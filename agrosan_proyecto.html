@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema Integral Frutera Agrosan — VIAIN 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy:   #0D2245;
+    --blue:   #1A4E8F;
+    --blue2:  #2B6CB8;
+    --red:    #C53A1F;
+    --orange: #E07020;
+    --green:  #1D6B3E;
+    --green2: #28A05A;
+    --gold:   #D4A832;
+    --light:  #F5F3EE;
+    --muted:  #8A8680;
+    --border: rgba(13,34,69,0.12);
+    --white:  #FFFFFF;
+    --shadow: 0 2px 16px rgba(13,34,69,0.10);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--light);
+    color: var(--navy);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── TYPOGRAPHY ── */
+  h1, h2, h3, h4 { font-family: 'Fraunces', serif; font-weight: 600; line-height: 1.15; }
+  h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); }
+  h2 { font-size: clamp(1.5rem, 3vw, 2rem); }
+  h3 { font-size: 1.15rem; font-weight: 500; }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; } to { opacity: 1; }
+  }
+  @keyframes slideRight {
+    from { width: 0; } to { width: var(--w); }
+  }
+  .reveal { opacity: 0; animation: fadeUp 0.6s ease forwards; }
+  .reveal-1 { animation-delay: 0.1s; }
+  .reveal-2 { animation-delay: 0.2s; }
+  .reveal-3 { animation-delay: 0.3s; }
+  .reveal-4 { animation-delay: 0.4s; }
+  .reveal-5 { animation-delay: 0.5s; }
+  .reveal-6 { animation-delay: 0.6s; }
+
+  /* ── NAV ── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--navy);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.25);
+  }
+  .nav-logo img { height: 32px; filter: brightness(0) invert(1); }
+  .nav-links { display: flex; gap: 4px; }
+  .nav-links a {
+    color: rgba(255,255,255,0.65);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    letter-spacing: 0.01em;
+  }
+  .nav-links a:hover { color: white; background: rgba(255,255,255,0.1); }
+  .nav-links a.active { color: white; background: rgba(255,255,255,0.15); }
+  .nav-badge {
+    background: var(--green2); color: white;
+    font-size: 11px; font-weight: 500;
+    padding: 3px 10px; border-radius: 20px;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    background: var(--navy);
+    padding: 5rem 2rem 4rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 40px,
+      rgba(255,255,255,0.015) 40px,
+      rgba(255,255,255,0.015) 41px
+    );
+  }
+  .hero-inner { max-width: 960px; margin: 0 auto; position: relative; }
+  .hero-tag {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.8);
+    font-size: 12px; font-weight: 500;
+    padding: 5px 14px; border-radius: 20px;
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .hero-tag span { width: 6px; height: 6px; background: var(--green2); border-radius: 50%; display: inline-block; }
+  .hero h1 { color: white; margin-bottom: 1rem; max-width: 640px; }
+  .hero h1 em { font-style: normal; color: var(--gold); }
+  .hero-sub { color: rgba(255,255,255,0.6); font-size: 1rem; max-width: 520px; margin-bottom: 2.5rem; }
+  .hero-stats {
+    display: flex; gap: 2.5rem; flex-wrap: wrap;
+    padding-top: 2rem;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+  .hero-stat-val { font-family: 'Fraunces', serif; font-size: 2rem; font-weight: 600; color: white; line-height: 1; }
+  .hero-stat-lbl { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 4px; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* ── SECTIONS ── */
+  section { padding: 4rem 2rem; }
+  .section-inner { max-width: 960px; margin: 0 auto; }
+  .section-tag {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--blue2);
+    margin-bottom: 0.5rem; display: block;
+  }
+  .section-title { margin-bottom: 2.5rem; color: var(--navy); }
+
+  /* ── OBJETIVO ── */
+  #objetivos { background: white; }
+  .obj-main {
+    background: var(--navy);
+    color: white;
+    border-radius: 16px;
+    padding: 2rem 2.5rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .obj-main::after {
+    content: '';
+    position: absolute; right: -20px; top: -20px;
+    width: 160px; height: 160px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 50%;
+  }
+  .obj-main p { font-size: 1.05rem; line-height: 1.7; color: rgba(255,255,255,0.85); }
+  .obj-main strong { color: var(--gold); font-weight: 500; }
+  .obj-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .obj-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    background: var(--light);
+    display: flex; align-items: flex-start; gap: 12px;
+    transition: box-shadow 0.2s;
+  }
+  .obj-card:hover { box-shadow: var(--shadow); }
+  .obj-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; flex-shrink: 0;
+  }
+  .oi-red   { background: #FEE2DC; color: var(--red); }
+  .oi-blue  { background: #DBEAFE; color: var(--blue); }
+  .oi-green { background: #D1FAE5; color: var(--green); }
+  .oi-gold  { background: #FEF3C7; color: #92660A; }
+  .obj-card p { font-size: 13px; color: #444; line-height: 1.5; }
+
+  /* ── EQUIPO ── */
+  #equipo { background: var(--light); }
+  .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+  .team-card {
+    background: white;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    text-align: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .team-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+  .team-avatar {
+    width: 56px; height: 56px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; font-weight: 600;
+    margin: 0 auto 1rem;
+    font-family: 'Fraunces', serif;
+  }
+  .av-sponsor { background: var(--navy); color: var(--gold); font-size: 1.2rem; }
+  .av-jp { background: #DBEAFE; color: var(--blue); }
+  .av-cc { background: #D1FAE5; color: var(--green); }
+  .av-cx { background: #FEF3C7; color: #92660A; }
+  .team-name { font-weight: 500; margin-bottom: 4px; }
+  .team-role { font-size: 12px; color: var(--muted); }
+  .sponsor-tag {
+    display: inline-block; margin-top: 8px;
+    background: var(--navy); color: var(--gold);
+    font-size: 10px; font-weight: 500;
+    padding: 3px 10px; border-radius: 20px;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+
+  /* ── ROADMAP ── */
+  #roadmap { background: white; }
+  .timeline-header {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+    background: var(--border);
+    border-radius: 12px 12px 0 0;
+    overflow: hidden;
+    margin-bottom: 2rem;
+  }
+  .tl-head-col {
+    padding: 1rem 1.25rem;
+    background: white;
+  }
+  .tl-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    font-family: 'Fraunces', serif; font-size: 0.85rem; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 8px;
+  }
+  .tn1 { background: #DBEAFE; color: var(--blue); }
+  .tn2 { background: #EDE9FE; color: #5B21B6; }
+  .tn3 { background: #D1FAE5; color: var(--green); }
+  .tl-head-col h4 { font-size: 0.85rem; font-family: 'DM Sans', sans-serif; font-weight: 500; }
+  .tl-head-col .dates { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .stage-block {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+  }
+  .stage-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    background: white;
+    transition: background 0.15s;
+    user-select: none;
+  }
+  .stage-head:hover { background: var(--light); }
+  .stage-head-left { display: flex; align-items: center; gap: 12px; }
+  .stage-dot {
+    width: 32px; height: 32px; border-radius: 50%;
+    font-family: 'Fraunces', serif; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; flex-shrink: 0;
+  }
+  .sd1 { background: #DBEAFE; color: var(--blue); }
+  .sd2 { background: #EDE9FE; color: #5B21B6; }
+  .sd3 { background: #D1FAE5; color: var(--green); }
+  .stage-title-txt { font-weight: 500; font-size: 0.95rem; }
+  .stage-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stage-head-right { display: flex; align-items: center; gap: 12px; }
+  .prog-bar-wrap { width: 100px; }
+  .prog-bar-track {
+    height: 5px; background: #E5E7EB;
+    border-radius: 3px; overflow: hidden;
+  }
+  .prog-bar-fill { height: 5px; border-radius: 3px; --w: 0%; animation: slideRight 1s ease 0.5s forwards; width: 0; }
+  .pbf1 { background: var(--blue2); }
+  .pbf2 { background: #7C3AED; }
+  .pbf3 { background: var(--green2); }
+  .prog-pct { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .chevron { font-size: 14px; color: var(--muted); transition: transform 0.3s; }
+  .chevron.open { transform: rotate(180deg); }
+
+  .stage-body { display: none; border-top: 1px solid var(--border); }
+  .stage-body.open { display: block; }
+  .area-section { border-bottom: 1px solid var(--border); }
+  .area-section:last-child { border-bottom: none; }
+  .area-label {
+    padding: 8px 16px;
+    font-size: 11px; font-weight: 500; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+    background: var(--light);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .mods-grid { display: grid; grid-template-columns: 1fr 1fr; }
+  .mod-row {
+    padding: 10px 16px;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .mod-row:nth-child(even) { border-right: none; }
+  .mod-row:last-child, .mod-row:nth-last-child(2):nth-child(odd) { border-bottom: none; }
+  .mod-row.full { grid-column: 1 / -1; border-right: none; }
+  .mod-row.full.not-last { border-bottom: 1px solid var(--border); }
+  .mod-txt { font-size: 13px; }
+  .badge {
+    font-size: 11px; padding: 2px 9px; border-radius: 20px;
+    white-space: nowrap; flex-shrink: 0; font-weight: 500;
+  }
+  .b-pend  { background: #F3F4F6; color: #6B7280; }
+  .b-new   { background: #D1FAE5; color: #065F46; }
+  .b-key   { background: #DBEAFE; color: #1E40AF; }
+  .b-auto  { background: #EDE9FE; color: #5B21B6; }
+
+  /* ── DTE ── */
+  #dte { background: var(--light); }
+  .dte-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.5rem; }
+  .dte-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+    transition: box-shadow 0.2s;
+  }
+  .dte-card:hover { box-shadow: var(--shadow); }
+  .dte-card.rec { border: 2px solid var(--blue2); }
+  .dte-chip {
+    font-size: 11px; font-weight: 500;
+    padding: 3px 11px; border-radius: 20px;
+    display: inline-block; margin-bottom: 12px;
+  }
+  .dc-rec { background: #DBEAFE; color: var(--blue); }
+  .dc-alt { background: #F3F4F6; color: #6B7280; }
+  .dte-card h3 { margin-bottom: 6px; font-size: 1rem; }
+  .dte-card p { font-size: 13px; color: #555; line-height: 1.5; margin-bottom: 12px; }
+  .dte-list { list-style: none; }
+  .dte-list li {
+    font-size: 12px; color: #555;
+    padding: 4px 0;
+    display: flex; align-items: flex-start; gap: 7px;
+  }
+  .ic-ok   { color: var(--green2); }
+  .ic-warn { color: var(--orange); }
+
+  .dte-route {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    padding: 1.25rem 1.5rem;
+  }
+  .dte-route h4 { font-size: 0.85rem; font-family: 'DM Sans', sans-serif; font-weight: 500; margin-bottom: 10px; }
+  .route-steps { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .r-step {
+    font-size: 12px; font-weight: 500;
+    padding: 5px 14px; border-radius: 20px;
+  }
+  .rs1 { background: #DBEAFE; color: var(--blue); }
+  .rs2 { background: #EDE9FE; color: #5B21B6; }
+  .rs3 { background: #D1FAE5; color: var(--green); }
+  .r-arrow { color: var(--muted); font-size: 13px; }
+
+  /* ── STACK ── */
+  #stack { background: white; }
+  .stack-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  .stack-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    background: var(--light);
+  }
+  .stack-card h4 { font-size: 0.8rem; font-family: 'DM Sans', sans-serif; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .stack-items { display: flex; flex-wrap: wrap; gap: 6px; }
+  .stack-tag {
+    font-size: 12px; font-weight: 500;
+    padding: 4px 10px; border-radius: 6px;
+    background: white; border: 1px solid var(--border);
+    color: var(--navy);
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    background: var(--navy);
+    padding: 2.5rem 2rem;
+    text-align: center;
+  }
+  footer img { height: 28px; filter: brightness(0) invert(1); margin-bottom: 1rem; opacity: 0.8; }
+  footer p { font-size: 12px; color: rgba(255,255,255,0.35); }
+  footer strong { color: rgba(255,255,255,0.6); font-weight: 400; }
+
+  /* ── KEY USERS ── */
+  #keyusers { background: white; }
+  .ku-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+  }
+  .ku-card {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.25rem 1.25rem 1.1rem;
+    background: var(--light);
+    display: flex; align-items: flex-start; gap: 14px;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .ku-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+  .ku-avatar {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Fraunces', serif; font-weight: 600; font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .kc1 { background: #DBEAFE; color: var(--blue); }
+  .kc2 { background: #FEF3C7; color: #92660A; }
+  .kc3 { background: #D1FAE5; color: var(--green); }
+  .kc4 { background: #FFE4E6; color: #9F1239; }
+  .kc5 { background: #EDE9FE; color: #5B21B6; }
+  .kc6 { background: #FEE2DC; color: var(--red); }
+  .kc7 { background: #E0F2FE; color: #0369A1; }
+  .ku-name { font-weight: 500; font-size: 0.95rem; margin-bottom: 2px; }
+  .ku-area {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.05em;
+    text-transform: uppercase;
+    display: inline-block; margin-bottom: 5px;
+    padding: 2px 8px; border-radius: 20px;
+  }
+  .ku-modules { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 640px) {
+    .nav-links { display: none; }
+    .hero-stats { gap: 1.5rem; }
+    .mods-grid { grid-template-columns: 1fr; }
+    .mod-row { border-right: none; }
+    .mod-row:last-child { border-bottom: none; }
+    .dte-cards { grid-template-columns: 1fr; }
+    .timeline-header { grid-template-columns: 1fr; }
+    .team-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* ── PORTAL: secciones nuevas ── */
+  #decisiones { background: var(--navy); }
+  #decisiones .section-tag { color: var(--gold); }
+  #decisiones .section-title { color: white; }
+  .dec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 12px; }
+  .dec-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 1.1rem 1.25rem; }
+  .dec-card h4 { color: var(--gold); font-family: 'DM Sans',sans-serif; font-weight:500; font-size:.8rem; letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px; }
+  .dec-card p { color: rgba(255,255,255,0.82); font-size:13px; line-height:1.5; }
+  .dec-card code { background: rgba(255,255,255,0.1); padding:1px 6px; border-radius:5px; font-size:12px; color:#fff; }
+
+  #modulos { background: var(--light); }
+  .mod-cards { display:grid; grid-template-columns: repeat(auto-fill, minmax(300px,1fr)); gap:16px; }
+  .mcard { background:white; border:1px solid var(--border); border-radius:14px; overflow:hidden; transition:box-shadow .2s; }
+  .mcard:hover { box-shadow: var(--shadow); }
+  .mcard-head { padding:1.1rem 1.25rem; cursor:pointer; display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .mcard-head h3 { font-size:1rem; font-weight:500; }
+  .mcard-meta { font-size:11px; color:var(--muted); margin-top:3px; }
+  .mcard-badges { display:flex; gap:5px; flex-wrap:wrap; margin-top:7px; }
+  .pill { font-size:10px; padding:2px 8px; border-radius:20px; font-weight:500; white-space:nowrap; }
+  .pill-ok { background:#D1FAE5; color:#065F46; }
+  .pill-pend { background:#F3F4F6; color:#6B7280; }
+  .pill-et1 { background:#DBEAFE; color:#1E40AF; }
+  .pill-et3 { background:#D1FAE5; color:#1D6B3E; }
+  .pill-sec { background:#FEF3C7; color:#92660A; }
+  .mcard-body { display:none; padding:0 1.25rem 1.25rem; border-top:1px solid var(--border); }
+  .mcard-body.open { display:block; }
+  .mcard-obj { font-size:13px; color:#444; margin:12px 0; line-height:1.55; }
+  .mcard h5 { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:12px 0 5px; }
+  .mcard ul { list-style:none; }
+  .mcard li { font-size:12.5px; color:#444; padding:2px 0 2px 14px; position:relative; line-height:1.45; }
+  .mcard li::before { content:'·'; position:absolute; left:2px; color:var(--blue2); font-weight:700; }
+  .mcard li.no::before { content:'✕'; font-size:9px; color:var(--red); top:3px; }
+  .mcard .ca-tag { display:inline-block; margin-top:10px; font-size:11px; background:var(--light); border:1px solid var(--border); padding:3px 9px; border-radius:6px; color:var(--navy); }
+
+  #avances { background:white; }
+  .upd-note { font-size:12px; color:var(--muted); margin-bottom:1.25rem; }
+  .av-row { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--border); }
+  .av-row:last-child { border-bottom:none; }
+  .av-name { flex:0 0 230px; font-size:13px; font-weight:500; }
+  .av-track { flex:1; height:8px; background:#EDF0F3; border-radius:5px; overflow:hidden; }
+  .av-fill { height:8px; border-radius:5px; background:var(--green2); }
+  .av-pct { flex:0 0 42px; text-align:right; font-size:12px; color:var(--muted); }
+  .av-state { flex:0 0 110px; font-size:11px; }
+
+  /* Gantt */
+  .gantt-wrap { margin-top:2rem; border:1px solid var(--border); border-radius:12px; overflow:auto; }
+  .gantt { min-width:760px; }
+  .g-head, .g-row { display:grid; }
+  .g-head { position:sticky; top:0; background:var(--light); border-bottom:1px solid var(--border); z-index:2; }
+  .g-cellh { font-size:10px; color:var(--muted); padding:6px 4px; text-align:center; border-left:1px solid var(--border); }
+  .g-cellh.lbl { text-align:left; padding-left:12px; border-left:none; font-weight:500; letter-spacing:.05em; text-transform:uppercase; }
+  .g-row { border-bottom:1px solid var(--border); align-items:center; }
+  .g-row:last-child { border-bottom:none; }
+  .g-row:hover { background:var(--light); }
+  .g-lbl { font-size:12px; padding:8px 12px; }
+  .g-track { position:relative; height:34px; }
+  .g-grid { position:absolute; inset:0; }
+  .g-gline { position:absolute; top:0; bottom:0; border-left:1px solid rgba(13,34,69,0.06); }
+  .g-bar { position:absolute; top:8px; height:18px; border-radius:5px; display:flex; align-items:center; overflow:hidden; box-shadow:0 1px 3px rgba(13,34,69,.15); }
+  .g-bar-fill { height:100%; background:rgba(255,255,255,0.35); }
+  .g-bar span { position:absolute; left:7px; font-size:10px; color:white; font-weight:600; white-space:nowrap; }
+  .g-e1 { background:var(--blue2); } .g-e2 { background:#7C3AED; } .g-e3 { background:var(--green2); }
+  .gantt-legend { display:flex; gap:16px; margin-top:12px; font-size:12px; color:var(--muted); align-items:center; }
+  .gantt-legend span { display:inline-flex; align-items:center; gap:6px; }
+  .gantt-legend i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+
+  #mockups { background:var(--light); }
+  .mk-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
+  .mk-card { background:white; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .mk-card img { width:100%; display:block; aspect-ratio:16/10; object-fit:cover; background:#EDF0F3; }
+  .mk-meta { padding:.85rem 1rem; }
+  .mk-meta h4 { font-size:.9rem; font-weight:500; }
+  .mk-meta .mk-mod { font-size:11px; color:var(--blue2); text-transform:uppercase; letter-spacing:.05em; }
+  .mk-meta p { font-size:12px; color:var(--muted); margin-top:4px; }
+  .empty-note { background:#FFF8E6; border:1px solid var(--gold); color:#7A5C00; padding:1rem 1.25rem; border-radius:10px; font-size:13px; line-height:1.5; }
+  .empty-note code { background:rgba(122,92,0,.1); padding:1px 6px; border-radius:5px; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">
+    <img src="data:image/jpeg;base64,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" alt="Frutera Agrosan" />
+  </div>
+  <div class="nav-links">
+    <a href="#objetivos">Objetivos</a>
+    <a href="#decisiones">Decisiones</a>
+    <a href="#roadmap">Roadmap</a>
+    <a href="#modulos">Módulos</a>
+    <a href="#avances">Avances</a>
+    <a href="#mockups">Mockups</a>
+    <a href="#stack">Stack</a>
+  </div>
+  <span class="nav-badge">En definición</span>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-inner">
+    <div class="hero-tag reveal reveal-1"><span></span>VIAIN Asesorías Informáticas · 2026</div>
+    <h1 class="reveal reveal-2">Sistema Integral<br><em>Frutera Agrosan</em></h1>
+    <p class="hero-sub reveal reveal-3">Modernización completa de la plataforma operacional — desde la orden de compra hasta la liquidación al productor.</p>
+      <div class="hero-stats">
+        <div class="reveal reveal-4">
+          <div class="hero-stat-val">3</div>
+          <div class="hero-stat-lbl">Etapas</div>
+        </div>
+        <div class="reveal reveal-4">
+          <div class="hero-stat-val">13</div>
+          <div class="hero-stat-lbl">Módulos</div>
+        </div>
+        <div class="reveal reveal-4">
+          <div class="hero-stat-val">41</div>
+          <div class="hero-stat-lbl">Semanas</div>
+        </div>
+      </div>
+  </div>
+</header>
+
+<!-- OBJETIVOS -->
+<section id="objetivos">
+  <div class="section-inner">
+    <span class="section-tag">Misión del proyecto</span>
+    <h2 class="section-title">Objetivos</h2>
+    <div class="obj-main reveal reveal-1">
+      <p>Crear una aplicación para Frutera Agrosan que contemple el <strong>100% de la operación de la empresa</strong>, reemplazando la Plataforma Web Actual y sistematizando todos los procesos manuales del negocio — desde la negociación de compras hasta la liquidación final al productor.</p>
+    </div>
+    <div class="obj-grid">
+      <div class="obj-card reveal reveal-2">
+        <div class="obj-icon oi-red">✕</div>
+        <div><h3>Reemplazar EDGE</h3><p>Eliminar el uso de EDGE como herramienta de gestión operacional.</p></div>
+      </div>
+      <div class="obj-card reveal reveal-3">
+        <div class="obj-icon oi-blue">⇄</div>
+        <div><h3>Reemplazar plataforma actual</h3><p>Migrar desde la Plataforma Web Actual a una arquitectura moderna cloud-ready.</p></div>
+      </div>
+      <div class="obj-card reveal reveal-4">
+        <div class="obj-icon oi-green">≡</div>
+        <div><h3>Sistematizar procesos</h3><p>Digitalizar y estandarizar los procesos manuales de la operación actual.</p></div>
+      </div>
+      <div class="obj-card reveal reveal-5">
+        <div class="obj-icon oi-gold">⚡</div>
+        <div><h3>Automatizar operación</h3><p>Lectura automática de packing list, facturas de compra y liquidaciones (Etapas 2–3).</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- EQUIPO -->
+<section id="equipo">
+  <div class="section-inner">
+    <span class="section-tag">Personas del proyecto</span>
+    <h2 class="section-title">Equipo</h2>
+    <div class="team-grid">
+      <div class="team-card reveal reveal-1">
+        <div class="team-avatar av-sponsor">LP</div>
+        <div class="team-name">Lorenzo Puentes</div>
+        <div class="team-role">Frutera Agrosan</div>
+        <span class="sponsor-tag">Sponsor</span>
+      </div>
+      <div class="team-card reveal reveal-2">
+        <div class="team-avatar av-jp">CD</div>
+        <div class="team-name">Christian Droguett</div>
+        <div class="team-role">Jefe de Proyecto · Desarrollador</div>
+      </div>
+      <div class="team-card reveal reveal-3">
+        <div class="team-avatar" style="background:#E8F5E9;color:#1B5E20;font-family:'Fraunces',serif;font-weight:600;width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">DZ</div>
+        <div class="team-name">DoZimple</div>
+        <div class="team-role">Desarrollador IA</div>
+      </div>
+      <div class="team-card reveal reveal-4">
+        <div class="team-avatar" style="background:#FEF9EC;color:#7A5C00;font-family:'Fraunces',serif;font-weight:600;width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">AV</div>
+        <div class="team-name">Alejandro Véliz</div>
+        <div class="team-role">Líder Funcional</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">Casos de uso · Datos de prueba · Enlace equipo–key users</div>
+      </div>
+      <div class="team-card reveal reveal-5">
+        <div class="team-avatar av-cc">CC</div>
+        <div class="team-name">Claude Code</div>
+        <div class="team-role">Desarrollador IA</div>
+      </div>
+      <div class="team-card reveal reveal-5">
+        <div class="team-avatar av-cx">CX</div>
+        <div class="team-name">Codex</div>
+        <div class="team-role">QA &amp; Revisión de código</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- KEY USERS -->
+<section id="keyusers">
+  <div class="section-inner">
+    <span class="section-tag">Frutera Agrosan</span>
+    <h2 class="section-title">Key users</h2>
+    <div class="ku-grid">
+
+      <div class="ku-card reveal reveal-1">
+        <div class="ku-avatar kc2">GI</div>
+        <div>
+          <div class="ku-name">Geovanni</div>
+          <span class="ku-area" style="background:#FEF3C7;color:#92660A;">Ventas</span>
+          <div class="ku-modules">Notas de venta · Despacho exportación · Cobranza</div>
+        </div>
+      </div>
+
+      <div class="ku-card reveal reveal-2">
+        <div class="ku-avatar kc7">LP</div>
+        <div>
+          <div class="ku-name">Lorenzo</div>
+          <span class="ku-area" style="background:#E0F2FE;color:#0369A1;">Liquidaciones</span>
+          <div class="ku-modules">Liq. clientes · Ingreso de costos · Emisión</div>
+        </div>
+      </div>
+
+      <div class="ku-card reveal reveal-3">
+        <div class="ku-avatar kc1">MA</div>
+        <div>
+          <div class="ku-name">Marcos</div>
+          <span class="ku-area" style="background:#DBEAFE;color:var(--blue);">Compras</span>
+          <div class="ku-modules">Órdenes de compra · Gestión de pagos</div>
+        </div>
+      </div>
+
+      <div class="ku-card reveal reveal-4">
+        <div class="ku-avatar kc7" style="background:#E0F2FE;color:#0369A1;">PA</div>
+        <div>
+          <div class="ku-name">Patricia</div>
+          <span class="ku-area" style="background:#D1FAE5;color:var(--green);">Gestión Productores</span>
+          <div class="ku-modules">Portal productores · Liquidaciones productor</div>
+        </div>
+      </div>
+
+      <div class="ku-card reveal reveal-5">
+        <div class="ku-avatar" style="background:#FEE2DC;color:var(--red);font-family:'Fraunces',serif;font-weight:600;width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">FA</div>
+        <div>
+          <div class="ku-name">Fabián</div>
+          <span class="ku-area" style="background:#FEE2DC;color:var(--red);">Finanzas</span>
+          <div class="ku-modules">Control de costos · Gestión de pagos · Cobranza</div>
+        </div>
+      </div>
+
+      <div class="ku-card reveal reveal-6">
+        <div class="ku-avatar kc4">BE</div>
+        <div>
+          <div class="ku-name">Bernardo</div>
+          <span class="ku-area" style="background:#FFE4E6;color:#9F1239;">Materiales</span>
+          <div class="ku-modules">Gestión de materiales · Tarifas e insumos</div>
+        </div>
+      </div>
+
+      <div class="ku-card reveal reveal-6">
+        <div class="ku-avatar kc5">MJ</div>
+        <div>
+          <div class="ku-name">María José</div>
+          <span class="ku-area" style="background:#EDE9FE;color:#5B21B6;">Cobranza</span>
+          <div class="ku-modules">Cobranza / CRM · Cuentas por cobrar</div>
+        </div>
+      </div>
+
+      <div class="ku-card reveal reveal-6">
+        <div class="ku-avatar kc6">IS</div>
+        <div>
+          <div class="ku-name">Isella</div>
+          <span class="ku-area" style="background:#FEE2DC;color:var(--red);">Calidad</span>
+          <div class="ku-modules">Validación de lotes · Gestión de reclamos</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section id="roadmap">
+  <div class="section-inner">
+    <span class="section-tag">Plan de trabajo</span>
+    <h2 class="section-title">Roadmap</h2>
+
+    <!-- ETAPA 1 -->
+    <div class="stage-block reveal reveal-2">
+      <div class="stage-head" onclick="toggleStage('e1')">
+        <div class="stage-head-left">
+          <div class="stage-dot sd1">1</div>
+          <div>
+            <div class="stage-title-txt">Operación core</div>
+            <div class="stage-sub">General · Calidad · Compras · Ventas · Cobranza · Materiales · Productores · Finanzas · Riesgo</div>
+          </div>
+        </div>
+        <div class="stage-head-right">
+          <div class="prog-bar-wrap">
+            <div class="prog-bar-track"><div class="prog-bar-fill pbf1" style="--w:0%"></div></div>
+            <div class="prog-pct">0% completado</div>
+          </div>
+          <span class="chevron" id="ch-e1">▾</span>
+        </div>
+      </div>
+      <div class="stage-body open" id="bd-e1">
+        <div class="area-section">
+          <div class="area-label">⚙️ General</div>
+          <div class="mods-grid">
+            <div class="mod-row"><span class="mod-txt">Mantenedores generales · maestros base</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Temporadas y parámetros del sistema</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Usuarios y perfiles · permisos por ítem de menú</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Entidades · maestro de terceros (multifunción)</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row full"><span class="mod-txt">Direcciones y contactos de entidades</span><span class="badge b-new">Definido</span></div>
+          </div>
+        </div>
+        <div class="area-section">
+          <div class="area-label">✅ Calidad</div>
+          <div class="mods-grid">
+            <div class="mod-row"><span class="mod-txt">Informe de calidad · digitación web de parámetros de terreno</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Análisis de reclamos</span><span class="badge b-new">Definido</span></div>
+          </div>
+        </div>
+        <div class="area-section">
+          <div class="area-label">🛒 Compras</div>
+          <div class="mods-grid">
+            <div class="mod-row"><span class="mod-txt">Solicitud de inspección</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Instructivo de embalaje</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Orden de compra multilínea</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Recepción de stock (con OC / consignación)</span><span class="badge b-key">Clave</span></div>
+          </div>
+        </div>
+        <div class="area-section">
+          <div class="area-label">🚢 Ventas</div>
+          <div class="mods-grid">
+            <div class="mod-row"><span class="mod-txt">Cierre de negocios</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Solicitud de reserva de espacios</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Instructivo de embarque (padre e hijos por planta)</span><span class="badge b-key">Clave</span></div>
+            <div class="mod-row"><span class="mod-txt">Reserva de pallets, carga packing list y actualización de Stock</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Ingreso de reclamos</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Valorización comercial del reclamo (Provisión/Nota de Crédito)</span><span class="badge b-new">Definido</span></div>
+          </div>
+        </div>
+        <div class="area-section">
+          <div class="area-label">💵 Cobranza</div>
+          <div class="mods-grid">
+            <div class="mod-row"><span class="mod-txt">Proforma, factura de exportación, nota de crédito y débito</span><span class="badge b-key">Clave</span></div>
+            <div class="mod-row"><span class="mod-txt">Registro de pagos y liquidación</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Proforma, facturas y notas de crédito de ventas nacionales</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Gestión Cobranza (cartera de vencimientos, envío de correos)</span><span class="badge b-new">Definido</span></div>
+          </div>
+        </div>
+        <div class="area-section">
+          <div class="area-label">📦 Materiales</div>
+          <div class="mods-grid">
+            <div class="mod-row"><span class="mod-txt">Maestro de artículos y recetas</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Órdenes de compra de materiales</span><span class="badge b-new">Nuevo</span></div>
+            <div class="mod-row"><span class="mod-txt">Movimientos de materiales (ventas, traslados, consumos)</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Consulta de stock por receta</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Proforma de venta de materiales</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Generación de guías de despacho</span><span class="badge b-new">Nuevo</span></div>
+          </div>
+        </div>
+        <div class="area-section">
+          <div class="area-label">🌱 Gestión de productores</div>
+          <div class="mods-grid">
+            <div class="mod-row"><span class="mod-txt">Ficha, predios y contrato</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Cuenta corriente del productor</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Captura de facturas y notas de crédito (fuente externa)</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Control de pagos (solicitud y confirmación)</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row full"><span class="mod-txt">Facturación de servicios (proforma)</span><span class="badge b-new">Definido</span></div>
+          </div>
+        </div>
+        <div class="area-section">
+          <div class="area-label">📊 Finanzas</div>
+          <div class="mods-grid">
+            <div class="mod-row"><span class="mod-txt">Margen operacional</span><span class="badge b-pend">Pendiente</span></div>
+            <div class="mod-row"><span class="mod-txt">Flujo de caja</span><span class="badge b-pend">Pendiente</span></div>
+          </div>
+        </div>
+        <div class="area-section">
+          <div class="area-label">🛡️ Gestión de Riesgo</div>
+          <div class="mods-grid">
+            <div class="mod-row"><span class="mod-txt">Línea de crédito y formas de pago</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Motor de score (conducta de pago + riesgo claim)</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Bloqueo automático y excepciones de crédito</span><span class="badge b-new">Definido</span></div>
+            <div class="mod-row"><span class="mod-txt">Historial de evaluación del riesgo</span><span class="badge b-new">Definido</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ETAPA 2 -->
+    <div class="stage-block reveal reveal-3">
+      <div class="stage-head" onclick="toggleStage('e2')">
+        <div class="stage-head-left">
+          <div class="stage-dot sd2">2</div>
+          <div>
+            <div class="stage-title-txt">Automatización IA</div>
+            <div class="stage-sub">Operaciones · Agentes IA · Documentos automáticos</div>
+          </div>
+        </div>
+        <div class="stage-head-right">
+          <div class="prog-bar-wrap">
+            <div class="prog-bar-track"><div class="prog-bar-fill pbf2" style="--w:0%"></div></div>
+            <div class="prog-pct">0% completado</div>
+          </div>
+          <span class="chevron" id="ch-e2">▾</span>
+        </div>
+      </div>
+      <div class="stage-body" id="bd-e2">
+        <div class="area-section">
+          <div class="area-label">📦 Operaciones</div>
+          <div class="mods-grid">
+            <div class="mod-row full"><span class="mod-txt">Carga de Stock automática (IA)</span><span class="badge b-auto">IA</span></div>
+          </div>
+        </div>
+        <div class="area-section">
+          <div class="area-label">✅ Calidad</div>
+          <div class="mods-grid">
+            <div class="mod-row full"><span class="mod-txt">Aplicación móvil offline para ingreso en terreno</span><span class="badge b-new">Nuevo</span></div>
+          </div>
+        </div>
+        <div class="area-section">
+          <div class="area-label">🤖 Inteligencia artificial</div>
+          <div class="mods-grid">
+            <div class="mod-row"><span class="mod-txt">Agentes de consulta de información</span><span class="badge b-auto">IA</span></div>
+            <div class="mod-row"><span class="mod-txt">Automatización lectura Packing List</span><span class="badge b-auto">IA</span></div>
+            <div class="mod-row full"><span class="mod-txt">Captura de facturas de compra</span><span class="badge b-auto">IA</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ETAPA 3 -->
+    <div class="stage-block reveal reveal-4">
+      <div class="stage-head" onclick="toggleStage('e3')">
+        <div class="stage-head-left">
+          <div class="stage-dot sd3">3</div>
+          <div>
+            <div class="stage-title-txt">Liquidaciones y cierre</div>
+            <div class="stage-sub">Liquidaciones · IA · Control de calidad</div>
+          </div>
+        </div>
+        <div class="stage-head-right">
+          <div class="prog-bar-wrap">
+            <div class="prog-bar-track"><div class="prog-bar-fill pbf3" style="--w:0%"></div></div>
+            <div class="prog-pct">0% completado</div>
+          </div>
+          <span class="chevron" id="ch-e3">▾</span>
+        </div>
+      </div>
+      <div class="stage-body" id="bd-e3">
+        <div class="area-section">
+          <div class="area-label">🧮 Liquidaciones</div>
+          <div class="mods-grid">
+            <div class="mod-row"><span class="mod-txt">Ingreso liq. clientes (automático)</span><span class="badge b-auto">IA</span></div>
+            <div class="mod-row"><span class="mod-txt">Matriz de costos</span><span class="badge b-pend">Pendiente</span></div>
+            <div class="mod-row"><span class="mod-txt">Determinación de precios</span><span class="badge b-pend">Pendiente</span></div>
+            <div class="mod-row"><span class="mod-txt">Liquidación de productores · cálculo y emisión</span><span class="badge b-key">Clave</span></div>
+          </div>
+        </div>
+        <div class="area-section">
+          <div class="area-label">🤖 Inteligencia artificial</div>
+          <div class="mods-grid">
+            <div class="mod-row full"><span class="mod-txt">Automatización lectura de liquidaciones</span><span class="badge b-auto">IA</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- STACK -->
+<section id="stack">
+  <div class="section-inner">
+    <span class="section-tag">Arquitectura técnica</span>
+    <h2 class="section-title">Stack tecnológico</h2>
+    <div class="stack-grid">
+      <div class="stack-card reveal reveal-1">
+        <h4>Backend</h4>
+        <div class="stack-items">
+          <span class="stack-tag">Node.js 22</span>
+          <span class="stack-tag">TypeScript</span>
+          <span class="stack-tag">Fastify 5</span>
+          <span class="stack-tag">PostgreSQL 17</span>
+          <span class="stack-tag">Prisma</span>
+          <span class="stack-tag">Redis · BullMQ</span>
+          <span class="stack-tag">Better Auth</span>
+        </div>
+      </div>
+      <div class="stack-card reveal reveal-2">
+        <h4>Frontend</h4>
+        <div class="stack-items">
+          <span class="stack-tag">React 19</span>
+          <span class="stack-tag">Next.js 15</span>
+          <span class="stack-tag">Tailwind v4</span>
+          <span class="stack-tag">shadcn/ui</span>
+          <span class="stack-tag">TanStack Query</span>
+          <span class="stack-tag">ky</span>
+        </div>
+      </div>
+      <div class="stack-card reveal reveal-3">
+        <h4>IA &amp; OCR</h4>
+        <div class="stack-items">
+          <span class="stack-tag">Document AI</span>
+          <span class="stack-tag">Claude API</span>
+          <span class="stack-tag">Python ML</span>
+          <span class="stack-tag">scikit-learn</span>
+        </div>
+      </div>
+      <div class="stack-card reveal reveal-4">
+        <h4>Infraestructura</h4>
+        <div class="stack-items">
+          <span class="stack-tag">Docker</span>
+          <span class="stack-tag">GitHub Actions</span>
+          <span class="stack-tag">VPS / Cloud</span>
+          <span class="stack-tag">CI/CD</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- DECISIONES -->
+<section id="decisiones">
+  <div class="section-inner">
+    <span class="section-tag">Reconciliado · Julio 2026</span>
+    <h2 class="section-title">Decisiones canónicas</h2>
+    <div class="dec-grid">
+      <div class="dec-card"><h4>Identificadores</h4><p>Toda tabla con <code>id Int autoincrement</code> + <code>codigo</code> de texto para identificación humana.</p></div>
+      <div class="dec-card"><h4>Autorización</h4><p>Perfil + ítem de menú + nivel: <code>SIN_ACCESO</code>, <code>LECTURA</code>, <code>TOTAL</code>. Sin roles rígidos.</p></div>
+      <div class="dec-card"><h4>API</h4><p>Prefijo <code>/api/&lt;módulo&gt;</code> sin versión. Validación Zod en body, params y query.</p></div>
+      <div class="dec-card"><h4>Frontend</h4><p>Next.js 15 App Router, route group <code>(app)</code> bajo <code>src/app/</code>. Menú dinámico por perfil.</p></div>
+      <div class="dec-card"><h4>Datos inmutables</h4><p>Movimientos y registros operativos no se editan: se corrigen con reversos. Softdelete en maestros.</p></div>
+      <div class="dec-card"><h4>Temporada</h4><p>Variable de sesión, conmutable sin cerrar sesión; scoping de datos operativos.</p></div>
+      <div class="dec-card"><h4>DTE</h4><p>Vía adaptador genérico a proveedor de mercado. No se construye motor propio.</p></div>
+      <div class="dec-card"><h4>IA</h4><p>Servicios externos (Etapas 2–3). No se desarrolla in-house en Etapa 1.</p></div>
+      <div class="dec-card"><h4>Entidades multifunción</h4><p>Una entidad puede ser Productor, Cliente, Proveedor y Transportista a la vez. Para facturarle debe estar marcada como Cliente nacional.</p></div>
+      <div class="dec-card"><h4>Ancla del negocio</h4><p>El <strong>Embarque</strong> es la entidad ancla. Su Nº de instructivo (campo Folio, manual) identifica al instructivo padre; los hijos se autogeneran por punto de retiro.</p></div>
+      <div class="dec-card"><h4>Factura o liquidación</h4><p>Un cobro al productor va por factura <em>o</em> por descuento en la liquidación. Nunca por ambas: previene el doble cobro.</p></div>
+      <div class="dec-card"><h4>Pallet</h4><p>Unidad mínima indivisible de inventario. Pertenece a un solo embarque; se puede desvincular hasta confirmar el despacho.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- MODULOS -->
+<section id="modulos">
+  <div class="section-inner">
+    <span class="section-tag">Definiciones</span>
+    <h2 class="section-title">Módulos</h2>
+    <div class="mod-cards" id="mod-cards"></div>
+  </div>
+</section>
+
+<!-- AVANCES + GANTT -->
+<section id="avances">
+  <div class="section-inner">
+    <span class="section-tag">Seguimiento</span>
+    <h2 class="section-title">Avances y carta Gantt</h2>
+    <div class="upd-note" id="upd-note">Cargando datos…</div>
+    <div id="avances-list"></div>
+    <h3 style="margin:2.5rem 0 .5rem;font-family:'Fraunces',serif;font-weight:500;">Carta Gantt (semanal)</h3>
+    <div id="gantt-host"></div>
+  </div>
+</section>
+
+<!-- MOCKUPS -->
+<section id="mockups">
+  <div class="section-inner">
+    <span class="section-tag">Diseño</span>
+    <h2 class="section-title">Mockups</h2>
+    <div id="mockups-host"></div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <img src="data:image/jpeg;base64,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" alt="Frutera Agrosan" />
+  <p>Documento de trabajo · <strong>VIAIN Asesorías Informáticas</strong> · Julio 2026</p>
+  <p style="margin-top:6px;">Versión 0.4 — Confidencial</p>
+</footer>
+
+<script>
+  function toggleStage(id) {
+    const body = document.getElementById('bd-' + id);
+    const ch = document.getElementById('ch-' + id);
+    const isOpen = body.classList.contains('open');
+    body.classList.toggle('open', !isOpen);
+    ch.classList.toggle('open', !isOpen);
+  }
+
+  // Intersection Observer for scroll reveals
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.style.animationPlayState = 'running';
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.reveal').forEach(el => {
+    el.style.animationPlayState = 'paused';
+    observer.observe(el);
+  });
+
+  // Active nav on scroll
+  const sections = document.querySelectorAll('section[id], header');
+  const navLinks = document.querySelectorAll('.nav-links a');
+  window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(s => {
+      if (window.scrollY >= s.offsetTop - 80) current = s.id;
+    });
+    navLinks.forEach(a => {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+    });
+  });
+</script>
+
+<script>
+// ===== MÓDULOS (embebido, siempre visible) =====
+const MODULOS = [
+
+  { n:"Mantenedores Generales", sec:"General", et:1, ok:true,
+    obj:"Los 24 catálogos transversales que alimentan a todo el sistema, sobre una base común con auditoría y borrado lógico.",
+    si:["Geografía: Zona, Región, Provincia, Comuna, País, Puerto",
+        "Comercial: Grupo mercado, Mercado, Moneda, Temporada, Tipo de embarque, Tipo de cuenta corriente",
+        "Operación: Bodega, Unidad de medida, Tipo de pallet, Altura, Tipo de producción",
+        "Fruta: Especie, Grupo variedad, Variedad, Categoría, Calibre",
+        "Parámetros: Tipo de parámetro y Parámetros (condición de venta, tipo de flete, etc.)"],
+    no:["Mantenedor de Entidades (módulo aparte)"],
+    reglas:["Código único entre no eliminados","Softdelete universal","Una sola moneda base; temporadas sin solape"], ca:"CA1–CA11" },
+
+  { n:"Usuarios y Perfiles", sec:"General", et:1, ok:true,
+    obj:"Autorización por perfil + ítem de menú + nivel, sobre Better Auth.",
+    si:["Catálogo de ítems de menú (menú dinámico)","Perfiles con matriz de accesos por ítem","Usuarios con avatar y contraseña con complejidad","Guard de autorización backend y frontend"],
+    no:["Autenticación de base (la maneja Better Auth)"],
+    reglas:["Acceso por defecto SIN_ACCESO","LECTURA = solo lectura; TOTAL = lectura/escritura","Email único como usuario"], ca:"CA1–CA10" },
+
+  { n:"Entidades", sec:"General", et:1, ok:true,
+    obj:"Maestro único de terceros (cliente, proveedor, productor, naviera, planta, etc.) con direcciones y contactos.",
+    si:["Entidad con tipo multiselect (una entidad puede cumplir varias funciones)","Direcciones por entidad","Contactos por entidad","Representante legal con RUT"],
+    no:["Lógica específica de cada función (vive en su módulo)","Clientes: crédito, score de riesgo, formas de pago y contactos por país (módulo aparte)"],
+    reglas:["Al menos un tipo por entidad","RUT validado con dígito verificador","Máximo una dirección por defecto"], ca:"CA1–CA9" },
+
+  { n:"Calidad — Control en origen", sec:"Calidad", et:1, ok:true,
+    obj:"Control de calidad de fruta en origen, configurado por especie, en web y dispositivo móvil.",
+    si:["Mantenedores de norma por especie: tipos/grupos/defectos y características de madurez",
+        "Módulo de ingreso de control de calidad: inspección por caja (predio, embalaje, categoría, calibre, frutos), defectos, madurez y fotos",
+        "Informe de calidad: resultado (Aprobado / Objetado / Rechazado) e informe PDF por correo",
+        "Digitación web de los parámetros tomados en terreno para generar el informe al productor"],
+    no:["Solicitud de inspección (se emite desde Compras — Ciclo de compras)","App móvil offline para ingreso en terreno (Etapa 2)","Validación de lotes recepcionados (otra etapa de Calidad)"],
+    reglas:["Defectos y madurez segmentados por especie","Captura por caja; cantidad definida en terreno","Resultado manual del inspector"], ca:"CA1–CA11" },
+
+  { n:"Calidad — Análisis de reclamos", sec:"Calidad", et:"1/3", ok:true,
+    obj:"Análisis técnico de los reclamos del cliente en destino, asociados al embarque (Instructivo): evaluación y veredicto.",
+    si:["Mantenedores: características de reclamo por especie y criterios de cumplimiento",
+        "Módulo de ingreso de reclamo: documentación del cliente, resumen, datos por especie y checklist de cumplimiento",
+        "Veredicto de procedencia (procedente / improcedente / parcial)",
+        "Checklist de cumplimiento y veredicto de procedencia"],
+    no:["Ingreso del reclamo y valorización comercial / provisión (viven en Ventas — Ciclo de ventas)","Módulo Embarque (pendiente)","Impacto en liquidaciones (Etapa 3)","Emisión de la Nota de Crédito (vive en Cobranza)"],
+    reglas:["Ingreso y evaluación por Calidad; la valorización la realiza Comercial","CERRADO bloquea edición; permisos separados"], ca:"CA1–CA10" },
+
+  { n:"Compras — Ciclo de compras", sec:"Compras", et:1, ok:true, estadoTxt:"Modelo cerrado · v0.1",
+    obj:"Ciclo de compra de fruta: del instructivo de embalaje a la recepción de stock, por compra directa (con OC) o consignación (sin OC).",
+    si:["Solicitud de inspección a Calidad",
+        "Instructivo de Embalaje (qué embalar, construido con maestros)",
+        "Orden de Compra multilínea (variedad, categoría, embalaje, rango de calibre, precio), opcionalmente asociada a un Cierre",
+        "Recepción de Stock: módulo único con modo con OC (validación) y sin OC (consignación)",
+        "Motor de validación OC↔carga por totales de línea (todo o nada) con reporte de diferencias",
+        "Generación de Stock / Pallets (unidad mínima indivisible)"],
+    no:["Informe de calidad (Calidad — Control en origen)","Captura de facturas y notas de crédito (Gestión de Productores)","Reserva de pallets, Embarque e Instructivo de Embarque (Ventas)","Integración AGL (solo lectura; detalle pendiente)","Lectura IA de PDF (Etapa 2)","Liquidación a Productor (Etapa 3)"],
+    reglas:["Validación por totales de línea de OC; calibre por rango; todo o nada","Fruta con OC → Costos; consignación → Liquidación a Productor","Pallet indivisible y exclusivo de un embarque, desvinculable hasta confirmar despacho","Instructivo de Embalaje y OC sin FK directa (trazabilidad vía informe de calidad)"], ca:"Validación §7" },
+
+  { n:"Ventas — Ciclo de ventas", sec:"Ventas", et:1, ok:false, estadoTxt:"En definición",
+    obj:"Ciclo comercial de exportación: desde el Cierre de Negocios hasta el Instructivo de Embarque, entidad ancla del negocio. Incluye el ingreso y la valorización (provisión) de los reclamos.",
+    si:["Cierre de Negocios: encabezado + detalle de fruta comprometida",
+        "Solicitud de Reserva de Espacios al Gestor Logístico y captura de su respuesta",
+        "Instructivo / Orden de Embarque: encabezado + contenedor + asignación de fruta, validada contra el Cierre de Negocios",
+        "Embarque con Nº de Instructivo (padre, campo Folio) e instructivos hijos por punto de retiro",
+        "Reserva de pallets, carga del packing list y actualización de Stock",
+        "Ingreso de reclamos del cliente en destino",
+        "Valorización comercial del reclamo (Provisión/Nota de Crédito): por caja, por kilo o monto fijo, con reversa e historial"],
+    no:["Análisis técnico del reclamo (Calidad)","Despacho / descuento de Stock (Operaciones)","Proforma y Factura DTE (Cobranza)","Determinación de precios definitiva (Etapa 3)","Programa Comercial (en duda, parking lot)"],
+    reglas:["Nº de Instructivo = campo Folio (manual, único); hijos autogenerados {folio}-{n}","Fruta del embarque ⊆ fruta del Cierre de Negocios","Herencia Cierre→Embarque: los campos repetidos se heredan y bloquean","Cierre de Negocios borrable solo si no tiene Instructivo asociado","Valor autorizado ≤ valor reclamado","Provisión VIGENTE reduce el saldo pendiente visible en cartera; nunca se elimina, se reversa"], ca:"R1–R11 · PR1–PR7" },
+
+  { n:"Cobranza — Facturación y Pagos", sec:"Cobranza", et:1, ok:true,
+    obj:"Por cada embarque: Proforma en PDF, Factura de Exportación (DTE 110) vía adaptador, cuotas con vencimientos dinámicos, NC/ND (112/111) prorrateadas y pagos multi-moneda con saldo a favor. Incluye la emisión de ventas nacionales (DTE 33/34).",
+    si:["Proforma (PDF, no tributaria) y Factura DTE 110 por embarque, con montos coincidentes",
+        "Forma de Pago con 1 a 3 cuotas, cada una con % y fecha de referencia (Factura / Embarque / Envío de documentos / Arribo / BL / Proforma)",
+        "Cuotas generadas al emitir el DTE, con vencimiento recalculable si cambian las fechas del embarque",
+        "NC (112) y ND (111) sobre el DTE, prorrateadas entre cuotas con saldo pendiente",
+        "Registro de pagos multi-moneda aplicados a uno o varios documentos, en cascada a la cuota más antigua, con saldo a favor del remanente",
+        "Ingreso manual de la liquidación del cliente",
+        "Proforma, facturas y notas de crédito de ventas nacionales (DTE 33/34), vía el mismo adaptador"],
+    no:["Motor de Score de Riesgo (vive en Gestión de Riesgo)","Ventana de gestión y envío de correos (módulo aparte)","Entidad Provisión (se crea y gestiona en Reclamos)","Generación de las proformas de servicios y de materiales (Productores / Materiales)"],
+    reglas:["1 Embarque → 1 Proforma, 1 Factura DTE, N NC/ND","Suma de cuotas de una Forma de Pago = 100%","NC/ND se prorratean; los pagos cascadan a la cuota más antigua","Todo documento y pago se mantiene en su propia moneda, sin conversión","Ventas nacionales: en borrador no hay efectos; al emitir se descuenta stock o se mueve la cuenta corriente","Solo se factura a entidades marcadas como Cliente nacional"], ca:"CA1–CA9 · VN1–VN6" },
+
+  { n:"Cobranza — Gestión", sec:"Cobranza", et:1, ok:true,
+    obj:"Gestión Cobranza: cartera de vencimientos, plantillas de correo con campos dinámicos y despacho por cliente con historial.",
+    si:["Listado de cuotas pendientes/vencidas: filtros por cliente, tipo de embarque, país destino, rango de vencimiento y estado",
+        "Selección múltiple y envío agrupado por cliente, un correo por cliente",
+        "Autoselección de destinatarios según país de destino del embarque",
+        "Mantenedor de plantillas con campos dinámicos y plantilla predeterminada por cliente",
+        "Mantenedor de configuración SMTP",
+        "Historial de envíos por embarque/factura y por cliente"],
+    no:["Motor de Score (vive en Gestión de Riesgo)","Emisión de documentos tributarios y registro de pagos/liquidación (Cobranza — Facturación y Pagos)","Envíos automáticos/programados (solo despacho manual bajo demanda)"],
+    reglas:["Un correo agrupa todos los vencimientos seleccionados de un mismo cliente","Si hay más de un país de destino en el envío, se despacha una copia a cada casilla asociada","El contenido final enviado queda como snapshot inmutable en el historial","El password SMTP nunca se expone por API"], ca:"CA1–CA5" },
+
+  { n:"Gestión de materiales", sec:"Materiales", et:1, ok:true,
+    obj:"Gestión de los materiales de embalaje: catálogo, recetas, movimientos de stock y consulta por receta.",
+    si:["Maestro de artículos: materiales de embalaje, envases y servicios (costeo PMP/Estándar, stock crítico)",
+        "Maestro de recetas por embalaje (componentes y consumos)",
+        "Módulo de movimientos con mantenedor de tipos (entradas, salidas, traslados; precio y DTE/transporte)",
+        "Consulta de stock por receta (estados OK / Crítico / Sin stock / Trasladar)",
+        "Órdenes de compra de materiales a proveedores",
+        "Generación de guías de despacho",
+        "Proforma de venta de materiales a clientes nacionales, validada y facturada en Cobranza"],
+    no:["Emisión real de DTE (adaptador externo)","Validación y emisión de la factura de venta (Cobranza — Ventas Nacionales)"],
+    reglas:["Movimientos inmutables","Saldo no negativo","PMP en entradas; consumo por lote","La emisión de la factura descuenta stock automáticamente (falla si no hay saldo)","Se vende a entidades marcadas como Cliente nacional"], ca:"CA1–CA19 · R16–R18" },
+
+  { n:"Gestión de Productores", sec:"Productores", et:"1/3", ok:true,
+    obj:"Gestión del productor (sobre Entidad): ficha, predios, contrato, cuenta corriente, captura de documentos de compra, control de pagos y facturación de servicios.",
+    si:["Mantenedor de productores: ficha, predios (CSG/SDP/GGN, geo) y contrato (PDF + condiciones controladas)",
+        "Módulo de cuenta corriente: imputación de debes y haberes con saldo",
+        "Captura de facturas y notas de crédito de compra desde la fuente externa, cuadradas contra las OC por montos",
+        "Control de pagos (solicitud y confirmación): búsqueda y filtro de cuotas pendientes",
+        "Facturación de servicios al productor (proforma), validada y facturada en Cobranza"],
+    no:["Orden de compra de fruta (módulo Compras)","Emisión de la factura de venta nacional (Cobranza)","Cálculo final de liquidación (módulo Liquidación de productores)"],
+    reglas:["Predio pertenece a un productor","Cuenta corriente inmutable; saldo = haber − debe","Exige representante legal con RUT","Una factura puede abarcar varias OC; se cuadra por montos","Factura capturada → HABER; NC → DEBE; pago confirmado → DEBE","Se paga la factura menos la NC aplicada","Se factura O se descuenta de la liquidación — nunca ambas","Para facturarle, el productor debe estar marcado también como Cliente nacional"], ca:"CA1–CA10 · R10–R16 · CO1–CO6" },
+
+  { n:"Liquidación de productores", sec:"Productores", et:"1/3", ok:false, estadoTxt:"Config lista · proceso Etapa 3",
+    obj:"Configuración y aplicación de los cobros y abonos que componen la liquidación al productor.",
+    si:["Mantenedor de conceptos de cobro / abono (positivos y negativos)",
+        "Formas de aplicación: por caja, por kilo, porcentual (% de la venta) y monto total",
+        "Listas de valores por concepto",
+        "Asociación de valores por productor",
+        "Ingreso de los datos de cobro de cada liquidación"],
+    no:["Cálculo final y cierre de la liquidación (Etapa 3)"],
+    reglas:["COBRO resta y ABONO suma a la liquidación","Valores parametrizables por forma de aplicación","Asociables por productor"], ca:"Por definir" },
+
+  { n:"Gestión de Riesgo", sec:"Gestión de Riesgo", et:1, ok:false, estadoTxt:"Spec listo · 1 punto pendiente",
+    obj:"Extensión del maestro de Cliente (sobre Entidades) con línea de crédito, formas de pago habilitadas y contactos de correo por país, más el motor de Score de Riesgo que determina el bloqueo automático para los Cierres de Negocios.",
+    si:["Campos de Cliente: línea de crédito, estado activo/inactivo, formas de pago habilitadas, plantilla de cobranza predeterminada",
+        "Contactos de correo por país de destino (uno o más por país; solo los países que el cliente realmente opera, no el listado completo del sistema)",
+        "Motor de Score: 4 parámetros de Conducta de Pago (morosidad ponderada, deuda vencida corto/largo plazo, impacto financiero, deuda total)",
+        "Motor de Score: 3 parámetros de Riesgo Claim (valor reclamado, tasa de reclamos, días de cierre) sobre la temporada actual",
+        "Nota final 1.0–7.0, clasificación (Bajo/Medio/Alto/Muy alto) y bloqueo automático por mora ponderada",
+        "Autorización de excepción de crédito puntual, válida para un solo Cierre de Negocios",
+        "Mantenedores de escalas, ponderadores y tasa mensual, todos con vigencia histórica",
+        "Historial de evaluación del riesgo"],
+    no:["Maestro genérico de Entidades: tipos, direcciones, representante legal (módulo aparte)","Creación del Cierre de Negocios (consume el estado de crédito vía API)","Emisión de documentos y cuotas (vive en Cobranza — Facturación y Pagos)"],
+    reglas:["El estado Inactivo (comercial) es independiente del bloqueo automático por score","Escala 1.0–7.0: Bajo/Medio/Alto/Muy alto; Bloqueado = Muy alto Y mora ponderada > umbral (default 30 días)","Riesgo Claim nunca mejora la nota final, solo puede empeorarla","Frecuencia de recálculo del score: pendiente de definición de negocio"], ca:"CA1–CA6" },
+];
+
+function renderModulos(){
+  const host = document.getElementById('mod-cards');
+  host.innerHTML = MODULOS.map((m,i)=>{
+    const et = (m.et==3||m.et=="3") ? '<span class="pill pill-et3">Etapa '+m.et+'</span>'
+             : '<span class="pill pill-et1">Etapa '+m.et+'</span>';
+    const etxt = m.estadoTxt || (m.ok ? 'Spec listo' : 'Pendiente');
+    const estado = '<span class="pill '+(m.ok?'pill-ok':'pill-pend')+'">'+etxt+'</span>';
+    return `<div class="mcard">
+      <div class="mcard-head" onclick="this.parentNode.querySelector('.mcard-body').classList.toggle('open')">
+        <div>
+          <h3>${m.n}</h3>
+          <div class="mcard-meta">${m.sec}</div>
+          <div class="mcard-badges"><span class="pill pill-sec">${m.sec}</span>${et}${estado}</div>
+        </div>
+        <span style="color:var(--muted);font-size:13px;">▾</span>
+      </div>
+      <div class="mcard-body">
+        <p class="mcard-obj">${m.obj}</p>
+        <h5>Módulos a implementar</h5><ul>${m.si.map(x=>`<li>${x}</li>`).join('')}</ul>
+        <h5>Fuera de alcance</h5><ul>${m.no.map(x=>`<li class="no">${x}</li>`).join('')}</ul>
+        <h5>Reglas clave</h5><ul>${m.reglas.map(x=>`<li>${x}</li>`).join('')}</ul>
+        <span class="ca-tag">Criterios de aceptación: ${m.ca}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ===== DATOS DINÁMICOS (data.json) =====
+function stateColor(e){ e=(e||'').toLowerCase();
+  if(e.includes('listo')||e.includes('hecho')) return 'var(--green2)';
+  if(e.includes('curso')||e.includes('proceso')) return 'var(--orange)';
+  return 'var(--muted)'; }
+
+function renderAvances(d){
+  document.getElementById('upd-note').textContent = 'Última actualización del registro: ' + (d.actualizado||'—');
+  const host = document.getElementById('avances-list');
+  host.innerHTML = (d.avances||[]).map(a=>`
+    <div class="av-row">
+      <div class="av-name">${a.modulo}</div>
+      <div class="av-track"><div class="av-fill" style="width:${a.progreso||0}%"></div></div>
+      <div class="av-pct">${a.progreso||0}%</div>
+      <div class="av-state" style="color:${stateColor(a.estado)}">${a.estado||''}</div>
+    </div>`).join('');
+}
+
+function renderGantt(d){
+  const g = d.gantt||{}; const N = g.semanas||16; const tareas = g.tareas||[];
+  const anchor = g.inicioSemana ? new Date(g.inicioSemana+'T00:00:00') : null;
+  const colW = 46, lblW = 200;
+  const weekLabel = (w)=>{ if(!anchor) return 'S'+w;
+    const dt = new Date(anchor); dt.setDate(dt.getDate()+(w-1)*7);
+    return ('0'+dt.getDate()).slice(-2)+'/'+('0'+(dt.getMonth()+1)).slice(-2); };
+  const cols = `${lblW}px repeat(${N}, ${colW}px)`;
+  let head = `<div class="g-cellh lbl">Tarea</div>`;
+  for(let w=1; w<=N; w++) head += `<div class="g-cellh">S${w}<br>${weekLabel(w)}</div>`;
+  let rows = '';
+  for(const t of tareas){
+    const ini = Math.max(1, t.inicioSemana||1), dur = Math.max(1, t.duracionSemanas||1);
+    const cls = t.etapa==2?'g-e2':(t.etapa==3?'g-e3':'g-e1');
+    let grid = '';
+    for(let w=1; w<=N; w++) grid += `<div class="g-gline" style="left:${(w-1)*colW}px"></div>`;
+    const left=(ini-1)*colW, width=dur*colW-4;
+    const bar = `<div class="g-bar ${cls}" style="left:${left}px;width:${width}px"
+                   title="${t.nombre} · S${ini}–S${ini+dur-1} · ${t.progreso||0}%">
+                   <div class="g-bar-fill" style="width:${100-(t.progreso||0)}%;margin-left:auto"></div>
+                   <span>${t.progreso||0}%</span></div>`;
+    rows += `<div class="g-row" style="grid-template-columns:${lblW}px 1fr">
+        <div class="g-lbl">${t.nombre}</div>
+        <div class="g-track"><div class="g-grid" style="width:${N*colW}px">${grid}</div>${bar}</div>
+      </div>`;
+  }
+  document.getElementById('gantt-host').innerHTML =
+    `<div class="gantt-wrap"><div class="gantt">
+       <div class="g-head" style="grid-template-columns:${cols}">${head}</div>
+       ${rows}
+     </div></div>
+     <div class="gantt-legend">
+       <span><i style="background:var(--blue2)"></i>Etapa 1</span>
+       <span><i style="background:#7C3AED"></i>Etapa 2</span>
+       <span><i style="background:var(--green2)"></i>Etapa 3</span>
+     </div>`;
+}
+
+function renderMockups(d){
+  const host = document.getElementById('mockups-host');
+  const mk = d.mockups||[];
+  if(!mk.length){ host.innerHTML = `<div class="empty-note">Aún no hay mockups cargados. Agrégalos en <code>data.json → mockups[]</code> con la forma <code>{ "titulo", "modulo", "img":"mockups/archivo.png", "nota" }</code> y coloca las imágenes en la carpeta <code>mockups/</code>.</div>`; return; }
+  host.innerHTML = `<div class="mk-grid">` + mk.map(m=>`
+    <div class="mk-card">
+      <img src="${m.img}" alt="${m.titulo}" onerror="this.style.opacity=.4;this.alt='(imagen no encontrada: '+this.src+')'">
+      <div class="mk-meta"><div class="mk-mod">${m.modulo||''}</div><h4>${m.titulo||''}</h4>${m.nota?`<p>${m.nota}</p>`:''}</div>
+    </div>`).join('') + `</div>`;
+}
+
+function dataError(msg){
+  document.getElementById('upd-note').innerHTML =
+    `<div class="empty-note">No se pudo cargar <code>data.json</code>. Para ver avances, Gantt y mockups, sirve el portal por HTTP (no lo abras con doble clic). Ej.: <code>python3 -m http.server</code> en esta carpeta y abre <code>http://localhost:8000/agrosan_proyecto.html</code>.<br><small>${msg||''}</small></div>`;
+  document.getElementById('gantt-host').innerHTML='';
+  renderMockups({mockups:[]});
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  renderModulos();
+  fetch('data.json').then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(d=>{ renderAvances(d); renderGantt(d); renderMockups(d); })
+    .catch(e=>dataError(e.message));
+});
+</script>
+</body>
+</html>

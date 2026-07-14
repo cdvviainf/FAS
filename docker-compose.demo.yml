@@ -1,0 +1,115 @@
+################################################################################
+# docker-compose.demo.yml — FAS Demo / Producción
+#
+# Para Coolify:
+#   1. Crear recurso "Docker Compose" apuntando a este archivo
+#   2. Configurar variables de entorno en la UI de Coolify (ver .env.demo.example)
+#   3. En "Domains" de cada servicio (api, web, pgadmin) asignar el subdominio
+#   4. Coolify gestiona SSL automáticamente vía Let's Encrypt
+#
+# Build args para Coolify (necesarios para el build de fas-web):
+#   NEXT_PUBLIC_API_URL → URL pública de la API, ej: https://api-fas.tudominio.cl
+################################################################################
+
+services:
+
+  # ─── PostgreSQL 17 ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: fas_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - fas_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis 7 ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: fas_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - fas_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── API (fas-api) ──────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./fas-api
+      dockerfile: Dockerfile
+    container_name: fas_api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${API_PUBLIC_URL}
+      EMAIL_FROM: ${EMAIL_FROM}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      DTE_PROVIDER: ${DTE_PROVIDER:-mock}
+      CORS_ORIGIN: ${WEB_PUBLIC_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ─── Web (fas-web) ───────────────────────────────────────────────────────────
+  web:
+    build:
+      context: ./fas-web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    container_name: fas_web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - api
+
+  # ─── pgAdmin 4 (opcional — puede omitirse en producción real) ───────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: fas_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - fas_pgadmin_data:/var/lib/pgadmin
+      - ./docker/pgadmin-servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  fas_postgres_data:
+    driver: local
+  fas_redis_data:
+    driver: local
+  fas_pgadmin_data:
+    driver: local

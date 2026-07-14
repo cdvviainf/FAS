@@ -1,0 +1,337 @@
+{
+  "actualizado": "2026-07-09",
+  "proyecto": {
+    "nombre": "FAS — Frutera Agrosan Sistema",
+    "version": "0.7"
+  },
+  "avances": [
+    {
+      "modulo": "Entorno general",
+      "progreso": 100,
+      "estado": "Listo"
+    },
+    {
+      "modulo": "Mantenedores Generales",
+      "progreso": 0,
+      "estado": "Spec listo"
+    },
+    {
+      "modulo": "Usuarios y Perfiles",
+      "progreso": 0,
+      "estado": "Spec listo"
+    },
+    {
+      "modulo": "Entidades",
+      "progreso": 0,
+      "estado": "Spec listo"
+    },
+    {
+      "modulo": "Calidad — Control en origen",
+      "progreso": 0,
+      "estado": "Spec listo"
+    },
+    {
+      "modulo": "Calidad — Análisis de reclamos",
+      "progreso": 0,
+      "estado": "Spec listo · ingreso y valorización en Ventas"
+    },
+    {
+      "modulo": "Calidad — App móvil offline",
+      "progreso": 0,
+      "estado": "Pendiente · Etapa 2"
+    },
+    {
+      "modulo": "Compras — Ciclo de compras",
+      "progreso": 0,
+      "estado": "Spec listo · modelo cerrado"
+    },
+    {
+      "modulo": "Ventas — Ciclo de ventas",
+      "progreso": 0,
+      "estado": "En definición"
+    },
+    {
+      "modulo": "Cobranza — Facturación y Pagos",
+      "progreso": 0,
+      "estado": "Spec listo · incluye ventas nacionales"
+    },
+    {
+      "modulo": "Cobranza — Gestión",
+      "progreso": 0,
+      "estado": "Spec listo"
+    },
+    {
+      "modulo": "Gestión de materiales",
+      "progreso": 0,
+      "estado": "Spec listo"
+    },
+    {
+      "modulo": "Gestión de Productores",
+      "progreso": 0,
+      "estado": "Spec listo"
+    },
+    {
+      "modulo": "Liquidación de productores",
+      "progreso": 0,
+      "estado": "Config lista · proceso Etapa 3"
+    },
+    {
+      "modulo": "Gestión de Riesgo",
+      "progreso": 0,
+      "estado": "Spec listo · 1 punto pendiente"
+    },
+    {
+      "modulo": "Finanzas — Margen operacional y flujo de caja",
+      "progreso": 0,
+      "estado": "Pendiente"
+    },
+    {
+      "modulo": "Operaciones / Stock",
+      "progreso": 0,
+      "estado": "Pendiente"
+    },
+    {
+      "modulo": "Integración AGL",
+      "progreso": 0,
+      "estado": "Pendiente · solo lectura"
+    },
+    {
+      "modulo": "Automatización IA",
+      "progreso": 0,
+      "estado": "Pendiente · Etapa 2"
+    }
+  ],
+  "gantt": {
+    "inicioSemana": "2026-07-13",
+    "semanas": 41,
+    "_ayuda": "inicioSemana = lunes de la semana 1. Cada tarea: inicioSemana (1..N), duracionSemanas, progreso 0-100, etapa 1/2/3.",
+    "tareas": [
+      {
+        "nombre": "Scaffold (fas-api + fas-web)",
+        "etapa": 1,
+        "inicioSemana": 1,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Entidades",
+        "etapa": 1,
+        "inicioSemana": 2,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Mantenedores Generales",
+        "etapa": 1,
+        "inicioSemana": 2,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Usuarios y Perfiles",
+        "etapa": 1,
+        "inicioSemana": 2,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Compras — Ciclo de compras",
+        "etapa": 1,
+        "inicioSemana": 3,
+        "duracionSemanas": 2,
+        "progreso": 0
+      },
+      {
+        "nombre": "Ventas — Ciclo de ventas",
+        "etapa": 1,
+        "inicioSemana": 5,
+        "duracionSemanas": 3,
+        "progreso": 0
+      },
+      {
+        "nombre": "Integración AGL (embarque)",
+        "etapa": 1,
+        "inicioSemana": 8,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Operaciones / Stock (recepción, PL)",
+        "etapa": 1,
+        "inicioSemana": 8,
+        "duracionSemanas": 2,
+        "progreso": 0
+      },
+      {
+        "nombre": "Ingreso y valorización de reclamos (Ventas)",
+        "etapa": 1,
+        "inicioSemana": 10,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Cobranza — Facturación y Pagos",
+        "etapa": 1,
+        "inicioSemana": 11,
+        "duracionSemanas": 2,
+        "progreso": 0
+      },
+      {
+        "nombre": "Ingreso de liquidación del cliente",
+        "etapa": 1,
+        "inicioSemana": 13,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Ventas nacionales · emisor desde 0 (DTE 33/34)",
+        "etapa": 1,
+        "inicioSemana": 14,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Cobranza — Gestión",
+        "etapa": 1,
+        "inicioSemana": 15,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Gestión de materiales",
+        "etapa": 1,
+        "inicioSemana": 16,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Guías de despacho (DTE 52)",
+        "etapa": 1,
+        "inicioSemana": 17,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Órdenes de compra de materiales",
+        "etapa": 1,
+        "inicioSemana": 17,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Proforma de venta de materiales",
+        "etapa": 1,
+        "inicioSemana": 18,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Gestión de Productores",
+        "etapa": 1,
+        "inicioSemana": 19,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Captura de facturas y NC (Gestión de Productores)",
+        "etapa": 1,
+        "inicioSemana": 20,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Control de pagos a productores",
+        "etapa": 1,
+        "inicioSemana": 21,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Proforma de servicios a productores",
+        "etapa": 1,
+        "inicioSemana": 21,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Ventas nacionales · confirmador de proformas",
+        "etapa": 1,
+        "inicioSemana": 22,
+        "duracionSemanas": 1,
+        "progreso": 0
+      },
+      {
+        "nombre": "Calidad — Control en origen",
+        "etapa": 1,
+        "inicioSemana": 23,
+        "duracionSemanas": 4,
+        "progreso": 0
+      },
+      {
+        "nombre": "Calidad — Análisis de reclamos",
+        "etapa": 1,
+        "inicioSemana": 27,
+        "duracionSemanas": 2,
+        "progreso": 0
+      },
+      {
+        "nombre": "Gestión de Riesgo",
+        "etapa": 1,
+        "inicioSemana": 29,
+        "duracionSemanas": 2,
+        "progreso": 0
+      },
+      {
+        "nombre": "Finanzas — Margen operacional y flujo de caja",
+        "etapa": 1,
+        "inicioSemana": 31,
+        "duracionSemanas": 2,
+        "progreso": 0
+      },
+      {
+        "nombre": "Automatización IA (PL, facturas, liquidaciones)",
+        "etapa": 2,
+        "inicioSemana": 35,
+        "duracionSemanas": 3,
+        "progreso": 0
+      },
+      {
+        "nombre": "Calidad — App móvil offline",
+        "etapa": 2,
+        "inicioSemana": 35,
+        "duracionSemanas": 3,
+        "progreso": 0
+      },
+      {
+        "nombre": "Liquidación de productores",
+        "etapa": 3,
+        "inicioSemana": 39,
+        "duracionSemanas": 3,
+        "progreso": 0
+      }
+    ]
+  },
+  "mockups": [
+    {
+      "_ejemplo": "Copia esta estructura y coloca la imagen en la carpeta mockups/",
+      "titulo": "Imagen Clara",
+      "modulo": "Dashboard",
+      "img": "mockups/dash1.png",
+      "nota": ""
+    },
+    {
+      "_ejemplo": "Copia esta estructura y coloca la imagen en la carpeta mockups/",
+      "titulo": "Imagen Oscura",
+      "modulo": "Dashboard",
+      "img": "mockups/dash2.png",
+      "nota": ""
+    },
+    {
+      "_ejemplo": "Copia esta estructura y coloca la imagen en la carpeta mockups/",
+      "titulo": "Imagen Oscura",
+      "modulo": "Gestión de Materiales",
+      "img": "mockups/articulos.png",
+      "nota": ""
+    }
+  ]
+}

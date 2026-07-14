@@ -1,0 +1,15 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "FAS — PostgreSQL 17",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "fas_db",
+      "Username": "fas_user",
+      "Password": "fas_pass",
+      "SSLMode": "prefer",
+      "PassFile": "/tmp/pgpassfile"
+    }
+  }
+}

@@ -1,0 +1,921 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USUARIOS Y AUTH ────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  role          UserRole
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  // Better Auth fields
+  emailVerified Boolean   @default(false)
+  image         String?
+  sessions      Session[]
+  accounts      Account[]
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                    String    @id
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+enum UserRole {
+  ADMIN
+  GERENCIA
+  COMPRAS
+  VENTAS
+  OPERACIONES
+  FINANZAS
+  CALIDAD
+}
+
+// ─── ENTIDADES MAESTRAS ──────────────────────────────────────────────────────
+
+model Productor {
+  id            String    @id @default(cuid())
+  rut           String    @unique
+  nombre        String
+  razonSocial   String
+  email         String?
+  telefono      String?
+  direccion     String?
+  comuna        String?
+  region        String?
+  banco         String?
+  tipoCuenta    String?
+  numeroCuenta  String?
+  activo        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  ordenesCompra OrdenCompra[]
+}
+
+model Cliente {
+  id         String      @id @default(cuid())
+  codigo     String      @unique
+  nombre     String
+  pais       String
+  mercado    MercadoType
+  email      String?
+  contacto   String?
+  activo     Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  deletedAt  DateTime?
+
+  notasVenta NotaVenta[]
+}
+
+enum MercadoType {
+  SUDAMERICA
+  NORTEAMERICA
+  EUROPA
+  ASIA
+  OTRO
+}
+
+model EspecieLegacy {
+  id        String           @id @default(cuid())
+  nombre    String           @unique
+  activo    Boolean          @default(true)
+
+  variedades VariedadLegacy[]
+
+  @@map("legacy_especies")
+}
+
+model VariedadLegacy {
+  id         String         @id @default(cuid())
+  nombre     String
+  especieId  String
+  especie    EspecieLegacy  @relation(fields: [especieId], references: [id])
+  activo     Boolean        @default(true)
+
+  @@unique([nombre, especieId])
+  ordenesCompra OrdenCompraItem[]
+  stockLotes    StockLote[]
+
+  @@map("legacy_variedades")
+}
+
+// ─── COMPRAS ─────────────────────────────────────────────────────────────────
+
+model OrdenCompra {
+  id            String      @id @default(cuid())
+  numero        String      @unique
+  productorId   String
+  productor     Productor   @relation(fields: [productorId], references: [id])
+  temporada     String
+  fechaEmision  DateTime
+  fechaEntrega  DateTime?
+  estado        OcEstado    @default(BORRADOR)
+  observaciones String?
+  montoTotal    Decimal     @db.Decimal(18, 4)
+  aprobadoPor   String?
+  aprobadoAt    DateTime?
+  createdBy     String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  deletedAt     DateTime?
+
+  items      OrdenCompraItem[]
+  pagos      PagoProductor[]
+  stockLotes StockLote[]
+}
+
+enum OcEstado {
+  BORRADOR
+  ENVIADA
+  APROBADA
+  RECIBIDA_PARCIAL
+  RECIBIDA_TOTAL
+  ANULADA
+}
+
+model OrdenCompraItem {
+  id              String         @id @default(cuid())
+  ordenCompraId   String
+  ordenCompra     OrdenCompra    @relation(fields: [ordenCompraId], references: [id])
+  variedadId      String
+  variedad        VariedadLegacy @relation(fields: [variedadId], references: [id])
+  calibre         String?
+  categoria       String?
+  unidad          String      @default("CAJA")
+  cantidadPactada Decimal     @db.Decimal(18, 4)
+  precioUnitario  Decimal     @db.Decimal(18, 4)
+  montoTotal      Decimal     @db.Decimal(18, 4)
+}
+
+model PagoProductor {
+  id            String      @id @default(cuid())
+  ordenCompraId String
+  ordenCompra   OrdenCompra @relation(fields: [ordenCompraId], references: [id])
+  fecha         DateTime
+  monto         Decimal     @db.Decimal(18, 4)
+  moneda        String      @default("CLP")
+  tipoPago      TipoPago
+  referencia    String?
+  observaciones String?
+  createdBy     String
+  createdAt     DateTime    @default(now())
+}
+
+enum TipoPago {
+  TRANSFERENCIA
+  CHEQUE
+  EFECTIVO
+  OTRO
+}
+
+// ─── OPERACIONES / STOCK ─────────────────────────────────────────────────────
+
+model StockLote {
+  id              String        @id @default(cuid())
+  codigo          String        @unique
+  ordenCompraId   String?
+  ordenCompra     OrdenCompra?  @relation(fields: [ordenCompraId], references: [id])
+  variedadId      String
+  variedad        VariedadLegacy @relation(fields: [variedadId], references: [id])
+  temporada       String
+  fechaRecepcion  DateTime
+  calibre         String?
+  categoria       String?
+  cantidadCajas   Decimal       @db.Decimal(18, 4)
+  pesoNeto        Decimal?      @db.Decimal(18, 4)
+  estadoCalidad   CalidadEstado @default(PENDIENTE)
+  observaciones   String?
+  createdBy       String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  movimientos    StockMovimiento[]
+  notaVentaItems NotaVentaItem[]
+}
+
+enum CalidadEstado {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+  APROBADO_CONDICIONADO
+}
+
+model StockMovimiento {
+  id            String         @id @default(cuid())
+  loteId        String
+  lote          StockLote      @relation(fields: [loteId], references: [id])
+  tipo          MovimientoTipo
+  cantidad      Decimal        @db.Decimal(18, 4)
+  referencia    String?
+  observaciones String?
+  createdBy     String
+  createdAt     DateTime       @default(now())
+}
+
+enum MovimientoTipo {
+  INGRESO
+  DESPACHO_EXPORTACION
+  MERMA
+  AJUSTE
+}
+
+// ─── MATERIALES ──────────────────────────────────────────────────────────────
+
+model Material {
+  id             String   @id @default(cuid())
+  codigo         String   @unique
+  nombre         String
+  unidad         String
+  precioUnitario Decimal  @db.Decimal(18, 4)
+  activo         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ─── VENTAS ──────────────────────────────────────────────────────────────────
+
+model NotaVenta {
+  id             String      @id @default(cuid())
+  numero         String      @unique
+  clienteId      String
+  cliente        Cliente     @relation(fields: [clienteId], references: [id])
+  fechaEmision   DateTime
+  fechaEmbarque  DateTime?
+  mercado        MercadoType
+  puertoDestino  String?
+  incoterm       String?
+  moneda         String      @default("USD")
+  estado         NvEstado    @default(BORRADOR)
+  observaciones  String?
+  montoTotal     Decimal     @db.Decimal(18, 4)
+  createdBy      String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+
+  items         NotaVentaItem[]
+  cobranzas     Cobranza[]
+  documentosDTE DocumentoDTE[]
+}
+
+enum NvEstado {
+  BORRADOR
+  CONFIRMADA
+  EMBARCADA
+  EN_TRANSITO
+  ENTREGADA
+  LIQUIDADA
+  ANULADA
+}
+
+model NotaVentaItem {
+  id             String    @id @default(cuid())
+  notaVentaId    String
+  notaVenta      NotaVenta @relation(fields: [notaVentaId], references: [id])
+  loteId         String
+  lote           StockLote @relation(fields: [loteId], references: [id])
+  cantidad       Decimal   @db.Decimal(18, 4)
+  precioUnitario Decimal   @db.Decimal(18, 4)
+  montoTotal     Decimal   @db.Decimal(18, 4)
+  descripcion    String?
+}
+
+// ─── COBRANZA ────────────────────────────────────────────────────────────────
+
+model Cobranza {
+  id               String         @id @default(cuid())
+  notaVentaId      String
+  notaVenta        NotaVenta      @relation(fields: [notaVentaId], references: [id])
+  fechaVencimiento DateTime
+  monto            Decimal        @db.Decimal(18, 4)
+  moneda           String         @default("USD")
+  estado           CobranzaEstado @default(PENDIENTE)
+  fechaPago        DateTime?
+  montoPagado      Decimal?       @db.Decimal(18, 4)
+  referencia       String?
+  observaciones    String?
+  createdBy        String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+enum CobranzaEstado {
+  PENDIENTE
+  PARCIAL
+  PAGADA
+  VENCIDA
+  INCOBRABLE
+}
+
+// ─── FINANZAS / COSTOS ───────────────────────────────────────────────────────
+
+model CostoOperacional {
+  id          String   @id @default(cuid())
+  tipo        String
+  descripcion String
+  monto       Decimal  @db.Decimal(18, 4)
+  moneda      String   @default("USD")
+  fecha       DateTime
+  referencia  String?
+  notaVentaId String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+}
+
+// ─── FACTURACIÓN DTE ─────────────────────────────────────────────────────────
+
+model DocumentoDTE {
+  id           String    @id @default(cuid())
+  notaVentaId  String?
+  notaVenta    NotaVenta? @relation(fields: [notaVentaId], references: [id])
+  tipoDTE      Int
+  folio        Int?
+  fecha        DateTime
+  rutEmisor    String
+  rutReceptor  String
+  montoNeto    Decimal   @db.Decimal(18, 4)
+  montoIva     Decimal   @db.Decimal(18, 4)
+  montoTotal   Decimal   @db.Decimal(18, 4)
+  estado       DteEstado @default(PENDIENTE)
+  proveedorRef String?
+  xmlTimbrado  String?
+  pdfUrl       String?
+  errorMensaje String?
+  createdBy    String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+enum DteEstado {
+  PENDIENTE
+  ENVIADO
+  ACEPTADO
+  RECHAZADO
+  ANULADO
+}
+
+// ─── CALIDAD ─────────────────────────────────────────────────────────────────
+
+model InspeccionCalidad {
+  id              String        @id @default(cuid())
+  loteId          String        @unique
+  fecha           DateTime
+  inspector       String
+  temperatura     Decimal?      @db.Decimal(5, 2)
+  brix            Decimal?      @db.Decimal(5, 2)
+  firmeza         String?
+  coloracion      String?
+  presenciaPlagas Boolean       @default(false)
+  resultado       CalidadEstado
+  observaciones   String?
+  createdBy       String
+  createdAt       DateTime      @default(now())
+}
+
+// ─── CONFIGURACIÓN / MANTENEDORES SIMPLES ───────────────────────────────────
+
+model Pais {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  esPaisOrigen          Boolean   @default(false)
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  mercados              Mercado[]
+  puertos               Puerto[]
+
+  @@map("paises")
+}
+
+model Zona {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("zonas")
+}
+
+model GrupoMercado {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  mercados              Mercado[]
+
+  @@map("grupos_mercado")
+}
+
+model TipoEmbarque {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  puertos               Puerto[]
+
+  @@map("tipos_embarque")
+}
+
+model UnidadMedida {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  especies              Especie[] @relation("UnidadMedidaCalidadEspecie")
+
+  @@map("unidades_medida")
+}
+
+model TipoPallet {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("tipos_pallet")
+}
+
+model Altura {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("alturas")
+}
+
+model TipoProduccion {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("tipos_produccion")
+}
+
+model TipoDefecto {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("tipos_defecto")
+}
+
+model TipoParametro {
+  id                    Int         @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime    @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?   @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  parametros            Parametro[]
+
+  @@map("tipos_parametro")
+}
+
+// ─── CONFIGURACIÓN / MANTENEDORES CON FK ────────────────────────────────────
+
+model Region {
+  id                    Int         @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime    @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?   @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  provincias            Provincia[]
+
+  @@map("regiones")
+}
+
+model Provincia {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  regionId              Int
+  region                Region    @relation(fields: [regionId], references: [id])
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  comunas               Comuna[]
+
+  @@map("provincias")
+}
+
+model Comuna {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  provinciaId           Int
+  provincia             Provincia @relation(fields: [provinciaId], references: [id])
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  bodegas               Bodega[]
+
+  @@map("comunas")
+}
+
+model Especie {
+  id                      Int            @id @default(autoincrement())
+  codigo                  String
+  descripcion             String
+  descripcionExtranjera   String?
+  unidadMedidaCalidadId   Int?
+  unidadMedidaCalidad     UnidadMedida?  @relation("UnidadMedidaCalidadEspecie", fields: [unidadMedidaCalidadId], references: [id])
+  bloqueado               Boolean        @default(false)
+  creadoEn                DateTime       @default(now())
+  creadoPor               String
+  actualizadoEn           DateTime?      @updatedAt
+  actualizadoPor          String?
+  eliminadoEn             DateTime?
+  eliminadoPor            String?
+
+  gruposVariedad          GrupoVariedad[]
+  variedades              Variedad[]
+  categorias              Categoria[]
+  calibres                Calibre[]
+
+  @@map("especies")
+}
+
+model GrupoVariedad {
+  id                    Int        @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  especieId             Int
+  especie               Especie    @relation(fields: [especieId], references: [id])
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime   @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?  @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  variedades            Variedad[]
+
+  @@map("grupos_variedad")
+}
+
+model Variedad {
+  id                    Int            @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  especieId             Int
+  especie               Especie        @relation(fields: [especieId], references: [id])
+  grupoVariedadId       Int?
+  grupoVariedad         GrupoVariedad? @relation(fields: [grupoVariedadId], references: [id])
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime       @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?      @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("variedades")
+}
+
+model Categoria {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  especieId             Int
+  especie               Especie   @relation(fields: [especieId], references: [id])
+  orden                 Int
+  control               String[]
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("categorias")
+}
+
+model Calibre {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  especieId             Int
+  especie               Especie   @relation(fields: [especieId], references: [id])
+  orden                 Int
+  control               String[]
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("calibres")
+}
+
+model Parametro {
+  id                    Int           @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  tipoParametroId       Int
+  tipoParametro         TipoParametro @relation(fields: [tipoParametroId], references: [id])
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime      @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?     @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("parametros")
+}
+
+model Mercado {
+  id                    Int          @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  grupoMercadoId        Int
+  grupoMercado          GrupoMercado @relation(fields: [grupoMercadoId], references: [id])
+  paisId                Int
+  pais                  Pais         @relation(fields: [paisId], references: [id])
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime     @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?    @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("mercados")
+}
+
+model Puerto {
+  id                    Int          @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  paisId                Int
+  pais                  Pais         @relation(fields: [paisId], references: [id])
+  tipoEmbarqueId        Int
+  tipoEmbarque          TipoEmbarque @relation(fields: [tipoEmbarqueId], references: [id])
+  latitud               Decimal?     @db.Decimal(10, 7)
+  longitud              Decimal?     @db.Decimal(10, 7)
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime     @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?    @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("puertos")
+}
+
+model Moneda {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  esMonedaBase          Boolean   @default(false)
+  decimales             Int       @default(2)
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("monedas")
+}
+
+enum NaturalezaCuentaCorriente {
+  DEBE
+  HABER
+  AMBOS
+}
+
+enum TipoBodega {
+  MATERIALES
+  EMBARQUE
+  DESPACHO
+}
+
+model Temporada {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  fechaInicio           DateTime  @db.Date
+  fechaTermino          DateTime  @db.Date
+  predeterminada        Boolean   @default(false)
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("temporadas")
+}
+
+model Bodega {
+  id                    Int              @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  direccion             String
+  comunaId              Int
+  comuna                Comuna           @relation(fields: [comunaId], references: [id])
+  tipos                 TipoBodega[]
+  latitud               Decimal?         @db.Decimal(10, 7)
+  longitud              Decimal?         @db.Decimal(10, 7)
+  bloqueado             Boolean          @default(false)
+  creadoEn              DateTime         @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?        @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  contactos             BodegaContacto[]
+
+  @@map("bodegas")
+}
+
+model BodegaContacto {
+  id        Int      @id @default(autoincrement())
+  bodegaId  Int
+  bodega    Bodega   @relation(fields: [bodegaId], references: [id])
+  nombre    String
+  email     String?
+  telefono  String?
+  orden     Int      @default(0)
+  creadoEn  DateTime @default(now())
+
+  @@map("bodega_contactos")
+}
+
+model ConceptoCtaCte {
+  id                    Int                       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  naturaleza            NaturalezaCuentaCorriente
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime                  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?                 @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  @@map("conceptos_cta_cte")
+}
