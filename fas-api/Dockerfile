@@ -3,11 +3,11 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache openssl
 COPY package*.json ./
-RUN npm ci
+# --ignore-scripts evita que @prisma/client postinstall dispare prisma generate
+# sin schema.prisma ni DATABASE_URL disponibles aún
+RUN npm ci --ignore-scripts
 COPY prisma ./prisma
-# DATABASE_URL dummy solo para que prisma generate valide el schema (no conecta a DB)
-ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
-RUN npx prisma generate
+RUN DATABASE_URL=postgresql://build:build@localhost:5432/build npx prisma generate
 COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
@@ -18,13 +18,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN apk add --no-cache openssl
 COPY package*.json ./
-# DATABASE_URL inline solo para que el postinstall de @prisma/client no falle.
-# No se bakea en la imagen: en runtime Coolify inyecta el valor real.
-RUN DATABASE_URL=postgresql://build:build@localhost:5432/build npm ci --omit=dev
+# --ignore-scripts evita el postinstall de @prisma/client; el cliente ya viene copiado del builder
+RUN npm ci --omit=dev --ignore-scripts
 COPY prisma ./prisma
-# Copiamos el cliente Prisma generado en el builder (sin re-generar)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/dist ./dist
 EXPOSE 3001
-# DATABASE_URL real viene de las variables de entorno de Coolify en runtime
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
