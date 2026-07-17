@@ -16,12 +16,11 @@ RUN npm run build
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-# DATABASE_URL dummy para que el postinstall de @prisma/client no falle al instalar deps.
-# Coolify sobreescribe este valor con la variable real en runtime.
-ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
 RUN apk add --no-cache openssl
 COPY package*.json ./
-RUN npm ci --omit=dev
+# DATABASE_URL inline solo para que el postinstall de @prisma/client no falle.
+# No se bakea en la imagen: en runtime Coolify inyecta el valor real.
+RUN DATABASE_URL=postgresql://build:build@localhost:5432/build npm ci --omit=dev
 COPY prisma ./prisma
 # Copiamos el cliente Prisma generado en el builder (sin re-generar)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
