@@ -3,9 +3,9 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache openssl
 COPY package*.json ./
-# --ignore-scripts evita que @prisma/client postinstall dispare prisma generate
-# sin schema.prisma ni DATABASE_URL disponibles aún
-RUN npm ci --ignore-scripts
+# NODE_ENV=development para que npm instale devDependencies (typescript, tsx, etc.)
+# --ignore-scripts evita que @prisma/client postinstall dispare prisma generate sin schema
+RUN NODE_ENV=development npm ci --ignore-scripts
 COPY prisma ./prisma
 RUN DATABASE_URL=postgresql://build:build@localhost:5432/build npx prisma generate
 COPY tsconfig.json ./
