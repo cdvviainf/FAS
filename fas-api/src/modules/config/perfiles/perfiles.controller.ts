@@ -21,20 +21,20 @@ export async function getPerfilById(req: FastifyRequest, reply: FastifyReply) {
 
 export async function createPerfil(req: FastifyRequest, reply: FastifyReply) {
   const input = perfilCreateSchema.parse(req.body)
-  const result = await service.crearPerfil(input)
+  const result = await service.crearPerfil(input, req.fasUserId)
   return reply.status(201).send(result)
 }
 
 export async function updatePerfil(req: FastifyRequest, reply: FastifyReply) {
   const { id } = perfilIdParamSchema.parse(req.params)
   const input = perfilUpdateSchema.parse(req.body)
-  const result = await service.actualizarPerfil(id, input)
+  const result = await service.actualizarPerfil(id, input, req.fasUserId)
   return reply.send(result)
 }
 
 export async function deletePerfil(req: FastifyRequest, reply: FastifyReply) {
   const { id } = perfilIdParamSchema.parse(req.params)
-  await service.eliminarPerfil(id)
+  await service.eliminarPerfil(id, req.fasUserId)
   return reply.status(204).send()
 }
 

@@ -61,16 +61,22 @@ export async function crearUsuario(input: UsuarioCreateInput, currentUserId = SI
     password: hashedPassword,
   })
 
-  // Crear registro en tabla Usuario (campos de aplicación)
-  const usuario = await repo.createUsuario({
-    id: authUser.id,
-    nombre: input.nombre,
-    email: input.email,
-    whatsapp: input.whatsapp,
-    imagenUrl: input.imagenUrl || null,
-    perfilId: input.perfilId,
-    creadoPor: currentUserId,
-  })
+  // Crear registro en tabla Usuario — si falla, compensar eliminando el User de Better Auth
+  let usuario
+  try {
+    usuario = await repo.createUsuario({
+      id: authUser.id,
+      nombre: input.nombre,
+      email: input.email,
+      whatsapp: input.whatsapp,
+      imagenUrl: input.imagenUrl || null,
+      perfilId: input.perfilId,
+      creadoPor: currentUserId,
+    })
+  } catch (err) {
+    await ctx.internalAdapter.deleteUser(authUser.id).catch(() => {})
+    throw err
+  }
 
   return usuario
 }

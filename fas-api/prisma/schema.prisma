@@ -116,7 +116,7 @@ model PerfilAcceso {
 model Usuario {
   id             String    @id
   nombre         String
-  email          String    @unique
+  email          String
   whatsapp       String?
   imagenUrl      String?
   perfilId       Int

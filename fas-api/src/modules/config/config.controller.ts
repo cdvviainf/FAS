@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import * as service from './config.service.js'
+import { prisma } from '../../lib/prisma.js'
 import {
   mantenedorListQuerySchema,
   mantenedorParamsSchema,
@@ -61,6 +62,27 @@ const schemaRegistry: Record<string, [ZodTypeAny, ZodTypeAny]> = {
 export async function getTemporadaPredeterminada(_req: FastifyRequest, reply: FastifyReply) {
   const temporada = await service.obtenerTemporadaPredeterminada()
   return reply.send(temporada ?? null)
+}
+
+// Retorna los ítems de menú accesibles para el perfil del usuario autenticado
+export async function getMiMenu(req: FastifyRequest, reply: FastifyReply) {
+  const perfilId = req.fasUserPerfilId
+  if (!perfilId) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Sin sesión.' } })
+
+  const accesos = await prisma.perfilAcceso.findMany({
+    where: { perfilId, nivel: { not: 'SIN_ACCESO' } },
+    include: {
+      itemMenu: { select: { codigo: true, nombre: true, seccion: true, ruta: true, esAccion: true, orden: true } },
+    },
+    orderBy: { itemMenu: { orden: 'asc' } },
+  })
+
+  const items = accesos.map((a) => ({
+    ...a.itemMenu,
+    nivel: a.nivel,
+  }))
+
+  return reply.send(items)
 }
 
 export function makeControllers(modelo: MantenedorModelo, schemaKey?: string) {
