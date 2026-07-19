@@ -1,17 +1,16 @@
 'use client';
 
 import PageContainer from '@/components/layout/page-container';
-import { OrganizationProfile } from '@clerk/nextjs';
-import { teamInfoContent } from '@/config/infoconfig';
 
 export default function TeamPage() {
   return (
     <PageContainer
       pageTitle='Team Management'
-      pageDescription='Manage your workspace team, members, roles, security and more.'
-      infoContent={teamInfoContent}
+      pageDescription='Gestión de equipo'
     >
-      <OrganizationProfile />
+      <div className='bg-muted rounded-lg p-6 text-center text-sm'>
+        Funcionalidad no disponible en esta versión.
+      </div>
     </PageContainer>
   );
 }
