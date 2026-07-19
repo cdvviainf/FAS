@@ -13,11 +13,8 @@ model User {
   id            String    @id @default(cuid())
   email         String    @unique
   name          String
-  role          UserRole
-  active        Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
 
   // Better Auth fields
   emailVerified Boolean   @default(false)
@@ -66,14 +63,72 @@ model Verification {
   updatedAt  DateTime @updatedAt
 }
 
-enum UserRole {
-  ADMIN
-  GERENCIA
-  COMPRAS
-  VENTAS
-  OPERACIONES
-  FINANZAS
-  CALIDAD
+// ─── AUTORIZACIÓN: ÍTEMS DE MENÚ, PERFILES Y USUARIOS ───────────────────────
+
+enum NivelAcceso {
+  SIN_ACCESO
+  LECTURA
+  TOTAL
+}
+
+model ItemMenu {
+  id       Int            @id @default(autoincrement())
+  codigo   String         @unique
+  nombre   String
+  seccion  String
+  ruta     String?
+  esAccion Boolean        @default(false)
+  orden    Int            @default(0)
+  activo   Boolean        @default(true)
+  accesos  PerfilAcceso[]
+
+  @@map("items_menu")
+}
+
+model Perfil {
+  id             Int            @id @default(autoincrement())
+  codigo         String
+  descripcion    String
+  accesos        PerfilAcceso[]
+  usuarios       Usuario[]
+  creadoEn       DateTime       @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime?      @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@map("perfiles")
+}
+
+model PerfilAcceso {
+  id         Int         @id @default(autoincrement())
+  perfilId   Int
+  perfil     Perfil      @relation(fields: [perfilId], references: [id])
+  itemMenuId Int
+  itemMenu   ItemMenu    @relation(fields: [itemMenuId], references: [id])
+  nivel      NivelAcceso @default(SIN_ACCESO)
+
+  @@unique([perfilId, itemMenuId])
+  @@map("perfil_accesos")
+}
+
+model Usuario {
+  id             String    @id
+  nombre         String
+  email          String    @unique
+  whatsapp       String?
+  imagenUrl      String?
+  perfilId       Int
+  perfil         Perfil    @relation(fields: [perfilId], references: [id])
+  creadoEn       DateTime  @default(now())
+  creadoPor      String?
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@map("usuarios")
 }
 
 // ─── ENTIDADES MAESTRAS ──────────────────────────────────────────────────────

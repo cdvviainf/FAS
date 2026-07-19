@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import { makeControllers, getTemporadaPredeterminada } from './config.controller.js'
 import type { MantenedorConfig } from './config.types.js'
+import { perfilesRoutes } from './perfiles/perfiles.routes.js'
+import { usuariosRoutes } from './usuarios/usuarios.routes.js'
 
 const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'pais', prefixRuta: 'paises', label: 'País', tienePaisOrigen: true, schemaKey: 'pais' },
@@ -35,6 +37,10 @@ const MANTENEDORES: MantenedorConfig[] = [
 ]
 
 export async function configRoutes(app: FastifyInstance) {
+  // Módulos de seguridad: perfiles, usuarios e ítems de menú
+  await app.register(perfilesRoutes)
+  await app.register(usuariosRoutes)
+
   // Ruta especial: temporada predeterminada (antes del loop para evitar que :id capture "predeterminada")
   app.get('/temporadas/predeterminada', getTemporadaPredeterminada)
 

@@ -18,6 +18,9 @@
   "author": "VIAIN Asesorías Informáticas",
   "license": "ISC",
   "type": "module",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
     "@fastify/helmet": "^13.0.2",
