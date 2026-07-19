@@ -164,7 +164,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
           </CardHeader>
           <CardContent>
             <editForm.AppForm>
-              <editForm.Form id='usuario-form' className='grid gap-4 sm:grid-cols-2 p-0 m-0'>
+              <editForm.Form id='usuario-edit-form' className='grid gap-4 sm:grid-cols-2 p-0 m-0'>
                 {/* Nombre */}
                 <editForm.Field name='nombre'>
                   {(field) => (
@@ -262,7 +262,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
           <Button type='button' variant='outline' onClick={() => router.push('/dashboard/configuracion/usuarios')}>
             Cancelar
           </Button>
-          <Button type='submit' form='usuario-form' isLoading={isPending}>
+          <Button type='submit' form='usuario-edit-form' isLoading={isPending}>
             <Icons.check className='mr-2 h-4 w-4' />
             Guardar cambios
           </Button>
@@ -273,14 +273,14 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
 
   // ---- CREATE MODE ----
   return (
-    <div className='space-y-6'>
-      <Card>
-        <CardHeader>
-          <CardTitle className='text-base'>Datos del Usuario</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <createForm.AppForm>
-            <createForm.Form id='usuario-form' className='grid gap-4 sm:grid-cols-2 p-0 m-0'>
+    <createForm.AppForm>
+      <createForm.Form id='usuario-create-form' className='space-y-6'>
+        <Card>
+          <CardHeader>
+            <CardTitle className='text-base'>Datos del Usuario</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className='grid gap-4 sm:grid-cols-2'>
               {/* Nombre */}
               <createForm.Field name='nombre'>
                 {(field) => (
@@ -378,19 +378,17 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
                   </div>
                 )}
               </createForm.Field>
-            </createForm.Form>
-          </createForm.AppForm>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Password section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className='text-base'>Contraseña</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <createForm.AppForm>
-            <createForm.Form id='usuario-form' className='grid gap-4 sm:grid-cols-2 p-0 m-0'>
+        {/* Password section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className='text-base'>Contraseña</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className='grid gap-4 sm:grid-cols-2'>
               <createForm.Field name='password'>
                 {(field) => (
                   <div className='space-y-1.5'>
@@ -430,20 +428,20 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
                   </div>
                 )}
               </createForm.Field>
-            </createForm.Form>
-          </createForm.AppForm>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-      <div className='flex items-center gap-3 justify-end'>
-        <Button type='button' variant='outline' onClick={() => router.push('/dashboard/configuracion/usuarios')}>
-          Cancelar
-        </Button>
-        <Button type='submit' form='usuario-form' isLoading={isPending}>
-          <Icons.check className='mr-2 h-4 w-4' />
-          Crear usuario
-        </Button>
-      </div>
-    </div>
+        <div className='flex items-center gap-3 justify-end'>
+          <Button type='button' variant='outline' onClick={() => router.push('/dashboard/configuracion/usuarios')}>
+            Cancelar
+          </Button>
+          <Button type='submit' isLoading={isPending}>
+            <Icons.check className='mr-2 h-4 w-4' />
+            Crear usuario
+          </Button>
+        </div>
+      </createForm.Form>
+    </createForm.AppForm>
   )
 }

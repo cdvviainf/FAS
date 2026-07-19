@@ -161,3 +161,44 @@ La forma de trabajo es spec-first. Cada modulo debe implementar reglas, contrato
 | QA-DOC-012 | Cerrado documental | `Docs/usuarios-perfiles.md` incorpora `ItemMenu.esAccion` y reglas para permisos de accion; la implementacion se revisara en codigo. |
 | QA-DOC-013 | Cerrado | `Docs/calidad.md` ya no contiene marca de preguntas abiertas en header/DoD. |
 | QA-DOC-014 | Cerrado | `Docs/00-entorno-general.md` declara IDs `Int autoincrement` para toda tabla y excepcion `Usuario.id`; specs operativos ya no usan `cuid`. |
+
+## 9. Revision QA implementacion Usuarios y Perfiles 2026-07-19
+
+Se revisaron backend, frontend, `schema.prisma`, seed y BD local contra `Docs/usuarios-perfiles.md`.
+
+Validacion ejecutada:
+
+| Comando | Resultado |
+|---|---|
+| `npm run build` en `fas-api` | Falla inicialmente porque el cliente Prisma no reconoce `perfil`, `usuario`, `itemMenu` ni `perfilAcceso`. |
+| `npm run db:generate` en `fas-api` | OK. Regenera Prisma Client. |
+| `npm run build` en `fas-api` despues de generate | OK. |
+| `npm run build` en `fas-web` | OK. Genera rutas `/dashboard/configuracion/usuarios`, `/dashboard/configuracion/perfiles` y variantes `nuevo/[id]`. |
+| `docker exec fas_postgres psql ...` | La BD local no contiene `items_menu`, `perfiles`, `perfil_accesos` ni `usuarios`. |
+| `npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script` | Muestra que faltan `NivelAcceso`, tablas del modulo y cambios legacy de `User`; confirma drift entre BD/migraciones y `schema.prisma`. |
+
+Checklist DoD del modulo:
+
+| ID | Criterio | Estado | Evidencia / nota |
+|---|---|---|---|
+| UP-DOD-01 | Better Auth operativo con usuario extendido. | Parcial | Existe configuracion Better Auth y CRUD crea `User` + `Usuario`, pero no se valido flujo login y softdelete no bloquea autenticacion. |
+| UP-DOD-02 | `ItemMenu`/`Perfil`/`PerfilAcceso`/`Usuario` migrados + seed. | No cumple | `schema.prisma` tiene los modelos, pero no existe migracion versionada y la BD local no tiene las tablas. |
+| UP-DOD-03 | Guard de autorizacion aplicado en rutas. | No cumple | Rutas CRUD se registran sin `preHandler`/guard. |
+| UP-DOD-04 | Politica de password + confirmacion. | Parcial | Backend valida complejidad y confirmacion; frontend muestra indicador, pero falta prueba automatizada y flujo de cambio UI. |
+| UP-DOD-05 | Tests CA1-CA10 en verde. | No cumple | No se encontraron tests del modulo. |
+| UP-DOD-06 | Editor perfiles con matriz dinamica + usuarios con avatar + sidebar dinamico. | Parcial | Existen pantallas y matriz dinamica, pero avatar es URL manual y sidebar sigue estatico/mock. |
+
+Hallazgos de implementacion:
+
+| ID | Severidad | Area | Hallazgo | Evidencia | Esperado | Estado | Accion Claude |
+|---|---|---|---|---|---|---|---|
+| QA-UP-001 | Bloqueante | BD / Migraciones | El modulo no tiene migracion versionada y no es ejecutable en la BD local. | `rg` no encuentra `items_menu/perfiles/perfil_accesos/usuarios` en `fas-api/prisma/migrations/*/migration.sql`; `docker exec fas_postgres psql` retorna 0 filas para esas tablas; `migrate diff` genera el SQL pendiente. | Crear migracion Prisma para `NivelAcceso`, `ItemMenu`, `Perfil`, `PerfilAcceso`, `Usuario`, FKs e indices requeridos. Aplicarla y dejar `migrate status` sin drift real. | Abierto |  |
+| QA-UP-002 | Bloqueante | Seguridad / Autorizacion | No existe guard por perfil + item + nivel en las rutas del modulo ni en los mantenedores. | `perfiles.routes.ts:12-18`, `usuarios.routes.ts:12-17` y `config.routes.ts:50-54` registran GET/POST/PATCH/DELETE directos sin `preHandler`; no hay endpoint `/me/menu` registrado. | GET requiere `LECTURA`; POST/PATCH/DELETE/password requieren `TOTAL`; faltante implica 403; debe existir guard reutilizable y `/api/config/me/menu`. | Abierto |  |
+| QA-UP-003 | Alta | Auth / Softdelete | El softdelete de usuario no impide autenticacion por Better Auth. | `usuarios.service.ts:116-121` solo marca `usuarios.eliminadoEn`; no actualiza `User`, `Account`, sesiones ni agrega hook/guard de login. | RU4: usuario eliminado no puede autenticarse y sus sesiones deben quedar invalidadas o denegadas. | Abierto |  |
+| QA-UP-004 | Alta | Auditoria | Auditoria usa usuario fijo `system`, no usuario autenticado. | `usuarios.service.ts:8`, `perfiles.service.ts:5`; controllers llaman services sin pasar usuario actual. | `creadoPor/actualizadoPor/eliminadoPor` deben usar el `userId` real de sesion. | Abierto |  |
+| QA-UP-005 | Alta | Integridad / Transacciones | Crear usuario puede dejar datos inconsistentes entre Better Auth y `Usuario`. | `usuarios.service.ts:48-73` crea `User`/`Account` via internal adapter y despues crea `Usuario` fuera de una transaccion comun; si falla `repo.createUsuario`, quedan credenciales activas sin perfil de app. | Crear en transaccion o implementar compensacion; errores de unicidad/BD no deben dejar cuentas huerfanas. | Abierto |  |
+| QA-UP-006 | Alta | Unicidad / Softdelete | Email de `usuarios` es unico absoluto, no "entre no eliminados"; `perfiles.codigo` no tiene garantia BD parcial. | `schema.prisma` usa `email String @unique`; no existe indice parcial para `perfiles.codigo WHERE eliminadoEn IS NULL`; el diff pendiente crea `usuarios_email_key`. | RU1/RP1 requieren unicidad entre no eliminados, garantizada en BD con indices parciales. | Abierto |  |
+| QA-UP-007 | Media | Navegacion / Seed | Las rutas seeded de `ItemMenu` no coinciden con las rutas reales del frontend. | `seed.ts:9-11` usa `/config/usuarios` y `/config/perfiles`; `nav-config.ts:288-289` y rutas reales usan `/dashboard/configuracion/usuarios` y `/dashboard/configuracion/perfiles`. | El menu dinamico debe devolver URLs navegables reales. | Abierto |  |
+| QA-UP-008 | Media | Frontend / Usuarios | Formulario de creacion de usuario renderiza dos formularios con el mismo `id`. | `usuario-form.tsx:283` y `usuario-form.tsx:393` declaran `id='usuario-form'`; el boton externo apunta a ese id. | Un solo `<form>` por submit o IDs unicos con comportamiento explicito; password y datos deben enviarse juntos de forma confiable. | Abierto |  |
+| QA-UP-009 | Media | Frontend / Alcance | Avatar y cambio de password no cumplen completamente el spec UI. | Usuario usa campo `URL de Avatar`; no se encontro pantalla/accion de cambio de password en UI aunque existe endpoint. | UP7 pide upload a storage y el spec pide cambio de contrasena en pantalla aparte. | Abierto |  |
+| QA-UP-010 | Alta | Tests | No hay tests CA1-CA10 para perfiles, usuarios, guard ni menu. | Busqueda en `fas-api/src`/`fas-web/src` no muestra suites del modulo; builds pasan, pero no cubren reglas de seguridad. | Agregar tests de backend para CA1-CA10 y, al menos, pruebas de UI/servicios para flujos principales. | Abierto |  |
