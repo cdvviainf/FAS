@@ -7,10 +7,17 @@ declare module 'fastify' {
   interface FastifyRequest {
     fasUserId?: string
     fasUserPerfilId?: number
+    // accesos del perfil indexados por código de ítem de menú (cargados en requireAuth)
+    fasAccesos?: Map<string, 'SIN_ACCESO' | 'LECTURA' | 'TOTAL'>
   }
 }
 
-// Verifica sesión activa y adjunta fasUserId + fasUserPerfilId al request
+/**
+ * Verifica sesión activa y carga en una sola query:
+ *   - fasUserId
+ *   - fasUserPerfilId
+ *   - fasAccesos (Map<codigoItemMenu, nivel>) — evita consulta adicional en requireLevel
+ */
 export const requireAuth: preHandlerHookHandler = async (request, reply) => {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(request.headers),
@@ -21,36 +28,49 @@ export const requireAuth: preHandlerHookHandler = async (request, reply) => {
       .send({ error: { code: 'UNAUTHORIZED', message: 'Autenticación requerida.' } })
     return
   }
+
   const usuario = await prisma.usuario.findFirst({
     where: { id: session.user.id, eliminadoEn: null },
-    select: { id: true, perfilId: true },
+    select: {
+      id: true,
+      perfilId: true,
+      perfil: {
+        select: {
+          accesos: {
+            select: {
+              nivel: true,
+              itemMenu: { select: { codigo: true } },
+            },
+          },
+        },
+      },
+    },
   })
+
   if (!usuario) {
     reply
       .status(401)
       .send({ error: { code: 'UNAUTHORIZED', message: 'Sesión inválida o usuario inactivo.' } })
     return
   }
+
   request.fasUserId = usuario.id
   request.fasUserPerfilId = usuario.perfilId
+  request.fasAccesos = new Map(
+    usuario.perfil.accesos.map((a) => [a.itemMenu.codigo, a.nivel]),
+  )
 }
 
-// Verifica que el usuario tenga al menos el nivel indicado en el ítem de menú
+/**
+ * Verifica nivel mínimo para un ítem de menú.
+ * Debe usarse después de requireAuth — lee fasAccesos sin ir a la BD.
+ */
 export function requireLevel(
   itemMenuCodigo: string,
   minLevel: 'LECTURA' | 'TOTAL',
 ): preHandlerHookHandler {
   return async (request, reply) => {
-    const perfilId = request.fasUserPerfilId
-    if (!perfilId) {
-      reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Acceso denegado.' } })
-      return
-    }
-    const acceso = await prisma.perfilAcceso.findFirst({
-      where: { perfilId, itemMenu: { codigo: itemMenuCodigo } },
-      select: { nivel: true },
-    })
-    const nivel = acceso?.nivel ?? 'SIN_ACCESO'
+    const nivel = request.fasAccesos?.get(itemMenuCodigo) ?? 'SIN_ACCESO'
     if (minLevel === 'LECTURA' && nivel === 'SIN_ACCESO') {
       reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'No tiene acceso a esta función.' } })
       return
