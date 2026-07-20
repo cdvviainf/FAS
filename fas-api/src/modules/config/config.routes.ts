@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { makeControllers, getTemporadaPredeterminada, getMiMenu } from './config.controller.js'
 import type { MantenedorConfig } from './config.types.js'
-import { requireAuth } from '../../plugins/auth-guard.js'
+import { requireAuth, requireLevel } from '../../plugins/auth-guard.js'
 import { perfilesRoutes } from './perfiles/perfiles.routes.js'
 import { usuariosRoutes } from './usuarios/usuarios.routes.js'
 
@@ -46,15 +46,17 @@ export async function configRoutes(app: FastifyInstance) {
   app.get('/me/menu', { preHandler: [requireAuth] }, getMiMenu)
 
   // Ruta especial: temporada predeterminada (antes del loop para evitar que :id capture "predeterminada")
-  app.get('/temporadas/predeterminada', getTemporadaPredeterminada)
+  app.get('/temporadas/predeterminada', { preHandler: [requireAuth, requireLevel('CONFIG_MANTENEDORES', 'LECTURA')] }, getTemporadaPredeterminada)
+
+  const ITEM = 'CONFIG_MANTENEDORES'
 
   for (const cfg of MANTENEDORES) {
     const ctrl = makeControllers(cfg.modelo, cfg.schemaKey)
 
-    app.get(`/${cfg.prefixRuta}`, ctrl.list)
-    app.get(`/${cfg.prefixRuta}/:id`, ctrl.getById)
-    app.post(`/${cfg.prefixRuta}`, ctrl.create)
-    app.patch(`/${cfg.prefixRuta}/:id`, ctrl.update)
-    app.delete(`/${cfg.prefixRuta}/:id`, ctrl.remove)
+    app.get(`/${cfg.prefixRuta}`, { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
+    app.get(`/${cfg.prefixRuta}/:id`, { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
+    app.post(`/${cfg.prefixRuta}`, { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)
+    app.patch(`/${cfg.prefixRuta}/:id`, { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.update)
+    app.delete(`/${cfg.prefixRuta}/:id`, { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.remove)
   }
 }

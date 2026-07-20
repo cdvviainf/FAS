@@ -52,19 +52,17 @@ export async function crearUsuario(input: UsuarioCreateInput, currentUserId = SI
     emailVerified: false,
   })
 
-  // Crear contraseña hasheada y vincular cuenta
-  const hashedPassword = await ctx.password.hash(input.password)
-  await ctx.internalAdapter.linkAccount({
-    userId: authUser.id,
-    providerId: 'credential',
-    accountId: authUser.email,
-    password: hashedPassword,
-  })
-
-  // Crear registro en tabla Usuario — si falla, compensar eliminando el User de Better Auth
-  let usuario
+  // Compensar si cualquier paso posterior falla — evita dejar un User huérfano en Better Auth
   try {
-    usuario = await repo.createUsuario({
+    const hashedPassword = await ctx.password.hash(input.password)
+    await ctx.internalAdapter.linkAccount({
+      userId: authUser.id,
+      providerId: 'credential',
+      accountId: authUser.email,
+      password: hashedPassword,
+    })
+
+    const usuario = await repo.createUsuario({
       id: authUser.id,
       nombre: input.nombre,
       email: input.email,
@@ -73,12 +71,12 @@ export async function crearUsuario(input: UsuarioCreateInput, currentUserId = SI
       perfilId: input.perfilId,
       creadoPor: currentUserId,
     })
+
+    return usuario
   } catch (err) {
     await ctx.internalAdapter.deleteUser(authUser.id).catch(() => {})
     throw err
   }
-
-  return usuario
 }
 
 export async function actualizarUsuario(id: string, input: UsuarioUpdateInput, currentUserId = SISTEMA_USER) {

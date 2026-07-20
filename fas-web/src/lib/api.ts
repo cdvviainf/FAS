@@ -14,6 +14,7 @@ const beforeErrorHook: BeforeErrorHook = ({ error }) => {
 
 export const api = ky.create({
   prefix: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api',
+  credentials: 'include',
   hooks: {
     beforeError: [beforeErrorHook]
   }

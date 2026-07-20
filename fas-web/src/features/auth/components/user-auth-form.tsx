@@ -1,72 +1,71 @@
 'use client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAppForm } from '@/components/ui/tanstack-form';
-import { useTransition } from 'react';
+import { Label } from '@/components/ui/label';
+import { authClient } from '@/lib/auth-client';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import * as z from 'zod';
-import GithubSignInButton from './github-auth-button';
-
-const formSchema = z.object({
-  email: z.string().email({ message: 'Enter a valid email address' })
-});
 
 export default function UserAuthForm() {
-  const [loading, startTransition] = useTransition();
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const form = useAppForm({
-    defaultValues: {
-      email: 'demo@gmail.com'
-    },
-    validators: {
-      onSubmit: formSchema
-    },
-    onSubmit: () => {
-      startTransition(() => {
-        toast.success('Signed In Successfully!');
-      });
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const result = await authClient.signIn.email({ email, password });
+      if (result.error) {
+        setError(result.error.message ?? 'Credenciales incorrectas.');
+        return;
+      }
+      toast.success('Sesión iniciada');
+      router.push('/dashboard/overview');
+      router.refresh();
+    } catch {
+      setError('Error al conectar con el servidor.');
+    } finally {
+      setLoading(false);
     }
-  });
+  }
 
   return (
-    <>
-      <form.AppForm>
-        <form.Form className='w-full space-y-2'>
-          <form.AppField
-            name='email'
-            children={(field) => (
-              <field.FieldSet>
-                <field.Field>
-                  <field.FieldLabel htmlFor={field.name}>Email</field.FieldLabel>
-                  <Input
-                    id={field.name}
-                    name={field.name}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder='Enter your email...'
-                    disabled={loading}
-                    aria-invalid={field.state.meta.isTouched && !field.state.meta.isValid}
-                  />
-                </field.Field>
-                <field.FieldError />
-              </field.FieldSet>
-            )}
-          />
-          <Button disabled={loading} className='mt-2 ml-auto w-full' type='submit'>
-            Continue With Email
-          </Button>
-        </form.Form>
-      </form.AppForm>
-      <div className='relative'>
-        <div className='absolute inset-0 flex items-center'>
-          <span className='w-full border-t' />
-        </div>
-        <div className='relative flex justify-center text-xs uppercase'>
-          <span className='bg-background text-muted-foreground px-2'>Or continue with</span>
-        </div>
+    <form onSubmit={handleSubmit} className='w-full space-y-4'>
+      <div className='space-y-2'>
+        <Label htmlFor='email'>Correo electrónico</Label>
+        <Input
+          id='email'
+          type='email'
+          placeholder='usuario@agrosan.cl'
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={loading}
+          required
+          autoComplete='email'
+        />
       </div>
-      <GithubSignInButton />
-    </>
+      <div className='space-y-2'>
+        <Label htmlFor='password'>Contraseña</Label>
+        <Input
+          id='password'
+          type='password'
+          placeholder='••••••••'
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={loading}
+          required
+          autoComplete='current-password'
+        />
+      </div>
+      {error && <p className='text-destructive text-sm'>{error}</p>}
+      <Button type='submit' className='w-full' disabled={loading}>
+        {loading ? 'Ingresando...' : 'Iniciar sesión'}
+      </Button>
+    </form>
   );
 }

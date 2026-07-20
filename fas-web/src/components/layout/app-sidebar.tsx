@@ -5,7 +5,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
@@ -27,6 +26,7 @@ import {
 import { navGroups } from '@/config/nav-config';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { useFilteredNavGroups } from '@/hooks/use-nav';
+import { authClient } from '@/lib/auth-client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
@@ -38,10 +38,23 @@ export default function AppSidebar() {
   const { isOpen } = useMediaQuery();
   const router = useRouter();
   const filteredGroups = useFilteredNavGroups(navGroups);
+  const { data: session } = authClient.useSession();
 
-  React.useEffect(() => {
-    // Side effects based on sidebar state changes
-  }, [isOpen]);
+  React.useEffect(() => {}, [isOpen]);
+
+  async function handleSignOut() {
+    await authClient.signOut();
+    router.push('/auth/sign-in');
+  }
+
+  const userName = session?.user?.name ?? 'Usuario';
+  const userEmail = session?.user?.email ?? '';
+  const initials = userName
+    .split(' ')
+    .map((n: string) => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
   return (
     <Sidebar collapsible='icon'>
@@ -113,12 +126,12 @@ export default function AppSidebar() {
                   size='lg'
                   className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
                 >
-                  <div className='bg-muted flex h-8 w-8 items-center justify-center rounded-lg'>
-                    <Icons.user className='h-4 w-4' />
+                  <div className='bg-muted flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold'>
+                    {initials || <Icons.user className='h-4 w-4' />}
                   </div>
                   <div className='grid flex-1 text-left text-sm leading-tight'>
-                    <span className='truncate font-medium'>Usuario Demo</span>
-                    <span className='text-muted-foreground truncate text-xs'>demo@agrosan.cl</span>
+                    <span className='truncate font-medium'>{userName}</span>
+                    <span className='text-muted-foreground truncate text-xs'>{userEmail}</span>
                   </div>
                   <Icons.chevronsDown className='ml-auto size-4' />
                 </SidebarMenuButton>
@@ -130,19 +143,15 @@ export default function AppSidebar() {
                 sideOffset={4}
               >
                 <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={() => router.push('/dashboard/profile')}>
-                    <Icons.account className='mr-2 h-4 w-4' />
-                    Mi Perfil
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => router.push('/dashboard/notifications')}>
                     <Icons.notification className='mr-2 h-4 w-4' />
                     Notificaciones
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => router.push('/auth/sign-in')}>
+                <DropdownMenuItem onClick={handleSignOut}>
                   <Icons.logout className='mr-2 h-4 w-4' />
-                  Cerrar Sesión
+                  Cerrar sesión
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

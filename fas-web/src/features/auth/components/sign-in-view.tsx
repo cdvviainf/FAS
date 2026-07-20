@@ -1,11 +1,6 @@
-import { Metadata } from 'next';
 import { InteractiveGridPattern } from './interactive-grid';
 import { cn } from '@/lib/utils';
-
-export const metadata: Metadata = {
-  title: 'Iniciar sesión — Frutera Agrosan',
-  description: 'Ingresa al sistema de gestión Frutera Agrosan.'
-};
+import UserAuthForm from './user-auth-form';
 
 export default function SignInViewPage() {
   return (
@@ -44,11 +39,9 @@ export default function SignInViewPage() {
         <div className='flex w-full max-w-sm flex-col items-center justify-center space-y-6'>
           <div className='w-full space-y-2 text-center'>
             <h1 className='text-2xl font-semibold tracking-tight'>Iniciar sesión</h1>
-            <p className='text-muted-foreground text-sm'>Autenticación en implementación</p>
+            <p className='text-muted-foreground text-sm'>Ingresa tus credenciales para acceder al sistema</p>
           </div>
-          <div className='bg-muted w-full rounded-lg p-6 text-center text-sm'>
-            El módulo de autenticación será implementado con Better Auth.
-          </div>
+          <UserAuthForm />
         </div>
       </div>
     </div>
