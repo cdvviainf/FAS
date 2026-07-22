@@ -128,6 +128,13 @@ export async function crearMantenedor(
   }
 
   const { contactos, ...coreData } = data as MantenedorCreateInput & { contactos?: import('./config.types.js').BodegaContactoInput[] }
+
+  // Temporada: convertir strings YYYY-MM-DD a Date para Prisma DateTime
+  if (modelo === 'temporada') {
+    if ((coreData as AnyRecord).fechaInicio) (coreData as AnyRecord).fechaInicio = new Date((coreData as AnyRecord).fechaInicio)
+    if ((coreData as AnyRecord).fechaTermino) (coreData as AnyRecord).fechaTermino = new Date((coreData as AnyRecord).fechaTermino)
+  }
+
   const created = await repo.createMantenedor(modelo, coreData, userId)
 
   if (modelo === 'bodega' && contactos && contactos.length > 0) {
@@ -249,6 +256,12 @@ export async function actualizarMantenedor(
   }
 
   const { contactos, ...coreData } = data as Partial<MantenedorCreateInput> & { contactos?: import('./config.types.js').BodegaContactoInput[] }
+
+  // Temporada: convertir strings YYYY-MM-DD a Date para Prisma DateTime
+  if (modelo === 'temporada') {
+    if ((coreData as AnyRecord).fechaInicio) (coreData as AnyRecord).fechaInicio = new Date((coreData as AnyRecord).fechaInicio)
+    if ((coreData as AnyRecord).fechaTermino) (coreData as AnyRecord).fechaTermino = new Date((coreData as AnyRecord).fechaTermino)
+  }
 
   if (modelo === 'bodega' && contactos !== undefined) {
     // Transacción atómica: update bodega + replace contactos
