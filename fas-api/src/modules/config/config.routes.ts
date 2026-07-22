@@ -4,6 +4,7 @@ import type { MantenedorConfig } from './config.types.js'
 import { requireAuth, requireLevel } from '../../plugins/auth-guard.js'
 import { perfilesRoutes } from './perfiles/perfiles.routes.js'
 import { usuariosRoutes } from './usuarios/usuarios.routes.js'
+import { entidadesRoutes } from './entidades/entidades.routes.js'
 
 const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'pais', prefixRuta: 'paises', label: 'País', tienePaisOrigen: true, schemaKey: 'pais' },
@@ -41,6 +42,7 @@ export async function configRoutes(app: FastifyInstance) {
   // Módulos de seguridad: perfiles, usuarios e ítems de menú
   await app.register(perfilesRoutes)
   await app.register(usuariosRoutes)
+  await app.register(entidadesRoutes)
 
   // Menú accesible del usuario autenticado
   app.get('/me/menu', { preHandler: [requireAuth] }, getMiMenu)

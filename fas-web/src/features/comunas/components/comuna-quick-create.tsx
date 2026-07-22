@@ -27,6 +27,7 @@ import { createMantenedorMutations } from '@/features/mantenedor-simple/mutation
 import { createMantenedorQueries } from '@/features/mantenedor-simple/queries'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
+import { ProvinciaQuickCreate } from '@/features/provincias/components/provincia-quick-create'
 
 const comunaQuickSchema = z.object({
   codigo: z.string().min(1, 'Requerido').max(50).trim(),
@@ -53,6 +54,7 @@ function ComunaQuickDialog({
   const mutations = createMantenedorMutations('comunas')
   const { keys } = createMantenedorQueries('comunas')
   const provinciasQueries = createMantenedorQueries('provincias')
+
 
   const { data: provinciasData } = useQuery(provinciasQueries.listOptions({ limit: 300, soloActivos: true }))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,22 +106,28 @@ function ComunaQuickDialog({
                   <Label className='text-sm font-medium'>
                     Provincia <span className='text-destructive'>*</span>
                   </Label>
-                  <Select
-                    value={field.state.value ? String(field.state.value) : ''}
-                    onValueChange={(v) => field.handleChange(parseInt(v, 10))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder='Seleccionar provincia...' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {provincias.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>
-                          <span className='text-muted-foreground text-xs mr-1.5'>{p.region?.descripcion ?? ''} ›</span>
-                          {p.descripcion}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className='flex items-center gap-2'>
+                    <Select
+                      value={field.state.value ? String(field.state.value) : ''}
+                      onValueChange={(v) => field.handleChange(parseInt(v, 10))}
+                    >
+                      <SelectTrigger className='flex-1'>
+                        <SelectValue placeholder='Seleccionar provincia...' />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {provincias.map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            <span className='text-muted-foreground text-xs mr-1.5'>{p.region?.descripcion ?? ''} ›</span>
+                            {p.descripcion}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <ProvinciaQuickCreate onCreated={(newProvincia) => {
+                      queryClient.invalidateQueries({ queryKey: provinciasQueries.keys.all })
+                      field.handleChange(newProvincia.id)
+                    }} />
+                  </div>
                   {field.state.meta.errors.length > 0 && (
                     <p className='text-sm text-destructive'>{String(field.state.meta.errors[0])}</p>
                   )}
@@ -161,7 +169,7 @@ export function ComunaQuickCreate({ onCreated }: ComunaQuickCreateProps) {
       >
         <Icons.add className='h-4 w-4' />
       </Button>
-      <ComunaQuickDialog open={open} onOpenChange={setOpen} onCreated={onCreated} />
+      {open && <ComunaQuickDialog open onOpenChange={setOpen} onCreated={onCreated} />}
     </>
   )
 }

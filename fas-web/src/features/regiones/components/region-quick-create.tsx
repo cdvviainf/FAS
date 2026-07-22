@@ -50,7 +50,12 @@ function RegionQuickDialog({
   })
 
   const form = useAppForm({
-    defaultValues: { codigo: '', descripcion: '', descripcionExtranjera: '' } as MantenedorSimpleFormValues,
+    defaultValues: {
+      codigo: '',
+      descripcion: '',
+      descripcionExtranjera: '',
+      bloqueado: false
+    } as MantenedorSimpleFormValues,
     validators: { onSubmit: mantenedorSimpleSchema },
     onSubmit: async ({ value }) => { await mutation.mutateAsync(value) }
   })
@@ -107,7 +112,7 @@ export function RegionQuickCreate({ onCreated }: RegionQuickCreateProps) {
       >
         <Icons.add className='h-4 w-4' />
       </Button>
-      <RegionQuickDialog open={open} onOpenChange={setOpen} onCreated={onCreated} />
+      {open && <RegionQuickDialog open onOpenChange={setOpen} onCreated={onCreated} />}
     </>
   )
 }

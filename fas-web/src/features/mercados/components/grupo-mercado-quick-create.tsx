@@ -105,7 +105,7 @@ export function GrupoMercadoQuickCreate({ onCreated }: GrupoMercadoQuickCreatePr
       >
         <Icons.add className='h-4 w-4' />
       </Button>
-      <GrupoMercadoQuickDialog open={open} onOpenChange={setOpen} onCreated={onCreated} />
+      {open && <GrupoMercadoQuickDialog open onOpenChange={setOpen} onCreated={onCreated} />}
     </>
   );
 }

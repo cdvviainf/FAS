@@ -50,7 +50,12 @@ function EspecieQuickDialog({
   })
 
   const form = useAppForm({
-    defaultValues: { codigo: '', descripcion: '', descripcionExtranjera: '' } as MantenedorSimpleFormValues,
+    defaultValues: {
+      codigo: '',
+      descripcion: '',
+      descripcionExtranjera: '',
+      bloqueado: false
+    } as MantenedorSimpleFormValues,
     validators: { onSubmit: mantenedorSimpleSchema },
     onSubmit: async ({ value }) => { await mutation.mutateAsync(value) }
   })
@@ -107,7 +112,7 @@ export function EspecieQuickCreate({ onCreated }: EspecieQuickCreateProps) {
       >
         <Icons.add className='h-4 w-4' />
       </Button>
-      <EspecieQuickDialog open={open} onOpenChange={setOpen} onCreated={onCreated} />
+      {open && <EspecieQuickDialog open onOpenChange={setOpen} onCreated={onCreated} />}
     </>
   )
 }

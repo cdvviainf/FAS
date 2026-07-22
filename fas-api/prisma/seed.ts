@@ -9,6 +9,7 @@ const itemsMenu = [
   { codigo: 'CONFIG_MANTENEDORES', nombre: 'Mantenedores Generales', seccion: 'Configuración', ruta: '/dashboard/configuracion', esAccion: false, orden: 10 },
   { codigo: 'CONFIG_USUARIOS', nombre: 'Usuarios', seccion: 'Configuración', ruta: '/dashboard/configuracion/usuarios', esAccion: false, orden: 11 },
   { codigo: 'CONFIG_PERFILES', nombre: 'Perfiles', seccion: 'Configuración', ruta: '/dashboard/configuracion/perfiles', esAccion: false, orden: 12 },
+  { codigo: 'CONFIG_ENTIDADES', nombre: 'Entidades', seccion: 'Configuración', ruta: '/dashboard/configuracion/entidades', esAccion: false, orden: 9 },
   // Compras
   { codigo: 'COMPRAS_OC', nombre: 'Órdenes de Compra', seccion: 'Compras', ruta: '/dashboard/compras/ordenes', esAccion: false, orden: 20 },
   { codigo: 'OC_APROBACION', nombre: 'Aprobación de OC', seccion: 'Compras', ruta: null, esAccion: true, orden: 21 },
@@ -18,7 +19,7 @@ const itemsMenu = [
   { codigo: 'PROD_CTA_CTE', nombre: 'Cuenta Corriente', seccion: 'Productores', ruta: '/dashboard/productores/cuenta-corriente', esAccion: false, orden: 32 },
   { codigo: 'PROD_CONCEPTOS_LIQ', nombre: 'Conceptos de Liquidación', seccion: 'Productores', ruta: '/dashboard/productores/conceptos-liquidacion', esAccion: false, orden: 33 },
   // Ventas
-  { codigo: 'VENTAS_NV', nombre: 'Notas de Venta', seccion: 'Ventas', ruta: '/dashboard/ventas/notas', esAccion: false, orden: 40 },
+  { codigo: 'VENTAS_NV', nombre: 'Cierre Comercial', seccion: 'Ventas', ruta: '/dashboard/ventas/notas', esAccion: false, orden: 40 },
   { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', seccion: 'Ventas', ruta: '/dashboard/ventas/cobranza', esAccion: false, orden: 41 },
   // Operaciones
   { codigo: 'OPER_MATERIALES', nombre: 'Materiales', seccion: 'Operaciones', ruta: '/dashboard/operaciones/materiales', esAccion: false, orden: 50 },
@@ -58,6 +59,22 @@ async function main() {
   }
 
   console.log(`ItemMenu: ${itemsMenu.length} ítems creados/actualizados.`)
+
+  // Sincronizar accesos TOTAL para el perfil ADMIN a todos los ítems de menú.
+  // Garantiza que cualquier ítem nuevo agregado al seed quede accesible para ADMIN.
+  const adminPerfil = await prisma.perfil.findFirst({ where: { codigo: 'ADMIN', eliminadoEn: null } })
+  if (adminPerfil) {
+    const allItems = await prisma.itemMenu.findMany()
+    for (const item of allItems) {
+      await prisma.perfilAcceso.upsert({
+        where: { perfilId_itemMenuId: { perfilId: adminPerfil.id, itemMenuId: item.id } },
+        create: { perfilId: adminPerfil.id, itemMenuId: item.id, nivel: 'TOTAL' },
+        update: { nivel: 'TOTAL' },
+      })
+    }
+    console.log(`PerfilAcceso ADMIN: ${allItems.length} accesos TOTAL sincronizados.`)
+  }
+
   console.log('Seed completado.')
 }
 

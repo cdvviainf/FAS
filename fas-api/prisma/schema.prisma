@@ -498,6 +498,8 @@ model Pais {
 
   mercados              Mercado[]
   puertos               Puerto[]
+  entidades             Entidad[]          @relation("EntidadPais")
+  entidadDirecciones    EntidadDireccion[] @relation("DireccionPais")
 
   @@map("paises")
 }
@@ -710,6 +712,7 @@ model Comuna {
   eliminadoPor          String?
 
   bodegas               Bodega[]
+  entidadDirecciones    EntidadDireccion[]
 
   @@map("comunas")
 }
@@ -978,4 +981,94 @@ model ConceptoCtaCte {
   eliminadoPor          String?
 
   @@map("conceptos_cta_cte")
+}
+
+// ─── ENTIDADES ────────────────────────────────────────────────────────────────
+
+enum TipoEntidad {
+  CLIENTE_NACIONAL
+  CLIENTE_EXTRANJERO
+  NOTIFY
+  CONSIGNATARIO
+  NAVIERA
+  AGENTE_ADUANA
+  COMPANIA_EMBARQUE
+  PROVEEDOR
+  EMPRESA_TRANSPORTE
+  PRODUCTOR
+  EXPORTADORA
+  PLANTA
+}
+
+model Entidad {
+  id                    Int               @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  razonSocial           String
+  giro                  String?
+  identificador         String?
+  paisId                Int
+  pais                  Pais              @relation("EntidadPais", fields: [paisId], references: [id])
+  email                 String?
+  telefono              String?
+  codigoExterno         String?
+  activo                Boolean           @default(true)
+  tipos                 TipoEntidad[]
+  creadoEn              DateTime          @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?         @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+  direcciones           EntidadDireccion[]
+  contactos             EntidadContacto[]
+
+  @@index([eliminadoEn])
+  @@map("entidades")
+}
+
+model EntidadDireccion {
+  id             Int       @id @default(autoincrement())
+  entidadId      Int
+  entidad        Entidad   @relation(fields: [entidadId], references: [id])
+  codigo         String
+  paisId         Int
+  pais           Pais      @relation("DireccionPais", fields: [paisId], references: [id])
+  comunaId       Int?
+  comuna         Comuna?   @relation(fields: [comunaId], references: [id])
+  direccion      String
+  esPorDefecto   Boolean   @default(false)
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@index([entidadId])
+  @@map("entidad_direcciones")
+}
+
+model EntidadContacto {
+  id                   Int       @id @default(autoincrement())
+  entidadId            Int
+  entidad              Entidad   @relation(fields: [entidadId], references: [id])
+  codigo               String
+  nombre               String
+  rut                  String?
+  whatsapp             String?
+  email                String?
+  telefono             String?
+  tipo                 String?
+  esRepresentanteLegal Boolean   @default(false)
+  creadoEn             DateTime  @default(now())
+  creadoPor            String
+  actualizadoEn        DateTime? @updatedAt
+  actualizadoPor       String?
+  eliminadoEn          DateTime?
+  eliminadoPor         String?
+
+  @@index([entidadId])
+  @@map("entidad_contactos")
 }

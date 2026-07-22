@@ -105,20 +105,20 @@ export function makeControllers(modelo: MantenedorModelo, schemaKey?: string) {
 
     async create(req: FastifyRequest, reply: FastifyReply) {
       const data = createSchema.parse(req.body) as MantenedorCreateInput
-      const item = await service.crearMantenedor(modelo, data)
+      const item = await service.crearMantenedor(modelo, data, req.fasUserId!)
       return reply.status(201).send(item)
     },
 
     async update(req: FastifyRequest, reply: FastifyReply) {
       const { id } = mantenedorParamsSchema.parse(req.params)
       const data = updateSchema.parse(req.body) as Partial<MantenedorCreateInput>
-      const item = await service.actualizarMantenedor(modelo, id, data)
+      const item = await service.actualizarMantenedor(modelo, id, data, req.fasUserId!)
       return reply.send(item)
     },
 
     async remove(req: FastifyRequest, reply: FastifyReply) {
       const { id } = mantenedorParamsSchema.parse(req.params)
-      await service.eliminarMantenedor(modelo, id)
+      await service.eliminarMantenedor(modelo, id, req.fasUserId!)
       return reply.status(204).send()
     },
   }

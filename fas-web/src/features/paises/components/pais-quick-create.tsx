@@ -129,7 +129,7 @@ export function PaisQuickCreate({ onCreated }: PaisQuickCreateProps) {
       >
         <Icons.add className='h-4 w-4' />
       </Button>
-      <PaisQuickDialog open={open} onOpenChange={setOpen} onCreated={onCreated} />
+      {open && <PaisQuickDialog open onOpenChange={setOpen} onCreated={onCreated} />}
     </>
   );
 }

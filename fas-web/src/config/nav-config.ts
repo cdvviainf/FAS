@@ -56,8 +56,8 @@ export const navGroups: NavGroup[] = [
         icon: 'ventas',
         isActive: false,
         items: [
-          { title: 'Notas de Venta',    url: '/dashboard/ventas/notas',     icon: 'forms'   },
-          { title: 'Orden de Embarque', url: '/dashboard/ventas/embarques',  icon: 'post'    },
+          { title: 'Cierre Comercial',   url: '/dashboard/ventas/notas',     icon: 'forms'   },
+          { title: 'Embarques',         url: '/dashboard/ventas/embarques',  icon: 'post'    },
           { title: 'Cobranza / CRM',    url: '/dashboard/ventas/cobranza',   icon: 'billing' },
           { title: 'Reclamos',          url: '/dashboard/ventas/reclamos',   icon: 'warning' }
         ]
@@ -101,6 +101,7 @@ export const navGroups: NavGroup[] = [
         icon: 'adjustments',
         isActive: false,
         items: [
+          { title: 'Entidades',           url: '/dashboard/configuracion/entidades',         icon: 'teams'           },
           { title: 'Artículos',           url: '/dashboard/configuracion/articulos',         icon: 'product'         },
           { title: 'Recetas',             url: '/dashboard/configuracion/recetas',           icon: 'recetas'         },
           { title: 'Tipos de Movimiento', url: '/dashboard/configuracion/tipos-movimiento',  icon: 'tiposMovimiento' }
@@ -143,9 +144,10 @@ export const navGroups: NavGroup[] = [
         icon: 'adjustments',
         isActive: false,
         items: [
-          { title: 'Productores',              url: '/dashboard/configuracion/productores',              icon: 'teams'   },
-          { title: 'Conceptos de Liquidación', url: '/dashboard/configuracion/conceptos-liquidacion',   icon: 'forms'   },
-          { title: 'Matriz de Costos',         url: '/dashboard/configuracion/matriz-costos',           icon: 'billing' }
+          { title: 'Entidades',                url: '/dashboard/configuracion/entidades',              icon: 'teams'   },
+          { title: 'Productores',              url: '/dashboard/configuracion/productores',            icon: 'teams'   },
+          { title: 'Conceptos de Liquidación', url: '/dashboard/configuracion/conceptos-liquidacion', icon: 'forms'   },
+          { title: 'Matriz de Costos',         url: '/dashboard/configuracion/matriz-costos',         icon: 'billing' }
         ]
       }
     ]
@@ -220,17 +222,72 @@ export const navGroups: NavGroup[] = [
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // CONFIGURACIÓN — mantenedores transversales + sistema + cuenta
+  // CONFIGURACIÓN — hub central de todos los mantenedores, agrupados por área
   //
-  // Aquí viven los catálogos que no pertenecen a una sección operativa específica:
-  //   · Geográfico, Fruta, Operación general → transversales
-  //   · Comercial general (Temporadas, Monedas, TipoCuentaCorriente) → usados en
-  //     múltiples secciones; los específicos de comercio van en Gestión Comercial.
-  //   · Sistema → configuración de la aplicación
+  // Cada subsección replica los maestros de la sección operativa correspondiente
+  // para que el administrador tenga acceso directo desde un único punto.
   // ═══════════════════════════════════════════════════════════════════════════
   {
     label: 'Configuración',
     items: [
+
+      // ── Gestión Comercial ────────────────────────────────────────────────
+      {
+        title: 'Gestión Comercial',
+        url: '#',
+        icon: 'ventas',
+        isActive: false,
+        items: [
+          { title: 'Entidades',         url: '/dashboard/configuracion/entidades',      icon: 'teams'   },
+          { title: 'Grupos de Mercado', url: '/dashboard/configuracion/grupos-mercado', icon: 'page'    },
+          { title: 'Mercados',          url: '/dashboard/configuracion/mercados',        icon: 'page'    },
+          { title: 'Tipos de Embarque', url: '/dashboard/configuracion/tipos-embarque', icon: 'page'    },
+          { title: 'Puertos',           url: '/dashboard/configuracion/puertos',         icon: 'page'    },
+          { title: 'Formas de Pago',    url: '/dashboard/configuracion/formas-pago',    icon: 'billing' }
+        ]
+      },
+
+      // ── Materiales ───────────────────────────────────────────────────────
+      {
+        title: 'Materiales',
+        url: '#',
+        icon: 'materiales',
+        isActive: false,
+        items: [
+          { title: 'Entidades',  url: '/dashboard/configuracion/entidades', icon: 'teams'   },
+          { title: 'Artículos',  url: '/dashboard/configuracion/articulos', icon: 'product' },
+          { title: 'Recetas',    url: '/dashboard/configuracion/recetas',   icon: 'recetas' }
+        ]
+      },
+
+      // ── Gestión Productores ──────────────────────────────────────────────
+      {
+        title: 'Gestión Productores',
+        url: '#',
+        icon: 'teams',
+        isActive: false,
+        items: [
+          { title: 'Entidades',                url: '/dashboard/configuracion/entidades',              icon: 'teams'   },
+          { title: 'Productores',              url: '/dashboard/configuracion/productores',            icon: 'teams'   },
+          { title: 'Conceptos de Liquidación', url: '/dashboard/configuracion/conceptos-liquidacion', icon: 'forms'   },
+          { title: 'Conceptos Cta. Cte.',      url: '/dashboard/configuracion/conceptos-cta-cte',     icon: 'billing' },
+          { title: 'Matriz de Costos',         url: '/dashboard/configuracion/matriz-costos',         icon: 'billing' }
+        ]
+      },
+
+      // ── Calidad ──────────────────────────────────────────────────────────
+      {
+        title: 'Calidad',
+        url: '#',
+        icon: 'calidad',
+        isActive: false,
+        items: [
+          { title: 'Tipos de Defecto',       url: '/dashboard/configuracion/tipos-defecto',            icon: 'page'  },
+          { title: 'Grupos de Defecto',      url: '/dashboard/configuracion/grupos-defecto',           icon: 'page'  },
+          { title: 'Defectos',               url: '/dashboard/configuracion/defectos',                 icon: 'page'  },
+          { title: 'Características Madurez',url: '/dashboard/configuracion/caracteristicas-madurez',  icon: 'forms' }
+        ]
+      },
 
       // ── Geográfico ──────────────────────────────────────────────────────
       {
@@ -239,12 +296,11 @@ export const navGroups: NavGroup[] = [
         icon: 'page',
         isActive: false,
         items: [
-          { title: 'Zonas',       url: '/dashboard/configuracion/zonas',       icon: 'page' },
-          { title: 'Países',      url: '/dashboard/configuracion/paises',      icon: 'page' },
-          { title: 'Regiones',    url: '/dashboard/configuracion/regiones',    icon: 'page' },
-          { title: 'Provincias',  url: '/dashboard/configuracion/provincias',  icon: 'page' },
-          { title: 'Comunas',     url: '/dashboard/configuracion/comunas',     icon: 'page' },
-          { title: 'Puertos',     url: '/dashboard/configuracion/puertos',     icon: 'page' }
+          { title: 'Zonas',      url: '/dashboard/configuracion/zonas',      icon: 'page' },
+          { title: 'Países',     url: '/dashboard/configuracion/paises',     icon: 'page' },
+          { title: 'Regiones',   url: '/dashboard/configuracion/regiones',   icon: 'page' },
+          { title: 'Provincias', url: '/dashboard/configuracion/provincias', icon: 'page' },
+          { title: 'Comunas',    url: '/dashboard/configuracion/comunas',    icon: 'page' }
         ]
       },
 
@@ -255,11 +311,9 @@ export const navGroups: NavGroup[] = [
         icon: 'operaciones',
         isActive: false,
         items: [
-          { title: 'Bodegas',             url: '/dashboard/configuracion/bodegas',           icon: 'bodega'      },
-          { title: 'Unidades de Medida',  url: '/dashboard/configuracion/unidades-medida',   icon: 'page'        },
-          { title: 'Tipos de Pallet',     url: '/dashboard/configuracion/tipos-pallet',      icon: 'page'        },
-          { title: 'Alturas',             url: '/dashboard/configuracion/alturas',            icon: 'page'        },
-          { title: 'Tipos de Producción', url: '/dashboard/configuracion/tipos-produccion',  icon: 'adjustments' }
+          { title: 'Tipos de Pallet',     url: '/dashboard/configuracion/tipos-pallet',     icon: 'page'        },
+          { title: 'Alturas',             url: '/dashboard/configuracion/alturas',           icon: 'page'        },
+          { title: 'Tipos de Producción', url: '/dashboard/configuracion/tipos-produccion', icon: 'adjustments' }
         ]
       },
 
@@ -270,11 +324,11 @@ export const navGroups: NavGroup[] = [
         icon: 'leaf',
         isActive: false,
         items: [
-          { title: 'Especies',           url: '/dashboard/configuracion/especies',          icon: 'leaf' },
+          { title: 'Especies',           url: '/dashboard/configuracion/especies',         icon: 'leaf' },
           { title: 'Grupos de Variedad', url: '/dashboard/configuracion/grupos-variedad',  icon: 'page' },
-          { title: 'Variedades',         url: '/dashboard/configuracion/variedades',        icon: 'page' },
-          { title: 'Categorías',         url: '/dashboard/configuracion/categorias',        icon: 'page' },
-          { title: 'Calibres',           url: '/dashboard/configuracion/calibres',          icon: 'page' }
+          { title: 'Variedades',         url: '/dashboard/configuracion/variedades',       icon: 'page' },
+          { title: 'Categorías',         url: '/dashboard/configuracion/categorias',       icon: 'page' },
+          { title: 'Calibres',           url: '/dashboard/configuracion/calibres',         icon: 'page' }
         ]
       },
 
@@ -285,14 +339,16 @@ export const navGroups: NavGroup[] = [
         icon: 'settings',
         isActive: false,
         items: [
-          { title: 'Usuarios',             url: '/dashboard/configuracion/usuarios',         icon: 'user2'       },
-          { title: 'Perfiles',             url: '/dashboard/configuracion/perfiles',         icon: 'lock'        },
-          { title: 'Temporadas',           url: '/dashboard/configuracion/temporadas',       icon: 'calendar'    },
-          { title: 'Monedas',              url: '/dashboard/configuracion/monedas',              icon: 'billing'     },
-          { title: 'Conceptos Cta. Cte.', url: '/dashboard/configuracion/conceptos-cta-cte', icon: 'billing'     },
-          { title: 'Tipos de Parámetro',   url: '/dashboard/configuracion/tipos-parametro',   icon: 'page'        },
-          { title: 'Parámetros',           url: '/dashboard/configuracion/parametros',       icon: 'adjustments' },
-          { title: 'Configuración General', url: '/dashboard/configuracion/general',         icon: 'settings'   }
+          { title: 'Usuarios',              url: '/dashboard/configuracion/usuarios',          icon: 'user2'           },
+          { title: 'Perfiles',              url: '/dashboard/configuracion/perfiles',          icon: 'lock'            },
+          { title: 'Bodegas',               url: '/dashboard/configuracion/bodegas',           icon: 'bodega'          },
+          { title: 'Unidades de Medida',    url: '/dashboard/configuracion/unidades-medida',   icon: 'page'            },
+          { title: 'Tipos de Movimiento',   url: '/dashboard/configuracion/tipos-movimiento',  icon: 'tiposMovimiento' },
+          { title: 'Temporadas',            url: '/dashboard/configuracion/temporadas',        icon: 'calendar'        },
+          { title: 'Monedas',               url: '/dashboard/configuracion/monedas',           icon: 'billing'         },
+          { title: 'Tipos de Parámetro',    url: '/dashboard/configuracion/tipos-parametro',   icon: 'page'            },
+          { title: 'Parámetros',            url: '/dashboard/configuracion/parametros',        icon: 'adjustments'     },
+          { title: 'Configuración General', url: '/dashboard/configuracion/general',           icon: 'settings'        }
         ]
       },
 
