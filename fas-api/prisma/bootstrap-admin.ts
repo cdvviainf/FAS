@@ -2,20 +2,25 @@
  * Bootstrap inicial de producción.
  * Crea el perfil ADMIN y el usuario administrador si no existen.
  *
- * Uso:
+ * Uso (producción — no requiere fuentes TypeScript):
  *   node --experimental-strip-types prisma/bootstrap-admin.ts
  *
- * Se puede correr múltiples veces sin efecto secundario (idempotente).
+ * Idempotente: puede correrse múltiples veces sin efecto secundario.
  */
 
 import { PrismaClient } from '@prisma/client'
-import { auth } from '../src/lib/auth.js'
+import { hashPassword } from '@better-auth/utils/password'
+import { randomBytes } from 'node:crypto'
 
 const ADMIN_EMAIL = 'admin@agrosanexp.com'
 const ADMIN_PASSWORD = 'Admin1234!'
 const ADMIN_NOMBRE = 'Administrador'
 
 const prisma = new PrismaClient()
+
+function generateId(length = 32): string {
+  return randomBytes(length).toString('base64url').slice(0, length)
+}
 
 async function main() {
   // 1. Crear perfil ADMIN si no existe
@@ -40,41 +45,37 @@ async function main() {
     return
   }
 
-  // 3. Crear usuario en Better Auth + tabla usuarios
-  const ctx = await auth.$context
-  const userId = ctx.generateId({ model: 'user' })
+  // 3. Crear usuario en Better Auth (tabla User) + Account + tabla usuarios
+  const userId = generateId(32)
+  const hashedPassword = await hashPassword(ADMIN_PASSWORD)
 
-  const authUser = await ctx.internalAdapter.createUser({
-    id: userId,
-    email: ADMIN_EMAIL,
-    name: ADMIN_NOMBRE,
-    emailVerified: true,
-  })
+  await prisma.$transaction(async (tx) => {
+    // Better Auth: tabla User
+    await tx.$executeRaw`
+      INSERT INTO "User" (id, email, name, "emailVerified", "createdAt", "updatedAt")
+      VALUES (${userId}, ${ADMIN_EMAIL}, ${ADMIN_NOMBRE}, true, NOW(), NOW())
+    `
 
-  try {
-    const hashedPassword = await ctx.password.hash(ADMIN_PASSWORD)
-    await ctx.internalAdapter.linkAccount({
-      userId: authUser.id,
-      providerId: 'credential',
-      accountId: ADMIN_EMAIL,
-      password: hashedPassword,
-    })
+    // Better Auth: tabla Account (credential)
+    const accountId = generateId(32)
+    await tx.$executeRaw`
+      INSERT INTO "Account" (id, "userId", "providerId", "accountId", password, "createdAt", "updatedAt")
+      VALUES (${accountId}, ${userId}, 'credential', ${ADMIN_EMAIL}, ${hashedPassword}, NOW(), NOW())
+    `
 
-    await prisma.usuario.create({
+    // Tabla usuarios (dominio FAS)
+    await tx.usuario.create({
       data: {
-        id: authUser.id,
+        id: userId,
         nombre: ADMIN_NOMBRE,
         email: ADMIN_EMAIL,
-        perfilId: perfil.id,
+        perfilId: perfil!.id,
         creadoPor: 'bootstrap',
       },
     })
+  })
 
-    console.log('✓ Usuario admin creado: %s / %s', ADMIN_EMAIL, ADMIN_PASSWORD)
-  } catch (err) {
-    await ctx.internalAdapter.deleteUser(authUser.id).catch(() => {})
-    throw err
-  }
+  console.log('✓ Usuario admin creado: %s / %s', ADMIN_EMAIL, ADMIN_PASSWORD)
 }
 
 main()
