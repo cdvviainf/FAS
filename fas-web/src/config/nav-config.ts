@@ -45,9 +45,10 @@ export const navGroups: NavGroup[] = [
         icon: 'compras',
         isActive: false,
         items: [
-          { title: 'Instructivo de Embalaje', url: '/dashboard/compras/instructivos', icon: 'forms'  },
-          { title: 'Órdenes de Compra',       url: '/dashboard/compras/ordenes',       icon: 'post'   },
-          { title: 'Recepción de Stock',       url: '/dashboard/compras/recepciones',  icon: 'bodega' }
+          { title: 'Instructivo de Embalaje',    url: '/dashboard/compras/instructivos',   icon: 'forms'   },
+          { title: 'Solicitud de Inspección',    url: '/dashboard/calidad/solicitudes',    icon: 'calidad' },
+          { title: 'Órdenes de Compra',          url: '/dashboard/compras/ordenes',         icon: 'post'    },
+          { title: 'Recepción de Stock',         url: '/dashboard/compras/recepciones',    icon: 'bodega'  }
         ]
       },
       {
@@ -123,6 +124,7 @@ export const navGroups: NavGroup[] = [
         icon: 'teams',
         isActive: false,
         items: [
+          { title: 'Contrato',          url: '/dashboard/productores/contrato',         icon: 'post'         },
           { title: 'Cuenta Corriente',  url: '/dashboard/productores/cuenta-corriente', icon: 'billing'      },
           { title: 'Solicitud de Pago', url: '/dashboard/productores/pagos',            icon: 'trendingDown' }
         ]
@@ -191,7 +193,8 @@ export const navGroups: NavGroup[] = [
           { title: 'Tipos de Defecto',         url: '/dashboard/configuracion/tipos-defecto',            icon: 'page'  },
           { title: 'Grupos de Defecto',         url: '/dashboard/configuracion/grupos-defecto',          icon: 'page'  },
           { title: 'Defectos',                  url: '/dashboard/configuracion/defectos',                icon: 'page'  },
-          { title: 'Características Madurez',   url: '/dashboard/configuracion/caracteristicas-madurez', icon: 'forms' }
+          { title: 'Características Madurez',   url: '/dashboard/configuracion/caracteristicas-madurez', icon: 'forms' },
+          { title: 'Motivos de Inspección',     url: '/dashboard/configuracion/motivos-inspeccion',      icon: 'page'  }
         ]
       }
     ]
@@ -285,7 +288,8 @@ export const navGroups: NavGroup[] = [
           { title: 'Tipos de Defecto',       url: '/dashboard/configuracion/tipos-defecto',            icon: 'page'  },
           { title: 'Grupos de Defecto',      url: '/dashboard/configuracion/grupos-defecto',           icon: 'page'  },
           { title: 'Defectos',               url: '/dashboard/configuracion/defectos',                 icon: 'page'  },
-          { title: 'Características Madurez',url: '/dashboard/configuracion/caracteristicas-madurez',  icon: 'forms' }
+          { title: 'Características Madurez',url: '/dashboard/configuracion/caracteristicas-madurez',  icon: 'forms' },
+          { title: 'Motivos de Inspección',  url: '/dashboard/configuracion/motivos-inspeccion',       icon: 'page'  }
         ]
       },
 
