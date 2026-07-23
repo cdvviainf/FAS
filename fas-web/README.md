@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# fas-web
 
-## Getting Started
+Frontend del Sistema de Gestión Integral Frutera Agrosan (FAS). Next.js 15 (App Router) + React 19 + TypeScript + Tailwind v4 + shadcn/ui + TanStack Query.
 
-First, run the development server:
+Consume exclusivamente la API REST de `fas-api` (repo hermano, independiente) — no hay SSR con acceso directo a base de datos. Ver `/Users/christiandroguett/sites/FAS/CLAUDE.md` para el contrato global del proyecto y `Docs/` (en la raíz del monorepo) para los specs por módulo.
+
+> **Antes de escribir código:** este proyecto usa una versión de Next.js con cambios que rompen convenciones conocidas (p. ej. `middleware.ts` → `proxy.ts`). Lee `AGENTS.md` y la documentación local en `node_modules/next/dist/docs/` antes de asumir comportamiento de versiones anteriores.
+
+## Stack
+
+- Next.js 15 App Router, React 19, TypeScript
+- Tailwind CSS v4 + shadcn/ui
+- TanStack Query v5 (server state) + `ky` (cliente HTTP)
+- React Hook Form / TanStack Form + Zod (formularios y validación)
+- Better Auth (cliente) — autenticación contra `fas-api`, cookies proxeadas vía `src/app/api/auth/[...all]/route.ts` para evitar problemas de cookies cross-domain
+
+## Desarrollo local
+
+Requiere que `fas-api` (y sus servicios Docker: PostgreSQL, Redis) estén corriendo — ver `Makefile` y `docker-compose.yml` en la raíz del monorepo (`make up`).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # http://localhost:3000
+npm run build
+npm run start
+npm run lint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Variables de entorno (`.env.local`)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Uso |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | URL pública de `fas-api` (navegador), ej. `http://localhost:3001/api`. |
+| `INTERNAL_API_URL` | (solo servidor, opcional) URL de `fas-api` alcanzable desde dentro del contenedor Next.js (ej. `http://api:3001`), usada por el proxy de auth para evitar que `localhost` resuelva al propio contenedor `web` en Docker. |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Ver `.env.local.example` para la plantilla completa.
 
-## Learn More
+## Estructura
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+├── app/
+│   ├── auth/           # Rutas públicas (login)
+│   ├── dashboard/       # Rutas protegidas (route group canónico)
+│   └── api/             # Route handlers internos (proxy de auth, mínimos)
+├── components/
+│   ├── ui/               # shadcn/ui (no modificar directamente)
+│   └── layout/           # Sidebar, topbar, shell del dashboard
+├── features/             # Un directorio por módulo de negocio (service, queries, types, components)
+├── config/
+│   └── nav-config.ts    # Estructura del menú lateral
+├── hooks/
+│   └── use-item-acceso.ts  # usePuedeLeer / usePuedeEscribir (permisos por perfil + ítem de menú + nivel)
+└── lib/
+    ├── auth-client.ts   # Cliente Better Auth
+    └── utils.ts
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Autorización en el frontend
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+El acceso no es por rol sino por perfil + ítem de menú + nivel (`SIN_ACCESO` / `LECTURA` / `TOTAL`). Todo botón o acción que modifique datos debe verificar `usePuedeEscribir(item)` antes de renderizarse — el backend es la autoridad final, pero la UI no debe ofrecer acciones que el backend igualmente rechazaría.

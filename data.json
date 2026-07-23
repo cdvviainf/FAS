@@ -12,17 +12,17 @@
     },
     {
       "modulo": "Mantenedores Generales",
-      "progreso": 0,
+      "progreso": 100,
       "estado": "Spec listo"
     },
     {
       "modulo": "Usuarios y Perfiles",
-      "progreso": 0,
+      "progreso": 100,
       "estado": "Spec listo"
     },
     {
       "modulo": "Entidades",
-      "progreso": 0,
+      "progreso": 100,
       "estado": "Spec listo"
     },
     {
@@ -42,7 +42,7 @@
     },
     {
       "modulo": "Compras — Ciclo de compras",
-      "progreso": 0,
+      "progreso": 20,
       "estado": "Spec listo · modelo cerrado"
     },
     {
@@ -111,35 +111,35 @@
         "etapa": 1,
         "inicioSemana": 1,
         "duracionSemanas": 1,
-        "progreso": 0
+        "progreso": 100
       },
       {
         "nombre": "Entidades",
         "etapa": 1,
         "inicioSemana": 2,
         "duracionSemanas": 1,
-        "progreso": 0
+        "progreso": 100
       },
       {
         "nombre": "Mantenedores Generales",
         "etapa": 1,
         "inicioSemana": 2,
         "duracionSemanas": 1,
-        "progreso": 0
+        "progreso": 100
       },
       {
         "nombre": "Usuarios y Perfiles",
         "etapa": 1,
         "inicioSemana": 2,
         "duracionSemanas": 1,
-        "progreso": 0
+        "progreso": 100
       },
       {
         "nombre": "Compras — Ciclo de compras",
         "etapa": 1,
         "inicioSemana": 3,
         "duracionSemanas": 2,
-        "progreso": 0
+        "progreso": 20
       },
       {
         "nombre": "Ventas — Ciclo de ventas",
