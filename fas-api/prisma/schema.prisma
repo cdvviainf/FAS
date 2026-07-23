@@ -133,7 +133,23 @@ model Usuario {
   eliminadoEn    DateTime?
   eliminadoPor   String?
 
+  solicitudesAsignadas SolicitudInspeccionAsignado[]
+  avatar               UsuarioAvatar?
+
   @@map("usuarios")
+}
+
+// Avatar del usuario (UP7): metadata en Usuario.imagenUrl (ruta de servido, no editable
+// manualmente), binario aquí — mismo patrón que DocumentoArticulo/DocumentoArticuloContenido.
+model UsuarioAvatar {
+  usuarioId String   @id
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  mime      String
+  tamano    Int
+  datos     Bytes
+  creadoEn  DateTime @default(now())
+
+  @@map("usuarios_avatar")
 }
 
 // ─── ENTIDADES MAESTRAS ──────────────────────────────────────────────────────
@@ -517,6 +533,8 @@ model Zona {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
+  predios               Predio[]
+
   @@map("zonas")
 }
 
@@ -570,6 +588,7 @@ model UnidadMedida {
   eliminadoPor          String?
 
   especies              Especie[] @relation("UnidadMedidaCalidadEspecie")
+  articulos             Articulo[]
 
   @@map("unidades_medida")
 }
@@ -618,6 +637,8 @@ model TipoProduccion {
   actualizadoPor        String?
   eliminadoEn           DateTime?
   eliminadoPor          String?
+
+  predios               Predio[]
 
   @@map("tipos_produccion")
 }
@@ -713,6 +734,7 @@ model Comuna {
 
   bodegas               Bodega[]
   entidadDirecciones    EntidadDireccion[]
+  predios               Predio[]
 
   @@map("comunas")
 }
@@ -736,6 +758,8 @@ model Especie {
   variedades              Variedad[]
   categorias              Categoria[]
   calibres                Calibre[]
+  solicitudesInspeccion   SolicitudInspeccion[]
+  conceptosLiquidacion    ConceptoLiquidacionEspecie[]
 
   @@map("especies")
 }
@@ -895,6 +919,8 @@ model Moneda {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
+  movimientosCC         MovimientoCuentaCorriente[]
+
   @@map("monedas")
 }
 
@@ -926,6 +952,9 @@ model Temporada {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
+  solicitudesInspeccion SolicitudInspeccion[]
+  contratosProductor    ProductorContrato[]
+
   @@map("temporadas")
 }
 
@@ -949,6 +978,9 @@ model Bodega {
   eliminadoPor          String?
 
   contactos             BodegaContacto[]
+  saldos                SaldoArticulo[]
+  movimientosOrigen     Movimiento[]     @relation("MovOrigen")
+  movimientosDestino    Movimiento[]     @relation("MovDestino")
 
   @@map("bodegas")
 }
@@ -979,6 +1011,8 @@ model ConceptoCtaCte {
   actualizadoPor        String?
   eliminadoEn           DateTime?
   eliminadoPor          String?
+
+  movimientosCC         MovimientoCuentaCorriente[]
 
   @@map("conceptos_cta_cte")
 }
@@ -1023,6 +1057,12 @@ model Entidad {
   eliminadoPor          String?
   direcciones           EntidadDireccion[]
   contactos             EntidadContacto[]
+  solicitudesInspeccion SolicitudInspeccion[]
+  movimientos           Movimiento[]          @relation("MovEntidad")
+  movimientosTransporte Movimiento[]          @relation("MovTransporte")
+  predios               Predio[]              @relation("PrediosProductor")
+  contratos             ProductorContrato[]   @relation("ContratosProductor")
+  movimientosCC         MovimientoCuentaCorriente[] @relation("CCProductor")
 
   @@index([eliminadoEn])
   @@map("entidades")
@@ -1039,12 +1079,16 @@ model EntidadDireccion {
   comuna         Comuna?   @relation(fields: [comunaId], references: [id])
   direccion      String
   esPorDefecto   Boolean   @default(false)
+  latitud        Decimal?  @db.Decimal(10, 7)
+  longitud       Decimal?  @db.Decimal(10, 7)
   creadoEn       DateTime  @default(now())
   creadoPor      String
   actualizadoEn  DateTime? @updatedAt
   actualizadoPor String?
   eliminadoEn    DateTime?
   eliminadoPor   String?
+
+  solicitudesInspeccion SolicitudInspeccion[]
 
   @@index([entidadId])
   @@map("entidad_direcciones")
@@ -1069,6 +1113,478 @@ model EntidadContacto {
   eliminadoEn          DateTime?
   eliminadoPor         String?
 
+  solicitudesInspeccion SolicitudInspeccion[]
+
   @@index([entidadId])
   @@map("entidad_contactos")
+}
+
+// ─── Calidad — Solicitudes de Inspección ─────────────────────────────────────
+
+enum EstadoSolicitudInspeccion {
+  PENDIENTE
+  NOTIFICADA
+  CERRADA
+}
+
+enum FuncionAsignadoInspeccion {
+  ACUDIR
+  NOTIFICAR
+}
+
+// Mantenedor: Motivo de Inspección (base común de mantenedores generales)
+model MotivoInspeccion {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  solicitudes           SolicitudInspeccion[]
+
+  @@map("motivos_inspeccion")
+}
+
+model SolicitudInspeccion {
+  id                 Int                       @id @default(autoincrement())
+  numero             Int                       // correlativo por temporada
+  codigo             String                    // SI-{codTemporada}-{NNNN}
+  temporadaId        Int
+  temporada          Temporada                 @relation(fields: [temporadaId], references: [id])
+  entidadProductorId Int                       // Entidad tipo PRODUCTOR
+  entidadProductor   Entidad                   @relation(fields: [entidadProductorId], references: [id])
+  direccionId        Int                       // EntidadDireccion de la entidad productora
+  direccion          EntidadDireccion          @relation(fields: [direccionId], references: [id])
+  contactoId         Int?                      // EntidadContacto de la entidad productora (opcional)
+  contacto           EntidadContacto?          @relation(fields: [contactoId], references: [id])
+  especieId          Int?
+  especie            Especie?                  @relation(fields: [especieId], references: [id])
+  fechaHora          DateTime                  // fecha y hora de la visita
+  motivoId           Int
+  motivo             MotivoInspeccion          @relation(fields: [motivoId], references: [id])
+  observaciones      String?
+  estado             EstadoSolicitudInspeccion @default(PENDIENTE)
+  notificadaEn       DateTime?
+  recordatorioEnviadoEn DateTime?
+  comentariosCierre  String?
+  fechaCierre        DateTime?
+  cerradaPor         String?                   // Usuario
+  creadoEn           DateTime                  @default(now())
+  creadoPor          String                    // solicitante
+  actualizadoEn      DateTime?                 @updatedAt
+  actualizadoPor     String?
+  eliminadoEn        DateTime?
+  eliminadoPor       String?
+
+  asignados          SolicitudInspeccionAsignado[]
+  adjuntos           SolicitudInspeccionAdjunto[]
+
+  @@unique([temporadaId, numero])
+  @@index([estado])
+  @@index([entidadProductorId])
+  @@index([eliminadoEn])
+  @@map("solicitudes_inspeccion")
+}
+
+model SolicitudInspeccionAsignado {
+  id          Int                       @id @default(autoincrement())
+  solicitudId Int
+  solicitud   SolicitudInspeccion       @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  usuarioId   String
+  usuario     Usuario                   @relation(fields: [usuarioId], references: [id])
+  funcion     FuncionAsignadoInspeccion
+
+  @@unique([solicitudId, usuarioId])
+  @@map("solicitud_inspeccion_asignados")
+}
+
+// Metadatos del adjunto — el binario vive en tabla aparte para no cargar blobs al listar
+model SolicitudInspeccionAdjunto {
+  id          Int                 @id @default(autoincrement())
+  solicitudId Int
+  solicitud   SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  nombre      String
+  mime        String
+  tamano      Int                 // bytes
+  etapa       String              // CREACION | CIERRE
+  subidoEn    DateTime            @default(now())
+  subidoPor   String              // Usuario
+
+  contenido   SolicitudInspeccionAdjuntoContenido?
+
+  @@index([solicitudId])
+  @@map("solicitud_inspeccion_adjuntos")
+}
+
+model SolicitudInspeccionAdjuntoContenido {
+  adjuntoId Int                        @id
+  adjunto   SolicitudInspeccionAdjunto @relation(fields: [adjuntoId], references: [id], onDelete: Cascade)
+  datos     Bytes
+
+  @@map("solicitud_inspeccion_adjuntos_contenido")
+}
+
+// ─── Configuración de correo (SMTP) ──────────────────────────────────────────
+
+model ConfiguracionCorreo {
+  id              Int       @id @default(autoincrement())
+  host            String                        // ej. smtp.office365.com
+  puerto          Int       @default(587)
+  seguridad       String    @default("STARTTLS") // STARTTLS | SSL | NINGUNA
+  usuario         String                        // casilla que autentica
+  passwordCifrada String                        // AES-256-GCM, nunca se expone por API
+  remitenteNombre String
+  remitenteEmail  String
+  creadoEn        DateTime  @default(now())
+  creadoPor       String
+  actualizadoEn   DateTime? @updatedAt
+  actualizadoPor  String?
+
+  @@map("configuracion_correo")
+}
+
+// ─── Materiales — Maestro de artículos, recetas y movimientos ───────────────
+
+enum TipoArticulo {
+  EMBALAJE
+  ENVASE
+  MATERIAL_EMBALAJE
+  SERVICIO
+}
+
+enum TipoCosteo {
+  PROMEDIO_PONDERADO
+  ESTANDAR
+}
+
+enum ModuloSistema {
+  MATERIALES
+  FRUTA
+}
+
+enum ClaseMovimiento {
+  ENTRADA
+  SALIDA
+  TRASLADO
+}
+
+model Articulo {
+  id                    Int          @id @default(autoincrement())
+  tipo                  TipoArticulo
+  codigo                String       @unique
+  descripcion           String
+  descripcionExtranjera String?
+  unidadId              Int
+  unidad                UnidadMedida @relation(fields: [unidadId], references: [id])
+  tipoCosteo            TipoCosteo
+  valorEstandar         Decimal?     @db.Decimal(14, 4) // requerido si ESTANDAR (R3)
+  controlaStock         Boolean      @default(true)     // false si ESTANDAR (R3)
+  stockCritico          Decimal?     @db.Decimal(14, 3)
+  activo                Boolean      @default(true)
+
+  documentos            DocumentoArticulo[]
+  recetas               Receta[]            @relation("EmbalajeRecetas")
+  comoComponente        RecetaDetalle[]     @relation("ComponenteRecetas")
+  saldos                SaldoArticulo[]
+  movimientosDetalle    MovimientoDetalle[]
+
+  creadoEn              DateTime     @default(now())
+  actualizadoEn         DateTime     @updatedAt
+
+  @@index([tipo])
+  @@index([activo])
+  @@map("articulos")
+}
+
+model DocumentoArticulo {
+  id          Int      @id @default(autoincrement())
+  articuloId  Int
+  articulo    Articulo @relation(fields: [articuloId], references: [id])
+  nombre      String
+  mime        String
+  tamano      Int
+  subidoPor   String
+  creadoEn    DateTime @default(now())
+
+  contenido   DocumentoArticuloContenido?
+
+  @@index([articuloId])
+  @@map("documentos_articulo")
+}
+
+// Metadatos separados del binario (mismo patrón que adjuntos de Solicitud de Inspección, SI-2)
+model DocumentoArticuloContenido {
+  documentoId Int               @id
+  documento   DocumentoArticulo @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+  datos       Bytes
+
+  @@map("documentos_articulo_contenido")
+}
+
+model Receta {
+  id                Int      @id @default(autoincrement())
+  embalajeId        Int                                 // FK a Articulo tipo EMBALAJE (R13)
+  embalaje          Articulo @relation("EmbalajeRecetas", fields: [embalajeId], references: [id])
+  codigo            String   @unique
+  descripcion       String
+  cantidadAProducir Decimal  @db.Decimal(14, 3)
+  activo            Boolean  @default(true)
+
+  detalle           RecetaDetalle[]
+
+  creadoEn          DateTime @default(now())
+  actualizadoEn     DateTime @updatedAt
+
+  @@index([embalajeId])
+  @@map("recetas")
+}
+
+model RecetaDetalle {
+  id                Int      @id @default(autoincrement())
+  recetaId          Int
+  receta            Receta   @relation(fields: [recetaId], references: [id], onDelete: Cascade)
+  componenteId      Int                                 // FK a Articulo MATERIAL_EMBALAJE o SERVICIO (R13)
+  componente        Articulo @relation("ComponenteRecetas", fields: [componenteId], references: [id])
+  cantidadAConsumir Decimal  @db.Decimal(14, 4)
+
+  @@index([recetaId])
+  @@map("receta_detalles")
+}
+
+model TipoMovimiento {
+  id                 Int             @id @default(autoincrement())
+  codigo             String          @unique
+  descripcion        String
+  modulos            ModuloSistema[]
+  clase              ClaseMovimiento
+  requierePrecio     Boolean         @default(false)
+  entidadRelacionada TipoEntidad?
+  emiteDTE           Boolean         @default(false)
+  activo             Boolean         @default(true)
+
+  movimientos        Movimiento[]
+
+  creadoEn           DateTime        @default(now())
+
+  @@index([clase])
+  @@map("tipos_movimiento")
+}
+
+model SaldoArticulo {
+  id            Int      @id @default(autoincrement())
+  articuloId    Int
+  articulo      Articulo @relation(fields: [articuloId], references: [id])
+  bodegaId      Int
+  bodega        Bodega   @relation(fields: [bodegaId], references: [id])
+  cantidad      Decimal  @db.Decimal(14, 3) @default(0)
+  costoPromedio Decimal  @db.Decimal(14, 4) @default(0)
+  actualizadoEn DateTime @updatedAt
+
+  @@unique([articuloId, bodegaId])
+  @@index([articuloId])
+  @@map("saldos_articulo")
+}
+
+model Movimiento {
+  id                  Int             @id @default(autoincrement())
+  tipoMovimientoId    Int
+  tipoMovimiento      TipoMovimiento  @relation(fields: [tipoMovimientoId], references: [id])
+  entidadId           Int?
+  entidad             Entidad?        @relation("MovEntidad", fields: [entidadId], references: [id])
+  fechaRegistro        DateTime        @default(now())
+  fechaMovimiento      DateTime
+  bodegaOrigenId       Int?
+  bodegaOrigen         Bodega?         @relation("MovOrigen", fields: [bodegaOrigenId], references: [id])
+  bodegaDestinoId      Int?
+  bodegaDestino        Bodega?         @relation("MovDestino", fields: [bodegaDestinoId], references: [id])
+  guiaReferencia       String?
+
+  // Datos de transporte — requeridos si tipoMovimiento.emiteDTE = true (R10)
+  transporteEntidadId  Int?
+  transporteEntidad    Entidad?        @relation("MovTransporte", fields: [transporteEntidadId], references: [id])
+  choferRut            String?
+  choferNombre         String?
+  placaCamion          String?
+  placaRemolque        String?
+  horaSalida           DateTime?
+  horaEstimadaLlegada  DateTime?
+
+  detalle              MovimientoDetalle[]
+  usuarioId            String
+  creadoEn             DateTime        @default(now())
+
+  @@index([tipoMovimientoId])
+  @@index([fechaMovimiento])
+  @@map("movimientos")
+}
+
+model MovimientoDetalle {
+  id             Int        @id @default(autoincrement())
+  movimientoId   Int
+  movimiento     Movimiento @relation(fields: [movimientoId], references: [id], onDelete: Cascade)
+  articuloId     Int
+  articulo       Articulo   @relation(fields: [articuloId], references: [id])
+  cantidad       Decimal    @db.Decimal(14, 3)
+  precioUnitario Decimal?   @db.Decimal(14, 4)
+
+  @@index([movimientoId])
+  @@index([articuloId])
+  @@map("movimiento_detalles")
+}
+
+// ─── Productores — Predios, Contrato, Cuenta Corriente, Conceptos de Liquidación ─
+
+enum UnidadVolumen {
+  KG
+  CAJAS
+}
+
+enum NaturalezaMovimientoCC {
+  DEBE
+  HABER
+}
+
+enum FormaAplicacionConcepto {
+  POR_KILO
+  POR_CAJA
+  PORCENTAJE_VENTA
+  MONTO_TOTAL
+}
+
+enum NaturalezaConcepto {
+  COBRO
+  ABONO
+}
+
+model Predio {
+  id               Int             @id @default(autoincrement())
+  entidadId        Int                                       // Entidad tipo PRODUCTOR (R1)
+  entidad          Entidad         @relation("PrediosProductor", fields: [entidadId], references: [id])
+  codigo           String                                    // único por productor (R2, índice parcial)
+  descripcion      String
+  codigoCsg        String?
+  nombreCsg        String?
+  codigoSdp        String?
+  codigoGgn        String?
+  direccion        String?
+  comunaId         Int?
+  comuna           Comuna?         @relation(fields: [comunaId], references: [id])
+  tipoProduccionId Int?
+  tipoProduccion   TipoProduccion? @relation(fields: [tipoProduccionId], references: [id])
+  zonaId           Int?
+  zona             Zona?           @relation(fields: [zonaId], references: [id])
+  latitud          Decimal?        @db.Decimal(10, 7)
+  longitud         Decimal?        @db.Decimal(10, 7)
+
+  creadoEn         DateTime        @default(now())
+  creadoPor        String
+  actualizadoEn    DateTime?       @updatedAt
+  actualizadoPor   String?
+  eliminadoEn      DateTime?
+  eliminadoPor     String?
+
+  @@index([entidadId])
+  @@map("predios")
+}
+
+model ProductorContrato {
+  id                     Int            @id @default(autoincrement())
+  entidadId              Int
+  entidad                Entidad        @relation("ContratosProductor", fields: [entidadId], references: [id])
+  temporadaId            Int?
+  temporada              Temporada?     @relation(fields: [temporadaId], references: [id])
+  pdfNombre              String?
+  pdfMime                String?
+  pdfTamano              Int?
+  fechaInicio            DateTime?      @db.Date
+  fechaTermino           DateTime?      @db.Date
+
+  // Condiciones controladas durante el proceso (⚠ semántica a refinar en Etapa 3, ver §3)
+  valoresFacturacion     String?
+  condicionesPago        String?
+  condicionesFacturacion String?
+  volumenComprometido    Decimal?       @db.Decimal(14, 3)
+  unidadVolumen          UnidadVolumen?
+  minimoGarantizado      Decimal?       @db.Decimal(14, 4)
+  // porcentajeCumplimiento: CALCULADO (volumen real / comprometido), no se almacena (R5b)
+
+  creadoEn               DateTime       @default(now())
+  creadoPor              String
+  actualizadoEn          DateTime?      @updatedAt
+  actualizadoPor         String?
+  eliminadoEn            DateTime?
+  eliminadoPor           String?
+
+  pdfContenido           ProductorContratoPdf?
+
+  @@index([entidadId])
+  @@map("productor_contratos")
+}
+
+// Metadatos separados del binario (mismo patrón que adjuntos de Solicitud de Inspección)
+model ProductorContratoPdf {
+  contratoId Int               @id
+  contrato   ProductorContrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  datos      Bytes
+
+  @@map("productor_contratos_pdf")
+}
+
+model MovimientoCuentaCorriente {
+  id          Int                    @id @default(autoincrement()) // operativo, inmutable (R5)
+  entidadId   Int                                                  // productor
+  entidad     Entidad                @relation("CCProductor", fields: [entidadId], references: [id])
+  tipoId      Int
+  tipo        ConceptoCtaCte         @relation(fields: [tipoId], references: [id])
+  naturaleza  NaturalezaMovimientoCC                               // DEBE o HABER (consistente con tipo.naturaleza, R6)
+  fecha       DateTime
+  glosa       String?
+  monto       Decimal                @db.Decimal(14, 4)
+  monedaId    Int?
+  moneda      Moneda?                @relation(fields: [monedaId], references: [id])
+  referencia  String?
+  temporadaId Int?
+  usuarioId   String
+  creadoEn    DateTime               @default(now())
+
+  @@index([entidadId, fecha])
+  @@index([tipoId])
+  @@map("movimientos_cuenta_corriente")
+}
+
+model ConceptoLiquidacion {
+  id              Int                          @id @default(autoincrement())
+  codigo          String
+  descripcion     String
+  formaAplicacion FormaAplicacionConcepto
+  naturaleza      NaturalezaConcepto                               // COBRO (−) / ABONO (+)
+  valores         ConceptoLiquidacionEspecie[]
+
+  creadoEn        DateTime  @default(now())
+  creadoPor       String
+  actualizadoEn   DateTime? @updatedAt
+  actualizadoPor  String?
+  eliminadoEn     DateTime?
+  eliminadoPor    String?
+
+  @@map("conceptos_liquidacion")
+}
+
+model ConceptoLiquidacionEspecie {
+  id         Int                 @id @default(autoincrement())
+  conceptoId Int
+  concepto   ConceptoLiquidacion @relation(fields: [conceptoId], references: [id], onDelete: Cascade)
+  especieId  Int
+  especie    Especie             @relation(fields: [especieId], references: [id])
+  valor      Decimal             @db.Decimal(14, 4)               // valor del concepto para esa especie
+
+  @@unique([conceptoId, especieId])
+  @@index([conceptoId])
+  @@map("conceptos_liquidacion_especie")
 }

@@ -74,6 +74,16 @@ Permitir: (a) configurar la norma de calidad por especie (defectos y madurez); (
 
 ## 4. Modelo de datos (Prisma)
 
+> **⚠️ Supersesión (2026-07-23) — SolicitudInspeccion v1.** Por decisión de Christian, el modelo `SolicitudInspeccion` complejo definido más abajo en esta sección (mercados/calibres/categorías/embalajes multiselect, planta/frigorífico, inspección por caja, PWA offline) queda **reemplazado** por una **solicitud de visita a terreno** simplificada, que es el primer modelo funcional implementado. El flujo de inspección por caja / norma de calidad por especie se retomará en una etapa posterior. Ver `Docs/Hallazgos/solicitud-inspeccion.md` para el spec vigente y el detalle de implementación.
+>
+> **Modelo vigente (implementado en `fas-api`):**
+> - `MotivoInspeccion` — nuevo mantenedor general (base común), ruta `/api/config/motivos-inspeccion`.
+> - `SolicitudInspeccion` — `numero` + `codigo` (`SI-{codTemporada}-{NNNN}`, correlativo por temporada), `temporadaId`, `entidadProductorId` (Entidad tipo PRODUCTOR), `direccionId` (EntidadDireccion, con `latitud`/`longitud`), `especieId?`, `fechaHora`, `motivoId`, `observaciones?`, `estado` (`PENDIENTE`/`NOTIFICADA`/`CERRADA`), datos de cierre y softdelete.
+> - `SolicitudInspeccionAsignado` — `usuarioId` + `funcion` (`ACUDIR`/`NOTIFICAR`).
+> - `SolicitudInspeccionAdjunto` (+ `...Contenido` con `Bytes`) — adjuntos guardados **en BD** (no en disco), separando metadatos del binario.
+> - `ConfiguracionCorreo` — SMTP (Office365) con password cifrada AES-256-GCM; pantalla en Configuración › Configuración General.
+> - Correos vía cola BullMQ `correos` (notificar / modificar / eliminar / cerrar / reabrir + recordatorio 24 h antes).
+
 ```prisma
 // ───── Mantenedores (solo WEB) ─────
 enum TipoDatoMadurez { DECIMAL PORCENTAJE ENTERO TEXTO LISTA }
