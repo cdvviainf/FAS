@@ -63,7 +63,8 @@ export function PaisFormSheet({ item, open, onOpenChange }: PaisFormSheetProps) 
       codigo: item?.codigo ?? '',
       descripcion: item?.descripcion ?? '',
       descripcionExtranjera: item?.descripcionExtranjera ?? '',
-      esPaisOrigen: item?.esPaisOrigen ?? false
+      esPaisOrigen: item?.esPaisOrigen ?? false,
+      bloqueado: item?.bloqueado ?? false
     } as PaisFormValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validators: { onSubmit: paisSchema as any },
@@ -80,8 +81,16 @@ export function PaisFormSheet({ item, open, onOpenChange }: PaisFormSheetProps) 
 
   const isPending = createMutation.isPending || updateMutation.isPending
 
+  // El Sheet permanece montado entre aperturas (lo controla el padre vía `open`),
+  // asi que hay que resetear el form manualmente al cerrar (Cancelar, Escape, click afuera);
+  // si no, reabrir "Nuevo" muestra los valores tipeados en la sesion anterior.
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) form.reset()
+    onOpenChange(nextOpen)
+  }
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent className='flex flex-col sm:max-w-md'>
         <SheetHeader>
           <SheetTitle>{isEdit ? 'Editar País' : 'Nuevo País'}</SheetTitle>
@@ -115,12 +124,19 @@ export function PaisFormSheet({ item, open, onOpenChange }: PaisFormSheetProps) 
                 placeholder='Ej: Chile'
               />
               <FormSwitchField name='esPaisOrigen' label='Es país de origen' />
+              {isEdit && (
+                <FormSwitchField
+                  name='bloqueado'
+                  label='Bloqueado'
+                  description='Un registro bloqueado no aparece en los selectores de nuevos registros.'
+                />
+              )}
             </form.Form>
           </form.AppForm>
         </div>
 
         <SheetFooter>
-          <Button type='button' variant='outline' onClick={() => onOpenChange(false)}>
+          <Button type='button' variant='outline' onClick={() => handleOpenChange(false)}>
             Cancelar
           </Button>
           <Button type='submit' form='pais-form' isLoading={isPending}>

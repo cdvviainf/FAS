@@ -271,3 +271,70 @@
 
 - Si la base de datos actual ya tiene temporadas creadas y ninguna marcada `predeterminada=true` (estado previo a QAS-MG-L6-001), el fix no repara datos retroactivamente — hay que marcar una manualmente una vez vía `PATCH /api/config/temporadas/:id`. El invariante queda garantizado hacia adelante desde el próximo `POST`.
 - R8/childrenMap se revisó contra los 24 mantenedores del spec; no se identificaron más brechas dentro del módulo Configuración. Relaciones cruzadas con otros módulos (p. ej. Materiales.Articulo → UnidadMedida) quedan fuera de este análisis porque esos módulos aún no están implementados en `fas-api`.
+
+## Revisión QA — Regresión alta de País (2026-07-23)
+
+| ID | Severidad | Estado | Hallazgo / evidencia |
+|---|---|---|---|
+| QAS-MG-L7-001 | Alta | **Corregido** | `paisSchema` extiende `mantenedorSimpleSchema`, que exige `bloqueado: boolean`, pero `PaisFormSheet.defaultValues` no lo definía — la validación de Zod fallaba en el cliente antes de llamar la mutación (por eso nunca se veía el `POST`). Se agregó `bloqueado: item?.bloqueado ?? false` a `defaultValues` y se agregó el switch "Bloqueado" (visible solo en edición, igual que el resto de mantenedores). Verificado con curl: `POST /api/config/paises` con `codigo/descripcion/esPaisOrigen` → 201; `DELETE` de limpieza → 204. |
+
+### Corrección Claude — 2026-07-23 (bug sistémico adicional detectado durante el fix)
+
+Al corregir QAS-MG-L7-001 se detectó un segundo bug, más amplio, no reportado
+aún como hallazgo QA: **ningún formulario de mantenedor (Sheet) limpiaba sus
+campos al cerrar sin guardar.** Flujo para reproducirlo en cualquier mantenedor:
+abrir "Nuevo", escribir datos, click en "Cancelar", volver a abrir "Nuevo" →
+los campos siguen con los valores anteriores.
+
+**Causa raíz:** el componente `Sheet` (`XxxFormSheet`) permanece montado en el
+árbol de React mientras el padre solo alterna la prop `open` — no se
+desmonta/remonta. El hook `useAppForm()` (TanStack Form) vive en ese componente
+siempre-montado, así que su estado interno persiste entre aperturas. El botón
+"Cancelar" solo llamaba `onOpenChange(false)`, nunca `form.reset()`; por eso el
+único momento en que el form sí se limpiaba era tras un `POST` exitoso (donde
+`form.reset()` ya se llamaba explícitamente en `onSuccess`).
+
+Este patrón es el mismo en absolutamente todos los `*-form-sheet.tsx` del
+proyecto (generado/copiado desde el mismo scaffold). Los componentes
+"QuickCreate" (diálogos de creación rápida embebidos en otros formularios, ej.
+`ComunaQuickCreate`) **no** tienen el bug porque su padre los desmonta
+condicionalmente (`{open && <XxxQuickDialog .../>}`), así que cada apertura
+crea una instancia nueva del formulario.
+
+**Fix aplicado** (idéntico en cada archivo): se agregó un `handleOpenChange`
+que llama `form.reset()` antes de propagar el cierre, y se usa tanto en el
+`onOpenChange` del `Sheet` (cubre Escape/click afuera) como en el botón
+Cancelar:
+
+```ts
+function handleOpenChange(nextOpen: boolean) {
+  if (!nextOpen) form.reset()
+  onOpenChange(nextOpen)
+}
+```
+
+Archivos corregidos (17): `mantenedor-form-sheet.tsx` (genérico, cubre
+alturas/grupos-mercado/motivos-inspeccion/regiones-genérico/tipos-defecto/
+tipos-embarque/tipos-pallet/tipos-parametro/tipos-produccion/unidades-medida/
+zonas), `pais-form-sheet.tsx`, `bodega-form-sheet.tsx`, `calibre-form-sheet.tsx`,
+`categoria-form-sheet.tsx`, `comuna-form-sheet.tsx`,
+`conceptos-cta-cte/concepto-form-sheet.tsx`, `especie-form-sheet.tsx`,
+`grupo-variedad-form-sheet.tsx`, `mercado-form-sheet.tsx`,
+`moneda-form-sheet.tsx`, `parametro-form-sheet.tsx`,
+`provincia-form-sheet.tsx`, `puerto-form-sheet.tsx`,
+`region-form-sheet.tsx` (página huérfana `/geografia`, corregido por
+consistencia aunque no está en el nav), `temporada-form-sheet.tsx`,
+`variedad-form-sheet.tsx`.
+
+Caso especial: `bodega-form-sheet.tsx` mantiene un arreglo `contactos` fuera de
+`useAppForm` (`useState` propio); `handleOpenChange` también lo restaura a su
+valor original (`item?.contactos` mapeado, o vacío en alta) para que no quede
+"contaminado" entre aperturas.
+
+No se tocaron los formularios basados en página completa (`usuario-form.tsx`,
+`perfil-form.tsx`, entidad, y los de Materiales/Productores que ya usan
+`useState` + `useEffect(open)` propio) porque no tienen este patrón de bug —
+o se remontan al navegar, o ya reseteaban correctamente.
+
+Verificación: `npx tsc --noEmit` limpio en `fas-web`, `npm run build` OK
+(todas las páginas generadas sin error).

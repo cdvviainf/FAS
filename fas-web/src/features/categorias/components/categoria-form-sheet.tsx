@@ -116,8 +116,16 @@ export function CategoriaFormSheet({ item, open, onOpenChange }: CategoriaFormSh
     form.setFieldValue('especieId', especie.id)
   }
 
+  // El Sheet permanece montado entre aperturas (lo controla el padre vía `open`),
+  // asi que hay que resetear el form manualmente al cerrar (Cancelar, Escape, click afuera);
+  // si no, reabrir "Nuevo" muestra los valores tipeados en la sesion anterior.
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) form.reset()
+    onOpenChange(nextOpen)
+  }
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent className='flex flex-col sm:max-w-md'>
         <SheetHeader>
           <SheetTitle>{isEdit ? 'Editar Categoría' : 'Nueva Categoría'}</SheetTitle>
@@ -201,7 +209,7 @@ export function CategoriaFormSheet({ item, open, onOpenChange }: CategoriaFormSh
         </div>
 
         <SheetFooter>
-          <Button type='button' variant='outline' onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button type='button' variant='outline' onClick={() => handleOpenChange(false)}>Cancelar</Button>
           <Button type='submit' form='categoria-form' isLoading={isPending}>
             <Icons.check className='mr-1 h-4 w-4' />
             {isEdit ? 'Guardar cambios' : 'Crear categoría'}
