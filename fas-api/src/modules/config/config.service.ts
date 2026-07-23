@@ -27,6 +27,41 @@ const childrenMap: Partial<Record<MantenedorModelo, ChildDef[]>> = {
   ],
   tipoEmbarque: [{ childModelo: 'puerto', parentField: 'tipoEmbarqueId', label: 'puertos' }],
   comuna: [{ childModelo: 'bodega', parentField: 'comunaId', label: 'bodegas' }],
+  unidadMedida: [{ childModelo: 'especie', parentField: 'unidadMedidaCalidadId', label: 'especies' }],
+}
+
+type ExternalReferenceDef = {
+  delegateName: 'entidad' | 'entidadDireccion' | 'bodegaContacto' | 'solicitudInspeccion'
+  parentField: string
+  label: string
+  usesSoftDelete?: boolean
+}
+const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceDef[]>> = {
+  pais: [
+    { delegateName: 'entidad', parentField: 'paisId', label: 'entidades' },
+    { delegateName: 'entidadDireccion', parentField: 'paisId', label: 'direcciones de entidad' },
+  ],
+  comuna: [
+    { delegateName: 'entidadDireccion', parentField: 'comunaId', label: 'direcciones de entidad' },
+  ],
+  bodega: [
+    {
+      delegateName: 'bodegaContacto',
+      parentField: 'bodegaId',
+      label: 'contactos de bodega',
+      usesSoftDelete: false,
+    },
+  ],
+  // QAS-SI-001: maestros usados por solicitudes de inspección vigentes
+  especie: [
+    { delegateName: 'solicitudInspeccion', parentField: 'especieId', label: 'solicitudes de inspección' },
+  ],
+  temporada: [
+    { delegateName: 'solicitudInspeccion', parentField: 'temporadaId', label: 'solicitudes de inspección' },
+  ],
+  motivoInspeccion: [
+    { delegateName: 'solicitudInspeccion', parentField: 'motivoId', label: 'solicitudes de inspección' },
+  ],
 }
 
 export async function obtenerTemporadaPredeterminada() {
@@ -122,9 +157,16 @@ export async function crearMantenedor(
     await repo.clearMonedaBase()
   }
 
-  // Temporada predeterminada — solo una
-  if (modelo === 'temporada' && data.predeterminada) {
-    await repo.clearTemporadaPredeterminada()
+  // Temporada predeterminada — siempre debe existir una: si no hay ninguna activa,
+  // esta se marca como predeterminada sin importar lo enviado por el cliente.
+  if (modelo === 'temporada') {
+    const existePredeterminada = await repo.countTemporadaPredeterminada()
+    if (existePredeterminada === 0) {
+      ;(data as AnyRecord).predeterminada = true
+    }
+    if (data.predeterminada) {
+      await repo.clearTemporadaPredeterminada()
+    }
   }
 
   const { contactos, ...coreData } = data as MantenedorCreateInput & { contactos?: import('./config.types.js').BodegaContactoInput[] }
@@ -294,7 +336,22 @@ export async function eliminarMantenedor(
     const count = await repo.countChildren(child.childModelo, id, child.parentField)
     if (count > 0) {
       throw new ConflictError(
-        `No se puede eliminar: tiene ${count} ${child.label} asociado${count === 1 ? '' : 's'}`,
+        `No se puede eliminar: tiene ${count} ${child.label} vigente${count === 1 ? '' : 's'} asociado${count === 1 ? '' : 's'}. Para dar de baja este registro, inactívalo (bloquéalo) en lugar de eliminarlo.`,
+      )
+    }
+  }
+
+  const externalReferences = externalReferencesMap[modelo] ?? []
+  for (const reference of externalReferences) {
+    const count = await repo.countActiveReferences(
+      reference.delegateName,
+      id,
+      reference.parentField,
+      reference.usesSoftDelete,
+    )
+    if (count > 0) {
+      throw new ConflictError(
+        `No se puede eliminar: tiene ${count} ${reference.label} vigente${count === 1 ? '' : 's'} asociado${count === 1 ? '' : 's'}. Para dar de baja este registro, inactívalo (bloquéalo) en lugar de eliminarlo.`,
       )
     }
   }

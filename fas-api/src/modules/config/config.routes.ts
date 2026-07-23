@@ -5,6 +5,8 @@ import { requireAuth, requireLevel } from '../../plugins/auth-guard.js'
 import { perfilesRoutes } from './perfiles/perfiles.routes.js'
 import { usuariosRoutes } from './usuarios/usuarios.routes.js'
 import { entidadesRoutes } from './entidades/entidades.routes.js'
+import { correoRoutes } from './correo/correo.routes.js'
+import { conceptosLiquidacionRoutes } from './conceptos-liquidacion/conceptos-liquidacion.routes.js'
 
 const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'pais', prefixRuta: 'paises', label: 'País', tienePaisOrigen: true, schemaKey: 'pais' },
@@ -36,6 +38,8 @@ const MANTENEDORES: MantenedorConfig[] = [
   // Lote 4
   { modelo: 'temporada', prefixRuta: 'temporadas', label: 'Temporada', schemaKey: 'temporada' },
   { modelo: 'bodega', prefixRuta: 'bodegas', label: 'Bodega', schemaKey: 'bodega' },
+  // Lote 6 — Calidad
+  { modelo: 'motivoInspeccion', prefixRuta: 'motivos-inspeccion', label: 'Motivo de Inspección' },
 ]
 
 export async function configRoutes(app: FastifyInstance) {
@@ -43,6 +47,8 @@ export async function configRoutes(app: FastifyInstance) {
   await app.register(perfilesRoutes)
   await app.register(usuariosRoutes)
   await app.register(entidadesRoutes)
+  await app.register(correoRoutes)
+  await app.register(conceptosLiquidacionRoutes)
 
   // Menú accesible del usuario autenticado
   app.get('/me/menu', { preHandler: [requireAuth] }, getMiMenu)

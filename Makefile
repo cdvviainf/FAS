@@ -72,3 +72,7 @@ help:
 	@echo ""
 	@grep -E '^## .*' Makefile | sed 's/## /  /'
 	@echo ""
+.PHONY: test-local-all
+
+test-local-all:
+	bash scripts/test-local-all.sh

@@ -15,7 +15,8 @@ export const mantenedorListQuerySchema = z.object({
   paisId: z.coerce.number().int().positive().optional(),
   tipoEmbarqueId: z.coerce.number().int().positive().optional(),
   contexto: z.enum(['origen', 'destino']).optional(),
-  soloActivos: z.coerce.boolean().optional(),
+  // z.coerce.boolean() convertiría "false" (string) a true; enum explícito lo evita
+  soloActivos: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
 })
 
 export const mantenedorParamsSchema = z.object({

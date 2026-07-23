@@ -10,25 +10,27 @@ const itemsMenu = [
   { codigo: 'CONFIG_USUARIOS', nombre: 'Usuarios', seccion: 'Configuración', ruta: '/dashboard/configuracion/usuarios', esAccion: false, orden: 11 },
   { codigo: 'CONFIG_PERFILES', nombre: 'Perfiles', seccion: 'Configuración', ruta: '/dashboard/configuracion/perfiles', esAccion: false, orden: 12 },
   { codigo: 'CONFIG_ENTIDADES', nombre: 'Entidades', seccion: 'Configuración', ruta: '/dashboard/configuracion/entidades', esAccion: false, orden: 9 },
+  { codigo: 'CONFIG_GENERAL', nombre: 'Configuración General', seccion: 'Configuración', ruta: '/dashboard/configuracion/general', esAccion: false, orden: 13 },
   // Compras
   { codigo: 'COMPRAS_OC', nombre: 'Órdenes de Compra', seccion: 'Compras', ruta: '/dashboard/compras/ordenes', esAccion: false, orden: 20 },
   { codigo: 'OC_APROBACION', nombre: 'Aprobación de OC', seccion: 'Compras', ruta: null, esAccion: true, orden: 21 },
   // Productores
-  { codigo: 'PROD_FICHA', nombre: 'Productores', seccion: 'Productores', ruta: '/dashboard/productores', esAccion: false, orden: 30 },
-  { codigo: 'PROD_CONTRATO', nombre: 'Contrato', seccion: 'Productores', ruta: '/dashboard/productores/contratos', esAccion: false, orden: 31 },
+  { codigo: 'PROD_FICHA', nombre: 'Productores', seccion: 'Productores', ruta: '/dashboard/configuracion/productores', esAccion: false, orden: 30 },
+  { codigo: 'PROD_CONTRATO', nombre: 'Contrato', seccion: 'Productores', ruta: '/dashboard/productores/contrato', esAccion: false, orden: 31 },
   { codigo: 'PROD_CTA_CTE', nombre: 'Cuenta Corriente', seccion: 'Productores', ruta: '/dashboard/productores/cuenta-corriente', esAccion: false, orden: 32 },
-  { codigo: 'PROD_CONCEPTOS_LIQ', nombre: 'Conceptos de Liquidación', seccion: 'Productores', ruta: '/dashboard/productores/conceptos-liquidacion', esAccion: false, orden: 33 },
+  { codigo: 'PROD_CONCEPTOS_LIQ', nombre: 'Conceptos de Liquidación', seccion: 'Productores', ruta: '/dashboard/configuracion/conceptos-liquidacion', esAccion: false, orden: 33 },
   // Ventas
   { codigo: 'VENTAS_NV', nombre: 'Cierre Comercial', seccion: 'Ventas', ruta: '/dashboard/ventas/notas', esAccion: false, orden: 40 },
   { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', seccion: 'Ventas', ruta: '/dashboard/ventas/cobranza', esAccion: false, orden: 41 },
   // Operaciones
-  { codigo: 'OPER_MATERIALES', nombre: 'Materiales', seccion: 'Operaciones', ruta: '/dashboard/operaciones/materiales', esAccion: false, orden: 50 },
+  { codigo: 'OPER_MATERIALES', nombre: 'Materiales', seccion: 'Operaciones', ruta: '/dashboard/configuracion/articulos', esAccion: false, orden: 50 },
   { codigo: 'OPER_STOCK', nombre: 'Stock Fruta', seccion: 'Operaciones', ruta: '/dashboard/operaciones/stock', esAccion: false, orden: 51 },
   // Finanzas
   { codigo: 'FIN_COSTOS', nombre: 'Gestión de Costos', seccion: 'Finanzas', ruta: '/dashboard/finanzas/costos', esAccion: false, orden: 60 },
   { codigo: 'FIN_PAGOS', nombre: 'Gestión de Pagos', seccion: 'Finanzas', ruta: '/dashboard/finanzas/pagos', esAccion: false, orden: 61 },
   { codigo: 'FIN_FACTURACION', nombre: 'Facturación', seccion: 'Finanzas', ruta: '/dashboard/finanzas/facturacion', esAccion: false, orden: 62 },
   // Calidad
+  { codigo: 'CAL_SOLICITUDES', nombre: 'Solicitudes de Inspección', seccion: 'Calidad', ruta: '/dashboard/calidad/solicitudes', esAccion: false, orden: 69 },
   { codigo: 'CAL_CONTROL', nombre: 'Control de Calidad', seccion: 'Calidad', ruta: '/dashboard/calidad/control', esAccion: false, orden: 70 },
   { codigo: 'CAL_LOTES', nombre: 'Validación de Lotes', seccion: 'Calidad', ruta: '/dashboard/calidad/lotes', esAccion: false, orden: 71 },
   { codigo: 'CAL_RECLAMOS', nombre: 'Reclamos', seccion: 'Calidad', ruta: '/dashboard/calidad/reclamos', esAccion: false, orden: 72 },

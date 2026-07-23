@@ -31,6 +31,8 @@ const modelMap: Record<MantenedorModelo, string> = {
   // Lote 4
   temporada: 'temporada',
   bodega: 'bodega',
+  // Lote 6 — Calidad
+  motivoInspeccion: 'motivoInspeccion',
 }
 
 // Qué campos include para modelos con FK (para exponer datos relacionados)
@@ -188,6 +190,24 @@ export async function countChildren(
     where: {
       [parentField]: parentId,
       eliminadoEn: null,
+    },
+  })
+}
+
+export async function countActiveReferences(
+  delegateName: 'entidad' | 'entidadDireccion' | 'bodegaContacto' | 'solicitudInspeccion',
+  parentId: number,
+  parentField: string,
+  usesSoftDelete = true,
+): Promise<number> {
+  const delegate = (prisma as unknown as Record<string, {
+    count(args: { where: Record<string, unknown> }): Promise<number>
+  }>)[delegateName]
+
+  return delegate.count({
+    where: {
+      [parentField]: parentId,
+      ...(usesSoftDelete ? { eliminadoEn: null } : {}),
     },
   })
 }
