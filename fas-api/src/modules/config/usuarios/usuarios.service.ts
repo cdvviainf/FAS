@@ -67,7 +67,6 @@ export async function crearUsuario(input: UsuarioCreateInput, currentUserId = SI
       nombre: input.nombre,
       email: input.email,
       whatsapp: input.whatsapp,
-      imagenUrl: input.imagenUrl || null,
       perfilId: input.perfilId,
       creadoPor: currentUserId,
     })
@@ -92,10 +91,39 @@ export async function actualizarUsuario(id: string, input: UsuarioUpdateInput, c
   return repo.updateUsuario(id, {
     nombre: input.nombre,
     whatsapp: input.whatsapp,
-    imagenUrl: input.imagenUrl,
     perfilId: input.perfilId,
     actualizadoPor: currentUserId,
   })
+}
+
+// ─── Avatar (UP7) ────────────────────────────────────────────────────────────
+// Mismo patrón que documentos de Articulo: metadata + binario, servido por endpoint
+// propio. `imagenUrl` deja de ser editable manualmente y pasa a ser la ruta de este
+// endpoint, gestionada solo por el servidor.
+
+const AVATAR_MIMES_PERMITIDOS = new Set(['image/jpeg', 'image/png', 'image/webp'])
+export const MAX_AVATAR_BYTES = 3 * 1024 * 1024
+
+export async function subirAvatar(id: string, archivo: { mime: string; datos: Buffer }) {
+  await obtenerUsuario(id)
+  if (!AVATAR_MIMES_PERMITIDOS.has(archivo.mime)) {
+    throw new ValidationError('Tipo de imagen no permitido. Se aceptan JPG, PNG o WEBP')
+  }
+  if (archivo.datos.length > MAX_AVATAR_BYTES) {
+    throw new ValidationError('La imagen supera el tamaño máximo de 3 MB')
+  }
+  return repo.upsertAvatar(id, { mime: archivo.mime, tamano: archivo.datos.length, datos: archivo.datos })
+}
+
+export async function descargarAvatar(id: string) {
+  const avatar = await repo.getAvatarContenido(id)
+  if (!avatar) throw new NotFoundError('Avatar', id)
+  return { mime: avatar.mime, datos: Buffer.from(avatar.datos) }
+}
+
+export async function eliminarAvatar(id: string) {
+  await obtenerUsuario(id)
+  await repo.deleteAvatar(id)
 }
 
 export async function cambiarPassword(id: string, input: CambiarPasswordInput) {
@@ -120,6 +148,14 @@ export async function cambiarPassword(id: string, input: CambiarPasswordInput) {
 export async function eliminarUsuario(id: string, currentUserId = SISTEMA_USER) {
   const usuario = await repo.findUsuarioById(id)
   if (!usuario) throw new NotFoundError('Usuario', id)
+
+  // QAS-SI-001: no eliminar si está vinculado (asignado o solicitante) a solicitudes vigentes
+  const vinculadas = await repo.countSolicitudesVinculadas(id)
+  if (vinculadas > 0) {
+    throw new ConflictError(
+      `No se puede eliminar el usuario: está vinculado a ${vinculadas} solicitud${vinculadas === 1 ? '' : 'es'} de inspección vigente${vinculadas === 1 ? '' : 's'} (como asignado o solicitante).`,
+    )
+  }
 
   // RU4: soft delete — no puede autenticarse luego
   await repo.softDeleteUsuario(id, currentUserId)

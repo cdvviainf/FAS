@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import * as service from './usuarios.service.js'
+import { ValidationError } from '../../../shared/errors.js'
 import {
   usuarioCreateSchema,
   usuarioUpdateSchema,
@@ -43,5 +44,32 @@ export async function changePassword(req: FastifyRequest, reply: FastifyReply) {
 export async function deleteUsuario(req: FastifyRequest, reply: FastifyReply) {
   const { id } = usuarioIdParamSchema.parse(req.params)
   await service.eliminarUsuario(id, req.fasUserId)
+  return reply.status(204).send()
+}
+
+// ─── Avatar ──────────────────────────────────────────────────────────────────
+
+export async function subirAvatar(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = usuarioIdParamSchema.parse(req.params)
+  const archivo = await req.file()
+  if (!archivo) throw new ValidationError('No se recibió ninguna imagen')
+  const datos = await archivo.toBuffer()
+  const usuario = await service.subirAvatar(id, { mime: archivo.mimetype, datos })
+  return reply.status(201).send(usuario)
+}
+
+export async function descargarAvatar(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = usuarioIdParamSchema.parse(req.params)
+  const { mime, datos } = await service.descargarAvatar(id)
+  return reply
+    .header('Content-Type', mime)
+    .header('Content-Length', String(datos.length))
+    .header('Cache-Control', 'private, max-age=300')
+    .send(datos)
+}
+
+export async function eliminarAvatar(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = usuarioIdParamSchema.parse(req.params)
+  await service.eliminarAvatar(id)
   return reply.status(204).send()
 }

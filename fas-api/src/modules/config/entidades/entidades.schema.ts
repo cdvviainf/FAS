@@ -45,6 +45,8 @@ export const direccionCreateSchema = z.object({
   comunaId: z.number().int().positive().optional(),
   direccion: z.string().min(1, 'La dirección es requerida').max(300).trim(),
   esPorDefecto: z.boolean().default(false),
+  latitud: z.number().min(-90).max(90).nullable().optional(),
+  longitud: z.number().min(-180).max(180).nullable().optional(),
 })
 
 export const direccionUpdateSchema = z.object({
@@ -53,6 +55,8 @@ export const direccionUpdateSchema = z.object({
   comunaId: z.number().int().positive().nullable().optional(),
   direccion: z.string().min(1).max(300).trim().optional(),
   esPorDefecto: z.boolean().optional(),
+  latitud: z.number().min(-90).max(90).nullable().optional(),
+  longitud: z.number().min(-180).max(180).nullable().optional(),
 })
 
 // ─── Contacto ─────────────────────────────────────────────────────────────────

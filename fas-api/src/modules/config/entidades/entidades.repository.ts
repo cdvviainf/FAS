@@ -89,6 +89,8 @@ export async function findEntidadById(id: number) {
           codigo: true,
           direccion: true,
           esPorDefecto: true,
+          latitud: true,
+          longitud: true,
           creadoEn: true,
           pais: { select: paisSelect },
           comuna: { select: comunaSelect },
@@ -200,10 +202,27 @@ export async function softDeleteEntidad(id: number, eliminadoPor: string) {
   })
 }
 
-export async function countEntidadUsos(_id: number): Promise<number> {
+export async function countEntidadUsos(id: number): Promise<number> {
   // Los módulos operativos (compras, ventas, etc.) aún no existen.
   // Cuando se implementen, agregar conteos aquí.
-  return 0
+  // QAS-SI-001: solicitudes de inspección vigentes que usan esta entidad como productor.
+  return prisma.solicitudInspeccion.count({
+    where: { entidadProductorId: id, eliminadoEn: null },
+  })
+}
+
+/** Solicitudes de inspección vigentes que usan una dirección de entidad. */
+export async function countDireccionUsos(dirId: number): Promise<number> {
+  return prisma.solicitudInspeccion.count({
+    where: { direccionId: dirId, eliminadoEn: null },
+  })
+}
+
+/** Solicitudes de inspección vigentes que usan un contacto de entidad. */
+export async function countContactoUsos(conId: number): Promise<number> {
+  return prisma.solicitudInspeccion.count({
+    where: { contactoId: conId, eliminadoEn: null },
+  })
 }
 
 // ─── Pais helpers ─────────────────────────────────────────────────────────────
@@ -278,6 +297,8 @@ export async function createDireccion(
       comunaId: data.comunaId,
       direccion: data.direccion,
       esPorDefecto: data.esPorDefecto,
+      latitud: data.latitud,
+      longitud: data.longitud,
       creadoPor,
     },
     include: {
@@ -300,6 +321,8 @@ export async function updateDireccion(
       ...(data.comunaId !== undefined ? { comunaId: data.comunaId } : {}),
       ...(data.direccion !== undefined ? { direccion: data.direccion } : {}),
       ...(data.esPorDefecto !== undefined ? { esPorDefecto: data.esPorDefecto } : {}),
+      ...(data.latitud !== undefined ? { latitud: data.latitud } : {}),
+      ...(data.longitud !== undefined ? { longitud: data.longitud } : {}),
       actualizadoPor,
     },
     include: {

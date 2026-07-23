@@ -244,6 +244,14 @@ export async function eliminarDireccion(
   const dir = await repo.findDireccionById(dirId, entidadId)
   if (!dir) throw new NotFoundError('Dirección', String(dirId))
 
+  // QAS-SI-001: no eliminar si hay solicitudes de inspección vigentes que la usan
+  const usos = await repo.countDireccionUsos(dirId)
+  if (usos > 0) {
+    throw new ConflictError(
+      `No se puede eliminar la dirección: está siendo utilizada en ${usos} solicitud${usos === 1 ? '' : 'es'} de inspección vigente${usos === 1 ? '' : 's'}.`,
+    )
+  }
+
   await repo.softDeleteDireccion(dirId, userId)
 }
 
@@ -335,6 +343,14 @@ export async function eliminarContacto(
 
   const contacto = await repo.findContactoById(conId, entidadId)
   if (!contacto) throw new NotFoundError('Contacto', String(conId))
+
+  // QAS-SI-001: no eliminar si hay solicitudes de inspección vigentes que lo usan
+  const usos = await repo.countContactoUsos(conId)
+  if (usos > 0) {
+    throw new ConflictError(
+      `No se puede eliminar el contacto: está siendo utilizado en ${usos} solicitud${usos === 1 ? '' : 'es'} de inspección vigente${usos === 1 ? '' : 's'}.`,
+    )
+  }
 
   await repo.softDeleteContacto(conId, userId)
 }

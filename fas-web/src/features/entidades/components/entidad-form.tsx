@@ -79,6 +79,8 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
     comunaId: null,
     direccion: '',
     esPorDefecto: false,
+    latitud: null,
+    longitud: null,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -90,6 +92,8 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
         comunaId: initial?.comunaId ?? null,
         direccion: initial?.direccion ?? '',
         esPorDefecto: initial?.esPorDefecto ?? false,
+        latitud: initial?.latitud ?? null,
+        longitud: initial?.longitud ?? null,
       })
       setErrors({})
     }
@@ -176,6 +180,31 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
               {errors.comunaId && <p className='text-xs text-destructive'>{errors.comunaId}</p>}
             </div>
           )}
+          <div className='grid grid-cols-2 gap-3'>
+            <div className='space-y-1.5'>
+              <Label>Latitud</Label>
+              <Input
+                type='number'
+                step='any'
+                value={form.latitud ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, latitud: e.target.value === '' ? null : parseFloat(e.target.value) }))}
+                placeholder='-33.4489'
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Longitud</Label>
+              <Input
+                type='number'
+                step='any'
+                value={form.longitud ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, longitud: e.target.value === '' ? null : parseFloat(e.target.value) }))}
+                placeholder='-70.6693'
+              />
+            </div>
+          </div>
+          <p className='text-xs text-muted-foreground -mt-2'>
+            Geolocalización opcional. Facilita ubicar el predio en solicitudes de inspección.
+          </p>
           <div className='flex items-center gap-2'>
             <Switch
               id='esPorDefecto-dir'
@@ -685,6 +714,8 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
         comunaId: d.comunaId ?? null,
         direccion: d.direccion,
         esPorDefecto: d.esPorDefecto,
+        latitud: d.latitud ?? null,
+        longitud: d.longitud ?? null,
         pais: paises.find((p) => p.id === d.paisId) ?? { id: d.paisId, codigo: '', descripcion: '' },
         comuna: d.comunaId ? (comunas.find((c) => c.id === d.comunaId) ?? null) : null,
       }))

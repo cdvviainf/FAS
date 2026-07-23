@@ -4,7 +4,6 @@ export const usuarioCreateSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido').max(200).trim(),
   email: z.string().email('Email inválido').max(200).toLowerCase().trim(),
   whatsapp: z.string().max(50).trim().optional(),
-  imagenUrl: z.string().url('URL de imagen inválida').max(500).optional().or(z.literal('')),
   perfilId: z.number().int().positive('El perfil es requerido'),
   password: z.string().min(1, 'La contraseña es requerida'),
   passwordConfirm: z.string().min(1, 'Confirma la contraseña'),
@@ -13,7 +12,6 @@ export const usuarioCreateSchema = z.object({
 export const usuarioUpdateSchema = z.object({
   nombre: z.string().min(1).max(200).trim().optional(),
   whatsapp: z.string().max(50).trim().optional().nullable(),
-  imagenUrl: z.string().url().max(500).optional().nullable().or(z.literal('')),
   perfilId: z.number().int().positive().optional(),
 })
 

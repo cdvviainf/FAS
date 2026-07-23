@@ -62,6 +62,8 @@ export interface DireccionItem {
   comunaId: number | null
   direccion: string
   esPorDefecto: boolean
+  latitud: string | number | null
+  longitud: string | number | null
   pais: { id: number; codigo: string; descripcion: string }
   comuna: { id: number; codigo: string; descripcion: string } | null
 }
@@ -134,6 +136,8 @@ export interface DireccionCreateInput {
   comunaId?: number | null
   direccion: string
   esPorDefecto: boolean
+  latitud?: number | null
+  longitud?: number | null
 }
 
 export interface ContactoCreateInput {

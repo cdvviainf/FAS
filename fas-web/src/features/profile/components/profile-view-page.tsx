@@ -1,9 +1,9 @@
+import { CambiarPasswordForm } from './cambiar-password-form'
+
 export default function ProfileViewPage() {
   return (
-    <div className='flex w-full flex-col p-4'>
-      <div className='bg-muted rounded-lg p-6 text-center text-sm'>
-        El perfil de usuario será implementado con Better Auth.
-      </div>
+    <div className='flex w-full flex-col gap-6 p-4'>
+      <CambiarPasswordForm />
     </div>
-  );
+  )
 }

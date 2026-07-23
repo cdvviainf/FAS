@@ -23,12 +23,12 @@ import { perfilesListOptions } from '@/features/perfiles/queries'
 import { usuarioDetailOptions, usuariosKeys } from '../queries'
 import { usuariosService } from '../service'
 import { PasswordStrengthIndicator } from './password-strength-indicator'
+import { AvatarUploadField } from './avatar-upload-field'
 import type { Perfil } from '@/features/perfiles/types'
 
 const usuarioBaseSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido').max(200).trim(),
   whatsapp: z.string().max(50).trim().optional().or(z.literal('')),
-  imagenUrl: z.string().url('URL inválida').max(500).optional().or(z.literal('')),
   perfilId: z.coerce.number().int().min(1, 'El perfil es requerido'),
 })
 
@@ -68,7 +68,6 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
         nombre: values.nombre,
         email: values.email,
         whatsapp: values.whatsapp || undefined,
-        imagenUrl: values.imagenUrl || undefined,
         perfilId: values.perfilId,
         password: values.password,
         passwordConfirm: values.passwordConfirm,
@@ -86,7 +85,6 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       usuariosService.update(usuarioId!, {
         nombre: values.nombre,
         whatsapp: values.whatsapp || null,
-        imagenUrl: values.imagenUrl || null,
         perfilId: values.perfilId,
       }),
     onSuccess: () => {
@@ -106,7 +104,6 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       nombre: '',
       email: '',
       whatsapp: '',
-      imagenUrl: '',
       perfilId: 0,
       password: '',
       passwordConfirm: '',
@@ -123,7 +120,6 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
     defaultValues: {
       nombre: usuario?.nombre ?? '',
       whatsapp: usuario?.whatsapp ?? '',
-      imagenUrl: usuario?.imagenUrl ?? '',
       perfilId: usuario?.perfilId ?? 0,
     } as UsuarioEditValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,7 +133,6 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
     if (usuario) {
       editForm.setFieldValue('nombre', usuario.nombre)
       editForm.setFieldValue('whatsapp', usuario.whatsapp ?? '')
-      editForm.setFieldValue('imagenUrl', usuario.imagenUrl ?? '')
       editForm.setFieldValue('perfilId', usuario.perfilId)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -207,24 +202,11 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
                   )}
                 </editForm.Field>
 
-                {/* imagenUrl */}
-                <editForm.Field name='imagenUrl'>
-                  {(field) => (
-                    <div className='space-y-1.5'>
-                      <Label htmlFor='imagenUrl'>URL de Avatar</Label>
-                      <Input
-                        id='imagenUrl'
-                        value={field.state.value ?? ''}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        placeholder='https://...'
-                      />
-                      {field.state.meta.errors.length > 0 && (
-                        <p className='text-sm text-destructive'>{String(field.state.meta.errors[0])}</p>
-                      )}
-                    </div>
-                  )}
-                </editForm.Field>
+                {/* Avatar */}
+                <div className='space-y-1.5 sm:col-span-2'>
+                  <Label>Avatar</Label>
+                  <AvatarUploadField usuarioId={usuarioId!} nombre={usuario?.nombre ?? ''} imagenUrl={usuario?.imagenUrl ?? null} />
+                </div>
 
                 {/* Perfil */}
                 <editForm.Field name='perfilId'>
@@ -329,24 +311,6 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
                       onChange={(e) => field.handleChange(e.target.value)}
                       placeholder='+56 9 1234 5678'
                     />
-                  </div>
-                )}
-              </createForm.Field>
-
-              {/* imagenUrl */}
-              <createForm.Field name='imagenUrl'>
-                {(field) => (
-                  <div className='space-y-1.5'>
-                    <Label>URL de Avatar</Label>
-                    <Input
-                      value={field.state.value ?? ''}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      placeholder='https://...'
-                    />
-                    {field.state.meta.errors.length > 0 && (
-                      <p className='text-sm text-destructive'>{String(field.state.meta.errors[0])}</p>
-                    )}
                   </div>
                 )}
               </createForm.Field>

@@ -107,6 +107,10 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:3001/api
+      # Solo servidor: dentro de la red de Docker, "localhost" apunta al propio
+      # contenedor web, no a fas-api. El route handler de auth (server-side) usa
+      # esta variable para llegar al servicio "api" por su nombre de red.
+      INTERNAL_API_URL: http://api:3001
       NEXT_PUBLIC_SENTRY_DISABLED: "true"
     volumes:
       - ./fas-web:/app

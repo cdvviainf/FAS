@@ -38,6 +38,10 @@ export const MOCK_ACCESOS: Record<string, NivelAcceso> = {
   'config.conceptos-cta-cte': 'TOTAL',
   'config.usuarios':         'TOTAL',
   'config.perfiles':         'TOTAL',
+  'config.motivos-inspeccion': 'TOTAL',
+  'config.general':          'TOTAL',
+  // Calidad
+  'calidad.solicitudes':     'TOTAL',
   // Operaciones
   'operaciones.materiales':  'TOTAL',
   'operaciones.recetas':     'TOTAL',
@@ -47,4 +51,9 @@ export const MOCK_ACCESOS: Record<string, NivelAcceso> = {
   'compras.ordenes':         'TOTAL',
   'ventas.notas':            'LECTURA',
   'ventas.cobranza':         'SIN_ACCESO',
+  // Productores
+  'productores.ficha':            'TOTAL',
+  'productores.contrato':         'TOTAL',
+  'productores.cuenta-corriente': 'TOTAL',
+  'config.conceptos-liquidacion': 'TOTAL',
 };

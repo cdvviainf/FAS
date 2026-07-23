@@ -30,4 +30,19 @@ export const usuariosService = {
   async remove(id: string): Promise<void> {
     await api.delete(`config/usuarios/${id}`)
   },
+
+  async subirAvatar(id: string, file: File): Promise<Usuario> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`config/usuarios/${id}/avatar`, { body: formData }).json()
+  },
+
+  async eliminarAvatar(id: string): Promise<void> {
+    await api.delete(`config/usuarios/${id}/avatar`)
+  },
+
+  avatarSrc(imagenUrl: string | null): string | null {
+    if (!imagenUrl) return null
+    return `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'}${imagenUrl}`
+  },
 }

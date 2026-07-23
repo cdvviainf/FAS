@@ -103,9 +103,54 @@ export async function updateUsuario(
   })
 }
 
+const AVATAR_RUTA_PREFIJO = '/config/usuarios'
+
+export async function upsertAvatar(id: string, data: { mime: string; tamano: number; datos: Buffer }) {
+  return prisma.$transaction(async (tx) => {
+    await tx.usuarioAvatar.upsert({
+      where: { usuarioId: id },
+      create: { usuarioId: id, mime: data.mime, tamano: data.tamano, datos: data.datos },
+      update: { mime: data.mime, tamano: data.tamano, datos: data.datos },
+    })
+    return tx.usuario.update({
+      where: { id },
+      data: { imagenUrl: `${AVATAR_RUTA_PREFIJO}/${id}/avatar` },
+      select: usuarioSelect,
+    })
+  })
+}
+
+export async function getAvatarContenido(id: string) {
+  return prisma.usuarioAvatar.findUnique({ where: { usuarioId: id } })
+}
+
+export async function deleteAvatar(id: string) {
+  return prisma.$transaction(async (tx) => {
+    await tx.usuarioAvatar.deleteMany({ where: { usuarioId: id } })
+    await tx.usuario.update({ where: { id }, data: { imagenUrl: null } })
+  })
+}
+
 export async function softDeleteUsuario(id: string, deletedBy: string) {
   return prisma.usuario.update({
     where: { id },
     data: { eliminadoEn: new Date(), eliminadoPor: deletedBy },
   })
+}
+
+/**
+ * Solicitudes de inspección vigentes vinculadas al usuario, ya sea como
+ * asignado (Acudir/Notificar) o como solicitante (`creadoPor`). QAS-SI-001
+ * re-test: el solicitante no quedaba cubierto, solo los asignados.
+ */
+export async function countSolicitudesVinculadas(usuarioId: string): Promise<number> {
+  const [comoAsignado, comoSolicitante] = await Promise.all([
+    prisma.solicitudInspeccionAsignado.count({
+      where: { usuarioId, solicitud: { eliminadoEn: null } },
+    }),
+    prisma.solicitudInspeccion.count({
+      where: { creadoPor: usuarioId, eliminadoEn: null },
+    }),
+  ])
+  return comoAsignado + comoSolicitante
 }

@@ -19,7 +19,6 @@ export interface UsuarioCreateInput {
   nombre: string
   email: string
   whatsapp?: string
-  imagenUrl?: string
   perfilId: number
   password: string
   passwordConfirm: string
@@ -28,6 +27,5 @@ export interface UsuarioCreateInput {
 export interface UsuarioUpdateInput {
   nombre?: string
   whatsapp?: string | null
-  imagenUrl?: string | null
   perfilId?: number
 }

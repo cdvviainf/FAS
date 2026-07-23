@@ -1,6 +1,14 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api').replace('/api', '')
+// Este handler corre server-side. En Docker Compose, `fas-web` y `fas-api` son
+// contenedores distintos: NEXT_PUBLIC_API_URL (pensado para el navegador, que sí
+// puede resolver "localhost") no es alcanzable desde dentro del contenedor. Se usa
+// INTERNAL_API_URL (solo servidor, sin prefijo NEXT_PUBLIC_) para el nombre de red
+// interno de Docker (ver docker-compose.yml) — ya viene sin sufijo /api, a
+// diferencia de NEXT_PUBLIC_API_URL. Fuera de Docker, cae al mismo host.
+const API_BASE =
+  process.env.INTERNAL_API_URL ??
+  (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api').replace(/\/api$/, '')
 
 async function handler(req: NextRequest): Promise<NextResponse> {
   const path = req.nextUrl.pathname // e.g. /api/auth/sign-in/email
