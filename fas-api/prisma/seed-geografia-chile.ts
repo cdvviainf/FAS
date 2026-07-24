@@ -15,7 +15,7 @@
  */
 
 import { PrismaClient } from '@prisma/client'
-import { REGIONES_CHILE } from './regiones-chile-data.js'
+import { REGIONES_CHILE } from './regiones-chile-data.ts'
 
 const prisma = new PrismaClient()
 const SISTEMA = 'sistema'
