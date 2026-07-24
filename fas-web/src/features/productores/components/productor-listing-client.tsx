@@ -66,7 +66,7 @@ export function ProductorListingClient() {
   if (isPending) return <DataTableSkeleton columnCount={5} rowCount={10} />
 
   return (
-    <div className='space-y-3'>
+    <div className='flex flex-1 flex-col space-y-3'>
       <Input
         placeholder='Buscar productor...'
         value={params.q ?? ''}

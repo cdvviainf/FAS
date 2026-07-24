@@ -306,6 +306,42 @@ con 76 páginas y generó las seis rutas del módulo. El módulo queda habilitad
 para pruebas funcionales de usuario. No quedan hallazgos abiertos; NV-IE-008 fue
 descartado tras confirmar que el nombre correcto es “Cierre Comercial”.
 
+## 10d. Revisión QA Orden de Compra 2026-07-24
+
+**No aprobado todavía para cierre funcional.** Schema, migración, API y
+frontend compilan; 7/7 pruebas unitarias y 67/67 de integración pasan contra
+PostgreSQL, con 26 migraciones al día. El build web genera las tres rutas de OC.
+
+Se registraron seis hallazgos (`OC-001` a `OC-006`). Los principales son la
+ausencia de una máquina de estados/bloqueo posterior a recepción (`OC-001`) y
+la falta de pruebas HTTP y de regresión para estados, permisos y eliminación
+(`OC-005`). Incoterm no está disponible en la UI ni validado por el backend
+(`OC-002`); el modo lectura de la UI continúa siendo editable y basado en
+permisos mock (`OC-003`). La migración destructiva (`OC-006`) se acepta solo por
+la confirmación previa de inexistencia de datos transaccionales.
+
+Detalle y evidencia:
+`Docs/Hallazgos/orden-de-compra.md`.
+
+**Actualización 2026-07-24 (Claude):** OC-001, OC-003, OC-004 y OC-005
+corregidos (bloqueo real de estado/edición tras Recepcionada, transición
+manual limitada a Borrador/Emitida, modo solo-lectura real en el formulario
+vía `fieldset disabled`, opciones "sin definir" en los selects, y 2 tests
+nuevos: referencias inexistentes + eliminación/bloqueo tras Recepcionada).
+OC-002 se acepta con la misma justificación ya usada para los campos
+Parametro-sin-mantenedor de Nota de Venta. OC-006 sin cambios. Suite completa:
+70/70 OK. Detalle en `Docs/Hallazgos/orden-de-compra.md`.
+
+**Re-test 2026-07-24 (Codex): aprobado para pruebas funcionales de usuario.**
+Se verificaron en código los bloqueos de una OC Recepcionada, la exclusión de
+esa transición manual, el formulario de solo lectura y las opciones para
+limpiar Cierre/Facturar a. La ruta OC está protegida contra acceso anónimo y los
+cinco casos específicos pasan. Resultado completo: 7/7 unitarias, 70/70
+integración, Prisma válido, 26 migraciones al día y builds API/web correctos.
+OC-002 y OC-006 permanecen aceptados; el uso de permisos mock se conserva como
+deuda transversal previamente aceptada. No quedan defectos abiertos de OC para
+el alcance acordado.
+
 ## 11. Revision QA implementacion Entidades 2026-07-20
 
 Se reviso el maestro de Entidades contra `Docs/entidades.md`, incluyendo migracion, esquema Prisma, backend, frontend, permisos y smoke runtime.
@@ -359,3 +395,4 @@ PostgreSQL/datos distintos. Diagnóstico de Codex + verificación de Claude:
 | QA-INFRA-001 | Bloqueante | Despliegue / Auth | `docker-compose.demo.yml` nunca declara `NEXT_PUBLIC_APP_URL` como build arg del servicio `web`, pese a que `WEB_PUBLIC_URL` ya existe como variable sin usar. `fas-web/src/lib/auth-client.ts` usa `NEXT_PUBLIC_APP_URL` (con default `'http://localhost:3000'`) como `baseURL` para el login. Al faltar la variable, el bundle de producción queda con el login apuntando literalmente a `http://localhost:3000` en vez del dominio público real. | `docker-compose.demo.yml` (bloque `web.build.args`, solo pasaba `NEXT_PUBLIC_API_URL`); `fas-web/Dockerfile` (solo declaraba `ARG`/`ENV` para `NEXT_PUBLIC_API_URL`); `fas-web/src/lib/auth-client.ts`. Esto explica por qué funciona en la máquina del desarrollador (tiene su propio stack Docker corriendo en `localhost:3000`, así que la request "rota" cae por accidente en el stack local) pero falla en cualquier otro navegador que no tenga nada en su propio `localhost:3000`. | El bundle debe embeber la URL pública real del frontend para que el cliente de Better Auth arme las requests de login contra el dominio correcto. | Corregido | 2026-07-24 Claude: agregado `ARG`/`ENV NEXT_PUBLIC_APP_URL` en `fas-web/Dockerfile`; agregado `NEXT_PUBLIC_APP_URL: ${WEB_PUBLIC_URL}` a `web.build.args` y `INTERNAL_API_URL: http://api:3001` a `web.environment` en `docker-compose.demo.yml`. Pendiente: falta reconstruir (`--build`) el recurso `fas-web` en Coolify y confirmar que la UI de Coolify tenga las mismas variables si no usa este compose file directamente. |
 | QA-INFRA-002 | Media | Despliegue | `INTERNAL_API_URL` (usada por `fas-web/src/app/api/auth/[...all]/route.ts` para hablarle a la API por la red interna de Docker) nunca se declaraba en `docker-compose.demo.yml`; el proxy caía al fallback público (`NEXT_PUBLIC_API_URL`), funcional pero innecesariamente indirecto (sale a internet y vuelve a entrar en vez de usar la red interna `coolify`/compose). | `fas-web/src/app/api/auth/[...all]/route.ts:9-11`; `docker-compose.demo.yml` (bloque `web`, sin `environment.INTERNAL_API_URL`). | El proxy de auth debe usar el hostname interno de Docker (`http://api:3001`), no rebotar por la URL pública. | Corregido | 2026-07-24 Claude: agregado junto con QA-INFRA-001. |
 | QA-INFRA-003 | Bloqueante | Despliegue / Auth | Tras QA-INFRA-001 el login ya funcionaba (verificado con DevTools: `POST /api/auth/sign-in/email` → 200, cookie seteada correctamente para el dominio del frontend), pero **todas las demás llamadas de datos** (mantenedores, ventas, compras, etc.) seguían fallando con 401 (confirmado en vivo: `GET https://a1ipcr987qbb5ffqcz5lvb05.../api/config/temporadas` → 401 Unauthorized). Causa: `src/lib/api.ts` apuntaba directo a `NEXT_PUBLIC_API_URL` (el dominio de fas-api), un dominio distinto al del frontend donde se guardó la cookie. Como fas-web y fas-api son subdominios `sslip.io` independientes, el navegador nunca comparte la cookie entre ambos (no hay dominio raíz común compartible). Explica por qué en la máquina del desarrollador "andaba" (cookie vieja cacheada directo contra el dominio de la API de alguna prueba anterior) y en cualquier navegador nuevo (confirmado reproducible en Chrome y Edge del propio usuario) fallaba todo. | `fas-web/src/lib/api.ts` (antes: `prefix: NEXT_PUBLIC_API_URL`); captura DevTools del usuario mostrando `Request URL` apuntando al dominio de la API con `Status 401`, mientras el login sí mostraba `Set-Cookie` correcto para el dominio del frontend. | Todas las llamadas del navegador deben ir al mismo dominio que sirve el login, para que la cookie de sesión viaje con ellas. | Corregido | 2026-07-24 Claude: agregado proxy genérico `fas-web/src/app/api/[...path]/route.ts` (mismo patrón que el proxy de auth); `src/lib/api.ts` cambiado a `prefix: '/api'` (relativo, mismo origen); actualizados 4 constructores de URL de descarga que también apuntaban directo a `NEXT_PUBLIC_API_URL` (`contratos`, `usuarios` avatar, `articulos` documentos, `solicitudes` adjuntos). Verificado end-to-end contra contenedores locales: login vía proxy (200, cookie) + `GET /api/config/temporadas` con esa cookie (200, datos reales) — antes del fix esa segunda llamada daba 401. Pendiente: confirmación del segundo usuario tras el rebuild en Coolify. |
+| QA-INFRA-004 | Bloqueante | Frontend / Layout | Reportado por el usuario: al crear una Entidad, el listado mostraba "1 row(s) total" en la paginación pero **ninguna fila visible** (ni siquiera el header de columnas), en el server y con cualquier tema. Diagnóstico completo con el usuario (Network: JSON de respuesta correcto y completo; Elements: el `<table>` renderizado tenía la fila con todos los datos correctos; Computed: color de texto normal, sin problema de contraste) descartó datos faltantes y bug de tema — era **layout roto**: `DataTable` (`src/components/ui/table/data-table.tsx`) depende de una cadena `flex flex-1` desde `PageContainer` hasta el `div.absolute.inset-0` que envuelve la tabla real; `entidad-listing-client.tsx` y `productor-listing-client.tsx` insertaban un `<div className='space-y-3'>` (bloque normal, no flex) entre ambos para poder poner un filtro arriba de la tabla, rompiendo la cadena — la tabla quedaba con altura real 0px (visible en el DOM, invisible en pantalla). El mismo patrón (`<div className='space-y-3'>` envolviendo filtro + `DataTable`) se encontró en 8 listados, incluyendo los 3 construidos en esta sesión (Nota de Venta, Instructivo de Embalaje, Orden de Compra) y otros preexistentes (Artículos, Tipos de Movimiento, Solicitudes de Inspección). | `src/features/entidades/components/entidad-listing-client.tsx:56`, `src/features/productores/components/productor-listing-client.tsx:69`, y 6 archivos más (ver Accion Claude). Contraste: `mercados-table/index.tsx` y el resto de mantenedores simples retornan `<DataTable>` como hijo directo de `PageContainer`, sin wrapper — por eso nunca tuvieron el problema. | Cualquier listado con filtro arriba de la tabla debe mantener la cadena `flex-1` intacta para que `DataTable` obtenga altura real. | Corregido | 2026-07-24 Claude: cambiado `<div className='space-y-3'>` → `<div className='flex flex-1 flex-col space-y-3'>` en los 8 archivos afectados. `tsc`/`build` limpios en ambos repos. |

@@ -63,7 +63,7 @@ export function TipoMovimientoListingClient() {
   if (isPending) return <DataTableSkeleton columnCount={7} rowCount={8} />
 
   return (
-    <div className='space-y-3'>
+    <div className='flex flex-1 flex-col space-y-3'>
       <DataTable table={table} />
       <TipoMovimientoFormSheet
         item={editItem}

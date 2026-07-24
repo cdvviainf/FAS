@@ -218,7 +218,7 @@ export function SolicitudListingClient() {
   if (isPending) return <DataTableSkeleton columnCount={6} rowCount={10} />
 
   return (
-    <div className='space-y-3'>
+    <div className='flex flex-1 flex-col space-y-3'>
       <div className='flex flex-wrap items-center gap-2'>
         <Input
           placeholder='Buscar código, motivo, productor...'
