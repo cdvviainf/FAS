@@ -172,6 +172,8 @@ describe('contrato HTTP de la API', () => {
     '/api/calidad/solicitudes',
     '/api/materiales/articulos',
     '/api/productores',
+    '/api/ventas/notas-venta',
+    '/api/compras/instructivos-embalaje',
   ])('protege la ruta construida %s', async (url) => {
     const response = await app.inject({ method: 'GET', url })
 

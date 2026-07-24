@@ -29,7 +29,7 @@ El módulo Compras cubre el ciclo completo de adquisición y recepción de fruta
 
 ## 3. Glosario y Nomenclatura
 
-- **Cierre de Negocio (= Nota de Venta):** primer documento del ciclo de ventas, numeración propia. Es el mismo documento que la Nota de Venta; "Cierre de Negocio" es el término usado por Compras/Operaciones.
+- **Cierre de Negocio (= Nota de Venta):** primer documento del ciclo de ventas, numeración propia. Es el mismo documento que la Nota de Venta; "Cierre de Negocio" es el término de negocio usado por Compras/Operaciones. **Reconciliación de nomenclatura (2026-07-24, hallazgo NV-IE-006):** el modelo Prisma se llama `NotaVenta` (definido en `ventas.md` §4.1); por lo tanto el FK en `InstructivoEmbalaje` y `OrdenCompra` es `notaVentaId → NotaVenta`, no `cierreNegocioId → CierreNegocio`. "Cierre de Negocio"/`CierreNegocio` queda como alias de negocio, no como nombre de modelo/campo.
 - **Instructivo de Embalaje:** documento que instruye **qué embalar** (tipo de embalaje, variedad, calibres, cantidades), construido con maestros del sistema. No confundir con el Instructivo de Embarque.
 - **Instructivo de Embarque:** documento que instruye **cómo despachar** (fechas/horas de retiro por planta). Es la identidad del Embarque (padre) más sus hijos por planta. Definido en `ventas.md`.
 - **Orden de Compra (OC):** especificación de lo que se va a comprar, **opcionalmente** asociada a un Cierre de Negocio. Multilínea.
@@ -49,7 +49,7 @@ Instrucción de qué embalar. **Sin estado propio** — es solo un documento que
 
 - `id` (PK)
 - `numero` (correlativo propio)
-- `cierreNegocioId` (FK → CierreNegocio) — el instructivo se emite en el contexto de un cierre
+- `notaVentaId` (FK → NotaVenta) — el instructivo se emite en el contexto de un cierre (ver nota de reconciliación en §3)
 - Detalle (1..N líneas): `articuloId` (FK → Artículo/Embalaje), `especieId`, `variedadId`, `categoriaId`, rango de calibre (`calibreMinId`, `calibreMaxId`), `cantidadPallets`, `cajasPorPallet`
 - `createdAt`, `createdBy`
 
@@ -60,7 +60,7 @@ Especificación de la compra. Nace del resultado de la inspección de Calidad (f
 
 - `id` (PK)
 - `numero` (correlativo propio)
-- `cierreNegocioId` (FK → CierreNegocio, **nullable**) — una OC **puede** estar asociada a un Cierre o no existir Cierre (OC suelta permitida). *Ligar una OC suelta a un Cierre a posteriori: flujo/UX diferido (ver §10).*
+- `notaVentaId` (FK → NotaVenta, **nullable**) — una OC **puede** estar asociada a un Cierre o no existir Cierre (OC suelta permitida). *Ligar una OC suelta a un Cierre a posteriori: flujo/UX diferido (ver §10).*
 - `informeCalidadId` (FK → InformeInspeccion) — trazabilidad
 - `informeCalidadPdfUrl` (path/URL al PDF del informe)
 - `estado` (ver §8)
@@ -109,8 +109,8 @@ Unidad mínima **indivisible** de inventario. Generado por la Recepción. Compue
 
 ### 4.7 Relaciones y cardinalidades
 
-- CierreNegocio `1 — 0..N` OrdenCompra *(el FK `cierreNegocioId` es nullable: una OC puede existir sin Cierre)*
-- CierreNegocio `1 — N` InstructivoEmbalaje
+- NotaVenta (= CierreNegocio) `1 — 0..N` OrdenCompra *(el FK `notaVentaId` es nullable: una OC puede existir sin Cierre)*
+- NotaVenta (= CierreNegocio) `1 — N` InstructivoEmbalaje
 - InstructivoEmbalaje `— (sin FK) —` OrdenCompra *(relación inexistente por diseño)*
 - OrdenCompra `1 — N` OrdenCompraLinea
 - OrdenCompra `1 — 0..1` Recepcion *(una recepción valida contra una OC; una OC se recepciona a lo más una vez en v0.1)*
@@ -313,7 +313,7 @@ Tras capturar, FAS imputa el documento a una o varias OC por montos (CO1) y refl
 ## 10. Pendientes, Supuestos y Deudas Cross-Módulo
 
 **Pendientes de definición:**
-- **OC suelta → Cierre a posteriori** — el modelo ya permite una OC **sin** Cierre (FK `cierreNegocioId` nullable). Queda diferido el **flujo/UX** de digitar una OC suelta y **ligarla** a un Cierre después (endpoint de vinculación + regla de qué campos se bloquean al vincular). *Diferido.*
+- **OC suelta → Cierre a posteriori** — el modelo ya permite una OC **sin** Cierre (FK `notaVentaId` nullable). Queda diferido el **flujo/UX** de digitar una OC suelta y **ligarla** a un Cierre después (endpoint de vinculación + regla de qué campos se bloquean al vincular). *Diferido.*
 - **Detalle de campos AGL** — qué campos exactos devuelve la consulta por número de embarque. *Pendiente.*
 - **Lectura IA / PDF** — Recepción y Packing List en formato PDF vía IA (Etapa 2). El mantenedor de columnas resuelve Excel en v0.1. *Pendiente.*
 

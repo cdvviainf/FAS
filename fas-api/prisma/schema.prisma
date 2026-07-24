@@ -187,8 +187,6 @@ model Cliente {
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   deletedAt  DateTime?
-
-  notasVenta NotaVenta[]
 }
 
 enum MercadoType {
@@ -314,7 +312,6 @@ model StockLote {
   updatedAt       DateTime      @updatedAt
 
   movimientos    StockMovimiento[]
-  notaVentaItems NotaVentaItem[]
 }
 
 enum CalidadEstado {
@@ -356,81 +353,6 @@ model Material {
   updatedAt      DateTime @updatedAt
 }
 
-// ─── VENTAS ──────────────────────────────────────────────────────────────────
-
-model NotaVenta {
-  id             String      @id @default(cuid())
-  numero         String      @unique
-  clienteId      String
-  cliente        Cliente     @relation(fields: [clienteId], references: [id])
-  fechaEmision   DateTime
-  fechaEmbarque  DateTime?
-  mercado        MercadoType
-  puertoDestino  String?
-  incoterm       String?
-  moneda         String      @default("USD")
-  estado         NvEstado    @default(BORRADOR)
-  observaciones  String?
-  montoTotal     Decimal     @db.Decimal(18, 4)
-  createdBy      String
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  deletedAt      DateTime?
-
-  items         NotaVentaItem[]
-  cobranzas     Cobranza[]
-  documentosDTE DocumentoDTE[]
-}
-
-enum NvEstado {
-  BORRADOR
-  CONFIRMADA
-  EMBARCADA
-  EN_TRANSITO
-  ENTREGADA
-  LIQUIDADA
-  ANULADA
-}
-
-model NotaVentaItem {
-  id             String    @id @default(cuid())
-  notaVentaId    String
-  notaVenta      NotaVenta @relation(fields: [notaVentaId], references: [id])
-  loteId         String
-  lote           StockLote @relation(fields: [loteId], references: [id])
-  cantidad       Decimal   @db.Decimal(18, 4)
-  precioUnitario Decimal   @db.Decimal(18, 4)
-  montoTotal     Decimal   @db.Decimal(18, 4)
-  descripcion    String?
-}
-
-// ─── COBRANZA ────────────────────────────────────────────────────────────────
-
-model Cobranza {
-  id               String         @id @default(cuid())
-  notaVentaId      String
-  notaVenta        NotaVenta      @relation(fields: [notaVentaId], references: [id])
-  fechaVencimiento DateTime
-  monto            Decimal        @db.Decimal(18, 4)
-  moneda           String         @default("USD")
-  estado           CobranzaEstado @default(PENDIENTE)
-  fechaPago        DateTime?
-  montoPagado      Decimal?       @db.Decimal(18, 4)
-  referencia       String?
-  observaciones    String?
-  createdBy        String
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-}
-
-enum CobranzaEstado {
-  PENDIENTE
-  PARCIAL
-  PAGADA
-  VENCIDA
-  INCOBRABLE
-}
-
 // ─── FINANZAS / COSTOS ───────────────────────────────────────────────────────
 
 model CostoOperacional {
@@ -444,38 +366,6 @@ model CostoOperacional {
   notaVentaId String?
   createdBy   String
   createdAt   DateTime @default(now())
-}
-
-// ─── FACTURACIÓN DTE ─────────────────────────────────────────────────────────
-
-model DocumentoDTE {
-  id           String    @id @default(cuid())
-  notaVentaId  String?
-  notaVenta    NotaVenta? @relation(fields: [notaVentaId], references: [id])
-  tipoDTE      Int
-  folio        Int?
-  fecha        DateTime
-  rutEmisor    String
-  rutReceptor  String
-  montoNeto    Decimal   @db.Decimal(18, 4)
-  montoIva     Decimal   @db.Decimal(18, 4)
-  montoTotal   Decimal   @db.Decimal(18, 4)
-  estado       DteEstado @default(PENDIENTE)
-  proveedorRef String?
-  xmlTimbrado  String?
-  pdfUrl       String?
-  errorMensaje String?
-  createdBy    String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-}
-
-enum DteEstado {
-  PENDIENTE
-  ENVIADO
-  ACEPTADO
-  RECHAZADO
-  ANULADO
 }
 
 // ─── CALIDAD ─────────────────────────────────────────────────────────────────
@@ -516,6 +406,7 @@ model Pais {
   puertos               Puerto[]
   entidades             Entidad[]          @relation("EntidadPais")
   entidadDirecciones    EntidadDireccion[] @relation("DireccionPais")
+  notasVenta            NotaVenta[]
 
   @@map("paises")
 }
@@ -570,6 +461,7 @@ model TipoEmbarque {
   eliminadoPor          String?
 
   puertos               Puerto[]
+  notasVenta            NotaVenta[]
 
   @@map("tipos_embarque")
 }
@@ -605,6 +497,8 @@ model TipoPallet {
   actualizadoPor        String?
   eliminadoEn           DateTime?
   eliminadoPor          String?
+
+  notaVentaDetalles     NotaVentaDetalle[]
 
   @@map("tipos_pallet")
 }
@@ -760,6 +654,8 @@ model Especie {
   calibres                Calibre[]
   solicitudesInspeccion   SolicitudInspeccion[]
   conceptosLiquidacion    ConceptoLiquidacionEspecie[]
+  notaVentaDetalles       NotaVentaDetalle[]
+  instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
 
   @@map("especies")
 }
@@ -801,6 +697,9 @@ model Variedad {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
+  notaVentaDetalles     NotaVentaDetalle[]
+  instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
+
   @@map("variedades")
 }
 
@@ -821,6 +720,9 @@ model Categoria {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
+  notaVentaDetalles     NotaVentaDetalle[]
+  instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
+
   @@map("categorias")
 }
 
@@ -840,6 +742,10 @@ model Calibre {
   actualizadoPor        String?
   eliminadoEn           DateTime?
   eliminadoPor          String?
+
+  notaVentaDetalleCalibres NotaVentaDetalleCalibre[]
+  instructivoEmbalajeDetalleMin InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeCalibreMin")
+  instructivoEmbalajeDetalleMax InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeCalibreMax")
 
   @@map("calibres")
 }
@@ -879,6 +785,8 @@ model Mercado {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
+  notasVenta            NotaVenta[]
+
   @@map("mercados")
 }
 
@@ -901,6 +809,8 @@ model Puerto {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
+  notasVenta            NotaVenta[]
+
   @@map("puertos")
 }
 
@@ -920,6 +830,7 @@ model Moneda {
   eliminadoPor          String?
 
   movimientosCC         MovimientoCuentaCorriente[]
+  notasVenta            NotaVenta[]
 
   @@map("monedas")
 }
@@ -1063,6 +974,10 @@ model Entidad {
   predios               Predio[]              @relation("PrediosProductor")
   contratos             ProductorContrato[]   @relation("ContratosProductor")
   movimientosCC         MovimientoCuentaCorriente[] @relation("CCProductor")
+  notasVentaCliente     NotaVenta[]           @relation("NotaVentaCliente")
+  notasVentaComprador   NotaVenta[]           @relation("NotaVentaComprador")
+  notasVentaNotify      NotaVenta[]           @relation("NotaVentaNotify")
+  notasVentaClienteFinal NotaVenta[]          @relation("NotaVentaClienteFinal")
 
   @@index([eliminadoEn])
   @@map("entidades")
@@ -1089,6 +1004,7 @@ model EntidadDireccion {
   eliminadoPor   String?
 
   solicitudesInspeccion SolicitudInspeccion[]
+  notasVenta            NotaVenta[]
 
   @@index([entidadId])
   @@map("entidad_direcciones")
@@ -1293,6 +1209,8 @@ model Articulo {
   comoComponente        RecetaDetalle[]     @relation("ComponenteRecetas")
   saldos                SaldoArticulo[]
   movimientosDetalle    MovimientoDetalle[]
+  notaVentaDetalles     NotaVentaDetalle[]
+  instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
 
   creadoEn              DateTime     @default(now())
   actualizadoEn         DateTime     @updatedAt
@@ -1587,4 +1505,150 @@ model ConceptoLiquidacionEspecie {
   @@unique([conceptoId, especieId])
   @@index([conceptoId])
   @@map("conceptos_liquidacion_especie")
+}
+
+// ─── Ventas — Nota de Venta (Docs/ventas.md §4.1) ────────────────────────────
+// Alcance mínimo viable: solo el encabezado + detalle de fruta comprometida.
+// Embarque/Instructivo de Embarque y Solicitud de Reserva (§4.2/§4.3) quedan
+// diferidos — no están implementados todavía.
+
+model NotaVenta {
+  id               Int       @id @default(autoincrement())
+  folio            Int       @unique // correlativo autonumérico (R1)
+  fecha            DateTime
+
+  clienteId        Int
+  cliente          Entidad   @relation("NotaVentaCliente", fields: [clienteId], references: [id])
+  compradorId      Int?
+  comprador        Entidad?  @relation("NotaVentaComprador", fields: [compradorId], references: [id])
+  notifyId         Int?
+  notify           Entidad?  @relation("NotaVentaNotify", fields: [notifyId], references: [id])
+  clienteFinalId   Int?
+  clienteFinal     Entidad?  @relation("NotaVentaClienteFinal", fields: [clienteFinalId], references: [id])
+
+  tipoEmbarqueId   Int
+  tipoEmbarque     TipoEmbarque      @relation(fields: [tipoEmbarqueId], references: [id])
+  mercadoId        Int
+  mercado          Mercado           @relation(fields: [mercadoId], references: [id])
+  paisDestinoId    Int
+  paisDestino      Pais              @relation(fields: [paisDestinoId], references: [id])
+  puertoDestinoId  Int?
+  puertoDestino    Puerto?           @relation(fields: [puertoDestinoId], references: [id])
+  direccionId      Int?
+  direccion        EntidadDireccion? @relation(fields: [direccionId], references: [id])
+  direccionDetalle String?
+
+  // Modalidad Venta / Cláusula Venta (Incoterm) / Tipo Flete / Forma Pago /
+  // Saldo Pago: referencian el catálogo genérico Parametro (mantenedores-
+  // generales.md), pero sus TipoParametro aún no están dados de alta — se
+  // dejan como Int suelto (sin FK Prisma) hasta que existan (Docs/ventas.md §8).
+  modalidadVentaId Int?
+  clausulaVentaId  Int?
+  tipoFleteId      Int?
+  formaPagoId      Int?
+  saldoPagoId      Int?
+
+  monedaId         Int
+  moneda           Moneda    @relation(fields: [monedaId], references: [id])
+
+  observaciones    String?
+
+  detalles         NotaVentaDetalle[]
+  instructivosEmbalaje InstructivoEmbalaje[]
+
+  creadoEn         DateTime  @default(now())
+  creadoPor        String
+  actualizadoEn    DateTime? @updatedAt
+  actualizadoPor   String?
+  eliminadoEn      DateTime?
+  eliminadoPor     String?
+
+  @@index([clienteId])
+  @@index([fecha])
+  @@map("notas_venta")
+}
+
+model NotaVentaDetalle {
+  id              Int        @id @default(autoincrement())
+  notaVentaId     Int
+  notaVenta       NotaVenta  @relation(fields: [notaVentaId], references: [id], onDelete: Cascade)
+
+  fechaCompromiso DateTime
+  especieId       Int
+  especie         Especie    @relation(fields: [especieId], references: [id])
+  variedadId      Int
+  variedad        Variedad   @relation(fields: [variedadId], references: [id])
+  articuloId      Int
+  articulo        Articulo   @relation(fields: [articuloId], references: [id])
+  categoriaId     Int?
+  categoria       Categoria? @relation(fields: [categoriaId], references: [id])
+  tipoPalletId    Int?
+  tipoPallet      TipoPallet? @relation(fields: [tipoPalletId], references: [id])
+
+  cantidadPallets Int
+  cajasPorPallet  Int
+  cajas           Int
+  precio          Decimal    @db.Decimal(14, 4)
+
+  calibres        NotaVentaDetalleCalibre[]
+
+  @@index([notaVentaId])
+  @@map("notas_venta_detalle")
+}
+
+model NotaVentaDetalleCalibre {
+  id        Int              @id @default(autoincrement())
+  detalleId Int
+  detalle   NotaVentaDetalle @relation(fields: [detalleId], references: [id], onDelete: Cascade)
+  calibreId Int
+  calibre   Calibre          @relation(fields: [calibreId], references: [id])
+
+  @@unique([detalleId, calibreId])
+  @@map("notas_venta_detalle_calibre")
+}
+
+// ─── Compras — Instructivo de Embalaje (Docs/compras.md §4.1) ───────────────
+// Documento que instruye qué embalar. Sin FK a OrdenCompra (relación
+// inexistente por diseño, ver compras.md §6.1) y sin máquina de estados —
+// es solo un documento emitido, no editable ni eliminable.
+
+model InstructivoEmbalaje {
+  id          Int       @id @default(autoincrement())
+  numero      Int       @unique // correlativo propio
+
+  notaVentaId Int
+  notaVenta   NotaVenta @relation(fields: [notaVentaId], references: [id])
+
+  detalle     InstructivoEmbalajeDetalle[]
+
+  creadoEn    DateTime  @default(now())
+  creadoPor   String
+
+  @@index([notaVentaId])
+  @@map("instructivos_embalaje")
+}
+
+model InstructivoEmbalajeDetalle {
+  id              Int                  @id @default(autoincrement())
+  instructivoId   Int
+  instructivo     InstructivoEmbalaje  @relation(fields: [instructivoId], references: [id], onDelete: Cascade)
+
+  articuloId      Int // FK → Artículo tipo EMBALAJE
+  articulo        Articulo             @relation(fields: [articuloId], references: [id])
+  especieId       Int
+  especie         Especie              @relation(fields: [especieId], references: [id])
+  variedadId      Int
+  variedad        Variedad             @relation(fields: [variedadId], references: [id])
+  categoriaId     Int
+  categoria       Categoria            @relation(fields: [categoriaId], references: [id])
+  calibreMinId    Int
+  calibreMin      Calibre              @relation("InstructivoEmbalajeCalibreMin", fields: [calibreMinId], references: [id])
+  calibreMaxId    Int
+  calibreMax      Calibre              @relation("InstructivoEmbalajeCalibreMax", fields: [calibreMaxId], references: [id])
+
+  cantidadPallets Int
+  cajasPorPallet  Int
+
+  @@index([instructivoId])
+  @@map("instructivo_embalaje_detalle")
 }

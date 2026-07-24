@@ -49,7 +49,8 @@ export const MOCK_ACCESOS: Record<string, NivelAcceso> = {
   'operaciones.stock':       'LECTURA',
   // Compras / Ventas
   'compras.ordenes':         'TOTAL',
-  'ventas.notas':            'LECTURA',
+  'compras.instructivo':     'TOTAL',
+  'ventas.notas':            'TOTAL',
   'ventas.cobranza':         'SIN_ACCESO',
   // Productores
   'productores.ficha':            'TOTAL',

@@ -266,6 +266,46 @@ web OK (71 páginas). `npm run lint` web continúa fallando por deuda global:
 48 errores y 11 advertencias; incluye reglas React en formularios de Materiales
 y Productores, pero no se detectaron errores del nuevo formulario de contraseña.
 
+## 10c. Revisión QA Nota de Venta e Instructivo de Embalaje 2026-07-24
+
+**No aprobado.** Se registraron siete hallazgos (`NV-IE-001` a `NV-IE-007`),
+incluidos tres bloqueos principales: frontend/rutas inexistentes, migración
+destructiva sin estrategia para datos legacy y ausencia de pruebas funcionales.
+Ventas R3 (bloqueo de borrado/edición con Instructivo asociado) tampoco está
+implementada. Detalle y evidencia en
+`Docs/Hallazgos/notas-venta-instructivo-embalaje.md`.
+
+Validación técnica: 7/7 unitarias, 59/59 integración, 25 migraciones al día,
+Prisma válido y builds API/web OK. El build web genera 72 páginas, pero no las
+rutas declaradas en el seed para Nota de Venta e Instructivo de Embalaje.
+
+**Actualización 2026-07-24 (Claude):** NV-IE-002 y NV-IE-003 se descartaron
+(confirmado con el usuario: el Instructivo de Embalaje no bloquea cierre/edición
+de la Nota de Venta — esa regla de `ventas.md` R3 aplica al Instructivo de
+Embarque, no implementado). NV-IE-005 se aceptó (confirmado: sin datos
+transaccionales en el demo Coolify). NV-IE-004, NV-IE-006 y NV-IE-007 quedaron
+corregidos: validaciones de mantenedores vigentes/tipo en ambos módulos, spec
+`compras.md` reconciliado (`notaVentaId`, no `cierreNegocioId`), y suite de
+integración nueva (`ventas-compras.integration.test.ts`, 5 casos). Suite total:
+64/64 OK. NV-IE-001 (frontend) queda diferido a pedido del usuario. Detalle en
+`Docs/Hallazgos/notas-venta-instructivo-embalaje.md`.
+
+**Re-test 2026-07-24 (Codex): backend aprobado.** Se verificaron 7/7 pruebas
+unitarias y 64/64 de integración contra PostgreSQL `fas_test`; Prisma válido,
+25 migraciones al día y builds API/web correctos. NV-IE-004, NV-IE-006 y
+NV-IE-007 quedan cerrados; NV-IE-005 aceptado por inexistencia confirmada de
+datos transaccionales. NV-IE-001 sigue diferido hasta implementar el frontend.
+NV-IE-008 fue posteriormente descartado: el usuario confirmó que el nombre
+correcto es “Cierre Comercial”, coincidente con la implementación y el seed.
+
+**Re-test NV-IE-001 2026-07-24 (Codex): cerrado.** Se verificó la implementación
+frontend de Nota de Venta e Instructivo de Embalaje: listado, alta y
+detalle/edición o vista de solo lectura, servicios conectados al backend y rutas
+alineadas con el seed/menú. `npm run build` de `fas-web` finalizó correctamente
+con 76 páginas y generó las seis rutas del módulo. El módulo queda habilitado
+para pruebas funcionales de usuario. No quedan hallazgos abiertos; NV-IE-008 fue
+descartado tras confirmar que el nombre correcto es “Cierre Comercial”.
+
 ## 11. Revision QA implementacion Entidades 2026-07-20
 
 Se reviso el maestro de Entidades contra `Docs/entidades.md`, incluyendo migracion, esquema Prisma, backend, frontend, permisos y smoke runtime.
@@ -306,3 +346,15 @@ Hallazgos de Entidades:
 | QA-ENT-007 | Media | Eliminacion / Regla R7 | `countEntidadUsos` siempre retorna 0; la proteccion contra referencias operacionales queda como placeholder. | `entidades.repository.ts:201-204`. | Implementar conteos reales a medida que existan modulos consumidores, o documentar explicitamente que R7 queda postergada hasta esos FKs. | Aceptado | Postergado: no existen modulos operativos con FK a Entidad aun. Se implementara en Etapa 2+ cuando existan compras/ventas/productores. |
 | QA-ENT-008 | Media | Frontend / Atomicidad | En alta, la UI exige al menos una direccion principal y crea entidad primero, luego direcciones/contactos en requests separados. | `entidad-form.tsx:442-470`. Si falla un subrecurso, queda la entidad base creada parcialmente. | Alinear regla de obligatoriedad con el spec y usar endpoint transaccional o compensacion si el alta inicial incluye subrecursos obligatorios. | Listo para re-test | 2026-07-22 Claude: `createMutation` en `entidad-form.tsx` envuelve la creacion de subrecursos en try/catch; si falla cualquier direccion o contacto, llama `entidadesService.remove(created.id)` para compensar antes de re-lanzar el error. |
 | QA-ENT-009 | Alta | Tests | No hay tests CA1-CA9 para reglas criticas del maestro. | Busqueda de suites especificas no muestra cobertura; solo se validaron builds y smoke manual. | Agregar tests backend para R1-R9/CA1-CA9 y pruebas UI de alta/edicion/subgrids. | Abierto | Pendiente. |
+
+## 12. Bug de despliegue — login roto en navegadores sin stack local (2026-07-24)
+
+Reportado por un segundo usuario probando el demo de Coolify: se loguea (o
+aparenta loguearse) pero no ve ningún dato en ninguna pantalla — no es un
+problema de perfil/permisos (ambos usuarios comparten la misma cuenta), ni de
+PostgreSQL/datos distintos. Diagnóstico de Codex + verificación de Claude:
+
+| ID | Severidad | Area | Hallazgo | Evidencia | Esperado | Estado | Accion Claude |
+|---|---|---|---|---|---|---|---|
+| QA-INFRA-001 | Bloqueante | Despliegue / Auth | `docker-compose.demo.yml` nunca declara `NEXT_PUBLIC_APP_URL` como build arg del servicio `web`, pese a que `WEB_PUBLIC_URL` ya existe como variable sin usar. `fas-web/src/lib/auth-client.ts` usa `NEXT_PUBLIC_APP_URL` (con default `'http://localhost:3000'`) como `baseURL` para el login. Al faltar la variable, el bundle de producción queda con el login apuntando literalmente a `http://localhost:3000` en vez del dominio público real. | `docker-compose.demo.yml` (bloque `web.build.args`, solo pasaba `NEXT_PUBLIC_API_URL`); `fas-web/Dockerfile` (solo declaraba `ARG`/`ENV` para `NEXT_PUBLIC_API_URL`); `fas-web/src/lib/auth-client.ts`. Esto explica por qué funciona en la máquina del desarrollador (tiene su propio stack Docker corriendo en `localhost:3000`, así que la request "rota" cae por accidente en el stack local) pero falla en cualquier otro navegador que no tenga nada en su propio `localhost:3000`. | El bundle debe embeber la URL pública real del frontend para que el cliente de Better Auth arme las requests de login contra el dominio correcto. | Corregido | 2026-07-24 Claude: agregado `ARG`/`ENV NEXT_PUBLIC_APP_URL` en `fas-web/Dockerfile`; agregado `NEXT_PUBLIC_APP_URL: ${WEB_PUBLIC_URL}` a `web.build.args` y `INTERNAL_API_URL: http://api:3001` a `web.environment` en `docker-compose.demo.yml`. Pendiente: falta reconstruir (`--build`) el recurso `fas-web` en Coolify y confirmar que la UI de Coolify tenga las mismas variables si no usa este compose file directamente. |
+| QA-INFRA-002 | Media | Despliegue | `INTERNAL_API_URL` (usada por `fas-web/src/app/api/auth/[...all]/route.ts` para hablarle a la API por la red interna de Docker) nunca se declaraba en `docker-compose.demo.yml`; el proxy caía al fallback público (`NEXT_PUBLIC_API_URL`), funcional pero innecesariamente indirecto (sale a internet y vuelve a entrar en vez de usar la red interna `coolify`/compose). | `fas-web/src/app/api/auth/[...all]/route.ts:9-11`; `docker-compose.demo.yml` (bloque `web`, sin `environment.INTERNAL_API_URL`). | El proxy de auth debe usar el hostname interno de Docker (`http://api:3001`), no rebotar por la URL pública. | Corregido | 2026-07-24 Claude: agregado junto con QA-INFRA-001. |

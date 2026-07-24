@@ -9,6 +9,8 @@ import { configRoutes } from './modules/config/config.routes.js'
 import { solicitudesRoutes } from './modules/calidad/solicitudes/solicitudes.routes.js'
 import { materialesRoutes } from './modules/materiales/materiales.routes.js'
 import { productoresRoutes } from './modules/productores/productores.routes.js'
+import { ventasRoutes } from './modules/ventas/ventas.routes.js'
+import { comprasRoutes } from './modules/compras/compras.routes.js'
 
 export async function buildApp(options: { logger?: boolean } = {}) {
   const app = Fastify({
@@ -109,6 +111,8 @@ export async function buildApp(options: { logger?: boolean } = {}) {
   await app.register(solicitudesRoutes, { prefix: '/api/calidad' })
   await app.register(materialesRoutes, { prefix: '/api/materiales' })
   await app.register(productoresRoutes, { prefix: '/api/productores' })
+  await app.register(ventasRoutes, { prefix: '/api/ventas' })
+  await app.register(comprasRoutes, { prefix: '/api/compras' })
 
   return app
 }

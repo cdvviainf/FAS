@@ -46,7 +46,7 @@ export const navGroups: NavGroup[] = [
         isActive: false,
         items: [
           { title: 'Solicitud de Inspección',    url: '/dashboard/calidad/solicitudes',    icon: 'calidad' },
-          { title: 'Instructivo de Embalaje',    url: '/dashboard/compras/instructivos',   icon: 'forms'   },
+          { title: 'Instructivo de Embalaje',    url: '/dashboard/compras/instructivo-embalaje', icon: 'forms' },
           { title: 'Órdenes de Compra',          url: '/dashboard/compras/ordenes',         icon: 'post'    },
           { title: 'Recepción de Stock',         url: '/dashboard/compras/recepciones',    icon: 'bodega'  }
         ]
