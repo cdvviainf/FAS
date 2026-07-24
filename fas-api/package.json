@@ -18,7 +18,9 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:prod": "node --experimental-strip-types prisma/seed.ts",
     "db:bootstrap": "tsx prisma/bootstrap-admin.ts",
-    "db:bootstrap:prod": "node --experimental-strip-types prisma/bootstrap-admin.ts"
+    "db:bootstrap:prod": "node --experimental-strip-types prisma/bootstrap-admin.ts",
+    "db:seed:geografia": "tsx prisma/seed-geografia-chile.ts",
+    "db:seed:geografia:prod": "node --experimental-strip-types prisma/seed-geografia-chile.ts"
   },
   "keywords": [],
   "author": "VIAIN Asesorías Informáticas",

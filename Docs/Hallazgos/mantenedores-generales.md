@@ -488,3 +488,56 @@ Agregar → clic en "+" junto a Comuna → se abre el diálogo anidado "Nueva
 Comuna" → se completa y crea → toast de confirmación → el Select de Comuna
 del diálogo padre muestra automáticamente la comuna recién creada
 seleccionada. `npx tsc --noEmit` limpio, `npm run build` OK.
+
+## Carga masiva de Región/Provincia/Comuna de Chile (2026-07-24)
+
+Petición del usuario: poder cargar de una vez todas las regiones, provincias
+y comunas de Chile, en vez de crearlas una por una manualmente (motivado por
+el hallazgo anterior de que solo existía 1 comuna real en la BD de
+desarrollo). El spec (`Docs/mantenedores-generales.md` §"DoD") ya anticipaba
+esto: *"Seed mínimo (...) regiones/comunas de Chile si se dispone del
+dataset"*.
+
+**Fuente de datos:** "Códigos Únicos Territoriales, vigentes a partir del 6
+de septiembre de 2018" — Ministerio del Interior, Subsecretaría de Desarrollo
+Regional y Administrativo (SUBDERE), el documento oficial que define la
+división político-administrativa vigente de Chile (16 regiones, 56
+provincias, 346 comunas, incluida la Región de Ñuble creada en 2018). Se
+obtuvo el PDF oficial y se extrajo la tabla completa; se validó
+programáticamente que los totales (16/56/346) coincidieran exactamente y que
+no hubiera códigos duplicados en ningún nivel antes de generar el seed.
+
+**Implementación:**
+- `fas-api/prisma/regiones-chile-data.ts`: los datos completos (generados
+  mecánicamente desde la tabla oficial, no tipeados a mano) — `codigo` de
+  Región usa la abreviación romana estándar reconocida en Chile (I..XII,
+  XIV..XVI, RM); `codigo` de Provincia/Comuna usa el Código Único
+  Territorial (INE) oficial.
+- `fas-api/prisma/seed-geografia-chile.ts`: script idempotente (upsert por
+  `codigo` entre no eliminados) — mismo patrón que `bootstrap-admin.ts`
+  (`tsx` en dev, `node --experimental-strip-types` en producción, sin paso
+  de build). Se agregaron los scripts npm `db:seed:geografia` /
+  `db:seed:geografia:prod`.
+- **No destructivo:** el script nunca elimina ni reasigna registros
+  existentes. Al finalizar, reporta (sin modificar) cualquier Región/
+  Provincia/Comuna cuyo `codigo` no coincida con ningún código oficial —
+  útil para detectar datos de prueba/duplicados dejados por QA manual, que
+  quedan a criterio del administrador limpiar.
+
+**Verificación:**
+- Ejecutado dos veces seguidas contra la BD de desarrollo: mismos conteos
+  ambas veces (16 regiones / 56 provincias / 346 comunas oficiales),
+  confirmando idempotencia — no crea duplicados al re-ejecutarse.
+- La BD de desarrollo ya tenía 4 registros de prueba (una Región "R13"
+  duplicada, una Región "iV"/"COQUIMBO", una Provincia "SAN" y la Comuna
+  "001" con FK real desde Bodega y Predio) — el script los reportó como
+  huérfanos sin tocarlos; la única Región real que coincidía por código
+  (`RM`) se actualizó correctamente a su nombre oficial ("Metropolitana de
+  Santiago") sin cambiar su `id`, preservando cualquier referencia existente.
+- `GET /api/config/comunas` confirma 347 comunas totales (346 oficiales + 1
+  de prueba preexistente); verificado visualmente en
+  `/dashboard/configuracion/comunas` que la jerarquía Provincia → Región se
+  resuelve correctamente para todo el dataset (paginado, 35 páginas de 10).
+- `npm run build`, `npm run test:run` (7/7) y `npm run test:integration`
+  (57/57) sin regresiones — el seed corre contra `fas_db` (desarrollo), no
+  contra `fas_test`, así que no interfiere con la suite automatizada.
