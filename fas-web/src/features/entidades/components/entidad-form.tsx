@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog'
 import { AlertModal } from '@/components/modal/alert-modal'
 import { Icons } from '@/components/icons'
+import { ComunaQuickCreate } from '@/features/comunas/components/comuna-quick-create'
 import { entidadDetailOptions, entidadesKeys, paisesOptions, comunasOptions } from '../queries'
 import { entidadesService } from '../service'
 import type {
@@ -89,6 +90,7 @@ interface DireccionDialogProps {
 }
 
 function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving, paises, comunas }: DireccionDialogProps) {
+  const queryClient = useQueryClient()
   const [form, setForm] = useState<DireccionCreateInput>({
     codigo: '',
     paisId: paisOrigen ?? 0,
@@ -180,19 +182,27 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
           {selectedPaisEsChile && (
             <div className='space-y-1.5'>
               <Label>Comuna <span className='text-destructive'>*</span></Label>
-              <Select
-                value={form.comunaId ? String(form.comunaId) : ''}
-                onValueChange={(v) => setForm((f) => ({ ...f, comunaId: parseInt(v) }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder='Seleccionar comuna...' />
-                </SelectTrigger>
-                <SelectContent>
-                  {comunas.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className='flex gap-2'>
+                <Select
+                  value={form.comunaId ? String(form.comunaId) : ''}
+                  onValueChange={(v) => setForm((f) => ({ ...f, comunaId: parseInt(v) }))}
+                >
+                  <SelectTrigger className='flex-1'>
+                    <SelectValue placeholder='Seleccionar comuna...' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {comunas.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <ComunaQuickCreate
+                  onCreated={(nuevaComuna) => {
+                    queryClient.invalidateQueries({ queryKey: entidadesKeys.comunas })
+                    setForm((f) => ({ ...f, comunaId: nuevaComuna.id }))
+                  }}
+                />
+              </div>
               {errors.comunaId && <p className='text-xs text-destructive'>{errors.comunaId}</p>}
             </div>
           )}

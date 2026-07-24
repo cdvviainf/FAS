@@ -459,3 +459,32 @@ sin cambios.
 Verificado con capturas Puppeteer reales (no solo inspección de CSS) en
 `claude` claro/oscuro y `neobrutualism` claro/oscuro: los mensajes de error
 ahora se ven en rojo, claramente distinguibles del texto normal.
+
+## Entidad — no se podía crear una Comuna nueva desde "Nueva Dirección" (2026-07-24)
+
+Reporte del usuario con captura de pantalla: en el diálogo "Nueva Dirección"
+(subrecurso de Entidad), el campo Comuna es un `<Select>` sin forma de crear
+una comuna que no exista en la lista — y en la BD de desarrollo solo existía
+1 comuna. Sin quick-create, cualquier dirección fuera de esa única comuna
+quedaba bloqueada por la regla "La comuna es requerida para Chile", sin
+ninguna vía para resolverlo desde la propia pantalla.
+
+Este es exactamente el mismo patrón que ya existe en otros formularios del
+proyecto (p. ej. `bodega-form-sheet.tsx`, que sí integra `ComunaQuickCreate`
+junto a su selector de comuna) — al `DireccionDialog` de `entidad-form.tsx`
+simplemente no se le agregó ese botón cuando se construyó.
+
+**Fix:** se agrega `ComunaQuickCreate` junto al `<Select>` de Comuna en
+`DireccionDialog`. Al crear la comuna, se invalida `entidadesKeys.comunas`
+(la query del propio formulario de Entidad) y se auto-selecciona la comuna
+recién creada en el formulario de dirección — mismo patrón que el resto del
+proyecto. El componente `ComunaQuickCreate` ya resuelve internamente el caso
+de que tampoco exista la Provincia (tiene su propio "+" anidado para
+`ProvinciaQuickCreate`), así que la cadena completa (Región → Provincia →
+Comuna, ver QAS-MG-L4-003) queda cubierta sin cambios adicionales.
+
+Verificado end-to-end con Puppeteer: Nueva Entidad → pestaña Direcciones →
+Agregar → clic en "+" junto a Comuna → se abre el diálogo anidado "Nueva
+Comuna" → se completa y crea → toast de confirmación → el Select de Comuna
+del diálogo padre muestra automáticamente la comuna recién creada
+seleccionada. `npx tsc --noEmit` limpio, `npm run build` OK.
