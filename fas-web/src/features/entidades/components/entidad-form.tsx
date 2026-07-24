@@ -41,6 +41,22 @@ import type {
 } from '../types'
 import { TIPOS_ENTIDAD_ORDEN, TIPO_ENTIDAD_LABELS } from '../types'
 
+// Mapea cada campo validado a la pestaña donde vive su input, para poder saltar
+// automáticamente a la pestaña con el primer error (el formulario está dividido
+// en Tabs y un error en una pestaña no activa quedaba invisible para el usuario).
+const FIELD_TAB: Record<string, 'entidad' | 'direcciones' | 'contactos'> = {
+  codigo: 'entidad',
+  descripcion: 'entidad',
+  razonSocial: 'entidad',
+  paisId: 'entidad',
+  tipos: 'entidad',
+  email: 'entidad',
+  giro: 'entidad',
+  identificador: 'entidad',
+  direcciones: 'direcciones',
+  direccionesPorDefecto: 'direcciones',
+}
+
 // ─── Validation helpers ───────────────────────────────────────────────────────
 
 function validarRutChileno(rut: string): boolean {
@@ -430,6 +446,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
     tipos: [],
   })
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [activeTab, setActiveTab] = useState<'entidad' | 'direcciones' | 'contactos'>('entidad')
 
   // ── Sub-listas (para create: local state; para edit: desde API) ──
   const [localDirecciones, setLocalDirecciones] = useState<(DireccionCreateInput & { _localId: number })[]>([])
@@ -503,6 +520,10 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
     if (!isEdit && localDirecciones.length === 0) e.direcciones = 'Debe agregar al menos una dirección'
     if (!isEdit && !localDirecciones.some((d) => d.esPorDefecto)) e.direccionesPorDefecto = 'Una dirección debe ser la principal'
     setFieldErrors(e)
+    const firstErrorField = Object.keys(e)[0]
+    if (firstErrorField) {
+      setActiveTab(FIELD_TAB[firstErrorField] ?? 'entidad')
+    }
     return Object.keys(e).length === 0
   }
 
@@ -559,7 +580,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
 
   function handleSubmit() {
     if (!validate()) {
-      toast.error('Corrija los errores antes de continuar')
+      toast.error('Hay campos por corregir — revisa la pestaña marcada con el punto rojo')
       return
     }
 
@@ -746,13 +767,21 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
 
   return (
     <div className='space-y-6'>
-      <Tabs defaultValue='entidad'>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList>
-          <TabsTrigger value='entidad'>Entidad</TabsTrigger>
+          <TabsTrigger value='entidad'>
+            Entidad
+            {Object.keys(fieldErrors).some((k) => FIELD_TAB[k] === 'entidad') && (
+              <span className='ml-1.5 h-1.5 w-1.5 rounded-full bg-destructive' aria-label='Hay errores en esta pestaña' />
+            )}
+          </TabsTrigger>
           <TabsTrigger value='direcciones'>
             Direcciones
             {direccionesToShow.length > 0 && (
               <Badge variant='secondary' className='ml-1.5 h-5 px-1.5 text-xs'>{direccionesToShow.length}</Badge>
+            )}
+            {Object.keys(fieldErrors).some((k) => FIELD_TAB[k] === 'direcciones') && (
+              <span className='ml-1.5 h-1.5 w-1.5 rounded-full bg-destructive' aria-label='Hay errores en esta pestaña' />
             )}
           </TabsTrigger>
           <TabsTrigger value='contactos'>

@@ -338,3 +338,87 @@ o se remontan al navegar, o ya reseteaban correctamente.
 
 Verificación: `npx tsc --noEmit` limpio en `fas-web`, `npm run build` OK
 (todas las páginas generadas sin error).
+
+## Revisión QA — Regresión de País y errores invisibles en formularios (2026-07-24)
+
+Reporte del usuario: "Al crear un PAÍS dice datos inválidos porque puse 2
+caracteres" y, por separado, "al crear entidad dice corrija datos antes de
+continuar pero no sé cuál es el error". Ambos casos comparten la misma raíz:
+el error específico existía en el backend, pero el usuario nunca llegaba a
+verlo.
+
+### QAS-MG-L7-001 (re-abierto) — País: código de 2 caracteres
+
+El fix anterior (agregar `bloqueado` a `defaultValues`) resolvió que el POST
+ni siquiera se disparara, pero dejó expuesto el problema real reportado ahora:
+`codigo` en `paisSchema` (frontend, `mantenedor-simple/schema.ts`) solo exigía
+`min(1).max(50)` — sin el formato ISO alfa-3 (3 letras mayúsculas) que el
+backend sí exige (`paisBodySchema`). Un código de 2 caracteres pasaba la
+validación del cliente, llegaba al API, y el backend lo rechazaba con Zod —
+pero el error handler global (`error-handler.ts`) siempre devuelve
+`message: "Datos inválidos"` para cualquier `ZodError`, dejando el mensaje
+específico ("El código de país debe ser ISO alfa-3") enterrado en
+`details.fieldErrors`, que el cliente no leía.
+
+**Fix (dos partes):**
+1. `paisSchema` (frontend) ahora replica exactamente la regla del backend
+   (`.length(3)` + `.regex(/^[A-Z]{3}$/)`), así el error se ve al instante
+   bajo el campo, sin llegar a tocar el API.
+2. `src/lib/api.ts` (`beforeErrorHook`, usado por **todos** los llamados a la
+   API vía la instancia compartida `ky`): ahora lee `details.fieldErrors` y
+   `details.formErrors` del error serializado y compone el mensaje del toast
+   a partir de ahí cuando existen, en vez de mostrar siempre el genérico
+   `"Datos inválidos"`. Si no hay detalles (p. ej. un `ConflictError` de
+   negocio con mensaje propio), el comportamiento no cambia. **Esto beneficia
+   a todos los formularios del proyecto que llaman a la API**, no solo País —
+   cualquier mismatch de validación cliente/servidor que exista hoy o se
+   introduzca a futuro en cualquier mantenedor/módulo mostrará el mensaje
+   específico en vez del genérico.
+
+Se auditaron todos los `*.schema.ts` de `fas-api` en busca de reglas
+`.regex()/.length()/.refine()` (formato ISO alfa-3, fechas `YYYY-MM-DD`,
+email, unicidad de especie en matriz) para ver si algún otro mantenedor tenía
+el mismo mismatch que País. Resultado: **Moneda** ya tenía su propio schema
+completo con la regla ISO 4217 correctamente replicada (no comparte el schema
+genérico como hacía País); **Temporada** ya replica el formato de fecha y el
+`refine` de rango. País era el único caso real, porque es el único mantenedor
+que reutiliza `mantenedorSimpleSchema` (genérico) pese a tener una regla de
+`codigo` más estricta que el resto.
+
+Verificado con curl: `POST /api/config/paises` con código de 2 caracteres →
+422 con `fieldErrors.codigo` (mensaje específico, ya no oculto); con código
+válido de 3 letras → 201.
+
+### Entidad — "Corrija los errores antes de continuar" sin indicar cuál
+
+Causa distinta a la de País: **no es un problema del mensaje del API**, sino
+de la UI. `entidad-form.tsx` divide el formulario en 3 pestañas (`Tabs`):
+Entidad, Direcciones, Contactos. La validación (`validate()`) cubre campos de
+las 3, pero el componente `<Tabs defaultValue='entidad'>` era **no
+controlado**: si el error caía en una pestaña distinta a la activa (los casos
+más fáciles de olvidar: "Debe agregar al menos una dirección" o "Una
+dirección debe ser la principal", ambos en la pestaña Direcciones), el
+usuario veía el toast genérico sin ningún indicio visual de dónde estaba el
+problema, porque el mensaje de error solo se renderiza dentro del contenido
+de esa pestaña (oculto si no está activa).
+
+**Fix:**
+- `Tabs` pasa a ser controlado (`value={activeTab}` / `onValueChange`).
+- `validate()` ahora, además de juntar los errores, salta automáticamente a
+  la pestaña del primer campo con error (`FIELD_TAB` mapea cada campo a su
+  pestaña).
+- Cada `TabsTrigger` muestra un punto rojo si tiene algún error pendiente,
+  para que quede visible incluso si el usuario navega manualmente después.
+- El toast pasa de "Corrija los errores antes de continuar" a "Hay campos
+  por corregir — revisa la pestaña marcada con el punto rojo", coherente con
+  el nuevo indicador visual.
+
+Se revisó el resto del proyecto por el mismo patrón (formulario con `Tabs` +
+validación cruzada): `entidad-form.tsx` es el único caso real — el resto de
+usos de `<Tabs>` en `fas-web` son vistas de lectura/navegación
+(`productor-ficha-client.tsx`, `notifications-page.tsx`, `overview.tsx`), no
+formularios con un único submit que valide campos reservados en pestañas no
+activas.
+
+Verificación: `npx tsc --noEmit` limpio, `npm run build` OK (todas las
+páginas), smoke test manual vía curl de la regla de País.
