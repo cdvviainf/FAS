@@ -65,7 +65,8 @@ export const solicitudesService = {
   },
 
   urlDescargaAdjunto(id: number, adjuntoId: number): string {
-    const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'
-    return `${base}/calidad/solicitudes/${id}/adjuntos/${adjuntoId}/descarga`
+    // Ruta relativa (mismo origen) para que el navegador envíe la cookie de
+    // sesión — ver comentario en src/lib/api.ts.
+    return `/api/calidad/solicitudes/${id}/adjuntos/${adjuntoId}/descarga`
   },
 }

@@ -20,7 +20,8 @@ export const contratosService = {
     return api.post(`productores/${entidadId}/contratos/${contratoId}/pdf`, { body: formData }).json()
   },
   urlDescargaPdf(entidadId: number, contratoId: number): string {
-    const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'
-    return `${base}/productores/${entidadId}/contratos/${contratoId}/pdf`
+    // Ruta relativa (mismo origen) para que el navegador envíe la cookie de
+    // sesión — ver comentario en src/lib/api.ts.
+    return `/api/productores/${entidadId}/contratos/${contratoId}/pdf`
   },
 }

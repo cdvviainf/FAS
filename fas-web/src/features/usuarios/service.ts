@@ -43,6 +43,8 @@ export const usuariosService = {
 
   avatarSrc(imagenUrl: string | null): string | null {
     if (!imagenUrl) return null
-    return `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'}${imagenUrl}`
+    // Ruta relativa (mismo origen) para que el navegador envíe la cookie de
+    // sesión — ver comentario en src/lib/api.ts.
+    return `/api${imagenUrl}`
   },
 }

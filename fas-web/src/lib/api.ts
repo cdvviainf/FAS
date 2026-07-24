@@ -33,8 +33,16 @@ const beforeErrorHook: BeforeErrorHook = ({ error }) => {
   return error
 }
 
+// Prefijo relativo ('/api', mismo origen del frontend) en vez de
+// NEXT_PUBLIC_API_URL directo: si fas-web y fas-api viven en dominios
+// distintos (ej. subdominios sslip.io separados en el demo de Coolify), la
+// cookie de sesión -- seteada para el dominio del frontend por el proxy de
+// auth (src/app/api/auth/[...all]/route.ts) -- nunca llegaría a un dominio
+// cruzado. Todas las llamadas pasan por el proxy genérico
+// (src/app/api/[...path]/route.ts), que reenvía al backend real conservando
+// las cookies entrantes. Ver QA/hallazgos-consolidados.md §12.
 export const api = ky.create({
-  prefix: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api',
+  prefix: '/api',
   credentials: 'include',
   hooks: {
     beforeError: [beforeErrorHook]
