@@ -422,3 +422,40 @@ activas.
 
 Verificación: `npx tsc --noEmit` limpio, `npm run build` OK (todas las
 páginas), smoke test manual vía curl de la regla de País.
+
+### Seguimiento (2026-07-24) — "los errores están en negro y no se entienden"
+
+Después de las correcciones anteriores (mensajes específicos + tabs), el
+usuario reportó que el color de los errores en sí no era legible. Se verificó
+visualmente con capturas reales (Puppeteer, no solo lectura de CSS) en los 10
+temas del selector, en claro y oscuro, comparando `--destructive` contra
+`--foreground` de cada uno. Dos temas tenían el bug real:
+
+- **`claude.css` (modo claro):** `--destructive` estaba fijado exactamente al
+  mismo valor que `--card-foreground` (`oklch(0.19 0.002 ...)`, croma ≈ 0 —
+  gris casi negro, no rojo). Aparenta ser un error de copiado al generar el
+  tema: el modo oscuro del mismo archivo sí tenía un rojo correcto
+  (`oklch(0.6368 0.2078 25.3313)`). Todo mensaje de error (campos de
+  formulario, indicador de tabs) se veía del mismo color que el texto normal.
+- **`neobrutualism.css` (ambos modos):** `--destructive` estaba fijado
+  exactamente igual a `--foreground` — negro sobre negro en claro, blanco
+  sobre blanco en oscuro. Notablemente, `--primary` de este mismo tema sí es
+  un rojo vivo (`oklch(0.6489/0.7044 ... 23-27`), lo que sugiere que
+  `--destructive` simplemente nunca se completó con un valor propio.
+
+**Fix:** se reemplazó `--destructive` en los 3 bloques afectados (`claude`
+claro, `neobrutualism` claro y oscuro) por el mismo rojo "estándar" que ya
+usan `astro-vista`/`zen`/`vercel`/`mono` en este mismo sistema de temas
+(`oklch(0.6368 0.2078 25.3313)` en claro, `oklch(0.7044 0.1872 23.1858)` en
+oscuro para neobrutualism). `--destructive-foreground` no se tocó.
+
+Se auditaron programáticamente los 10 temas comparando croma y valor exacto
+de `--destructive` vs `--foreground` — no quedan más casos con croma
+≈ 0 ni coincidencia exacta con `--foreground`. `notebook.css` (modo oscuro)
+tiene croma baja (0.049) pero corresponde a un rosa-rojo apagado deliberado
+(consistente con la paleta suave del resto del tema), no un bug — se dejó
+sin cambios.
+
+Verificado con capturas Puppeteer reales (no solo inspección de CSS) en
+`claude` claro/oscuro y `neobrutualism` claro/oscuro: los mensajes de error
+ahora se ven en rojo, claramente distinguibles del texto normal.

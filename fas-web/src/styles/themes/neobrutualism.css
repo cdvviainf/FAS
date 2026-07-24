@@ -13,7 +13,10 @@
   --muted-foreground: oklch(0.3211 0 0);
   --accent: oklch(0.5635 0.2408 260.8178);
   --accent-foreground: oklch(1 0 0);
-  --destructive: oklch(0 0 0);
+  /* Antes tenía el mismo valor que --foreground (negro): los errores eran
+     indistinguibles del texto normal. Se usa un rojo vivo, igual de "brutalista"
+     que el resto de la paleta (compárese con --primary de este mismo tema). */
+  --destructive: oklch(0.6368 0.2078 25.3313);
   --destructive-foreground: oklch(1 0 0);
   --border: oklch(0 0 0);
   --input: oklch(0 0 0);
@@ -68,7 +71,9 @@
   --muted-foreground: oklch(0.8452 0 0);
   --accent: oklch(0.6755 0.1765 252.2592);
   --accent-foreground: oklch(0 0 0);
-  --destructive: oklch(1 0 0);
+  /* Antes tenía el mismo valor que --foreground en modo oscuro (blanco):
+     los errores eran indistinguibles del texto normal. */
+  --destructive: oklch(0.7044 0.1872 23.1858);
   --destructive-foreground: oklch(0 0 0);
   --border: oklch(1 0 0);
   --input: oklch(1 0 0);
