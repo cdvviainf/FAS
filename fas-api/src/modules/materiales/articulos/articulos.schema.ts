@@ -10,6 +10,11 @@ export const articuloCreateSchema = z.object({
   valorEstandar: z.number().min(0).optional().nullable(),
   stockCritico: z.number().min(0).optional().nullable(),
   activo: z.boolean().default(true),
+  // Atributos físicos del embalaje, usados por Compras (Orden de Compra hereda
+  // estos valores de la línea, ver compras.md §4.3).
+  etiqueta: z.string().max(100).trim().optional().nullable(),
+  kgNetoEnvase: z.number().min(0).optional().nullable(),
+  kgBrutoEnvase: z.number().min(0).optional().nullable(),
 })
 
 // El código es inmutable (mismo patrón que mantenedores generales)

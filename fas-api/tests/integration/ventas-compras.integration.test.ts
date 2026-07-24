@@ -7,6 +7,12 @@ import {
   eliminarNotaVenta,
 } from '../../src/modules/ventas/notas-venta/notas-venta.service.js'
 import { crearInstructivo } from '../../src/modules/compras/instructivo-embalaje/instructivo-embalaje.service.js'
+import {
+  crearOrdenCompra,
+  actualizarOrdenCompra,
+  eliminarOrdenCompra,
+  obtenerOrdenCompra,
+} from '../../src/modules/compras/ordenes-compra/ordenes-compra.service.js'
 
 const databaseName = new URL(process.env.DATABASE_URL ?? '').pathname.slice(1)
 if (databaseName !== 'fas_test') {
@@ -16,6 +22,9 @@ if (databaseName !== 'fas_test') {
 async function limpiarDatos() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      "orden_compra_linea",
+      "orden_compra_cuota_pago",
+      "ordenes_compra",
       "instructivo_embalaje_detalle",
       "instructivos_embalaje",
       "notas_venta_detalle_calibre",
@@ -211,5 +220,117 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
     await prisma.mercado.update({ where: { id: f.mercado.id }, data: { bloqueado: true } })
 
     await expect(crearNotaVenta(nvBase(f), 'test')).rejects.toMatchObject({ statusCode: 422 })
+  })
+})
+
+describe('Orden de Compra contra PostgreSQL', () => {
+  beforeEach(limpiarDatos)
+  afterAll(async () => {
+    await limpiarDatos()
+    await prisma.$disconnect()
+  })
+
+  function ocLinea(f: Awaited<ReturnType<typeof crearFixtures>>) {
+    return {
+      especieId: f.especie.id,
+      variedadId: f.variedad.id,
+      categoriaId: f.categoria.id,
+      articuloId: f.articulo.id,
+      calibreMinId: f.calibreChico.id,
+      calibreMaxId: f.calibreGrande.id,
+      cantidadPallets: 40,
+      cajasPorPallet: 114,
+      precioUsdCaja: 8.5,
+    }
+  }
+
+  it('genera correlativo OC-{año}-{NNNN} y rechaza productor sin tipo Productor', async () => {
+    const f = await crearFixtures()
+    const oc1 = await crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, lineas: [ocLinea(f)] }, 'test')
+    const oc2 = await crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, lineas: [ocLinea(f)] }, 'test')
+    const anio = new Date().getFullYear()
+    expect(oc1.numero).toBe(`OC-${anio}-0001`)
+    expect(oc2.numero).toBe(`OC-${anio}-0002`)
+
+    await expect(
+      crearOrdenCompra({ entidadProductorId: f.cliente.id, monedaId: f.moneda.id, lineas: [ocLinea(f)] }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('exige que las cuotas de pago sumen 100% y valida el rango de calibre por especie', async () => {
+    const f = await crearFixtures()
+
+    await expect(
+      crearOrdenCompra({
+        entidadProductorId: f.productor.id,
+        monedaId: f.moneda.id,
+        lineas: [ocLinea(f)],
+        cuotasPago: [{ porcentaje: 80, plazoDias: 30 }, { porcentaje: 30, plazoDias: 60 }],
+      }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
+
+    await expect(
+      crearOrdenCompra({
+        entidadProductorId: f.productor.id,
+        monedaId: f.moneda.id,
+        lineas: [{ ...ocLinea(f), calibreMinId: f.calibreGrande.id, calibreMaxId: f.calibreChico.id }],
+      }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
+
+    const oc = await crearOrdenCompra({
+      entidadProductorId: f.productor.id,
+      monedaId: f.moneda.id,
+      lineas: [ocLinea(f)],
+      cuotasPago: [
+        { porcentaje: 80, plazoDias: 30, descripcion: 'Anticipo' },
+        { porcentaje: 20, plazoDias: 60, descripcion: 'Saldo' },
+      ],
+    }, 'test')
+    expect(oc.cuotasPago).toHaveLength(2)
+    expect(oc.lineas).toHaveLength(1)
+  })
+
+  it('permite editar líneas y cuotas de una OC en Borrador', async () => {
+    const f = await crearFixtures()
+    const oc = await crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, lineas: [ocLinea(f)] }, 'test')
+    expect(oc.estado).toBe('BORRADOR')
+
+    const editada = await actualizarOrdenCompra(oc.id, {
+      estado: 'EMITIDA',
+      lineas: [{ ...ocLinea(f), cantidadPallets: 50 }],
+    }, 'test')
+    expect(editada.estado).toBe('EMITIDA')
+    expect(editada.lineas).toHaveLength(1)
+    expect(editada.lineas[0].cantidadPallets).toBe(50)
+  })
+
+  it('rechaza notaVentaId y facturarAId inexistentes', async () => {
+    const f = await crearFixtures()
+
+    await expect(
+      crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, notaVentaId: 999999, lineas: [ocLinea(f)] }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
+
+    await expect(
+      crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, facturarAId: 999999, lineas: [ocLinea(f)] }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('permite eliminar (soft delete) una OC en Borrador/Emitida, pero bloquea edición y eliminación tras Recepcionada', async () => {
+    const f = await crearFixtures()
+    const oc = await crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, lineas: [ocLinea(f)] }, 'test')
+
+    await eliminarOrdenCompra(oc.id, 'test')
+    await expect(obtenerOrdenCompra(oc.id)).rejects.toMatchObject({ statusCode: 404 })
+
+    // Simula el estado que en el futuro solo asignará el flujo de Recepción
+    // (compras.md §4.4/§8) — no seteable manualmente vía la API (OC-001).
+    const oc2 = await crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, lineas: [ocLinea(f)] }, 'test')
+    await prisma.ordenCompra.update({ where: { id: oc2.id }, data: { estado: 'RECEPCIONADA' } })
+
+    await expect(
+      actualizarOrdenCompra(oc2.id, { observaciones: 'no debería aplicar' }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
+    await expect(eliminarOrdenCompra(oc2.id, 'test')).rejects.toMatchObject({ statusCode: 422 })
   })
 })

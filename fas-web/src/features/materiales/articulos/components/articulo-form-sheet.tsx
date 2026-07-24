@@ -53,6 +53,9 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
   const [valorEstandar, setValorEstandar] = useState('')
   const [stockCritico, setStockCritico] = useState('')
   const [activo, setActivo] = useState(true)
+  const [etiqueta, setEtiqueta] = useState('')
+  const [kgNetoEnvase, setKgNetoEnvase] = useState('')
+  const [kgBrutoEnvase, setKgBrutoEnvase] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const { data: unidades } = useQuery({
@@ -75,6 +78,9 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setValorEstandar(item.valorEstandar ?? '')
       setStockCritico(item.stockCritico ?? '')
       setActivo(item.activo)
+      setEtiqueta(item.etiqueta ?? '')
+      setKgNetoEnvase(item.kgNetoEnvase ?? '')
+      setKgBrutoEnvase(item.kgBrutoEnvase ?? '')
     } else {
       setTipo('MATERIAL_EMBALAJE')
       setCodigo('')
@@ -85,6 +91,9 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setValorEstandar('')
       setStockCritico('')
       setActivo(true)
+      setEtiqueta('')
+      setKgNetoEnvase('')
+      setKgBrutoEnvase('')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item?.id])
@@ -105,6 +114,9 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
         valorEstandar: valorEstandar ? Number(valorEstandar) : null,
         stockCritico: stockCritico ? Number(stockCritico) : null,
         activo,
+        etiqueta: tipo === 'EMBALAJE' ? (etiqueta.trim() || null) : null,
+        kgNetoEnvase: tipo === 'EMBALAJE' && kgNetoEnvase ? Number(kgNetoEnvase) : null,
+        kgBrutoEnvase: tipo === 'EMBALAJE' && kgBrutoEnvase ? Number(kgBrutoEnvase) : null,
       }
       if (isEdit) {
         return articulosService.update(item!.id, payload)
@@ -218,6 +230,25 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
               <Input type='number' step='0.001' value={stockCritico} onChange={(e) => setStockCritico(e.target.value)} />
               <p className='text-xs text-muted-foreground'>Este artículo controla stock (Promedio Ponderado).</p>
             </div>
+          )}
+
+          {tipo === 'EMBALAJE' && (
+            <>
+              <div className='space-y-1.5'>
+                <Label>Etiqueta</Label>
+                <Input value={etiqueta} onChange={(e) => setEtiqueta(e.target.value)} placeholder='Ej: Standard' />
+              </div>
+              <div className='grid grid-cols-2 gap-3'>
+                <div className='space-y-1.5'>
+                  <Label>Kg Neto envase</Label>
+                  <Input type='number' step='0.001' value={kgNetoEnvase} onChange={(e) => setKgNetoEnvase(e.target.value)} />
+                </div>
+                <div className='space-y-1.5'>
+                  <Label>Kg Bruto envase</Label>
+                  <Input type='number' step='0.001' value={kgBrutoEnvase} onChange={(e) => setKgBrutoEnvase(e.target.value)} />
+                </div>
+              </div>
+            </>
           )}
 
           <div className='flex items-center gap-2'>

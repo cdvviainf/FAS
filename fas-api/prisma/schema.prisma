@@ -171,8 +171,6 @@ model Productor {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
-
-  ordenesCompra OrdenCompra[]
 }
 
 model Cliente {
@@ -215,79 +213,9 @@ model VariedadLegacy {
   activo     Boolean        @default(true)
 
   @@unique([nombre, especieId])
-  ordenesCompra OrdenCompraItem[]
   stockLotes    StockLote[]
 
   @@map("legacy_variedades")
-}
-
-// ─── COMPRAS ─────────────────────────────────────────────────────────────────
-
-model OrdenCompra {
-  id            String      @id @default(cuid())
-  numero        String      @unique
-  productorId   String
-  productor     Productor   @relation(fields: [productorId], references: [id])
-  temporada     String
-  fechaEmision  DateTime
-  fechaEntrega  DateTime?
-  estado        OcEstado    @default(BORRADOR)
-  observaciones String?
-  montoTotal    Decimal     @db.Decimal(18, 4)
-  aprobadoPor   String?
-  aprobadoAt    DateTime?
-  createdBy     String
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  deletedAt     DateTime?
-
-  items      OrdenCompraItem[]
-  pagos      PagoProductor[]
-  stockLotes StockLote[]
-}
-
-enum OcEstado {
-  BORRADOR
-  ENVIADA
-  APROBADA
-  RECIBIDA_PARCIAL
-  RECIBIDA_TOTAL
-  ANULADA
-}
-
-model OrdenCompraItem {
-  id              String         @id @default(cuid())
-  ordenCompraId   String
-  ordenCompra     OrdenCompra    @relation(fields: [ordenCompraId], references: [id])
-  variedadId      String
-  variedad        VariedadLegacy @relation(fields: [variedadId], references: [id])
-  calibre         String?
-  categoria       String?
-  unidad          String      @default("CAJA")
-  cantidadPactada Decimal     @db.Decimal(18, 4)
-  precioUnitario  Decimal     @db.Decimal(18, 4)
-  montoTotal      Decimal     @db.Decimal(18, 4)
-}
-
-model PagoProductor {
-  id            String      @id @default(cuid())
-  ordenCompraId String
-  ordenCompra   OrdenCompra @relation(fields: [ordenCompraId], references: [id])
-  fecha         DateTime
-  monto         Decimal     @db.Decimal(18, 4)
-  moneda        String      @default("CLP")
-  tipoPago      TipoPago
-  referencia    String?
-  observaciones String?
-  createdBy     String
-  createdAt     DateTime    @default(now())
-}
-
-enum TipoPago {
-  TRANSFERENCIA
-  CHEQUE
-  EFECTIVO
-  OTRO
 }
 
 // ─── OPERACIONES / STOCK ─────────────────────────────────────────────────────
@@ -295,8 +223,6 @@ enum TipoPago {
 model StockLote {
   id              String        @id @default(cuid())
   codigo          String        @unique
-  ordenCompraId   String?
-  ordenCompra     OrdenCompra?  @relation(fields: [ordenCompraId], references: [id])
   variedadId      String
   variedad        VariedadLegacy @relation(fields: [variedadId], references: [id])
   temporada       String
@@ -656,6 +582,7 @@ model Especie {
   conceptosLiquidacion    ConceptoLiquidacionEspecie[]
   notaVentaDetalles       NotaVentaDetalle[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
+  ordenCompraLineas       OrdenCompraLinea[]
 
   @@map("especies")
 }
@@ -699,6 +626,7 @@ model Variedad {
 
   notaVentaDetalles     NotaVentaDetalle[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
+  ordenCompraLineas     OrdenCompraLinea[]
 
   @@map("variedades")
 }
@@ -722,6 +650,7 @@ model Categoria {
 
   notaVentaDetalles     NotaVentaDetalle[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
+  ordenCompraLineas     OrdenCompraLinea[]
 
   @@map("categorias")
 }
@@ -746,6 +675,8 @@ model Calibre {
   notaVentaDetalleCalibres NotaVentaDetalleCalibre[]
   instructivoEmbalajeDetalleMin InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeCalibreMin")
   instructivoEmbalajeDetalleMax InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeCalibreMax")
+  ordenCompraLineaMin      OrdenCompraLinea[] @relation("OrdenCompraCalibreMin")
+  ordenCompraLineaMax      OrdenCompraLinea[] @relation("OrdenCompraCalibreMax")
 
   @@map("calibres")
 }
@@ -831,6 +762,7 @@ model Moneda {
 
   movimientosCC         MovimientoCuentaCorriente[]
   notasVenta            NotaVenta[]
+  ordenesCompra         OrdenCompra[]
 
   @@map("monedas")
 }
@@ -978,6 +910,8 @@ model Entidad {
   notasVentaComprador   NotaVenta[]           @relation("NotaVentaComprador")
   notasVentaNotify      NotaVenta[]           @relation("NotaVentaNotify")
   notasVentaClienteFinal NotaVenta[]          @relation("NotaVentaClienteFinal")
+  ordenesCompraProductor OrdenCompra[]        @relation("OrdenCompraProductor")
+  ordenesCompraFacturarA OrdenCompra[]        @relation("OrdenCompraFacturarA")
 
   @@index([eliminadoEn])
   @@map("entidades")
@@ -1203,6 +1137,11 @@ model Articulo {
   controlaStock         Boolean      @default(true)     // false si ESTANDAR (R3)
   stockCritico          Decimal?     @db.Decimal(14, 3)
   activo                Boolean      @default(true)
+  // Atributos físicos del embalaje (Orden de Compra hereda estos valores del
+  // artículo elegido en la línea, no los duplica — ver compras.md §4.3).
+  etiqueta              String?
+  kgNetoEnvase          Decimal?     @db.Decimal(10, 3)
+  kgBrutoEnvase         Decimal?     @db.Decimal(10, 3)
 
   documentos            DocumentoArticulo[]
   recetas               Receta[]            @relation("EmbalajeRecetas")
@@ -1211,6 +1150,7 @@ model Articulo {
   movimientosDetalle    MovimientoDetalle[]
   notaVentaDetalles     NotaVentaDetalle[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
+  ordenCompraLineas     OrdenCompraLinea[]
 
   creadoEn              DateTime     @default(now())
   actualizadoEn         DateTime     @updatedAt
@@ -1555,6 +1495,7 @@ model NotaVenta {
 
   detalles         NotaVentaDetalle[]
   instructivosEmbalaje InstructivoEmbalaje[]
+  ordenesCompra OrdenCompra[]
 
   creadoEn         DateTime  @default(now())
   creadoPor        String
@@ -1651,4 +1592,90 @@ model InstructivoEmbalajeDetalle {
 
   @@index([instructivoId])
   @@map("instructivo_embalaje_detalle")
+}
+
+// ─── Compras — Orden de Compra (Docs/compras.md §4.2/§4.3) ──────────────────
+// Alcance mínimo acordado con el usuario: sin informeCalidadId (no se exige
+// Calidad aprobada todavía) y con campos comerciales que el documento real de
+// Agrosan usa y que el spec original no cubría (proveedor, forma/plazos de
+// pago, incoterm, facturar a).
+
+enum EstadoOrdenCompra {
+  BORRADOR
+  EMITIDA
+  RECEPCIONADA
+}
+
+model OrdenCompra {
+  id                 Int               @id @default(autoincrement())
+  numero             String            @unique // OC-{AAAA}-{NNNN}, correlativo por año
+
+  entidadProductorId Int // Entidad tipo PRODUCTOR
+  entidadProductor   Entidad           @relation("OrdenCompraProductor", fields: [entidadProductorId], references: [id])
+  notaVentaId        Int?
+  notaVenta          NotaVenta?        @relation(fields: [notaVentaId], references: [id])
+
+  fecha              DateTime          @default(now())
+  formaPago          String?
+  condicionPagoTexto String?
+  monedaId           Int
+  moneda             Moneda            @relation(fields: [monedaId], references: [id])
+  incotermId         Int? // Parametro genérico (Incoterm de compra) — ver nota en NotaVenta
+  facturarAId        Int?
+  facturarA          Entidad?          @relation("OrdenCompraFacturarA", fields: [facturarAId], references: [id])
+  observaciones      String?
+  estado             EstadoOrdenCompra @default(BORRADOR)
+
+  lineas             OrdenCompraLinea[]
+  cuotasPago         OrdenCompraCuotaPago[]
+
+  creadoEn           DateTime          @default(now())
+  creadoPor          String
+  actualizadoEn      DateTime?         @updatedAt
+  actualizadoPor     String?
+  eliminadoEn        DateTime?
+  eliminadoPor       String?
+
+  @@index([entidadProductorId])
+  @@index([notaVentaId])
+  @@map("ordenes_compra")
+}
+
+model OrdenCompraCuotaPago {
+  id            Int         @id @default(autoincrement())
+  ordenCompraId Int
+  ordenCompra   OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
+
+  porcentaje    Decimal     @db.Decimal(5, 2)
+  plazoDias     Int
+  descripcion   String?
+
+  @@index([ordenCompraId])
+  @@map("orden_compra_cuota_pago")
+}
+
+model OrdenCompraLinea {
+  id              Int         @id @default(autoincrement())
+  ordenCompraId   Int
+  ordenCompra     OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
+
+  especieId       Int
+  especie         Especie     @relation(fields: [especieId], references: [id])
+  variedadId      Int
+  variedad        Variedad    @relation(fields: [variedadId], references: [id])
+  categoriaId     Int
+  categoria       Categoria   @relation(fields: [categoriaId], references: [id])
+  articuloId      Int // FK → Artículo tipo EMBALAJE (etiqueta/pesos se leen del artículo)
+  articulo        Articulo    @relation(fields: [articuloId], references: [id])
+  calibreMinId    Int
+  calibreMin      Calibre     @relation("OrdenCompraCalibreMin", fields: [calibreMinId], references: [id])
+  calibreMaxId    Int
+  calibreMax      Calibre     @relation("OrdenCompraCalibreMax", fields: [calibreMaxId], references: [id])
+
+  cantidadPallets Int
+  cajasPorPallet  Int
+  precioUsdCaja   Decimal     @db.Decimal(14, 4)
+
+  @@index([ordenCompraId])
+  @@map("orden_compra_linea")
 }

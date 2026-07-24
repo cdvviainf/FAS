@@ -56,15 +56,40 @@ Instrucción de qué embalar. **Sin estado propio** — es solo un documento que
 > El detalle usa **artículos maestros** (ej. `UV0001103 — CAJA MARCA AGROSAN ETIQUETA TAIWAN PLÁSTICO`), no descripciones libres.
 
 ### 4.2 OrdenCompra (OC)
-Especificación de la compra. Nace del resultado de la inspección de Calidad (fruta ya embalada y aprobada), no del Instructivo de Embalaje.
+Especificación de la compra.
+
+> **Reconciliación (2026-07-24, implementación real vs. spec original):** el
+> spec original condicionaba la OC al resultado de una inspección de Calidad
+> aprobada (`informeCalidadId → InformeInspeccion`). Ese modelo de Calidad
+> (`InspeccionCaja` y afines, calidad.md) todavía no está implementado — **el
+> usuario confirmó que por ahora no se requiere Calidad aprobada para emitir
+> una OC**; nace de un Cierre Comercial (Nota de Venta) o sin ninguna
+> referencia. El campo `informeCalidadId`/`informeCalidadPdfUrl` se **omite**
+> de esta primera implementación (se agregará cuando exista el modelo de
+> Calidad real). Además, comparando contra un documento real de Agrosan (OC
+> legacy en PDF) se detectó que el modelo original no tenía forma de
+> identificar al productor ni las condiciones comerciales — se agregaron los
+> campos abajo marcados **(nuevo)**.
 
 - `id` (PK)
-- `numero` (correlativo propio)
+- `numero` (correlativo propio, formato `OC-{AAAA}-{NNNN}` por año — CLAUDE.md §7)
+- `entidadProductorId` (FK → Entidad tipo PRODUCTOR) **(nuevo)** — obligatorio; el documento real siempre identifica al productor/proveedor de la compra
 - `notaVentaId` (FK → NotaVenta, **nullable**) — una OC **puede** estar asociada a un Cierre o no existir Cierre (OC suelta permitida). *Ligar una OC suelta a un Cierre a posteriori: flujo/UX diferido (ver §10).*
-- `informeCalidadId` (FK → InformeInspeccion) — trazabilidad
-- `informeCalidadPdfUrl` (path/URL al PDF del informe)
+- `formaPago` (texto libre) **(nuevo)**
+- `condicionPagoTexto` (texto libre, explicación de la condición de pago) **(nuevo)**
+- `monedaId` (FK → Moneda) **(nuevo)**
+- `incotermId` (Parametro genérico, sin TipoParametro aún — mismo patrón que `clausulaVentaId` en ventas.md) **(nuevo)**
+- `facturarAId` (FK → Entidad, nullable) **(nuevo)**
+- `observaciones` **(nuevo)**
 - `estado` (ver §8)
-- `createdAt`, `createdBy`
+- `creadoEn`, `creadoPor`
+
+#### 4.2.1 OrdenCompraCuotaPago **(nuevo)**
+El pago puede ser en cuotas (ej. "80% a 30 días, 20% a 60 días"). Detalle 0..N líneas:
+- `ordenCompraId` (FK → OrdenCompra)
+- `porcentaje` (Decimal) — la suma de todas las cuotas de una OC debe ser 100%
+- `plazoDias` (Int)
+- `descripcion` (texto libre, opcional)
 
 ### 4.3 OrdenCompraLinea
 La OC es **multilínea**. Cada línea es una combinación completa de características + rango de calibre + cantidades + precio.
@@ -76,6 +101,13 @@ La OC es **multilínea**. Cada línea es una combinación completa de caracterí
 - `cantidadPallets` (Int)
 - `cajasPorPallet` (Int) — usado para calcular el total esperado (`cantidadPallets × cajasPorPallet`); **no** es restricción por pallet individual
 - `precioUsdCaja` (Decimal) — **precio de compra** (lo que paga Agrosan). Alimenta Costos (ver §10)
+
+> **Etiqueta y peso del envase (2026-07-24):** un documento real de Agrosan
+> muestra "Etiqueta" y "Kg Neto/Bruto Envase" por línea. Se confirmó con el
+> usuario que son **atributos del Artículo** (materiales.md), no de la línea
+> de OC — la línea los hereda del artículo elegido, sin duplicarlos.
+> `Articulo` gana los campos `etiqueta`, `kgNetoEnvase`, `kgBrutoEnvase`
+> (opcionales, aplican a artículos tipo EMBALAJE).
 
 ### 4.4 Recepcion
 Módulo único, dos modos según presencia de OC. Una Recepción se valida contra **una** OC o contra **ninguna** (nunca varias).
