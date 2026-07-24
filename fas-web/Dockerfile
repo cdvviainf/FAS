@@ -9,9 +9,12 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# NEXT_PUBLIC_API_URL se embebe en el bundle — debe pasarse como build arg en Coolify
+# NEXT_PUBLIC_API_URL y NEXT_PUBLIC_APP_URL se embeben en el bundle — deben
+# pasarse como build arg en Coolify (ver docker-compose.demo.yml)
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV BUILD_STANDALONE=true
 ENV NEXT_PUBLIC_SENTRY_DISABLED=true
 ENV NEXT_TELEMETRY_DISABLED=1

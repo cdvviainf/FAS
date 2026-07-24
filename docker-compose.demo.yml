@@ -9,6 +9,12 @@
 #
 # Build args para Coolify (necesarios para el build de fas-web):
 #   NEXT_PUBLIC_API_URL → URL pública de la API, ej: https://api-fas.tudominio.cl
+#   NEXT_PUBLIC_APP_URL (= WEB_PUBLIC_URL) → URL pública del propio frontend.
+#     Usada por el cliente de Better Auth (src/lib/auth-client.ts) para armar
+#     las requests de login/sesión. Si falta, el bundle cae al default
+#     'http://localhost:3000' y el login queda roto en cualquier navegador
+#     que no tenga algo corriendo en su propio localhost:3000 (bug real
+#     detectado 2026-07-24, ver Docs/Hallazgos).
 ################################################################################
 
 services:
@@ -78,12 +84,17 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_APP_URL: ${WEB_PUBLIC_URL}
     container_name: fas_web
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       NODE_ENV: production
+      # Server-side only (sin prefijo NEXT_PUBLIC_): usado por
+      # src/app/api/auth/[...all]/route.ts para llegar a la API por la red
+      # interna de Docker en vez de rebotar por la URL pública.
+      INTERNAL_API_URL: http://api:3001
     depends_on:
       - api
 
