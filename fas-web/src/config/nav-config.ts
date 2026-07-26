@@ -57,7 +57,7 @@ export const navGroups: NavGroup[] = [
         icon: 'ventas',
         isActive: false,
         items: [
-          { title: 'Cierre Comercial',   url: '/dashboard/ventas/notas',     icon: 'forms'   },
+          { title: 'Cierre Comercial',   url: '/dashboard/ventas/cierre',     icon: 'forms'   },
           { title: 'Embarques',         url: '/dashboard/ventas/embarques',  icon: 'post'    },
           { title: 'Cobranza / CRM',    url: '/dashboard/ventas/cobranza',   icon: 'billing' },
           { title: 'Reclamos',          url: '/dashboard/ventas/reclamos',   icon: 'warning' }

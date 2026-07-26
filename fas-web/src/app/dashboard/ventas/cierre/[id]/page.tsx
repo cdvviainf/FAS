@@ -2,7 +2,7 @@ import PageContainer from '@/components/layout/page-container'
 import { NotaVentaForm } from '@/features/ventas/notas-venta/components/nota-venta-form'
 
 export const metadata = {
-  title: 'FAS — Editar Nota de Venta',
+  title: 'FAS — Editar Cierre Comercial',
 }
 
 type PageProps = {
@@ -15,7 +15,7 @@ export default async function Page(props: PageProps) {
 
   return (
     <PageContainer
-      pageTitle='Nota de Venta'
+      pageTitle='Cierre Comercial'
       pageDescription='Modifica el encabezado o agrega líneas de fruta comprometida.'
     >
       <div className='max-w-4xl'>

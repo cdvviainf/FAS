@@ -47,9 +47,9 @@ export function NotaVentaListingClient() {
       {puedeEscribir && (
         <div className='flex justify-end'>
           <Button asChild>
-            <Link href='/dashboard/ventas/notas/nueva'>
+            <Link href='/dashboard/ventas/cierre/nueva'>
               <Icons.add className='mr-2 h-4 w-4' />
-              Nueva Nota de Venta
+              Nuevo Cierre Comercial
             </Link>
           </Button>
         </div>

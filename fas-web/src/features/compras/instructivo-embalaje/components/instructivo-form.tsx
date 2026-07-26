@@ -131,7 +131,7 @@ export function InstructivoEmbalajeForm() {
 
   function validar(): boolean {
     const e: Record<string, string> = {}
-    if (!notaVentaId) e.notaVentaId = 'La Nota de Venta (Cierre Comercial) es requerida'
+    if (!notaVentaId) e.notaVentaId = 'El Cierre Comercial es requerido'
     if (detalle.length === 0) e.detalle = 'Debe agregar al menos una línea'
     setErrors(e)
     return Object.keys(e).length === 0
@@ -150,9 +150,9 @@ export function InstructivoEmbalajeForm() {
         </CardHeader>
         <CardContent className='space-y-4'>
           <div className='space-y-1.5'>
-            <Label>Cierre Comercial (Nota de Venta) <span className='text-destructive'>*</span></Label>
+            <Label>Cierre Comercial <span className='text-destructive'>*</span></Label>
             <Select value={notaVentaId ? String(notaVentaId) : ''} onValueChange={(v) => setNotaVentaId(Number(v))}>
-              <SelectTrigger><SelectValue placeholder='Seleccionar Nota de Venta...' /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder='Seleccionar Cierre Comercial...' /></SelectTrigger>
               <SelectContent>
                 {(notasVentaData?.data ?? []).map((nv) => (
                   <SelectItem key={nv.id} value={String(nv.id)}>Folio {nv.folio} — {nv.cliente.descripcion}</SelectItem>

@@ -9,7 +9,7 @@ export default function Page() {
   return (
     <PageContainer
       pageTitle='Cierre Comercial'
-      pageDescription='Notas de Venta: encabezado y detalle de fruta comprometida con el cliente.'
+      pageDescription='Cierre Comercial: encabezado y detalle de fruta comprometida con el cliente.'
     >
       <NotaVentaListingClient />
     </PageContainer>

@@ -33,11 +33,11 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
   const deleteMutation = useMutation({
     mutationFn: () => notasVentaService.remove(notaVenta.id),
     onSuccess: () => {
-      toast.success('Nota de Venta eliminada')
+      toast.success('Cierre Comercial eliminado')
       setDeleteOpen(false)
       queryClient.invalidateQueries({ queryKey: notasVentaKeys.all })
     },
-    onError: (e: Error) => toast.error(e.message || 'Error al eliminar la Nota de Venta'),
+    onError: (e: Error) => toast.error(e.message || 'Error al eliminar el Cierre Comercial'),
   })
 
   return (
@@ -57,7 +57,7 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align='end'>
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => router.push(`/dashboard/ventas/notas/${notaVenta.id}`)}>
+          <DropdownMenuItem onClick={() => router.push(`/dashboard/ventas/cierre/${notaVenta.id}`)}>
             <Icons.edit className='mr-2 h-4 w-4' />
             {puedeEscribir ? 'Editar' : 'Ver detalle'}
           </DropdownMenuItem>

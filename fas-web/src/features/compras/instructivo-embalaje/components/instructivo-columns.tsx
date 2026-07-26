@@ -30,7 +30,7 @@ export const instructivoColumns: ColumnDef<InstructivoEmbalajeListItem>[] = [
   },
   {
     id: 'notaVenta',
-    header: 'Nota de Venta',
+    header: 'Cierre Comercial',
     cell: ({ row }) => <span className='font-mono text-sm'>Folio {row.original.notaVenta.folio}</span>,
     size: 140,
   },

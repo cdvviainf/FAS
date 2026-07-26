@@ -205,21 +205,21 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   const createMutation = useMutation({
     mutationFn: (data: NotaVentaCreateInput) => notasVentaService.create(data),
     onSuccess: (res) => {
-      toast.success(`Nota de Venta creada — Folio ${res.data.folio}`)
+      toast.success(`Cierre Comercial creado — Folio ${res.data.folio}`)
       queryClient.invalidateQueries({ queryKey: notasVentaKeys.all })
-      router.push(`/dashboard/ventas/notas/${res.data.id}`)
+      router.push(`/dashboard/ventas/cierre/${res.data.id}`)
     },
-    onError: (e: Error) => toast.error(e.message || 'Error al crear la Nota de Venta'),
+    onError: (e: Error) => toast.error(e.message || 'Error al crear el Cierre Comercial'),
   })
 
   const updateMutation = useMutation({
     mutationFn: (data: NotaVentaCreateInput) => notasVentaService.update(notaVentaId!, data),
     onSuccess: () => {
-      toast.success('Nota de Venta actualizada')
+      toast.success('Cierre Comercial actualizado')
       queryClient.invalidateQueries({ queryKey: notasVentaKeys.all })
       queryClient.invalidateQueries({ queryKey: notasVentaKeys.detail(notaVentaId!) })
     },
-    onError: (e: Error) => toast.error(e.message || 'Error al actualizar la Nota de Venta'),
+    onError: (e: Error) => toast.error(e.message || 'Error al actualizar el Cierre Comercial'),
   })
 
   const addDetalleMutation = useMutation({
@@ -292,7 +292,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     <div className='space-y-6'>
       <Card>
         <CardHeader>
-          <CardTitle>{isEdit ? `Nota de Venta — Folio ${notaVenta?.data.folio}` : 'Nueva Nota de Venta'}</CardTitle>
+          <CardTitle>{isEdit ? `Cierre Comercial — Folio ${notaVenta?.data.folio}` : 'Nuevo Cierre Comercial'}</CardTitle>
         </CardHeader>
         <CardContent className='space-y-4'>
           <div className='grid gap-4 sm:grid-cols-2'>
@@ -429,9 +429,9 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
           </div>
 
           <div className='flex justify-end gap-2'>
-            <Button variant='outline' onClick={() => router.push('/dashboard/ventas/notas')} disabled={isPending}>Cancelar</Button>
+            <Button variant='outline' onClick={() => router.push('/dashboard/ventas/cierre')} disabled={isPending}>Cancelar</Button>
             <Button onClick={handleSubmit} isLoading={isPending}>
-              <Icons.check className='mr-1 h-4 w-4' /> {isEdit ? 'Guardar cambios' : 'Crear Nota de Venta'}
+              <Icons.check className='mr-1 h-4 w-4' /> {isEdit ? 'Guardar cambios' : 'Crear Cierre Comercial'}
             </Button>
           </div>
         </CardContent>
