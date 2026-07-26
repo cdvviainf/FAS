@@ -80,6 +80,19 @@ de implementación.
 Embarque, Instructivo de Embarque y Solicitud de Reserva permanecen fuera de
 esta revisión, conforme a las preguntas abiertas declaradas en `ventas.md`.
 
+## Regresión Cierre Comercial — Codex (2026-07-25)
+
+El cambio directo del módulo amplía el límite máximo del listado de 100 a 500
+registros para alimentar selectores dependientes. No altera creación, edición,
+validaciones, correlativo ni permisos.
+
+- Suite de integración completa: 71/71 OK.
+- Prisma y 30 migraciones: OK.
+- Builds API/web: OK.
+- Las rutas de Cierre Comercial continúan presentes.
+
+**Resultado:** sin regresiones nuevas detectadas en Cierre Comercial.
+
 ## Verificación runtime en Docker (Claude, 2026-07-24)
 
 Al probar el flujo real contra los contenedores de desarrollo (`fas_api`,

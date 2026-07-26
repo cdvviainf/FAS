@@ -96,7 +96,7 @@ function RegionQuickDialog({
 
 export function RegionQuickCreate({ onCreated }: RegionQuickCreateProps) {
   const [open, setOpen] = useState(false)
-  const puedeEscribir = usePuedeEscribir('config.regiones')
+  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
 
   if (!puedeEscribir) return null
 

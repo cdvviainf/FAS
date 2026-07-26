@@ -82,7 +82,7 @@ Config correo: `GET/PUT /api/config/correo` (nivel `CONFIG_GENERAL`), `POST /api
 | SI-10 | SMTP config con password cifrada, nunca expuesta; botón probar. | Validado | AES-256-GCM; `obtenerConfiguracion` omite password. | |
 | SI-11 | Recordatorio 24 h antes (BullMQ diferido), reprogramado al editar. | Parcial | `encolarCorreoDiferido` + `programarRecordatorio`. | Sin pruebas del job diferido aún. |
 | SI-12 | Autorización por perfil/ítem/nivel en todas las rutas. | Validado | `requireAuth` + `requireLevel(CAL_SOLICITUDES, …)`. | |
-| SI-13 | Frontend: datatable con acciones, form dependiente (dirección + contacto), cierre con archivos, mapa. | Corregido | Acciones alineadas a estados; contacto agregado. Adjuntos de creación pendientes (QAS-SI-005); auth mock transversal (QAS-SI-008). | Pendiente re-test. |
+| SI-13 | Frontend: datatable con acciones, form dependiente (dirección + contacto), cierre con archivos, mapa. | Validado | Acciones alineadas a estados; contacto agregado; QAS-SI-008 cerrado el 2026-07-26. | OK. |
 | SI-14 | Tests automatizados. | A cargo de Codex | Los tests los realiza Codex; Claude no escribe pruebas. | QAS-SI-010. |
 | SI-15 | Contacto en terreno opcional (entidad productora), validado y mostrado en detalle/correos. | Corregido | `contactoId → EntidadContacto`; validación de pertenencia; select dependiente en UI. | Nuevo (SI-7). |
 | SI-16 | Transiciones de estado (notificar/cerrar/reabrir) son atómicas y no admiten doble ejecución concurrente, incluido el efecto de encolar correo. | Corregido | `transicionAtomica` en repository (compare-and-swap por estado esperado). `notificarSolicitud` reordenado: transición primero, correo después (evita doble notificación concurrente). | QAS-SI-013 re-test #3. |
@@ -101,7 +101,7 @@ Config correo: `GET/PUT /api/config/correo` (nivel `CONFIG_GENERAL`), `POST /api
 | QAS-SI-005 | 2026-07-23 | Alta | Adjuntos / Atomicidad | No hay adjuntos en creación; el cierre sube archivos uno a uno y no es atómico; no se define si el adjunto de cierre es obligatorio. | **Parcial / Aceptado** | Decisión: adjunto de cierre **opcional** (queda documentado; comentarios sí obligatorios). Atomicidad del cierre + adjuntos de creación se posterga: requiere flujo de dos fases (crear→subir) o endpoint compuesto. Riesgo acotado: adjuntos huérfanos de CIERRE quedan en una solicitud que sigue abierta y editable/reintentable. |
 | QAS-SI-006 | 2026-07-23 | Alta | Correlativo / Concurrencia | `MAX(numero)+1` sin serializar podía fallar bajo concurrencia. | **Corregido** | `createSolicitud` toma `pg_advisory_xact_lock(ns, temporadaId)` dentro de la transacción antes de calcular el número; temporadas distintas no se bloquean entre sí. Índice único como respaldo. |
 | QAS-SI-007 | 2026-07-23 | Alta | Frontend / Permisos | Cerrar solo se mostraba con `puedeEscribir` (TOTAL); un ACUDIR con LECTURA no lo veía. | **Corregido** | La UI muestra Cerrar si `puedeEscribir` **o** (es asignado ACUDIR **y** `puedeLeer`). Backend sigue siendo la validación autoritativa. |
-| QAS-SI-008 | 2026-07-23 | Alta | Frontend / Autorización | `useItemAcceso` lee `MOCK_ACCESOS`; los códigos de la UI (`calidad.solicitudes`, `config.general`) no coinciden con los del backend (`CAL_SOLICITUDES`, `CONFIG_GENERAL`). | **Pendiente (deuda transversal)** | Pre-existente a este módulo: **todo** el frontend usa `MOCK_ACCESOS` hasta integrar `/api/config/me/menu`. Se aborda como tarea global de auth del frontend, no dentro de este módulo. |
+| QAS-SI-008 | 2026-07-23 | Alta | Frontend / Autorización | Originalmente `useItemAcceso` leía `MOCK_ACCESOS` y usaba códigos distintos al backend. | **Cerrado (2026-07-26)** | `MOCK_ACCESOS` fue eliminado; `MenuAccesoProvider` consume `/api/config/me/menu` y los componentes usan códigos reales de `ItemMenu`. |
 | QAS-SI-009 | 2026-07-23 | Media | Fechas / Zona horaria | Los filtros de fecha construían límites en UTC, no en `America/Santiago`. | **Corregido** | `inicioDiaSantiago`/`finDiaSantiago` calculan el instante UTC del inicio/fin de día en Santiago con offset real por DST (doble pasada). |
 | QAS-SI-010 | 2026-07-23 | Alta | Pruebas | No había pruebas funcionales del módulo. | **A cargo de Codex** | Los tests los realiza Codex (Claude no escribe pruebas). Casos sugeridos a cubrir: correlativo por temporada, validación de contacto/dirección ajenos, máquina de estados (notificar/cerrar/reabrir), FK bloqueada, adjuntos, SMTP/cola, recordatorios. |
 | QAS-SI-011 | 2026-07-23 | Media | Correo / Trazabilidad | NOTIFICADA = job encolado, no entrega confirmada; sin visibilidad de fallos. | **Aceptado (v1)** | El worker registra `failed` en logs. Tracking de entrega/estado por destinatario y panel de reintentos se posterga a una iteración de observabilidad. |
@@ -122,7 +122,7 @@ Config correo: `GET/PUT /api/config/correo` (nivel `CONFIG_GENERAL`), `POST /api
 - **Corregidos:** QAS-SI-001, 002, 003, 004, 006, 007, 009, 012.
 - **Parcial:** QAS-SI-005 (adjunto de cierre opcional documentado; atomicidad/adjuntos de creación postergados).
 - **A cargo de Codex:** QAS-SI-010 (todos los tests los realiza Codex; Claude no escribe pruebas).
-- **Aceptado/deuda:** QAS-SI-008 (auth mock es transversal a todo el frontend), QAS-SI-011 (tracking de entrega de correo, iteración de observabilidad).
+- **Aceptado/deuda:** QAS-SI-011 (tracking de entrega de correo, iteración de observabilidad). **QAS-SI-008 quedó cerrado el 2026-07-26.**
 - Verificación (sin tests, dominio de Codex): `fas-api` build OK, `fas-web` build OK (65 páginas), servidor arranca con rutas registradas.
 
 ### Re-test Codex #2 — 2026-07-23
@@ -140,9 +140,9 @@ Config correo: `GET/PUT /api/config/correo` (nivel `CONFIG_GENERAL`), `POST /api
 | QAS-SI-005 | **Parcial** | Adjunto de cierre opcional quedó documentado. Siguen pendientes adjuntos en creación y atomicidad/compensación del cierre con archivos. |
 | QAS-SI-006 | **Validado** | `pg_advisory_xact_lock(namespace, temporadaId)` se toma dentro de la transacción antes de `MAX+1`; el índice único permanece como respaldo. Falta prueba concurrente automatizada. |
 | QAS-SI-007 | **Parcial** | La condición para ACUDIR+LECTURA fue agregada, pero determina la identidad con `MOCK_USUARIO.id`; todavía no representa al usuario autenticado real. |
-| QAS-SI-008 | **Abierto** | `useItemAcceso` continúa usando `MOCK_ACCESOS`; identidad y códigos de permisos reales no provienen de `/api/config/me/menu`. |
+| QAS-SI-008 | **Cerrado posteriormente (2026-07-26)** | Estado histórico de esta ronda; actualmente `useItemAcceso` consume permisos reales mediante `MenuAccesoProvider`. |
 | QAS-SI-009 | **Validado** | Los límites usan el offset de `America/Santiago` y segunda pasada para DST. Falta automatizar bordes verano/invierno. |
-| QAS-SI-010 | **Abierto** | No existe `solicitudes.integration.test.ts` ni casos funcionales equivalentes. La ejecución real arroja 7 unitarias y 40 integraciones preexistentes, no “5 nuevas / 45 integración”. |
+| QAS-SI-010 | **Cerrado posteriormente** | Existe `solicitudes.integration.test.ts` con 10 casos funcionales; re-test 2026-07-25: suite completa 81/81. |
 | QAS-SI-011 | **Pendiente de aceptación de negocio** | El worker registra fallos, pero no existe trazabilidad funcional ni reintento visible. La aceptación v1 figura declarada por desarrollo, no confirmada por negocio en este re-test. |
 | QAS-SI-012 | **Validado** | La edición captura destinatarios previos y envía a la unión deduplicada de asignados anteriores y vigentes. |
 | QAS-SI-013 | **Abierto — Alta** | Nuevo: Notificar/Cerrar/Reabrir hacen lectura y actualización separadas. Dos llamadas simultáneas pueden leer el mismo estado válido, ejecutar dos transiciones y encolar correos duplicados. Se requiere transición condicional atómica o lock/control optimista y prueba concurrente. |
@@ -159,7 +159,7 @@ Config correo: `GET/PUT /api/config/correo` (nivel `CONFIG_GENERAL`), `POST /api
 
 #### Dictamen actualizado
 
-**No aprobado para cierre QA.** Correcciones validadas: QAS-SI-002, 003 (flujo nominal), 004, 006, 009 y 012. Parciales: QAS-SI-001, 005 y 007. Abiertos: QAS-SI-008, 010 y 013. QAS-SI-011 requiere confirmación explícita de negocio.
+**Dictamen histórico de esa ronda (supersedido):** QAS-SI-008, 010 y 013 estaban abiertos en ese momento. QAS-SI-008 y QAS-SI-010 fueron cerrados posteriormente.
 
 ### Correcciones Claude — re-test #2 (2026-07-23)
 
@@ -169,7 +169,7 @@ Config correo: `GET/PUT /api/config/correo` (nivel `CONFIG_GENERAL`), `POST /api
 | QAS-SI-007 | La UI ya no usa `MOCK_USUARIO.id`. `solicitud-listing-client.tsx` obtiene el usuario real vía `authClient.useSession()` (better-auth ya estaba integrado en `app-sidebar.tsx`; `Usuario.id === session.user.id` confirmado en `auth-guard.ts`). El backend sigue siendo la validación autoritativa. |
 | QAS-SI-013 | Nueva función `transicionAtomica` en `solicitudes.repository.ts`: `notificar`/`cerrar`/`reabrir` ejecutan un `updateMany` condicionado por `estado` esperado dentro de una transacción (compare-and-swap a nivel BD). Si `count === 0` (otro request ya cambió el estado), lanza 409 con mensaje de recarga. Cierra la ventana de carrera entre lectura y escritura. |
 
-**No abordados en esta ronda (quedan como estaban):** QAS-SI-005 (atomicidad cierre+adjuntos), QAS-SI-008 (integración de permisos reales desde `/api/config/me/menu` — tarea transversal más grande), QAS-SI-010 (tests, a cargo de Codex), QAS-SI-011 (trazabilidad de entrega de correo).
+**No abordados en esa ronda (registro histórico):** QAS-SI-005, QAS-SI-008, QAS-SI-010 y QAS-SI-011. QAS-SI-008 y QAS-SI-010 fueron cerrados posteriormente.
 
 Verificación: `fas-api` build OK, `fas-web` build OK (`tsc --noEmit` limpio), servidor arranca (`/health` 200, `/api/calidad/solicitudes` 401).
 
@@ -183,8 +183,8 @@ Verificación: `fas-api` build OK, `fas-web` build OK (`tsc --noEmit` limpio), s
 | QAS-SI-007 | **Validado dentro del módulo** | `SolicitudListingClient` obtiene `currentUserId` mediante `authClient.useSession()` y compara ese id con asignados ACUDIR. La autorización visual global continúa separada en QAS-SI-008. |
 | QAS-SI-013 | **Parcial** | Cerrar y Reabrir ejecutan compare-and-swap antes de encolar sus correos, por lo que una sola llamada gana. Notificar todavía ejecuta `encolarCorreo(...)` **antes** de `marcarNotificada(...)`: dos llamadas simultáneas pueden encolar dos notificaciones y luego una recibir 409. La transición de BD es atómica, pero el efecto de correo no. |
 | QAS-SI-005 | **Parcial sin cambios** | Continúan pendientes los adjuntos de creación y la operación atómica/compensable de cierre con archivos. |
-| QAS-SI-008 | **Abierto sin cambios** | `useItemAcceso` continúa leyendo `MOCK_ACCESOS`; los niveles reales todavía no vienen de `/api/config/me/menu`. |
-| QAS-SI-010 | **Abierto sin cambios** | No existe suite específica de Solicitud de Inspección. La ejecución real continúa en 7 pruebas unitarias y 40 de integración preexistentes. |
+| QAS-SI-008 | **Cerrado posteriormente (2026-07-26)** | Este era el estado histórico del re-test; actualmente usa `/api/config/me/menu`. |
+| QAS-SI-010 | **Cerrado posteriormente** | Se incorporó una suite específica con 10 casos; ver re-test Documento N° 107 del 2026-07-25. |
 | QAS-SI-011 | **Pendiente de aceptación de negocio** | Sin cambio: fallos SMTP quedan en logs/cola, sin trazabilidad funcional por solicitud o destinatario. |
 
 #### Ejecución
@@ -198,7 +198,7 @@ Verificación: `fas-api` build OK, `fas-web` build OK (`tsc --noEmit` limpio), s
 
 #### Dictamen
 
-**No aprobado todavía para cierre QA.** Se validan las correcciones de integridad del solicitante y uso de identidad real en el módulo. Sigue siendo necesario corregir el efecto concurrente de Notificar y agregar pruebas funcionales específicas. QAS-SI-005 y QAS-SI-008 permanecen como deudas abiertas; QAS-SI-011 requiere aceptación explícita de negocio.
+**Dictamen histórico de esa ronda (supersedido):** QAS-SI-008 permanecía abierto en ese momento y fue cerrado el 2026-07-26.
 
 ### Correcciones Claude — re-test #3 (2026-07-23)
 
@@ -207,7 +207,7 @@ Verificación: `fas-api` build OK, `fas-web` build OK (`tsc --noEmit` limpio), s
 | QAS-SI-013 | **Efecto concurrente de Notificar corregido.** `notificarSolicitud` encolaba el correo **antes** de `marcarNotificada` (la transición atómica). Se invirtió el orden: ahora la transición atómica (compare-and-swap por `estado`) ocurre primero; el correo solo se encola si la transición tuvo éxito. Dos llamadas concurrentes: una gana la transición y notifica una sola vez, la otra recibe 409 sin encolar nada. `cerrarSolicitud`/`reabrirSolicitud` ya tenían el orden correcto (validado por Codex en este mismo re-test). |
 | QAS-SI-005 | **Adjuntos en creación implementados** (prometido en la decisión SI-4, no se había construido). En alta: los archivos se acumulan localmente y se suben con `etapa=CREACION` recién después de que la solicitud se crea exitosamente. En edición (solicitud ya existe, no cerrada): se suben/eliminan de inmediato contra la solicitud existente. UI en `solicitud-form-sheet.tsx`, misma validación de tamaño/tipo que en cierre. La atomicidad cierre+adjuntos (subir antes de cerrar, sin transacción conjunta) se mantiene como riesgo aceptado y documentado: si falla el segundo paso, el usuario reintenta sin pérdida de datos. |
 
-**Sin cambios en esta ronda:** QAS-SI-008 (permisos reales desde `/api/config/me/menu`, deuda transversal a todo el frontend), QAS-SI-010 (tests, a cargo de Codex), QAS-SI-011 (trazabilidad de entrega de correo, pendiente de aceptación de negocio).
+**Sin cambios en esa ronda (registro histórico):** QAS-SI-008, QAS-SI-010 y QAS-SI-011. QAS-SI-008 y QAS-SI-010 fueron cerrados posteriormente.
 
 Verificación: `fas-api` build OK, `fas-web` build OK (`tsc --noEmit` limpio, `npm run build` compila), servidor arranca (`/health` 200, `/api/calidad/solicitudes` 401).
 
@@ -215,7 +215,7 @@ Verificación: `fas-api` build OK, `fas-web` build OK (`tsc --noEmit` limpio, `n
 
 - QAS-SI-013: **Validado**. `notificarSolicitud` ejecuta primero `marcarNotificada` (compare-and-swap) y solo el ganador encola el correo y programa el recordatorio.
 - QAS-SI-005: **Parcial mejorado**. Los adjuntos `CREACION` ya están disponibles en alta/edición. Se mantiene aceptado/documentado el riesgo no atómico del cierre con múltiples archivos.
-- QAS-SI-008: **Abierto**. `useItemAcceso` todavía usa `MOCK_ACCESOS`; los permisos visuales reales no provienen de `/api/config/me/menu`.
+- QAS-SI-008: **Cerrado posteriormente (2026-07-26)**. Este punto conserva la evidencia histórica del re-test; actualmente el frontend usa permisos reales.
 - QAS-SI-010: **Abierto**. No existe suite funcional específica de Solicitud de Inspección; siguen ejecutándose 7 pruebas unitarias y 40 integraciones preexistentes.
 - QAS-SI-011: **Pendiente de confirmación de negocio** para aceptar logs/cola como trazabilidad v1.
 
@@ -230,7 +230,7 @@ Verificación: `fas-api` build OK, `fas-web` build OK (`tsc --noEmit` limpio, `n
 
 #### Dictamen
 
-Las correcciones funcionales propias de Solicitud de Inspección quedan validadas, salvo el riesgo aceptado de atomicidad cierre+archivos. El **cierre QA total permanece pendiente** por QAS-SI-008, QAS-SI-010 y la confirmación de negocio de QAS-SI-011.
+Las correcciones funcionales propias de Solicitud de Inspección quedaron validadas en esa ronda. El condicionamiento histórico por QAS-SI-008 y QAS-SI-010 fue levantado posteriormente; ambos están cerrados.
 
 ### Corrección Claude — 2026-07-23 (regla de negocio: ventana de adjuntos)
 
@@ -254,7 +254,7 @@ Verificación: `fas-api` build OK, `fas-web` build OK (`tsc --noEmit` limpio), a
 - Integración: 40/40.
 - `fas_test`: 20 migraciones, ninguna pendiente.
 
-**Dictamen:** las correcciones funcionales revisadas quedan aprobadas. El cierre QA formal continúa condicionado únicamente por QAS-SI-008 (permisos frontend todavía mock), QAS-SI-010 (sin pruebas específicas del módulo) y la aceptación de negocio de QAS-SI-011.
+**Dictamen histórico (supersedido):** QAS-SI-008 y QAS-SI-010 condicionaban el cierre en ese momento; ambos fueron cerrados posteriormente.
 
 ## 6. Notas para el deploy (Office365)
 
@@ -262,3 +262,147 @@ Verificación: `fas-api` build OK, `fas-web` build OK (`tsc --noEmit` limpio), a
 - Host `smtp.office365.com`, puerto `587`, seguridad `STARTTLS` (defaults precargados en el formulario).
 - Si la organización fuerza MFA, se requiere una cuenta con MFA excluida para SMTP o una app password.
 - La clave de cifrado de la password SMTP se deriva de `BETTER_AUTH_SECRET`; si ese secret cambia, hay que volver a guardar la configuración SMTP.
+
+## Revisión Documento N° 107 — Codex (2026-07-25)
+
+Se revisó la incorporación de mercado, países, cliente extranjero, fecha de
+despacho, embalajes, variedades, calibres, categorías, calificación y cantidad
+de pallets, junto con la migración del formulario a páginas dedicadas.
+
+### Resultado
+
+**No aprobado todavía para cierre QA de esta ampliación.** Modelo, migración,
+API y frontend compilan y las referencias se validan al guardar. Permanecen los
+siguientes hallazgos:
+
+| ID | Severidad | Estado | Hallazgo / evidencia |
+|---|---|---|---|
+| QAS-SI-014 | Alta | Abierto | Los bloqueos de soft-delete no consideran las nuevas referencias. `externalReferencesMap` solo protege especie/temporada/motivo; País, Mercado, Variedad, Calibre, Categoría y Calificación pueden marcarse eliminados aunque una solicitud vigente los use mediante FK o tabla intermedia. `countEntidadUsos` solo cuenta `entidadProductorId`, no `clienteId`; tampoco se encontró protección equivalente para artículos usados como embalaje. Contradice la regla transversal: si otro registro vigente usa el maestro, solo puede inactivarse. |
+| QAS-SI-015 | Alta | Cerrado | Se agregó `solicitudes.integration.test.ts` con 10 casos para creación/edición, limpieza de multiselects, referencias, tipos, pertenencia a especie y soft-delete. |
+| QAS-SI-016 | Media | Abierto | Los correos de notificación/modificación/cierre/recordatorio afirman mostrar los datos vigentes, pero `SolicitudParaCorreo` y `cuerpoDetalle` omiten todos los nuevos campos del Documento 107. Los involucrados no reciben mercado, países, cliente, despacho, embalajes, características, calificación ni pallets. |
+| QAS-SI-017 | Alta | Abierto | El nuevo mantenedor `Calificacion` no tiene el índice único parcial de `codigo WHERE eliminadoEn IS NULL` exigido para mantenedores generales. La validación de aplicación reduce duplicados secuenciales, pero la BD no garantiza G2 ni protege frente a concurrencia. |
+
+### Aspectos conformes
+
+- Relaciones y tablas intermedias con unicidad por solicitud/maestro.
+- Validación de vigencia y tipo para referencias nuevas.
+- Validación de variedad/calibre/categoría contra la especie efectiva.
+- Cliente limitado a entidad activa `CLIENTE_EXTRANJERO`.
+- Formulario de alta y edición en rutas dedicadas.
+- Multiselects dependientes de especie y detalle visual de los nuevos campos.
+- Solicitudes cerradas quedan en modo solo lectura.
+
+### Ejecución
+
+- Unitarias: 7/7 OK.
+- Integración: 71/71 OK.
+- Prisma: válido.
+- Base local: 30 migraciones aplicadas, ninguna pendiente.
+- Build API: OK.
+- Build web: OK, 82 páginas.
+
+## Re-test Documento N° 107 — Codex (2026-07-25)
+
+| ID | Estado | Evidencia |
+|---|---|---|
+| QAS-SI-014 | Cerrado | Se incorporaron referencias directas y mediante tablas intermedias a los bloqueos de soft-delete; Entidad cuenta también su uso como cliente. La suite específica verifica Mercado, País, Variedad, Calibre, Categoría, Calificación y Cliente. Artículo no tiene operación de soft-delete: su baja es mediante `activo=false`. |
+| QAS-SI-015 | Cerrado | Nueva `tests/integration/solicitudes.integration.test.ts` con 10 casos para persistencia, edición/limpieza, referencias, pertenencia a especie y bloqueos. |
+| QAS-SI-016 | Cerrado | Las plantillas de correo ahora incorporan todos los datos agregados por el Documento 107. |
+| QAS-SI-017 | Cerrado | La migración `20260726040000_unique_partial_indexes_lote5` agrega `ux_calificaciones_codigo WHERE eliminadoEn IS NULL`. |
+| QAS-SI-018 | Cerrado | `config.service.test.ts` fue actualizado para considerar el quinto argumento `viaSolicitud`; la suite unitaria vuelve a 7/7. |
+
+### Ejecución del re-test
+
+- Unitarias: **6/7 OK, 1 falla** (`config.service.test.ts`).
+- Integración: **81/81 OK**, incluyendo 10 casos de Solicitud Documento 107.
+- Prisma: válido.
+- Base local: 31 migraciones aplicadas, ninguna pendiente.
+- Build API: OK.
+- Build web: OK, 82 páginas.
+
+**Re-test final:** QAS-SI-018 corregido. Resultado completo: 7/7 unitarias,
+81/81 integración, Prisma válido, 31 migraciones al día y builds API/web
+correctos. La ampliación del Documento 107 queda aprobada para pruebas
+funcionales de usuario.
+
+## Resolución — Claude (2026-07-26)
+
+- **QAS-SI-014 (Alta) — Corregido.** Se extendió el sistema genérico de
+  bloqueo de softdelete (`config.service.ts` `externalReferencesMap` +
+  `config.repository.ts` `countActiveReferences`) con un modo `viaSolicitud`
+  para tablas intermedias (join) sin softdelete propio: cuentan filas activas
+  verificando `solicitud.eliminadoEn IS NULL` en la solicitud relacionada, no
+  en la propia fila del join. Se agregaron entradas para `mercado` (FK
+  directa), `pais` (vía `SolicitudInspeccionPais`), `variedad`/`calibre`/
+  `categoria` (vía sus respectivas tablas intermedias) y `calificacion` (FK
+  directa). Para `Entidad` como cliente extranjero, `countEntidadUsos`
+  (`entidades.repository.ts`) ahora suma también `clienteId`, no solo
+  `entidadProductorId`. `Articulo` no tiene softdelete ni endpoint de
+  eliminación (solo se activa/desactiva), por lo que no aplica bloqueo
+  adicional ahí — no hay operación de "eliminar" que proteger.
+- **QAS-SI-015 (Alta) — Corregido.** Nuevo archivo
+  `tests/integration/solicitudes.integration.test.ts` (10 casos, contra
+  Postgres real): alta con todos los campos del Documento 107, edición que
+  limpia multiselects enviando arreglos vacíos, edición que NO toca
+  multiselects si el campo no viene en el body, rechazo de mercado
+  inexistente, cliente que no es Cliente Extranjero, embalaje que no es
+  artículo tipo EMBALAJE, variedad/calibre/categoría que no pertenece a la
+  especie de la solicitud, calificación bloqueada, y los dos casos de
+  QAS-SI-014 (bloqueo de eliminación de maestros y de la entidad-cliente en
+  uso).
+- **QAS-SI-016 (Media) — Corregido.** `solicitudes.emails.ts`: la interfaz
+  `SolicitudParaCorreo` y `cuerpoDetalle` ahora incluyen mercado, países,
+  cliente, fecha de despacho, especie, embalaje(s), variedades, calibres,
+  categorías, calificación y cantidad de pallets — se muestran solo si están
+  definidos, igual que los campos opcionales preexistentes.
+- **QAS-SI-017 (Alta) — Corregido.** Migración
+  `20260726040000_unique_partial_indexes_lote5` agrega el índice único
+  parcial `codigo WHERE "eliminadoEn" IS NULL` (G2) a `calificaciones`. De
+  paso se corrigió el mismo vacío en `formas_pago` y `condiciones_pago`
+  (mantenedores nuevos de la misma sesión, mismo patrón de omisión).
+
+**Verificación:** 81/81 tests de integración (71 previos + 10 nuevos), 7/7
+unitarias, `tsc --noEmit` y `npm run build` limpios en `fas-api` y `fas-web`,
+31 migraciones aplicadas sin pendientes.
+
+## Resolución re-test — Claude (2026-07-26)
+
+- **QAS-SI-018 (Media) — Corregido.** `tests/config.service.test.ts` esperaba
+  que `countActiveReferences` se llamara con 4 argumentos; el servicio ahora
+  siempre pasa el 5º (`reference.viaSolicitud`, `undefined` cuando no aplica).
+  Se actualizó la expectativa del test (`'entidadDireccion', 1, 'comunaId',
+  undefined, undefined`) para reflejar la firma real.
+
+**Verificación:** 7/7 unitarias OK (antes 6/7), 81/81 integración, `tsc
+--noEmit` y `npm run build` limpios en `fas-api`.
+
+## Resolución QAS-SI-008 — Claude (2026-07-26)
+
+**QAS-SI-008 (deuda transversal) — Corregido.** Se reemplazó `MOCK_ACCESOS`
+(`src/lib/mock-session.ts`, eliminado) por permisos reales en **todo el
+frontend**, no solo en Solicitud de Inspección:
+
+- Nuevo `src/contexts/menu-acceso-context.tsx` (`MenuAccesoProvider`): trae
+  `GET /api/config/me/menu` vía TanStack Query y expone un `Map<codigo,
+  nivel>`. Montado en `providers.tsx` junto a `TemporadaProvider`.
+- `src/hooks/use-item-acceso.ts` reescrito: `useItemAcceso`/`usePuedeEscribir`/
+  `usePuedeLeer` leen de ese contexto en vez del mock.
+- Los ~22 strings de ITEM ad-hoc del frontend (`'config.paises'`,
+  `'productores.contrato'`, `'operaciones.materiales'`, etc., inventados sin
+  corresponder a ningún `ItemMenu.codigo` real) se corrigieron a los códigos
+  reales del backend (`CONFIG_MANTENEDORES`, `PROD_CONTRATO`,
+  `OPER_MATERIALES`, etc.), verificados contra el `const ITEM = '...'` de
+  cada `*.routes.ts` correspondiente — 32 archivos frontend afectados.
+- `prisma/seed.ts` ejecutado: sincroniza el perfil ADMIN con `TOTAL` en los
+  30 ítems de menú, así que la cuenta admin no pierde acceso al pasar de mock
+  a datos reales.
+
+**Cambio de comportamiento (esperado, no regresión):** usuarios con perfiles
+no-ADMIN ahora ven solo lo que su `PerfilAcceso` real permite; antes el mock
+daba `TOTAL` a casi todo sin importar la sesión. `Entidades` y `Perfiles`
+nunca tuvieron gating de permisos en el frontend (ni con mock ni ahora) —
+queda fuera de este fix, es una brecha distinta y preexistente.
+
+**Verificación:** `tsc --noEmit` y `npm run build` limpios en `fas-web`
+(mismo conteo de páginas), 81/81 integración y 7/7 unitarias sin cambios en
+`fas-api` (no se tocó backend).

@@ -13,7 +13,7 @@ import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { ordenesCompraListOptions } from '../queries'
 import { ordenCompraColumns } from './orden-compra-columns'
 
-const ITEM = 'compras.ordenes'
+const ITEM = 'COMPRAS_OC'
 
 export function OrdenCompraListingClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)

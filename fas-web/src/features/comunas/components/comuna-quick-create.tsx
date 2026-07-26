@@ -153,7 +153,7 @@ function ComunaQuickDialog({
 
 export function ComunaQuickCreate({ onCreated }: ComunaQuickCreateProps) {
   const [open, setOpen] = useState(false)
-  const puedeEscribir = usePuedeEscribir('config.comunas')
+  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
 
   if (!puedeEscribir) return null
 

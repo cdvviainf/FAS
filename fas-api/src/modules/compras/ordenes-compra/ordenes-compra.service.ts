@@ -2,7 +2,6 @@ import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './ordenes-compra.repository.js'
 import type {
   OrdenCompraCreateInput,
-  OrdenCompraCuotaPagoInput,
   OrdenCompraLineaInput,
   OrdenCompraUpdateInput,
 } from './ordenes-compra.types.js'
@@ -46,19 +45,14 @@ async function validarLinea(linea: OrdenCompraLineaInput, index: number) {
   }
 }
 
-function validarCuotasPago(cuotas: OrdenCompraCuotaPagoInput[] | undefined) {
-  if (!cuotas || cuotas.length === 0) return
-  const suma = cuotas.reduce((acc, c) => acc + c.porcentaje, 0)
-  if (Math.round(suma * 100) / 100 !== 100) {
-    throw new ValidationError(`Las cuotas de pago deben sumar 100% (suma actual: ${suma}%)`)
-  }
-}
-
 async function validarReferenciasHeader(data: {
   entidadProductorId?: number
   notaVentaId?: number | null
   monedaId?: number
-  facturarAId?: number | null
+  formaPagoId?: number | null
+  destinoMercadoId?: number | null
+  condicionPagoId?: number | null
+  responsableId?: string | null
 }) {
   if (data.entidadProductorId != null) {
     const productor = await repo.getEntidadProductor(data.entidadProductorId)
@@ -75,9 +69,21 @@ async function validarReferenciasHeader(data: {
     const notaVenta = await repo.getNotaVenta(data.notaVentaId)
     if (!notaVenta) throw new ValidationError('El Cierre Comercial (Nota de Venta) seleccionado no existe')
   }
-  if (data.facturarAId != null) {
-    const entidad = await repo.getEntidad(data.facturarAId)
-    if (!entidad) throw new ValidationError('La entidad seleccionada para facturar no existe o está inactiva')
+  if (data.formaPagoId != null) {
+    const formaPago = await repo.getFormaPago(data.formaPagoId)
+    if (!formaPago) throw new ValidationError('La forma de pago seleccionada no existe o está bloqueada')
+  }
+  if (data.destinoMercadoId != null) {
+    const mercado = await repo.getMercado(data.destinoMercadoId)
+    if (!mercado) throw new ValidationError('El destino (mercado) seleccionado no existe o está bloqueado')
+  }
+  if (data.condicionPagoId != null) {
+    const condicionPago = await repo.getCondicionPago(data.condicionPagoId)
+    if (!condicionPago) throw new ValidationError('La condición de pago seleccionada no existe o está bloqueada')
+  }
+  if (data.responsableId != null) {
+    const responsable = await repo.getUsuarioResponsable(data.responsableId)
+    if (!responsable) throw new ValidationError('El responsable seleccionado no existe o no está marcado como Responsable de Venta')
   }
 }
 
@@ -94,7 +100,6 @@ export async function obtenerOrdenCompra(id: number) {
 
 export async function crearOrdenCompra(body: OrdenCompraCreateInput, creadoPor: string) {
   await validarReferenciasHeader(body)
-  validarCuotasPago(body.cuotasPago)
   for (const [index, linea] of body.lineas.entries()) {
     await validarLinea(linea, index)
   }
@@ -110,7 +115,6 @@ export async function actualizarOrdenCompra(id: number, body: OrdenCompraUpdateI
     throw new ValidationError('La Orden de Compra ya fue recepcionada y no puede editarse')
   }
   await validarReferenciasHeader(body)
-  validarCuotasPago(body.cuotasPago)
   if (body.lineas) {
     for (const [index, linea] of body.lineas.entries()) {
       await validarLinea(linea, index)

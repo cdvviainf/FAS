@@ -13,6 +13,16 @@ export const solicitudCreateSchema = z.object({
   especieId: z.number().int().positive().nullable().optional(),
   fechaHora: z.string().datetime({ offset: true, message: 'Fecha/hora inválida (ISO 8601)' }),
   motivoId: z.number().int().positive('El motivo es requerido'),
+  mercadoId: z.number().int().positive().nullable().optional(),
+  paisIds: z.array(z.number().int().positive()).optional(),
+  clienteId: z.number().int().positive().nullable().optional(),
+  fechaDespacho: z.string().date().nullable().optional(),
+  cantidadPallets: z.number().int().positive().nullable().optional(),
+  calificacionId: z.number().int().positive().nullable().optional(),
+  variedadIds: z.array(z.number().int().positive()).optional(),
+  calibreIds: z.array(z.number().int().positive()).optional(),
+  categoriaIds: z.array(z.number().int().positive()).optional(),
+  articuloIds: z.array(z.number().int().positive()).optional(),
   observaciones: z.string().max(5000).nullable().optional(),
   asignados: z
     .array(asignadoSchema)

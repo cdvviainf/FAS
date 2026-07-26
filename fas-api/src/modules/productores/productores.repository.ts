@@ -40,7 +40,28 @@ export async function getFicha(entidadId: number) {
       },
       direcciones: { where: { eliminadoEn: null } },
       predios: { where: { eliminadoEn: null } },
-      contratos: { where: { eliminadoEn: null }, orderBy: { creadoEn: 'desc' } },
+      contratos: {
+        where: { eliminadoEn: null },
+        orderBy: { creadoEn: 'desc' },
+        include: {
+          temporada: { select: { id: true, codigo: true, descripcion: true } },
+          especie: { select: { id: true, codigo: true, descripcion: true } },
+          lineas: {
+            include: {
+              articulo: { select: { id: true, codigo: true, descripcion: true } },
+              variedad: { select: { id: true, codigo: true, descripcion: true } },
+              calibreDesde: { select: { id: true, codigo: true, descripcion: true } },
+              calibreHasta: { select: { id: true, codigo: true, descripcion: true } },
+              categoria: { select: { id: true, codigo: true, descripcion: true } },
+              unidadMedida: { select: { id: true, codigo: true, descripcion: true } },
+            },
+          },
+          adjuntos: {
+            select: { id: true, nombre: true, mime: true, tamano: true, subidoEn: true, subidoPor: true },
+            orderBy: { subidoEn: 'desc' },
+          },
+        },
+      },
     },
   })
   if (!entidad) return null

@@ -11,6 +11,12 @@ export interface EntidadRef {
   razonSocial: string
 }
 
+export interface UsuarioRef {
+  id: string
+  nombre: string
+  email: string
+}
+
 export type EstadoOrdenCompra = 'BORRADOR' | 'EMITIDA' | 'RECEPCIONADA'
 
 export const ESTADO_OC_LABELS: Record<EstadoOrdenCompra, string> = {
@@ -45,6 +51,13 @@ export interface OrdenCompraCuotaPagoItem {
   descripcion: string | null
 }
 
+export interface CondicionPagoRef {
+  id: number
+  codigo: string
+  descripcion: string
+  cuotas: { id: number; porcentaje: string; plazoDias: number; descripcion: string | null }[]
+}
+
 export interface OrdenCompraListItem {
   id: number
   numero: string
@@ -59,11 +72,17 @@ export interface OrdenCompraListItem {
 export interface OrdenCompraDetalle extends OrdenCompraListItem {
   monedaId: number
   notaVentaId: number | null
-  formaPago: string | null
-  condicionPagoTexto: string | null
+  fechaEntregaDesde: string | null
+  fechaEntregaHasta: string | null
+  formaPagoId: number | null
+  formaPago: MantenedorRef | null
+  condicionPagoId: number | null
+  condicionPago: CondicionPagoRef | null
   incotermId: number | null
-  facturarAId: number | null
-  facturarA: EntidadRef | null
+  destinoMercadoId: number | null
+  destinoMercado: MantenedorRef | null
+  responsableId: string | null
+  responsable: UsuarioRef | null
   observaciones: string | null
   lineas: OrdenCompraLineaItem[]
   cuotasPago: OrdenCompraCuotaPagoItem[]
@@ -88,28 +107,23 @@ export interface OrdenCompraLineaInput {
   precioUsdCaja: number
 }
 
-export interface OrdenCompraCuotaPagoInput {
-  porcentaje: number
-  plazoDias: number
-  descripcion?: string | null
-}
-
 export interface OrdenCompraCreateInput {
   entidadProductorId: number
   notaVentaId?: number | null
   fecha?: string
-  formaPago?: string | null
-  condicionPagoTexto?: string | null
+  fechaEntregaDesde?: string | null
+  fechaEntregaHasta?: string | null
+  formaPagoId?: number | null
+  condicionPagoId?: number | null
   monedaId: number
   incotermId?: number | null
-  facturarAId?: number | null
+  destinoMercadoId?: number | null
+  responsableId?: string | null
   observaciones?: string | null
   lineas: OrdenCompraLineaInput[]
-  cuotasPago?: OrdenCompraCuotaPagoInput[]
 }
 
-export type OrdenCompraUpdateInput = Partial<Omit<OrdenCompraCreateInput, 'lineas' | 'cuotasPago'>> & {
+export type OrdenCompraUpdateInput = Partial<Omit<OrdenCompraCreateInput, 'lineas'>> & {
   estado?: EstadoOrdenCompra
   lineas?: OrdenCompraLineaInput[]
-  cuotasPago?: OrdenCompraCuotaPagoInput[]
 }

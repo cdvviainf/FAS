@@ -80,7 +80,29 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
             )}
             <Campo label='Fecha y hora'>{fmt.format(new Date(solicitud.fechaHora))}</Campo>
             <Campo label='Motivo'>{solicitud.motivo.descripcion}</Campo>
+            {solicitud.mercado && <Campo label='Mercado'>{solicitud.mercado.descripcion}</Campo>}
+            {solicitud.paises.length > 0 && (
+              <Campo label='Países'>{solicitud.paises.map((p) => p.pais.descripcion).join(', ')}</Campo>
+            )}
+            {solicitud.cliente && <Campo label='Cliente'>{solicitud.cliente.razonSocial}</Campo>}
+            {solicitud.fechaDespacho && (
+              <Campo label='Fecha despacho'>{new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium' }).format(new Date(solicitud.fechaDespacho))}</Campo>
+            )}
             {solicitud.especie && <Campo label='Especie'>{solicitud.especie.descripcion}</Campo>}
+            {solicitud.embalajes.length > 0 && (
+              <Campo label='Embalaje'>{solicitud.embalajes.map((e) => e.articulo.descripcion).join(', ')}</Campo>
+            )}
+            {solicitud.variedades.length > 0 && (
+              <Campo label='Variedades'>{solicitud.variedades.map((v) => v.variedad.descripcion).join(', ')}</Campo>
+            )}
+            {solicitud.calibres.length > 0 && (
+              <Campo label='Calibres'>{solicitud.calibres.map((c) => c.calibre.descripcion).join(', ')}</Campo>
+            )}
+            {solicitud.categorias.length > 0 && (
+              <Campo label='Categorías'>{solicitud.categorias.map((c) => c.categoria.descripcion).join(', ')}</Campo>
+            )}
+            {solicitud.calificacion && <Campo label='Calificación'>{solicitud.calificacion.descripcion}</Campo>}
+            {solicitud.cantidadPallets != null && <Campo label='Cant. pallets'>{solicitud.cantidadPallets}</Campo>}
             <Campo label='Temporada'>{solicitud.temporada.codigo}</Campo>
             {solicitud.observaciones && (
               <Campo label='Observaciones'>

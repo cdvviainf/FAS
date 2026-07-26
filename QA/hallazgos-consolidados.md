@@ -185,7 +185,7 @@ Checklist DoD del modulo:
 | UP-DOD-02 | `ItemMenu`/`Perfil`/`PerfilAcceso`/`Usuario` migrados + seed. | No cumple | `schema.prisma` tiene los modelos, pero no existe migracion versionada y la BD local no tiene las tablas. |
 | UP-DOD-03 | Guard de autorizacion aplicado en rutas. | No cumple | Rutas CRUD se registran sin `preHandler`/guard. |
 | UP-DOD-04 | Politica de password + confirmacion. | Parcial | Backend valida complejidad y confirmacion; frontend muestra indicador, pero falta prueba automatizada y flujo de cambio UI. |
-| UP-DOD-05 | Tests CA1-CA10 en verde. | No cumple | No se encontraron tests del modulo. |
+| UP-DOD-05 | Tests CA1-CA10 en verde. | Parcial | La integración HTTP cubre autenticación, protección anónima, niveles LECTURA/TOTAL y cambio de contraseña; falta la matriz completa CA1-CA10. |
 | UP-DOD-06 | Editor perfiles con matriz dinamica + usuarios con avatar + sidebar dinamico. | Parcial | Existen pantallas y matriz dinamica, pero avatar es URL manual y sidebar sigue estatico/mock. |
 
 Hallazgos de implementacion:
@@ -201,7 +201,7 @@ Hallazgos de implementacion:
 | QA-UP-007 | Media | Navegacion / Seed | Las rutas seeded de `ItemMenu` no coinciden con las rutas reales del frontend. | `seed.ts:9-11` usa `/config/usuarios` y `/config/perfiles`; `nav-config.ts:288-289` y rutas reales usan `/dashboard/configuracion/usuarios` y `/dashboard/configuracion/perfiles`. | El menu dinamico debe devolver URLs navegables reales. | Cerrado | Re-test Codex 2026-07-19: `seed.ts` usa `/dashboard/configuracion/usuarios` y `/dashboard/configuracion/perfiles`. |
 | QA-UP-008 | Media | Frontend / Usuarios | Formulario de creacion de usuario renderiza dos formularios con el mismo `id`. | `usuario-form.tsx:283` y `usuario-form.tsx:393` declaran `id='usuario-form'`; el boton externo apunta a ese id. | Un solo `<form>` por submit o IDs unicos con comportamiento explicito; password y datos deben enviarse juntos de forma confiable. | Cerrado | Re-test Codex 2026-07-19: create mode usa un solo `usuario-create-form`, edit mode usa `usuario-edit-form`; `fas-web` compila OK. |
 | QA-UP-009 | Media | Frontend / Alcance | Avatar y cambio de password no cumplen completamente el spec UI. | Usuario usa campo `URL de Avatar`; no se encontro pantalla/accion de cambio de password en UI aunque existe endpoint. | UP7 pide upload a storage y el spec pide cambio de contrasena en pantalla aparte. | Listo para re-test | 2026-07-23 Claude: password — ver nota anterior (cerrado, revalidado por Codex). Avatar (UP7): agregado modelo `UsuarioAvatar` (metadata + `Bytes`, mismo patrón que `DocumentoArticulo`); endpoints `POST/GET/DELETE /api/config/usuarios/:id/avatar` (multipart, límite 3MB, solo JPG/PNG/WEBP). `Usuario.imagenUrl` deja de ser editable manualmente (removido de `usuarioCreateSchema`/`usuarioUpdateSchema`) y pasa a ser gestionado por el servidor: se setea a la ruta del endpoint al subir, se limpia a `null` al eliminar. Frontend: `usuario-form.tsx` (edición) reemplaza el input de URL por `AvatarUploadField` (preview circular + subir/cambiar/eliminar, con guard `usePuedeEscribir`); el formulario de creación ya no ofrece el campo (el upload requiere que el usuario exista, mismo patrón que documentos de Artículo). Verificado end-to-end con curl: subida → `imagenUrl` apunta al endpoint, descarga devuelve el binario idéntico al subido, eliminación limpia `imagenUrl`, mimetype no permitido → 422. Páginas de alta/edición renderizan 200. Builds y suite de integración (56/56) en verde. |
-| QA-UP-010 | Alta | Tests | No hay tests CA1-CA10 para perfiles, usuarios, guard ni menu. | Busqueda en `fas-api/src`/`fas-web/src` no muestra suites del modulo; builds pasan, pero no cubren reglas de seguridad. | Agregar tests de backend para CA1-CA10 y, al menos, pruebas de UI/servicios para flujos principales. | Abierto | Re-test Codex 2026-07-19: sigue sin suites para perfiles, usuarios, guard o `/me/menu`. |
+| QA-UP-010 | Alta | Tests | La cobertura de perfiles, usuarios, guard y menú no completa CA1-CA10. | `http.integration.test.ts` cubre protección anónima, LECTURA/TOTAL y contraseña, pero no todos los casos de perfiles, usuarios soft-delete y `/me/menu`. | Completar pruebas backend CA1-CA10 y pruebas frontend de permisos. | Parcial | Re-test Codex 2026-07-26: existen pruebas HTTP relevantes y están verdes, pero la matriz contractual continúa incompleta. |
 
 Re-test QA 2026-07-19:
 
@@ -383,6 +383,81 @@ Hallazgos de Entidades:
 | QA-ENT-008 | Media | Frontend / Atomicidad | En alta, la UI exige al menos una direccion principal y crea entidad primero, luego direcciones/contactos en requests separados. | `entidad-form.tsx:442-470`. Si falla un subrecurso, queda la entidad base creada parcialmente. | Alinear regla de obligatoriedad con el spec y usar endpoint transaccional o compensacion si el alta inicial incluye subrecursos obligatorios. | Listo para re-test | 2026-07-22 Claude: `createMutation` en `entidad-form.tsx` envuelve la creacion de subrecursos en try/catch; si falla cualquier direccion o contacto, llama `entidadesService.remove(created.id)` para compensar antes de re-lanzar el error. |
 | QA-ENT-009 | Alta | Tests | No hay tests CA1-CA9 para reglas criticas del maestro. | Busqueda de suites especificas no muestra cobertura; solo se validaron builds y smoke manual. | Agregar tests backend para R1-R9/CA1-CA9 y pruebas UI de alta/edicion/subgrids. | Abierto | Pendiente. |
 
+## 10e. Regresión Cierre Comercial y Solicitud de Inspección 2026-07-25
+
+**Cierre Comercial:** aprobado sin regresiones nuevas. El cambio directo solo
+amplía a 500 el límite del listado; 71/71 integraciones y ambos builds pasan.
+
+**Solicitud de Inspección — ampliación Documento 107:** no aprobada todavía
+para cierre QA. Se registraron cuatro hallazgos:
+
+- `QAS-SI-014` Alta: los nuevos vínculos no participan en las reglas de bloqueo
+  de soft-delete de maestros.
+- `QAS-SI-015` Alta: no hay pruebas funcionales que ejerciten los nuevos campos
+  y multiselects.
+- `QAS-SI-016` Media: los correos omiten todos los nuevos datos del Documento
+  107.
+- `QAS-SI-017` Alta: Calificación no tiene índice único parcial de código.
+
+### Resolución — Claude (2026-07-26)
+
+Los cuatro hallazgos quedaron corregidos: bloqueo de softdelete extendido
+(mercado/país/variedad/calibre/categoría/calificación + cliente extranjero de
+Entidad, vía un nuevo modo `viaSolicitud` en el sistema genérico de
+referencias); 10 tests de integración nuevos contra Postgres
+(`solicitudes.integration.test.ts`); correos de la solicitud ahora incluyen
+todos los campos del Documento 107; e índice único parcial de código agregado
+a `calificaciones` (y de paso a `formas_pago`/`condiciones_pago`, mismo vacío
+introducido en la misma sesión). Detalle completo en
+`Docs/Hallazgos/solicitud-inspeccion.md`. Verificación: 81/81 integración,
+7/7 unitarias, builds y `tsc` limpios en ambos repos.
+
+Validación técnica: 7/7 unitarias, 71/71 integración, Prisma válido, 30
+migraciones al día, build API OK y build web OK con 82 páginas. Detalle en
+`Docs/Hallazgos/solicitud-inspeccion.md`.
+
+**Re-test 2026-07-25 (Codex):** QAS-SI-014 a QAS-SI-017 cerrados y verificados.
+La suite específica nueva aporta 10 casos; integración queda 81/81, Prisma
+válido, 31 migraciones al día y ambos builds correctos. Se abre QAS-SI-018
+(media): `config.service.test.ts` conserva una expectativa de cuatro argumentos
+para `countActiveReferences`, pero el servicio ahora invoca cinco al agregar
+`viaSolicitud`; por ello la suite unitaria termina 6/7 con una falla. La rama no
+queda completamente verde hasta actualizar esa prueba.
+
+**Re-test final 2026-07-25 (Codex): QAS-SI-018 cerrado.** La expectativa
+unitaria fue actualizada y la ejecución completa queda verde: 7/7 unitarias,
+81/81 integración, Prisma válido, 31 migraciones al día, build API OK y build
+web OK con 82 páginas. La ampliación de Solicitud de Inspección queda aprobada
+para pruebas funcionales de usuario.
+
+**Resolución QAS-SI-018 — Claude (2026-07-26):** actualizada la expectativa en
+`tests/config.service.test.ts` para incluir el 5º argumento (`viaSolicitud`,
+`undefined` en este caso). 7/7 unitarias OK, 81/81 integración, build limpio.
+Rama completamente verde.
+
+## 10f. Auditoría de hallazgos abiertos de pruebas 2026-07-25
+
+Se cruzaron los hallazgos históricos con las suites actuales y se ejecutaron
+las pruebas disponibles:
+
+- Unitarias: 7/7 OK.
+- Integración PostgreSQL: 81/81 OK.
+- Solicitud de Inspección (`QAS-SI-010`/`QAS-SI-015`): **cerrado**; existe
+  suite específica con 10 casos.
+- Mantenedores (`QAS-MG-009` y DoD CA1–CA11): **parcial**. Ya existen 7
+  unitarias, 5 integraciones específicas y cobertura HTTP de CRUD/auditoría/
+  niveles, pero no están cubiertos todos los CA4–CA11.
+- Usuarios/Perfiles (`QA-UP-010`): **parcial**. HTTP cubre autenticación,
+  protección anónima, LECTURA/TOTAL y cambio de contraseña, pero no una matriz
+  completa CA1–CA10 para perfiles, usuarios, soft-delete y `/me/menu`.
+- Entidades (`QA-ENT-009`): **abierto**. No existe suite funcional específica
+  para CA1–CA9.
+- `QA-DOC-011`: sigue siendo una inconsistencia documental del plan de Reclamos
+  (CA1–CA8 versus CA1–CA10), no una suite ejecutable del módulo.
+
+No se encontraron suites frontend automatizadas; los builds validan tipos y
+rutas, pero no sustituyen pruebas de interacción UI.
+
 ## 12. Bug de despliegue — login roto en navegadores sin stack local (2026-07-24)
 
 Reportado por un segundo usuario probando el demo de Coolify: se loguea (o
@@ -396,3 +471,47 @@ PostgreSQL/datos distintos. Diagnóstico de Codex + verificación de Claude:
 | QA-INFRA-002 | Media | Despliegue | `INTERNAL_API_URL` (usada por `fas-web/src/app/api/auth/[...all]/route.ts` para hablarle a la API por la red interna de Docker) nunca se declaraba en `docker-compose.demo.yml`; el proxy caía al fallback público (`NEXT_PUBLIC_API_URL`), funcional pero innecesariamente indirecto (sale a internet y vuelve a entrar en vez de usar la red interna `coolify`/compose). | `fas-web/src/app/api/auth/[...all]/route.ts:9-11`; `docker-compose.demo.yml` (bloque `web`, sin `environment.INTERNAL_API_URL`). | El proxy de auth debe usar el hostname interno de Docker (`http://api:3001`), no rebotar por la URL pública. | Corregido | 2026-07-24 Claude: agregado junto con QA-INFRA-001. |
 | QA-INFRA-003 | Bloqueante | Despliegue / Auth | Tras QA-INFRA-001 el login ya funcionaba (verificado con DevTools: `POST /api/auth/sign-in/email` → 200, cookie seteada correctamente para el dominio del frontend), pero **todas las demás llamadas de datos** (mantenedores, ventas, compras, etc.) seguían fallando con 401 (confirmado en vivo: `GET https://a1ipcr987qbb5ffqcz5lvb05.../api/config/temporadas` → 401 Unauthorized). Causa: `src/lib/api.ts` apuntaba directo a `NEXT_PUBLIC_API_URL` (el dominio de fas-api), un dominio distinto al del frontend donde se guardó la cookie. Como fas-web y fas-api son subdominios `sslip.io` independientes, el navegador nunca comparte la cookie entre ambos (no hay dominio raíz común compartible). Explica por qué en la máquina del desarrollador "andaba" (cookie vieja cacheada directo contra el dominio de la API de alguna prueba anterior) y en cualquier navegador nuevo (confirmado reproducible en Chrome y Edge del propio usuario) fallaba todo. | `fas-web/src/lib/api.ts` (antes: `prefix: NEXT_PUBLIC_API_URL`); captura DevTools del usuario mostrando `Request URL` apuntando al dominio de la API con `Status 401`, mientras el login sí mostraba `Set-Cookie` correcto para el dominio del frontend. | Todas las llamadas del navegador deben ir al mismo dominio que sirve el login, para que la cookie de sesión viaje con ellas. | Corregido | 2026-07-24 Claude: agregado proxy genérico `fas-web/src/app/api/[...path]/route.ts` (mismo patrón que el proxy de auth); `src/lib/api.ts` cambiado a `prefix: '/api'` (relativo, mismo origen); actualizados 4 constructores de URL de descarga que también apuntaban directo a `NEXT_PUBLIC_API_URL` (`contratos`, `usuarios` avatar, `articulos` documentos, `solicitudes` adjuntos). Verificado end-to-end contra contenedores locales: login vía proxy (200, cookie) + `GET /api/config/temporadas` con esa cookie (200, datos reales) — antes del fix esa segunda llamada daba 401. Pendiente: confirmación del segundo usuario tras el rebuild en Coolify. |
 | QA-INFRA-004 | Bloqueante | Frontend / Layout | Reportado por el usuario: al crear una Entidad, el listado mostraba "1 row(s) total" en la paginación pero **ninguna fila visible** (ni siquiera el header de columnas), en el server y con cualquier tema. Diagnóstico completo con el usuario (Network: JSON de respuesta correcto y completo; Elements: el `<table>` renderizado tenía la fila con todos los datos correctos; Computed: color de texto normal, sin problema de contraste) descartó datos faltantes y bug de tema — era **layout roto**: `DataTable` (`src/components/ui/table/data-table.tsx`) depende de una cadena `flex flex-1` desde `PageContainer` hasta el `div.absolute.inset-0` que envuelve la tabla real; `entidad-listing-client.tsx` y `productor-listing-client.tsx` insertaban un `<div className='space-y-3'>` (bloque normal, no flex) entre ambos para poder poner un filtro arriba de la tabla, rompiendo la cadena — la tabla quedaba con altura real 0px (visible en el DOM, invisible en pantalla). El mismo patrón (`<div className='space-y-3'>` envolviendo filtro + `DataTable`) se encontró en 8 listados, incluyendo los 3 construidos en esta sesión (Nota de Venta, Instructivo de Embalaje, Orden de Compra) y otros preexistentes (Artículos, Tipos de Movimiento, Solicitudes de Inspección). | `src/features/entidades/components/entidad-listing-client.tsx:56`, `src/features/productores/components/productor-listing-client.tsx:69`, y 6 archivos más (ver Accion Claude). Contraste: `mercados-table/index.tsx` y el resto de mantenedores simples retornan `<DataTable>` como hijo directo de `PageContainer`, sin wrapper — por eso nunca tuvieron el problema. | Cualquier listado con filtro arriba de la tabla debe mantener la cadena `flex-1` intacta para que `DataTable` obtenga altura real. | Corregido | 2026-07-24 Claude: cambiado `<div className='space-y-3'>` → `<div className='flex flex-1 flex-col space-y-3'>` en los 8 archivos afectados. `tsc`/`build` limpios en ambos repos. |
+
+## 13. QAS-SI-008 — Auth mock reemplazado por permisos reales (2026-07-26)
+
+Deuda transversal documentada desde 2026-07-23 (afecta a todo el frontend, no
+solo a Solicitud de Inspección): `usePuedeEscribir`/`usePuedeLeer` leían
+`MOCK_ACCESOS` (`src/lib/mock-session.ts`), un mapa hardcodeado con strings de
+ítem inventados (`'config.paises'`, `'productores.contrato'`, etc.) que no
+correspondían a ningún `ItemMenu.codigo` real del backend.
+
+**Corregido — Claude 2026-07-26:** `mock-session.ts` eliminado. Nuevo
+`src/contexts/menu-acceso-context.tsx` (`MenuAccesoProvider`, montado junto a
+`TemporadaProvider` en `providers.tsx`) trae `GET /api/config/me/menu` real
+vía TanStack Query. `use-item-acceso.ts` reescrito para leer de ahí. Los ~22
+strings de ITEM ad-hoc en 32 archivos frontend se corrigieron a los códigos
+reales del backend (verificados contra `const ITEM = '...'` de cada
+`*.routes.ts`). `prisma/seed.ts` re-ejecutado para sincronizar el perfil
+ADMIN con `TOTAL` en los 30 ítems de menú (no pierde acceso). Cambio de
+comportamiento esperado: usuarios con perfiles no-ADMIN ahora ven solo lo que
+su `PerfilAcceso` real permite. `Entidades`/`Perfiles` siguen sin gating de
+permisos en el frontend — brecha preexistente distinta, fuera de este fix.
+Verificación: `tsc`/build limpios en `fas-web`, 81/81 integración y 7/7
+unitarias sin cambios en `fas-api` (no se tocó backend). Detalle completo en
+`Docs/Hallazgos/solicitud-inspeccion.md`.
+
+## 14. Revisión actual de hallazgos de pruebas 2026-07-26
+
+Ejecución local: 7/7 unitarias, 81/81 integración, Prisma válido, 31
+migraciones al día y builds API/web correctos (82 páginas).
+
+Estado:
+
+- Solicitud de Inspección: suites y hallazgos de cobertura cerrados.
+- Cierre Comercial, Compras, Productores y Artículos: cobertura existente
+  ejecutada en verde.
+- Mantenedores Generales: parcial; faltan casos contractuales CA4–CA11.
+- Usuarios/Perfiles: parcial; falta completar CA1–CA10.
+- Entidades: abierto; continúa sin suite específica CA1–CA9.
+- Frontend: no hay runner de pruebas de interacción. El nuevo contexto de
+  permisos reales compila, pero no tiene test automatizado.
+
+Hallazgo funcional relacionado: la sustitución del mock de permisos está
+correctamente aplicada a los módulos que usan `useItemAcceso`, pero
+Entidades/Perfiles siguen sin gating visual propio, brecha ya documentada en
+la resolución QAS-SI-008.

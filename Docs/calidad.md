@@ -82,6 +82,15 @@ Permitir: (a) configurar la norma de calidad por especie (defectos y madurez); (
 > - `SolicitudInspeccionAsignado` — `usuarioId` + `funcion` (`ACUDIR`/`NOTIFICAR`).
 > - `SolicitudInspeccionAdjunto` (+ `...Contenido` con `Bytes`) — adjuntos guardados **en BD** (no en disco), separando metadatos del binario.
 > - `ConfiguracionCorreo` — SMTP (Office365) con password cifrada AES-256-GCM; pantalla en Configuración › Configuración General.
+>
+> **Campos del Documento N° 107 retomados (2026-07-26)** — por decisión de negocio, se reincorporan a `SolicitudInspeccion` (no se retoma inspección por caja/PWA, solo estos campos de cabecera):
+> - `mercadoId?` (FK → `Mercado`) y `paisIds` multiselect (`SolicitudInspeccionPais`, join con `Pais`).
+> - `clienteId?` (FK → `Entidad` tipo `CLIENTE_EXTRANJERO`) y `fechaDespacho?` (Date).
+> - `variedadIds` / `calibreIds` / `categoriaIds` multiselect (joins `SolicitudInspeccionVariedad/Calibre/Categoria`), validados contra la `especieId` de la solicitud cuando esta está definida.
+> - `articuloIds` (Embalaje) multiselect (`SolicitudInspeccionEmbalaje`), artículos tipo `EMBALAJE` activos.
+> - `cantidadPallets?` (Int).
+> - `calificacionId?` (FK → `Calificacion`, **nuevo mantenedor** `/api/config/calificaciones` — reemplaza el texto libre "B1" del spec original).
+> - Todos opcionales, consistente con la naturaleza de solicitud preliminar del modelo vigente. Formulario de alta/edición migrado de Sheet a página dedicada (mismo patrón que Orden de Compra), `/dashboard/calidad/solicitudes/nueva` y `/[id]`.
 > - Correos vía cola BullMQ `correos` (notificar / modificar / eliminar / cerrar / reabrir + recordatorio 24 h antes).
 
 ```prisma

@@ -7,7 +7,7 @@ import {
 } from '../../src/modules/productores/predios/predios.service.js'
 import {
   crearContrato,
-  subirPdf,
+  agregarAdjunto,
 } from '../../src/modules/productores/contratos/contratos.service.js'
 import {
   imputarMovimiento,
@@ -22,7 +22,9 @@ if (databaseName !== 'fas_test') {
 async function limpiarDatos() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
-      "productor_contratos_pdf",
+      "productor_contrato_adjuntos_contenido",
+      "productor_contrato_adjuntos",
+      "productor_contrato_linea",
       "productor_contratos",
       "movimientos_cuenta_corriente",
       "predios",
@@ -30,6 +32,13 @@ async function limpiarDatos() {
       "entidad_direcciones",
       "entidades",
       "conceptos_cta_cte",
+      "articulos",
+      "calibres",
+      "categorias",
+      "variedades",
+      "especies",
+      "temporadas",
+      "unidades_medida",
       "paises"
     RESTART IDENTITY CASCADE
   `)
@@ -56,6 +65,36 @@ async function crearEntidad(tipos: ('PRODUCTOR' | 'PROVEEDOR')[], codigo: string
       creadoPor: 'test',
     },
   })
+}
+
+async function crearFixturesContrato() {
+  const temporada = await prisma.temporada.create({
+    data: { codigo: 'T26', descripcion: 'Temporada 2026', fechaInicio: new Date('2026-01-01'), fechaTermino: new Date('2026-12-31'), creadoPor: 'test' },
+  })
+  const especie = await prisma.especie.create({ data: { codigo: 'UV', descripcion: 'Uva', creadoPor: 'test' } })
+  const variedad = await prisma.variedad.create({ data: { codigo: 'RG', descripcion: 'Red Globe', especieId: especie.id, creadoPor: 'test' } })
+  const categoria = await prisma.categoria.create({ data: { codigo: 'CAT1', descripcion: 'Categoría 1', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
+  const calibreDesde = await prisma.calibre.create({ data: { codigo: 'XL', descripcion: 'XL', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
+  const calibreHasta = await prisma.calibre.create({ data: { codigo: 'XXL', descripcion: 'XXL', especieId: especie.id, orden: 2, control: [], creadoPor: 'test' } })
+  const unidad = await prisma.unidadMedida.create({ data: { codigo: 'KG', descripcion: 'Kilos', creadoPor: 'test' } })
+  const articulo = await prisma.articulo.create({
+    data: { tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
+  })
+
+  return { temporada, especie, variedad, categoria, calibreDesde, calibreHasta, unidad, articulo }
+}
+
+function lineaBase(f: Awaited<ReturnType<typeof crearFixturesContrato>>) {
+  return {
+    articuloId: f.articulo.id,
+    variedadId: f.variedad.id,
+    calibreDesdeId: f.calibreDesde.id,
+    calibreHastaId: f.calibreHasta.id,
+    categoriaId: f.categoria.id,
+    unidadMedidaId: f.unidad.id,
+    cantidadComprometida: 10_000,
+    minimoGarantizado: 8_000,
+  }
 }
 
 describe('maestro de Productores contra PostgreSQL', () => {
@@ -108,6 +147,7 @@ describe('maestro de Productores contra PostgreSQL', () => {
 
   it('CA3/R3: rechaza representante legal sin RUT y contrato sin representante', async () => {
     const productor = await crearEntidad(['PRODUCTOR'], 'PROD-01')
+    const f = await crearFixturesContrato()
 
     await expect(crearContacto(productor.id, {
       codigo: 'LEGAL',
@@ -115,13 +155,20 @@ describe('maestro de Productores contra PostgreSQL', () => {
       esRepresentanteLegal: true,
     }, 'test')).rejects.toMatchObject({ statusCode: 422 })
 
-    await expect(crearContrato(productor.id, {}, 'test')).rejects.toMatchObject({
+    await expect(crearContrato(productor.id, {
+      temporadaId: f.temporada.id,
+      especieId: f.especie.id,
+      fechaInicio: '2026-01-01',
+      fechaTermino: '2026-12-31',
+      lineas: [lineaBase(f)],
+    }, 'test')).rejects.toMatchObject({
       statusCode: 422,
     })
   })
 
-  it('CA4: crea contrato con condiciones y permite asociar un PDF', async () => {
+  it('CA4: crea contrato con especie/temporada de cabecera, línea de características y permite adjuntar documentos', async () => {
     const productor = await crearEntidad(['PRODUCTOR'], 'PROD-01')
+    const f = await crearFixturesContrato()
     await crearContacto(productor.id, {
       codigo: 'LEGAL',
       nombre: 'Representante',
@@ -130,19 +177,46 @@ describe('maestro de Productores contra PostgreSQL', () => {
     }, 'test')
 
     const contrato = await crearContrato(productor.id, {
-      volumenComprometido: 10_000,
-      unidadVolumen: 'KG',
-      condicionesPago: 'Pago a 30 días',
+      temporadaId: f.temporada.id,
+      especieId: f.especie.id,
+      fechaInicio: '2026-01-01',
+      fechaTermino: '2026-12-31',
+      lineas: [lineaBase(f)],
     }, 'test')
-    const conPdf = await subirPdf(productor.id, contrato.id, {
+
+    expect(contrato.especieId).toBe(f.especie.id)
+    expect(contrato.lineas).toHaveLength(1)
+    expect(contrato.lineas[0].cantidadComprometida.toString()).toBe('10000')
+
+    const adjunto = await agregarAdjunto(productor.id, contrato.id, {
       nombre: 'contrato.pdf',
       mime: 'application/pdf',
       datos: Buffer.from('%PDF-1.4 prueba'),
-    })
+    }, 'test')
 
-    expect(conPdf.volumenComprometido?.toString()).toBe('10000')
-    expect(conPdf.unidadVolumen).toBe('KG')
-    expect(conPdf.pdfNombre).toBe('contrato.pdf')
+    expect(adjunto.nombre).toBe('contrato.pdf')
+  })
+
+  it('PROD-CONTRATO: rechaza un segundo contrato para la misma especie y temporada del productor', async () => {
+    const productor = await crearEntidad(['PRODUCTOR'], 'PROD-01')
+    const f = await crearFixturesContrato()
+    await crearContacto(productor.id, {
+      codigo: 'LEGAL',
+      nombre: 'Representante',
+      rut: '12.345.678-5',
+      esRepresentanteLegal: true,
+    }, 'test')
+
+    const datos = {
+      temporadaId: f.temporada.id,
+      especieId: f.especie.id,
+      fechaInicio: '2026-01-01',
+      fechaTermino: '2026-12-31',
+      lineas: [lineaBase(f)],
+    }
+    await crearContrato(productor.id, datos, 'test')
+
+    await expect(crearContrato(productor.id, datos, 'test')).rejects.toMatchObject({ statusCode: 422 })
   })
 
   it('CA5/CA6: calcula saldo y valida la naturaleza del concepto', async () => {

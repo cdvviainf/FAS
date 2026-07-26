@@ -94,7 +94,7 @@ function MotivoQuickDialog({
 
 export function MotivoQuickCreate({ onCreated }: MotivoQuickCreateProps) {
   const [open, setOpen] = useState(false)
-  const puedeEscribir = usePuedeEscribir('config.motivos-inspeccion')
+  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
 
   if (!puedeEscribir) return null
 

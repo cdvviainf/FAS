@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs'
@@ -36,11 +37,10 @@ import { solicitudesListOptions, solicitudesKeys } from '../queries'
 import { solicitudesService } from '../service'
 import { ESTADO_LABELS } from '../types'
 import type { SolicitudInspeccion, EstadoSolicitud } from '../types'
-import { SolicitudFormSheet } from './solicitud-form-sheet'
 import { SolicitudCerrarDialog } from './solicitud-cerrar-dialog'
 import { SolicitudDetalleDialog } from './solicitud-detalle-dialog'
 
-const ITEM = 'calidad.solicitudes'
+const ITEM = 'CAL_SOLICITUDES'
 
 const fmt = new Intl.DateTimeFormat('es-CL', {
   dateStyle: 'short',
@@ -56,6 +56,7 @@ const estadoVariant: Record<EstadoSolicitud, 'secondary' | 'default' | 'outline'
 
 export function SolicitudListingClient() {
   const queryClient = useQueryClient()
+  const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
   const puedeLeer = usePuedeLeer(ITEM)
   const { data: session } = authClient.useSession()
@@ -70,8 +71,6 @@ export function SolicitudListingClient() {
   })
 
   // Dialog state
-  const [formOpen, setFormOpen] = useState(false)
-  const [editItem, setEditItem] = useState<SolicitudInspeccion | undefined>()
   const [cerrarItem, setCerrarItem] = useState<SolicitudInspeccion | undefined>()
   const [detalleItem, setDetalleItem] = useState<SolicitudInspeccion | undefined>()
   const [deleteItem, setDeleteItem] = useState<SolicitudInspeccion | undefined>()
@@ -173,7 +172,7 @@ export function SolicitudListingClient() {
                 </DropdownMenuItem>
               )}
               {puedeEscribir && !esCerrada && (
-                <DropdownMenuItem onClick={() => { setEditItem(s); setFormOpen(true) }}>
+                <DropdownMenuItem onClick={() => router.push(`/dashboard/calidad/solicitudes/${s.id}`)}>
                   <Icons.edit className='mr-2 h-4 w-4' /> Editar
                 </DropdownMenuItem>
               )}
@@ -242,7 +241,7 @@ export function SolicitudListingClient() {
         </Select>
         <div className='flex-1' />
         {puedeEscribir && (
-          <Button onClick={() => { setEditItem(undefined); setFormOpen(true) }} disabled={!temporada}>
+          <Button onClick={() => router.push('/dashboard/calidad/solicitudes/nueva')} disabled={!temporada}>
             <Icons.add className='mr-1 h-4 w-4' /> Nueva solicitud
           </Button>
         )}
@@ -257,11 +256,6 @@ export function SolicitudListingClient() {
       <DataTable table={table} />
 
       {/* Dialogs */}
-      <SolicitudFormSheet
-        item={editItem}
-        open={formOpen}
-        onOpenChange={(v) => { setFormOpen(v); if (!v) setEditItem(undefined) }}
-      />
       {cerrarItem && (
         <SolicitudCerrarDialog
           solicitud={cerrarItem}

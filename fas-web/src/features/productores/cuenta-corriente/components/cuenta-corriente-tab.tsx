@@ -9,7 +9,7 @@ import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { cuentaCorrienteService } from '../service'
 import { MovimientoCCFormSheet } from './movimiento-cc-form-sheet'
 
-const ITEM = 'productores.cuenta-corriente'
+const ITEM = 'PROD_CTA_CTE'
 const fmt = new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium' })
 const fmtMoneda = new Intl.NumberFormat('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 

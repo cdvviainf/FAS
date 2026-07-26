@@ -3,6 +3,7 @@ export type MantenedorModelo =
   | 'zona'
   | 'grupoMercado'
   | 'tipoEmbarque'
+  | 'formaPago'
   | 'unidadMedida'
   | 'tipoPallet'
   | 'altura'
@@ -29,6 +30,7 @@ export type MantenedorModelo =
   | 'bodega'
   // Lote 6 — Calidad
   | 'motivoInspeccion'
+  | 'calificacion'
 
 export interface MantenedorListFilters {
   q?: string

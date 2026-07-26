@@ -94,7 +94,7 @@ function UnidadMedidaQuickDialog({
 
 export function UnidadMedidaQuickCreate({ onCreated }: UnidadMedidaQuickCreateProps) {
   const [open, setOpen] = useState(false)
-  const puedeEscribir = usePuedeEscribir('config.unidades-medida')
+  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
 
   if (!puedeEscribir) return null
 

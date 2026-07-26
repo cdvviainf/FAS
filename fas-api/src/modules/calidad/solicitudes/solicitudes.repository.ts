@@ -26,6 +26,14 @@ const includeDetalle = {
   },
   especie: { select: { id: true, codigo: true, descripcion: true } },
   motivo: { select: { id: true, codigo: true, descripcion: true } },
+  mercado: { select: { id: true, codigo: true, descripcion: true } },
+  cliente: { select: { id: true, codigo: true, descripcion: true, razonSocial: true } },
+  calificacion: { select: { id: true, codigo: true, descripcion: true } },
+  paises: { select: { pais: { select: { id: true, codigo: true, descripcion: true } } } },
+  variedades: { select: { variedad: { select: { id: true, codigo: true, descripcion: true } } } },
+  calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
+  categorias: { select: { categoria: { select: { id: true, codigo: true, descripcion: true } } } },
+  embalajes: { select: { articulo: { select: { id: true, codigo: true, descripcion: true } } } },
   asignados: {
     select: {
       id: true,
@@ -132,7 +140,20 @@ export interface SolicitudCoreData {
   especieId?: number | null
   fechaHora: Date
   motivoId: number
+  mercadoId?: number | null
+  clienteId?: number | null
+  fechaDespacho?: Date | null
+  cantidadPallets?: number | null
+  calificacionId?: number | null
   observaciones?: string | null
+}
+
+export interface SolicitudMultiSelects {
+  paisIds: number[]
+  variedadIds: number[]
+  calibreIds: number[]
+  categoriaIds: number[]
+  articuloIds: number[]
 }
 
 /**
@@ -145,6 +166,7 @@ export async function createSolicitud(
   temporadaId: number,
   temporadaCodigo: string,
   data: SolicitudCoreData,
+  multi: SolicitudMultiSelects,
   asignados: AsignadoInput[],
   userId: string,
 ) {
@@ -168,6 +190,11 @@ export async function createSolicitud(
         ...data,
         creadoPor: userId,
         asignados: { create: asignados },
+        paises: { create: multi.paisIds.map((paisId) => ({ paisId })) },
+        variedades: { create: multi.variedadIds.map((variedadId) => ({ variedadId })) },
+        calibres: { create: multi.calibreIds.map((calibreId) => ({ calibreId })) },
+        categorias: { create: multi.categoriaIds.map((categoriaId) => ({ categoriaId })) },
+        embalajes: { create: multi.articuloIds.map((articuloId) => ({ articuloId })) },
       },
       include: includeDetalle,
     })
@@ -181,6 +208,7 @@ export async function updateSolicitud(
   id: number,
   data: Partial<SolicitudCoreData>,
   asignados: AsignadoInput[] | undefined,
+  multi: Partial<SolicitudMultiSelects>,
   userId: string,
 ) {
   return prisma.$transaction(async (tx) => {
@@ -189,6 +217,26 @@ export async function updateSolicitud(
       await tx.solicitudInspeccionAsignado.createMany({
         data: asignados.map((a) => ({ solicitudId: id, ...a })),
       })
+    }
+    if (multi.paisIds !== undefined) {
+      await tx.solicitudInspeccionPais.deleteMany({ where: { solicitudId: id } })
+      await tx.solicitudInspeccionPais.createMany({ data: multi.paisIds.map((paisId) => ({ solicitudId: id, paisId })) })
+    }
+    if (multi.variedadIds !== undefined) {
+      await tx.solicitudInspeccionVariedad.deleteMany({ where: { solicitudId: id } })
+      await tx.solicitudInspeccionVariedad.createMany({ data: multi.variedadIds.map((variedadId) => ({ solicitudId: id, variedadId })) })
+    }
+    if (multi.calibreIds !== undefined) {
+      await tx.solicitudInspeccionCalibre.deleteMany({ where: { solicitudId: id } })
+      await tx.solicitudInspeccionCalibre.createMany({ data: multi.calibreIds.map((calibreId) => ({ solicitudId: id, calibreId })) })
+    }
+    if (multi.categoriaIds !== undefined) {
+      await tx.solicitudInspeccionCategoria.deleteMany({ where: { solicitudId: id } })
+      await tx.solicitudInspeccionCategoria.createMany({ data: multi.categoriaIds.map((categoriaId) => ({ solicitudId: id, categoriaId })) })
+    }
+    if (multi.articuloIds !== undefined) {
+      await tx.solicitudInspeccionEmbalaje.deleteMany({ where: { solicitudId: id } })
+      await tx.solicitudInspeccionEmbalaje.createMany({ data: multi.articuloIds.map((articuloId) => ({ solicitudId: id, articuloId })) })
     }
     return tx.solicitudInspeccion.update({
       where: { id },
@@ -356,6 +404,42 @@ export async function getTemporadaActiva(temporadaId: number) {
   return prisma.temporada.findFirst({
     where: { id: temporadaId, eliminadoEn: null, bloqueado: false },
   })
+}
+
+export async function getMercadoActivo(id: number) {
+  return prisma.mercado.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+// El "Cliente" de la solicitud es el cliente extranjero destino de la fruta
+export async function getClienteExtranjero(id: number) {
+  return prisma.entidad.findFirst({
+    where: { id, eliminadoEn: null, activo: true, tipos: { has: 'CLIENTE_EXTRANJERO' } },
+    select: { id: true },
+  })
+}
+
+export async function getCalificacionActiva(id: number) {
+  return prisma.calificacion.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getPaisesActivos(ids: number[]) {
+  return prisma.pais.findMany({ where: { id: { in: ids }, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getVariedadesActivas(ids: number[]) {
+  return prisma.variedad.findMany({ where: { id: { in: ids }, eliminadoEn: null, bloqueado: false }, select: { id: true, especieId: true } })
+}
+
+export async function getCalibresActivos(ids: number[]) {
+  return prisma.calibre.findMany({ where: { id: { in: ids }, eliminadoEn: null, bloqueado: false }, select: { id: true, especieId: true } })
+}
+
+export async function getCategoriasActivas(ids: number[]) {
+  return prisma.categoria.findMany({ where: { id: { in: ids }, eliminadoEn: null, bloqueado: false }, select: { id: true, especieId: true } })
+}
+
+export async function getArticulosEmbalaje(ids: number[]) {
+  return prisma.articulo.findMany({ where: { id: { in: ids } }, select: { id: true, tipo: true, activo: true } })
 }
 
 // ─── Conteo de referencias (para bloquear soft delete de maestros, QAS-SI-001) ─

@@ -43,7 +43,7 @@ export const notaVentaParamsSchema = z.object({
 
 export const notaVentaListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  limit: z.coerce.number().int().positive().max(500).default(20),
   clienteId: z.coerce.number().int().positive().optional(),
 })
 

@@ -73,7 +73,8 @@ export const navGroups: NavGroup[] = [
           { title: 'Grupos de Mercado', url: '/dashboard/configuracion/grupos-mercado', icon: 'page'    },
           { title: 'Mercados',          url: '/dashboard/configuracion/mercados',        icon: 'page'    },
           { title: 'Tipos de Embarque', url: '/dashboard/configuracion/tipos-embarque', icon: 'page'    },
-          { title: 'Formas de Pago',    url: '/dashboard/configuracion/formas-pago',    icon: 'billing' }
+          { title: 'Formas de Pago',    url: '/dashboard/configuracion/formas-pago',    icon: 'billing' },
+          { title: 'Condiciones de Pago', url: '/dashboard/configuracion/condiciones-pago', icon: 'billing' }
         ]
       }
     ]
@@ -246,7 +247,8 @@ export const navGroups: NavGroup[] = [
           { title: 'Mercados',          url: '/dashboard/configuracion/mercados',        icon: 'page'    },
           { title: 'Tipos de Embarque', url: '/dashboard/configuracion/tipos-embarque', icon: 'page'    },
           { title: 'Puertos',           url: '/dashboard/configuracion/puertos',         icon: 'page'    },
-          { title: 'Formas de Pago',    url: '/dashboard/configuracion/formas-pago',    icon: 'billing' }
+          { title: 'Formas de Pago',    url: '/dashboard/configuracion/formas-pago',    icon: 'billing' },
+          { title: 'Condiciones de Pago', url: '/dashboard/configuracion/condiciones-pago', icon: 'billing' }
         ]
       },
 
@@ -289,7 +291,8 @@ export const navGroups: NavGroup[] = [
           { title: 'Grupos de Defecto',      url: '/dashboard/configuracion/grupos-defecto',           icon: 'page'  },
           { title: 'Defectos',               url: '/dashboard/configuracion/defectos',                 icon: 'page'  },
           { title: 'Características Madurez',url: '/dashboard/configuracion/caracteristicas-madurez',  icon: 'forms' },
-          { title: 'Motivos de Inspección',  url: '/dashboard/configuracion/motivos-inspeccion',       icon: 'page'  }
+          { title: 'Motivos de Inspección',  url: '/dashboard/configuracion/motivos-inspeccion',       icon: 'page'  },
+          { title: 'Calificaciones',         url: '/dashboard/configuracion/calificaciones',           icon: 'page'  }
         ]
       },
 

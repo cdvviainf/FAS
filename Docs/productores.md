@@ -52,7 +52,7 @@ Permitir a Patricia administrar la ficha de cada productor, sus predios, su cont
 | PR1 | Productor | No hay tabla `Productor` aparte: es `Entidad` con `PRODUCTOR` en `tipos`; predios/contrato/CC cuelgan de `entidadId`. |
 | PR2 | Representante legal | El productor exige ≥1 `EntidadContacto` con `esRepresentanteLegal = true` y `rut` (cambio ya aplicado en entidades.md). |
 | PR3 | Predio | Maestro: `Int`, código único por productor, softdelete, auditoría. **Sin** descripción extranjera. |
-| PR4 | Contrato | Múltiples contratos por productor (historial), con `temporadaId` (season-scoped, E3). PDF opcional adjunto. |
+| PR4 | Contrato | Múltiples contratos por productor (historial), con `temporadaId` y `especieId` obligatorios; **un solo contrato activo por combinación especie-temporada**. Documentos adjuntos múltiples (no solo PDF). |
 | PR5 | Cuenta corriente | Movimientos **inmutables**; saldo = Σ HABER − Σ DEBE; corrección por reverso. |
 | PR6 | Concepto de liquidación | Cabecera (código, descripción, forma de aplicación, naturaleza COBRO/ABONO) + valor por especie (matriz tipo lista de precios). |
 | PR7 | Forma de aplicación | `POR_KILO`, `POR_CAJA`, `PORCENTAJE_VENTA` y **`MONTO_TOTAL`** (añadido para el caso "transporte por X dólares totales"). |
@@ -119,24 +119,26 @@ model Predio {
   @@index([entidadId])
 }
 
+// Rediseñado (reconciliación QA, ver §0 de CLAUDE.md): cabecera imputable
+// reducida a Temporada/Especie/vigencia + Condición de Pago (maestro
+// genérico); "Valores/Condiciones de facturación" y "% cumplimiento" quedan
+// fuera de Etapa 1. El compromiso de volumen se detalla en una grilla de
+// líneas por característica de fruta, y el contrato admite múltiples
+// documentos adjuntos (no solo un PDF).
 model ProductorContrato {
-  id                     Int            @id @default(autoincrement())
-  entidadId              Int
-  entidad                Entidad        @relation("ContratosProductor", fields: [entidadId], references: [id])
-  temporadaId            Int?
-  temporada              Temporada?     @relation(fields: [temporadaId], references: [id])
-  pdfRuta                String?                            // contrato escaneado (PDF)
-  fechaInicio            DateTime?      @db.Date
-  fechaTermino           DateTime?      @db.Date
+  id              Int        @id @default(autoincrement())
+  entidadId       Int
+  entidad         Entidad    @relation("ContratosProductor", fields: [entidadId], references: [id])
+  temporadaId     Int                                        // obligatorio (antes opcional)
+  temporada       Temporada  @relation(fields: [temporadaId], references: [id])
+  especieId       Int                                        // NUEVO — el contrato es por especie (obligatorio)
+  especie         Especie    @relation(fields: [especieId], references: [id])
+  fechaInicio     DateTime   @db.Date                         // sugerida desde temporada.fechaInicio, editable
+  fechaTermino    DateTime   @db.Date                         // sugerida desde temporada.fechaTermino, editable
+  condicionPagoId Int?                                        // Parametro genérico (mismo patrón que incotermId en OrdenCompra)
 
-  // Condiciones controladas durante el proceso
-  valoresFacturacion     String?                            // ⚠ a refinar
-  condicionesPago        String?
-  condicionesFacturacion String?                            // ⚠ a refinar (vs valoresFacturacion)
-  volumenComprometido    Decimal?       @db.Decimal(14, 3)
-  unidadVolumen          UnidadVolumen?
-  minimoGarantizado      Decimal?       @db.Decimal(14, 4)
-  // porcentajeCumplimiento: CALCULADO (volumen real / comprometido), no se almacena (R5b)
+  lineas          ProductorContratoLinea[]
+  adjuntos        ProductorContratoAdjunto[]
 
   creadoEn      DateTime  @default(now())
   creadoPor     String
@@ -146,6 +148,42 @@ model ProductorContrato {
   eliminadoPor  String?
 
   @@index([entidadId])
+  @@index([especieId])
+  @@index([temporadaId])
+}
+
+// Grilla de características de la fruta comprometidas en el contrato
+model ProductorContratoLinea {
+  id                   Int      @id @default(autoincrement())
+  contratoId           Int
+  contrato             ProductorContrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+
+  articuloId           Int      // Embalaje: FK → Artículo tipo EMBALAJE
+  variedadId           Int      // debe pertenecer a la especie del contrato
+  calibreDesdeId       Int      // rango de calibre, debe pertenecer a la especie del contrato
+  calibreHastaId       Int
+  categoriaId          Int      // debe pertenecer a la especie del contrato
+  unidadMedidaId       Int
+
+  cantidadComprometida Decimal  @db.Decimal(14, 3)
+  minimoGarantizado    Decimal  @db.Decimal(14, 4)
+
+  @@index([contratoId])
+}
+
+// Metadatos del adjunto — el binario vive en tabla aparte (mismo patrón que
+// adjuntos de Solicitud de Inspección); reemplaza el PDF único anterior
+model ProductorContratoAdjunto {
+  id         Int      @id @default(autoincrement())
+  contratoId Int
+  contrato   ProductorContrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  nombre     String
+  mime       String
+  tamano     Int
+  subidoEn   DateTime @default(now())
+  subidoPor  String
+
+  @@index([contratoId])
 }
 
 model MovimientoCuentaCorriente {
@@ -302,8 +340,8 @@ model ProformaServicioDetalle {
 - **R1 — Predio de productor.** `Predio.entidadId` debe ser una entidad con `PRODUCTOR` en `tipos` → 422.
 - **R2 — Código de predio** único por productor entre no eliminados.
 - **R3 — Representante legal obligatorio.** Un productor debe tener un `EntidadContacto` con `esRepresentanteLegal = true` y `rut` válido (regla R9 de entidades). Bloquear operaciones que lo requieran si falta.
-- **R4 — Contrato.** PDF opcional; condiciones se editan/exhiben en sección independiente. Múltiples contratos por productor (historial), season-scoped.
-- **R5 — Cuenta corriente.** Movimientos inmutables; corrección por reverso. **R5b:** saldo = Σ(HABER) − Σ(DEBE). `% cumplimiento` del contrato = volumen real / `volumenComprometido` × 100 (volumen real proviene de Compras — pendiente).
+- **R4 — Contrato.** Cabecera imputable: `temporadaId` y `especieId` obligatorios (el contrato es por especie), `fechaInicio`/`fechaTermino` sugeridas desde la temporada seleccionada pero editables, `condicionPagoId` opcional (Parametro genérico). El compromiso de volumen se detalla en `ProductorContratoLinea` (Embalaje, Variedad, Categoría, rango de Calibre, Unidad de Medida, cantidad comprometida y mínimo garantizado por línea) — mínimo 1 línea. Admite múltiples documentos adjuntos (`ProductorContratoAdjunto`). **R4b — Unicidad:** un productor no puede tener dos contratos activos (no eliminados) para la misma combinación especie-temporada → 422.
+- **R5 — Cuenta corriente.** Movimientos inmutables; corrección por reverso. **R5b:** saldo = Σ(HABER) − Σ(DEBE). `% cumplimiento` del contrato queda fuera de Etapa 1 (dependía de "Valores/Condiciones de facturación", removidas de la cabecera; se retoma junto con el volumen real de Compras).
 - **R6 — Naturaleza CC.** `movimiento.naturaleza` debe ser compatible con `tipo.naturaleza`: si el tipo es `DEBE` → solo DEBE; `HABER` → solo HABER; `AMBOS` → cualquiera. → 422 si incompatible.
 - **R7 — Concepto por especie.** `valor` único por `(conceptoId, especieId)`. La `naturaleza` del concepto define el signo al aplicarlo (COBRO resta, ABONO suma).
 - **R8 — Softdelete + auditoría** en Predio, Contrato y Concepto. Movimientos CC inmutables (no softdelete, se revierten).
@@ -340,8 +378,10 @@ model ProformaServicioDetalle {
 | GET | `/` | Lista entidades con tipo PRODUCTOR (+ resumen). |
 | GET | `/:entidadId` | Ficha: datos de entidad, representante legal, predios, contratos. |
 | GET/POST/PATCH/DELETE | `/:entidadId/predios[/:predioId]` | CRUD de predios (R1/R2). |
-| GET/POST/PATCH/DELETE | `/:entidadId/contratos[/:contratoId]` | CRUD de contratos + condiciones (R4). |
-| POST | `/:entidadId/contratos/:contratoId/pdf` | Subir/reemplazar PDF del contrato. |
+| GET/POST/PATCH/DELETE | `/:entidadId/contratos[/:contratoId]` | CRUD de contratos, cabecera + líneas de características (R4/R4b). |
+| POST | `/:entidadId/contratos/:contratoId/adjuntos` | Agregar un documento adjunto (multipart, sin límite de cantidad). |
+| GET | `/:entidadId/contratos/:contratoId/adjuntos/:adjuntoId` | Descargar un adjunto. |
+| DELETE | `/:entidadId/contratos/:contratoId/adjuntos/:adjuntoId` | Eliminar un adjunto. |
 | GET | `/:entidadId/cuenta-corriente` | Informe: movimientos + saldo (filtros fecha/temporada). |
 | POST | `/:entidadId/cuenta-corriente` | Imputar debe/haber (R6). |
 
@@ -377,7 +417,7 @@ model ProformaServicioDetalle {
 - **Listado de productores:** tabla (entidades PRODUCTOR) con búsqueda; acceso a la ficha.
 - **Ficha de productor:** datos de entidad (reutiliza Entidades) con foco en **representante legal** (contacto con RUT obligatorio) + pestañas:
   - **Predios:** grilla (código, descripción, códigos CSG/SDP/GGN, dirección, comuna, tipo producción, zona, geo). Alta/edición.
-  - **Contrato:** subida de PDF + **sección independiente** con las condiciones (valores/condiciones de facturación, condiciones de pago, volumen comprometido + % cumplimiento, mínimo garantizado).
+  - **Contrato:** cabecera (Temporada, Especie, vigencia sugerida desde la temporada, Condición de Pago) + grilla de líneas (Embalaje, Variedad, Calibre desde/hasta, Categoría, Unidad de Medida, cantidad comprometida, mínimo garantizado) + documentos adjuntos múltiples.
   - **Cuenta corriente:** informe con debes/haberes y **saldo corriente**; alta de movimientos por tipo.
 - **Conceptos de liquidación** (Configuración o Productores): primero la cabecera (código, descripción, **forma de aplicación**: por kilo / por caja / % venta / monto total; **naturaleza**: cobro/abono) y luego la **tabla de especies** con el valor de cada una (estilo lista de precios). Responsivo (E5).
 
@@ -388,7 +428,8 @@ model ProformaServicioDetalle {
 - **CA1 (R1):** Crear predio sobre una entidad sin tipo PRODUCTOR → 422.
 - **CA2 (R2):** Dos predios del mismo productor con igual código → 422; mismo código en otro productor → OK.
 - **CA3 (R3):** Marcar contacto como representante legal sin RUT → 422 (regla de entidades).
-- **CA4 (R4):** Asociar un PDF al contrato y registrar volumen comprometido = 10.000 kg; la ficha muestra el contrato y la sección de condiciones.
+- **CA4 (R4):** Crear un contrato con especie/temporada de cabecera y una línea de características con cantidad comprometida = 10.000 kg; la ficha muestra el contrato, su grilla de líneas y permite adjuntar documentos.
+- **CA4b (R4b):** Crear un segundo contrato para el mismo productor con igual especie y temporada → 422.
 - **CA5 (R5b):** Con HABER 1.000 y DEBE 300, el saldo del informe = 700.
 - **CA6 (R6):** Movimiento `DEBE` con un tipo cuya naturaleza es `HABER` → 422; con tipo `AMBOS` → OK.
 - **CA7 (R5 inmutable):** No existe endpoint para editar/borrar un movimiento de CC; se corrige con reverso.

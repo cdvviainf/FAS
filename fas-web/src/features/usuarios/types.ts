@@ -6,6 +6,7 @@ export interface Usuario {
   imagenUrl: string | null
   perfilId: number
   perfil: { id: number; codigo: string; descripcion: string }
+  esResponsableVenta: boolean
   creadoEn: string
   actualizadoEn: string | null
 }
@@ -20,6 +21,7 @@ export interface UsuarioCreateInput {
   email: string
   whatsapp?: string
   perfilId: number
+  esResponsableVenta?: boolean
   password: string
   passwordConfirm: string
 }
@@ -28,4 +30,5 @@ export interface UsuarioUpdateInput {
   nombre?: string
   whatsapp?: string | null
   perfilId?: number
+  esResponsableVenta?: boolean
 }

@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
-import type { OrdenCompraCreateInput, OrdenCompraLineaInput, OrdenCompraCuotaPagoInput, OrdenCompraUpdateInput } from './ordenes-compra.types.js'
+import type { OrdenCompraCreateInput, OrdenCompraUpdateInput } from './ordenes-compra.types.js'
 
 const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: true }
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
@@ -8,7 +8,12 @@ const includeDetalle = {
   entidadProductor: { select: entidadSelect },
   notaVenta: { select: { id: true, folio: true } },
   moneda: { select: mantenedorSelect },
-  facturarA: { select: entidadSelect },
+  formaPago: { select: mantenedorSelect },
+  destinoMercado: { select: mantenedorSelect },
+  responsable: { select: { id: true, nombre: true, email: true } },
+  condicionPago: {
+    select: { id: true, codigo: true, descripcion: true, cuotas: { select: { id: true, porcentaje: true, plazoDias: true, descripcion: true } } },
+  },
   lineas: {
     include: {
       especie: { select: mantenedorSelect },
@@ -53,10 +58,28 @@ export async function getOrdenCompraById(id: number) {
 
 const LOCK_NAMESPACE_ORDEN_COMPRA = 490236
 
+// Las cuotas de pago no se cargan manualmente: se copian desde la plantilla
+// de la Condición de Pago seleccionada (snapshot, no referencia viva — si la
+// plantilla cambia después no afecta OCs ya creadas).
+async function cuotasDesdeCondicionPago(condicionPagoId: number | null | undefined) {
+  if (!condicionPagoId) return []
+  const condicionPago = await prisma.condicionPago.findFirst({
+    where: { id: condicionPagoId, eliminadoEn: null },
+    include: { cuotas: true },
+  })
+  if (!condicionPago) return []
+  return condicionPago.cuotas.map((c) => ({
+    porcentaje: c.porcentaje,
+    plazoDias: c.plazoDias,
+    descripcion: c.descripcion,
+  }))
+}
+
 export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor: string) {
-  const { lineas, cuotasPago, ...cabecera } = data
+  const { lineas, ...cabecera } = data
   const anio = (data.fecha ?? new Date()).getFullYear()
   const prefijo = `OC-${anio}-`
+  const cuotasPago = await cuotasDesdeCondicionPago(data.condicionPagoId)
 
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_ORDEN_COMPRA}::int, ${anio}::int)`
@@ -70,7 +93,7 @@ export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor:
         numero,
         creadoPor,
         lineas: { create: lineas },
-        cuotasPago: { create: cuotasPago ?? [] },
+        cuotasPago: { create: cuotasPago },
       },
       include: includeDetalle,
     })
@@ -78,14 +101,15 @@ export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor:
 }
 
 export async function updateOrdenCompra(id: number, data: OrdenCompraUpdateInput, actualizadoPor: string) {
-  const { lineas, cuotasPago, ...cabecera } = data
+  const { lineas, ...cabecera } = data
 
   return prisma.$transaction(async (tx) => {
     if (lineas !== undefined) {
       await tx.ordenCompraLinea.deleteMany({ where: { ordenCompraId: id } })
       await tx.ordenCompraLinea.createMany({ data: lineas.map((l) => ({ ordenCompraId: id, ...l })) })
     }
-    if (cuotasPago !== undefined) {
+    if (data.condicionPagoId !== undefined) {
+      const cuotasPago = await cuotasDesdeCondicionPago(data.condicionPagoId)
       await tx.ordenCompraCuotaPago.deleteMany({ where: { ordenCompraId: id } })
       await tx.ordenCompraCuotaPago.createMany({ data: cuotasPago.map((c) => ({ ordenCompraId: id, ...c })) })
     }
@@ -111,16 +135,31 @@ export async function getEntidadProductor(id: number) {
   })
 }
 
-export async function getEntidad(id: number) {
-  return prisma.entidad.findFirst({ where: { id, eliminadoEn: null, activo: true }, select: { id: true } })
-}
-
 export async function getNotaVenta(id: number) {
   return prisma.notaVenta.findFirst({ where: { id, eliminadoEn: null }, select: { id: true } })
 }
 
 export async function getMoneda(id: number) {
   return prisma.moneda.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getFormaPago(id: number) {
+  return prisma.formaPago.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getMercado(id: number) {
+  return prisma.mercado.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getCondicionPago(id: number) {
+  return prisma.condicionPago.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getUsuarioResponsable(id: string) {
+  return prisma.usuario.findFirst({
+    where: { id, eliminadoEn: null, esResponsableVenta: true },
+    select: { id: true },
+  })
 }
 
 export async function getEspecie(id: number) {

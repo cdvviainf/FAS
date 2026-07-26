@@ -26,7 +26,7 @@ import { TIPO_ARTICULO_LABELS } from '../types'
 import type { Articulo, TipoArticulo } from '../types'
 import { ArticuloFormSheet } from './articulo-form-sheet'
 
-const ITEM = 'operaciones.materiales'
+const ITEM = 'OPER_MATERIALES'
 
 export function ArticuloListingClient() {
   const router = useRouter()

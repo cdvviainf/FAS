@@ -119,6 +119,7 @@ describe('reglas de mantenedores', () => {
         1,
         'comunaId',
         undefined,
+        undefined,
       )
       expect(mockedRepo.softDeleteMantenedor).not.toHaveBeenCalled()
     })

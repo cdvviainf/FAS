@@ -2,12 +2,13 @@ import { api } from '@/lib/api'
 import type { Usuario, UsuarioListResponse, UsuarioCreateInput, UsuarioUpdateInput } from './types'
 
 export const usuariosService = {
-  async list(params: { page?: number; limit?: number; q?: string; perfilId?: number } = {}): Promise<UsuarioListResponse> {
+  async list(params: { page?: number; limit?: number; q?: string; perfilId?: number; esResponsableVenta?: boolean } = {}): Promise<UsuarioListResponse> {
     const searchParams: Record<string, string> = {}
     if (params.page) searchParams.page = String(params.page)
     if (params.limit) searchParams.limit = String(params.limit)
     if (params.q) searchParams.q = params.q
     if (params.perfilId) searchParams.perfilId = String(params.perfilId)
+    if (params.esResponsableVenta !== undefined) searchParams.esResponsableVenta = String(params.esResponsableVenta)
     return api.get('config/usuarios', { searchParams }).json()
   },
 

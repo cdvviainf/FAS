@@ -31,15 +31,26 @@ const childrenMap: Partial<Record<MantenedorModelo, ChildDef[]>> = {
 }
 
 type ExternalReferenceDef = {
-  delegateName: 'entidad' | 'entidadDireccion' | 'bodegaContacto' | 'solicitudInspeccion'
+  delegateName:
+    | 'entidad'
+    | 'entidadDireccion'
+    | 'bodegaContacto'
+    | 'solicitudInspeccion'
+    | 'solicitudInspeccionPais'
+    | 'solicitudInspeccionVariedad'
+    | 'solicitudInspeccionCalibre'
+    | 'solicitudInspeccionCategoria'
+    | 'solicitudInspeccionEmbalaje'
   parentField: string
   label: string
   usesSoftDelete?: boolean
+  viaSolicitud?: boolean
 }
 const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceDef[]>> = {
   pais: [
     { delegateName: 'entidad', parentField: 'paisId', label: 'entidades' },
     { delegateName: 'entidadDireccion', parentField: 'paisId', label: 'direcciones de entidad' },
+    { delegateName: 'solicitudInspeccionPais', parentField: 'paisId', label: 'solicitudes de inspección', viaSolicitud: true },
   ],
   comuna: [
     { delegateName: 'entidadDireccion', parentField: 'comunaId', label: 'direcciones de entidad' },
@@ -52,7 +63,7 @@ const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceD
       usesSoftDelete: false,
     },
   ],
-  // QAS-SI-001: maestros usados por solicitudes de inspección vigentes
+  // QAS-SI-001/QAS-SI-014: maestros usados por solicitudes de inspección vigentes
   especie: [
     { delegateName: 'solicitudInspeccion', parentField: 'especieId', label: 'solicitudes de inspección' },
   ],
@@ -61,6 +72,21 @@ const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceD
   ],
   motivoInspeccion: [
     { delegateName: 'solicitudInspeccion', parentField: 'motivoId', label: 'solicitudes de inspección' },
+  ],
+  mercado: [
+    { delegateName: 'solicitudInspeccion', parentField: 'mercadoId', label: 'solicitudes de inspección' },
+  ],
+  variedad: [
+    { delegateName: 'solicitudInspeccionVariedad', parentField: 'variedadId', label: 'solicitudes de inspección', viaSolicitud: true },
+  ],
+  calibre: [
+    { delegateName: 'solicitudInspeccionCalibre', parentField: 'calibreId', label: 'solicitudes de inspección', viaSolicitud: true },
+  ],
+  categoria: [
+    { delegateName: 'solicitudInspeccionCategoria', parentField: 'categoriaId', label: 'solicitudes de inspección', viaSolicitud: true },
+  ],
+  calificacion: [
+    { delegateName: 'solicitudInspeccion', parentField: 'calificacionId', label: 'solicitudes de inspección' },
   ],
 }
 
@@ -348,6 +374,7 @@ export async function eliminarMantenedor(
       id,
       reference.parentField,
       reference.usesSoftDelete,
+      reference.viaSolicitud,
     )
     if (count > 0) {
       throw new ConflictError(

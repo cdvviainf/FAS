@@ -18,7 +18,7 @@ import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { correoConfigService, type CorreoConfigInput } from '../service'
 
-const ITEM = 'config.general'
+const ITEM = 'CONFIG_GENERAL'
 
 // Defaults Office365
 const DEFAULTS: CorreoConfigInput = {

@@ -1,7 +1,7 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './contratos.repository.js'
 import { findEntidadById } from '../../config/entidades/entidades.repository.js'
-import type { ContratoCreateInput, ContratoUpdateInput } from './contratos.types.js'
+import type { ContratoCreateInput, ContratoLineaInput, ContratoUpdateInput } from './contratos.types.js'
 
 async function validarProductor(entidadId: number) {
   const entidad = await findEntidadById(entidadId)
@@ -22,11 +22,66 @@ export async function obtenerContrato(entidadId: number, contratoId: number) {
   return contrato
 }
 
-// PROD-03: la temporada debe existir, no estar eliminada ni bloqueada
-async function validarReferenciasVigentes(body: ContratoCreateInput | ContratoUpdateInput) {
+async function validarLinea(especieId: number, linea: ContratoLineaInput, index: number) {
+  const prefijo = `Línea ${index + 1}:`
+
+  const articulo = await repo.getArticuloTipo(linea.articuloId)
+  if (!articulo) throw new ValidationError(`${prefijo} el artículo de embalaje seleccionado no existe`)
+  if (articulo.tipo !== 'EMBALAJE') throw new ValidationError(`${prefijo} el artículo debe ser de tipo Embalaje`)
+  if (!articulo.activo) throw new ValidationError(`${prefijo} el artículo de embalaje seleccionado está inactivo`)
+
+  const variedad = await repo.getVariedad(linea.variedadId)
+  if (!variedad) throw new ValidationError(`${prefijo} la variedad seleccionada no existe o está bloqueada`)
+  if (variedad.especieId !== especieId) {
+    throw new ValidationError(`${prefijo} la variedad no pertenece a la especie del contrato`)
+  }
+
+  const categoria = await repo.getCategoria(linea.categoriaId)
+  if (!categoria) throw new ValidationError(`${prefijo} la categoría seleccionada no existe o está bloqueada`)
+  if (categoria.especieId !== especieId) {
+    throw new ValidationError(`${prefijo} la categoría no pertenece a la especie del contrato`)
+  }
+
+  const unidadMedida = await repo.getUnidadMedida(linea.unidadMedidaId)
+  if (!unidadMedida) throw new ValidationError(`${prefijo} la unidad de medida seleccionada no existe o está bloqueada`)
+
+  const [calibreDesde, calibreHasta] = await Promise.all([
+    repo.getCalibre(linea.calibreDesdeId),
+    repo.getCalibre(linea.calibreHastaId),
+  ])
+  if (!calibreDesde || !calibreHasta) {
+    throw new ValidationError(`${prefijo} uno o ambos calibres del rango no existen o están bloqueados`)
+  }
+  if (calibreDesde.especieId !== especieId || calibreHasta.especieId !== especieId) {
+    throw new ValidationError(`${prefijo} el rango de calibre no pertenece a la especie del contrato`)
+  }
+  if (calibreDesde.orden > calibreHasta.orden) {
+    throw new ValidationError(`${prefijo} el calibre "desde" debe preceder (o igualar) al calibre "hasta" en el orden del maestro`)
+  }
+}
+
+// PROD-03: la temporada debe existir, no estar eliminada ni bloqueada; la especie debe existir
+async function validarReferenciasHeader(body: ContratoCreateInput | ContratoUpdateInput) {
   if (body.temporadaId != null) {
     const temporada = await repo.getTemporadaActiva(body.temporadaId)
     if (!temporada) throw new ValidationError('La temporada seleccionada no existe, está bloqueada o fue eliminada')
+  }
+  if (body.especieId != null) {
+    const especie = await repo.getEspecie(body.especieId)
+    if (!especie) throw new ValidationError('La especie seleccionada no existe o está bloqueada')
+  }
+}
+
+// Un solo contrato activo por combinación especie-temporada, por productor
+async function validarUnicoPorEspecieTemporada(
+  entidadId: number,
+  especieId: number,
+  temporadaId: number,
+  excluirId?: number,
+) {
+  const existentes = await repo.contarContratosPorEspecieTemporada(entidadId, especieId, temporadaId, excluirId)
+  if (existentes > 0) {
+    throw new ValidationError('Este productor ya tiene un contrato para esa especie en la temporada seleccionada')
   }
 }
 
@@ -39,13 +94,27 @@ export async function crearContrato(entidadId: number, body: ContratoCreateInput
       'El productor debe tener un representante legal (con RUT) registrado antes de crear un contrato (R3)',
     )
   }
-  await validarReferenciasVigentes(body)
+  await validarReferenciasHeader(body)
+  await validarUnicoPorEspecieTemporada(entidadId, body.especieId, body.temporadaId)
+  for (const [index, linea] of body.lineas.entries()) {
+    await validarLinea(body.especieId, linea, index)
+  }
   return repo.createContrato(entidadId, body, userId)
 }
 
 export async function actualizarContrato(entidadId: number, contratoId: number, body: ContratoUpdateInput, userId: string) {
-  await obtenerContrato(entidadId, contratoId)
-  await validarReferenciasVigentes(body)
+  const existente = await obtenerContrato(entidadId, contratoId)
+  await validarReferenciasHeader(body)
+  const especieId = body.especieId ?? existente.especieId
+  const temporadaId = body.temporadaId ?? existente.temporadaId
+  if (body.especieId != null || body.temporadaId != null) {
+    await validarUnicoPorEspecieTemporada(entidadId, especieId, temporadaId, contratoId)
+  }
+  if (body.lineas) {
+    for (const [index, linea] of body.lineas.entries()) {
+      await validarLinea(especieId, linea, index)
+    }
+  }
   return repo.updateContrato(contratoId, body, userId)
 }
 
@@ -54,34 +123,40 @@ export async function eliminarContrato(entidadId: number, contratoId: number, us
   await repo.softDeleteContrato(contratoId, userId)
 }
 
-// ─── PDF ─────────────────────────────────────────────────────────────────────
+// ─── Documentos adjuntos ──────────────────────────────────────────────────────
 
-const MIME_PDF = 'application/pdf'
-export const MAX_PDF_BYTES = 15 * 1024 * 1024
+export const MAX_ADJUNTO_BYTES = 15 * 1024 * 1024
 
-export async function subirPdf(
+export async function agregarAdjunto(
   entidadId: number,
   contratoId: number,
   archivo: { nombre: string; mime: string; datos: Buffer },
+  userId: string,
 ) {
   await obtenerContrato(entidadId, contratoId)
-  if (archivo.mime !== MIME_PDF) {
-    throw new ValidationError('Solo se acepta PDF para el contrato')
+  if (archivo.datos.length > MAX_ADJUNTO_BYTES) {
+    throw new ValidationError('El archivo supera el tamaño máximo de 15 MB')
   }
-  if (archivo.datos.length > MAX_PDF_BYTES) {
-    throw new ValidationError('El PDF supera el tamaño máximo de 15 MB')
-  }
-  return repo.guardarPdf(
+  return repo.agregarAdjunto(
     contratoId,
     { nombre: archivo.nombre, mime: archivo.mime, tamano: archivo.datos.length },
     archivo.datos,
+    userId,
   )
 }
 
-export async function descargarPdf(entidadId: number, contratoId: number) {
-  const contrato = await obtenerContrato(entidadId, contratoId)
-  if (!contrato.pdfNombre) throw new NotFoundError('PDF del contrato', String(contratoId))
-  const contenido = await repo.getPdfContenido(contratoId)
-  if (!contenido) throw new NotFoundError('Contenido del PDF', String(contratoId))
-  return { meta: { nombre: contrato.pdfNombre, mime: contrato.pdfMime! }, datos: Buffer.from(contenido.datos) }
+export async function descargarAdjunto(entidadId: number, contratoId: number, adjuntoId: number) {
+  await obtenerContrato(entidadId, contratoId)
+  const adjunto = await repo.getAdjunto(contratoId, adjuntoId)
+  if (!adjunto) throw new NotFoundError('Adjunto', String(adjuntoId))
+  const contenido = await repo.getAdjuntoContenido(adjuntoId)
+  if (!contenido) throw new NotFoundError('Contenido del adjunto', String(adjuntoId))
+  return { meta: { nombre: adjunto.nombre, mime: adjunto.mime }, datos: Buffer.from(contenido.datos) }
+}
+
+export async function eliminarAdjunto(entidadId: number, contratoId: number, adjuntoId: number) {
+  await obtenerContrato(entidadId, contratoId)
+  const adjunto = await repo.getAdjunto(contratoId, adjuntoId)
+  if (!adjunto) throw new NotFoundError('Adjunto', String(adjuntoId))
+  await repo.eliminarAdjunto(adjuntoId)
 }

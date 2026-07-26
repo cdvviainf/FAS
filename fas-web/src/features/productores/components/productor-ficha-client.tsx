@@ -15,7 +15,7 @@ export function ProductorFichaClient({ entidadId }: { entidadId: number }) {
   const tabInicial = searchParams.get('tab') ?? 'predios'
   // PROD-01: Contrato tiene permiso propio (PROD_CONTRATO); ocultar la pestaña
   // si el perfil no tiene ni siquiera LECTURA, en vez de mostrar "sin contratos".
-  const puedeVerContrato = usePuedeLeer('productores.contrato')
+  const puedeVerContrato = usePuedeLeer('PROD_CONTRATO')
 
   const { data, isPending } = useQuery(productorFichaOptions(entidadId))
 

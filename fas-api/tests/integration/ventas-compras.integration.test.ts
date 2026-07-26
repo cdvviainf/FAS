@@ -25,6 +25,8 @@ async function limpiarDatos() {
       "orden_compra_linea",
       "orden_compra_cuota_pago",
       "ordenes_compra",
+      "condicion_pago_cuota",
+      "condiciones_pago",
       "instructivo_embalaje_detalle",
       "instructivos_embalaje",
       "notas_venta_detalle_calibre",
@@ -40,9 +42,39 @@ async function limpiarDatos() {
       "monedas",
       "tipos_embarque",
       "entidades",
-      "paises"
+      "paises",
+      "usuarios",
+      "perfiles"
     RESTART IDENTITY CASCADE
   `)
+}
+
+async function crearUsuarioResponsable(esResponsableVenta: boolean, codigoSufijo: string) {
+  const perfil = await prisma.perfil.create({
+    data: { codigo: `PERFIL-${codigoSufijo}`, descripcion: 'Perfil de prueba', creadoPor: 'test' },
+  })
+  return prisma.usuario.create({
+    data: {
+      id: `usuario-${codigoSufijo}`,
+      nombre: `Usuario ${codigoSufijo}`,
+      email: `usuario-${codigoSufijo}@example.invalid`,
+      perfilId: perfil.id,
+      esResponsableVenta,
+      creadoPor: 'test',
+    },
+  })
+}
+
+async function crearCondicionPago(cuotas: { porcentaje: number; plazoDias: number }[]) {
+  return prisma.condicionPago.create({
+    data: {
+      codigo: 'CP-30-60',
+      descripcion: '50/50 a 30 y 60 días',
+      creadoPor: 'test',
+      cuotas: { create: cuotas },
+    },
+    include: { cuotas: true },
+  })
 }
 
 async function crearFixtures() {
@@ -257,17 +289,12 @@ describe('Orden de Compra contra PostgreSQL', () => {
     ).rejects.toMatchObject({ statusCode: 422 })
   })
 
-  it('exige que las cuotas de pago sumen 100% y valida el rango de calibre por especie', async () => {
+  it('deriva las cuotas de pago desde la Condición de Pago seleccionada (no se cargan manualmente) y valida el rango de calibre por especie', async () => {
     const f = await crearFixtures()
-
-    await expect(
-      crearOrdenCompra({
-        entidadProductorId: f.productor.id,
-        monedaId: f.moneda.id,
-        lineas: [ocLinea(f)],
-        cuotasPago: [{ porcentaje: 80, plazoDias: 30 }, { porcentaje: 30, plazoDias: 60 }],
-      }, 'test'),
-    ).rejects.toMatchObject({ statusCode: 422 })
+    const condicionPago = await crearCondicionPago([
+      { porcentaje: 80, plazoDias: 30, descripcion: 'Anticipo' },
+      { porcentaje: 20, plazoDias: 60, descripcion: 'Saldo' },
+    ])
 
     await expect(
       crearOrdenCompra({
@@ -280,14 +307,20 @@ describe('Orden de Compra contra PostgreSQL', () => {
     const oc = await crearOrdenCompra({
       entidadProductorId: f.productor.id,
       monedaId: f.moneda.id,
+      condicionPagoId: condicionPago.id,
       lineas: [ocLinea(f)],
-      cuotasPago: [
-        { porcentaje: 80, plazoDias: 30, descripcion: 'Anticipo' },
-        { porcentaje: 20, plazoDias: 60, descripcion: 'Saldo' },
-      ],
     }, 'test')
     expect(oc.cuotasPago).toHaveLength(2)
+    expect(oc.cuotasPago.map((c) => Number(c.porcentaje)).sort()).toEqual([20, 80])
     expect(oc.lineas).toHaveLength(1)
+
+    // Sin condición de pago no hay cuotas (no quedan pendientes de carga manual)
+    const ocSinCuotas = await crearOrdenCompra({
+      entidadProductorId: f.productor.id,
+      monedaId: f.moneda.id,
+      lineas: [ocLinea(f)],
+    }, 'test')
+    expect(ocSinCuotas.cuotasPago).toHaveLength(0)
   })
 
   it('permite editar líneas y cuotas de una OC en Borrador', async () => {
@@ -304,16 +337,41 @@ describe('Orden de Compra contra PostgreSQL', () => {
     expect(editada.lineas[0].cantidadPallets).toBe(50)
   })
 
-  it('rechaza notaVentaId y facturarAId inexistentes', async () => {
+  it('rechaza notaVentaId, destinoMercadoId, condicionPagoId y responsableId inexistentes o inválidos', async () => {
     const f = await crearFixtures()
+    const usuarioSinFlag = await crearUsuarioResponsable(false, 'no-resp')
 
     await expect(
       crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, notaVentaId: 999999, lineas: [ocLinea(f)] }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     await expect(
-      crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, facturarAId: 999999, lineas: [ocLinea(f)] }, 'test'),
+      crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, destinoMercadoId: 999999, lineas: [ocLinea(f)] }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
+
+    await expect(
+      crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, condicionPagoId: 999999, lineas: [ocLinea(f)] }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
+
+    await expect(
+      crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, formaPagoId: 999999, lineas: [ocLinea(f)] }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
+
+    // Solo usuarios marcados como Responsable de Venta pueden asignarse
+    await expect(
+      crearOrdenCompra({ entidadProductorId: f.productor.id, monedaId: f.moneda.id, responsableId: usuarioSinFlag.id, lineas: [ocLinea(f)] }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
+
+    const usuarioResponsable = await crearUsuarioResponsable(true, 'si-resp')
+    const oc = await crearOrdenCompra({
+      entidadProductorId: f.productor.id,
+      monedaId: f.moneda.id,
+      destinoMercadoId: f.mercado.id,
+      responsableId: usuarioResponsable.id,
+      lineas: [ocLinea(f)],
+    }, 'test')
+    expect(oc.destinoMercado?.id).toBe(f.mercado.id)
+    expect(oc.responsable?.id).toBe(usuarioResponsable.id)
   })
 
   it('permite eliminar (soft delete) una OC en Borrador/Emitida, pero bloquea edición y eliminación tras Recepcionada', async () => {

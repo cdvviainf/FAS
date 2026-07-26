@@ -96,7 +96,7 @@ function EspecieQuickDialog({
 
 export function EspecieQuickCreate({ onCreated }: EspecieQuickCreateProps) {
   const [open, setOpen] = useState(false)
-  const puedeEscribir = usePuedeEscribir('config.especies')
+  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
 
   if (!puedeEscribir) return null
 

@@ -32,7 +32,7 @@ import { TIPO_ARTICULO_LABELS, TIPO_COSTEO_LABELS } from '../types'
 import type { Articulo, TipoArticulo, TipoCosteo } from '../types'
 
 const unidadesService = createMantenedorService('unidades-medida')
-const ITEM = 'operaciones.materiales'
+const ITEM = 'OPER_MATERIALES'
 
 interface ArticuloFormSheetProps {
   item?: Articulo

@@ -1,34 +1,69 @@
-export type UnidadVolumen = 'KG' | 'CAJAS'
+interface RefSimple {
+  id: number
+  codigo: string
+  descripcion: string
+}
+
+export interface ContratoLinea {
+  id: number
+  articuloId: number
+  articulo: RefSimple & { etiqueta?: string | null; kgNetoEnvase?: string | null; kgBrutoEnvase?: string | null }
+  variedadId: number
+  variedad: RefSimple
+  calibreDesdeId: number
+  calibreDesde: RefSimple
+  calibreHastaId: number
+  calibreHasta: RefSimple
+  categoriaId: number
+  categoria: RefSimple
+  unidadMedidaId: number
+  unidadMedida: RefSimple
+  cantidadComprometida: string
+  minimoGarantizado: string
+}
+
+export interface ContratoAdjunto {
+  id: number
+  nombre: string
+  mime: string
+  tamano: number
+  subidoEn: string
+  subidoPor: string
+}
 
 export interface Contrato {
   id: number
   entidadId: number
-  temporadaId: number | null
-  temporada: { id: number; codigo: string; descripcion: string } | null
-  pdfNombre: string | null
-  pdfMime: string | null
-  pdfTamano: number | null
-  fechaInicio: string | null
-  fechaTermino: string | null
-  valoresFacturacion: string | null
-  condicionesPago: string | null
-  condicionesFacturacion: string | null
-  volumenComprometido: string | null
-  unidadVolumen: UnidadVolumen | null
-  minimoGarantizado: string | null
+  temporadaId: number
+  temporada: RefSimple
+  especieId: number
+  especie: RefSimple
+  fechaInicio: string
+  fechaTermino: string
+  condicionPagoId: number | null
+  lineas: ContratoLinea[]
+  adjuntos: ContratoAdjunto[]
   creadoEn: string
 }
 
+export interface ContratoLineaInput {
+  articuloId: number
+  variedadId: number
+  calibreDesdeId: number
+  calibreHastaId: number
+  categoriaId: number
+  unidadMedidaId: number
+  cantidadComprometida: number
+  minimoGarantizado: number
+}
+
 export interface ContratoCreateInput {
-  temporadaId?: number | null
-  fechaInicio?: string | null
-  fechaTermino?: string | null
-  valoresFacturacion?: string | null
-  condicionesPago?: string | null
-  condicionesFacturacion?: string | null
-  volumenComprometido?: number | null
-  unidadVolumen?: UnidadVolumen | null
-  minimoGarantizado?: number | null
+  temporadaId: number
+  especieId: number
+  fechaInicio: string
+  fechaTermino: string
+  condicionPagoId?: number | null
+  lineas: ContratoLineaInput[]
 }
 
 export type ContratoUpdateInput = Partial<ContratoCreateInput>

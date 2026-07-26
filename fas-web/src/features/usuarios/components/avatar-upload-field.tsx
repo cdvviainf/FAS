@@ -10,7 +10,7 @@ import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { usuariosService } from '../service'
 import { usuariosKeys } from '../queries'
 
-const ITEM = 'config.usuarios'
+const ITEM = 'CONFIG_USUARIOS'
 
 function iniciales(nombre: string): string {
   return nombre

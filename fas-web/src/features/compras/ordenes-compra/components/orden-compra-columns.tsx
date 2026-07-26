@@ -24,7 +24,7 @@ import type { OrdenCompraListItem } from '../types'
 import { ESTADO_OC_LABELS } from '../types'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 
-const ITEM = 'compras.ordenes'
+const ITEM = 'COMPRAS_OC'
 
 const ESTADO_VARIANT: Record<string, 'secondary' | 'default' | 'outline'> = {
   BORRADOR: 'secondary',

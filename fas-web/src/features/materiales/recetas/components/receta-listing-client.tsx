@@ -18,7 +18,7 @@ import { recetasService } from '../service'
 import type { Receta } from '../types'
 import { RecetaFormSheet } from './receta-form-sheet'
 
-const ITEM = 'operaciones.materiales'
+const ITEM = 'OPER_MATERIALES'
 
 export function RecetaListingClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)

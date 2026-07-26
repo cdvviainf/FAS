@@ -7,8 +7,8 @@ import type { UsuarioCreateInput, UsuarioUpdateInput, CambiarPasswordInput } fro
 
 const SISTEMA_USER = 'system'
 
-export async function listarUsuarios(page: number, limit: number, q?: string, perfilId?: number) {
-  const { data, total } = await repo.findAllUsuarios(page, limit, q, perfilId)
+export async function listarUsuarios(page: number, limit: number, q?: string, perfilId?: number, esResponsableVenta?: boolean) {
+  const { data, total } = await repo.findAllUsuarios(page, limit, q, perfilId, esResponsableVenta)
   return {
     data,
     meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
@@ -68,6 +68,7 @@ export async function crearUsuario(input: UsuarioCreateInput, currentUserId = SI
       email: input.email,
       whatsapp: input.whatsapp,
       perfilId: input.perfilId,
+      esResponsableVenta: input.esResponsableVenta,
       creadoPor: currentUserId,
     })
 
@@ -92,6 +93,7 @@ export async function actualizarUsuario(id: string, input: UsuarioUpdateInput, c
     nombre: input.nombre,
     whatsapp: input.whatsapp,
     perfilId: input.perfilId,
+    esResponsableVenta: input.esResponsableVenta,
     actualizadoPor: currentUserId,
   })
 }

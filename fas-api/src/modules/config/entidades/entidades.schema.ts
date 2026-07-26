@@ -101,7 +101,7 @@ export const entidadContactoParamSchema = z.object({
 
 export const entidadListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  limit: z.coerce.number().int().positive().max(500).default(20),
   q: z.string().trim().optional(),
   tipo: z.enum(tipoEntidadValues).optional(),
   activo: z

@@ -11,7 +11,7 @@ import { prediosService } from '../service'
 import type { Predio } from '../types'
 import { PredioFormSheet } from './predio-form-sheet'
 
-const ITEM = 'productores.ficha'
+const ITEM = 'PROD_FICHA'
 
 export function PrediosTab({ entidadId, predios }: { entidadId: number; predios: Predio[] }) {
   const puedeEscribir = usePuedeEscribir(ITEM)

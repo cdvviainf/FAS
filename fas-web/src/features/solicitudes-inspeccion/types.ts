@@ -67,6 +67,19 @@ export interface SolicitudInspeccion {
   fechaHora: string
   motivoId: number
   motivo: { id: number; codigo: string; descripcion: string }
+  mercadoId: number | null
+  mercado: { id: number; codigo: string; descripcion: string } | null
+  clienteId: number | null
+  cliente: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
+  fechaDespacho: string | null
+  cantidadPallets: number | null
+  calificacionId: number | null
+  calificacion: { id: number; codigo: string; descripcion: string } | null
+  paises: { pais: { id: number; codigo: string; descripcion: string } }[]
+  variedades: { variedad: { id: number; codigo: string; descripcion: string } }[]
+  calibres: { calibre: { id: number; codigo: string; descripcion: string } }[]
+  categorias: { categoria: { id: number; codigo: string; descripcion: string } }[]
+  embalajes: { articulo: { id: number; codigo: string; descripcion: string } }[]
   observaciones: string | null
   estado: EstadoSolicitud
   notificadaEn: string | null
@@ -87,6 +100,16 @@ export interface SolicitudCreateInput {
   especieId?: number | null
   fechaHora: string
   motivoId: number
+  mercadoId?: number | null
+  paisIds?: number[]
+  clienteId?: number | null
+  fechaDespacho?: string | null
+  cantidadPallets?: number | null
+  calificacionId?: number | null
+  variedadIds?: number[]
+  calibreIds?: number[]
+  categoriaIds?: number[]
+  articuloIds?: number[]
   observaciones?: string | null
   asignados: AsignadoInput[]
 }

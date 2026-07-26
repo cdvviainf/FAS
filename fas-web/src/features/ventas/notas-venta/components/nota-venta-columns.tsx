@@ -22,7 +22,7 @@ import { notasVentaKeys } from '../queries'
 import type { NotaVentaListItem } from '../types'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 
-const ITEM = 'ventas.notas'
+const ITEM = 'VENTAS_NV'
 
 function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
   const [deleteOpen, setDeleteOpen] = useState(false)

@@ -206,9 +206,12 @@ export async function countEntidadUsos(id: number): Promise<number> {
   // Los módulos operativos (compras, ventas, etc.) aún no existen.
   // Cuando se implementen, agregar conteos aquí.
   // QAS-SI-001: solicitudes de inspección vigentes que usan esta entidad como productor.
-  return prisma.solicitudInspeccion.count({
-    where: { entidadProductorId: id, eliminadoEn: null },
-  })
+  // QAS-SI-014: también como cliente (extranjero) del Documento 107.
+  const [comoProductor, comoCliente] = await Promise.all([
+    prisma.solicitudInspeccion.count({ where: { entidadProductorId: id, eliminadoEn: null } }),
+    prisma.solicitudInspeccion.count({ where: { clienteId: id, eliminadoEn: null } }),
+  ])
+  return comoProductor + comoCliente
 }
 
 /** Solicitudes de inspección vigentes que usan una dirección de entidad. */

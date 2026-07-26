@@ -89,7 +89,7 @@ function GrupoMercadoQuickDialog({
 
 export function GrupoMercadoQuickCreate({ onCreated }: GrupoMercadoQuickCreateProps) {
   const [open, setOpen] = useState(false);
-  const puedeEscribir = usePuedeEscribir('config.grupos-mercado');
+  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES');
 
   if (!puedeEscribir) return null;
 

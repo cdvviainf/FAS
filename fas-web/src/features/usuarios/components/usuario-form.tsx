@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import {
   Select,
@@ -30,6 +31,7 @@ const usuarioBaseSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido').max(200).trim(),
   whatsapp: z.string().max(50).trim().optional().or(z.literal('')),
   perfilId: z.coerce.number().int().min(1, 'El perfil es requerido'),
+  esResponsableVenta: z.boolean(),
 })
 
 const usuarioCreateSchema = usuarioBaseSchema.extend({
@@ -69,6 +71,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
         email: values.email,
         whatsapp: values.whatsapp || undefined,
         perfilId: values.perfilId,
+        esResponsableVenta: values.esResponsableVenta,
         password: values.password,
         passwordConfirm: values.passwordConfirm,
       }),
@@ -86,6 +89,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
         nombre: values.nombre,
         whatsapp: values.whatsapp || null,
         perfilId: values.perfilId,
+        esResponsableVenta: values.esResponsableVenta,
       }),
     onSuccess: () => {
       toast.success('Usuario actualizado correctamente')
@@ -105,6 +109,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       email: '',
       whatsapp: '',
       perfilId: 0,
+      esResponsableVenta: false,
       password: '',
       passwordConfirm: '',
     } as UsuarioCreateValues,
@@ -121,6 +126,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       nombre: usuario?.nombre ?? '',
       whatsapp: usuario?.whatsapp ?? '',
       perfilId: usuario?.perfilId ?? 0,
+      esResponsableVenta: usuario?.esResponsableVenta ?? false,
     } as UsuarioEditValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validators: { onSubmit: usuarioEditSchema as any },
@@ -134,6 +140,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       editForm.setFieldValue('nombre', usuario.nombre)
       editForm.setFieldValue('whatsapp', usuario.whatsapp ?? '')
       editForm.setFieldValue('perfilId', usuario.perfilId)
+      editForm.setFieldValue('esResponsableVenta', usuario.esResponsableVenta)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario])
@@ -232,6 +239,20 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
                       {field.state.meta.errors.length > 0 && (
                         <p className='text-sm text-destructive'>{String(field.state.meta.errors[0])}</p>
                       )}
+                    </div>
+                  )}
+                </editForm.Field>
+
+                {/* Responsable de Venta */}
+                <editForm.Field name='esResponsableVenta'>
+                  {(field) => (
+                    <div className='flex items-center gap-2 sm:col-span-2'>
+                      <Checkbox
+                        id='esResponsableVenta-edit'
+                        checked={field.state.value}
+                        onCheckedChange={(v) => field.handleChange(v === true)}
+                      />
+                      <Label htmlFor='esResponsableVenta-edit'>Responsable de Venta</Label>
                     </div>
                   )}
                 </editForm.Field>
@@ -339,6 +360,20 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
                     {field.state.meta.errors.length > 0 && (
                       <p className='text-sm text-destructive'>{String(field.state.meta.errors[0])}</p>
                     )}
+                  </div>
+                )}
+              </createForm.Field>
+
+              {/* Responsable de Venta */}
+              <createForm.Field name='esResponsableVenta'>
+                {(field) => (
+                  <div className='flex items-center gap-2 sm:col-span-2'>
+                    <Checkbox
+                      id='esResponsableVenta-create'
+                      checked={field.state.value}
+                      onCheckedChange={(v) => field.handleChange(v === true)}
+                    />
+                    <Label htmlFor='esResponsableVenta-create'>Responsable de Venta</Label>
                   </div>
                 )}
               </createForm.Field>

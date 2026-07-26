@@ -10,28 +10,23 @@ export interface OrdenCompraLineaInput {
   precioUsdCaja: number
 }
 
-export interface OrdenCompraCuotaPagoInput {
-  porcentaje: number
-  plazoDias: number
-  descripcion?: string | null
-}
-
 export interface OrdenCompraCreateInput {
   entidadProductorId: number
   notaVentaId?: number | null
   fecha?: Date
-  formaPago?: string | null
-  condicionPagoTexto?: string | null
+  fechaEntregaDesde?: string | null
+  fechaEntregaHasta?: string | null
+  formaPagoId?: number | null
+  condicionPagoId?: number | null
   monedaId: number
   incotermId?: number | null
-  facturarAId?: number | null
+  destinoMercadoId?: number | null
+  responsableId?: string | null
   observaciones?: string | null
   lineas: OrdenCompraLineaInput[]
-  cuotasPago?: OrdenCompraCuotaPagoInput[]
 }
 
-export type OrdenCompraUpdateInput = Partial<Omit<OrdenCompraCreateInput, 'lineas' | 'cuotasPago'>> & {
+export type OrdenCompraUpdateInput = Partial<Omit<OrdenCompraCreateInput, 'lineas'>> & {
   estado?: 'BORRADOR' | 'EMITIDA' | 'RECEPCIONADA'
   lineas?: OrdenCompraLineaInput[]
-  cuotasPago?: OrdenCompraCuotaPagoInput[]
 }

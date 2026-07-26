@@ -13,7 +13,7 @@ import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { instructivosEmbalajeListOptions } from '../queries'
 import { instructivoColumns } from './instructivo-columns'
 
-const ITEM = 'compras.instructivo'
+const ITEM = 'COMPRAS_INSTRUCTIVO'
 
 export function InstructivoListingClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)

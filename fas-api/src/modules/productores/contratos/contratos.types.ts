@@ -1,15 +1,21 @@
-export type UnidadVolumen = 'KG' | 'CAJAS'
+export interface ContratoLineaInput {
+  articuloId: number
+  variedadId: number
+  calibreDesdeId: number
+  calibreHastaId: number
+  categoriaId: number
+  unidadMedidaId: number
+  cantidadComprometida: number
+  minimoGarantizado: number
+}
 
 export interface ContratoCreateInput {
-  temporadaId?: number | null
-  fechaInicio?: string | null
-  fechaTermino?: string | null
-  valoresFacturacion?: string | null
-  condicionesPago?: string | null
-  condicionesFacturacion?: string | null
-  volumenComprometido?: number | null
-  unidadVolumen?: UnidadVolumen | null
-  minimoGarantizado?: number | null
+  temporadaId: number
+  especieId: number
+  fechaInicio: string
+  fechaTermino: string
+  condicionPagoId?: number | null
+  lineas: ContratoLineaInput[]
 }
 
 export type ContratoUpdateInput = Partial<ContratoCreateInput>

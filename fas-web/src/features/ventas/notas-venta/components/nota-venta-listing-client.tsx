@@ -13,7 +13,7 @@ import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { notasVentaListOptions } from '../queries'
 import { notaVentaColumns } from './nota-venta-columns'
 
-const ITEM = 'ventas.notas'
+const ITEM = 'VENTAS_NV'
 
 export function NotaVentaListingClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)

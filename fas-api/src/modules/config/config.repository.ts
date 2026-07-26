@@ -7,6 +7,7 @@ const modelMap: Record<MantenedorModelo, string> = {
   zona: 'zona',
   grupoMercado: 'grupoMercado',
   tipoEmbarque: 'tipoEmbarque',
+  formaPago: 'formaPago',
   unidadMedida: 'unidadMedida',
   tipoPallet: 'tipoPallet',
   altura: 'altura',
@@ -33,6 +34,7 @@ const modelMap: Record<MantenedorModelo, string> = {
   bodega: 'bodega',
   // Lote 6 — Calidad
   motivoInspeccion: 'motivoInspeccion',
+  calificacion: 'calificacion',
 }
 
 // Qué campos include para modelos con FK (para exponer datos relacionados)
@@ -195,10 +197,22 @@ export async function countChildren(
 }
 
 export async function countActiveReferences(
-  delegateName: 'entidad' | 'entidadDireccion' | 'bodegaContacto' | 'solicitudInspeccion',
+  delegateName:
+    | 'entidad'
+    | 'entidadDireccion'
+    | 'bodegaContacto'
+    | 'solicitudInspeccion'
+    | 'solicitudInspeccionPais'
+    | 'solicitudInspeccionVariedad'
+    | 'solicitudInspeccionCalibre'
+    | 'solicitudInspeccionCategoria'
+    | 'solicitudInspeccionEmbalaje',
   parentId: number,
   parentField: string,
   usesSoftDelete = true,
+  // Tablas intermedias (join) no tienen softdelete propio: la vigencia se
+  // valida contra la solicitud relacionada (QAS-SI-014).
+  viaSolicitud = false,
 ): Promise<number> {
   const delegate = (prisma as unknown as Record<string, {
     count(args: { where: Record<string, unknown> }): Promise<number>
@@ -207,7 +221,9 @@ export async function countActiveReferences(
   return delegate.count({
     where: {
       [parentField]: parentId,
-      ...(usesSoftDelete ? { eliminadoEn: null } : {}),
+      ...(viaSolicitud
+        ? { solicitud: { eliminadoEn: null } }
+        : usesSoftDelete ? { eliminadoEn: null } : {}),
     },
   })
 }

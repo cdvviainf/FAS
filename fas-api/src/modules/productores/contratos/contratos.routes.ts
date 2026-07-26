@@ -11,6 +11,7 @@ export async function contratosRoutes(app: FastifyInstance) {
   app.patch('/:entidadId/contratos/:contratoId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.update)
   app.delete('/:entidadId/contratos/:contratoId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.remove)
 
-  app.post('/:entidadId/contratos/:contratoId/pdf', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.subirPdf)
-  app.get('/:entidadId/contratos/:contratoId/pdf', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarPdf)
+  app.post('/:entidadId/contratos/:contratoId/adjuntos', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.agregarAdjunto)
+  app.get('/:entidadId/contratos/:contratoId/adjuntos/:adjuntoId', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarAdjunto)
+  app.delete('/:entidadId/contratos/:contratoId/adjuntos/:adjuntoId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.eliminarAdjunto)
 }

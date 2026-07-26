@@ -29,7 +29,7 @@ import { FORMA_APLICACION_LABELS, NATURALEZA_CONCEPTO_LABELS } from '../types'
 import type { ConceptoLiquidacion, FormaAplicacionConcepto, NaturalezaConcepto, ValorEspecieInput } from '../types'
 
 const especiesService = createMantenedorService('especies')
-const ITEM = 'config.conceptos-liquidacion'
+const ITEM = 'PROD_CONCEPTOS_LIQ'
 
 interface ConceptoFormSheetProps {
   item?: ConceptoLiquidacion

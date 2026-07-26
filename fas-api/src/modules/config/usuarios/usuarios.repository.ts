@@ -7,15 +7,17 @@ const usuarioSelect = {
   whatsapp: true,
   imagenUrl: true,
   perfilId: true,
+  esResponsableVenta: true,
   creadoEn: true,
   actualizadoEn: true,
   perfil: { select: { id: true, codigo: true, descripcion: true } },
 }
 
-export async function findAllUsuarios(page: number, limit: number, q?: string, perfilId?: number) {
+export async function findAllUsuarios(page: number, limit: number, q?: string, perfilId?: number, esResponsableVenta?: boolean) {
   const where = {
     eliminadoEn: null,
     ...(perfilId ? { perfilId } : {}),
+    ...(esResponsableVenta !== undefined ? { esResponsableVenta } : {}),
     ...(q
       ? {
           OR: [
@@ -64,6 +66,7 @@ export async function createUsuario(data: {
   whatsapp?: string
   imagenUrl?: string | null
   perfilId: number
+  esResponsableVenta?: boolean
   creadoPor?: string
 }) {
   return prisma.usuario.create({
@@ -74,6 +77,7 @@ export async function createUsuario(data: {
       whatsapp: data.whatsapp ?? null,
       imagenUrl: data.imagenUrl ?? null,
       perfilId: data.perfilId,
+      esResponsableVenta: data.esResponsableVenta ?? false,
       creadoPor: data.creadoPor ?? null,
     },
     select: usuarioSelect,
@@ -87,6 +91,7 @@ export async function updateUsuario(
     whatsapp?: string | null
     imagenUrl?: string | null
     perfilId?: number
+    esResponsableVenta?: boolean
     actualizadoPor?: string
   },
 ) {
@@ -97,6 +102,7 @@ export async function updateUsuario(
       ...(data.whatsapp !== undefined ? { whatsapp: data.whatsapp } : {}),
       ...(data.imagenUrl !== undefined ? { imagenUrl: data.imagenUrl } : {}),
       ...(data.perfilId !== undefined ? { perfilId: data.perfilId } : {}),
+      ...(data.esResponsableVenta !== undefined ? { esResponsableVenta: data.esResponsableVenta } : {}),
       ...(data.actualizadoPor !== undefined ? { actualizadoPor: data.actualizadoPor } : {}),
     },
     select: usuarioSelect,

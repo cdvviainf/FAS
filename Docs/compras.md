@@ -74,22 +74,28 @@ Especificación de la compra.
 - `id` (PK)
 - `numero` (correlativo propio, formato `OC-{AAAA}-{NNNN}` por año — CLAUDE.md §7)
 - `entidadProductorId` (FK → Entidad tipo PRODUCTOR) **(nuevo)** — obligatorio; el documento real siempre identifica al productor/proveedor de la compra
-- `notaVentaId` (FK → NotaVenta, **nullable**) — una OC **puede** estar asociada a un Cierre o no existir Cierre (OC suelta permitida). *Ligar una OC suelta a un Cierre a posteriori: flujo/UX diferido (ver §10).*
-- `formaPago` (texto libre) **(nuevo)**
-- `condicionPagoTexto` (texto libre, explicación de la condición de pago) **(nuevo)**
+- `notaVentaId` (FK → NotaVenta, **nullable**) — origen de la OC: "Cierre Comercial" (con Nota de Venta) o "Manual" (sin ella, OC suelta permitida). *Ligar una OC suelta a un Cierre a posteriori: flujo/UX diferido (ver §10).*
+- `fechaEntregaDesde` / `fechaEntregaHasta` (Date, opcionales) **(nuevo, 2026-07-26)** — ventana de entrega comprometida
+- `responsableId` (FK → Usuario, nullable) **(nuevo, 2026-07-26)** — solo usuarios marcados `esResponsableVenta` en su ficha
+- `destinoMercadoId` (FK → Mercado, nullable) **(nuevo, 2026-07-26)** — "Destino" de la OC
+- `formaPagoId` (FK → FormaPago, nullable) **(nuevo, 2026-07-26)** — mantenedor propio (`Docs/mantenedores-generales.md`); reemplaza el texto libre original
+- `condicionPagoId` (FK → CondicionPago, nullable) **(nuevo, 2026-07-26)** — reemplaza `condicionPagoTexto`; ver §4.2.1
 - `monedaId` (FK → Moneda) **(nuevo)**
 - `incotermId` (Parametro genérico, sin TipoParametro aún — mismo patrón que `clausulaVentaId` en ventas.md) **(nuevo)**
-- `facturarAId` (FK → Entidad, nullable) **(nuevo)**
+- ~~`facturarAId`~~ **(eliminado 2026-07-26)** — decisión de negocio: la OC no factura a una entidad distinta del productor
 - `observaciones` **(nuevo)**
 - `estado` (ver §8)
 - `creadoEn`, `creadoPor`
 
-#### 4.2.1 OrdenCompraCuotaPago **(nuevo)**
-El pago puede ser en cuotas (ej. "80% a 30 días, 20% a 60 días"). Detalle 0..N líneas:
+#### 4.2.1 CondicionPago **(nuevo, 2026-07-26 — reemplaza `condicionPagoTexto`)**
+Maestro propio (cabecera + cuotas, mismo patrón que `ConceptoLiquidacion`), `Docs/mantenedores-generales.md`. **Determina automáticamente** las cuotas de pago de la OC: no se cargan manualmente por orden.
+- `id`, `codigo`, `descripcion`, `bloqueado`, auditoría/softdelete
+- `cuotas` — 1..N `CondicionPagoCuota { porcentaje (Decimal, suma total = 100%), plazoDias (Int), descripcion? }`
+
+#### 4.2.2 OrdenCompraCuotaPago
+Snapshot inmutable de las cuotas al momento de crear/editar la OC (se copian desde `CondicionPago.cuotas` en el instante en que se fija `condicionPagoId`; si la plantilla cambia después, **no** afecta OCs ya creadas). Vacío si la OC no tiene condición de pago.
 - `ordenCompraId` (FK → OrdenCompra)
-- `porcentaje` (Decimal) — la suma de todas las cuotas de una OC debe ser 100%
-- `plazoDias` (Int)
-- `descripcion` (texto libre, opcional)
+- `porcentaje` (Decimal), `plazoDias` (Int), `descripcion` (texto libre, opcional)
 
 ### 4.3 OrdenCompraLinea
 La OC es **multilínea**. Cada línea es una combinación completa de características + rango de calibre + cantidades + precio.

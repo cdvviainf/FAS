@@ -10,11 +10,11 @@ datasource db {
 // ─── USUARIOS Y AUTH ────────────────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Better Auth fields
   emailVerified Boolean   @default(false)
@@ -119,22 +119,24 @@ model PerfilAcceso {
 }
 
 model Usuario {
-  id             String    @id
-  nombre         String
-  email          String
-  whatsapp       String?
-  imagenUrl      String?
-  perfilId       Int
-  perfil         Perfil    @relation(fields: [perfilId], references: [id])
-  creadoEn       DateTime  @default(now())
-  creadoPor      String?
-  actualizadoEn  DateTime? @updatedAt
-  actualizadoPor String?
-  eliminadoEn    DateTime?
-  eliminadoPor   String?
+  id                 String    @id
+  nombre             String
+  email              String
+  whatsapp           String?
+  imagenUrl          String?
+  perfilId           Int
+  perfil             Perfil    @relation(fields: [perfilId], references: [id])
+  esResponsableVenta Boolean   @default(false)
+  creadoEn           DateTime  @default(now())
+  creadoPor          String?
+  actualizadoEn      DateTime? @updatedAt
+  actualizadoPor     String?
+  eliminadoEn        DateTime?
+  eliminadoPor       String?
 
-  solicitudesAsignadas SolicitudInspeccionAsignado[]
-  avatar               UsuarioAvatar?
+  solicitudesAsignadas     SolicitudInspeccionAsignado[]
+  avatar                   UsuarioAvatar?
+  ordenesCompraResponsable OrdenCompra[]
 
   @@map("usuarios")
 }
@@ -155,36 +157,36 @@ model UsuarioAvatar {
 // ─── ENTIDADES MAESTRAS ──────────────────────────────────────────────────────
 
 model Productor {
-  id            String    @id @default(cuid())
-  rut           String    @unique
-  nombre        String
-  razonSocial   String
-  email         String?
-  telefono      String?
-  direccion     String?
-  comuna        String?
-  region        String?
-  banco         String?
-  tipoCuenta    String?
-  numeroCuenta  String?
-  activo        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
+  id           String    @id @default(cuid())
+  rut          String    @unique
+  nombre       String
+  razonSocial  String
+  email        String?
+  telefono     String?
+  direccion    String?
+  comuna       String?
+  region       String?
+  banco        String?
+  tipoCuenta   String?
+  numeroCuenta String?
+  activo       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 }
 
 model Cliente {
-  id         String      @id @default(cuid())
-  codigo     String      @unique
-  nombre     String
-  pais       String
-  mercado    MercadoType
-  email      String?
-  contacto   String?
-  activo     Boolean     @default(true)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  deletedAt  DateTime?
+  id        String      @id @default(cuid())
+  codigo    String      @unique
+  nombre    String
+  pais      String
+  mercado   MercadoType
+  email     String?
+  contacto  String?
+  activo    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  deletedAt DateTime?
 }
 
 enum MercadoType {
@@ -196,9 +198,9 @@ enum MercadoType {
 }
 
 model EspecieLegacy {
-  id        String           @id @default(cuid())
-  nombre    String           @unique
-  activo    Boolean          @default(true)
+  id     String  @id @default(cuid())
+  nombre String  @unique
+  activo Boolean @default(true)
 
   variedades VariedadLegacy[]
 
@@ -206,38 +208,37 @@ model EspecieLegacy {
 }
 
 model VariedadLegacy {
-  id         String         @id @default(cuid())
+  id         String        @id @default(cuid())
   nombre     String
   especieId  String
-  especie    EspecieLegacy  @relation(fields: [especieId], references: [id])
-  activo     Boolean        @default(true)
+  especie    EspecieLegacy @relation(fields: [especieId], references: [id])
+  activo     Boolean       @default(true)
+  stockLotes StockLote[]
 
   @@unique([nombre, especieId])
-  stockLotes    StockLote[]
-
   @@map("legacy_variedades")
 }
 
 // ─── OPERACIONES / STOCK ─────────────────────────────────────────────────────
 
 model StockLote {
-  id              String        @id @default(cuid())
-  codigo          String        @unique
-  variedadId      String
-  variedad        VariedadLegacy @relation(fields: [variedadId], references: [id])
-  temporada       String
-  fechaRecepcion  DateTime
-  calibre         String?
-  categoria       String?
-  cantidadCajas   Decimal       @db.Decimal(18, 4)
-  pesoNeto        Decimal?      @db.Decimal(18, 4)
-  estadoCalidad   CalidadEstado @default(PENDIENTE)
-  observaciones   String?
-  createdBy       String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id             String         @id @default(cuid())
+  codigo         String         @unique
+  variedadId     String
+  variedad       VariedadLegacy @relation(fields: [variedadId], references: [id])
+  temporada      String
+  fechaRecepcion DateTime
+  calibre        String?
+  categoria      String?
+  cantidadCajas  Decimal        @db.Decimal(18, 4)
+  pesoNeto       Decimal?       @db.Decimal(18, 4)
+  estadoCalidad  CalidadEstado  @default(PENDIENTE)
+  observaciones  String?
+  createdBy      String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  movimientos    StockMovimiento[]
+  movimientos StockMovimiento[]
 }
 
 enum CalidadEstado {
@@ -328,11 +329,12 @@ model Pais {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  mercados              Mercado[]
-  puertos               Puerto[]
-  entidades             Entidad[]          @relation("EntidadPais")
-  entidadDirecciones    EntidadDireccion[] @relation("DireccionPais")
-  notasVenta            NotaVenta[]
+  mercados                  Mercado[]
+  puertos                   Puerto[]
+  entidades                 Entidad[]                 @relation("EntidadPais")
+  entidadDirecciones        EntidadDireccion[]        @relation("DireccionPais")
+  notasVenta                NotaVenta[]
+  solicitudesInspeccionPais SolicitudInspeccionPais[]
 
   @@map("paises")
 }
@@ -350,7 +352,7 @@ model Zona {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  predios               Predio[]
+  predios Predio[]
 
   @@map("zonas")
 }
@@ -368,7 +370,7 @@ model GrupoMercado {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  mercados              Mercado[]
+  mercados Mercado[]
 
   @@map("grupos_mercado")
 }
@@ -386,10 +388,28 @@ model TipoEmbarque {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  puertos               Puerto[]
-  notasVenta            NotaVenta[]
+  puertos    Puerto[]
+  notasVenta NotaVenta[]
 
   @@map("tipos_embarque")
+}
+
+model FormaPago {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  ordenesCompra OrdenCompra[]
+
+  @@map("formas_pago")
 }
 
 model UnidadMedida {
@@ -405,8 +425,9 @@ model UnidadMedida {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  especies              Especie[] @relation("UnidadMedidaCalidadEspecie")
-  articulos             Articulo[]
+  especies                Especie[]                @relation("UnidadMedidaCalidadEspecie")
+  articulos               Articulo[]
+  contratoProductorLineas ProductorContratoLinea[]
 
   @@map("unidades_medida")
 }
@@ -424,7 +445,7 @@ model TipoPallet {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  notaVentaDetalles     NotaVentaDetalle[]
+  notaVentaDetalles NotaVentaDetalle[]
 
   @@map("tipos_pallet")
 }
@@ -458,7 +479,7 @@ model TipoProduccion {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  predios               Predio[]
+  predios Predio[]
 
   @@map("tipos_produccion")
 }
@@ -480,19 +501,19 @@ model TipoDefecto {
 }
 
 model TipoParametro {
-  id                    Int         @id @default(autoincrement())
+  id                    Int       @id @default(autoincrement())
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   bloqueado             Boolean   @default(false)
-  creadoEn              DateTime    @default(now())
+  creadoEn              DateTime  @default(now())
   creadoPor             String
-  actualizadoEn         DateTime?   @updatedAt
+  actualizadoEn         DateTime? @updatedAt
   actualizadoPor        String?
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  parametros            Parametro[]
+  parametros Parametro[]
 
   @@map("tipos_parametro")
 }
@@ -500,19 +521,19 @@ model TipoParametro {
 // ─── CONFIGURACIÓN / MANTENEDORES CON FK ────────────────────────────────────
 
 model Region {
-  id                    Int         @id @default(autoincrement())
+  id                    Int       @id @default(autoincrement())
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   bloqueado             Boolean   @default(false)
-  creadoEn              DateTime    @default(now())
+  creadoEn              DateTime  @default(now())
   creadoPor             String
-  actualizadoEn         DateTime?   @updatedAt
+  actualizadoEn         DateTime? @updatedAt
   actualizadoPor        String?
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  provincias            Provincia[]
+  provincias Provincia[]
 
   @@map("regiones")
 }
@@ -532,7 +553,7 @@ model Provincia {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  comunas               Comuna[]
+  comunas Comuna[]
 
   @@map("provincias")
 }
@@ -552,57 +573,58 @@ model Comuna {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  bodegas               Bodega[]
-  entidadDirecciones    EntidadDireccion[]
-  predios               Predio[]
+  bodegas            Bodega[]
+  entidadDirecciones EntidadDireccion[]
+  predios            Predio[]
 
   @@map("comunas")
 }
 
 model Especie {
-  id                      Int            @id @default(autoincrement())
-  codigo                  String
-  descripcion             String
-  descripcionExtranjera   String?
-  unidadMedidaCalidadId   Int?
-  unidadMedidaCalidad     UnidadMedida?  @relation("UnidadMedidaCalidadEspecie", fields: [unidadMedidaCalidadId], references: [id])
-  bloqueado               Boolean        @default(false)
-  creadoEn                DateTime       @default(now())
-  creadoPor               String
-  actualizadoEn           DateTime?      @updatedAt
-  actualizadoPor          String?
-  eliminadoEn             DateTime?
-  eliminadoPor            String?
+  id                    Int           @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  unidadMedidaCalidadId Int?
+  unidadMedidaCalidad   UnidadMedida? @relation("UnidadMedidaCalidadEspecie", fields: [unidadMedidaCalidadId], references: [id])
+  bloqueado             Boolean       @default(false)
+  creadoEn              DateTime      @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?     @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
 
-  gruposVariedad          GrupoVariedad[]
-  variedades              Variedad[]
-  categorias              Categoria[]
-  calibres                Calibre[]
-  solicitudesInspeccion   SolicitudInspeccion[]
-  conceptosLiquidacion    ConceptoLiquidacionEspecie[]
-  notaVentaDetalles       NotaVentaDetalle[]
+  gruposVariedad              GrupoVariedad[]
+  variedades                  Variedad[]
+  categorias                  Categoria[]
+  calibres                    Calibre[]
+  solicitudesInspeccion       SolicitudInspeccion[]
+  conceptosLiquidacion        ConceptoLiquidacionEspecie[]
+  notaVentaDetalles           NotaVentaDetalle[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
-  ordenCompraLineas       OrdenCompraLinea[]
+  ordenCompraLineas           OrdenCompraLinea[]
+  contratosProductor          ProductorContrato[]
 
   @@map("especies")
 }
 
 model GrupoVariedad {
-  id                    Int        @id @default(autoincrement())
+  id                    Int       @id @default(autoincrement())
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   especieId             Int
-  especie               Especie    @relation(fields: [especieId], references: [id])
+  especie               Especie   @relation(fields: [especieId], references: [id])
   bloqueado             Boolean   @default(false)
-  creadoEn              DateTime   @default(now())
+  creadoEn              DateTime  @default(now())
   creadoPor             String
-  actualizadoEn         DateTime?  @updatedAt
+  actualizadoEn         DateTime? @updatedAt
   actualizadoPor        String?
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  variedades            Variedad[]
+  variedades Variedad[]
 
   @@map("grupos_variedad")
 }
@@ -616,7 +638,7 @@ model Variedad {
   especie               Especie        @relation(fields: [especieId], references: [id])
   grupoVariedadId       Int?
   grupoVariedad         GrupoVariedad? @relation(fields: [grupoVariedadId], references: [id])
-  bloqueado             Boolean   @default(false)
+  bloqueado             Boolean        @default(false)
   creadoEn              DateTime       @default(now())
   creadoPor             String
   actualizadoEn         DateTime?      @updatedAt
@@ -624,9 +646,11 @@ model Variedad {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  notaVentaDetalles     NotaVentaDetalle[]
+  notaVentaDetalles           NotaVentaDetalle[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
-  ordenCompraLineas     OrdenCompraLinea[]
+  ordenCompraLineas           OrdenCompraLinea[]
+  contratoProductorLineas     ProductorContratoLinea[]
+  solicitudesInspeccion       SolicitudInspeccionVariedad[]
 
   @@map("variedades")
 }
@@ -648,9 +672,11 @@ model Categoria {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  notaVentaDetalles     NotaVentaDetalle[]
+  notaVentaDetalles           NotaVentaDetalle[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
-  ordenCompraLineas     OrdenCompraLinea[]
+  ordenCompraLineas           OrdenCompraLinea[]
+  contratoProductorLineas     ProductorContratoLinea[]
+  solicitudesInspeccion       SolicitudInspeccionCategoria[]
 
   @@map("categorias")
 }
@@ -672,11 +698,14 @@ model Calibre {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  notaVentaDetalleCalibres NotaVentaDetalleCalibre[]
+  notaVentaDetalleCalibres      NotaVentaDetalleCalibre[]
   instructivoEmbalajeDetalleMin InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeCalibreMin")
   instructivoEmbalajeDetalleMax InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeCalibreMax")
-  ordenCompraLineaMin      OrdenCompraLinea[] @relation("OrdenCompraCalibreMin")
-  ordenCompraLineaMax      OrdenCompraLinea[] @relation("OrdenCompraCalibreMax")
+  ordenCompraLineaMin           OrdenCompraLinea[]           @relation("OrdenCompraCalibreMin")
+  ordenCompraLineaMax           OrdenCompraLinea[]           @relation("OrdenCompraCalibreMax")
+  contratoProductorLineaDesde   ProductorContratoLinea[]     @relation("ProductorContratoCalibreDesde")
+  contratoProductorLineaHasta   ProductorContratoLinea[]     @relation("ProductorContratoCalibreHasta")
+  solicitudesInspeccion         SolicitudInspeccionCalibre[]
 
   @@map("calibres")
 }
@@ -688,7 +717,7 @@ model Parametro {
   descripcionExtranjera String?
   tipoParametroId       Int
   tipoParametro         TipoParametro @relation(fields: [tipoParametroId], references: [id])
-  bloqueado             Boolean   @default(false)
+  bloqueado             Boolean       @default(false)
   creadoEn              DateTime      @default(now())
   creadoPor             String
   actualizadoEn         DateTime?     @updatedAt
@@ -708,7 +737,7 @@ model Mercado {
   grupoMercado          GrupoMercado @relation(fields: [grupoMercadoId], references: [id])
   paisId                Int
   pais                  Pais         @relation(fields: [paisId], references: [id])
-  bloqueado             Boolean   @default(false)
+  bloqueado             Boolean      @default(false)
   creadoEn              DateTime     @default(now())
   creadoPor             String
   actualizadoEn         DateTime?    @updatedAt
@@ -717,6 +746,8 @@ model Mercado {
   eliminadoPor          String?
 
   notasVenta            NotaVenta[]
+  ordenesCompra         OrdenCompra[]
+  solicitudesInspeccion SolicitudInspeccion[]
 
   @@map("mercados")
 }
@@ -732,7 +763,7 @@ model Puerto {
   tipoEmbarque          TipoEmbarque @relation(fields: [tipoEmbarqueId], references: [id])
   latitud               Decimal?     @db.Decimal(10, 7)
   longitud              Decimal?     @db.Decimal(10, 7)
-  bloqueado             Boolean   @default(false)
+  bloqueado             Boolean      @default(false)
   creadoEn              DateTime     @default(now())
   creadoPor             String
   actualizadoEn         DateTime?    @updatedAt
@@ -740,7 +771,7 @@ model Puerto {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  notasVenta            NotaVenta[]
+  notasVenta NotaVenta[]
 
   @@map("puertos")
 }
@@ -760,9 +791,9 @@ model Moneda {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  movimientosCC         MovimientoCuentaCorriente[]
-  notasVenta            NotaVenta[]
-  ordenesCompra         OrdenCompra[]
+  movimientosCC MovimientoCuentaCorriente[]
+  notasVenta    NotaVenta[]
+  ordenesCompra OrdenCompra[]
 
   @@map("monedas")
 }
@@ -802,41 +833,41 @@ model Temporada {
 }
 
 model Bodega {
-  id                    Int              @id @default(autoincrement())
+  id                    Int          @id @default(autoincrement())
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   direccion             String
   comunaId              Int
-  comuna                Comuna           @relation(fields: [comunaId], references: [id])
+  comuna                Comuna       @relation(fields: [comunaId], references: [id])
   tipos                 TipoBodega[]
-  latitud               Decimal?         @db.Decimal(10, 7)
-  longitud              Decimal?         @db.Decimal(10, 7)
-  bloqueado             Boolean          @default(false)
-  creadoEn              DateTime         @default(now())
+  latitud               Decimal?     @db.Decimal(10, 7)
+  longitud              Decimal?     @db.Decimal(10, 7)
+  bloqueado             Boolean      @default(false)
+  creadoEn              DateTime     @default(now())
   creadoPor             String
-  actualizadoEn         DateTime?        @updatedAt
+  actualizadoEn         DateTime?    @updatedAt
   actualizadoPor        String?
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  contactos             BodegaContacto[]
-  saldos                SaldoArticulo[]
-  movimientosOrigen     Movimiento[]     @relation("MovOrigen")
-  movimientosDestino    Movimiento[]     @relation("MovDestino")
+  contactos          BodegaContacto[]
+  saldos             SaldoArticulo[]
+  movimientosOrigen  Movimiento[]     @relation("MovOrigen")
+  movimientosDestino Movimiento[]     @relation("MovDestino")
 
   @@map("bodegas")
 }
 
 model BodegaContacto {
-  id        Int      @id @default(autoincrement())
-  bodegaId  Int
-  bodega    Bodega   @relation(fields: [bodegaId], references: [id])
-  nombre    String
-  email     String?
-  telefono  String?
-  orden     Int      @default(0)
-  creadoEn  DateTime @default(now())
+  id       Int      @id @default(autoincrement())
+  bodegaId Int
+  bodega   Bodega   @relation(fields: [bodegaId], references: [id])
+  nombre   String
+  email    String?
+  telefono String?
+  orden    Int      @default(0)
+  creadoEn DateTime @default(now())
 
   @@map("bodega_contactos")
 }
@@ -847,7 +878,7 @@ model ConceptoCtaCte {
   descripcion           String
   descripcionExtranjera String?
   naturaleza            NaturalezaCuentaCorriente
-  bloqueado             Boolean   @default(false)
+  bloqueado             Boolean                   @default(false)
   creadoEn              DateTime                  @default(now())
   creadoPor             String
   actualizadoEn         DateTime?                 @updatedAt
@@ -855,7 +886,7 @@ model ConceptoCtaCte {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  movimientosCC         MovimientoCuentaCorriente[]
+  movimientosCC MovimientoCuentaCorriente[]
 
   @@map("conceptos_cta_cte")
 }
@@ -878,40 +909,40 @@ enum TipoEntidad {
 }
 
 model Entidad {
-  id                    Int               @id @default(autoincrement())
-  codigo                String
-  descripcion           String
-  descripcionExtranjera String?
-  razonSocial           String
-  giro                  String?
-  identificador         String?
-  paisId                Int
-  pais                  Pais              @relation("EntidadPais", fields: [paisId], references: [id])
-  email                 String?
-  telefono              String?
-  codigoExterno         String?
-  activo                Boolean           @default(true)
-  tipos                 TipoEntidad[]
-  creadoEn              DateTime          @default(now())
-  creadoPor             String
-  actualizadoEn         DateTime?         @updatedAt
-  actualizadoPor        String?
-  eliminadoEn           DateTime?
-  eliminadoPor          String?
-  direcciones           EntidadDireccion[]
-  contactos             EntidadContacto[]
-  solicitudesInspeccion SolicitudInspeccion[]
-  movimientos           Movimiento[]          @relation("MovEntidad")
-  movimientosTransporte Movimiento[]          @relation("MovTransporte")
-  predios               Predio[]              @relation("PrediosProductor")
-  contratos             ProductorContrato[]   @relation("ContratosProductor")
-  movimientosCC         MovimientoCuentaCorriente[] @relation("CCProductor")
-  notasVentaCliente     NotaVenta[]           @relation("NotaVentaCliente")
-  notasVentaComprador   NotaVenta[]           @relation("NotaVentaComprador")
-  notasVentaNotify      NotaVenta[]           @relation("NotaVentaNotify")
-  notasVentaClienteFinal NotaVenta[]          @relation("NotaVentaClienteFinal")
-  ordenesCompraProductor OrdenCompra[]        @relation("OrdenCompraProductor")
-  ordenesCompraFacturarA OrdenCompra[]        @relation("OrdenCompraFacturarA")
+  id                           Int                         @id @default(autoincrement())
+  codigo                       String
+  descripcion                  String
+  descripcionExtranjera        String?
+  razonSocial                  String
+  giro                         String?
+  identificador                String?
+  paisId                       Int
+  pais                         Pais                        @relation("EntidadPais", fields: [paisId], references: [id])
+  email                        String?
+  telefono                     String?
+  codigoExterno                String?
+  activo                       Boolean                     @default(true)
+  tipos                        TipoEntidad[]
+  creadoEn                     DateTime                    @default(now())
+  creadoPor                    String
+  actualizadoEn                DateTime?                   @updatedAt
+  actualizadoPor               String?
+  eliminadoEn                  DateTime?
+  eliminadoPor                 String?
+  direcciones                  EntidadDireccion[]
+  contactos                    EntidadContacto[]
+  solicitudesInspeccion        SolicitudInspeccion[]       @relation("SolicitudInspeccionProductor")
+  solicitudesInspeccionCliente SolicitudInspeccion[]       @relation("SolicitudInspeccionCliente")
+  movimientos                  Movimiento[]                @relation("MovEntidad")
+  movimientosTransporte        Movimiento[]                @relation("MovTransporte")
+  predios                      Predio[]                    @relation("PrediosProductor")
+  contratos                    ProductorContrato[]         @relation("ContratosProductor")
+  movimientosCC                MovimientoCuentaCorriente[] @relation("CCProductor")
+  notasVentaCliente            NotaVenta[]                 @relation("NotaVentaCliente")
+  notasVentaComprador          NotaVenta[]                 @relation("NotaVentaComprador")
+  notasVentaNotify             NotaVenta[]                 @relation("NotaVentaNotify")
+  notasVentaClienteFinal       NotaVenta[]                 @relation("NotaVentaClienteFinal")
+  ordenesCompraProductor       OrdenCompra[]               @relation("OrdenCompraProductor")
 
   @@index([eliminadoEn])
   @@map("entidades")
@@ -996,50 +1027,137 @@ model MotivoInspeccion {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  solicitudes           SolicitudInspeccion[]
+  solicitudes SolicitudInspeccion[]
 
   @@map("motivos_inspeccion")
 }
 
 model SolicitudInspeccion {
-  id                 Int                       @id @default(autoincrement())
-  numero             Int                       // correlativo por temporada
-  codigo             String                    // SI-{codTemporada}-{NNNN}
-  temporadaId        Int
-  temporada          Temporada                 @relation(fields: [temporadaId], references: [id])
-  entidadProductorId Int                       // Entidad tipo PRODUCTOR
-  entidadProductor   Entidad                   @relation(fields: [entidadProductorId], references: [id])
-  direccionId        Int                       // EntidadDireccion de la entidad productora
-  direccion          EntidadDireccion          @relation(fields: [direccionId], references: [id])
-  contactoId         Int?                      // EntidadContacto de la entidad productora (opcional)
-  contacto           EntidadContacto?          @relation(fields: [contactoId], references: [id])
-  especieId          Int?
-  especie            Especie?                  @relation(fields: [especieId], references: [id])
-  fechaHora          DateTime                  // fecha y hora de la visita
-  motivoId           Int
-  motivo             MotivoInspeccion          @relation(fields: [motivoId], references: [id])
-  observaciones      String?
-  estado             EstadoSolicitudInspeccion @default(PENDIENTE)
-  notificadaEn       DateTime?
+  id                    Int                       @id @default(autoincrement())
+  numero                Int // correlativo por temporada
+  codigo                String // SI-{codTemporada}-{NNNN}
+  temporadaId           Int
+  temporada             Temporada                 @relation(fields: [temporadaId], references: [id])
+  entidadProductorId    Int // Entidad tipo PRODUCTOR
+  entidadProductor      Entidad                   @relation("SolicitudInspeccionProductor", fields: [entidadProductorId], references: [id])
+  direccionId           Int // EntidadDireccion de la entidad productora
+  direccion             EntidadDireccion          @relation(fields: [direccionId], references: [id])
+  contactoId            Int? // EntidadContacto de la entidad productora (opcional)
+  contacto              EntidadContacto?          @relation(fields: [contactoId], references: [id])
+  especieId             Int?
+  especie               Especie?                  @relation(fields: [especieId], references: [id])
+  fechaHora             DateTime // fecha y hora de la visita
+  motivoId              Int
+  motivo                MotivoInspeccion          @relation(fields: [motivoId], references: [id])
+  // Documento N° 107 (calidad.md §3) — retomados por decisión de negocio (2026-07-26)
+  mercadoId             Int?
+  mercado               Mercado?                  @relation(fields: [mercadoId], references: [id])
+  clienteId             Int? // Entidad tipo CLIENTE_EXTRANJERO (opcional)
+  cliente               Entidad?                  @relation("SolicitudInspeccionCliente", fields: [clienteId], references: [id])
+  fechaDespacho         DateTime?                 @db.Date
+  cantidadPallets       Int?
+  calificacionId        Int?
+  calificacion          Calificacion?             @relation(fields: [calificacionId], references: [id])
+  observaciones         String?
+  estado                EstadoSolicitudInspeccion @default(PENDIENTE)
+  notificadaEn          DateTime?
   recordatorioEnviadoEn DateTime?
-  comentariosCierre  String?
-  fechaCierre        DateTime?
-  cerradaPor         String?                   // Usuario
-  creadoEn           DateTime                  @default(now())
-  creadoPor          String                    // solicitante
-  actualizadoEn      DateTime?                 @updatedAt
-  actualizadoPor     String?
-  eliminadoEn        DateTime?
-  eliminadoPor       String?
+  comentariosCierre     String?
+  fechaCierre           DateTime?
+  cerradaPor            String? // Usuario
+  creadoEn              DateTime                  @default(now())
+  creadoPor             String // solicitante
+  actualizadoEn         DateTime?                 @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
 
-  asignados          SolicitudInspeccionAsignado[]
-  adjuntos           SolicitudInspeccionAdjunto[]
+  asignados  SolicitudInspeccionAsignado[]
+  adjuntos   SolicitudInspeccionAdjunto[]
+  paises     SolicitudInspeccionPais[]
+  variedades SolicitudInspeccionVariedad[]
+  calibres   SolicitudInspeccionCalibre[]
+  categorias SolicitudInspeccionCategoria[]
+  embalajes  SolicitudInspeccionEmbalaje[]
 
   @@unique([temporadaId, numero])
   @@index([estado])
   @@index([entidadProductorId])
   @@index([eliminadoEn])
   @@map("solicitudes_inspeccion")
+}
+
+model SolicitudInspeccionPais {
+  id          Int                 @id @default(autoincrement())
+  solicitudId Int
+  solicitud   SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  paisId      Int
+  pais        Pais                @relation(fields: [paisId], references: [id])
+
+  @@unique([solicitudId, paisId])
+  @@map("solicitud_inspeccion_paises")
+}
+
+model SolicitudInspeccionVariedad {
+  id          Int                 @id @default(autoincrement())
+  solicitudId Int
+  solicitud   SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  variedadId  Int
+  variedad    Variedad            @relation(fields: [variedadId], references: [id])
+
+  @@unique([solicitudId, variedadId])
+  @@map("solicitud_inspeccion_variedades")
+}
+
+model SolicitudInspeccionCalibre {
+  id          Int                 @id @default(autoincrement())
+  solicitudId Int
+  solicitud   SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  calibreId   Int
+  calibre     Calibre             @relation(fields: [calibreId], references: [id])
+
+  @@unique([solicitudId, calibreId])
+  @@map("solicitud_inspeccion_calibres")
+}
+
+model SolicitudInspeccionCategoria {
+  id          Int                 @id @default(autoincrement())
+  solicitudId Int
+  solicitud   SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  categoriaId Int
+  categoria   Categoria           @relation(fields: [categoriaId], references: [id])
+
+  @@unique([solicitudId, categoriaId])
+  @@map("solicitud_inspeccion_categorias")
+}
+
+model SolicitudInspeccionEmbalaje {
+  id          Int                 @id @default(autoincrement())
+  solicitudId Int
+  solicitud   SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  articuloId  Int
+  articulo    Articulo            @relation(fields: [articuloId], references: [id])
+
+  @@unique([solicitudId, articuloId])
+  @@map("solicitud_inspeccion_embalajes")
+}
+
+model Calificacion {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  solicitudesInspeccion SolicitudInspeccion[]
+
+  @@map("calificaciones")
 }
 
 model SolicitudInspeccionAsignado {
@@ -1061,12 +1179,12 @@ model SolicitudInspeccionAdjunto {
   solicitud   SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
   nombre      String
   mime        String
-  tamano      Int                 // bytes
-  etapa       String              // CREACION | CIERRE
+  tamano      Int // bytes
+  etapa       String // CREACION | CIERRE
   subidoEn    DateTime            @default(now())
-  subidoPor   String              // Usuario
+  subidoPor   String // Usuario
 
-  contenido   SolicitudInspeccionAdjuntoContenido?
+  contenido SolicitudInspeccionAdjuntoContenido?
 
   @@index([solicitudId])
   @@map("solicitud_inspeccion_adjuntos")
@@ -1084,11 +1202,11 @@ model SolicitudInspeccionAdjuntoContenido {
 
 model ConfiguracionCorreo {
   id              Int       @id @default(autoincrement())
-  host            String                        // ej. smtp.office365.com
+  host            String // ej. smtp.office365.com
   puerto          Int       @default(587)
   seguridad       String    @default("STARTTLS") // STARTTLS | SSL | NINGUNA
-  usuario         String                        // casilla que autentica
-  passwordCifrada String                        // AES-256-GCM, nunca se expone por API
+  usuario         String // casilla que autentica
+  passwordCifrada String // AES-256-GCM, nunca se expone por API
   remitenteNombre String
   remitenteEmail  String
   creadoEn        DateTime  @default(now())
@@ -1134,7 +1252,7 @@ model Articulo {
   unidad                UnidadMedida @relation(fields: [unidadId], references: [id])
   tipoCosteo            TipoCosteo
   valorEstandar         Decimal?     @db.Decimal(14, 4) // requerido si ESTANDAR (R3)
-  controlaStock         Boolean      @default(true)     // false si ESTANDAR (R3)
+  controlaStock         Boolean      @default(true) // false si ESTANDAR (R3)
   stockCritico          Decimal?     @db.Decimal(14, 3)
   activo                Boolean      @default(true)
   // Atributos físicos del embalaje (Orden de Compra hereda estos valores del
@@ -1143,17 +1261,19 @@ model Articulo {
   kgNetoEnvase          Decimal?     @db.Decimal(10, 3)
   kgBrutoEnvase         Decimal?     @db.Decimal(10, 3)
 
-  documentos            DocumentoArticulo[]
-  recetas               Receta[]            @relation("EmbalajeRecetas")
-  comoComponente        RecetaDetalle[]     @relation("ComponenteRecetas")
-  saldos                SaldoArticulo[]
-  movimientosDetalle    MovimientoDetalle[]
-  notaVentaDetalles     NotaVentaDetalle[]
+  documentos                  DocumentoArticulo[]
+  recetas                     Receta[]                      @relation("EmbalajeRecetas")
+  comoComponente              RecetaDetalle[]               @relation("ComponenteRecetas")
+  saldos                      SaldoArticulo[]
+  movimientosDetalle          MovimientoDetalle[]
+  notaVentaDetalles           NotaVentaDetalle[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
-  ordenCompraLineas     OrdenCompraLinea[]
+  ordenCompraLineas           OrdenCompraLinea[]
+  contratoProductorLineas     ProductorContratoLinea[]
+  solicitudesInspeccion       SolicitudInspeccionEmbalaje[]
 
-  creadoEn              DateTime     @default(now())
-  actualizadoEn         DateTime     @updatedAt
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
 
   @@index([tipo])
   @@index([activo])
@@ -1161,16 +1281,16 @@ model Articulo {
 }
 
 model DocumentoArticulo {
-  id          Int      @id @default(autoincrement())
-  articuloId  Int
-  articulo    Articulo @relation(fields: [articuloId], references: [id])
-  nombre      String
-  mime        String
-  tamano      Int
-  subidoPor   String
-  creadoEn    DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  articuloId Int
+  articulo   Articulo @relation(fields: [articuloId], references: [id])
+  nombre     String
+  mime       String
+  tamano     Int
+  subidoPor  String
+  creadoEn   DateTime @default(now())
 
-  contenido   DocumentoArticuloContenido?
+  contenido DocumentoArticuloContenido?
 
   @@index([articuloId])
   @@map("documentos_articulo")
@@ -1187,17 +1307,17 @@ model DocumentoArticuloContenido {
 
 model Receta {
   id                Int      @id @default(autoincrement())
-  embalajeId        Int                                 // FK a Articulo tipo EMBALAJE (R13)
+  embalajeId        Int // FK a Articulo tipo EMBALAJE (R13)
   embalaje          Articulo @relation("EmbalajeRecetas", fields: [embalajeId], references: [id])
   codigo            String   @unique
   descripcion       String
   cantidadAProducir Decimal  @db.Decimal(14, 3)
   activo            Boolean  @default(true)
 
-  detalle           RecetaDetalle[]
+  detalle RecetaDetalle[]
 
-  creadoEn          DateTime @default(now())
-  actualizadoEn     DateTime @updatedAt
+  creadoEn      DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
 
   @@index([embalajeId])
   @@map("recetas")
@@ -1207,7 +1327,7 @@ model RecetaDetalle {
   id                Int      @id @default(autoincrement())
   recetaId          Int
   receta            Receta   @relation(fields: [recetaId], references: [id], onDelete: Cascade)
-  componenteId      Int                                 // FK a Articulo MATERIAL_EMBALAJE o SERVICIO (R13)
+  componenteId      Int // FK a Articulo MATERIAL_EMBALAJE o SERVICIO (R13)
   componente        Articulo @relation("ComponenteRecetas", fields: [componenteId], references: [id])
   cantidadAConsumir Decimal  @db.Decimal(14, 4)
 
@@ -1226,9 +1346,9 @@ model TipoMovimiento {
   emiteDTE           Boolean         @default(false)
   activo             Boolean         @default(true)
 
-  movimientos        Movimiento[]
+  movimientos Movimiento[]
 
-  creadoEn           DateTime        @default(now())
+  creadoEn DateTime @default(now())
 
   @@index([clase])
   @@map("tipos_movimiento")
@@ -1240,8 +1360,8 @@ model SaldoArticulo {
   articulo      Articulo @relation(fields: [articuloId], references: [id])
   bodegaId      Int
   bodega        Bodega   @relation(fields: [bodegaId], references: [id])
-  cantidad      Decimal  @db.Decimal(14, 3) @default(0)
-  costoPromedio Decimal  @db.Decimal(14, 4) @default(0)
+  cantidad      Decimal  @default(0) @db.Decimal(14, 3)
+  costoPromedio Decimal  @default(0) @db.Decimal(14, 4)
   actualizadoEn DateTime @updatedAt
 
   @@unique([articuloId, bodegaId])
@@ -1250,32 +1370,32 @@ model SaldoArticulo {
 }
 
 model Movimiento {
-  id                  Int             @id @default(autoincrement())
-  tipoMovimientoId    Int
-  tipoMovimiento      TipoMovimiento  @relation(fields: [tipoMovimientoId], references: [id])
-  entidadId           Int?
-  entidad             Entidad?        @relation("MovEntidad", fields: [entidadId], references: [id])
-  fechaRegistro        DateTime        @default(now())
-  fechaMovimiento      DateTime
-  bodegaOrigenId       Int?
-  bodegaOrigen         Bodega?         @relation("MovOrigen", fields: [bodegaOrigenId], references: [id])
-  bodegaDestinoId      Int?
-  bodegaDestino        Bodega?         @relation("MovDestino", fields: [bodegaDestinoId], references: [id])
-  guiaReferencia       String?
+  id               Int            @id @default(autoincrement())
+  tipoMovimientoId Int
+  tipoMovimiento   TipoMovimiento @relation(fields: [tipoMovimientoId], references: [id])
+  entidadId        Int?
+  entidad          Entidad?       @relation("MovEntidad", fields: [entidadId], references: [id])
+  fechaRegistro    DateTime       @default(now())
+  fechaMovimiento  DateTime
+  bodegaOrigenId   Int?
+  bodegaOrigen     Bodega?        @relation("MovOrigen", fields: [bodegaOrigenId], references: [id])
+  bodegaDestinoId  Int?
+  bodegaDestino    Bodega?        @relation("MovDestino", fields: [bodegaDestinoId], references: [id])
+  guiaReferencia   String?
 
   // Datos de transporte — requeridos si tipoMovimiento.emiteDTE = true (R10)
-  transporteEntidadId  Int?
-  transporteEntidad    Entidad?        @relation("MovTransporte", fields: [transporteEntidadId], references: [id])
-  choferRut            String?
-  choferNombre         String?
-  placaCamion          String?
-  placaRemolque        String?
-  horaSalida           DateTime?
-  horaEstimadaLlegada  DateTime?
+  transporteEntidadId Int?
+  transporteEntidad   Entidad?  @relation("MovTransporte", fields: [transporteEntidadId], references: [id])
+  choferRut           String?
+  choferNombre        String?
+  placaCamion         String?
+  placaRemolque       String?
+  horaSalida          DateTime?
+  horaEstimadaLlegada DateTime?
 
-  detalle              MovimientoDetalle[]
-  usuarioId            String
-  creadoEn             DateTime        @default(now())
+  detalle   MovimientoDetalle[]
+  usuarioId String
+  creadoEn  DateTime            @default(now())
 
   @@index([tipoMovimientoId])
   @@index([fechaMovimiento])
@@ -1298,11 +1418,6 @@ model MovimientoDetalle {
 
 // ─── Productores — Predios, Contrato, Cuenta Corriente, Conceptos de Liquidación ─
 
-enum UnidadVolumen {
-  KG
-  CAJAS
-}
-
 enum NaturalezaMovimientoCC {
   DEBE
   HABER
@@ -1322,9 +1437,9 @@ enum NaturalezaConcepto {
 
 model Predio {
   id               Int             @id @default(autoincrement())
-  entidadId        Int                                       // Entidad tipo PRODUCTOR (R1)
+  entidadId        Int // Entidad tipo PRODUCTOR (R1)
   entidad          Entidad         @relation("PrediosProductor", fields: [entidadId], references: [id])
-  codigo           String                                    // único por productor (R2, índice parcial)
+  codigo           String // único por productor (R2, índice parcial)
   descripcion      String
   codigoCsg        String?
   nombreCsg        String?
@@ -1340,67 +1455,107 @@ model Predio {
   latitud          Decimal?        @db.Decimal(10, 7)
   longitud         Decimal?        @db.Decimal(10, 7)
 
-  creadoEn         DateTime        @default(now())
-  creadoPor        String
-  actualizadoEn    DateTime?       @updatedAt
-  actualizadoPor   String?
-  eliminadoEn      DateTime?
-  eliminadoPor     String?
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
 
   @@index([entidadId])
   @@map("predios")
 }
 
 model ProductorContrato {
-  id                     Int            @id @default(autoincrement())
-  entidadId              Int
-  entidad                Entidad        @relation("ContratosProductor", fields: [entidadId], references: [id])
-  temporadaId            Int?
-  temporada              Temporada?     @relation(fields: [temporadaId], references: [id])
-  pdfNombre              String?
-  pdfMime                String?
-  pdfTamano              Int?
-  fechaInicio            DateTime?      @db.Date
-  fechaTermino           DateTime?      @db.Date
+  id              Int       @id @default(autoincrement())
+  entidadId       Int
+  entidad         Entidad   @relation("ContratosProductor", fields: [entidadId], references: [id])
+  temporadaId     Int
+  temporada       Temporada @relation(fields: [temporadaId], references: [id])
+  especieId       Int
+  especie         Especie   @relation(fields: [especieId], references: [id])
+  fechaInicio     DateTime  @db.Date
+  fechaTermino    DateTime  @db.Date
+  // Parametro genérico (Condición de Pago) — mismo patrón que incotermId en
+  // OrdenCompra: el TipoParametro "Condición de Pago" todavía no está dado de
+  // alta (se crea en Configuración → Tipos de Parámetro cuando se necesite).
+  condicionPagoId Int?
 
-  // Condiciones controladas durante el proceso (⚠ semántica a refinar en Etapa 3, ver §3)
-  valoresFacturacion     String?
-  condicionesPago        String?
-  condicionesFacturacion String?
-  volumenComprometido    Decimal?       @db.Decimal(14, 3)
-  unidadVolumen          UnidadVolumen?
-  minimoGarantizado      Decimal?       @db.Decimal(14, 4)
-  // porcentajeCumplimiento: CALCULADO (volumen real / comprometido), no se almacena (R5b)
+  lineas   ProductorContratoLinea[]
+  adjuntos ProductorContratoAdjunto[]
 
-  creadoEn               DateTime       @default(now())
-  creadoPor              String
-  actualizadoEn          DateTime?      @updatedAt
-  actualizadoPor         String?
-  eliminadoEn            DateTime?
-  eliminadoPor           String?
-
-  pdfContenido           ProductorContratoPdf?
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
 
   @@index([entidadId])
+  @@index([especieId])
+  @@index([temporadaId])
   @@map("productor_contratos")
 }
 
-// Metadatos separados del binario (mismo patrón que adjuntos de Solicitud de Inspección)
-model ProductorContratoPdf {
-  contratoId Int               @id
+// Grilla de características de la fruta comprometidas en el contrato
+model ProductorContratoLinea {
+  id         Int               @id @default(autoincrement())
+  contratoId Int
   contrato   ProductorContrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
-  datos      Bytes
 
-  @@map("productor_contratos_pdf")
+  articuloId     Int // FK → Artículo tipo EMBALAJE
+  articulo       Articulo     @relation(fields: [articuloId], references: [id])
+  variedadId     Int
+  variedad       Variedad     @relation(fields: [variedadId], references: [id])
+  calibreDesdeId Int
+  calibreDesde   Calibre      @relation("ProductorContratoCalibreDesde", fields: [calibreDesdeId], references: [id])
+  calibreHastaId Int
+  calibreHasta   Calibre      @relation("ProductorContratoCalibreHasta", fields: [calibreHastaId], references: [id])
+  categoriaId    Int
+  categoria      Categoria    @relation(fields: [categoriaId], references: [id])
+  unidadMedidaId Int
+  unidadMedida   UnidadMedida @relation(fields: [unidadMedidaId], references: [id])
+
+  cantidadComprometida Decimal @db.Decimal(14, 3)
+  minimoGarantizado    Decimal @db.Decimal(14, 4)
+
+  @@index([contratoId])
+  @@map("productor_contrato_linea")
+}
+
+// Metadatos del adjunto — el binario vive en tabla aparte (mismo patrón que
+// adjuntos de Solicitud de Inspección)
+model ProductorContratoAdjunto {
+  id         Int               @id @default(autoincrement())
+  contratoId Int
+  contrato   ProductorContrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  nombre     String
+  mime       String
+  tamano     Int
+  subidoEn   DateTime          @default(now())
+  subidoPor  String
+
+  contenido ProductorContratoAdjuntoContenido?
+
+  @@index([contratoId])
+  @@map("productor_contrato_adjuntos")
+}
+
+model ProductorContratoAdjuntoContenido {
+  adjuntoId Int                      @id
+  adjunto   ProductorContratoAdjunto @relation(fields: [adjuntoId], references: [id], onDelete: Cascade)
+  datos     Bytes
+
+  @@map("productor_contrato_adjuntos_contenido")
 }
 
 model MovimientoCuentaCorriente {
   id          Int                    @id @default(autoincrement()) // operativo, inmutable (R5)
-  entidadId   Int                                                  // productor
+  entidadId   Int // productor
   entidad     Entidad                @relation("CCProductor", fields: [entidadId], references: [id])
   tipoId      Int
   tipo        ConceptoCtaCte         @relation(fields: [tipoId], references: [id])
-  naturaleza  NaturalezaMovimientoCC                               // DEBE o HABER (consistente con tipo.naturaleza, R6)
+  naturaleza  NaturalezaMovimientoCC // DEBE o HABER (consistente con tipo.naturaleza, R6)
   fecha       DateTime
   glosa       String?
   monto       Decimal                @db.Decimal(14, 4)
@@ -1421,15 +1576,15 @@ model ConceptoLiquidacion {
   codigo          String
   descripcion     String
   formaAplicacion FormaAplicacionConcepto
-  naturaleza      NaturalezaConcepto                               // COBRO (−) / ABONO (+)
+  naturaleza      NaturalezaConcepto // COBRO (−) / ABONO (+)
   valores         ConceptoLiquidacionEspecie[]
 
-  creadoEn        DateTime  @default(now())
-  creadoPor       String
-  actualizadoEn   DateTime? @updatedAt
-  actualizadoPor  String?
-  eliminadoEn     DateTime?
-  eliminadoPor    String?
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
 
   @@map("conceptos_liquidacion")
 }
@@ -1440,7 +1595,7 @@ model ConceptoLiquidacionEspecie {
   concepto   ConceptoLiquidacion @relation(fields: [conceptoId], references: [id], onDelete: Cascade)
   especieId  Int
   especie    Especie             @relation(fields: [especieId], references: [id])
-  valor      Decimal             @db.Decimal(14, 4)               // valor del concepto para esa especie
+  valor      Decimal             @db.Decimal(14, 4) // valor del concepto para esa especie
 
   @@unique([conceptoId, especieId])
   @@index([conceptoId])
@@ -1453,18 +1608,18 @@ model ConceptoLiquidacionEspecie {
 // diferidos — no están implementados todavía.
 
 model NotaVenta {
-  id               Int       @id @default(autoincrement())
-  folio            Int       @unique // correlativo autonumérico (R1)
-  fecha            DateTime
+  id    Int      @id @default(autoincrement())
+  folio Int      @unique // correlativo autonumérico (R1)
+  fecha DateTime
 
-  clienteId        Int
-  cliente          Entidad   @relation("NotaVentaCliente", fields: [clienteId], references: [id])
-  compradorId      Int?
-  comprador        Entidad?  @relation("NotaVentaComprador", fields: [compradorId], references: [id])
-  notifyId         Int?
-  notify           Entidad?  @relation("NotaVentaNotify", fields: [notifyId], references: [id])
-  clienteFinalId   Int?
-  clienteFinal     Entidad?  @relation("NotaVentaClienteFinal", fields: [clienteFinalId], references: [id])
+  clienteId      Int
+  cliente        Entidad  @relation("NotaVentaCliente", fields: [clienteId], references: [id])
+  compradorId    Int?
+  comprador      Entidad? @relation("NotaVentaComprador", fields: [compradorId], references: [id])
+  notifyId       Int?
+  notify         Entidad? @relation("NotaVentaNotify", fields: [notifyId], references: [id])
+  clienteFinalId Int?
+  clienteFinal   Entidad? @relation("NotaVentaClienteFinal", fields: [clienteFinalId], references: [id])
 
   tipoEmbarqueId   Int
   tipoEmbarque     TipoEmbarque      @relation(fields: [tipoEmbarqueId], references: [id])
@@ -1488,21 +1643,21 @@ model NotaVenta {
   formaPagoId      Int?
   saldoPagoId      Int?
 
-  monedaId         Int
-  moneda           Moneda    @relation(fields: [monedaId], references: [id])
+  monedaId Int
+  moneda   Moneda @relation(fields: [monedaId], references: [id])
 
-  observaciones    String?
+  observaciones String?
 
-  detalles         NotaVentaDetalle[]
+  detalles             NotaVentaDetalle[]
   instructivosEmbalaje InstructivoEmbalaje[]
-  ordenesCompra OrdenCompra[]
+  ordenesCompra        OrdenCompra[]
 
-  creadoEn         DateTime  @default(now())
-  creadoPor        String
-  actualizadoEn    DateTime? @updatedAt
-  actualizadoPor   String?
-  eliminadoEn      DateTime?
-  eliminadoPor     String?
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
 
   @@index([clienteId])
   @@index([fecha])
@@ -1510,28 +1665,28 @@ model NotaVenta {
 }
 
 model NotaVentaDetalle {
-  id              Int        @id @default(autoincrement())
-  notaVentaId     Int
-  notaVenta       NotaVenta  @relation(fields: [notaVentaId], references: [id], onDelete: Cascade)
+  id          Int       @id @default(autoincrement())
+  notaVentaId Int
+  notaVenta   NotaVenta @relation(fields: [notaVentaId], references: [id], onDelete: Cascade)
 
   fechaCompromiso DateTime
   especieId       Int
-  especie         Especie    @relation(fields: [especieId], references: [id])
+  especie         Especie     @relation(fields: [especieId], references: [id])
   variedadId      Int
-  variedad        Variedad   @relation(fields: [variedadId], references: [id])
+  variedad        Variedad    @relation(fields: [variedadId], references: [id])
   articuloId      Int
-  articulo        Articulo   @relation(fields: [articuloId], references: [id])
+  articulo        Articulo    @relation(fields: [articuloId], references: [id])
   categoriaId     Int?
-  categoria       Categoria? @relation(fields: [categoriaId], references: [id])
+  categoria       Categoria?  @relation(fields: [categoriaId], references: [id])
   tipoPalletId    Int?
   tipoPallet      TipoPallet? @relation(fields: [tipoPalletId], references: [id])
 
   cantidadPallets Int
   cajasPorPallet  Int
   cajas           Int
-  precio          Decimal    @db.Decimal(14, 4)
+  precio          Decimal @db.Decimal(14, 4)
 
-  calibres        NotaVentaDetalleCalibre[]
+  calibres NotaVentaDetalleCalibre[]
 
   @@index([notaVentaId])
   @@map("notas_venta_detalle")
@@ -1554,38 +1709,38 @@ model NotaVentaDetalleCalibre {
 // es solo un documento emitido, no editable ni eliminable.
 
 model InstructivoEmbalaje {
-  id          Int       @id @default(autoincrement())
-  numero      Int       @unique // correlativo propio
+  id     Int @id @default(autoincrement())
+  numero Int @unique // correlativo propio
 
   notaVentaId Int
   notaVenta   NotaVenta @relation(fields: [notaVentaId], references: [id])
 
-  detalle     InstructivoEmbalajeDetalle[]
+  detalle InstructivoEmbalajeDetalle[]
 
-  creadoEn    DateTime  @default(now())
-  creadoPor   String
+  creadoEn  DateTime @default(now())
+  creadoPor String
 
   @@index([notaVentaId])
   @@map("instructivos_embalaje")
 }
 
 model InstructivoEmbalajeDetalle {
-  id              Int                  @id @default(autoincrement())
-  instructivoId   Int
-  instructivo     InstructivoEmbalaje  @relation(fields: [instructivoId], references: [id], onDelete: Cascade)
+  id            Int                 @id @default(autoincrement())
+  instructivoId Int
+  instructivo   InstructivoEmbalaje @relation(fields: [instructivoId], references: [id], onDelete: Cascade)
 
-  articuloId      Int // FK → Artículo tipo EMBALAJE
-  articulo        Articulo             @relation(fields: [articuloId], references: [id])
-  especieId       Int
-  especie         Especie              @relation(fields: [especieId], references: [id])
-  variedadId      Int
-  variedad        Variedad             @relation(fields: [variedadId], references: [id])
-  categoriaId     Int
-  categoria       Categoria            @relation(fields: [categoriaId], references: [id])
-  calibreMinId    Int
-  calibreMin      Calibre              @relation("InstructivoEmbalajeCalibreMin", fields: [calibreMinId], references: [id])
-  calibreMaxId    Int
-  calibreMax      Calibre              @relation("InstructivoEmbalajeCalibreMax", fields: [calibreMaxId], references: [id])
+  articuloId   Int // FK → Artículo tipo EMBALAJE
+  articulo     Articulo  @relation(fields: [articuloId], references: [id])
+  especieId    Int
+  especie      Especie   @relation(fields: [especieId], references: [id])
+  variedadId   Int
+  variedad     Variedad  @relation(fields: [variedadId], references: [id])
+  categoriaId  Int
+  categoria    Categoria @relation(fields: [categoriaId], references: [id])
+  calibreMinId Int
+  calibreMin   Calibre   @relation("InstructivoEmbalajeCalibreMin", fields: [calibreMinId], references: [id])
+  calibreMaxId Int
+  calibreMax   Calibre   @relation("InstructivoEmbalajeCalibreMax", fields: [calibreMaxId], references: [id])
 
   cantidadPallets Int
   cajasPorPallet  Int
@@ -1607,38 +1762,84 @@ enum EstadoOrdenCompra {
 }
 
 model OrdenCompra {
-  id                 Int               @id @default(autoincrement())
-  numero             String            @unique // OC-{AAAA}-{NNNN}, correlativo por año
+  id     Int    @id @default(autoincrement())
+  numero String @unique // OC-{AAAA}-{NNNN}, correlativo por año
 
   entidadProductorId Int // Entidad tipo PRODUCTOR
-  entidadProductor   Entidad           @relation("OrdenCompraProductor", fields: [entidadProductorId], references: [id])
-  notaVentaId        Int?
-  notaVenta          NotaVenta?        @relation(fields: [notaVentaId], references: [id])
+  entidadProductor   Entidad    @relation("OrdenCompraProductor", fields: [entidadProductorId], references: [id])
+  notaVentaId        Int? // origen Cierre Comercial; null = Manual
+  notaVenta          NotaVenta? @relation(fields: [notaVentaId], references: [id])
 
-  fecha              DateTime          @default(now())
-  formaPago          String?
-  condicionPagoTexto String?
-  monedaId           Int
-  moneda             Moneda            @relation(fields: [monedaId], references: [id])
-  incotermId         Int? // Parametro genérico (Incoterm de compra) — ver nota en NotaVenta
-  facturarAId        Int?
-  facturarA          Entidad?          @relation("OrdenCompraFacturarA", fields: [facturarAId], references: [id])
-  observaciones      String?
-  estado             EstadoOrdenCompra @default(BORRADOR)
+  fecha             DateTime  @default(now())
+  fechaEntregaDesde DateTime? @db.Date
+  fechaEntregaHasta DateTime? @db.Date
 
-  lineas             OrdenCompraLinea[]
-  cuotasPago         OrdenCompraCuotaPago[]
+  formaPagoId      Int?
+  formaPago        FormaPago?        @relation(fields: [formaPagoId], references: [id])
+  condicionPagoId  Int?
+  condicionPago    CondicionPago?    @relation(fields: [condicionPagoId], references: [id])
+  monedaId         Int
+  moneda           Moneda            @relation(fields: [monedaId], references: [id])
+  incotermId       Int? // Parametro genérico (Incoterm de compra) — ver nota en NotaVenta
+  destinoMercadoId Int?
+  destinoMercado   Mercado?          @relation(fields: [destinoMercadoId], references: [id])
+  responsableId    String?
+  responsable      Usuario?          @relation(fields: [responsableId], references: [id])
+  observaciones    String?
+  estado           EstadoOrdenCompra @default(BORRADOR)
 
-  creadoEn           DateTime          @default(now())
-  creadoPor          String
-  actualizadoEn      DateTime?         @updatedAt
-  actualizadoPor     String?
-  eliminadoEn        DateTime?
-  eliminadoPor       String?
+  lineas     OrdenCompraLinea[]
+  cuotasPago OrdenCompraCuotaPago[]
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
 
   @@index([entidadProductorId])
   @@index([notaVentaId])
+  @@index([formaPagoId])
+  @@index([condicionPagoId])
+  @@index([destinoMercadoId])
+  @@index([responsableId])
   @@map("ordenes_compra")
+}
+
+// Maestro: cabecera + cuotas (mismo patrón cabecera+matriz que ConceptoLiquidacion).
+// Determina automáticamente las cuotas de pago de la Orden de Compra al
+// seleccionarse — no se cargan manualmente por OC.
+model CondicionPago {
+  id          Int     @id @default(autoincrement())
+  codigo      String
+  descripcion String
+  bloqueado   Boolean @default(false)
+
+  cuotas        CondicionPagoCuota[]
+  ordenesCompra OrdenCompra[]
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@map("condiciones_pago")
+}
+
+model CondicionPagoCuota {
+  id              Int           @id @default(autoincrement())
+  condicionPagoId Int
+  condicionPago   CondicionPago @relation(fields: [condicionPagoId], references: [id], onDelete: Cascade)
+
+  porcentaje  Decimal @db.Decimal(5, 2)
+  plazoDias   Int
+  descripcion String?
+
+  @@index([condicionPagoId])
+  @@map("condicion_pago_cuota")
 }
 
 model OrdenCompraCuotaPago {
@@ -1646,35 +1847,35 @@ model OrdenCompraCuotaPago {
   ordenCompraId Int
   ordenCompra   OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
 
-  porcentaje    Decimal     @db.Decimal(5, 2)
-  plazoDias     Int
-  descripcion   String?
+  porcentaje  Decimal @db.Decimal(5, 2)
+  plazoDias   Int
+  descripcion String?
 
   @@index([ordenCompraId])
   @@map("orden_compra_cuota_pago")
 }
 
 model OrdenCompraLinea {
-  id              Int         @id @default(autoincrement())
-  ordenCompraId   Int
-  ordenCompra     OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
+  id            Int         @id @default(autoincrement())
+  ordenCompraId Int
+  ordenCompra   OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
 
-  especieId       Int
-  especie         Especie     @relation(fields: [especieId], references: [id])
-  variedadId      Int
-  variedad        Variedad    @relation(fields: [variedadId], references: [id])
-  categoriaId     Int
-  categoria       Categoria   @relation(fields: [categoriaId], references: [id])
-  articuloId      Int // FK → Artículo tipo EMBALAJE (etiqueta/pesos se leen del artículo)
-  articulo        Articulo    @relation(fields: [articuloId], references: [id])
-  calibreMinId    Int
-  calibreMin      Calibre     @relation("OrdenCompraCalibreMin", fields: [calibreMinId], references: [id])
-  calibreMaxId    Int
-  calibreMax      Calibre     @relation("OrdenCompraCalibreMax", fields: [calibreMaxId], references: [id])
+  especieId    Int
+  especie      Especie   @relation(fields: [especieId], references: [id])
+  variedadId   Int
+  variedad     Variedad  @relation(fields: [variedadId], references: [id])
+  categoriaId  Int
+  categoria    Categoria @relation(fields: [categoriaId], references: [id])
+  articuloId   Int // FK → Artículo tipo EMBALAJE (etiqueta/pesos se leen del artículo)
+  articulo     Articulo  @relation(fields: [articuloId], references: [id])
+  calibreMinId Int
+  calibreMin   Calibre   @relation("OrdenCompraCalibreMin", fields: [calibreMinId], references: [id])
+  calibreMaxId Int
+  calibreMax   Calibre   @relation("OrdenCompraCalibreMax", fields: [calibreMaxId], references: [id])
 
   cantidadPallets Int
   cajasPorPallet  Int
-  precioUsdCaja   Decimal     @db.Decimal(14, 4)
+  precioUsdCaja   Decimal @db.Decimal(14, 4)
 
   @@index([ordenCompraId])
   @@map("orden_compra_linea")

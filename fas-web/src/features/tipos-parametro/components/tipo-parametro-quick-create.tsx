@@ -96,7 +96,7 @@ function TipoParametroQuickDialog({
 
 export function TipoParametroQuickCreate({ onCreated }: TipoParametroQuickCreateProps) {
   const [open, setOpen] = useState(false)
-  const puedeEscribir = usePuedeEscribir('config.tipos-parametro')
+  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
 
   if (!puedeEscribir) return null
 

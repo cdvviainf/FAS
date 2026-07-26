@@ -13,7 +13,7 @@ import { FORMA_APLICACION_LABELS, NATURALEZA_CONCEPTO_LABELS } from '../types'
 import type { ConceptoLiquidacion } from '../types'
 import { ConceptoFormSheet } from './concepto-form-sheet'
 
-const ITEM = 'config.conceptos-liquidacion'
+const ITEM = 'PROD_CONCEPTOS_LIQ'
 
 export function ConceptoListingClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)

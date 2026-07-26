@@ -14,6 +14,16 @@ export interface SolicitudCreateInput {
   especieId?: number | null
   fechaHora: string // ISO 8601
   motivoId: number
+  mercadoId?: number | null
+  paisIds?: number[]
+  clienteId?: number | null
+  fechaDespacho?: string | null
+  cantidadPallets?: number | null
+  calificacionId?: number | null
+  variedadIds?: number[]
+  calibreIds?: number[]
+  categoriaIds?: number[]
+  articuloIds?: number[]
   observaciones?: string | null
   asignados: AsignadoInput[]
 }
@@ -25,6 +35,16 @@ export interface SolicitudUpdateInput {
   especieId?: number | null
   fechaHora?: string
   motivoId?: number
+  mercadoId?: number | null
+  paisIds?: number[]
+  clienteId?: number | null
+  fechaDespacho?: string | null
+  cantidadPallets?: number | null
+  calificacionId?: number | null
+  variedadIds?: number[]
+  calibreIds?: number[]
+  categoriaIds?: number[]
+  articuloIds?: number[]
   observaciones?: string | null
   asignados?: AsignadoInput[]
 }

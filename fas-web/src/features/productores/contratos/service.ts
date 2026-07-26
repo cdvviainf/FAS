@@ -1,5 +1,5 @@
 import { api } from '@/lib/api'
-import type { Contrato, ContratoCreateInput, ContratoUpdateInput } from './types'
+import type { Contrato, ContratoAdjunto, ContratoCreateInput, ContratoUpdateInput } from './types'
 
 export const contratosService = {
   async list(entidadId: number): Promise<{ data: Contrato[] }> {
@@ -14,14 +14,17 @@ export const contratosService = {
   async remove(entidadId: number, contratoId: number): Promise<void> {
     await api.delete(`productores/${entidadId}/contratos/${contratoId}`)
   },
-  async subirPdf(entidadId: number, contratoId: number, archivo: File): Promise<{ data: Contrato }> {
+  async agregarAdjunto(entidadId: number, contratoId: number, archivo: File): Promise<{ data: ContratoAdjunto }> {
     const formData = new FormData()
     formData.append('file', archivo)
-    return api.post(`productores/${entidadId}/contratos/${contratoId}/pdf`, { body: formData }).json()
+    return api.post(`productores/${entidadId}/contratos/${contratoId}/adjuntos`, { body: formData }).json()
   },
-  urlDescargaPdf(entidadId: number, contratoId: number): string {
+  async eliminarAdjunto(entidadId: number, contratoId: number, adjuntoId: number): Promise<void> {
+    await api.delete(`productores/${entidadId}/contratos/${contratoId}/adjuntos/${adjuntoId}`)
+  },
+  urlDescargaAdjunto(entidadId: number, contratoId: number, adjuntoId: number): string {
     // Ruta relativa (mismo origen) para que el navegador envíe la cookie de
     // sesión — ver comentario en src/lib/api.ts.
-    return `/api/productores/${entidadId}/contratos/${contratoId}/pdf`
+    return `/api/productores/${entidadId}/contratos/${contratoId}/adjuntos/${adjuntoId}`
   },
 }

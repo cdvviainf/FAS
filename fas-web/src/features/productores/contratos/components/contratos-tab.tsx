@@ -14,8 +14,14 @@ import { ContratoFormSheet } from './contrato-form-sheet'
 
 // PROD-01: Contratos tiene su propio ítem de menú (PROD_CONTRATO), independiente
 // de la Ficha (PROD_FICHA) — no se debe reutilizar el permiso de la ficha aquí.
-const ITEM = 'productores.contrato'
+const ITEM = 'PROD_CONTRATO'
 const fmt = new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium' })
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: {
   entidadId: number
@@ -28,22 +34,33 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
   const [formOpen, setFormOpen] = useState(false)
   const [subiendoId, setSubiendoId] = useState<number | null>(null)
   const [deleteItem, setDeleteItem] = useState<Contrato | undefined>()
+  const [deleteAdjunto, setDeleteAdjunto] = useState<{ contratoId: number; adjuntoId: number; nombre: string } | undefined>()
   const inputRef = useRef<HTMLInputElement>(null)
 
   const invalidarFicha = () => queryClient.invalidateQueries({ queryKey: ['productores', 'ficha', entidadId] })
 
-  const subirPdfMutation = useMutation({
+  const agregarAdjuntoMutation = useMutation({
     mutationFn: ({ contratoId, archivo }: { contratoId: number; archivo: File }) =>
-      contratosService.subirPdf(entidadId, contratoId, archivo),
+      contratosService.agregarAdjunto(entidadId, contratoId, archivo),
     onSuccess: () => {
       invalidarFicha()
-      toast.success('PDF subido')
+      toast.success('Documento adjuntado')
     },
-    onError: (e: Error) => toast.error(e.message || 'Error al subir el PDF'),
+    onError: (e: Error) => toast.error(e.message || 'Error al adjuntar el documento'),
     onSettled: () => setSubiendoId(null),
   })
 
-  // PROD-02: el contrato tiene DELETE en la API pero no había forma de eliminarlo desde la UI
+  const eliminarAdjuntoMutation = useMutation({
+    mutationFn: ({ contratoId, adjuntoId }: { contratoId: number; adjuntoId: number }) =>
+      contratosService.eliminarAdjunto(entidadId, contratoId, adjuntoId),
+    onSuccess: () => {
+      invalidarFicha()
+      toast.success('Documento eliminado')
+      setDeleteAdjunto(undefined)
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al eliminar el documento'),
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (contratoId: number) => contratosService.remove(entidadId, contratoId),
     onSuccess: () => {
@@ -64,11 +81,10 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
       <input
         ref={inputRef}
         type='file'
-        accept='application/pdf'
         className='hidden'
         onChange={(e) => {
           const archivo = e.target.files?.[0]
-          if (archivo && subiendoId) subirPdfMutation.mutate({ contratoId: subiendoId, archivo })
+          if (archivo && subiendoId) agregarAdjuntoMutation.mutate({ contratoId: subiendoId, archivo })
           e.target.value = ''
         }}
       />
@@ -91,26 +107,22 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
       ) : (
         <div className='space-y-3'>
           {contratos.map((c) => (
-            <div key={c.id} className='rounded-md border p-3'>
+            <div key={c.id} className='space-y-3 rounded-md border p-3'>
               <div className='flex items-center justify-between'>
                 <div>
                   <p className='font-medium'>
-                    {c.temporada ? c.temporada.codigo : 'Sin temporada'}
-                    {c.fechaInicio && ` — ${fmt.format(new Date(c.fechaInicio))}`}
-                    {c.fechaTermino && ` a ${fmt.format(new Date(c.fechaTermino))}`}
+                    {c.especie.descripcion} — {c.temporada.codigo}
                   </p>
-                  {c.volumenComprometido && (
-                    <p className='text-xs text-muted-foreground'>
-                      Volumen comprometido: {c.volumenComprometido} {c.unidadVolumen}
-                    </p>
-                  )}
+                  <p className='text-xs text-muted-foreground'>
+                    {fmt.format(new Date(c.fechaInicio))} a {fmt.format(new Date(c.fechaTermino))}
+                  </p>
                 </div>
                 {puedeEscribir && (
                   <div className='flex gap-1'>
                     <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => { setEditItem(c); setFormOpen(true) }}>
                       <Icons.edit className='h-4 w-4' />
                     </Button>
-                    <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => iniciarSubida(c.id)} disabled={subirPdfMutation.isPending}>
+                    <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => iniciarSubida(c.id)} disabled={agregarAdjuntoMutation.isPending}>
                       <Icons.upload className='h-4 w-4' />
                     </Button>
                     <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => setDeleteItem(c)}>
@@ -119,25 +131,68 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
                   </div>
                 )}
               </div>
-              {c.pdfNombre ? (
-                <a
-                  href={contratosService.urlDescargaPdf(entidadId, c.id)}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                  className='mt-1 inline-flex items-center gap-1 text-sm text-primary hover:underline'
-                >
-                  <Icons.paperclip className='h-4 w-4' /> {c.pdfNombre}
-                </a>
-              ) : (
-                <Badge variant='outline' className='mt-1'>Sin PDF adjunto</Badge>
-              )}
-              {(c.valoresFacturacion || c.condicionesPago || c.condicionesFacturacion) && (
-                <div className='mt-2 space-y-1 text-xs text-muted-foreground'>
-                  {c.valoresFacturacion && <p><strong>Valores facturación:</strong> {c.valoresFacturacion}</p>}
-                  {c.condicionesPago && <p><strong>Condiciones pago:</strong> {c.condicionesPago}</p>}
-                  {c.condicionesFacturacion && <p><strong>Condiciones facturación:</strong> {c.condicionesFacturacion}</p>}
+
+              {c.lineas.length > 0 && (
+                <div className='overflow-auto rounded border'>
+                  <table className='w-full text-xs'>
+                    <thead className='bg-muted/50'>
+                      <tr>
+                        <th className='p-1.5 text-left'>Embalaje</th>
+                        <th className='p-1.5 text-left'>Variedad</th>
+                        <th className='p-1.5 text-left'>Categoría</th>
+                        <th className='p-1.5 text-left'>Calibre</th>
+                        <th className='p-1.5 text-right'>Comprometido</th>
+                        <th className='p-1.5 text-right'>Mín. garantizado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {c.lineas.map((l) => (
+                        <tr key={l.id} className='border-t'>
+                          <td className='p-1.5'>{l.articulo.codigo}</td>
+                          <td className='p-1.5'>{l.variedad.descripcion}</td>
+                          <td className='p-1.5'>{l.categoria.descripcion}</td>
+                          <td className='p-1.5'>{l.calibreDesde.descripcion}–{l.calibreHasta.descripcion}</td>
+                          <td className='p-1.5 text-right'>{l.cantidadComprometida} {l.unidadMedida.codigo}</td>
+                          <td className='p-1.5 text-right'>{l.minimoGarantizado}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
+
+              <div className='space-y-1'>
+                <p className='text-xs font-medium text-muted-foreground'>Documentos adjuntos</p>
+                {c.adjuntos.length === 0 ? (
+                  <Badge variant='outline'>Sin documentos adjuntos</Badge>
+                ) : (
+                  <ul className='space-y-1'>
+                    {c.adjuntos.map((a) => (
+                      <li key={a.id} className='flex items-center justify-between gap-2 text-sm'>
+                        <a
+                          href={contratosService.urlDescargaAdjunto(entidadId, c.id, a.id)}
+                          target='_blank'
+                          rel='noopener noreferrer'
+                          className='inline-flex items-center gap-1 text-primary hover:underline'
+                        >
+                          <Icons.paperclip className='h-4 w-4' /> {a.nombre}
+                        </a>
+                        <span className='text-xs text-muted-foreground'>{formatBytes(a.tamano)}</span>
+                        {puedeEscribir && (
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-6 w-6'
+                            onClick={() => setDeleteAdjunto({ contratoId: c.id, adjuntoId: a.id, nombre: a.nombre })}
+                          >
+                            <Icons.trash className='h-3.5 w-3.5' />
+                          </Button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -156,6 +211,14 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
         loading={deleteMutation.isPending}
         title='Eliminar contrato'
         description='¿Eliminar este contrato? Esta acción no se puede deshacer.'
+      />
+      <AlertModal
+        isOpen={!!deleteAdjunto}
+        onClose={() => setDeleteAdjunto(undefined)}
+        onConfirm={() => deleteAdjunto && eliminarAdjuntoMutation.mutate({ contratoId: deleteAdjunto.contratoId, adjuntoId: deleteAdjunto.adjuntoId })}
+        loading={eliminarAdjuntoMutation.isPending}
+        title='Eliminar documento'
+        description={`¿Eliminar el documento "${deleteAdjunto?.nombre}"?`}
       />
     </div>
   )

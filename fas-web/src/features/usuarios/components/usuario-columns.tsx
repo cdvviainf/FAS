@@ -1,6 +1,7 @@
 'use client'
 
 import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-header'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -97,6 +98,11 @@ export const usuarioColumns: ColumnDef<Usuario>[] = [
     cell: ({ row }) => (
       <span className='text-sm'>{row.original.perfil.descripcion}</span>
     ),
+  },
+  {
+    id: 'esResponsableVenta',
+    header: 'Responsable de Venta',
+    cell: ({ row }) => row.original.esResponsableVenta ? <Badge variant='default'>Sí</Badge> : <span className='text-sm text-muted-foreground'>—</span>,
   },
   {
     id: 'whatsapp',

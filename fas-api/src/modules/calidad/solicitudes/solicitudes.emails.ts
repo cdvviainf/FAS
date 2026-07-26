@@ -15,8 +15,20 @@ interface SolicitudParaCorreo {
   contacto?: { nombre: string; telefono?: string | null; whatsapp?: string | null; email?: string | null } | null
   motivo: { descripcion: string }
   especie?: { descripcion: string } | null
+  mercado?: { descripcion: string } | null
+  cliente?: { razonSocial: string } | null
+  fechaDespacho?: Date | null
+  cantidadPallets?: number | null
+  calificacion?: { descripcion: string } | null
+  paises?: { pais: { descripcion: string } }[]
+  variedades?: { variedad: { descripcion: string } }[]
+  calibres?: { calibre: { descripcion: string } }[]
+  categorias?: { categoria: { descripcion: string } }[]
+  embalajes?: { articulo: { descripcion: string } }[]
   asignados: { funcion: string; usuario: { nombre: string; email: string } }[]
 }
+
+const fmtFechaCorta = new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeZone: 'America/Santiago' })
 
 const fmtFecha = new Intl.DateTimeFormat('es-CL', {
   dateStyle: 'full',
@@ -53,7 +65,17 @@ ${fila('Lugar', `${esc(lugar)}${mapa}`)}
 ${contactoStr ? fila('Contacto en terreno', contactoStr) : ''}
 ${fila('Fecha y hora', fmtFecha.format(s.fechaHora))}
 ${fila('Motivo', esc(s.motivo.descripcion))}
+${s.mercado ? fila('Mercado', esc(s.mercado.descripcion)) : ''}
+${s.paises && s.paises.length > 0 ? fila('Países', s.paises.map((p) => esc(p.pais.descripcion)).join(', ')) : ''}
+${s.cliente ? fila('Cliente', esc(s.cliente.razonSocial)) : ''}
+${s.fechaDespacho ? fila('Fecha de despacho', fmtFechaCorta.format(s.fechaDespacho)) : ''}
 ${s.especie ? fila('Especie', esc(s.especie.descripcion)) : ''}
+${s.embalajes && s.embalajes.length > 0 ? fila('Embalaje', s.embalajes.map((e) => esc(e.articulo.descripcion)).join(', ')) : ''}
+${s.variedades && s.variedades.length > 0 ? fila('Variedades', s.variedades.map((v) => esc(v.variedad.descripcion)).join(', ')) : ''}
+${s.calibres && s.calibres.length > 0 ? fila('Calibres', s.calibres.map((c) => esc(c.calibre.descripcion)).join(', ')) : ''}
+${s.categorias && s.categorias.length > 0 ? fila('Categorías', s.categorias.map((c) => esc(c.categoria.descripcion)).join(', ')) : ''}
+${s.calificacion ? fila('Calificación', esc(s.calificacion.descripcion)) : ''}
+${s.cantidadPallets != null ? fila('Cant. pallets', String(s.cantidadPallets)) : ''}
 ${acuden ? fila('Debe(n) acudir', acuden) : ''}
 ${s.observaciones ? fila('Observaciones', esc(s.observaciones).replace(/\n/g, '<br>')) : ''}
 </table>`

@@ -11,7 +11,7 @@ import {
 
 export async function listUsuarios(req: FastifyRequest, reply: FastifyReply) {
   const query = usuarioListQuerySchema.parse(req.query)
-  const result = await service.listarUsuarios(query.page, query.limit, query.q, query.perfilId)
+  const result = await service.listarUsuarios(query.page, query.limit, query.q, query.perfilId, query.esResponsableVenta)
   return reply.send(result)
 }
 

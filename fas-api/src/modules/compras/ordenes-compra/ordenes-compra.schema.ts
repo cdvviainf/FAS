@@ -12,37 +12,52 @@ const lineaSchema = z.object({
   precioUsdCaja: z.number().nonnegative('El precio no puede ser negativo'),
 })
 
-const cuotaPagoSchema = z.object({
-  porcentaje: z.number().positive('El porcentaje debe ser mayor a 0').max(100, 'El porcentaje no puede superar 100'),
-  plazoDias: z.number().int().nonnegative('El plazo en días no puede ser negativo'),
-  descripcion: z.string().max(200).trim().optional().nullable(),
-})
-
 export const ordenCompraCreateSchema = z.object({
   entidadProductorId: z.number().int().positive('El productor es requerido'),
   notaVentaId: z.number().int().positive().optional().nullable(),
   fecha: z.coerce.date().optional(),
-  formaPago: z.string().max(100).trim().optional().nullable(),
-  condicionPagoTexto: z.string().max(2000).trim().optional().nullable(),
+  fechaEntregaDesde: z.string().date().optional().nullable(),
+  fechaEntregaHasta: z.string().date().optional().nullable(),
+  formaPagoId: z.number().int().positive().optional().nullable(),
+  condicionPagoId: z.number().int().positive().optional().nullable(),
   monedaId: z.number().int().positive('La moneda es requerida'),
   incotermId: z.number().int().positive().optional().nullable(),
-  facturarAId: z.number().int().positive().optional().nullable(),
+  destinoMercadoId: z.number().int().positive().optional().nullable(),
+  responsableId: z.string().min(1).optional().nullable(),
   observaciones: z.string().max(2000).trim().optional().nullable(),
   lineas: z.array(lineaSchema).min(1, 'La OC debe tener al menos una línea'),
-  cuotasPago: z.array(cuotaPagoSchema).optional().default([]),
-})
+}).refine(
+  (d) => !d.fechaEntregaDesde || !d.fechaEntregaHasta || d.fechaEntregaDesde <= d.fechaEntregaHasta,
+  { message: 'La fecha de entrega desde no puede ser posterior a la fecha hasta', path: ['fechaEntregaHasta'] },
+)
 
-export const ordenCompraUpdateSchema = ordenCompraCreateSchema
-  .omit({ lineas: true, cuotasPago: true })
-  .partial()
-  .extend({
-    // RECEPCIONADA queda fuera de las transiciones manuales: solo la
-    // asignará el futuro flujo de Recepción de Stock (compras.md §4.4/§8),
-    // no este endpoint (OC-001).
-    estado: z.enum(['BORRADOR', 'EMITIDA']).optional(),
-    lineas: z.array(lineaSchema).min(1).optional(),
-    cuotasPago: z.array(cuotaPagoSchema).optional(),
-  })
+export const ordenCompraUpdateSchema = z.object({
+  entidadProductorId: z.number().int().positive().optional(),
+  notaVentaId: z.number().int().positive().optional().nullable(),
+  fecha: z.coerce.date().optional(),
+  fechaEntregaDesde: z.string().date().optional().nullable(),
+  fechaEntregaHasta: z.string().date().optional().nullable(),
+  formaPagoId: z.number().int().positive().optional().nullable(),
+  condicionPagoId: z.number().int().positive().optional().nullable(),
+  monedaId: z.number().int().positive().optional(),
+  incotermId: z.number().int().positive().optional().nullable(),
+  destinoMercadoId: z.number().int().positive().optional().nullable(),
+  responsableId: z.string().min(1).optional().nullable(),
+  observaciones: z.string().max(2000).trim().optional().nullable(),
+  // RECEPCIONADA queda fuera de las transiciones manuales: solo la
+  // asignará el futuro flujo de Recepción de Stock (compras.md §4.4/§8),
+  // no este endpoint (OC-001).
+  estado: z.enum(['BORRADOR', 'EMITIDA']).optional(),
+  lineas: z.array(lineaSchema).min(1).optional(),
+}).superRefine((d, ctx) => {
+  if (d.fechaEntregaDesde && d.fechaEntregaHasta && d.fechaEntregaDesde > d.fechaEntregaHasta) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'La fecha de entrega desde no puede ser posterior a la fecha hasta',
+      path: ['fechaEntregaHasta'],
+    })
+  }
+})
 
 export const ordenCompraParamsSchema = z.object({
   id: z.coerce.number().int().positive(),

@@ -7,12 +7,14 @@ import { usuariosRoutes } from './usuarios/usuarios.routes.js'
 import { entidadesRoutes } from './entidades/entidades.routes.js'
 import { correoRoutes } from './correo/correo.routes.js'
 import { conceptosLiquidacionRoutes } from './conceptos-liquidacion/conceptos-liquidacion.routes.js'
+import { condicionesPagoRoutes } from './condiciones-pago/condiciones-pago.routes.js'
 
 const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'pais', prefixRuta: 'paises', label: 'País', tienePaisOrigen: true, schemaKey: 'pais' },
   { modelo: 'zona', prefixRuta: 'zonas', label: 'Zona' },
   { modelo: 'grupoMercado', prefixRuta: 'grupos-mercado', label: 'Grupo de Mercado' },
   { modelo: 'tipoEmbarque', prefixRuta: 'tipos-embarque', label: 'Tipo de Embarque' },
+  { modelo: 'formaPago', prefixRuta: 'formas-pago', label: 'Forma de Pago' },
   { modelo: 'unidadMedida', prefixRuta: 'unidades-medida', label: 'Unidad de Medida' },
   { modelo: 'tipoPallet', prefixRuta: 'tipos-pallet', label: 'Tipo de Pallet' },
   { modelo: 'altura', prefixRuta: 'alturas', label: 'Altura' },
@@ -40,6 +42,7 @@ const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'bodega', prefixRuta: 'bodegas', label: 'Bodega', schemaKey: 'bodega' },
   // Lote 6 — Calidad
   { modelo: 'motivoInspeccion', prefixRuta: 'motivos-inspeccion', label: 'Motivo de Inspección' },
+  { modelo: 'calificacion', prefixRuta: 'calificaciones', label: 'Calificación' },
 ]
 
 export async function configRoutes(app: FastifyInstance) {
@@ -49,6 +52,7 @@ export async function configRoutes(app: FastifyInstance) {
   await app.register(entidadesRoutes)
   await app.register(correoRoutes)
   await app.register(conceptosLiquidacionRoutes)
+  await app.register(condicionesPagoRoutes)
 
   // Menú accesible del usuario autenticado
   app.get('/me/menu', { preHandler: [requireAuth] }, getMiMenu)

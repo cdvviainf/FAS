@@ -60,8 +60,16 @@ async function validarReferencias(data: {
   contactoId?: number | null
   motivoId?: number
   especieId?: number | null
+  mercadoId?: number | null
+  clienteId?: number | null
+  calificacionId?: number | null
+  paisIds?: number[]
+  variedadIds?: number[]
+  calibreIds?: number[]
+  categoriaIds?: number[]
+  articuloIds?: number[]
   asignados?: { usuarioId: string; funcion: string }[]
-}, entidadIdParaDireccion?: number) {
+}, entidadIdParaDireccion?: number, especieIdVigente?: number | null) {
   if (data.entidadProductorId !== undefined) {
     const entidad = await repo.getEntidadProductor(data.entidadProductorId)
     if (!entidad) throw new ValidationError('La entidad seleccionada no existe, está inactiva/eliminada o no es de tipo Productor')
@@ -84,6 +92,67 @@ async function validarReferencias(data: {
   if (data.especieId != null) {
     const especie = await repo.getEspecieActiva(data.especieId)
     if (!especie) throw new ValidationError('La especie seleccionada no existe o fue eliminada')
+  }
+  if (data.mercadoId != null) {
+    const mercado = await repo.getMercadoActivo(data.mercadoId)
+    if (!mercado) throw new ValidationError('El mercado seleccionado no existe o está bloqueado')
+  }
+  if (data.clienteId != null) {
+    const cliente = await repo.getClienteExtranjero(data.clienteId)
+    if (!cliente) throw new ValidationError('El cliente seleccionado no existe, está inactivo o no es de tipo Cliente Extranjero')
+  }
+  if (data.calificacionId != null) {
+    const calificacion = await repo.getCalificacionActiva(data.calificacionId)
+    if (!calificacion) throw new ValidationError('La calificación seleccionada no existe o está bloqueada')
+  }
+
+  // especieId efectiva para validar pertenencia de variedad/calibre/categoría
+  const especieId = data.especieId !== undefined ? data.especieId : especieIdVigente
+
+  if (data.paisIds && data.paisIds.length > 0) {
+    const paises = await repo.getPaisesActivos(data.paisIds)
+    if (paises.length !== new Set(data.paisIds).size) {
+      throw new ValidationError('Uno o más países seleccionados no existen o están bloqueados')
+    }
+  }
+  if (data.variedadIds && data.variedadIds.length > 0) {
+    const variedades = await repo.getVariedadesActivas(data.variedadIds)
+    if (variedades.length !== new Set(data.variedadIds).size) {
+      throw new ValidationError('Una o más variedades seleccionadas no existen o están bloqueadas')
+    }
+    if (especieId != null && variedades.some((v) => v.especieId !== especieId)) {
+      throw new ValidationError('Una o más variedades no pertenecen a la especie seleccionada')
+    }
+  }
+  if (data.calibreIds && data.calibreIds.length > 0) {
+    const calibres = await repo.getCalibresActivos(data.calibreIds)
+    if (calibres.length !== new Set(data.calibreIds).size) {
+      throw new ValidationError('Uno o más calibres seleccionados no existen o están bloqueados')
+    }
+    if (especieId != null && calibres.some((c) => c.especieId !== especieId)) {
+      throw new ValidationError('Uno o más calibres no pertenecen a la especie seleccionada')
+    }
+  }
+  if (data.categoriaIds && data.categoriaIds.length > 0) {
+    const categorias = await repo.getCategoriasActivas(data.categoriaIds)
+    if (categorias.length !== new Set(data.categoriaIds).size) {
+      throw new ValidationError('Una o más categorías seleccionadas no existen o están bloqueadas')
+    }
+    if (especieId != null && categorias.some((c) => c.especieId !== especieId)) {
+      throw new ValidationError('Una o más categorías no pertenecen a la especie seleccionada')
+    }
+  }
+  if (data.articuloIds && data.articuloIds.length > 0) {
+    const articulos = await repo.getArticulosEmbalaje(data.articuloIds)
+    if (articulos.length !== new Set(data.articuloIds).size) {
+      throw new ValidationError('Uno o más embalajes seleccionados no existen')
+    }
+    if (articulos.some((a) => a.tipo !== 'EMBALAJE')) {
+      throw new ValidationError('Todos los embalajes seleccionados deben ser artículos de tipo Embalaje')
+    }
+    if (articulos.some((a) => !a.activo)) {
+      throw new ValidationError('Uno o más embalajes seleccionados están inactivos')
+    }
   }
   if (data.asignados !== undefined) {
     const ids = data.asignados.map((a) => a.usuarioId)
@@ -118,11 +187,16 @@ export async function crearSolicitud(body: SolicitudCreateBody, userId: string) 
 
   await validarReferencias(body)
 
-  const { temporadaId, asignados, fechaHora, ...core } = body
+  const {
+    temporadaId, asignados, fechaHora,
+    paisIds = [], variedadIds = [], calibreIds = [], categoriaIds = [], articuloIds = [],
+    ...core
+  } = body
   return repo.createSolicitud(
     temporadaId,
     temporada.codigo,
-    { ...core, fechaHora: new Date(fechaHora) },
+    { ...core, fechaHora: new Date(fechaHora), fechaDespacho: core.fechaDespacho ? new Date(core.fechaDespacho) : null },
+    { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds },
     asignados,
     userId,
   )
@@ -134,7 +208,7 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
     throw new ConflictError('No se puede editar una solicitud cerrada')
   }
 
-  await validarReferencias(body, body.entidadProductorId ?? actual.entidadProductorId)
+  await validarReferencias(body, body.entidadProductorId ?? actual.entidadProductorId, actual.especieId)
 
   // Si cambia la entidad, la dirección debe venir también (y ya se validó contra la nueva entidad)
   const cambiaEntidad = body.entidadProductorId !== undefined && body.entidadProductorId !== actual.entidadProductorId
@@ -150,11 +224,16 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
   // también a los asignados que puedan ser removidos en esta edición.
   const destinatariosPrevios = actual.estado === 'NOTIFICADA' ? await destinatariosDe(actual) : []
 
-  const { asignados, fechaHora, ...core } = body
+  const { asignados, fechaHora, fechaDespacho, paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, ...core } = body
   const actualizada = await repo.updateSolicitud(
     id,
-    { ...core, ...(fechaHora ? { fechaHora: new Date(fechaHora) } : {}) },
+    {
+      ...core,
+      ...(fechaHora ? { fechaHora: new Date(fechaHora) } : {}),
+      ...(fechaDespacho !== undefined ? { fechaDespacho: fechaDespacho ? new Date(fechaDespacho) : null } : {}),
+    },
     asignados,
+    { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds },
     userId,
   )
 
