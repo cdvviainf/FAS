@@ -198,7 +198,10 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
                   </SelectContent>
                 </Select>
               </div>
-              <UnidadMedidaQuickCreate onCreated={(u) => setUnidadId(u.id)} />
+              <UnidadMedidaQuickCreate onCreated={(u) => {
+                queryClient.invalidateQueries({ queryKey: ['unidades-medida-options'] })
+                setUnidadId(u.id)
+              }} />
             </div>
             {errors.unidadId && <p className='text-xs text-destructive'>{errors.unidadId}</p>}
           </div>

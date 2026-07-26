@@ -28,6 +28,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { AlertModal } from '@/components/modal/alert-modal'
+import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
 import { ComunaQuickCreate } from '@/features/comunas/components/comuna-quick-create'
 import { entidadDetailOptions, entidadesKeys, paisesOptions, comunasOptions } from '../queries'
@@ -183,19 +184,14 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
             <div className='space-y-1.5'>
               <Label>Comuna <span className='text-destructive'>*</span></Label>
               <div className='flex gap-2'>
-                <Select
+                <Combobox
+                  className='flex-1'
                   value={form.comunaId ? String(form.comunaId) : ''}
-                  onValueChange={(v) => setForm((f) => ({ ...f, comunaId: parseInt(v) }))}
-                >
-                  <SelectTrigger className='flex-1'>
-                    <SelectValue placeholder='Seleccionar comuna...' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {comunas.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(v) => setForm((f) => ({ ...f, comunaId: parseInt(v) }))}
+                  placeholder='Seleccionar comuna...'
+                  searchPlaceholder='Buscar comuna...'
+                  options={comunas.map((c) => ({ value: String(c.id), label: c.descripcion }))}
+                />
                 <ComunaQuickCreate
                   onCreated={(nuevaComuna) => {
                     queryClient.invalidateQueries({ queryKey: entidadesKeys.comunas })

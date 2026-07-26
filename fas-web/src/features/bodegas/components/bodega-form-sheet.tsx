@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useAppForm, useFormFields } from '@/components/ui/tanstack-form'
 import { Button } from '@/components/ui/button'
+import { Combobox } from '@/components/ui/combobox'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -226,24 +227,17 @@ export function BodegaFormSheet({ item, open, onOpenChange }: BodegaFormSheetPro
                       Comuna <span className='text-destructive'>*</span>
                     </Label>
                     <div className='flex gap-2'>
-                      <Select
+                      <Combobox
+                        className='flex-1'
                         value={field.state.value ? String(field.state.value) : ''}
-                        onValueChange={(v) => field.handleChange(parseInt(v, 10))}
-                      >
-                        <SelectTrigger className='flex-1'>
-                          <SelectValue placeholder='Seleccionar comuna...' />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {comunas.map((c) => (
-                            <SelectItem key={c.id} value={String(c.id)}>
-                              {c.descripcion}
-                              {c.provincia && (
-                                <span className='text-muted-foreground text-xs ml-1.5'>({c.provincia.descripcion})</span>
-                              )}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={(v) => field.handleChange(parseInt(v, 10))}
+                        placeholder='Seleccionar comuna...'
+                        searchPlaceholder='Buscar comuna...'
+                        options={comunas.map((c) => ({
+                          value: String(c.id),
+                          label: c.provincia ? `${c.descripcion} (${c.provincia.descripcion})` : c.descripcion,
+                        }))}
+                      />
                       <ComunaQuickCreate onCreated={(c) => field.handleChange(c.id)} />
                     </div>
                     {field.state.meta.errors.length > 0 && (

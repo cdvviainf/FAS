@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/components/icons'
+import { Combobox } from '@/components/ui/combobox'
 import { entidadesService } from '@/features/entidades/service'
 import { usuariosService } from '@/features/usuarios/service'
 import { articulosService } from '@/features/materiales/articulos/service'
@@ -331,17 +332,13 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
           <div className='grid gap-4 sm:grid-cols-2'>
             <div className='space-y-1.5'>
               <Label>Productor <span className='text-destructive'>*</span></Label>
-              <Select
+              <Combobox
                 value={productorId ? String(productorId) : ''}
-                onValueChange={(v) => { setProductorId(Number(v)); setDireccionId(null); setContactoId(null) }}
-              >
-                <SelectTrigger><SelectValue placeholder='Seleccionar productor...' /></SelectTrigger>
-                <SelectContent>
-                  {(productores?.data ?? []).map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => { setProductorId(Number(v)); setDireccionId(null); setContactoId(null) }}
+                placeholder='Seleccionar productor...'
+                searchPlaceholder='Buscar productor...'
+                options={(productores?.data ?? []).map((p) => ({ value: String(p.id), label: p.descripcion }))}
+              />
               {errors.productor && <p className='text-xs text-destructive'>{errors.productor}</p>}
             </div>
             <div className='space-y-1.5'>
@@ -399,7 +396,10 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
                     </SelectContent>
                   </Select>
                 </div>
-                <MotivoQuickCreate onCreated={(m) => setMotivoId(m.id)} />
+                <MotivoQuickCreate onCreated={(m) => {
+                  queryClient.invalidateQueries({ queryKey: ['motivos-options'] })
+                  setMotivoId(m.id)
+                }} />
               </div>
               {errors.motivo && <p className='text-xs text-destructive'>{errors.motivo}</p>}
             </div>
@@ -435,15 +435,13 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
             </div>
             <div className='space-y-1.5'>
               <Label>Cliente <span className='text-muted-foreground text-xs'>(opcional)</span></Label>
-              <Select value={clienteId ? String(clienteId) : 'none'} onValueChange={(v) => setClienteId(v === 'none' ? null : Number(v))}>
-                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='none'>Sin definir</SelectItem>
-                  {(clientes?.data ?? []).map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={clienteId ? String(clienteId) : 'none'}
+                onChange={(v) => setClienteId(v === 'none' ? null : Number(v))}
+                placeholder='Sin definir'
+                searchPlaceholder='Buscar cliente...'
+                options={[{ value: 'none', label: 'Sin definir' }, ...(clientes?.data ?? []).map((c) => ({ value: String(c.id), label: c.descripcion }))]}
+              />
             </div>
             <div className='space-y-1.5'>
               <Label>Fecha de despacho <span className='text-muted-foreground text-xs'>(opcional)</span></Label>

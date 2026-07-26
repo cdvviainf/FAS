@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select'
 import { Icons } from '@/components/icons'
 import { Badge } from '@/components/ui/badge'
+import { Combobox } from '@/components/ui/combobox'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { entidadesService } from '@/features/entidades/service'
@@ -318,14 +319,13 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
           <div className='grid gap-4 sm:grid-cols-2'>
             <div className='space-y-1.5'>
               <Label>Productor <span className='text-destructive'>*</span></Label>
-              <Select value={fields.entidadProductorId ? String(fields.entidadProductorId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, entidadProductorId: Number(v) }))}>
-                <SelectTrigger><SelectValue placeholder='Seleccionar productor...' /></SelectTrigger>
-                <SelectContent>
-                  {productores.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion} — {p.razonSocial}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={fields.entidadProductorId ? String(fields.entidadProductorId) : ''}
+                onChange={(v) => setFields((f) => ({ ...f, entidadProductorId: Number(v) }))}
+                placeholder='Seleccionar productor...'
+                searchPlaceholder='Buscar productor...'
+                options={productores.map((p) => ({ value: String(p.id), label: `${p.descripcion} — ${p.razonSocial}` }))}
+              />
               {errors.entidadProductorId && <p className='text-xs text-destructive'>{errors.entidadProductorId}</p>}
             </div>
             <div className='space-y-1.5'>

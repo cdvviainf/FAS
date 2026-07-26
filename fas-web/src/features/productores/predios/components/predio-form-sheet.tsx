@@ -21,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { prediosService } from '../service'
@@ -195,15 +196,16 @@ export function PredioFormSheet({ entidadId, item, open, onOpenChange }: PredioF
           <div className='grid grid-cols-2 gap-3'>
             <div className='space-y-1.5'>
               <Label>Comuna</Label>
-              <Select value={comunaId ? String(comunaId) : 'none'} onValueChange={(v) => setComunaId(v === 'none' ? null : parseInt(v))}>
-                <SelectTrigger><SelectValue placeholder='Sin comuna' /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='none'>Sin comuna</SelectItem>
-                  {(comunas?.data ?? []).map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={comunaId ? String(comunaId) : 'none'}
+                onChange={(v) => setComunaId(v === 'none' ? null : parseInt(v))}
+                placeholder='Sin comuna'
+                searchPlaceholder='Buscar comuna...'
+                options={[
+                  { value: 'none', label: 'Sin comuna' },
+                  ...(comunas?.data ?? []).map((c) => ({ value: String(c.id), label: c.descripcion })),
+                ]}
+              />
             </div>
             <div className='space-y-1.5'>
               <Label>Zona</Label>

@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Icons } from '@/components/icons'
+import { Combobox } from '@/components/ui/combobox'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { entidadesService } from '@/features/entidades/service'
 import { entidadDetailOptions } from '@/features/entidades/queries'
@@ -302,52 +303,45 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
             </div>
             <div className='space-y-1.5'>
               <Label>Cliente <span className='text-destructive'>*</span></Label>
-              <Select
+              <Combobox
                 value={fields.clienteId ? String(fields.clienteId) : ''}
-                onValueChange={(v) => setFields((f) => ({ ...f, clienteId: Number(v), direccionId: null }))}
-              >
-                <SelectTrigger><SelectValue placeholder='Seleccionar cliente...' /></SelectTrigger>
-                <SelectContent>
-                  {clientes.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion} — {c.razonSocial}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setFields((f) => ({ ...f, clienteId: Number(v), direccionId: null }))}
+                placeholder='Seleccionar cliente...'
+                searchPlaceholder='Buscar cliente...'
+                options={clientes.map((c) => ({ value: String(c.id), label: `${c.descripcion} — ${c.razonSocial}` }))}
+              />
               {errors.clienteId && <p className='text-xs text-destructive'>{errors.clienteId}</p>}
             </div>
 
             <div className='space-y-1.5'>
               <Label>Comprador</Label>
-              <Select value={fields.compradorId ? String(fields.compradorId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, compradorId: v ? Number(v) : null }))}>
-                <SelectTrigger><SelectValue placeholder='Sin comprador' /></SelectTrigger>
-                <SelectContent>
-                  {entidades.map((e) => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={fields.compradorId ? String(fields.compradorId) : 'none'}
+                onChange={(v) => setFields((f) => ({ ...f, compradorId: v === 'none' ? null : Number(v) }))}
+                placeholder='Sin comprador'
+                searchPlaceholder='Buscar entidad...'
+                options={[{ value: 'none', label: 'Sin comprador' }, ...entidades.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
+              />
             </div>
             <div className='space-y-1.5'>
               <Label>Notify</Label>
-              <Select value={fields.notifyId ? String(fields.notifyId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, notifyId: v ? Number(v) : null }))}>
-                <SelectTrigger><SelectValue placeholder='Sin notify' /></SelectTrigger>
-                <SelectContent>
-                  {entidades.map((e) => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={fields.notifyId ? String(fields.notifyId) : 'none'}
+                onChange={(v) => setFields((f) => ({ ...f, notifyId: v === 'none' ? null : Number(v) }))}
+                placeholder='Sin notify'
+                searchPlaceholder='Buscar entidad...'
+                options={[{ value: 'none', label: 'Sin notify' }, ...entidades.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
+              />
             </div>
             <div className='space-y-1.5'>
               <Label>Cliente Final</Label>
-              <Select value={fields.clienteFinalId ? String(fields.clienteFinalId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, clienteFinalId: v ? Number(v) : null }))}>
-                <SelectTrigger><SelectValue placeholder='Sin cliente final' /></SelectTrigger>
-                <SelectContent>
-                  {entidades.map((e) => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={fields.clienteFinalId ? String(fields.clienteFinalId) : 'none'}
+                onChange={(v) => setFields((f) => ({ ...f, clienteFinalId: v === 'none' ? null : Number(v) }))}
+                placeholder='Sin cliente final'
+                searchPlaceholder='Buscar entidad...'
+                options={[{ value: 'none', label: 'Sin cliente final' }, ...entidades.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
+              />
             </div>
 
             <div className='space-y-1.5'>
