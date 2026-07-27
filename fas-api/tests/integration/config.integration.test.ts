@@ -23,14 +23,22 @@ async function limpiarDatos() {
       "provincias",
       "regiones",
       "temporadas",
-      "paises"
+      "paises",
+      "mercados",
+      "grupos_mercado"
     RESTART IDENTITY CASCADE
   `)
 }
 
 async function crearGeografia() {
+  const grupoMercado = await prisma.grupoMercado.create({
+    data: { codigo: 'GM-TEST', descripcion: 'Grupo prueba', creadoPor: 'test' },
+  })
+  const mercado = await prisma.mercado.create({
+    data: { codigo: 'M-TEST', descripcion: 'Mercado prueba', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
+  })
   const pais = await prisma.pais.create({
-    data: { codigo: 'CHL', descripcion: 'Chile', creadoPor: 'test' },
+    data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, creadoPor: 'test' },
   })
   const region = await prisma.region.create({
     data: { codigo: 'RM', descripcion: 'Metropolitana', creadoPor: 'test' },
@@ -132,15 +140,23 @@ describe('mantenedores contra PostgreSQL', () => {
   })
 
   it('permite reutilizar un código después del soft delete', async () => {
+    const grupoMercado = await prisma.grupoMercado.create({
+      data: { codigo: 'GM-ARG', descripcion: 'Grupo Argentina', creadoPor: 'test' },
+    })
+    const mercado = await prisma.mercado.create({
+      data: { codigo: 'M-ARG', descripcion: 'Mercado Argentina', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
+    })
     const pais = await crearMantenedor('pais', {
       codigo: 'ARG',
       descripcion: 'Argentina',
+      mercadoId: mercado.id,
     })
     await eliminarMantenedor('pais', pais.id, 'test')
 
     const reemplazo = await crearMantenedor('pais', {
       codigo: 'ARG',
       descripcion: 'Argentina nueva',
+      mercadoId: mercado.id,
     })
 
     expect(reemplazo.id).not.toBe(pais.id)

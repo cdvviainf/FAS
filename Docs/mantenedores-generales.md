@@ -104,7 +104,9 @@ model Pais {
   // + base — codigo = ISO 3166-1 alfa-3 (G8)
   esPaisOrigen Boolean   @default(false)
   puertos      Puerto[]
-  mercados     Mercado[]
+  mercadoId    Int?
+  mercado      Mercado?  @relation(fields: [mercadoId], references: [id])
+  // Un Mercado agrupa varios Países (ej. Mercado "Europa" contiene España/Francia/Alemania)
 }
 
 model TipoEmbarque {
@@ -154,8 +156,7 @@ model Mercado {
   // + base
   grupoMercadoId Int
   grupoMercado   GrupoMercado @relation(fields: [grupoMercadoId], references: [id])
-  paisId         Int
-  pais           Pais         @relation(fields: [paisId], references: [id])
+  paises         Pais[]
 }
 
 model Moneda {
@@ -266,7 +267,7 @@ model TipoCuentaCorriente {
 - **R5 — Moneda base única.** Debe existir exactamente una `Moneda` con `esMonedaBase = true`. Marcar una nueva desmarca la anterior (o se valida) → nunca cero ni dos.
 - **R6 — Categoría.orden.** Único por `especieId` entre no eliminados → 422 si se repite.
 - **R7 — Calibre.orden.** Único por `especieId` entre no eliminados → 422 si se repite.
-- **R8 — Eliminación con dependientes.** No se puede softdelete de un maestro padre que tenga hijos no eliminados (ej. Especie con variedades, Región con provincias, País con puertos/mercados, Tipo Parámetro con parámetros) → 409.
+- **R8 — Eliminación con dependientes.** No se puede softdelete de un maestro padre que tenga hijos no eliminados (ej. Especie con variedades, Región con provincias, País con puertos, Mercado con países, Tipo Parámetro con parámetros) → 409.
 - **R9 — Puertos por contexto.** El listado en contexto **origen** retorna solo puertos cuyo `pais.esPaisOrigen = true`; en contexto **destino** retorna todos.
 - **R10 — Geolocalización.** `latitud`/`longitud` opcionales, `Decimal(10,7)`, para graficar.
 
@@ -287,7 +288,7 @@ model TipoCuentaCorriente {
 
 **Filtros de FK para selects en cascada** (query params):
 - `/provincias?regionId=` · `/comunas?provinciaId=`
-- `/mercados?grupoMercadoId=&paisId=`
+- `/mercados?grupoMercadoId=` · `/paises?mercadoId=` (un Mercado agrupa varios Países)
 - `/grupos-variedad?especieId=` · `/variedades?especieId=&grupoVariedadId=` · `/categorias?especieId=` · `/calibres?especieId=`
 - `/parametros?tipoParametroId=`
 
@@ -303,8 +304,8 @@ model TipoCuentaCorriente {
 - **Pantalla genérica de mantenedor** reutilizable: tabla con búsqueda + alta/edición en dialog + acción eliminar (softdelete con confirmación). Recibe la definición de columnas/campos por configuración.
 - Campos especiales por mantenedor:
   - Temporada: dos date pickers (inicio/término).
-  - País: switch "Es país de origen".
-  - Provincia/Comuna/Mercado/Variedad/Categoría/Calibre/Parámetro: selects dependientes (cascada).
+  - País: switch "Es país de origen"; select Mercado (opcional).
+  - Provincia/Comuna/País/Variedad/Categoría/Calibre/Parámetro: selects dependientes (cascada).
   - Moneda: switch "Es moneda base" + input decimales.
   - Bodega: dirección, select Comuna, multiselect tipos, lat/long.
   - Puerto: select País, select Tipo de embarque, lat/long.

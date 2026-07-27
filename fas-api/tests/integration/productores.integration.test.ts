@@ -39,12 +39,24 @@ async function limpiarDatos() {
       "especies",
       "temporadas",
       "unidades_medida",
-      "paises"
+      "paises",
+      "mercados",
+      "grupos_mercado"
     RESTART IDENTITY CASCADE
   `)
 }
 
 async function crearEntidad(tipos: ('PRODUCTOR' | 'PROVEEDOR')[], codigo: string) {
+  const grupoMercado = await prisma.grupoMercado.upsert({
+    where: { id: 1 },
+    update: {},
+    create: { id: 1, codigo: 'GM-TEST', descripcion: 'Grupo prueba', creadoPor: 'test' },
+  })
+  const mercado = await prisma.mercado.upsert({
+    where: { id: 1 },
+    update: {},
+    create: { id: 1, codigo: 'M-TEST', descripcion: 'Mercado prueba', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
+  })
   const pais = await prisma.pais.upsert({
     where: { id: 1 },
     update: {},
@@ -52,6 +64,7 @@ async function crearEntidad(tipos: ('PRODUCTOR' | 'PROVEEDOR')[], codigo: string
       id: 1,
       codigo: 'CHL',
       descripcion: 'Chile',
+      mercadoId: mercado.id,
       creadoPor: 'test',
     },
   })

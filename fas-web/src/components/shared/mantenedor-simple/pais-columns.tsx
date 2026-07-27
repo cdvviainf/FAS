@@ -4,9 +4,10 @@ import type { ColumnDef } from '@tanstack/react-table'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 import { Icons } from '@/components/icons'
 
-// Pais has an extra field esPaisOrigen
+// Pais has extra fields esPaisOrigen y mercado (Mercado agrupa varios Países)
 export interface PaisItem extends MantenedorSimple {
   esPaisOrigen?: boolean
+  mercado?: { id: number; descripcion: string } | null
 }
 
 export const paisExtraColumns: ColumnDef<MantenedorSimple>[] = [
@@ -24,6 +25,20 @@ export const paisExtraColumns: ColumnDef<MantenedorSimple>[] = [
         </span>
       ) : (
         <span className='text-muted-foreground text-sm'>No</span>
+      )
+    }
+  },
+  {
+    id: 'mercado',
+    accessorKey: 'mercado',
+    header: 'Mercado',
+    enableSorting: false,
+    cell: ({ row }) => {
+      const pais = row.original as PaisItem
+      return pais.mercado ? (
+        <span className='text-sm'>{pais.mercado.descripcion}</span>
+      ) : (
+        <span className='text-muted-foreground text-xs'>—</span>
       )
     }
   }

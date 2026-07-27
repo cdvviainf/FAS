@@ -329,7 +329,9 @@ model Pais {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  mercados                  Mercado[]
+  mercadoId Int
+  mercado   Mercado @relation(fields: [mercadoId], references: [id])
+
   puertos                   Puerto[]
   entidades                 Entidad[]                 @relation("EntidadPais")
   entidadDirecciones        EntidadDireccion[]        @relation("DireccionPais")
@@ -735,8 +737,6 @@ model Mercado {
   descripcionExtranjera String?
   grupoMercadoId        Int
   grupoMercado          GrupoMercado @relation(fields: [grupoMercadoId], references: [id])
-  paisId                Int
-  pais                  Pais         @relation(fields: [paisId], references: [id])
   bloqueado             Boolean      @default(false)
   creadoEn              DateTime     @default(now())
   creadoPor             String
@@ -745,6 +745,7 @@ model Mercado {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
+  paises                Pais[]
   notasVenta            NotaVenta[]
   ordenesCompra         OrdenCompra[]
   solicitudesInspeccion SolicitudInspeccion[]

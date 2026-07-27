@@ -78,7 +78,9 @@ async function crearCondicionPago(cuotas: { porcentaje: number; plazoDias: numbe
 }
 
 async function crearFixtures() {
-  const pais = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', creadoPor: 'test' } })
+  const grupoMercado = await prisma.grupoMercado.create({ data: { codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
+  const mercado = await prisma.mercado.create({ data: { codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, creadoPor: 'test' } })
+  const pais = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, creadoPor: 'test' } })
   const cliente = await prisma.entidad.create({
     data: { codigo: 'CLI-01', descripcion: 'Cliente Uno', razonSocial: 'Cliente Uno SpA', paisId: pais.id, tipos: ['CLIENTE_NACIONAL'], creadoPor: 'test' },
   })
@@ -86,8 +88,6 @@ async function crearFixtures() {
     data: { codigo: 'PROD-01', descripcion: 'Productor Uno', razonSocial: 'Productor Uno SpA', paisId: pais.id, tipos: ['PRODUCTOR'], creadoPor: 'test' },
   })
   const tipoEmbarque = await prisma.tipoEmbarque.create({ data: { codigo: 'MARIT', descripcion: 'Marítimo', creadoPor: 'test' } })
-  const grupoMercado = await prisma.grupoMercado.create({ data: { codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
-  const mercado = await prisma.mercado.create({ data: { codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, paisId: pais.id, creadoPor: 'test' } })
   const moneda = await prisma.moneda.create({ data: { codigo: 'USD', descripcion: 'Dólar', creadoPor: 'test' } })
   const especie = await prisma.especie.create({ data: { codigo: 'UV', descripcion: 'Uva', creadoPor: 'test' } })
   const variedad = await prisma.variedad.create({ data: { codigo: 'RG', descripcion: 'Red Globe', especieId: especie.id, creadoPor: 'test' } })
@@ -252,6 +252,22 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
     await prisma.mercado.update({ where: { id: f.mercado.id }, data: { bloqueado: true } })
 
     await expect(crearNotaVenta(nvBase(f), 'test')).rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('NV-IE-009: rechaza un país destino que no pertenece al mercado seleccionado', async () => {
+    const f = await crearFixtures()
+    const otroMercado = await prisma.mercado.create({
+      data: {
+        codigo: 'MK2',
+        descripcion: 'Mercado 2',
+        grupoMercadoId: f.mercado.grupoMercadoId,
+        creadoPor: 'test',
+      },
+    })
+
+    await expect(
+      crearNotaVenta({ ...nvBase(f), mercadoId: otroMercado.id }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
   })
 })
 

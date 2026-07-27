@@ -51,6 +51,12 @@ async function validarReferenciasHeader(r: ReferenciasHeader) {
   if (!paisDestino) throw new ValidationError('El país destino seleccionado no existe o está bloqueado')
   if (!moneda) throw new ValidationError('La moneda seleccionada no existe o está bloqueada')
 
+  // NV-IE-009: el país destino debe pertenecer al mercado seleccionado
+  // (un Mercado agrupa varios Países, mantenedores-generales.md).
+  if (paisDestino && paisDestino.mercadoId !== r.mercadoId) {
+    throw new ValidationError('El país destino no pertenece al mercado seleccionado')
+  }
+
   if (r.puertoDestinoId != null) {
     const puerto = await repo.getPuerto(r.puertoDestinoId)
     if (!puerto) throw new ValidationError('El puerto destino seleccionado no existe o está bloqueado')

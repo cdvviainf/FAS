@@ -44,6 +44,7 @@ export interface MantenedorListFilters {
   tipoParametroId?: number
   grupoMercadoId?: number
   paisId?: number
+  mercadoId?: number
   tipoEmbarqueId?: number
   // Puerto R9
   contexto?: 'origen' | 'destino'
@@ -75,6 +76,7 @@ export interface MantenedorCreateInput {
   tipoParametroId?: number
   grupoMercadoId?: number
   paisId?: number
+  mercadoId?: number | null  // Pais
   tipoEmbarqueId?: number
   orden?: number             // Categoria, Calibre
   control?: string[]         // Categoria, Calibre

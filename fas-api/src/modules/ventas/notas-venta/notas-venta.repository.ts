@@ -129,7 +129,7 @@ export async function getMercado(id: number) {
 }
 
 export async function getPais(id: number) {
-  return prisma.pais.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+  return prisma.pais.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true, mercadoId: true } })
 }
 
 export async function getPuerto(id: number) {

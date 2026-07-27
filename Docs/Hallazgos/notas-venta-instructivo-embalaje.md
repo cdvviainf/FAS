@@ -118,3 +118,47 @@ necesita `prisma generate` + restart, no solo el bind-mount de `src/`.
 Pendiente de verificación visual en navegador (sin datos de Cliente/Mercado/
 Artículo-Embalaje en la BD de desarrollo todavía) — queda para cuando el
 usuario retome la sesión con la extensión de Chrome conectada.
+
+## Regresión Cierre Comercial — Mercado → País (Codex, 2026-07-26)
+
+| ID | Severidad | Estado | Hallazgo / evidencia | Resultado esperado |
+|---|---|---|---|---|
+| NV-IE-009 | Alta | Validado | Backend y frontend comprueban/filtran la pertenencia mercado–país. El nuevo caso automatizado confirma que un país de otro mercado es rechazado con 422. | Mantener la regresión en la suite. |
+| NV-IE-010 | Alta | Validado | Fixture adaptado: crea Mercado y luego País con `mercadoId`. Los 11 casos del archivo pasan, incluyendo la nueva regresión NV-IE-009. | Resuelto. |
+
+**Ejecución:** build API y web correctos; suite unitaria 7/7; integración
+global 61/81, con 20 fallas concentradas en los fixtures de Cierre
+Comercial/Orden de Compra y Solicitud de Inspección. La regresión no está
+aprobada todavía.
+
+### Corrección (Claude, 2026-07-27)
+
+- **NV-IE-009:** `validarReferenciasHeader` (`notas-venta.service.ts`) ahora
+  compara `paisDestino.mercadoId` (repo `getPais` ya lo selecciona) contra
+  `r.mercadoId` efectivo y lanza `ValidationError('El país destino no
+  pertenece al mercado seleccionado')` si no coinciden — aplica tanto en
+  creación como en edición, porque ambas ya pasaban por el mismo objeto
+  `efectivo`/`body` fusionado con el registro existente.
+- **NV-IE-010:** no corregido — requiere editar
+  `ventas-compras.integration.test.ts`, y Claude no edita archivos de test
+  bajo ninguna circunstancia. Pendiente para Codex o el usuario.
+
+### Re-test Codex (2026-07-27)
+
+La implementación de NV-IE-009 es coherente por revisión estática, pero no se
+cierra sin prueba ejecutable. La suite del archivo queda **0/10** por
+NV-IE-010. Resultado global: unitarias 7/7, integración 61/81 y builds
+API/web correctos. Cierre Comercial todavía no queda aprobado.
+
+### Ejecución tras actualizar tests — Codex (2026-07-27)
+
+`ventas-compras.integration.test.ts`: **11/11 OK**, incluyendo rechazo 422
+para Mercado–País incompatible. NV-IE-009 y NV-IE-010 quedan validados.
+
+### Re-verificación (Claude, 2026-07-27)
+
+Confirmado sin tocar la suite: `ventas-compras.integration.test.ts` +
+`solicitudes.integration.test.ts` → **23/23 OK**. NV-IE-009/010 se dan por
+cerrados. (Ver `mantenedores-generales.md` — QAS-MG-MP-005 — para una
+regresión distinta que este mismo cambio introdujo en otras 3 suites de
+integración no relacionadas con Cierre Comercial.)

@@ -25,6 +25,7 @@ export interface MantenedorSimpleFilters {
   tipoParametroId?: number
   grupoMercadoId?: number
   paisId?: number
+  mercadoId?: number
   tipoEmbarqueId?: number
   contexto?: 'origen' | 'destino'
   soloActivos?: boolean
@@ -43,6 +44,7 @@ export interface MantenedorSimpleCreateInput {
   tipoParametroId?: number
   grupoMercadoId?: number
   paisId?: number
+  mercadoId?: number
   tipoEmbarqueId?: number
   orden?: number
   esPaisOrigen?: boolean

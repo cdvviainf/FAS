@@ -39,8 +39,10 @@ async function limpiarDatos() {
 }
 
 async function crearFixtures() {
-  const chile = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', esPaisOrigen: true, creadoPor: 'test' } })
-  const usa = await prisma.pais.create({ data: { codigo: 'USA', descripcion: 'Estados Unidos', creadoPor: 'test' } })
+  const grupoMercado = await prisma.grupoMercado.create({ data: { codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
+  const mercado = await prisma.mercado.create({ data: { codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, creadoPor: 'test' } })
+  const chile = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, esPaisOrigen: true, creadoPor: 'test' } })
+  const usa = await prisma.pais.create({ data: { codigo: 'USA', descripcion: 'Estados Unidos', mercadoId: mercado.id, creadoPor: 'test' } })
 
   const productor = await prisma.entidad.create({
     data: { codigo: 'PROD-01', descripcion: 'Productor Uno', razonSocial: 'Productor Uno SpA', paisId: chile.id, tipos: ['PRODUCTOR'], creadoPor: 'test' },
@@ -66,9 +68,6 @@ async function crearFixtures() {
   const variedadOtraEspecie = await prisma.variedad.create({ data: { codigo: 'BING', descripcion: 'Bing', especieId: otraEspecie.id, creadoPor: 'test' } })
   const calibre = await prisma.calibre.create({ data: { codigo: 'XL', descripcion: 'XL', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
   const categoria = await prisma.categoria.create({ data: { codigo: 'CAT1', descripcion: 'Categoría 1', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
-
-  const grupoMercado = await prisma.grupoMercado.create({ data: { codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
-  const mercado = await prisma.mercado.create({ data: { codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, paisId: usa.id, creadoPor: 'test' } })
 
   const unidad = await prisma.unidadMedida.create({ data: { codigo: 'CAJA', descripcion: 'Caja', creadoPor: 'test' } })
   const embalaje = await prisma.articulo.create({
@@ -146,6 +145,7 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
       variedadIds: [f.variedad.id],
       calibreIds: [f.calibre.id],
       categoriaIds: [f.categoria.id],
+      mercadoId: f.mercado.id,
       paisIds: [f.usa.id],
     }, 'test')
 
@@ -182,6 +182,47 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
 
     await expect(crearSolicitud({ ...payloadBase(f), clienteId: f.clienteNoExtranjero.id }, 'test'))
       .rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('QAS-SI-020: rechaza países que no pertenecen al mercado indicado al crear', async () => {
+    const f = await crearFixtures()
+    const otroMercado = await prisma.mercado.create({
+      data: {
+        codigo: 'MK2',
+        descripcion: 'Mercado 2',
+        grupoMercadoId: f.grupoMercado.id,
+        creadoPor: 'test',
+      },
+    })
+
+    await expect(
+      crearSolicitud({
+        ...payloadBase(f),
+        mercadoId: otroMercado.id,
+        paisIds: [f.usa.id],
+      }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('QAS-SI-020: rechaza cambiar solo el mercado si los países vigentes pertenecen al anterior', async () => {
+    const f = await crearFixtures()
+    const creada = await crearSolicitud({
+      ...payloadBase(f),
+      mercadoId: f.mercado.id,
+      paisIds: [f.usa.id],
+    }, 'test')
+    const otroMercado = await prisma.mercado.create({
+      data: {
+        codigo: 'MK2',
+        descripcion: 'Mercado 2',
+        grupoMercadoId: f.grupoMercado.id,
+        creadoPor: 'test',
+      },
+    })
+
+    await expect(
+      actualizarSolicitud(creada.id, { mercadoId: otroMercado.id }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
   })
 
   it('rechaza un embalaje que no es artículo tipo EMBALAJE', async () => {

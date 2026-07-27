@@ -52,22 +52,6 @@ export const columns: ColumnDef<Mercado>[] = [
     }
   },
   {
-    id: 'pais',
-    accessorKey: 'pais',
-    header: 'País',
-    enableSorting: false,
-    cell: ({ row }) => {
-      const p = row.original.pais
-      if (!p) return <span className='text-muted-foreground text-xs'>—</span>
-      return (
-        <span className='text-sm text-muted-foreground'>
-          <span className='font-mono text-xs mr-1'>{p.codigo}</span>
-          {p.descripcion}
-        </span>
-      )
-    }
-  },
-  {
     id: 'actions',
     cell: ({ row }) => <CellAction data={row.original} />
   }

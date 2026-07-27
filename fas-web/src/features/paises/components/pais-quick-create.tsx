@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAppForm, useFormFields } from '@/components/ui/tanstack-form';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -11,13 +12,21 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
 import { Icons } from '@/components/icons';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { paisKeys } from '../api/queries';
 import { createPaisMutation } from '../api/mutations';
 import { paisSchema, type PaisFormValues } from '../schemas/pais';
 import { usePuedeEscribir } from '@/hooks/use-item-acceso';
+import { createMantenedorQueries } from '@/features/mantenedor-simple/queries';
 import type { Pais } from '../api/types';
 
 interface PaisQuickCreateProps {
@@ -34,6 +43,9 @@ function PaisQuickDialog({
   onCreated: (pais: Pais) => void;
 }) {
   const queryClient = useQueryClient();
+
+  const { data: mercadosData } = useQuery(createMantenedorQueries('mercados').listOptions({ limit: 300 }));
+  const mercados = mercadosData?.data ?? [];
 
   const mutation = useMutation({
     ...createPaisMutation,
@@ -52,7 +64,8 @@ function PaisQuickDialog({
       codigo: '',
       descripcion: '',
       descripcionExtranjera: '',
-      esPaisOrigen: false
+      esPaisOrigen: false,
+      mercadoId: 0
     } as PaisFormValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validators: { onSubmit: paisSchema as any },
@@ -94,6 +107,35 @@ function PaisQuickDialog({
               name='esPaisOrigen'
               label='Es país de origen'
             />
+            <form.Field name='mercadoId'>
+              {(field) => (
+                <div className='space-y-1.5'>
+                  <Label className='text-sm font-medium'>
+                    Mercado <span className='text-destructive'>*</span>
+                  </Label>
+                  <Select
+                    value={field.state.value ? String(field.state.value) : ''}
+                    onValueChange={(v) => field.handleChange(Number(v))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder='Seleccionar mercado...' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {mercados.map((m) => (
+                        <SelectItem key={m.id} value={String(m.id)}>
+                          {m.descripcion}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {field.state.meta.errors.length > 0 && (
+                    <p className='text-sm text-destructive'>
+                      {String(field.state.meta.errors[0])}
+                    </p>
+                  )}
+                </div>
+              )}
+            </form.Field>
           </form.Form>
         </form.AppForm>
 

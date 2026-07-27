@@ -73,7 +73,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const [direccionId, setDireccionId] = useState<number | null>(null)
   const [contactoId, setContactoId] = useState<number | null>(null)
   const [motivoId, setMotivoId] = useState<number | null>(null)
-  const [fechaHora, setFechaHora] = useState('')
+  const [fechaHora, setFechaHora] = useState(() => toLocalInput(new Date().toISOString()))
   const [mercadoId, setMercadoId] = useState<number | null>(null)
   const [paisIds, setPaisIds] = useState<number[]>([])
   const [clienteId, setClienteId] = useState<number | null>(null)
@@ -121,9 +121,10 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     staleTime: 5 * 60_000,
   })
   const { data: paises } = useQuery({
-    queryKey: ['paises-options-solicitud'],
-    queryFn: () => paisesService.list({ soloActivos: true, limit: 500 }),
-    staleTime: 5 * 60_000,
+    queryKey: ['paises-options-solicitud', mercadoId],
+    queryFn: () => paisesService.list({ soloActivos: true, limit: 500, mercadoId: mercadoId ?? undefined }),
+    staleTime: 60_000,
+    enabled: !!mercadoId,
   })
   const { data: clientes } = useQuery({
     queryKey: ['clientes-extranjeros-options'],
@@ -414,7 +415,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
           <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
             <div className='space-y-1.5'>
               <Label>Mercado</Label>
-              <Select value={mercadoId ? String(mercadoId) : 'none'} onValueChange={(v) => setMercadoId(v === 'none' ? null : Number(v))}>
+              <Select value={mercadoId ? String(mercadoId) : 'none'} onValueChange={(v) => { setMercadoId(v === 'none' ? null : Number(v)); setPaisIds([]) }}>
                 <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value='none'>Sin definir</SelectItem>
@@ -430,7 +431,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
                 options={(paises?.data ?? []).map((p) => ({ id: p.id, label: p.descripcion }))}
                 selectedIds={paisIds}
                 onChange={setPaisIds}
-                placeholder='Agregar país...'
+                placeholder={mercadoId ? 'Agregar país...' : 'Elige un mercado primero'}
+                disabled={!mercadoId}
               />
             </div>
             <div className='space-y-1.5'>

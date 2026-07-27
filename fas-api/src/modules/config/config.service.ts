@@ -21,8 +21,8 @@ const childrenMap: Partial<Record<MantenedorModelo, ChildDef[]>> = {
   grupoVariedad: [{ childModelo: 'variedad', parentField: 'grupoVariedadId', label: 'variedades' }],
   tipoParametro: [{ childModelo: 'parametro', parentField: 'tipoParametroId', label: 'parámetros' }],
   grupoMercado: [{ childModelo: 'mercado', parentField: 'grupoMercadoId', label: 'mercados' }],
+  mercado: [{ childModelo: 'pais', parentField: 'mercadoId', label: 'países' }],
   pais: [
-    { childModelo: 'mercado', parentField: 'paisId', label: 'mercados' },
     { childModelo: 'puerto', parentField: 'paisId', label: 'puertos' },
   ],
   tipoEmbarque: [{ childModelo: 'puerto', parentField: 'tipoEmbarqueId', label: 'puertos' }],

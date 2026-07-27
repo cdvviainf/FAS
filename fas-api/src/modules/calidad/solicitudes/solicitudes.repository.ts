@@ -423,7 +423,7 @@ export async function getCalificacionActiva(id: number) {
 }
 
 export async function getPaisesActivos(ids: number[]) {
-  return prisma.pais.findMany({ where: { id: { in: ids }, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+  return prisma.pais.findMany({ where: { id: { in: ids }, eliminadoEn: null, bloqueado: false }, select: { id: true, mercadoId: true } })
 }
 
 export async function getVariedadesActivas(ids: number[]) {

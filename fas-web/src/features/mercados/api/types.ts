@@ -5,8 +5,6 @@ export interface Mercado {
   descripcionExtranjera?: string | null
   grupoMercadoId: number
   grupoMercado?: { id: number; descripcion: string } | null
-  paisId: number
-  pais?: { id: number; descripcion: string; codigo: string } | null
   creadoEn: string
   creadoPor: string
 }
@@ -28,5 +26,4 @@ export interface MercadoMutationPayload {
   descripcion: string
   descripcionExtranjera?: string
   grupoMercadoId: number
-  paisId: number
 }

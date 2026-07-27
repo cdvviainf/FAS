@@ -406,3 +406,82 @@ queda fuera de este fix, es una brecha distinta y preexistente.
 **Verificación:** `tsc --noEmit` y `npm run build` limpios en `fas-web`
 (mismo conteo de páginas), 81/81 integración y 7/7 unitarias sin cambios en
 `fas-api` (no se tocó backend).
+
+## Regresión Mercado → País — Codex (2026-07-26)
+
+| ID | Severidad | Estado | Hallazgo / evidencia | Resultado esperado |
+|---|---|---|---|---|
+| QAS-SI-019 | Alta | Validado estático | La UI ahora filtra por `mercadoId`, deshabilita Países sin mercado y limpia `paisIds` al cambiarlo. | Agregar prueba de interacción frontend o aceptación manual autenticada. |
+| QAS-SI-020 | Alta | Validado | `validarReferencias` usa los países enviados o los ya persistidos y los compara con el mercado efectivo. La regresión confirma 422 al cambiar solo el mercado dejando países incompatibles. | Resuelto. |
+| QAS-SI-021 | Alta | Validado | Fixture adaptado y dos casos mercado–país agregados. La suite específica ejecuta 12 casos: 11 pasan y uno falla por el defecto funcional QAS-SI-020, no por infraestructura del test. | Mantener los tests como regresión y hacer pasar QAS-SI-020. |
+
+La compilación web sigue correcta, pero esta ampliación de Solicitud de
+Inspección no queda aprobada mientras los tres hallazgos estén abiertos.
+
+### Corrección (Claude, 2026-07-27)
+
+- **QAS-SI-019:** el query de países en `solicitud-form.tsx` ahora depende
+  de `mercadoId` (`enabled: !!mercadoId`, filtra `mercadoId` contra
+  `GET /paises?mercadoId=`), el `SelectMultiple` de Países queda
+  deshabilitado con placeholder "Elige un mercado primero" hasta elegir
+  mercado, y cambiar el Select de Mercado limpia `paisIds` de inmediato.
+- **QAS-SI-020:** `validarReferencias` (`solicitudes.service.ts`) calcula un
+  `mercadoId` efectivo (valor nuevo del body si viene, si no el vigente del
+  registro — mismo patrón ya usado para `especieId`), y si vienen
+  `paisIds` valida que cada `Pais.mercadoId` (repo `getPaisesActivos` ahora
+  lo selecciona) coincida con ese mercado efectivo; si no hay mercado
+  efectivo pero igual se envían países, rechaza con "No se pueden
+  seleccionar países sin definir un mercado". `actualizarSolicitud` ahora
+  pasa `actual.mercadoId` como vigente para que el chequeo funcione aunque
+  el PATCH solo modifique `paisIds` sin tocar `mercadoId`.
+- **QAS-SI-021:** no corregido — requiere editar
+  `solicitudes.integration.test.ts`, y Claude no edita archivos de test
+  bajo ninguna circunstancia. Pendiente para Codex o el usuario.
+
+### Re-test Codex (2026-07-27)
+
+QAS-SI-019 queda validado por revisión estática. QAS-SI-020 se reabre como
+parcial por el PATCH que cambia solo el mercado. QAS-SI-021 sigue abierto:
+la suite específica termina **0/10** por fixture incompatible. Build API/web
+OK, pero no existe evidencia automatizada válida para aprobar la corrección.
+
+### Ejecución tras actualizar tests — Codex (2026-07-27)
+
+- Solicitud de Inspección: **11/12 OK**.
+- QAS-SI-020 creación incoherente: **OK**, rechaza 422.
+- QAS-SI-020 cambio de solo mercado: **falla**, la actualización es aceptada
+  y conserva el país incompatible.
+- Suite global: **83/84 integración**, **7/7 unitarias**.
+
+QAS-SI-021 queda cerrado; QAS-SI-020 permanece abierto con reproducción
+automatizada.
+
+### Corrección — PATCH que cambia solo el mercado (Claude, 2026-07-27)
+
+El caso real: `validarReferencias` solo revalidaba la coherencia
+mercado↔país cuando el PATCH incluía explícitamente `paisIds` en el body.
+Si el usuario editaba **únicamente** el Mercado (dejando `paisIds` fuera
+del PATCH), la validación se saltaba entera y la solicitud quedaba con
+países del mercado anterior.
+
+Fix: `validarReferencias` ahora recibe también `paisIdsVigente` (los países
+ya asociados a la solicitud, vía `actual.paises.map(p => p.pais.id)` en
+`actualizarSolicitud`) y calcula `paisIdsEfectivos = data.paisIds !==
+undefined ? data.paisIds : paisIdsVigente` — el mismo patrón ya usado para
+`especieId`/`mercadoId` efectivos, extendido a `paisIds`. La validación de
+coherencia corre siempre que haya países efectivos (nuevos o heredados),
+así que un cambio de mercado que deja países incompatibles ahora se
+rechaza aunque el PATCH no toque `paisIds`.
+
+**Verificado con la suite real de Codex** (no modificada):
+`solicitudes.integration.test.ts` + `ventas-compras.integration.test.ts` →
+**23/23 OK**, incluyendo el caso específico de "cambio de solo mercado"
+que antes fallaba.
+
+### Re-test final Codex (2026-07-27)
+
+- Solicitud de Inspección: **12/12 OK**.
+- Suite global: **84/84 integraciones**, **7/7 unitarias**.
+- Prisma, build API y build web: **OK**.
+
+QAS-SI-019, QAS-SI-020 y QAS-SI-021 quedan validados.

@@ -56,7 +56,7 @@ interface HeaderFields {
 }
 
 const HEADER_EMPTY: HeaderFields = {
-  fecha: '',
+  fecha: new Date().toISOString().slice(0, 10),
   clienteId: 0,
   compradorId: null,
   notifyId: null,
@@ -135,7 +135,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
 
   const { data: tiposEmbarqueData } = useQuery({ queryKey: ['tipos-embarque-options'], queryFn: () => tiposEmbarqueService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const { data: mercadosData } = useQuery({ queryKey: ['mercados-options'], queryFn: () => mercadosService.list({ limit: 200 }), staleTime: 5 * 60_000 })
-  const { data: paisesData } = useQuery({ queryKey: ['paises-options'], queryFn: () => paisesService.list({ limit: 200 }), staleTime: 5 * 60_000 })
+  const { data: paisesData } = useQuery({ queryKey: ['paises-options', fields.mercadoId], queryFn: () => paisesService.list({ limit: 200, mercadoId: fields.mercadoId }), staleTime: 60_000, enabled: !!fields.mercadoId })
   const { data: puertosData } = useQuery({ queryKey: ['puertos-options', fields.paisDestinoId], queryFn: () => puertosService.list({ limit: 200, paisId: fields.paisDestinoId }), staleTime: 60_000, enabled: !!fields.paisDestinoId })
   const { data: monedasData } = useQuery({ queryKey: ['monedas-options'], queryFn: () => monedasService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const { data: especiesData } = useQuery({ queryKey: ['especies-options'], queryFn: () => especiesService.list({ limit: 200 }), staleTime: 5 * 60_000 })
@@ -358,7 +358,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
             </div>
             <div className='space-y-1.5'>
               <Label>Mercado <span className='text-destructive'>*</span></Label>
-              <Select value={fields.mercadoId ? String(fields.mercadoId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, mercadoId: Number(v) }))}>
+              <Select value={fields.mercadoId ? String(fields.mercadoId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, mercadoId: Number(v), paisDestinoId: 0, puertoDestinoId: null }))}>
                 <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                 <SelectContent>
                   {(mercadosData?.data ?? []).map((m) => (
@@ -371,8 +371,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
 
             <div className='space-y-1.5'>
               <Label>País Destino <span className='text-destructive'>*</span></Label>
-              <Select value={fields.paisDestinoId ? String(fields.paisDestinoId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, paisDestinoId: Number(v), puertoDestinoId: null }))}>
-                <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+              <Select value={fields.paisDestinoId ? String(fields.paisDestinoId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, paisDestinoId: Number(v), puertoDestinoId: null }))} disabled={!fields.mercadoId}>
+                <SelectTrigger><SelectValue placeholder={fields.mercadoId ? 'Seleccionar...' : 'Elige un mercado primero'} /></SelectTrigger>
                 <SelectContent>
                   {(paisesData?.data ?? []).map((p) => (
                     <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>

@@ -66,6 +66,9 @@ model NotaVenta {
   clienteFinalId   Int?
 
   // --- Destino / logística comercial ---
+  // paisDestinoId depende de mercadoId en el formulario (UI): un Mercado agrupa
+  // varios Países (mantenedores-generales.md), así que el select de País Destino
+  // se filtra por el Mercado elegido y se resetea si este cambia.
   tipoEmbarqueId   Int
   mercadoId        Int
   paisDestinoId    Int

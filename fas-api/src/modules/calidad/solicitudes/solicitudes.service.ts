@@ -69,7 +69,7 @@ async function validarReferencias(data: {
   categoriaIds?: number[]
   articuloIds?: number[]
   asignados?: { usuarioId: string; funcion: string }[]
-}, entidadIdParaDireccion?: number, especieIdVigente?: number | null) {
+}, entidadIdParaDireccion?: number, especieIdVigente?: number | null, mercadoIdVigente?: number | null, paisIdsVigente?: number[]) {
   if (data.entidadProductorId !== undefined) {
     const entidad = await repo.getEntidadProductor(data.entidadProductorId)
     if (!entidad) throw new ValidationError('La entidad seleccionada no existe, está inactiva/eliminada o no es de tipo Productor')
@@ -106,13 +106,25 @@ async function validarReferencias(data: {
     if (!calificacion) throw new ValidationError('La calificación seleccionada no existe o está bloqueada')
   }
 
-  // especieId efectiva para validar pertenencia de variedad/calibre/categoría
+  // especieId/mercadoId efectivos (valor nuevo si viene en el body, si no el vigente)
+  // para validar pertenencia de variedad/calibre/categoría/país aunque solo uno
+  // de los dos campos relacionados cambie (QAS-SI-020). paisIds efectivo: si el
+  // PATCH no toca países, se revalidan los vigentes contra el mercado nuevo —
+  // si no, un cambio de mercado sin tocar países deja la solicitud incoherente.
   const especieId = data.especieId !== undefined ? data.especieId : especieIdVigente
+  const mercadoId = data.mercadoId !== undefined ? data.mercadoId : mercadoIdVigente
+  const paisIdsEfectivos = data.paisIds !== undefined ? data.paisIds : paisIdsVigente
 
-  if (data.paisIds && data.paisIds.length > 0) {
-    const paises = await repo.getPaisesActivos(data.paisIds)
-    if (paises.length !== new Set(data.paisIds).size) {
+  if (paisIdsEfectivos && paisIdsEfectivos.length > 0) {
+    if (mercadoId == null) {
+      throw new ValidationError('No se pueden seleccionar países sin definir un mercado')
+    }
+    const paises = await repo.getPaisesActivos(paisIdsEfectivos)
+    if (paises.length !== new Set(paisIdsEfectivos).size) {
       throw new ValidationError('Uno o más países seleccionados no existen o están bloqueados')
+    }
+    if (paises.some((p) => p.mercadoId !== mercadoId)) {
+      throw new ValidationError('Uno o más países seleccionados no pertenecen al mercado indicado')
     }
   }
   if (data.variedadIds && data.variedadIds.length > 0) {
@@ -208,7 +220,13 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
     throw new ConflictError('No se puede editar una solicitud cerrada')
   }
 
-  await validarReferencias(body, body.entidadProductorId ?? actual.entidadProductorId, actual.especieId)
+  await validarReferencias(
+    body,
+    body.entidadProductorId ?? actual.entidadProductorId,
+    actual.especieId,
+    actual.mercadoId,
+    actual.paises.map((p) => p.pais.id),
+  )
 
   // Si cambia la entidad, la dirección debe venir también (y ya se validó contra la nueva entidad)
   const cambiaEntidad = body.entidadProductorId !== undefined && body.entidadProductorId !== actual.entidadProductorId

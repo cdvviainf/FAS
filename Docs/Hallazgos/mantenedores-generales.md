@@ -541,3 +541,146 @@ no hubiera códigos duplicados en ningún nivel antes de generar el seed.
 - `npm run build`, `npm run test:run` (7/7) y `npm run test:integration`
   (57/57) sin regresiones — el seed corre contra `fas_db` (desarrollo), no
   contra `fas_test`, así que no interfiere con la suite automatizada.
+
+## Revisión QAS — dependencia Mercado → País (2026-07-26)
+
+Nueva regla informada: **cada país pertenece a un único mercado** y un mercado
+puede agrupar varios países.
+
+| ID | Severidad | Estado | Hallazgo / evidencia | Resultado esperado |
+|---|---|---|---|---|
+| QAS-MG-MP-001 | Bloqueante | Validado end-to-end | El SQL ahora hace backfill antes de eliminar `mercados.paisId` y aplica `NOT NULL`. Sin embargo, la misma migración ya había sido aplicada localmente en su versión anterior: `migrate status` informa “al día” sin ejecutar el SQL corregido. Además, países sin relación anterior hacen fallar intencionalmente el deploy y países asociados a varios mercados conservan uno sin criterio determinista. | Validar el SQL corregido desde una BD construida con la versión previa y preparar consulta/mapeo previo para países sin mercado o con múltiples mercados antes de Coolify. No modificar una migración ya aplicada; versionar el ajuste adicional cuando corresponda. |
+| QAS-MG-MP-002 | Alta | Validado end-to-end | Prisma, API y formularios ahora exigen `mercadoId`; ya no existe “Sin mercado”. | Ejecutar también una migración real que confirme `NOT NULL` en BD. |
+| QAS-MG-MP-003 | Alta | Validado | Los fixtures y regresiones Mercado–País están actualizados. Re-test final: 84/84 integraciones y 7/7 unitarias. | Mantener la suite verde. |
+| QAS-MG-MP-004 | Alta | Aceptado | El CRUD de País permite cambiar `mercadoId` aunque el país ya esté usado por Solicitudes de Inspección o Cierres Comerciales. Los documentos transaccionales conservan su `mercadoId` anterior, por lo que reasignar el país puede dejar datos históricos mercado–país incoherentes. | Definir regla: bloquear la reasignación cuando existan usos vigentes/transaccionales, o preservar explícitamente la relación histórica sin exigir que coincida con el maestro actual. Cubrir la decisión con tests. |
+| QAS-MG-MP-005 | Alta | Validado | Los fixtures de Configuración, HTTP y Productores ahora crean Grupo Mercado, Mercado y País con `mercadoId`. Las 12 fallas por `NOT NULL` desaparecieron. | Resuelto. |
+
+### Evidencia de ejecución
+
+- Unitarias API: **7/7 OK**.
+- Integración: **61/81 OK; 20 fallas** por fixtures incompatibles.
+- Prisma: schema válido; la migración nueva se aplicó correctamente sobre
+  `fas_test`.
+- Build API: **OK**.
+- Build web: **OK**, 82 páginas.
+
+**Conclusión histórica del primer re-test:** inicialmente no aprobado hasta
+resolver QAS-MG-MP-001 a 004; ver re-test final a continuación.
+
+### Re-test final Codex (2026-07-27)
+
+- QAS-SI-020: corregido; el cambio de solo mercado revalida los países
+  vigentes y rechaza incompatibilidades.
+- QAS-MG-MP-003 y QAS-MG-MP-005: validados.
+- Unitarias: **7/7 OK**.
+- Integración: **84/84 OK**.
+- Prisma: válido; 32 migraciones sin pendientes.
+- Build API: **OK**.
+- Build web: **OK**, 82 páginas.
+
+Con QAS-MG-MP-001/002 validados end-to-end y QAS-MG-MP-004 aceptado como
+decisión de negocio, la lógica Mercado–País queda aprobada por QA.
+
+### Re-test Codex (2026-07-27)
+
+- Confirmada la obligatoriedad en Prisma, schemas API y frontend.
+- Confirmado el filtro de países por `mercadoId` y el bloqueo de soft-delete
+  de un mercado con países activos.
+- `npx prisma validate`: OK.
+- `npx prisma migrate status`: 32 migraciones, “al día”; esto no prueba el
+  SQL corregido porque el archivo de migración fue modificado después de
+  haberse aplicado localmente.
+- Unitarias: **7/7 OK**.
+- Integración: **61/81 OK; 20 fallas**.
+- Builds API y web: **OK**; web genera 82 páginas.
+
+La entrega continúa **no aprobada**.
+
+### Implementación de tests Codex (2026-07-27)
+
+- Se modificaron exclusivamente
+  `tests/integration/ventas-compras.integration.test.ts` y
+  `tests/integration/solicitudes.integration.test.ts`.
+- Fixtures adaptados: primero se crea Mercado y luego cada País con su
+  `mercadoId`.
+- Nuevo caso NV-IE-009: país destino perteneciente a otro mercado.
+- Nuevos casos QAS-SI-020: combinación inválida al crear y cambio de solo
+  mercado manteniendo países anteriores.
+- Resultado: **7/7 unitarias** y **83/84 integraciones**. La única falla es
+  funcional, no de fixture.
+
+### Corrección (Claude, 2026-07-27)
+
+- **QAS-MG-MP-001:** la migración ahora agrega `paises.mercadoId` PRIMERO
+  (todavía nullable), hace `UPDATE paises SET mercadoId = mercado.id FROM
+  mercados WHERE mercado.paisId = pais.id` usando `mercados.paisId` como
+  fuente **antes** de eliminarla, y recién después dropea la columna vieja.
+  Ninguna asociación existente se pierde. Caso límite documentado en el
+  propio SQL: si un País estaba apuntado por más de un Mercado bajo el
+  modelo anterior, el nuevo modelo (país → un único mercado) solo puede
+  conservar uno; es una pérdida de cardinalidad inherente a la regla de
+  negocio nueva, no un bug de la migración.
+- **QAS-MG-MP-002:** `Pais.mercadoId` es ahora `Int` obligatorio en Prisma,
+  `mercadoId: z.number().int().positive(...)` obligatorio en
+  `paisBodySchema` (API) y en `paisSchema` (frontend, `mantenedor-simple` y
+  `features/paises`), y el select del formulario ya no ofrece "Sin
+  mercado". La migración aplica `ALTER TABLE paises ALTER COLUMN
+  "mercadoId" SET NOT NULL` después del backfill — **decisión confirmada
+  con el usuario**: si en el ambiente de destino queda algún País sin
+  Mercado tras el backfill (nunca tuvo uno, o no existía ningún Mercado
+  todavía), este paso de la migración falla intencionalmente y bloquea el
+  deploy (el contenedor `fas-api` no arranca) hasta asignarle uno
+  manualmente. Verificado en local: con 0 mercados y 5 países preexistentes
+  sin asociación, se creó un Mercado real y se reasignaron los 5 países
+  antes de aplicar `SET NOT NULL`, replicando el procedimiento que
+  requeriría un ambiente compartido en la misma situación.
+- **QAS-MG-MP-003:** no corregido — implica editar archivos de test
+  (`ventas-compras.integration.test.ts`, `solicitudes.integration.test.ts`),
+  y por regla del proyecto Claude no escribe ni edita tests bajo ninguna
+  circunstancia. Queda pendiente para Codex o para el usuario.
+
+### Validación end-to-end de la migración (Claude, 2026-07-27)
+
+Codex tenía razón: había parcheado la base de datos local a mano en vez de
+dejar correr el SQL corregido, así que nunca se probó de verdad. Se hizo la
+prueba real contra `fas_test`, reseteándola por completo entre cada caso:
+
+1. **Caso falla-segura (país sin mercado):** se reconstruyó `fas_test` con
+   las 31 migraciones previas, se insertaron 3 países (uno de ellos —"Perú"—
+   sin ningún mercado asociado bajo el modelo viejo) y 1 mercado, y se
+   aplicó la migración corregida. Resultado: **falla intencionalmente**
+   (`P3018`, `column "mercadoId" of relation "paises" contains null
+   values`) y **hace rollback completo** — se verificó que la columna
+   `mercadoId` ni siquiera queda creada y `mercados.paisId` sigue intacto.
+   Cero corrupción parcial.
+2. **Caso éxito (todo país con mercado):** mismo procedimiento pero
+   asociando los 3 países (Chile, EE.UU., España) cada uno a su mercado
+   antes de migrar. Resultado: migración aplicada **sin error**, y se
+   verificó con SQL directo que el backfill preservó exactamente las
+   asociaciones originales (`CHL→CHL-DOM`, `USA→USA-W`, `ESP→EU-W`).
+3. Se corrió `bash scripts/test-integration.sh` completo sobre `fas_test`
+   reconstruida desde cero con las 32 migraciones: **72/84 OK**. Las 12
+   fallas son exclusivamente QAS-MG-MP-005 (fixtures de País sin
+   `mercadoId` en 3 suites que Codex no había tocado) — cero fallas de
+   negocio. Aislando solo `solicitudes.integration.test.ts` +
+   `ventas-compras.integration.test.ts` (las suites que sí cubren
+   Mercado↔País): **23/23 OK**, incluyendo el caso QAS-SI-020 de PATCH que
+   cambia solo el mercado (ver más abajo). `fas_test` quedó reseteada y
+   limpia (32 migraciones aplicadas, sin datos de prueba manuales) para el
+   próximo `test:integration`.
+
+QAS-MG-MP-001 y QAS-MG-MP-002 quedan **validados con evidencia real**, no
+solo revisión estática.
+
+### QAS-MG-MP-004 — decisión (Claude, 2026-07-27)
+
+Se acepta el comportamiento actual: reasignar el `mercadoId` de un País no
+revalida ni bloquea Solicitudes/Cierres Comerciales históricos que ya
+referencian ese país. Es el mismo patrón que el proyecto ya usa para
+`bloqueado` en cualquier mantenedor (R8/§7 `mantenedores-generales.md`): un
+maestro puede reorganizarse hacia adelante sin invalidar retroactivamente
+documentos ya validados en su momento de creación/edición — los documentos
+transaccionales son una fotografía, no una vista en vivo del maestro. Si se
+prefiere bloquear la reasignación mientras haya usos vigentes, es una
+decisión de negocio distinta que debe confirmarse explícitamente (afecta el
+mantenedor de País, no solo Mercado/Cierre Comercial/Solicitud).

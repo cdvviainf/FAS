@@ -47,7 +47,7 @@ export function MovimientoFormSheet({ open, onOpenChange }: MovimientoFormSheetP
 
   const [tipoMovimientoId, setTipoMovimientoId] = useState<number | null>(null)
   const [entidadId, setEntidadId] = useState<number | null>(null)
-  const [fechaMovimiento, setFechaMovimiento] = useState('')
+  const [fechaMovimiento, setFechaMovimiento] = useState(() => new Date().toISOString().slice(0, 10))
   const [bodegaOrigenId, setBodegaOrigenId] = useState<number | null>(null)
   const [bodegaDestinoId, setBodegaDestinoId] = useState<number | null>(null)
   const [guiaReferencia, setGuiaReferencia] = useState('')
@@ -105,7 +105,7 @@ export function MovimientoFormSheet({ open, onOpenChange }: MovimientoFormSheetP
     setErrors({})
     setTipoMovimientoId(null)
     setEntidadId(null)
-    setFechaMovimiento('')
+    setFechaMovimiento(new Date().toISOString().slice(0, 10))
     setBodegaOrigenId(null)
     setBodegaDestinoId(null)
     setGuiaReferencia('')

@@ -29,9 +29,6 @@ import { mercadoSchema } from '../schemas/mercado';
 import { gruposMercadoQueryOptions } from '@/features/grupos-mercado/api/queries';
 import type { GrupoMercado } from '@/features/grupos-mercado/api/types';
 import { GrupoMercadoQuickCreate } from './grupo-mercado-quick-create';
-import { paisesQueryOptions } from '@/features/paises/api/queries';
-import type { Pais } from '@/features/paises/api/types';
-import { PaisQuickCreate } from '@/features/paises/components/pais-quick-create';
 
 // Form values con IDs como números (coercionados por zod en submit)
 type FormValues = {
@@ -39,7 +36,6 @@ type FormValues = {
   descripcion: string;
   descripcionExtranjera: string;
   grupoMercadoId: number;
-  paisId: number;
 };
 
 interface MercadoFormSheetProps {
@@ -54,9 +50,6 @@ export function MercadoFormSheet({ mercado, open, onOpenChange }: MercadoFormShe
 
   const { data: gruposData } = useQuery(gruposMercadoQueryOptions({ limit: 300 }));
   const grupos = gruposData?.grupos ?? [];
-
-  const { data: paisesData } = useQuery(paisesQueryOptions({ limit: 300 }));
-  const paises = paisesData?.paises ?? [];
 
   const createMutation = useMutation({
     ...createMercadoMutation,
@@ -84,8 +77,7 @@ export function MercadoFormSheet({ mercado, open, onOpenChange }: MercadoFormShe
       codigo: mercado?.codigo ?? '',
       descripcion: mercado?.descripcion ?? '',
       descripcionExtranjera: mercado?.descripcionExtranjera ?? '',
-      grupoMercadoId: mercado?.grupoMercadoId ?? 0,
-      paisId: mercado?.paisId ?? 0
+      grupoMercadoId: mercado?.grupoMercadoId ?? 0
     } as FormValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validators: { onSubmit: mercadoSchema as any },
@@ -103,10 +95,6 @@ export function MercadoFormSheet({ mercado, open, onOpenChange }: MercadoFormShe
 
   const handleGrupoCreado = (grupo: GrupoMercado) => {
     form.setFieldValue('grupoMercadoId', grupo.id);
-  };
-
-  const handlePaisCreado = (pais: Pais) => {
-    form.setFieldValue('paisId', pais.id);
   };
 
   // El Sheet permanece montado entre aperturas (lo controla el padre vía `open`),
@@ -181,41 +169,6 @@ export function MercadoFormSheet({ mercado, open, onOpenChange }: MercadoFormShe
                     <p className='text-xs text-muted-foreground'>
                       Usa <Icons.add className='inline h-3 w-3' /> para crear un grupo sin cerrar este formulario.
                     </p>
-                    {field.state.meta.errors.length > 0 && (
-                      <p className='text-sm text-destructive'>
-                        {String(field.state.meta.errors[0])}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </form.Field>
-
-              {/* País */}
-              <form.Field name='paisId'>
-                {(field) => (
-                  <div className='space-y-1.5'>
-                    <Label className='text-sm font-medium'>
-                      País <span className='text-destructive'>*</span>
-                    </Label>
-                    <div className='flex gap-2'>
-                      <Select
-                        value={field.state.value ? String(field.state.value) : ''}
-                        onValueChange={(v) => field.handleChange(Number(v))}
-                      >
-                        <SelectTrigger className='flex-1'>
-                          <SelectValue placeholder='Seleccionar país...' />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {paises.map((p) => (
-                            <SelectItem key={p.id} value={String(p.id)}>
-                              <span className='font-mono text-xs text-muted-foreground mr-2'>{p.codigo}</span>
-                              {p.descripcion}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <PaisQuickCreate onCreated={handlePaisCreado} />
-                    </div>
                     {field.state.meta.errors.length > 0 && (
                       <p className='text-sm text-destructive'>
                         {String(field.state.meta.errors[0])}

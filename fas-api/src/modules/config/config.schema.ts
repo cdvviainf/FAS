@@ -13,6 +13,7 @@ export const mantenedorListQuerySchema = z.object({
   tipoParametroId: z.coerce.number().int().positive().optional(),
   grupoMercadoId: z.coerce.number().int().positive().optional(),
   paisId: z.coerce.number().int().positive().optional(),
+  mercadoId: z.coerce.number().int().positive().optional(),
   tipoEmbarqueId: z.coerce.number().int().positive().optional(),
   contexto: z.enum(['origen', 'destino']).optional(),
   // z.coerce.boolean() convertiría "false" (string) a true; enum explícito lo evita
@@ -42,6 +43,7 @@ export const paisBodySchema = mantenedorBaseSchema.extend({
     .regex(/^[A-Z]{3}$/, 'El código debe ser 3 letras mayúsculas (ej: CHL, USA)')
     .trim(),
   esPaisOrigen: z.boolean().default(false),
+  mercadoId: z.number().int().positive({ message: 'Selecciona un mercado' }),
 })
 
 export const paisUpdateSchema = paisBodySchema.omit({ codigo: true }).partial()
@@ -137,7 +139,6 @@ export const parametroUpdateSchema = parametroBodySchema
 
 export const mercadoBodySchema = mantenedorBaseSchema.extend({
   grupoMercadoId: z.number().int().positive({ message: 'Selecciona un grupo de mercado' }),
-  paisId: z.number().int().positive({ message: 'Selecciona un país' }),
 })
 
 export const mercadoUpdateSchema = mercadoBodySchema

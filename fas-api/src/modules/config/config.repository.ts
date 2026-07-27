@@ -52,7 +52,9 @@ const includeMap: Partial<Record<MantenedorModelo, object>> = {
   parametro: { tipoParametro: { select: { id: true, descripcion: true } } },
   mercado: {
     grupoMercado: { select: { id: true, descripcion: true } },
-    pais: { select: { id: true, descripcion: true, codigo: true } },
+  },
+  pais: {
+    mercado: { select: { id: true, descripcion: true } },
   },
   puerto: {
     pais: { select: { id: true, descripcion: true, codigo: true, esPaisOrigen: true } },
@@ -74,7 +76,7 @@ const includeMap: Partial<Record<MantenedorModelo, object>> = {
 }
 
 // FK filter fields per model
-type FkFilterKey = 'regionId' | 'provinciaId' | 'especieId' | 'grupoVariedadId' | 'tipoParametroId' | 'grupoMercadoId' | 'paisId' | 'tipoEmbarqueId' | 'comunaId'
+type FkFilterKey = 'regionId' | 'provinciaId' | 'especieId' | 'grupoVariedadId' | 'tipoParametroId' | 'grupoMercadoId' | 'paisId' | 'tipoEmbarqueId' | 'comunaId' | 'mercadoId'
 
 const fkFilterMap: Partial<Record<MantenedorModelo, FkFilterKey[]>> = {
   provincia: ['regionId'],
@@ -84,9 +86,10 @@ const fkFilterMap: Partial<Record<MantenedorModelo, FkFilterKey[]>> = {
   categoria: ['especieId'],
   calibre: ['especieId'],
   parametro: ['tipoParametroId'],
-  mercado: ['grupoMercadoId', 'paisId'],
+  mercado: ['grupoMercadoId'],
   puerto: ['paisId', 'tipoEmbarqueId'],
   bodega: ['comunaId'],
+  pais: ['mercadoId'],
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

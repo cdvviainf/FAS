@@ -27,6 +27,8 @@ async function limpiarDatos() {
       "provincias",
       "regiones",
       "paises",
+      "mercados",
+      "grupos_mercado",
       "temporadas"
     RESTART IDENTITY CASCADE
   `)
@@ -301,8 +303,14 @@ describe('contrato HTTP de la API', () => {
 
   it('no filtra contratos a un perfil con Ficha pero sin permiso de Contratos', async () => {
     const { cookie } = await crearSesion('LECTURA', 'PROD_FICHA')
+    const grupoMercado = await prisma.grupoMercado.create({
+      data: { codigo: 'GM-QA', descripcion: 'Grupo QA', creadoPor: 'test' },
+    })
+    const mercado = await prisma.mercado.create({
+      data: { codigo: 'M-QA', descripcion: 'Mercado QA', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
+    })
     const pais = await prisma.pais.create({
-      data: { codigo: 'CHL', descripcion: 'Chile', creadoPor: 'test' },
+      data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, creadoPor: 'test' },
     })
     const productor = await prisma.entidad.create({
       data: {

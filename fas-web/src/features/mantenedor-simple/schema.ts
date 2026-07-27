@@ -17,7 +17,8 @@ export const paisSchema = mantenedorSimpleSchema.extend({
     .length(3, 'El código de país debe ser ISO alfa-3 (3 letras)')
     .regex(/^[A-Z]{3}$/, 'El código debe ser 3 letras mayúsculas (ej: CHL, USA)')
     .trim(),
-  esPaisOrigen: z.boolean().default(false)
+  esPaisOrigen: z.boolean().default(false),
+  mercadoId: z.coerce.number().int().positive('Selecciona un mercado')
 })
 
 export type PaisFormValues = z.infer<typeof paisSchema>

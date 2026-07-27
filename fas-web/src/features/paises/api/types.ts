@@ -4,6 +4,7 @@ export interface Pais {
   descripcion: string;
   descripcionExtranjera?: string;
   esPaisOrigen: boolean;
+  mercadoId: number;
   creadoEn: string;
 }
 
@@ -23,4 +24,5 @@ export interface PaisMutationPayload {
   descripcion: string;
   descripcionExtranjera?: string;
   esPaisOrigen: boolean;
+  mercadoId: number;
 }
