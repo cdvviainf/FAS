@@ -90,12 +90,14 @@ Especificación de la compra.
 #### 4.2.1 CondicionPago **(nuevo, 2026-07-26 — reemplaza `condicionPagoTexto`)**
 Maestro propio (cabecera + cuotas, mismo patrón que `ConceptoLiquidacion`), `Docs/mantenedores-generales.md`. **Determina automáticamente** las cuotas de pago de la OC: no se cargan manualmente por orden.
 - `id`, `codigo`, `descripcion`, `bloqueado`, auditoría/softdelete
-- `cuotas` — 1..N `CondicionPagoCuota { porcentaje (Decimal, suma total = 100%), plazoDias (Int), descripcion? }`
+- `cuotas` — 1..N `CondicionPagoCuota { fechaReferencia (FACTURA/ZARPE/ENVIO_DOCUMENTOS, default FACTURA), plazoDias (Int), tipoValor (PORCENTAJE/MONTO_UNITARIO, default PORCENTAJE), porcentaje (Decimal, requerido si tipoValor=PORCENTAJE), valorUnitario/monedaId/unidadId (requeridos si tipoValor=MONTO_UNITARIO), descripcion? }`
+- **Regla de cuotas (2026-07-28):** las cuotas `PORCENTAJE` son **siempre obligatorias** y deben sumar exactamente 100% entre sí, exista o no además una cuota `MONTO_UNITARIO`. A lo sumo **una** cuota puede ser `MONTO_UNITARIO`, y debe ser la primera (índice 0) de la lista — representa un **cargo adicional** (ej. USD/caja o USD/kilo según cantidad real embarcada/despachada), nunca un reemplazo del 100%. `unidadId` en una cuota `MONTO_UNITARIO` solo admite las unidades `CAJA` o `KG` (`Docs/mantenedores-generales.md`); si es `KG`, el cálculo de cantidad real exige que cada `Articulo` involucrado tenga `kgNetoEnvase` válido (rechaza con error de negocio si falta).
 
 #### 4.2.2 OrdenCompraCuotaPago
 Snapshot inmutable de las cuotas al momento de crear/editar la OC (se copian desde `CondicionPago.cuotas` en el instante en que se fija `condicionPagoId`; si la plantilla cambia después, **no** afecta OCs ya creadas). Vacío si la OC no tiene condición de pago.
 - `ordenCompraId` (FK → OrdenCompra)
-- `porcentaje` (Decimal), `plazoDias` (Int), `descripcion` (texto libre, opcional)
+- `fechaReferencia`, `plazoDias` (Int), `tipoValor`, `porcentaje` (Decimal, nullable), `valorUnitario`/`monedaId`/`unidadId` (nullable, solo cuota `MONTO_UNITARIO`), `descripcion` (texto libre, opcional)
+- `montoCalculado` (Decimal, solo cuota `MONTO_UNITARIO`) — `valorUnitario × cantidad real` (cajas o kilos embarcados según `unidadId`, calculado desde las líneas de la OC). Se **recalcula automáticamente** cada vez que cambian las líneas de la OC (no solo cuando cambia `condicionPagoId`).
 
 ### 4.3 OrdenCompraLinea
 La OC es **multilínea**. Cada línea es una combinación completa de características + rango de calibre + cantidades + precio.

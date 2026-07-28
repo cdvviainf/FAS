@@ -46,7 +46,7 @@ export interface PaisOption {
   id: number
   codigo: string
   descripcion: string
-  esPaisOrigen: boolean
+  esPaisNacional: boolean
 }
 
 export interface ComunaOption {
@@ -58,6 +58,7 @@ export interface ComunaOption {
 export interface DireccionItem {
   id: number
   codigo: string
+  descripcion: string
   paisId: number
   comunaId: number | null
   direccion: string
@@ -105,7 +106,7 @@ export interface EntidadDetalle {
   activo: boolean
   tipos: TipoEntidad[]
   paisId: number
-  pais: { id: number; codigo: string; descripcion: string; esPaisOrigen: boolean }
+  pais: { id: number; codigo: string; descripcion: string; esPaisNacional: boolean }
   direcciones: DireccionItem[]
   contactos: ContactoItem[]
 }
@@ -132,6 +133,7 @@ export interface EntidadCreateInput {
 
 export interface DireccionCreateInput {
   codigo: string
+  descripcion: string
   paisId: number
   comunaId?: number | null
   direccion: string

@@ -27,6 +27,7 @@ import { articulosService } from '@/features/materiales/articulos/service'
 import { notasVentaService } from '@/features/ventas/notas-venta/service'
 import { usuariosService } from '@/features/usuarios/service'
 import { condicionesPagoService } from '@/features/condiciones-pago/service'
+import { FECHA_REFERENCIA_LABELS } from '@/features/condiciones-pago/types'
 import { ordenCompraDetailOptions, ordenesCompraKeys } from '../queries'
 import { ordenesCompraService } from '../service'
 import type {
@@ -417,7 +418,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
               <div className='flex flex-wrap gap-2'>
                 {cuotasPreview.map((c, i) => (
                   <Badge key={i} variant='outline'>
-                    {c.porcentaje}% a {c.plazoDias} días{c.descripcion ? ` — ${c.descripcion}` : ''}
+                    {c.tipoValor === 'MONTO_UNITARIO'
+                      ? `${c.moneda?.codigo ?? ''} ${c.valorUnitario} por ${c.unidad?.descripcion ?? ''}`
+                      : `${c.porcentaje}%`} a {c.plazoDias} días desde {FECHA_REFERENCIA_LABELS[c.fechaReferencia]}{c.descripcion ? ` — ${c.descripcion}` : ''}
                   </Badge>
                 ))}
               </div>

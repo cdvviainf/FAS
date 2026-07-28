@@ -2,7 +2,13 @@ import { prisma } from '../../../lib/prisma.js'
 import type { CondicionPagoCreateInput, CondicionPagoUpdateInput } from './condiciones-pago.types.js'
 
 const includeCuotas = {
-  cuotas: { orderBy: { plazoDias: 'asc' as const } },
+  cuotas: {
+    orderBy: { plazoDias: 'asc' as const },
+    include: {
+      moneda: { select: { id: true, codigo: true, descripcion: true } },
+      unidad: { select: { id: true, codigo: true, descripcion: true } },
+    },
+  },
 }
 
 export async function listCondicionesPago(q?: string) {
@@ -66,4 +72,12 @@ export async function softDeleteCondicionPago(id: number, eliminadoPor: string) 
     where: { id },
     data: { eliminadoEn: new Date(), eliminadoPor },
   })
+}
+
+export async function getMoneda(id: number) {
+  return prisma.moneda.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getUnidadMedida(id: number) {
+  return prisma.unidadMedida.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true, codigo: true } })
 }

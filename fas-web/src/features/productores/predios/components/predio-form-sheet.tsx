@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
+import { GeoPasteButton } from '@/components/shared/geo-paste-button'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { prediosService } from '../service'
 import type { Predio } from '../types'
@@ -234,14 +235,25 @@ export function PredioFormSheet({ entidadId, item, open, onOpenChange }: PredioF
             </Select>
           </div>
 
-          <div className='grid grid-cols-2 gap-3'>
-            <div className='space-y-1.5'>
-              <Label>Latitud</Label>
-              <Input type='number' step='any' value={latitud} onChange={(e) => setLatitud(e.target.value)} />
+          <div className='space-y-1.5'>
+            <div className='flex items-center justify-between'>
+              <Label className='text-sm font-medium text-muted-foreground'>Coordenadas (opcional)</Label>
+              <GeoPasteButton
+                onPegado={({ lat, lng }) => {
+                  setLatitud(String(lat))
+                  setLongitud(String(lng))
+                }}
+              />
             </div>
-            <div className='space-y-1.5'>
-              <Label>Longitud</Label>
-              <Input type='number' step='any' value={longitud} onChange={(e) => setLongitud(e.target.value)} />
+            <div className='grid grid-cols-2 gap-3'>
+              <div className='space-y-1.5'>
+                <Label>Latitud</Label>
+                <Input type='number' step='any' value={latitud} onChange={(e) => setLatitud(e.target.value)} />
+              </div>
+              <div className='space-y-1.5'>
+                <Label>Longitud</Label>
+                <Input type='number' step='any' value={longitud} onChange={(e) => setLongitud(e.target.value)} />
+              </div>
             </div>
           </div>
         </div>

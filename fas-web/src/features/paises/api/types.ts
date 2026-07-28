@@ -3,7 +3,8 @@ export interface Pais {
   codigo: string; // ISO 3166-1 alfa-3
   descripcion: string;
   descripcionExtranjera?: string;
-  esPaisOrigen: boolean;
+  esPaisNacional: boolean;
+  puedeSerOrigen: boolean;
   mercadoId: number;
   creadoEn: string;
 }
@@ -23,6 +24,7 @@ export interface PaisMutationPayload {
   codigo: string;
   descripcion: string;
   descripcionExtranjera?: string;
-  esPaisOrigen: boolean;
+  esPaisNacional: boolean;
+  puedeSerOrigen: boolean;
   mercadoId: number;
 }

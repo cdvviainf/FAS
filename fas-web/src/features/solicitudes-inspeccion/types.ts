@@ -47,6 +47,7 @@ export interface SolicitudInspeccion {
   direccion: {
     id: number
     codigo: string
+    descripcion: string
     direccion: string
     latitud: string | null
     longitud: string | null

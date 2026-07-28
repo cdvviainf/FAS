@@ -64,7 +64,8 @@ function PaisQuickDialog({
       codigo: '',
       descripcion: '',
       descripcionExtranjera: '',
-      esPaisOrigen: false,
+      esPaisNacional: false,
+      puedeSerOrigen: false,
       mercadoId: 0
     } as PaisFormValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,8 +105,12 @@ function PaisQuickDialog({
               placeholder='Ej: Peru'
             />
             <FormSwitchField
-              name='esPaisOrigen'
-              label='Es país de origen'
+              name='esPaisNacional'
+              label='Es país nacional'
+            />
+            <FormSwitchField
+              name='puedeSerOrigen'
+              label='Puede ser país de origen'
             />
             <form.Field name='mercadoId'>
               {(field) => (

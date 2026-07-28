@@ -10,6 +10,12 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Estado local del ciclo Claude -> Codex QA (aún no versionado)
+.claude/
+.agents/
+.codex/
+.qa-workflow/
+
 # Node
 node_modules/
 

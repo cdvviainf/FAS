@@ -42,7 +42,8 @@ export const paisBodySchema = mantenedorBaseSchema.extend({
     .length(3, 'El código de país debe ser ISO alfa-3 (3 letras)')
     .regex(/^[A-Z]{3}$/, 'El código debe ser 3 letras mayúsculas (ej: CHL, USA)')
     .trim(),
-  esPaisOrigen: z.boolean().default(false),
+  esPaisNacional: z.boolean().default(false),
+  puedeSerOrigen: z.boolean().default(false),
   mercadoId: z.number().int().positive({ message: 'Selecciona un mercado' }),
 })
 

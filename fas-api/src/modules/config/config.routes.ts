@@ -8,6 +8,7 @@ import { entidadesRoutes } from './entidades/entidades.routes.js'
 import { correoRoutes } from './correo/correo.routes.js'
 import { conceptosLiquidacionRoutes } from './conceptos-liquidacion/conceptos-liquidacion.routes.js'
 import { condicionesPagoRoutes } from './condiciones-pago/condiciones-pago.routes.js'
+import { prefijosCodigoRoutes } from './prefijos-codigo/prefijos-codigo.routes.js'
 
 const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'pais', prefixRuta: 'paises', label: 'País', tienePaisOrigen: true, schemaKey: 'pais' },
@@ -53,6 +54,7 @@ export async function configRoutes(app: FastifyInstance) {
   await app.register(correoRoutes)
   await app.register(conceptosLiquidacionRoutes)
   await app.register(condicionesPagoRoutes)
+  await app.register(prefijosCodigoRoutes)
 
   // Menú accesible del usuario autenticado
   app.get('/me/menu', { preHandler: [requireAuth] }, getMiMenu)

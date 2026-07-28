@@ -51,7 +51,7 @@ export async function crearEntidad(input: EntidadCreateInput, userId: string) {
 
   // R3: si país es Chile y hay identificador → validar DV
   if (input.identificador) {
-    if (pais.esPaisOrigen) {
+    if (pais.esPaisNacional) {
       if (!validarRutChileno(input.identificador)) {
         throw new ValidationError(
           `El identificador "${input.identificador}" no es un RUT chileno válido`,
@@ -68,7 +68,7 @@ export async function crearEntidad(input: EntidadCreateInput, userId: string) {
   }
 
   // Giro obligatorio si el país es Chile
-  if (pais.esPaisOrigen && !input.giro) {
+  if (pais.esPaisNacional && !input.giro) {
     throw new ValidationError('El giro es obligatorio para entidades nacionales (Chile)')
   }
 
@@ -105,7 +105,7 @@ export async function actualizarEntidad(
   const identificadorEfectivo =
     input.identificador !== undefined ? input.identificador : entidad.identificador
   if (identificadorEfectivo) {
-    if (pais.esPaisOrigen) {
+    if (pais.esPaisNacional) {
       if (!validarRutChileno(identificadorEfectivo)) {
         throw new ValidationError(
           `El identificador "${identificadorEfectivo}" no es un RUT chileno válido`,
@@ -123,7 +123,7 @@ export async function actualizarEntidad(
 
   // Giro obligatorio si país es Chile
   const giroEfectivo = input.giro !== undefined ? input.giro : entidad.giro
-  if (pais.esPaisOrigen && !giroEfectivo) {
+  if (pais.esPaisNacional && !giroEfectivo) {
     throw new ValidationError('El giro es obligatorio para entidades nacionales (Chile)')
   }
 
@@ -169,7 +169,7 @@ export async function crearDireccion(
 
   // R5: comunaId solo permitido si el país es Chile
   if (input.comunaId) {
-    if (!pais.esPaisOrigen) {
+    if (!pais.esPaisNacional) {
       throw new ValidationError(
         'La comuna solo puede asignarse en direcciones de Chile',
       )
@@ -216,7 +216,7 @@ export async function actualizarDireccion(
   // R5: comunaId
   const comunaId = input.comunaId !== undefined ? input.comunaId : dir.comunaId
   if (comunaId) {
-    if (!pais.esPaisOrigen) {
+    if (!pais.esPaisNacional) {
       throw new ValidationError(
         'La comuna solo puede asignarse en direcciones de Chile',
       )

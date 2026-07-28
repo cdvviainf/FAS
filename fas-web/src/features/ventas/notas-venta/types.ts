@@ -10,13 +10,26 @@ export interface CondicionPagoRef {
   descripcion: string
 }
 
+export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS'
+export type TipoValorCuota = 'PORCENTAJE' | 'MONTO_UNITARIO'
+
 // Snapshot inmutable de las cuotas de la Forma de Pago al momento de guardar
 // el Cierre Comercial (ver Docs/ventas.md R12) — no cambia si se edita la
-// CondicionPago después.
+// CondicionPago después. `montoCalculado` (cuotas MONTO_UNITARIO) sí se
+// recalcula cada vez que se agrega un detalle nuevo, para reflejar la fruta
+// comprometida real.
 export interface NotaVentaCuotaPagoRef {
   id: number
-  porcentaje: string
+  fechaReferencia: FechaReferenciaPago
   plazoDias: number
+  tipoValor: TipoValorCuota
+  porcentaje: string | null
+  valorUnitario: string | null
+  monedaId: number | null
+  moneda: MantenedorRef | null
+  unidadId: number | null
+  unidad: MantenedorRef | null
+  montoCalculado: string | null
   descripcion: string | null
 }
 

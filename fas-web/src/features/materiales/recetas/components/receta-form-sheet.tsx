@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Icons } from '@/components/icons'
 import { articulosService } from '../../articulos/service'
+import { prefijosCodigoService } from '@/features/prefijos-codigo/service'
 import { recetasService } from '../service'
 import type { Receta, RecetaDetalleInput } from '../types'
 
@@ -70,6 +71,19 @@ export function RecetaFormSheet({ embalajeId, item, open, onOpenChange, onSaved 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item?.id])
+
+  // Sugerencia de código (Prefijos de Código) — solo al crear.
+  const { data: codigoSugerido } = useQuery({
+    queryKey: ['prefijo-codigo-siguiente', 'receta'],
+    queryFn: () => prefijosCodigoService.siguienteCodigo('receta'),
+    enabled: open && !isEdit,
+    staleTime: 0,
+  })
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open && !isEdit && codigoSugerido) setCodigo(codigoSugerido)
+  }, [codigoSugerido, open, isEdit])
 
   const mutation = useMutation({
     mutationFn: async () => {

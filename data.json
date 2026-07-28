@@ -42,12 +42,12 @@
     },
     {
       "modulo": "Compras — Ciclo de compras",
-      "progreso": 20,
+      "progreso": 60,
       "estado": "Spec listo · modelo cerrado"
     },
     {
       "modulo": "Ventas — Ciclo de ventas",
-      "progreso": 0,
+      "progreso": 20,
       "estado": "En definición"
     },
     {
@@ -139,14 +139,14 @@
         "etapa": 1,
         "inicioSemana": 3,
         "duracionSemanas": 2,
-        "progreso": 20
+        "progreso": 60
       },
       {
         "nombre": "Ventas — Ciclo de ventas",
         "etapa": 1,
         "inicioSemana": 5,
         "duracionSemanas": 3,
-        "progreso": 0
+        "progreso": 20
       },
       {
         "nombre": "Integración AGL (embarque)",

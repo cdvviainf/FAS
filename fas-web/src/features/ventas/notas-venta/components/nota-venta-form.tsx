@@ -25,6 +25,7 @@ import { entidadesService } from '@/features/entidades/service'
 import { entidadDetailOptions } from '@/features/entidades/queries'
 import { articulosService } from '@/features/materiales/articulos/service'
 import { condicionesPagoService } from '@/features/condiciones-pago/service'
+import { FECHA_REFERENCIA_LABELS } from '@/features/condiciones-pago/types'
 import { notaVentaDetailOptions, notasVentaKeys } from '../queries'
 import { notasVentaService } from '../service'
 import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput } from '../types'
@@ -438,7 +439,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 <SelectTrigger><SelectValue placeholder={fields.clienteId ? 'Sin dirección' : 'Elige un cliente primero'} /></SelectTrigger>
                 <SelectContent>
                   {direccionesCliente.map((d) => (
-                    <SelectItem key={d.id} value={String(d.id)}>{d.direccion}</SelectItem>
+                    <SelectItem key={d.id} value={String(d.id)}>{d.descripcion} — {d.direccion}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -517,7 +518,9 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               <div className='flex flex-wrap gap-2'>
                 {cuotasPreview.map((c, i) => (
                   <Badge key={i} variant='outline'>
-                    {c.porcentaje}% a {c.plazoDias} días{c.descripcion ? ` — ${c.descripcion}` : ''}
+                    {c.tipoValor === 'MONTO_UNITARIO'
+                      ? `${c.moneda?.codigo ?? ''} ${c.valorUnitario} por ${c.unidad?.descripcion ?? ''}`
+                      : `${c.porcentaje}%`} a {c.plazoDias} días desde {FECHA_REFERENCIA_LABELS[c.fechaReferencia]}{c.descripcion ? ` — ${c.descripcion}` : ''}
                   </Badge>
                 ))}
               </div>

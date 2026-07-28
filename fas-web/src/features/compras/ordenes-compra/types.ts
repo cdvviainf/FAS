@@ -44,10 +44,21 @@ export interface OrdenCompraLineaItem {
   precioUsdCaja: string
 }
 
+export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS'
+export type TipoValorCuota = 'PORCENTAJE' | 'MONTO_UNITARIO'
+
 export interface OrdenCompraCuotaPagoItem {
   id: number
-  porcentaje: string
+  fechaReferencia: FechaReferenciaPago
   plazoDias: number
+  tipoValor: TipoValorCuota
+  porcentaje: string | null
+  valorUnitario: string | null
+  monedaId: number | null
+  moneda: MantenedorRef | null
+  unidadId: number | null
+  unidad: MantenedorRef | null
+  montoCalculado: string | null
   descripcion: string | null
 }
 
@@ -55,7 +66,6 @@ export interface CondicionPagoRef {
   id: number
   codigo: string
   descripcion: string
-  cuotas: { id: number; porcentaje: string; plazoDias: number; descripcion: string | null }[]
 }
 
 export interface OrdenCompraListItem {

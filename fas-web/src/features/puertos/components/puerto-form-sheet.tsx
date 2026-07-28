@@ -30,7 +30,7 @@ import { createCodigoValidator } from '@/features/mantenedor-simple/service'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 import { PaisQuickCreate } from '@/features/paises/components/pais-quick-create'
 import { TipoEmbarqueQuickCreate } from '@/features/tipos-embarque/components/tipo-embarque-quick-create'
-import { IconClipboard } from '@tabler/icons-react'
+import { GeoPasteButton } from '@/components/shared/geo-paste-button'
 
 const puertoSchema = z.object({
   codigo: z.string().min(1, 'Requerido').max(50).trim(),
@@ -49,7 +49,7 @@ interface PuertoItem extends MantenedorSimple {
   tipoEmbarqueId?: number
   latitud?: number | null
   longitud?: number | null
-  pais?: { id: number; descripcion: string; codigo: string; esPaisOrigen: boolean }
+  pais?: { id: number; descripcion: string; codigo: string; puedeSerOrigen: boolean }
   tipoEmbarque?: { id: number; descripcion: string }
 }
 
@@ -119,22 +119,6 @@ export function PuertoFormSheet({ item, open, onOpenChange }: PuertoFormSheetPro
   const { FormTextField } = useFormFields<PuertoFormValues>()
   const isPending = createMutation.isPending || updateMutation.isPending
 
-  const handleGeosPaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText()
-      const match = text.trim().match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/)
-      if (match) {
-        form.setFieldValue('latitud', parseFloat(match[1]))
-        form.setFieldValue('longitud', parseFloat(match[2]))
-        toast.success('Coordenadas pegadas correctamente')
-      } else {
-        toast.error('Formato no reconocido. Copia las coordenadas desde Google Maps (lat, lng)')
-      }
-    } catch {
-      toast.error('No se pudo leer el portapapeles')
-    }
-  }
-
   // El Sheet permanece montado entre aperturas (lo controla el padre vía `open`),
   // asi que hay que resetear el form manualmente al cerrar (Cancelar, Escape, click afuera);
   // si no, reabrir "Nuevo" muestra los valores tipeados en la sesion anterior.
@@ -176,12 +160,12 @@ export function PuertoFormSheet({ item, open, onOpenChange }: PuertoFormSheetPro
                         </SelectTrigger>
                         <SelectContent>
                           {paises.map((p) => {
-                            const pais = p as MantenedorSimple & { esPaisOrigen?: boolean; codigo?: string }
+                            const pais = p as MantenedorSimple & { puedeSerOrigen?: boolean; codigo?: string }
                             return (
                               <SelectItem key={pais.id} value={String(pais.id)}>
                                 <span className='font-mono text-xs text-muted-foreground mr-2'>{pais.codigo}</span>
                                 {pais.descripcion}
-                                {pais.esPaisOrigen && (
+                                {pais.puedeSerOrigen && (
                                   <Badge variant='outline' className='ml-2 text-xs py-0'>Origen</Badge>
                                 )}
                               </SelectItem>
@@ -232,17 +216,12 @@ export function PuertoFormSheet({ item, open, onOpenChange }: PuertoFormSheetPro
               <div className='space-y-1.5'>
                 <div className='flex items-center justify-between'>
                   <Label className='text-sm font-medium text-muted-foreground'>Coordenadas (opcional)</Label>
-                  <Button
-                    type='button'
-                    variant='ghost'
-                    size='sm'
-                    className='h-7 px-2 text-xs gap-1'
-                    onClick={handleGeosPaste}
-                    title='Pegar coordenadas desde Google Maps (lat, lng)'
-                  >
-                    <IconClipboard className='h-3.5 w-3.5' />
-                    Pegar coords
-                  </Button>
+                  <GeoPasteButton
+                    onPegado={({ lat, lng }) => {
+                      form.setFieldValue('latitud', lat)
+                      form.setFieldValue('longitud', lng)
+                    }}
+                  />
                 </div>
                 <div className='grid grid-cols-2 gap-4'>
                   <FormTextField name='latitud' label='Latitud' placeholder='Ej: -33.5928' type='number' />

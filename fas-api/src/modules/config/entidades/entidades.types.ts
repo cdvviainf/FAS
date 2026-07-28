@@ -30,7 +30,7 @@ export interface EntidadDetalle {
   creadoPor: string
   actualizadoEn: Date | null
   actualizadoPor: string | null
-  pais: { id: number; codigo: string; descripcion: string; esPaisOrigen: boolean }
+  pais: { id: number; codigo: string; descripcion: string; esPaisNacional: boolean }
   direcciones: DireccionItem[]
   contactos: ContactoItem[]
 }
@@ -38,8 +38,11 @@ export interface EntidadDetalle {
 export interface DireccionItem {
   id: number
   codigo: string
+  descripcion: string
   direccion: string
   esPorDefecto: boolean
+  latitud: string | null
+  longitud: string | null
   creadoEn: Date
   pais: { id: number; codigo: string; descripcion: string }
   comuna: { id: number; codigo: string; descripcion: string } | null

@@ -28,9 +28,11 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { AlertModal } from '@/components/modal/alert-modal'
+import { GeoPasteButton } from '@/components/shared/geo-paste-button'
 import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
 import { ComunaQuickCreate } from '@/features/comunas/components/comuna-quick-create'
+import { prefijosCodigoService } from '@/features/prefijos-codigo/service'
 import { entidadDetailOptions, entidadesKeys, paisesOptions, comunasOptions } from '../queries'
 import { entidadesService } from '../service'
 import type {
@@ -86,7 +88,7 @@ interface DireccionDialogProps {
   onClose: () => void
   onSave: (data: DireccionCreateInput & { id?: number }) => Promise<void>
   isSaving: boolean
-  paises: { id: number; descripcion: string; esPaisOrigen: boolean }[]
+  paises: { id: number; descripcion: string; esPaisNacional: boolean }[]
   comunas: { id: number; descripcion: string }[]
 }
 
@@ -94,6 +96,7 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
   const queryClient = useQueryClient()
   const [form, setForm] = useState<DireccionCreateInput>({
     codigo: '',
+    descripcion: '',
     paisId: paisOrigen ?? 0,
     comunaId: null,
     direccion: '',
@@ -107,6 +110,7 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
     if (open) {
       setForm({
         codigo: initial?.codigo ?? '',
+        descripcion: initial?.descripcion ?? '',
         paisId: initial?.paisId ?? paisOrigen ?? (paises[0]?.id ?? 0),
         comunaId: initial?.comunaId ?? null,
         direccion: initial?.direccion ?? '',
@@ -124,6 +128,7 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
   function validate(): boolean {
     const e: Record<string, string> = {}
     if (!form.codigo.trim()) e.codigo = 'El código es requerido'
+    if (!form.descripcion.trim()) e.descripcion = 'La descripción es requerida'
     if (!form.direccion.trim()) e.direccion = 'La dirección es requerida'
     if (!form.paisId) e.paisId = 'El país es requerido'
     if (selectedPaisEsChile && !form.comunaId) e.comunaId = 'La comuna es requerida para Chile'
@@ -172,6 +177,15 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
             </div>
           </div>
           <div className='space-y-1.5'>
+            <Label>Descripción <span className='text-destructive'>*</span></Label>
+            <Input
+              value={form.descripcion}
+              onChange={(e) => setForm((f) => ({ ...f, descripcion: e.target.value }))}
+              placeholder='Ej: Casa matriz, Bodega Norte'
+            />
+            {errors.descripcion && <p className='text-xs text-destructive'>{errors.descripcion}</p>}
+          </div>
+          <div className='space-y-1.5'>
             <Label>Dirección <span className='text-destructive'>*</span></Label>
             <Input
               value={form.direccion}
@@ -202,6 +216,12 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
               {errors.comunaId && <p className='text-xs text-destructive'>{errors.comunaId}</p>}
             </div>
           )}
+          <div className='flex items-center justify-between'>
+            <Label className='text-sm font-medium text-muted-foreground'>Coordenadas (opcional)</Label>
+            <GeoPasteButton
+              onPegado={({ lat, lng }) => setForm((f) => ({ ...f, latitud: lat, longitud: lng }))}
+            />
+          </div>
           <div className='grid grid-cols-2 gap-3'>
             <div className='space-y-1.5'>
               <Label>Latitud</Label>
@@ -479,7 +499,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
 
   const paises = paisesData?.data ?? []
   const comunas = comunasData?.data ?? []
-  const paisOrigen = paises.find((p) => p.esPaisOrigen)?.id ?? null
+  const paisOrigen = paises.find((p) => p.esPaisNacional)?.id ?? null
   const selectedPaisEsChile = fields.paisId === paisOrigen
 
   // ── Load existing entity ──
@@ -501,6 +521,19 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
       })
     }
   }, [entidad])
+
+  // ── Sugerencia de código (Prefijos de Código) — solo al crear ──
+  const { data: codigoSugerido } = useQuery({
+    queryKey: ['prefijo-codigo-siguiente', 'entidad'],
+    queryFn: () => prefijosCodigoService.siguienteCodigo('entidad'),
+    enabled: !isEdit,
+    staleTime: 0,
+  })
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!isEdit && codigoSugerido) setFields((f) => ({ ...f, codigo: codigoSugerido }))
+  }, [codigoSugerido, isEdit])
 
   // ── Set default paisId on create when paises load ──
   useEffect(() => {
@@ -541,6 +574,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
         for (const dir of localDirecciones) {
           await entidadesService.createDireccion(created.id, {
             codigo: dir.codigo,
+            descripcion: dir.descripcion,
             paisId: dir.paisId,
             comunaId: dir.comunaId ?? undefined,
             direccion: dir.direccion,
@@ -737,6 +771,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
     : localDirecciones.map((d) => ({
         id: d._localId,
         codigo: d.codigo,
+        descripcion: d.descripcion,
         paisId: d.paisId,
         comunaId: d.comunaId ?? null,
         direccion: d.direccion,
@@ -976,6 +1011,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                   <thead>
                     <tr className='border-b bg-muted/40'>
                       <th className='px-4 py-2 text-left font-medium'>Código</th>
+                      <th className='px-4 py-2 text-left font-medium'>Descripción</th>
                       <th className='px-4 py-2 text-left font-medium'>Dirección</th>
                       <th className='px-4 py-2 text-left font-medium'>País / Comuna</th>
                       <th className='px-4 py-2 text-center font-medium'>Principal</th>
@@ -986,6 +1022,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                     {direccionesToShow.map((dir) => (
                       <tr key={dir.id} className='border-b hover:bg-muted/30 transition-colors'>
                         <td className='px-4 py-2 font-mono text-xs'>{dir.codigo}</td>
+                        <td className='px-4 py-2'>{dir.descripcion}</td>
                         <td className='px-4 py-2'>{dir.direccion}</td>
                         <td className='px-4 py-2 text-xs text-muted-foreground'>
                           {dir.pais.descripcion}
@@ -1009,6 +1046,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                                   initial: {
                                     id: isEdit ? dir.id : undefined,
                                     codigo: dir.codigo,
+                                    descripcion: dir.descripcion,
                                     paisId: dir.paisId,
                                     comunaId: dir.comunaId ?? undefined,
                                     direccion: dir.direccion,

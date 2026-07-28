@@ -14,6 +14,7 @@ const includeDetalle = {
     select: {
       id: true,
       codigo: true,
+      descripcion: true,
       direccion: true,
       latitud: true,
       longitud: true,

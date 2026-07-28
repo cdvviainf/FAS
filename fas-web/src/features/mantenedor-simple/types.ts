@@ -47,7 +47,8 @@ export interface MantenedorSimpleCreateInput {
   mercadoId?: number
   tipoEmbarqueId?: number
   orden?: number
-  esPaisOrigen?: boolean
+  esPaisNacional?: boolean
+  puedeSerOrigen?: boolean
   // Moneda
   esMonedaBase?: boolean
   decimales?: number

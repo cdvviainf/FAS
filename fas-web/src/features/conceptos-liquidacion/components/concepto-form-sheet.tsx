@@ -24,6 +24,7 @@ import { Label } from '@/components/ui/label'
 import { Icons } from '@/components/icons'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { prefijosCodigoService } from '@/features/prefijos-codigo/service'
 import { conceptosLiquidacionService } from '../service'
 import { FORMA_APLICACION_LABELS, NATURALEZA_CONCEPTO_LABELS } from '../types'
 import type { ConceptoLiquidacion, FormaAplicacionConcepto, NaturalezaConcepto, ValorEspecieInput } from '../types'
@@ -73,6 +74,19 @@ export function ConceptoFormSheet({ item, open, onOpenChange }: ConceptoFormShee
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item?.id])
+
+  // Sugerencia de código (Prefijos de Código) — solo al crear.
+  const { data: codigoSugerido } = useQuery({
+    queryKey: ['prefijo-codigo-siguiente', 'conceptoLiquidacion'],
+    queryFn: () => prefijosCodigoService.siguienteCodigo('conceptoLiquidacion'),
+    enabled: open && !isEdit,
+    staleTime: 0,
+  })
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open && !isEdit && codigoSugerido) setCodigo(codigoSugerido)
+  }, [codigoSugerido, open, isEdit])
 
   const mutation = useMutation({
     mutationFn: async () => {

@@ -11,7 +11,7 @@ import {
   SheetTitle
 } from '@/components/ui/sheet'
 import { Icons } from '@/components/icons'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { createMantenedorMutations } from '@/features/mantenedor-simple/mutations'
 import { createMantenedorQueries } from '@/features/mantenedor-simple/queries'
@@ -21,6 +21,8 @@ import {
   type MantenedorSimpleFormValues
 } from '@/features/mantenedor-simple/schema'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
+import { prefijosCodigoService } from '@/features/prefijos-codigo/service'
+import { RECURSO_A_MODELO } from '@/features/prefijos-codigo/types'
 
 interface MantenedorFormSheetProps {
   recurso: string
@@ -44,6 +46,16 @@ export function MantenedorFormSheet({
   const mutations = createMantenedorMutations(recurso)
   const { keys } = createMantenedorQueries(recurso)
   const codigoValidator = React.useMemo(() => createCodigoValidator(recurso), [recurso])
+
+  // Sugerencia de código (Prefijos de Código) — solo al crear. Se aplica una
+  // sola vez por apertura del Sheet para no pisar lo que el usuario escriba.
+  const modeloPrefijo = RECURSO_A_MODELO[recurso]
+  const { data: codigoSugerido } = useQuery({
+    queryKey: ['prefijo-codigo-siguiente', modeloPrefijo],
+    queryFn: () => prefijosCodigoService.siguienteCodigo(modeloPrefijo),
+    enabled: open && !isEdit && !!modeloPrefijo,
+    staleTime: 0,
+  })
 
   const createMutation = useMutation({
     ...mutations.create,
@@ -84,6 +96,13 @@ export function MantenedorFormSheet({
   })
 
   const { FormTextField, FormSwitchField } = useFormFields<MantenedorSimpleFormValues>()
+
+  React.useEffect(() => {
+    if (open && !isEdit && codigoSugerido) {
+      form.setFieldValue('codigo', codigoSugerido)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codigoSugerido, open, isEdit])
 
   const isPending = createMutation.isPending || updateMutation.isPending
 

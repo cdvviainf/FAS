@@ -86,12 +86,15 @@ model EntidadDireccion {
   entidadId    Int
   entidad      Entidad    @relation(fields: [entidadId], references: [id])
   codigo       String
+  descripcion  String                       // etiqueta legible, ej. "Casa matriz", "Bodega Norte" — obligatoria (2026-07-28)
   paisId       Int
   pais         Pais       @relation(fields: [paisId], references: [id])
   comunaId     Int?
   comuna       Comuna?    @relation(fields: [comunaId], references: [id])
   direccion    String                       // texto de la dirección
   esPorDefecto Boolean    @default(false)
+  latitud      Decimal?   @db.Decimal(10, 7)  // geolocalización (2026-07-28) — pegado de coordenadas o link de Google Maps, ver componente compartido en mantenedores-generales.md (Puerto/Bodega) y productores.md (Predio)
+  longitud     Decimal?   @db.Decimal(10, 7)
 
   // auditoría + softdelete (mismo patrón base)
   creadoEn     DateTime   @default(now())

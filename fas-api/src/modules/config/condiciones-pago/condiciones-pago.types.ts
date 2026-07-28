@@ -1,6 +1,14 @@
+export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS'
+export type TipoValorCuota = 'PORCENTAJE' | 'MONTO_UNITARIO'
+
 export interface CondicionPagoCuotaInput {
-  porcentaje: number
+  fechaReferencia: FechaReferenciaPago
   plazoDias: number
+  tipoValor: TipoValorCuota
+  porcentaje?: number | null
+  valorUnitario?: number | null
+  monedaId?: number | null
+  unidadId?: number | null
   descripcion?: string
 }
 

@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { prefijosCodigoService } from '@/features/prefijos-codigo/service'
+import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import {
   Sheet,
   SheetContent,
@@ -11,15 +13,25 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { condicionesPagoService } from '../service'
-import type { CondicionPago, CondicionPagoCuotaInput } from '../types'
+import { FECHA_REFERENCIA_LABELS } from '../types'
+import type { CondicionPago, CondicionPagoCuotaInput, FechaReferenciaPago, TipoValorCuota } from '../types'
 
 const ITEM = 'CONFIG_MANTENEDORES'
+const monedasService = createMantenedorService('monedas')
+const unidadesService = createMantenedorService('unidades-medida')
 
 interface CondicionPagoFormSheetProps {
   item?: CondicionPago
@@ -28,7 +40,26 @@ interface CondicionPagoFormSheetProps {
 }
 
 function cuotaVacia(): CondicionPagoCuotaInput {
-  return { porcentaje: 0, plazoDias: 0, descripcion: '' }
+  return { fechaReferencia: 'FACTURA', plazoDias: 0, tipoValor: 'PORCENTAJE', porcentaje: 0, descripcion: '' }
+}
+
+// Misma regla que el backend (condiciones-pago.schema.ts): a lo sumo UNA
+// cuota MONTO_UNITARIO, y debe ser la primera, como cargo ADICIONAL —
+// siempre debe existir además al menos una cuota PORCENTAJE, y las cuotas
+// PORCENTAJE deben sumar exactamente 100% entre sí.
+function validarReglaCuotas(cuotas: CondicionPagoCuotaInput[]): string | null {
+  const cuotasMontoUnitario = cuotas.filter((c) => c.tipoValor === 'MONTO_UNITARIO')
+  if (cuotasMontoUnitario.length > 1) return 'Solo puede haber una cuota de monto unitario'
+  if (cuotasMontoUnitario.length === 1 && cuotas[0]?.tipoValor !== 'MONTO_UNITARIO') {
+    return 'El monto unitario solo puede ser la primera cuota'
+  }
+  const porcentuales = cuotas.filter((c) => c.tipoValor === 'PORCENTAJE')
+  if (porcentuales.length === 0) return 'Debe haber al menos una cuota por porcentaje que sume 100%'
+  const suma = porcentuales.reduce((acc, c) => acc + (c.porcentaje || 0), 0)
+  if (Math.round(suma * 100) / 100 !== 100) {
+    return `Las cuotas por porcentaje deben sumar 100% (suma actual: ${suma}%)`
+  }
+  return null
 }
 
 export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPagoFormSheetProps) {
@@ -40,6 +71,12 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
   const [cuotas, setCuotas] = useState<CondicionPagoCuotaInput[]>([cuotaVacia()])
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+  const { data: monedas } = useQuery({ queryKey: ['monedas-options'], queryFn: () => monedasService.list({ limit: 200 }), staleTime: 5 * 60_000, enabled: open })
+  // La cuota de monto unitario solo admite Caja o Kilo (mismo criterio que
+  // el backend, condiciones-pago.service.ts) — filtra el catálogo genérico.
+  const { data: unidades } = useQuery({ queryKey: ['unidades-medida-options'], queryFn: () => unidadesService.list({ limit: 200 }), staleTime: 5 * 60_000, enabled: open })
+  const unidadesCajaKilo = (unidades?.data ?? []).filter((u) => ['CAJA', 'KG'].includes(u.codigo))
+
   useEffect(() => {
     if (!open) return
     setErrors({})
@@ -47,7 +84,16 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
       setCodigo(item.codigo)
       setDescripcion(item.descripcion)
       setCuotas(item.cuotas.length > 0
-        ? item.cuotas.map((c) => ({ porcentaje: Number(c.porcentaje), plazoDias: c.plazoDias, descripcion: c.descripcion ?? '' }))
+        ? item.cuotas.map((c) => ({
+            fechaReferencia: c.fechaReferencia,
+            plazoDias: c.plazoDias,
+            tipoValor: c.tipoValor,
+            porcentaje: c.porcentaje != null ? Number(c.porcentaje) : null,
+            valorUnitario: c.valorUnitario != null ? Number(c.valorUnitario) : null,
+            monedaId: c.monedaId,
+            unidadId: c.unidadId,
+            descripcion: c.descripcion ?? '',
+          }))
         : [cuotaVacia()])
     } else {
       setCodigo('')
@@ -57,10 +103,28 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item?.id])
 
-  const sumaCuotas = cuotas.reduce((acc, c) => acc + (c.porcentaje || 0), 0)
+  // Sugerencia de código (Prefijos de Código) — solo al crear.
+  const { data: codigoSugerido } = useQuery({
+    queryKey: ['prefijo-codigo-siguiente', 'condicionPago'],
+    queryFn: () => prefijosCodigoService.siguienteCodigo('condicionPago'),
+    enabled: open && !isEdit,
+    staleTime: 0,
+  })
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open && !isEdit && codigoSugerido) setCodigo(codigoSugerido)
+  }, [codigoSugerido, open, isEdit])
+
+  const sumaCuotas = cuotas.filter((c) => c.tipoValor === 'PORCENTAJE').reduce((acc, c) => acc + (c.porcentaje || 0), 0)
 
   function actualizarCuota(index: number, cambios: Partial<CondicionPagoCuotaInput>) {
     setCuotas((prev) => prev.map((c, i) => (i === index ? { ...c, ...cambios } : c)))
+  }
+  function cambiarTipoValor(index: number, tipoValor: TipoValorCuota) {
+    actualizarCuota(index, tipoValor === 'PORCENTAJE'
+      ? { tipoValor, porcentaje: 0, valorUnitario: null, monedaId: null, unidadId: null }
+      : { tipoValor, porcentaje: null, valorUnitario: 0, monedaId: null, unidadId: null })
   }
   function agregarCuota() {
     setCuotas((prev) => [...prev, cuotaVacia()])
@@ -74,8 +138,12 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
     if (!isEdit && !codigo.trim()) e.codigo = 'El código es requerido'
     if (!descripcion.trim()) e.descripcion = 'La descripción es requerida'
     if (cuotas.length === 0) e.cuotas = 'Debe agregar al menos una cuota'
-    if (Math.round(sumaCuotas * 100) / 100 !== 100) {
-      e.cuotas = `Las cuotas deben sumar 100% (suma actual: ${sumaCuotas}%)`
+    const errorRegla = validarReglaCuotas(cuotas)
+    if (errorRegla) e.cuotas = errorRegla
+    for (const c of cuotas) {
+      if (c.tipoValor === 'MONTO_UNITARIO' && (!c.monedaId || !c.unidadId || !c.valorUnitario)) {
+        e.cuotas = 'La cuota de monto unitario requiere valor, moneda y unidad'
+      }
     }
     setErrors(e)
     return Object.keys(e).length === 0
@@ -105,10 +173,10 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className='flex w-full flex-col sm:max-w-lg'>
+      <SheetContent className='flex w-full flex-col sm:max-w-2xl'>
         <SheetHeader>
           <SheetTitle>{isEdit ? `Editar Condición de Pago ${item?.codigo}` : 'Nueva Condición de Pago'}</SheetTitle>
-          <SheetDescription>Define las cuotas (% y plazo en días) que se copiarán automáticamente a la Orden de Compra al seleccionarla.</SheetDescription>
+          <SheetDescription>Define las cuotas que se copiarán automáticamente a la Orden de Compra / Cierre Comercial al seleccionarla.</SheetDescription>
         </SheetHeader>
 
         <div className='flex-1 space-y-4 overflow-auto px-1 py-2'>
@@ -126,25 +194,88 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
           <div className='space-y-2'>
             <Label>Cuotas</Label>
             {cuotas.map((c, i) => (
-              <div key={i} className='flex items-end gap-2'>
-                <div className='space-y-1.5'>
-                  <Label className='text-xs'>Porcentaje</Label>
-                  <Input type='number' className='w-24' value={c.porcentaje || ''} onChange={(e) => actualizarCuota(i, { porcentaje: Number(e.target.value) })} />
+              <div key={i} className='space-y-2 rounded-md border p-3'>
+                <div className='flex items-center justify-between'>
+                  <span className='text-xs font-medium text-muted-foreground'>Cuota {i + 1}</span>
+                  <Button type='button' variant='ghost' size='icon' className='h-7 w-7' onClick={() => quitarCuota(i)} disabled={cuotas.length <= 1}>
+                    <Icons.trash className='h-3.5 w-3.5' />
+                  </Button>
                 </div>
-                <div className='space-y-1.5'>
-                  <Label className='text-xs'>Plazo (días)</Label>
-                  <Input type='number' className='w-24' value={c.plazoDias || ''} onChange={(e) => actualizarCuota(i, { plazoDias: Number(e.target.value) })} />
+
+                <div className='grid grid-cols-2 gap-2'>
+                  <div className='space-y-1.5'>
+                    <Label className='text-xs'>Fecha de Referencia</Label>
+                    <Select value={c.fechaReferencia} onValueChange={(v) => actualizarCuota(i, { fechaReferencia: v as FechaReferenciaPago })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(FECHA_REFERENCIA_LABELS) as FechaReferenciaPago[]).map((k) => (
+                          <SelectItem key={k} value={k}>{FECHA_REFERENCIA_LABELS[k]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className='space-y-1.5'>
+                    <Label className='text-xs'>Plazo (días)</Label>
+                    <Input type='number' value={c.plazoDias || ''} onChange={(e) => actualizarCuota(i, { plazoDias: Number(e.target.value) })} />
+                  </div>
                 </div>
-                <div className='flex-1 space-y-1.5'>
+
+                {i === 0 && (
+                  <div className='space-y-1.5'>
+                    <Label className='text-xs'>Tipo de valor</Label>
+                    <Select value={c.tipoValor} onValueChange={(v) => cambiarTipoValor(i, v as TipoValorCuota)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='PORCENTAJE'>Porcentaje</SelectItem>
+                        <SelectItem value='MONTO_UNITARIO'>Monto unitario (por Caja/Kilo)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {c.tipoValor === 'PORCENTAJE' ? (
+                  <div className='space-y-1.5'>
+                    <Label className='text-xs'>Porcentaje</Label>
+                    <Input type='number' value={c.porcentaje ?? ''} onChange={(e) => actualizarCuota(i, { porcentaje: Number(e.target.value) })} />
+                  </div>
+                ) : (
+                  <div className='grid grid-cols-3 gap-2'>
+                    <div className='space-y-1.5'>
+                      <Label className='text-xs'>Valor por unidad</Label>
+                      <Input type='number' step='0.01' value={c.valorUnitario ?? ''} onChange={(e) => actualizarCuota(i, { valorUnitario: Number(e.target.value) })} />
+                    </div>
+                    <div className='space-y-1.5'>
+                      <Label className='text-xs'>Moneda</Label>
+                      <Select value={c.monedaId ? String(c.monedaId) : ''} onValueChange={(v) => actualizarCuota(i, { monedaId: Number(v) })}>
+                        <SelectTrigger><SelectValue placeholder='Moneda...' /></SelectTrigger>
+                        <SelectContent>
+                          {(monedas?.data ?? []).map((m) => (
+                            <SelectItem key={m.id} value={String(m.id)}>{m.codigo}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className='space-y-1.5'>
+                      <Label className='text-xs'>Unidad</Label>
+                      <Select value={c.unidadId ? String(c.unidadId) : ''} onValueChange={(v) => actualizarCuota(i, { unidadId: Number(v) })}>
+                        <SelectTrigger><SelectValue placeholder='Unidad...' /></SelectTrigger>
+                        <SelectContent>
+                          {unidadesCajaKilo.map((u) => (
+                            <SelectItem key={u.id} value={String(u.id)}>{u.descripcion}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+
+                <div className='space-y-1.5'>
                   <Label className='text-xs'>Descripción</Label>
                   <Input value={c.descripcion ?? ''} onChange={(e) => actualizarCuota(i, { descripcion: e.target.value })} placeholder='Ej: Anticipo' />
                 </div>
-                <Button type='button' variant='ghost' size='icon' onClick={() => quitarCuota(i)} disabled={cuotas.length <= 1}>
-                  <Icons.trash className='h-4 w-4' />
-                </Button>
               </div>
             ))}
-            <p className='text-xs text-muted-foreground'>Suma actual: {sumaCuotas}%</p>
+            <p className='text-xs text-muted-foreground'>Suma de cuotas por porcentaje: {sumaCuotas}%</p>
             {errors.cuotas && <p className='text-xs text-destructive'>{errors.cuotas}</p>}
             <Button type='button' variant='secondary' size='sm' onClick={agregarCuota}>
               <Icons.add className='mr-1 h-4 w-4' /> Agregar cuota

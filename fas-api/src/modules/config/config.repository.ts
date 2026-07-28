@@ -57,7 +57,7 @@ const includeMap: Partial<Record<MantenedorModelo, object>> = {
     mercado: { select: { id: true, descripcion: true } },
   },
   puerto: {
-    pais: { select: { id: true, descripcion: true, codigo: true, esPaisOrigen: true } },
+    pais: { select: { id: true, descripcion: true, codigo: true, puedeSerOrigen: true } },
     tipoEmbarque: { select: { id: true, descripcion: true } },
   },
   bodega: {
@@ -111,10 +111,10 @@ export async function listMantenedor(modelo: MantenedorModelo, filters: Mantened
     }
   }
 
-  // R9: Puerto con contexto=origen solo devuelve puertos de países con esPaisOrigen=true
+  // R9: Puerto con contexto=origen solo devuelve puertos de países con puedeSerOrigen=true
   const contextoWhere =
     modelo === 'puerto' && filters.contexto === 'origen'
-      ? { pais: { esPaisOrigen: true } }
+      ? { pais: { puedeSerOrigen: true } }
       : {}
 
   const where = {

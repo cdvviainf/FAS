@@ -117,6 +117,7 @@ describe('mantenedores contra PostgreSQL', () => {
       data: {
         entidadId: entidad.id,
         codigo: 'CASA',
+        descripcion: 'Casa matriz',
         paisId: pais.id,
         comunaId: comuna.id,
         direccion: 'Dirección de prueba',

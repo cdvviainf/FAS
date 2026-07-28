@@ -21,7 +21,7 @@ const paisConOrigenSelect = {
   id: true,
   codigo: true,
   descripcion: true,
-  esPaisOrigen: true,
+  esPaisNacional: true,
 } as const
 
 const comunaSelect = {
@@ -87,6 +87,7 @@ export async function findEntidadById(id: number) {
         select: {
           id: true,
           codigo: true,
+          descripcion: true,
           direccion: true,
           esPorDefecto: true,
           latitud: true,
@@ -233,7 +234,7 @@ export async function countContactoUsos(conId: number): Promise<number> {
 export async function findPaisById(id: number) {
   return prisma.pais.findFirst({
     where: { id, eliminadoEn: null },
-    select: { id: true, esPaisOrigen: true, descripcion: true },
+    select: { id: true, esPaisNacional: true, descripcion: true },
   })
 }
 
@@ -296,6 +297,7 @@ export async function createDireccion(
     data: {
       entidadId,
       codigo: data.codigo,
+      descripcion: data.descripcion,
       paisId: data.paisId,
       comunaId: data.comunaId,
       direccion: data.direccion,
@@ -320,6 +322,7 @@ export async function updateDireccion(
     where: { id },
     data: {
       ...(data.codigo !== undefined ? { codigo: data.codigo } : {}),
+      ...(data.descripcion !== undefined ? { descripcion: data.descripcion } : {}),
       ...(data.paisId !== undefined ? { paisId: data.paisId } : {}),
       ...(data.comunaId !== undefined ? { comunaId: data.comunaId } : {}),
       ...(data.direccion !== undefined ? { direccion: data.direccion } : {}),

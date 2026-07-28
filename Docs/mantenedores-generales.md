@@ -102,7 +102,12 @@ model Temporada {
 
 model Pais {
   // + base — codigo = ISO 3166-1 alfa-3 (G8)
-  esPaisOrigen Boolean   @default(false)
+  // Semánticas independientes (2026-07-28, reemplaza el antiguo `esPaisOrigen`
+  // sobrecargado): esPaisNacional = "es Chile" (único, exige RUT/comunas
+  // chilenas); puedeSerOrigen = filtro de puertos R9 (multi-país, un puerto
+  // puede servir de origen y destino a la vez sin heredar reglas de RUT/comunas).
+  esPaisNacional Boolean  @default(false)
+  puedeSerOrigen Boolean  @default(false)
   puertos      Puerto[]
   mercadoId    Int?
   mercado      Mercado?  @relation(fields: [mercadoId], references: [id])
@@ -268,7 +273,7 @@ model TipoCuentaCorriente {
 - **R6 — Categoría.orden.** Único por `especieId` entre no eliminados → 422 si se repite.
 - **R7 — Calibre.orden.** Único por `especieId` entre no eliminados → 422 si se repite.
 - **R8 — Eliminación con dependientes.** No se puede softdelete de un maestro padre que tenga hijos no eliminados (ej. Especie con variedades, Región con provincias, País con puertos, Mercado con países, Tipo Parámetro con parámetros) → 409.
-- **R9 — Puertos por contexto.** El listado en contexto **origen** retorna solo puertos cuyo `pais.esPaisOrigen = true`; en contexto **destino** retorna todos.
+- **R9 — Puertos por contexto.** El listado en contexto **origen** retorna solo puertos cuyo `pais.puedeSerOrigen = true`; en contexto **destino** retorna todos.
 - **R10 — Geolocalización.** `latitud`/`longitud` opcionales, `Decimal(10,7)`, para graficar.
 
 ---
@@ -322,7 +327,7 @@ model TipoCuentaCorriente {
 - **CA6 (R6):** Dos categorías de la misma especie con el mismo `orden` → 422; mismo `orden` en otra especie → OK.
 - **CA7 (R7):** Dos calibres de la misma especie con el mismo `orden` → 422.
 - **CA8 (R8):** Eliminar una Especie con variedades no eliminadas → 409.
-- **CA9 (R9):** `GET /puertos?contexto=origen` retorna solo puertos de países con `esPaisOrigen=true`; `contexto=destino` retorna todos.
+- **CA9 (R9):** `GET /puertos?contexto=origen` retorna solo puertos de países con `puedeSerOrigen=true`; `contexto=destino` retorna todos.
 - **CA10 (cascada):** `GET /comunas?provinciaId=X` retorna solo comunas de esa provincia (no eliminadas).
 - **CA11 (geo):** Bodega/Puerto persisten lat/long con precisión decimal y se exponen para graficar.
 

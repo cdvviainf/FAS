@@ -41,6 +41,7 @@ export const entidadUpdateSchema = z.object({
 
 export const direccionCreateSchema = z.object({
   codigo: z.string().min(1, 'El código es requerido').max(50).trim(),
+  descripcion: z.string().min(1, 'La descripción es requerida').max(200).trim(),
   paisId: z.number().int().positive('El país es requerido'),
   comunaId: z.number().int().positive().optional(),
   direccion: z.string().min(1, 'La dirección es requerida').max(300).trim(),
@@ -51,6 +52,7 @@ export const direccionCreateSchema = z.object({
 
 export const direccionUpdateSchema = z.object({
   codigo: z.string().min(1).max(50).trim().optional(),
+  descripcion: z.string().min(1).max(200).trim().optional(),
   paisId: z.number().int().positive().optional(),
   comunaId: z.number().int().positive().nullable().optional(),
   direccion: z.string().min(1).max(300).trim().optional(),

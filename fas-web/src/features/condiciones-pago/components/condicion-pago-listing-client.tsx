@@ -9,8 +9,16 @@ import { Icons } from '@/components/icons'
 import { AlertModal } from '@/components/modal/alert-modal'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { condicionesPagoService } from '../service'
-import type { CondicionPago } from '../types'
+import { FECHA_REFERENCIA_LABELS } from '../types'
+import type { CondicionPago, CondicionPagoCuota } from '../types'
 import { CondicionPagoFormSheet } from './condicion-pago-form-sheet'
+
+function labelCuota(cuota: CondicionPagoCuota): string {
+  const base = cuota.tipoValor === 'MONTO_UNITARIO'
+    ? `${cuota.moneda?.codigo ?? ''} ${cuota.valorUnitario} por ${cuota.unidad?.descripcion ?? ''}`
+    : `${cuota.porcentaje}%`
+  return `${base} a ${cuota.plazoDias} días desde ${FECHA_REFERENCIA_LABELS[cuota.fechaReferencia]}${cuota.descripcion ? ` — ${cuota.descripcion}` : ''}`
+}
 
 const ITEM = 'CONFIG_MANTENEDORES'
 
@@ -62,7 +70,7 @@ export function CondicionPagoListingClient() {
               <div className='mt-2 flex flex-wrap gap-2'>
                 {c.cuotas.map((cuota) => (
                   <Badge key={cuota.id} variant='outline'>
-                    {cuota.porcentaje}% a {cuota.plazoDias} días{cuota.descripcion ? ` — ${cuota.descripcion}` : ''}
+                    {labelCuota(cuota)}
                   </Badge>
                 ))}
               </div>

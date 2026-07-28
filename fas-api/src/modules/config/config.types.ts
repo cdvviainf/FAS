@@ -66,7 +66,8 @@ export interface MantenedorCreateInput {
   codigo: string
   descripcion: string
   descripcionExtranjera?: string
-  esPaisOrigen?: boolean     // solo Pais
+  esPaisNacional?: boolean   // solo Pais
+  puedeSerOrigen?: boolean   // solo Pais
   // FK fields
   regionId?: number
   provinciaId?: number

@@ -21,6 +21,7 @@ import { Icons } from '@/components/icons'
 import { useAppForm, useFormFields } from '@/components/ui/tanstack-form'
 import { itemsMenuOptions, perfilDetailOptions, perfilesKeys } from '../queries'
 import { perfilesService } from '../service'
+import { prefijosCodigoService } from '@/features/prefijos-codigo/service'
 import type { NivelAcceso, ItemMenu } from '../types'
 
 const perfilSchema = z.object({
@@ -146,6 +147,19 @@ export function PerfilForm({ perfilId }: PerfilFormProps) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [perfilData])
+
+  // Sugerencia de código (Prefijos de Código) — solo al crear.
+  const { data: codigoSugerido } = useQuery({
+    queryKey: ['prefijo-codigo-siguiente', 'perfil'],
+    queryFn: () => prefijosCodigoService.siguienteCodigo('perfil'),
+    enabled: !isEdit,
+    staleTime: 0,
+  })
+
+  useEffect(() => {
+    if (!isEdit && codigoSugerido) form.setFieldValue('codigo', codigoSugerido)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codigoSugerido, isEdit])
 
   const { FormTextField } = useFormFields<PerfilFormValues>()
 

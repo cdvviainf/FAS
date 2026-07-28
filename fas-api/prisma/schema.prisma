@@ -320,7 +320,12 @@ model Pais {
   codigo                String
   descripcion           String
   descripcionExtranjera String?
-  esPaisOrigen          Boolean   @default(false)
+  // Semánticas independientes (antes un único esPaisOrigen sobrecargado):
+  // esPaisNacional = "es Chile" (único, exige RUT/comunas chilenas).
+  // puedeSerOrigen = filtro de puertos R9 (multi-país, un puerto puede
+  // servir de origen y destino a la vez sin heredar reglas de RUT/comunas).
+  esPaisNacional        Boolean   @default(false)
+  puedeSerOrigen        Boolean   @default(false)
   bloqueado             Boolean   @default(false)
   creadoEn              DateTime  @default(now())
   creadoPor             String
@@ -430,6 +435,9 @@ model UnidadMedida {
   especies                Especie[]                @relation("UnidadMedidaCalidadEspecie")
   articulos               Articulo[]
   contratoProductorLineas ProductorContratoLinea[]
+  condicionPagoCuotas     CondicionPagoCuota[]
+  ordenCompraCuotasPago   OrdenCompraCuotaPago[]
+  notaVentaCuotasPago     NotaVentaCuotaPago[]
 
   @@map("unidades_medida")
 }
@@ -500,6 +508,30 @@ model TipoDefecto {
   eliminadoPor          String?
 
   @@map("tipos_defecto")
+}
+
+// Configura, por cada mantenedor/módulo que use campo `codigo`, un prefijo
+// fijo + cantidad de dígitos del correlativo (ej. Entidad: "EN" + 3 dígitos
+// -> EN001, EN002...). El formulario de creación de ese mantenedor consulta
+// el siguiente correlativo disponible como sugerencia (editable).
+model PrefijoCodigo {
+  id             Int       @id @default(autoincrement())
+  // Sin @unique de Prisma (no soporta índices parciales en el DSL) — la
+  // unicidad real está en un índice único parcial a nivel de BD, solo entre
+  // filas activas (WHERE eliminadoEn IS NULL, ver migration.sql), para que
+  // el soft-delete permita recrear un prefijo sin perder protección contra
+  // duplicados concurrentes (FAS-PMQ-R1-006).
+  modelo         String
+  prefijo        String
+  digitos        Int
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@map("prefijos_codigo")
 }
 
 model TipoParametro {
@@ -797,9 +829,12 @@ model Moneda {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  movimientosCC MovimientoCuentaCorriente[]
-  notasVenta    NotaVenta[]
-  ordenesCompra OrdenCompra[]
+  movimientosCC         MovimientoCuentaCorriente[]
+  notasVenta            NotaVenta[]
+  ordenesCompra         OrdenCompra[]
+  condicionPagoCuotas   CondicionPagoCuota[]
+  ordenCompraCuotasPago OrdenCompraCuotaPago[]
+  notaVentaCuotasPago   NotaVentaCuotaPago[]
 
   @@map("monedas")
 }
@@ -959,6 +994,7 @@ model EntidadDireccion {
   entidadId      Int
   entidad        Entidad   @relation(fields: [entidadId], references: [id])
   codigo         String
+  descripcion    String    // etiqueta legible, ej. "Casa matriz", "Bodega Norte"
   paisId         Int
   pais           Pais      @relation("DireccionPais", fields: [paisId], references: [id])
   comunaId       Int?
@@ -1688,9 +1724,19 @@ model NotaVentaCuotaPago {
   notaVentaId Int
   notaVenta   NotaVenta @relation(fields: [notaVentaId], references: [id], onDelete: Cascade)
 
-  porcentaje  Decimal @db.Decimal(5, 2)
-  plazoDias   Int
-  descripcion String?
+  fechaReferencia FechaReferenciaPago @default(FACTURA)
+  plazoDias       Int
+  tipoValor       TipoValorCuota      @default(PORCENTAJE)
+  porcentaje      Decimal?            @db.Decimal(5, 2)
+  valorUnitario   Decimal?            @db.Decimal(14, 4)
+  monedaId        Int?
+  moneda          Moneda?             @relation(fields: [monedaId], references: [id])
+  unidadId        Int?
+  unidad          UnidadMedida?       @relation(fields: [unidadId], references: [id])
+  // Monto ya resuelto (valorUnitario × cantidad real del Cierre Comercial) al
+  // momento de snapshotear — inmutable, no se recalcula si cambian las líneas.
+  montoCalculado  Decimal?            @db.Decimal(14, 4)
+  descripcion     String?
 
   @@index([notaVentaId])
   @@map("nota_venta_cuota_pago")
@@ -1854,14 +1900,37 @@ model CondicionPago {
   @@map("condiciones_pago")
 }
 
+// Fechas desde las que se cuenta el plazo en días de una cuota (R12b).
+enum FechaReferenciaPago {
+  FACTURA
+  ZARPE
+  ENVIO_DOCUMENTOS
+}
+
+// PORCENTAJE: cuota expresada como % (deben sumar 100% entre las cuotas
+// PORCENTAJE de una misma condición). MONTO_UNITARIO: solo permitido en la
+// primera cuota — valor fijo por unidad (caja o kilo) en una moneda, que se
+// multiplica por la cantidad real de la OC/Cierre Comercial al aplicarse.
+enum TipoValorCuota {
+  PORCENTAJE
+  MONTO_UNITARIO
+}
+
 model CondicionPagoCuota {
   id              Int           @id @default(autoincrement())
   condicionPagoId Int
   condicionPago   CondicionPago @relation(fields: [condicionPagoId], references: [id], onDelete: Cascade)
 
-  porcentaje  Decimal @db.Decimal(5, 2)
-  plazoDias   Int
-  descripcion String?
+  fechaReferencia FechaReferenciaPago @default(FACTURA)
+  plazoDias       Int
+  tipoValor       TipoValorCuota      @default(PORCENTAJE)
+  porcentaje      Decimal?            @db.Decimal(5, 2)
+  valorUnitario   Decimal?            @db.Decimal(14, 4)
+  monedaId        Int?
+  moneda          Moneda?             @relation(fields: [monedaId], references: [id])
+  unidadId        Int?
+  unidad          UnidadMedida?       @relation(fields: [unidadId], references: [id])
+  descripcion     String?
 
   @@index([condicionPagoId])
   @@map("condicion_pago_cuota")
@@ -1872,9 +1941,19 @@ model OrdenCompraCuotaPago {
   ordenCompraId Int
   ordenCompra   OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
 
-  porcentaje  Decimal @db.Decimal(5, 2)
-  plazoDias   Int
-  descripcion String?
+  fechaReferencia FechaReferenciaPago @default(FACTURA)
+  plazoDias       Int
+  tipoValor       TipoValorCuota      @default(PORCENTAJE)
+  porcentaje      Decimal?            @db.Decimal(5, 2)
+  valorUnitario   Decimal?            @db.Decimal(14, 4)
+  monedaId        Int?
+  moneda          Moneda?             @relation(fields: [monedaId], references: [id])
+  unidadId        Int?
+  unidad          UnidadMedida?       @relation(fields: [unidadId], references: [id])
+  // Monto ya resuelto (valorUnitario × cantidad real de la OC) al momento de
+  // snapshotear — inmutable, no se recalcula si cambian las líneas después.
+  montoCalculado  Decimal?            @db.Decimal(14, 4)
+  descripcion     String?
 
   @@index([ordenCompraId])
   @@map("orden_compra_cuota_pago")

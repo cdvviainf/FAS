@@ -41,14 +41,14 @@ async function limpiarDatos() {
 async function crearFixtures() {
   const grupoMercado = await prisma.grupoMercado.create({ data: { codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
   const mercado = await prisma.mercado.create({ data: { codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, creadoPor: 'test' } })
-  const chile = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, esPaisOrigen: true, creadoPor: 'test' } })
+  const chile = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, esPaisNacional: true, puedeSerOrigen: true, creadoPor: 'test' } })
   const usa = await prisma.pais.create({ data: { codigo: 'USA', descripcion: 'Estados Unidos', mercadoId: mercado.id, creadoPor: 'test' } })
 
   const productor = await prisma.entidad.create({
     data: { codigo: 'PROD-01', descripcion: 'Productor Uno', razonSocial: 'Productor Uno SpA', paisId: chile.id, tipos: ['PRODUCTOR'], creadoPor: 'test' },
   })
   const direccion = await prisma.entidadDireccion.create({
-    data: { entidadId: productor.id, codigo: 'D1', paisId: chile.id, direccion: 'Camino Interior 123', creadoPor: 'test' },
+    data: { entidadId: productor.id, codigo: 'D1', descripcion: 'Predio principal', paisId: chile.id, direccion: 'Camino Interior 123', creadoPor: 'test' },
   })
   const clienteExtranjero = await prisma.entidad.create({
     data: { codigo: 'CLI-EXT', descripcion: 'Cliente USA', razonSocial: 'Cliente USA Inc', paisId: usa.id, tipos: ['CLIENTE_EXTRANJERO'], creadoPor: 'test' },

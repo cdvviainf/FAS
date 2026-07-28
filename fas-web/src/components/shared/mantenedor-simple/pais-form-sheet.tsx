@@ -29,7 +29,8 @@ import { paisSchema, type PaisFormValues } from '@/features/mantenedor-simple/sc
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 
 interface PaisItem extends MantenedorSimple {
-  esPaisOrigen?: boolean
+  esPaisNacional?: boolean
+  puedeSerOrigen?: boolean
   mercadoId?: number | null
 }
 
@@ -75,7 +76,8 @@ export function PaisFormSheet({ item, open, onOpenChange }: PaisFormSheetProps) 
       codigo: item?.codigo ?? '',
       descripcion: item?.descripcion ?? '',
       descripcionExtranjera: item?.descripcionExtranjera ?? '',
-      esPaisOrigen: item?.esPaisOrigen ?? false,
+      esPaisNacional: item?.esPaisNacional ?? false,
+      puedeSerOrigen: item?.puedeSerOrigen ?? false,
       bloqueado: item?.bloqueado ?? false,
       mercadoId: item?.mercadoId ?? 0
     } as PaisFormValues,
@@ -136,7 +138,16 @@ export function PaisFormSheet({ item, open, onOpenChange }: PaisFormSheetProps) 
                 label='Descripción extranjera'
                 placeholder='Ej: Chile'
               />
-              <FormSwitchField name='esPaisOrigen' label='Es país de origen' />
+              <FormSwitchField
+                name='esPaisNacional'
+                label='Es país nacional'
+                description='Marca el país operativo local (Chile) — exige RUT y comunas chilenas en sus entidades y direcciones. Debe haber solo uno.'
+              />
+              <FormSwitchField
+                name='puedeSerOrigen'
+                label='Puede ser país de origen'
+                description='Habilita que los puertos de este país aparezcan también como origen (además de destino). Puede activarse en varios países a la vez.'
+              />
 
               <form.Field name='mercadoId'>
                 {(field) => (

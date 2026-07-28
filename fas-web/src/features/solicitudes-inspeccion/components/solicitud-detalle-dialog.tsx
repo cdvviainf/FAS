@@ -53,7 +53,7 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
           <div className='space-y-2'>
             <Campo label='Productor'>{solicitud.entidadProductor.razonSocial}</Campo>
             <Campo label='Lugar'>
-              {direccion.direccion}{direccion.comuna ? `, ${direccion.comuna.descripcion}` : ''}
+              {direccion.descripcion} — {direccion.direccion}{direccion.comuna ? `, ${direccion.comuna.descripcion}` : ''}
               {tieneGeo && (
                 <a
                   href={`https://www.google.com/maps?q=${direccion.latitud},${direccion.longitud}`}

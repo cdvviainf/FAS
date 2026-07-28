@@ -106,16 +106,29 @@ model NotaVenta {
 }
 
 model NotaVentaCuotaPago {
-  id             Int       @id @default(autoincrement())
-  notaVentaId    Int
-  notaVenta      NotaVenta @relation(fields: [notaVentaId], references: [id], onDelete: Cascade)
+  id              Int              @id @default(autoincrement())
+  notaVentaId     Int
+  notaVenta       NotaVenta        @relation(fields: [notaVentaId], references: [id], onDelete: Cascade)
 
-  porcentaje     Decimal   @db.Decimal(5, 2)
-  plazoDias      Int
-  descripcion    String?
+  fechaReferencia FechaReferenciaPago @default(FACTURA)  // FACTURA/ZARPE/ENVIO_DOCUMENTOS
+  plazoDias       Int
+  tipoValor       TipoValorCuota   @default(PORCENTAJE)  // PORCENTAJE/MONTO_UNITARIO
+  porcentaje      Decimal?         @db.Decimal(5, 2)      // requerido si tipoValor=PORCENTAJE
+  valorUnitario   Decimal?         @db.Decimal(14, 4)     // requerido si tipoValor=MONTO_UNITARIO
+  monedaId        Int?
+  moneda          Moneda?          @relation(fields: [monedaId], references: [id])
+  unidadId        Int?
+  unidad          UnidadMedida?    @relation(fields: [unidadId], references: [id])
+  montoCalculado  Decimal?         @db.Decimal(14, 4)     // valorUnitario × cantidad real (cajas/kilos), solo MONTO_UNITARIO — recalculado en cada cambio de detalles
+  descripcion     String?
 
   @@index([notaVentaId])
 }
+```
+
+**Regla de cuotas (2026-07-28, mismo contrato que `compras.md` §4.2.1):** las cuotas `PORCENTAJE` son **siempre obligatorias** y deben sumar exactamente 100% entre sí, exista o no además una cuota `MONTO_UNITARIO`. A lo sumo **una** cuota puede ser `MONTO_UNITARIO`, y debe ser la primera (índice 0) — representa un **cargo adicional** (USD/caja o USD/kilo según cantidad real de la NV), nunca un reemplazo del 100%. `unidadId` en esa cuota solo admite `CAJA` o `KG`; si es `KG`, cada `Articulo` involucrado en los detalles debe tener `kgNetoEnvase` válido (error de negocio si falta). `montoCalculado` se recalcula automáticamente cada vez que se agrega un detalle a la NV (`addDetalle`), ya que a diferencia de la OC los detalles se agregan incrementalmente después del encabezado.
+
+```prisma
 
 model NotaVentaDetalle {
   id             Int       @id @default(autoincrement())

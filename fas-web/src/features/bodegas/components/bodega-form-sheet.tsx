@@ -24,7 +24,8 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Icons } from '@/components/icons'
-import { IconClipboard, IconTrash, IconPlus } from '@tabler/icons-react'
+import { GeoPasteButton } from '@/components/shared/geo-paste-button'
+import { IconTrash, IconPlus } from '@tabler/icons-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -153,22 +154,6 @@ export function BodegaFormSheet({ item, open, onOpenChange }: BodegaFormSheetPro
   const { FormTextField, FormSwitchField } = useFormFields<BodegaFormValues>()
   const isPending = createMutation.isPending || updateMutation.isPending
 
-  const handleGeosPaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText()
-      const match = text.trim().match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/)
-      if (match) {
-        form.setFieldValue('latitud', parseFloat(match[1]))
-        form.setFieldValue('longitud', parseFloat(match[2]))
-        toast.success('Coordenadas pegadas correctamente')
-      } else {
-        toast.error('Formato no reconocido. Copia las coordenadas desde Google Maps (lat, lng)')
-      }
-    } catch {
-      toast.error('No se pudo leer el portapapeles')
-    }
-  }
-
   // El Sheet permanece montado entre aperturas (lo controla el padre vía `open`),
   // asi que hay que resetear el form manualmente al cerrar (Cancelar, Escape, click afuera);
   // si no, reabrir "Nuevo" muestra los valores tipeados en la sesion anterior.
@@ -292,17 +277,12 @@ export function BodegaFormSheet({ item, open, onOpenChange }: BodegaFormSheetPro
               <div className='space-y-1.5'>
                 <div className='flex items-center justify-between'>
                   <Label className='text-sm font-medium text-muted-foreground'>Coordenadas (opcional)</Label>
-                  <Button
-                    type='button'
-                    variant='ghost'
-                    size='sm'
-                    className='h-7 px-2 text-xs gap-1'
-                    onClick={handleGeosPaste}
-                    title='Pegar coordenadas desde Google Maps (lat, lng)'
-                  >
-                    <IconClipboard className='h-3.5 w-3.5' />
-                    Pegar coords
-                  </Button>
+                  <GeoPasteButton
+                    onPegado={({ lat, lng }) => {
+                      form.setFieldValue('latitud', lat)
+                      form.setFieldValue('longitud', lng)
+                    }}
+                  />
                 </div>
                 <div className='grid grid-cols-2 gap-4'>
                   <FormTextField name='latitud' label='Latitud' placeholder='Ej: -33.5928' type='number' />

@@ -1,4 +1,6 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { ValidationError } from '../../../shared/errors.js'
 import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaUpdateInput } from './notas-venta.types.js'
 
 const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: true }
@@ -18,7 +20,12 @@ const includeDetalle = {
   clausulaVenta: { select: { id: true, codigo: true, descripcion: true } },
   tipoFlete: { select: { id: true, codigo: true, descripcion: true } },
   condicionPago: { select: { id: true, codigo: true, descripcion: true } },
-  cuotasPago: true,
+  cuotasPago: {
+    include: {
+      moneda: { select: { id: true, codigo: true, descripcion: true } },
+      unidad: { select: { id: true, codigo: true, descripcion: true } },
+    },
+  },
   detalles: {
     include: {
       especie: { select: { id: true, codigo: true, descripcion: true } },
@@ -62,32 +69,113 @@ export async function getNotaVentaById(id: number) {
 
 const LOCK_NAMESPACE_NOTA_VENTA = 490234
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Tx = any
+
+// Suma cajas totales de los detalles. Si la unidad de la cuota es "KG",
+// convierte a kilos usando el kgNetoEnvase del artículo (embalaje) de cada
+// detalle — rechaza (422) si algún artículo involucrado no tiene peso
+// cargado, en vez de valorizar en cero en silencio (FAS-PMQ-R1-003).
+async function calcularCantidadReal(
+  tx: Tx,
+  detalles: { cajas: number; articuloId: number }[],
+  unidadId: number,
+): Promise<Prisma.Decimal> {
+  const totalCajas = detalles.reduce((acc, d) => acc + d.cajas, 0)
+
+  const unidad = await tx.unidadMedida.findUnique({ where: { id: unidadId }, select: { codigo: true } })
+  if (unidad?.codigo !== 'KG') return new Prisma.Decimal(totalCajas)
+
+  const articuloIds = [...new Set(detalles.map((d) => d.articuloId))]
+  const articulos: { id: number; kgNetoEnvase: Prisma.Decimal | null }[] = await tx.articulo.findMany({
+    where: { id: { in: articuloIds } },
+    select: { id: true, kgNetoEnvase: true },
+  })
+  const pesoPorArticulo = new Map(articulos.map((a) => [a.id, a.kgNetoEnvase]))
+
+  let total = new Prisma.Decimal(0)
+  for (const d of detalles) {
+    const peso = pesoPorArticulo.get(d.articuloId)
+    if (peso == null || peso.lte(0)) {
+      throw new ValidationError(
+        `No se puede calcular la cuota en Kilo: el artículo de un detalle no tiene kg neto de envase cargado (id ${d.articuloId})`,
+      )
+    }
+    total = total.plus(peso.mul(d.cajas))
+  }
+  return total
+}
+
 // Las cuotas de pago no se cargan manualmente: se copian desde la plantilla
 // de la Condición de Pago seleccionada (snapshot, no referencia viva — si la
 // plantilla cambia después no afecta Cierres Comerciales ya creados). Mismo
-// patrón que ordenes-compra.repository.ts (Docs/ventas.md R12).
-async function cuotasDesdeCondicionPago(condicionPagoId: number | null | undefined) {
+// patrón que ordenes-compra.repository.ts (Docs/ventas.md R12). El monto de
+// una cuota MONTO_UNITARIO se resuelve contra los detalles de fruta que
+// existan en ese momento — como se agregan de a uno después de crear el
+// encabezado, `recalcularCuotasMontoUnitario` la vuelve a resolver cada vez
+// que se agrega un detalle nuevo.
+async function cuotasDesdeCondicionPago(
+  tx: Tx,
+  condicionPagoId: number | null | undefined,
+  detalles: { cajas: number; articuloId: number }[],
+) {
   if (!condicionPagoId) return []
-  const condicionPago = await prisma.condicionPago.findFirst({
+  const condicionPago = await tx.condicionPago.findFirst({
     where: { id: condicionPagoId, eliminadoEn: null },
     include: { cuotas: true },
   })
   if (!condicionPago) return []
-  return condicionPago.cuotas.map((c) => ({
-    porcentaje: c.porcentaje,
-    plazoDias: c.plazoDias,
-    descripcion: c.descripcion,
-  }))
+
+  return Promise.all(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    condicionPago.cuotas.map(async (c: any) => {
+      const montoCalculado =
+        c.tipoValor === 'MONTO_UNITARIO'
+          ? (c.valorUnitario as Prisma.Decimal).mul(await calcularCantidadReal(tx, detalles, c.unidadId))
+          : null
+      return {
+        fechaReferencia: c.fechaReferencia,
+        plazoDias: c.plazoDias,
+        tipoValor: c.tipoValor,
+        porcentaje: c.porcentaje,
+        valorUnitario: c.valorUnitario,
+        monedaId: c.monedaId,
+        unidadId: c.unidadId,
+        montoCalculado,
+        descripcion: c.descripcion,
+      }
+    }),
+  )
+}
+
+// Recalcula `montoCalculado` de las cuotas MONTO_UNITARIO ya guardadas contra
+// el total de detalles actual — se llama después de agregar cada detalle
+// nuevo, para que el monto refleje la fruta comprometida real.
+async function recalcularCuotasMontoUnitario(tx: Tx, notaVentaId: number) {
+  const cuotasMontoUnitario = await tx.notaVentaCuotaPago.findMany({
+    where: { notaVentaId, tipoValor: 'MONTO_UNITARIO' },
+  })
+  if (cuotasMontoUnitario.length === 0) return
+
+  const detalles = await tx.notaVentaDetalle.findMany({
+    where: { notaVentaId },
+    select: { cajas: true, articuloId: true },
+  })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const cuota of cuotasMontoUnitario as any[]) {
+    const montoCalculado = (cuota.valorUnitario as Prisma.Decimal).mul(await calcularCantidadReal(tx, detalles, cuota.unidadId))
+    await tx.notaVentaCuotaPago.update({ where: { id: cuota.id }, data: { montoCalculado } })
+  }
 }
 
 export async function createNotaVenta(data: NotaVentaCreateInput, creadoPor: string) {
-  const cuotasPago = await cuotasDesdeCondicionPago(data.condicionPagoId)
-
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_NOTA_VENTA}::int, 0)`
 
     const max = await tx.notaVenta.aggregate({ _max: { folio: true } })
     const folio = (max._max.folio ?? 0) + 1
+    const cuotasPago = await cuotasDesdeCondicionPago(tx, data.condicionPagoId, [])
 
     return tx.notaVenta.create({
       data: { ...data, folio, creadoPor, cuotasPago: { create: cuotasPago } },
@@ -104,7 +192,8 @@ export async function updateNotaVenta(id: number, data: NotaVentaUpdateInput, ac
       // reenviarlo sin cambios en cualquier PATCH (ej. al editar Observaciones).
       const actual = await tx.notaVenta.findUniqueOrThrow({ where: { id }, select: { condicionPagoId: true } })
       if (data.condicionPagoId !== actual.condicionPagoId) {
-        const cuotasPago = await cuotasDesdeCondicionPago(data.condicionPagoId)
+        const detallesActuales = await tx.notaVentaDetalle.findMany({ where: { notaVentaId: id }, select: { cajas: true, articuloId: true } })
+        const cuotasPago = await cuotasDesdeCondicionPago(tx, data.condicionPagoId, detallesActuales)
         await tx.notaVentaCuotaPago.deleteMany({ where: { notaVentaId: id } })
         await tx.notaVentaCuotaPago.createMany({ data: cuotasPago.map((c) => ({ notaVentaId: id, ...c })) })
       }
@@ -125,17 +214,21 @@ export async function softDeleteNotaVenta(id: number, eliminadoPor: string) {
 }
 
 export async function addDetalle(notaVentaId: number, data: NotaVentaDetalleCreateInput) {
-  return prisma.notaVentaDetalle.create({
-    data: { ...data, notaVentaId },
-    include: {
-      especie: { select: { id: true, codigo: true, descripcion: true } },
-      variedad: { select: { id: true, codigo: true, descripcion: true } },
-      articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
-      categoria: { select: { id: true, codigo: true, descripcion: true } },
-      tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
-      calibreInicio: { select: { id: true, codigo: true, descripcion: true } },
-      calibreFin: { select: { id: true, codigo: true, descripcion: true } },
-    },
+  return prisma.$transaction(async (tx) => {
+    const detalle = await tx.notaVentaDetalle.create({
+      data: { ...data, notaVentaId },
+      include: {
+        especie: { select: { id: true, codigo: true, descripcion: true } },
+        variedad: { select: { id: true, codigo: true, descripcion: true } },
+        articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+        categoria: { select: { id: true, codigo: true, descripcion: true } },
+        tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
+        calibreInicio: { select: { id: true, codigo: true, descripcion: true } },
+        calibreFin: { select: { id: true, codigo: true, descripcion: true } },
+      },
+    })
+    await recalcularCuotasMontoUnitario(tx, notaVentaId)
+    return detalle
   })
 }
 

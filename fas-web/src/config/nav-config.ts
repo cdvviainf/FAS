@@ -355,6 +355,7 @@ export const navGroups: NavGroup[] = [
           { title: 'Monedas',               url: '/dashboard/configuracion/monedas',           icon: 'billing'         },
           { title: 'Tipos de Parámetro',    url: '/dashboard/configuracion/tipos-parametro',   icon: 'page'            },
           { title: 'Parámetros',            url: '/dashboard/configuracion/parametros',        icon: 'adjustments'     },
+          { title: 'Prefijos de Código',    url: '/dashboard/configuracion/prefijos-codigo',   icon: 'adjustments'     },
           { title: 'Configuración General', url: '/dashboard/configuracion/general',           icon: 'settings'        }
         ]
       },

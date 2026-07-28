@@ -26,6 +26,7 @@ import { Icons } from '@/components/icons'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { UnidadMedidaQuickCreate } from '@/features/unidades-medida/components/unidad-medida-quick-create'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { prefijosCodigoService } from '@/features/prefijos-codigo/service'
 import { articulosService } from '../service'
 import { articulosKeys } from '../queries'
 import { TIPO_ARTICULO_LABELS, TIPO_COSTEO_LABELS } from '../types'
@@ -49,7 +50,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
   const [descripcion, setDescripcion] = useState('')
   const [descripcionExtranjera, setDescripcionExtranjera] = useState('')
   const [unidadId, setUnidadId] = useState<number | null>(null)
-  const [tipoCosteo, setTipoCosteo] = useState<TipoCosteo>('ESTANDAR')
+  const [tipoCosteo, setTipoCosteo] = useState<TipoCosteo>('PROMEDIO_PONDERADO')
   const [valorEstandar, setValorEstandar] = useState('')
   const [stockCritico, setStockCritico] = useState('')
   const [activo, setActivo] = useState(true)
@@ -64,6 +65,19 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
     staleTime: 60_000,
     enabled: open,
   })
+
+  // Sugerencia de código (Prefijos de Código) — solo al crear.
+  const { data: codigoSugerido } = useQuery({
+    queryKey: ['prefijo-codigo-siguiente', 'articulo'],
+    queryFn: () => prefijosCodigoService.siguienteCodigo('articulo'),
+    enabled: open && !item,
+    staleTime: 0,
+  })
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open && !item && codigoSugerido) setCodigo(codigoSugerido)
+  }, [codigoSugerido, open, item])
 
   useEffect(() => {
     if (!open) return
@@ -87,7 +101,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setDescripcion('')
       setDescripcionExtranjera('')
       setUnidadId(null)
-      setTipoCosteo('ESTANDAR')
+      setTipoCosteo('PROMEDIO_PONDERADO')
       setValorEstandar('')
       setStockCritico('')
       setActivo(true)
@@ -98,10 +112,6 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item?.id])
 
-  // R4: Servicio siempre es Estándar
-  useEffect(() => {
-    if (tipo === 'SERVICIO') setTipoCosteo('ESTANDAR')
-  }, [tipo])
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -158,7 +168,16 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
           <div className='grid grid-cols-2 gap-3'>
             <div className='space-y-1.5'>
               <Label>Tipo <span className='text-destructive'>*</span></Label>
-              <Select value={tipo} onValueChange={(v) => setTipo(v as TipoArticulo)}>
+              <Select
+                value={tipo}
+                onValueChange={(v) => {
+                  const nuevoTipo = v as TipoArticulo
+                  setTipo(nuevoTipo)
+                  // Sugerencia de costeo al cambiar el tipo (R4: Servicio siempre Estándar;
+                  // el resto sugiere Promedio Ponderado, editable por el usuario).
+                  setTipoCosteo(nuevoTipo === 'SERVICIO' ? 'ESTANDAR' : 'PROMEDIO_PONDERADO')
+                }}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(Object.keys(TIPO_ARTICULO_LABELS) as TipoArticulo[]).map((t) => (

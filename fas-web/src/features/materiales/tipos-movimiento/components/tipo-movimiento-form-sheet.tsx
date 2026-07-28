@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { prefijosCodigoService } from '@/features/prefijos-codigo/service'
 import {
   Sheet,
   SheetContent,
@@ -73,6 +74,19 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item?.id])
+
+  // Sugerencia de código (Prefijos de Código) — solo al crear.
+  const { data: codigoSugerido } = useQuery({
+    queryKey: ['prefijo-codigo-siguiente', 'tipoMovimiento'],
+    queryFn: () => prefijosCodigoService.siguienteCodigo('tipoMovimiento'),
+    enabled: open && !isEdit,
+    staleTime: 0,
+  })
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open && !isEdit && codigoSugerido) setCodigo(codigoSugerido)
+  }, [codigoSugerido, open, isEdit])
 
   const mutation = useMutation({
     mutationFn: async () => {

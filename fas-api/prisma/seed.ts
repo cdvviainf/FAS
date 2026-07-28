@@ -21,7 +21,7 @@ const itemsMenu = [
   { codigo: 'PROD_CTA_CTE', nombre: 'Cuenta Corriente', seccion: 'Productores', ruta: '/dashboard/productores/cuenta-corriente', esAccion: false, orden: 32 },
   { codigo: 'PROD_CONCEPTOS_LIQ', nombre: 'Conceptos de Liquidación', seccion: 'Productores', ruta: '/dashboard/configuracion/conceptos-liquidacion', esAccion: false, orden: 33 },
   // Ventas
-  { codigo: 'VENTAS_NV', nombre: 'Cierre Comercial', seccion: 'Ventas', ruta: '/dashboard/ventas/notas', esAccion: false, orden: 40 },
+  { codigo: 'VENTAS_NV', nombre: 'Cierre Comercial', seccion: 'Ventas', ruta: '/dashboard/ventas/cierre', esAccion: false, orden: 40 },
   { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', seccion: 'Ventas', ruta: '/dashboard/ventas/cobranza', esAccion: false, orden: 41 },
   // Operaciones
   { codigo: 'OPER_MATERIALES', nombre: 'Materiales', seccion: 'Operaciones', ruta: '/dashboard/configuracion/articulos', esAccion: false, orden: 50 },
@@ -142,6 +142,21 @@ async function main() {
     }
   }
   console.log(`TipoParametro: ${tiposParametroVentas.length} tipos verificados. Parametro: ${parametrosCreados} valores nuevos creados.`)
+
+  console.log('Seeding UnidadMedida (Caja/Kilo para cuota unitaria de Condición de Pago)...')
+  const unidadesBase = [
+    { codigo: 'CAJA', descripcion: 'Caja' },
+    { codigo: 'KG', descripcion: 'Kilogramo' },
+  ]
+  let unidadesCreadas = 0
+  for (const u of unidadesBase) {
+    const existente = await prisma.unidadMedida.findFirst({ where: { codigo: u.codigo, eliminadoEn: null } })
+    if (!existente) {
+      await prisma.unidadMedida.create({ data: { ...u, creadoPor: SISTEMA_USER } })
+      unidadesCreadas++
+    }
+  }
+  console.log(`UnidadMedida: ${unidadesCreadas} unidades nuevas creadas.`)
 
   console.log('Seed completado.')
 }

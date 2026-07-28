@@ -351,7 +351,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
                 <SelectContent>
                   {direcciones.map((d) => (
                     <SelectItem key={d.id} value={String(d.id)}>
-                      {d.direccion}{d.comuna ? ` — ${d.comuna.descripcion}` : ''}
+                      {d.descripcion} — {d.direccion}{d.comuna ? ` — ${d.comuna.descripcion}` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>

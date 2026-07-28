@@ -1,7 +1,29 @@
+export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS'
+export type TipoValorCuota = 'PORCENTAJE' | 'MONTO_UNITARIO'
+
+export const FECHA_REFERENCIA_LABELS: Record<FechaReferenciaPago, string> = {
+  FACTURA: 'Fecha de Factura',
+  ZARPE: 'Fecha de Zarpe',
+  ENVIO_DOCUMENTOS: 'Fecha de Envío de Documentos',
+}
+
+export interface MantenedorRef {
+  id: number
+  codigo: string
+  descripcion: string
+}
+
 export interface CondicionPagoCuota {
   id: number
-  porcentaje: string
+  fechaReferencia: FechaReferenciaPago
   plazoDias: number
+  tipoValor: TipoValorCuota
+  porcentaje: string | null
+  valorUnitario: string | null
+  monedaId: number | null
+  moneda: MantenedorRef | null
+  unidadId: number | null
+  unidad: MantenedorRef | null
   descripcion: string | null
 }
 
@@ -14,8 +36,13 @@ export interface CondicionPago {
 }
 
 export interface CondicionPagoCuotaInput {
-  porcentaje: number
+  fechaReferencia: FechaReferenciaPago
   plazoDias: number
+  tipoValor: TipoValorCuota
+  porcentaje?: number | null
+  valorUnitario?: number | null
+  monedaId?: number | null
+  unidadId?: number | null
   descripcion?: string
 }
 
