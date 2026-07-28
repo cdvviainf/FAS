@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -73,9 +74,14 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
 
   const { data: monedas } = useQuery({ queryKey: ['monedas-options'], queryFn: () => monedasService.list({ limit: 200 }), staleTime: 5 * 60_000, enabled: open })
   // La cuota de monto unitario solo admite Caja o Kilo (mismo criterio que
-  // el backend, condiciones-pago.service.ts) — filtra el catálogo genérico.
+  // el backend, condiciones-pago.service.ts) — son las dos únicas opciones,
+  // por eso se muestran como radio button fijo en vez de un select.
   const { data: unidades } = useQuery({ queryKey: ['unidades-medida-options'], queryFn: () => unidadesService.list({ limit: 200 }), staleTime: 5 * 60_000, enabled: open })
-  const unidadesCajaKilo = (unidades?.data ?? []).filter((u) => ['CAJA', 'KG'].includes(u.codigo))
+  const ORDEN_UNIDAD: Record<string, number> = { CAJA: 0, KG: 1 }
+  const UNIDAD_LABELS: Record<string, string> = { CAJA: 'Caja', KG: 'Kilo' }
+  const unidadesCajaKilo = (unidades?.data ?? [])
+    .filter((u) => ['CAJA', 'KG'].includes(u.codigo))
+    .sort((a, b) => ORDEN_UNIDAD[a.codigo] - ORDEN_UNIDAD[b.codigo])
 
   useEffect(() => {
     if (!open) return
@@ -257,14 +263,18 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
                     </div>
                     <div className='space-y-1.5'>
                       <Label className='text-xs'>Unidad</Label>
-                      <Select value={c.unidadId ? String(c.unidadId) : ''} onValueChange={(v) => actualizarCuota(i, { unidadId: Number(v) })}>
-                        <SelectTrigger><SelectValue placeholder='Unidad...' /></SelectTrigger>
-                        <SelectContent>
-                          {unidadesCajaKilo.map((u) => (
-                            <SelectItem key={u.id} value={String(u.id)}>{u.descripcion}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <RadioGroup
+                        className='grid-flow-col justify-start gap-4 pt-1.5'
+                        value={c.unidadId ? String(c.unidadId) : ''}
+                        onValueChange={(v) => actualizarCuota(i, { unidadId: Number(v) })}
+                      >
+                        {unidadesCajaKilo.map((u) => (
+                          <div key={u.id} className='flex items-center gap-1.5'>
+                            <RadioGroupItem value={String(u.id)} id={`unidad-${i}-${u.id}`} />
+                            <Label htmlFor={`unidad-${i}-${u.id}`} className='text-xs font-normal'>{UNIDAD_LABELS[u.codigo]}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
                     </div>
                   </div>
                 )}
