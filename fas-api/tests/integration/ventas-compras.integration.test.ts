@@ -29,7 +29,6 @@ async function limpiarDatos() {
       "condiciones_pago",
       "instructivo_embalaje_detalle",
       "instructivos_embalaje",
-      "notas_venta_detalle_calibre",
       "notas_venta_detalle",
       "notas_venta",
       "articulos",
@@ -153,7 +152,8 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
         cajasPorPallet: 1,
         cajas: 1,
         precio: 1,
-        calibreIds: [f.calibreChico.id],
+        calibreInicioId: f.calibreChico.id,
+      calibreFinId: f.calibreChico.id,
       }),
     ).rejects.toMatchObject({ statusCode: 422 })
 
@@ -170,7 +170,8 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
         cajasPorPallet: 1,
         cajas: 1,
         precio: 1,
-        calibreIds: [f.calibreChico.id],
+        calibreInicioId: f.calibreChico.id,
+      calibreFinId: f.calibreChico.id,
       }),
     ).rejects.toMatchObject({ statusCode: 422 })
 
@@ -183,7 +184,8 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
       cajasPorPallet: 1,
       cajas: 1,
       precio: 1,
-      calibreIds: [f.calibreChico.id],
+      calibreInicioId: f.calibreChico.id,
+      calibreFinId: f.calibreChico.id,
     })
     expect(detalle.notaVentaId).toBe(nv.id)
   })

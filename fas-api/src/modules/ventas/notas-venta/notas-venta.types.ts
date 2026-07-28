@@ -13,8 +13,7 @@ export interface NotaVentaCreateInput {
   modalidadVentaId?: number | null
   clausulaVentaId?: number | null
   tipoFleteId?: number | null
-  formaPagoId?: number | null
-  saldoPagoId?: number | null
+  condicionPagoId?: number | null
   monedaId: number
   observaciones?: string | null
 }
@@ -32,5 +31,6 @@ export interface NotaVentaDetalleCreateInput {
   cajasPorPallet: number
   cajas: number
   precio: number
-  calibreIds: number[]
+  calibreInicioId: number
+  calibreFinId: number
 }

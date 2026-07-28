@@ -700,7 +700,8 @@ model Calibre {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  notaVentaDetalleCalibres      NotaVentaDetalleCalibre[]
+  notaVentaDetalleCalibreInicio NotaVentaDetalle[]           @relation("NotaVentaCalibreInicio")
+  notaVentaDetalleCalibreFin    NotaVentaDetalle[]           @relation("NotaVentaCalibreFin")
   instructivoEmbalajeDetalleMin InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeCalibreMin")
   instructivoEmbalajeDetalleMax InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeCalibreMax")
   ordenCompraLineaMin           OrdenCompraLinea[]           @relation("OrdenCompraCalibreMin")
@@ -726,6 +727,10 @@ model Parametro {
   actualizadoPor        String?
   eliminadoEn           DateTime?
   eliminadoPor          String?
+
+  notasVentaModalidad NotaVenta[] @relation("NotaVentaModalidadVenta")
+  notasVentaClausula  NotaVenta[] @relation("NotaVentaClausulaVenta")
+  notasVentaTipoFlete NotaVenta[] @relation("NotaVentaTipoFlete")
 
   @@map("parametros")
 }
@@ -1634,15 +1639,23 @@ model NotaVenta {
   direccion        EntidadDireccion? @relation(fields: [direccionId], references: [id])
   direccionDetalle String?
 
-  // Modalidad Venta / Cláusula Venta (Incoterm) / Tipo Flete / Forma Pago /
-  // Saldo Pago: referencian el catálogo genérico Parametro (mantenedores-
-  // generales.md), pero sus TipoParametro aún no están dados de alta — se
-  // dejan como Int suelto (sin FK Prisma) hasta que existan (Docs/ventas.md §8).
+  // Modalidad Venta / Cláusula Venta (Incoterm) / Tipo Flete: catálogo
+  // genérico Parametro (mantenedores-generales.md), cada uno filtrado por su
+  // propio TipoParametro (ver seed).
   modalidadVentaId Int?
+  modalidadVenta   Parametro? @relation("NotaVentaModalidadVenta", fields: [modalidadVentaId], references: [id])
   clausulaVentaId  Int?
+  clausulaVenta    Parametro? @relation("NotaVentaClausulaVenta", fields: [clausulaVentaId], references: [id])
   tipoFleteId      Int?
-  formaPagoId      Int?
-  saldoPagoId      Int?
+  tipoFlete        Parametro? @relation("NotaVentaTipoFlete", fields: [tipoFleteId], references: [id])
+
+  // Forma de pago: condición de pago con cuotas (% + plazo en días), mismo
+  // modelo que Compras (CondicionPago). No existe un campo de "saldo pago"
+  // separado — las cuotas se snapshotean en NotaVentaCuotaPago al guardar
+  // (mismo patrón que OrdenCompraCuotaPago, ver Docs/ventas.md R12).
+  condicionPagoId Int?
+  condicionPago   CondicionPago? @relation(fields: [condicionPagoId], references: [id])
+  cuotasPago      NotaVentaCuotaPago[]
 
   monedaId Int
   moneda   Moneda @relation(fields: [monedaId], references: [id])
@@ -1662,7 +1675,25 @@ model NotaVenta {
 
   @@index([clienteId])
   @@index([fecha])
+  @@index([condicionPagoId])
   @@map("notas_venta")
+}
+
+// Snapshot inmutable de las cuotas al momento de crear/editar el Cierre
+// Comercial (se copian desde CondicionPago.cuotas en el instante en que se
+// fija condicionPagoId; si la plantilla cambia después, no afecta Cierres ya
+// creados) — mismo patrón que OrdenCompraCuotaPago (compras.md §4.2.1).
+model NotaVentaCuotaPago {
+  id          Int       @id @default(autoincrement())
+  notaVentaId Int
+  notaVenta   NotaVenta @relation(fields: [notaVentaId], references: [id], onDelete: Cascade)
+
+  porcentaje  Decimal @db.Decimal(5, 2)
+  plazoDias   Int
+  descripcion String?
+
+  @@index([notaVentaId])
+  @@map("nota_venta_cuota_pago")
 }
 
 model NotaVentaDetalle {
@@ -1685,23 +1716,15 @@ model NotaVentaDetalle {
   cantidadPallets Int
   cajasPorPallet  Int
   cajas           Int
-  precio          Decimal @db.Decimal(14, 4)
+  precio          Decimal @db.Decimal(14, 4) // valor unitario por caja, en la moneda del encabezado
 
-  calibres NotaVentaDetalleCalibre[]
+  calibreInicioId Int
+  calibreInicio   Calibre @relation("NotaVentaCalibreInicio", fields: [calibreInicioId], references: [id])
+  calibreFinId    Int
+  calibreFin      Calibre @relation("NotaVentaCalibreFin", fields: [calibreFinId], references: [id])
 
   @@index([notaVentaId])
   @@map("notas_venta_detalle")
-}
-
-model NotaVentaDetalleCalibre {
-  id        Int              @id @default(autoincrement())
-  detalleId Int
-  detalle   NotaVentaDetalle @relation(fields: [detalleId], references: [id], onDelete: Cascade)
-  calibreId Int
-  calibre   Calibre          @relation(fields: [calibreId], references: [id])
-
-  @@unique([detalleId, calibreId])
-  @@map("notas_venta_detalle_calibre")
 }
 
 // ─── Compras — Instructivo de Embalaje (Docs/compras.md §4.1) ───────────────
@@ -1819,6 +1842,7 @@ model CondicionPago {
 
   cuotas        CondicionPagoCuota[]
   ordenesCompra OrdenCompra[]
+  notasVenta    NotaVenta[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String

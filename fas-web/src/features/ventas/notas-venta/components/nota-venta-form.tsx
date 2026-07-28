@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
   Select,
@@ -24,6 +24,7 @@ import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { entidadesService } from '@/features/entidades/service'
 import { entidadDetailOptions } from '@/features/entidades/queries'
 import { articulosService } from '@/features/materiales/articulos/service'
+import { condicionesPagoService } from '@/features/condiciones-pago/service'
 import { notaVentaDetailOptions, notasVentaKeys } from '../queries'
 import { notasVentaService } from '../service'
 import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput } from '../types'
@@ -38,6 +39,8 @@ const variedadesService = createMantenedorService('variedades')
 const categoriasService = createMantenedorService('categorias')
 const calibresService = createMantenedorService('calibres')
 const tiposPalletService = createMantenedorService('tipos-pallet')
+const tiposParametroService = createMantenedorService('tipos-parametro')
+const parametrosService = createMantenedorService('parametros')
 
 interface HeaderFields {
   fecha: string
@@ -52,6 +55,10 @@ interface HeaderFields {
   direccionId: number | null
   direccionDetalle: string
   monedaId: number
+  modalidadVentaId: number | null
+  clausulaVentaId: number | null
+  tipoFleteId: number | null
+  condicionPagoId: number | null
   observaciones: string
 }
 
@@ -68,6 +75,10 @@ const HEADER_EMPTY: HeaderFields = {
   direccionId: null,
   direccionDetalle: '',
   monedaId: 0,
+  modalidadVentaId: null,
+  clausulaVentaId: null,
+  tipoFleteId: null,
+  condicionPagoId: null,
   observaciones: '',
 }
 
@@ -82,7 +93,8 @@ interface NuevaLinea {
   cajasPorPallet: string
   cajas: string
   precio: string
-  calibreIds: number[]
+  calibreInicioId: number
+  calibreFinId: number
 }
 
 const LINEA_EMPTY: NuevaLinea = {
@@ -96,7 +108,8 @@ const LINEA_EMPTY: NuevaLinea = {
   cajasPorPallet: '',
   cajas: '',
   precio: '',
-  calibreIds: [],
+  calibreInicioId: 0,
+  calibreFinId: 0,
 }
 
 interface NotaVentaFormProps {
@@ -144,6 +157,27 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   const { data: calibresData } = useQuery({ queryKey: ['calibres-options', linea.especieId], queryFn: () => calibresService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
   const { data: tiposPalletData } = useQuery({ queryKey: ['tipos-pallet-options'], queryFn: () => tiposPalletService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const { data: articulosData } = useQuery({ queryKey: ['articulos-embalaje-options'], queryFn: () => articulosService.list({ limit: 500, tipo: 'EMBALAJE', activo: true }), staleTime: 60_000 })
+  const { data: condicionesPagoData } = useQuery({ queryKey: ['condiciones-pago-options'], queryFn: () => condicionesPagoService.list(), staleTime: 60_000 })
+
+  const { data: tiposParametroData } = useQuery({ queryKey: ['tipos-parametro-options'], queryFn: () => tiposParametroService.list({ limit: 200 }), staleTime: 5 * 60_000 })
+  const tipoFleteTipoId = tiposParametroData?.data.find((t) => t.codigo === 'TIPO_FLETE')?.id
+  const modalidadVentaTipoId = tiposParametroData?.data.find((t) => t.codigo === 'MODALIDAD_VENTA')?.id
+  const incotermTipoId = tiposParametroData?.data.find((t) => t.codigo === 'INCOTERM')?.id
+  const { data: tiposFleteData } = useQuery({ queryKey: ['parametros-options', tipoFleteTipoId], queryFn: () => parametrosService.list({ limit: 200, tipoParametroId: tipoFleteTipoId }), staleTime: 5 * 60_000, enabled: !!tipoFleteTipoId })
+  const { data: modalidadesVentaData } = useQuery({ queryKey: ['parametros-options', modalidadVentaTipoId], queryFn: () => parametrosService.list({ limit: 200, tipoParametroId: modalidadVentaTipoId }), staleTime: 5 * 60_000, enabled: !!modalidadVentaTipoId })
+  const { data: incotermsData } = useQuery({ queryKey: ['parametros-options', incotermTipoId], queryFn: () => parametrosService.list({ limit: 200, tipoParametroId: incotermTipoId }), staleTime: 5 * 60_000, enabled: !!incotermTipoId })
+
+  const condicionPagoSeleccionada = (condicionesPagoData?.data ?? []).find((c) => c.id === fields.condicionPagoId)
+  // "Sin definir" (condicionPagoId null) oculta el preview. Si la selección
+  // no cambió respecto de lo guardado, se muestra el snapshot persistido
+  // (NotaVentaCuotaPago — inmutable aunque la CondicionPago se edite después).
+  // Si el usuario eligió/cambió la Forma de Pago, se previsualizan las cuotas
+  // vigentes del catálogo — son las que se snapshotearán recién al guardar.
+  const cuotasPreview = !fields.condicionPagoId
+    ? []
+    : isEdit && fields.condicionPagoId === notaVenta?.data.condicionPagoId
+      ? notaVenta?.data.cuotasPago ?? []
+      : condicionPagoSeleccionada?.cuotas ?? []
 
   const { data: clienteDetalle } = useQuery({
     ...entidadDetailOptions(fields.clienteId || 0),
@@ -167,6 +201,10 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
         direccionId: d.direccionId,
         direccionDetalle: d.direccionDetalle ?? '',
         monedaId: d.monedaId,
+        modalidadVentaId: d.modalidadVentaId,
+        clausulaVentaId: d.clausulaVentaId,
+        tipoFleteId: d.tipoFleteId,
+        condicionPagoId: d.condicionPagoId,
         observaciones: d.observaciones ?? '',
       })
     }
@@ -198,6 +236,10 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       direccionId: fields.direccionId,
       direccionDetalle: fields.direccionDetalle.trim() || undefined,
       monedaId: fields.monedaId,
+      modalidadVentaId: fields.modalidadVentaId,
+      clausulaVentaId: fields.clausulaVentaId,
+      tipoFleteId: fields.tipoFleteId,
+      condicionPagoId: fields.condicionPagoId,
       observaciones: fields.observaciones.trim() || undefined,
     }
   }
@@ -243,13 +285,6 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     else createMutation.mutate(payload)
   }
 
-  function toggleCalibre(id: number) {
-    setLinea((l) => ({
-      ...l,
-      calibreIds: l.calibreIds.includes(id) ? l.calibreIds.filter((c) => c !== id) : [...l.calibreIds, id],
-    }))
-  }
-
   function validarLinea(): boolean {
     const e: Record<string, string> = {}
     if (!linea.fechaCompromiso) e.fechaCompromiso = 'Requerida'
@@ -260,7 +295,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     if (!linea.cajasPorPallet || Number(linea.cajasPorPallet) <= 0) e.cajasPorPallet = 'Debe ser mayor a 0'
     if (!linea.cajas || Number(linea.cajas) <= 0) e.cajas = 'Debe ser mayor a 0'
     if (!linea.precio || Number(linea.precio) <= 0) e.precio = 'Debe ser mayor a 0'
-    if (linea.calibreIds.length === 0) e.calibreIds = 'Seleccione al menos un calibre'
+    if (!linea.calibreInicioId) e.calibreInicioId = 'Requerido'
+    if (!linea.calibreFinId) e.calibreFinId = 'Requerido'
     setLineaErrors(e)
     return Object.keys(e).length === 0
   }
@@ -278,9 +314,12 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       cajasPorPallet: Number(linea.cajasPorPallet),
       cajas: Number(linea.cajas),
       precio: Number(linea.precio),
-      calibreIds: linea.calibreIds,
+      calibreInicioId: linea.calibreInicioId,
+      calibreFinId: linea.calibreFinId,
     })
   }
+
+  const articuloSeleccionado = (articulosData?.data ?? []).find((a) => a.id === linea.articuloId)
 
   if (isEdit && isLoading) {
     return <p className='text-sm text-muted-foreground'>Cargando…</p>
@@ -421,7 +460,69 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </Select>
               {errors.monedaId && <p className='text-xs text-destructive'>{errors.monedaId}</p>}
             </div>
+
+            <div className='space-y-1.5'>
+              <Label>Tipo de Flete</Label>
+              <Select value={fields.tipoFleteId ? String(fields.tipoFleteId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, tipoFleteId: v === 'none' ? null : Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none'>Sin definir</SelectItem>
+                  {(tiposFleteData?.data ?? []).map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Modalidad de Venta</Label>
+              <Select value={fields.modalidadVentaId ? String(fields.modalidadVentaId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, modalidadVentaId: v === 'none' ? null : Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none'>Sin definir</SelectItem>
+                  {(modalidadesVentaData?.data ?? []).map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Incoterm (Cláusula de Venta)</Label>
+              <Select value={fields.clausulaVentaId ? String(fields.clausulaVentaId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, clausulaVentaId: v === 'none' ? null : Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none'>Sin definir</SelectItem>
+                  {(incotermsData?.data ?? []).map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Forma de Pago</Label>
+              <Select value={fields.condicionPagoId ? String(fields.condicionPagoId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, condicionPagoId: v === 'none' ? null : Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none'>Sin definir</SelectItem>
+                  {(condicionesPagoData?.data ?? []).map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          {cuotasPreview.length > 0 && (
+            <div className='rounded-md border p-3'>
+              <p className='mb-2 text-xs font-medium text-muted-foreground'>Plazo de pago (determinado por la Forma de Pago)</p>
+              <div className='flex flex-wrap gap-2'>
+                {cuotasPreview.map((c, i) => (
+                  <Badge key={i} variant='outline'>
+                    {c.porcentaje}% a {c.plazoDias} días{c.descripcion ? ` — ${c.descripcion}` : ''}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className='space-y-1.5'>
             <Label>Observaciones</Label>
@@ -450,8 +551,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                     <span className='font-medium'>{d.especie.descripcion} / {d.variedad.descripcion}</span>
                     <span className='text-muted-foreground'>{d.articulo.descripcion}</span>
                     {d.categoria && <span className='text-muted-foreground'>· {d.categoria.descripcion}</span>}
-                    <span className='text-muted-foreground'>· Calibres: {d.calibres.map((c) => c.calibre.codigo).join(', ')}</span>
-                    <span className='ml-auto text-muted-foreground'>{d.cantidadPallets} pallets × {d.cajasPorPallet} cj · ${d.precio}</span>
+                    <span className='text-muted-foreground'>· Calibre: {d.calibreInicio.codigo}–{d.calibreFin.codigo}</span>
+                    <span className='ml-auto text-muted-foreground'>{d.cantidadPallets} pallets × {d.cajasPorPallet} cj · ${d.precio}/cj</span>
                   </div>
                 ))}
               </div>
@@ -467,7 +568,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </div>
               <div className='space-y-1.5'>
                 <Label>Especie <span className='text-destructive'>*</span></Label>
-                <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: null, calibreIds: [] }))}>
+                <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: null, calibreInicioId: 0, calibreFinId: 0 }))}>
                   <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                   <SelectContent>
                     {(especiesData?.data ?? []).map((e) => (
@@ -539,25 +640,45 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 {lineaErrors.cajas && <p className='text-xs text-destructive'>{lineaErrors.cajas}</p>}
               </div>
               <div className='space-y-1.5'>
-                <Label>Precio <span className='text-destructive'>*</span></Label>
+                <Label>Valor por Caja <span className='text-destructive'>*</span></Label>
                 <Input type='number' step='0.01' value={linea.precio} onChange={(e) => setLinea((l) => ({ ...l, precio: e.target.value }))} />
+                <p className='text-xs text-muted-foreground'>En la moneda del encabezado ({(monedasData?.data ?? []).find((m) => m.id === fields.monedaId)?.codigo ?? '—'})</p>
                 {lineaErrors.precio && <p className='text-xs text-destructive'>{lineaErrors.precio}</p>}
               </div>
             </div>
 
-            <div className='space-y-1.5'>
-              <Label>Calibres <span className='text-destructive'>*</span></Label>
-              {!linea.especieId && <p className='text-xs text-muted-foreground'>Elige una especie primero</p>}
-              <div className='grid gap-2 sm:grid-cols-3 md:grid-cols-4'>
-                {(calibresData?.data ?? []).map((c) => (
-                  <div key={c.id} className='flex items-center gap-2'>
-                    <Checkbox id={`cal-${c.id}`} checked={linea.calibreIds.includes(c.id)} onCheckedChange={() => toggleCalibre(c.id)} />
-                    <Label htmlFor={`cal-${c.id}`} className='font-normal'>{c.descripcion}</Label>
-                  </div>
-                ))}
+            <div className='grid gap-3 sm:grid-cols-2'>
+              <div className='space-y-1.5'>
+                <Label>Calibre Inicio <span className='text-destructive'>*</span></Label>
+                <Select value={linea.calibreInicioId ? String(linea.calibreInicioId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, calibreInicioId: Number(v) }))} disabled={!linea.especieId}>
+                  <SelectTrigger><SelectValue placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'} /></SelectTrigger>
+                  <SelectContent>
+                    {(calibresData?.data ?? []).map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {lineaErrors.calibreInicioId && <p className='text-xs text-destructive'>{lineaErrors.calibreInicioId}</p>}
               </div>
-              {lineaErrors.calibreIds && <p className='text-xs text-destructive'>{lineaErrors.calibreIds}</p>}
+              <div className='space-y-1.5'>
+                <Label>Calibre Fin <span className='text-destructive'>*</span></Label>
+                <Select value={linea.calibreFinId ? String(linea.calibreFinId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, calibreFinId: Number(v) }))} disabled={!linea.especieId}>
+                  <SelectTrigger><SelectValue placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'} /></SelectTrigger>
+                  <SelectContent>
+                    {(calibresData?.data ?? []).map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {lineaErrors.calibreFinId && <p className='text-xs text-destructive'>{lineaErrors.calibreFinId}</p>}
+              </div>
             </div>
+
+            {articuloSeleccionado && (articuloSeleccionado.etiqueta || articuloSeleccionado.kgNetoEnvase) && (
+              <p className='text-xs text-muted-foreground'>
+                Etiqueta: {articuloSeleccionado.etiqueta ?? '—'} · Kg Neto: {articuloSeleccionado.kgNetoEnvase ?? '—'} · Kg Bruto: {articuloSeleccionado.kgBrutoEnvase ?? '—'}
+              </p>
+            )}
 
             <div className='flex justify-end'>
               <Button variant='secondary' onClick={handleAgregarLinea} isLoading={addDetalleMutation.isPending}>

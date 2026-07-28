@@ -4,10 +4,20 @@ export interface MantenedorRef {
   descripcion: string
 }
 
-export interface NotaVentaCalibreItem {
+export interface CondicionPagoRef {
   id: number
-  calibreId: number
-  calibre: MantenedorRef
+  codigo: string
+  descripcion: string
+}
+
+// Snapshot inmutable de las cuotas de la Forma de Pago al momento de guardar
+// el Cierre Comercial (ver Docs/ventas.md R12) — no cambia si se edita la
+// CondicionPago después.
+export interface NotaVentaCuotaPagoRef {
+  id: number
+  porcentaje: string
+  plazoDias: number
+  descripcion: string | null
 }
 
 export interface NotaVentaDetalleItem {
@@ -19,7 +29,7 @@ export interface NotaVentaDetalleItem {
   variedadId: number
   variedad: MantenedorRef
   articuloId: number
-  articulo: MantenedorRef
+  articulo: MantenedorRef & { etiqueta: string | null; kgNetoEnvase: string | null; kgBrutoEnvase: string | null }
   categoriaId: number | null
   categoria: MantenedorRef | null
   tipoPalletId: number | null
@@ -28,7 +38,10 @@ export interface NotaVentaDetalleItem {
   cajasPorPallet: number
   cajas: number
   precio: string
-  calibres: NotaVentaCalibreItem[]
+  calibreInicioId: number
+  calibreInicio: MantenedorRef
+  calibreFinId: number
+  calibreFin: MantenedorRef
 }
 
 export interface NotaVentaListItem {
@@ -59,6 +72,15 @@ export interface NotaVentaDetalle extends NotaVentaListItem {
   direccion: { id: number; codigo: string; direccion: string } | null
   direccionDetalle: string | null
   monedaId: number
+  modalidadVentaId: number | null
+  modalidadVenta: MantenedorRef | null
+  clausulaVentaId: number | null
+  clausulaVenta: MantenedorRef | null
+  tipoFleteId: number | null
+  tipoFlete: MantenedorRef | null
+  condicionPagoId: number | null
+  condicionPago: CondicionPagoRef | null
+  cuotasPago: NotaVentaCuotaPagoRef[]
   observaciones: string | null
   detalles: NotaVentaDetalleItem[]
 }
@@ -81,6 +103,10 @@ export interface NotaVentaCreateInput {
   direccionId?: number | null
   direccionDetalle?: string | null
   monedaId: number
+  modalidadVentaId?: number | null
+  clausulaVentaId?: number | null
+  tipoFleteId?: number | null
+  condicionPagoId?: number | null
   observaciones?: string | null
 }
 
@@ -97,5 +123,6 @@ export interface NotaVentaDetalleCreateInput {
   cajasPorPallet: number
   cajas: number
   precio: number
-  calibreIds: number[]
+  calibreInicioId: number
+  calibreFinId: number
 }

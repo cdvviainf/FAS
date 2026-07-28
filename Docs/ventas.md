@@ -53,6 +53,13 @@ Sistematizar el ciclo comercial de exportación de Frutera Agrosan, desde el com
 
 ### 4.1 Nota de Venta
 
+> **⚠️ Supersesión (2026-07-27) — Cierre Comercial v1.** Por decisión de Christian, el contrato de esta sección se **reemplaza** en los siguientes puntos, ya implementados en `fas-api`/`fas-web`:
+> - `formaPagoId` + `saldoPagoId` (sueltos) → **`condicionPagoId`** (FK a `CondicionPago`, mismo maestro cuotas % + plazoDias que usa Compras). Las cuotas se **snapshotean** en `NotaVentaCuotaPago` al guardar — no cambian retroactivamente si se edita la plantilla `CondicionPago` después (ver R12).
+> - `calibres NotaVentaDetalleCalibre[]` (multiselect) → **`calibreInicioId`/`calibreFinId`** (FK a `Calibre`, rango sobre el maestro ordenado por especie — mismo patrón que `OrdenCompraLinea.calibreMinId/calibreMaxId` en `compras.md` §6.5).
+> - `modalidadVentaId`, `clausulaVentaId` (Incoterm), `tipoFleteId` quedan como FK reales al catálogo genérico `Parametro` (antes eran `Int` suelto a la espera de que existieran sus `TipoParametro`; ya se dieron de alta vía seed: `MODALIDAD_VENTA`, `INCOTERM`, `TIPO_FLETE`).
+> - **Fuera de esta implementación:** el bloque Embarque/Instructivo (§4.2) y Solicitud de Reserva (§4.3) siguen sin implementar, diferidos a una etapa posterior — no se tocan por esta supersesión.
+> Ver `Docs/Hallazgos/notas-venta-instructivo-embalaje.md` para el detalle de la reconciliación QA.
+
 ```prisma
 model NotaVenta {
   id               Int       @id @default(autoincrement())
@@ -77,16 +84,16 @@ model NotaVenta {
   direccionDetalle String?
 
   // --- Condiciones de venta ---
-  modalidadVentaId Int?
-  clausulaVentaId  Int?      // Incoterm
-  tipoFleteId      Int?
-  formaPagoId      Int?
-  saldoPagoId      Int?
+  modalidadVentaId Int?      // FK → Parametro (TipoParametro MODALIDAD_VENTA)
+  clausulaVentaId  Int?      // FK → Parametro (TipoParametro INCOTERM)
+  tipoFleteId      Int?      // FK → Parametro (TipoParametro TIPO_FLETE)
+  condicionPagoId  Int?      // FK → CondicionPago ("Forma de Pago" en UI; snapshot en NotaVentaCuotaPago, ver R12)
   monedaId         Int
 
   observaciones    String?
 
   detalles         NotaVentaDetalle[]
+  cuotasPago       NotaVentaCuotaPago[]             // snapshot inmutable de CondicionPago.cuotas al guardar (R12)
   embarques        Embarque[]
 
   creadoPorId      String                          // Usuario (Better Auth)
@@ -96,6 +103,18 @@ model NotaVenta {
 
   @@index([clienteId])
   @@index([fecha])
+}
+
+model NotaVentaCuotaPago {
+  id             Int       @id @default(autoincrement())
+  notaVentaId    Int
+  notaVenta      NotaVenta @relation(fields: [notaVentaId], references: [id], onDelete: Cascade)
+
+  porcentaje     Decimal   @db.Decimal(5, 2)
+  plazoDias      Int
+  descripcion    String?
+
+  @@index([notaVentaId])
 }
 
 model NotaVentaDetalle {
@@ -113,19 +132,12 @@ model NotaVentaDetalle {
   cantidadPallets Int
   cajasPorPallet  Int
   cajas           Int
-  precio          Decimal   @db.Decimal(14, 4)
+  precio          Decimal   @db.Decimal(14, 4)       // valor unitario por caja, en la moneda del encabezado
 
-  calibres        NotaVentaDetalleCalibre[]         // Calibre es multiselect
+  calibreInicioId Int                                // FK → Calibre, rango sobre el maestro ordenado por especie
+  calibreFinId    Int                                // FK → Calibre, idem (ver R12)
 
   @@index([notaVentaId])
-}
-
-model NotaVentaDetalleCalibre {
-  id        Int              @id @default(autoincrement())
-  detalleId Int
-  detalle   NotaVentaDetalle @relation(fields: [detalleId], references: [id], onDelete: Cascade)
-  calibreId Int
-  @@unique([detalleId, calibreId])
 }
 ```
 
@@ -316,6 +328,7 @@ model SolicitudReserva {
 - **R9 — Stock (etapa posterior).** Tras crear el Instructivo, se asocia el stock; el stock **debe coincidir** con lo determinado en las características del Instructivo. Mecánica en Operaciones/Stock.
 - **R10 — Número de instructivo.** Texto ingresado **manualmente** en el campo `Folio` del Embarque (no correlativo), **único**, reutilizado en OC de Compras. Es la identidad del instructivo **padre**. **`Folio` = Número de Instructivo** (mismo dato; Q1 resuelta).
 - **R11 — Instructivos hijos por punto de retiro.** Cada Embarque genera **≥1** `InstructivoHijo`, uno por planta / punto de retiro que aporta fruta al contenedor. Código **autogenerado** `{numeroInstructivo}-{n}` (ej. `001A-1`, `001A-2`). Contiene la fecha/hora de retiro de esa planta (varían entre plantas). Con una sola planta de retiro hay un **único hijo** (`001A-1`), para mantener la nomenclatura actual. La partición se **deriva de la reserva de pallets** al embarque, agrupando por punto de retiro (mecánica en Operaciones/Stock). Fuente de las fechas de retiro: **AGL** (§2, `compras.md`).
+- **R12 — Forma de Pago y rango de calibre del detalle (Cierre Comercial v1, ver supersesión §4.1).** Al elegir una `CondicionPago` ("Forma de Pago") en el encabezado, sus cuotas (`porcentaje`/`plazoDias`) se **copian** a `NotaVentaCuotaPago` en el mismo momento (snapshot inmutable, igual que `OrdenCompraCuotaPago` en `compras.md` §4.2.1) — si la plantilla `CondicionPago` se edita después, los Cierres Comerciales ya guardados **no** cambian. Cada línea de detalle exige `calibreInicioId`/`calibreFinId` (rango, no multiselect), validado igual que `compras.md` §6.5: ambos deben pertenecer a la especie de la línea y `calibreInicio.orden <= calibreFin.orden` según el maestro ordenado.
 
 ---
 
@@ -324,7 +337,7 @@ model SolicitudReserva {
 | Método | Ruta | Notas |
 |---|---|---|
 | GET/POST/PATCH/DELETE | `/notas-venta[/:id]` | DELETE solo sin embarque asociado (R3). PATCH bloquea campos heredados si hay embarque. |
-| POST | `/notas-venta/:id/detalles` | Línea de fruta (calibre multiselect). |
+| POST | `/notas-venta/:id/detalles` | Línea de fruta (rango de calibre inicio/fin, ver R12). |
 | GET/POST/PATCH/DELETE | `/embarques[/:id]` | Hereda campos de NV (R4). |
 | POST | `/embarques/:id/contenedores` | Encabezado de contenedor. |
 | POST | `/embarques/:id/contenedores/:cid/asignaciones` | Asignación de fruta, validada contra NV (R8), valor heredado (R5). |
@@ -340,8 +353,8 @@ model SolicitudReserva {
 
 Basadas en el sistema legado (screenshots):
 
-1. **Nota de Venta** — encabezado (Folio, Fecha, Cliente, Tipo Embarque, Mercado, País Destino, Dirección/Detalle, Puerto Destino, Comprador, Notify, Modalidad Venta, Cláusula Venta, Tipo Flete, Forma Pago, Saldo Pago, Moneda, Cliente Final, Observaciones) → **Continuar**.
-2. **Detalle NV** — línea (Fecha Compromiso, Especie, Variedad, Artículo, Calibre multi, Categoría, Tipo Pallet, Cant. Pallets, Cajas x Pallet, Cajas, Precio) + grilla → **Terminar**.
+1. **Nota de Venta** — encabezado (Folio, Fecha, Cliente, Tipo Embarque, Mercado, País Destino, Dirección/Detalle, Puerto Destino, Comprador, Notify, Modalidad Venta, Cláusula Venta, Tipo Flete, Forma de Pago —`CondicionPago`, cuotas se muestran como preview snapshot al guardar—, Moneda, Cliente Final, Observaciones) → **Continuar**.
+2. **Detalle NV** — línea (Fecha Compromiso, Especie, Variedad, Artículo tipo Embalaje —etiqueta/kg neto/kg bruto heredados del artículo—, Calibre Inicio/Fin, Categoría, Tipo Pallet, Cant. Pallets, Cajas x Pallet, Cajas, Precio por caja) + grilla → **Terminar**.
 3. **Orden de Embarque** — encabezado extenso (incluye **`Folio`** = N° de instructivo, texto manual único) + botón **Seleccionar Reserva** (rellena datos logísticos desde la reserva).
 4. **Detalle Orden Embarque** — botón **Contenedor** → campos del contenedor + checks de inspección/fumigación.
 5. **Detalle Asignación Contenedor** (modal) — Artículo, Variedad, Calibre, Tipo Pallet, Cant. Pallets, Cajas x Pallet, Cajas, Valor + grilla con Total.
@@ -350,7 +363,9 @@ Basadas en el sistema legado (screenshots):
 
 ## 8. Mantenedores y catálogos requeridos
 
-**Mantenedores nuevos/confirmar:** Tipo Embarque, Modalidad de Venta, Cláusula de Venta (Incoterm), Tipo Flete, Forma de Pago, Saldo Pago, **Vía de Embarque**, Ruta, Tipo BL, Tipo Contenedor, Tipo Tratamiento, Tipo Atmósfera, Bodega, Categoría, Tipo Pallet, Puerto (Embarque/Destino), Destino Final, Tipo Inspección.
+**Ya implementados (Cierre Comercial v1, ver supersesión §4.1):** Modalidad de Venta, Cláusula de Venta (Incoterm) y Tipo Flete como `Parametro` genérico (mantenedores-generales.md) bajo sus `TipoParametro` `MODALIDAD_VENTA`/`INCOTERM`/`TIPO_FLETE`. Forma de Pago reemplazada por `CondicionPago` (`config/condiciones-pago`, compartido con Compras — no se crea un mantenedor "Saldo Pago" separado, ver R12).
+
+**Mantenedores nuevos/confirmar (Embarque/Instructivo, aún sin implementar):** Tipo Embarque, **Vía de Embarque**, Ruta, Tipo BL, Tipo Contenedor, Tipo Tratamiento, Tipo Atmósfera, Bodega, Categoría, Tipo Pallet, Puerto (Embarque/Destino), Destino Final, Tipo Inspección.
 
 **Entidades por rol/tipo:** Cliente, Comprador, Notify, Cliente Final, Facturar a, Naviera, Embarcador, Agente Aduana, Transportista, **Gestor Logístico** (tipo nuevo, patrón `PLANTA`).
 
@@ -359,6 +374,8 @@ Basadas en el sistema legado (screenshots):
 ---
 
 ## 9. Plan de implementación / Tests / DoD
+
+> **Cierre Comercial v1 (R12) — cobertura de tests diferida (decisión de negocio, Christian, 2026-07-27).** Esta sección **no exige** cobertura de integración para `condicionPagoId`/snapshot de cuotas, `modalidadVentaId`/`clausulaVentaId`/`tipoFleteId` ni rango `calibreInicioId`/`calibreFinId` como condición para dar por cerrada la implementación. La falta de esos casos (`CCOM-QA-001`, ver `Docs/Hallazgos/notas-venta-instructivo-embalaje.md`) queda **aceptada como gap postergado**, no como defecto bloqueante — se retoma cuando el usuario decida agregarla.
 
 `TODO` (completar al cerrar §10):
 - Migraciones Prisma.

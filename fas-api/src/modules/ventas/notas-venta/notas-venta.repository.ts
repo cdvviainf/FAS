@@ -14,14 +14,20 @@ const includeDetalle = {
   puertoDestino: { select: { id: true, codigo: true, descripcion: true } },
   direccion: { select: { id: true, codigo: true, direccion: true } },
   moneda: { select: { id: true, codigo: true, descripcion: true } },
+  modalidadVenta: { select: { id: true, codigo: true, descripcion: true } },
+  clausulaVenta: { select: { id: true, codigo: true, descripcion: true } },
+  tipoFlete: { select: { id: true, codigo: true, descripcion: true } },
+  condicionPago: { select: { id: true, codigo: true, descripcion: true } },
+  cuotasPago: true,
   detalles: {
     include: {
       especie: { select: { id: true, codigo: true, descripcion: true } },
       variedad: { select: { id: true, codigo: true, descripcion: true } },
-      articulo: { select: { id: true, codigo: true, descripcion: true } },
+      articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
       categoria: { select: { id: true, codigo: true, descripcion: true } },
       tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
-      calibres: { include: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
+      calibreInicio: { select: { id: true, codigo: true, descripcion: true } },
+      calibreFin: { select: { id: true, codigo: true, descripcion: true } },
     },
   },
 }
@@ -56,7 +62,27 @@ export async function getNotaVentaById(id: number) {
 
 const LOCK_NAMESPACE_NOTA_VENTA = 490234
 
+// Las cuotas de pago no se cargan manualmente: se copian desde la plantilla
+// de la Condición de Pago seleccionada (snapshot, no referencia viva — si la
+// plantilla cambia después no afecta Cierres Comerciales ya creados). Mismo
+// patrón que ordenes-compra.repository.ts (Docs/ventas.md R12).
+async function cuotasDesdeCondicionPago(condicionPagoId: number | null | undefined) {
+  if (!condicionPagoId) return []
+  const condicionPago = await prisma.condicionPago.findFirst({
+    where: { id: condicionPagoId, eliminadoEn: null },
+    include: { cuotas: true },
+  })
+  if (!condicionPago) return []
+  return condicionPago.cuotas.map((c) => ({
+    porcentaje: c.porcentaje,
+    plazoDias: c.plazoDias,
+    descripcion: c.descripcion,
+  }))
+}
+
 export async function createNotaVenta(data: NotaVentaCreateInput, creadoPor: string) {
+  const cuotasPago = await cuotasDesdeCondicionPago(data.condicionPagoId)
+
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_NOTA_VENTA}::int, 0)`
 
@@ -64,17 +90,30 @@ export async function createNotaVenta(data: NotaVentaCreateInput, creadoPor: str
     const folio = (max._max.folio ?? 0) + 1
 
     return tx.notaVenta.create({
-      data: { ...data, folio, creadoPor },
+      data: { ...data, folio, creadoPor, cuotasPago: { create: cuotasPago } },
       include: includeDetalle,
     })
   })
 }
 
 export async function updateNotaVenta(id: number, data: NotaVentaUpdateInput, actualizadoPor: string) {
-  return prisma.notaVenta.update({
-    where: { id },
-    data: { ...data, actualizadoPor },
-    include: includeDetalle,
+  return prisma.$transaction(async (tx) => {
+    if (data.condicionPagoId !== undefined) {
+      // El snapshot es inmutable (R12): regenerarlo solo si condicionPagoId
+      // realmente cambió respecto del valor persistido — el formulario puede
+      // reenviarlo sin cambios en cualquier PATCH (ej. al editar Observaciones).
+      const actual = await tx.notaVenta.findUniqueOrThrow({ where: { id }, select: { condicionPagoId: true } })
+      if (data.condicionPagoId !== actual.condicionPagoId) {
+        const cuotasPago = await cuotasDesdeCondicionPago(data.condicionPagoId)
+        await tx.notaVentaCuotaPago.deleteMany({ where: { notaVentaId: id } })
+        await tx.notaVentaCuotaPago.createMany({ data: cuotasPago.map((c) => ({ notaVentaId: id, ...c })) })
+      }
+    }
+    return tx.notaVenta.update({
+      where: { id },
+      data: { ...data, actualizadoPor },
+      include: includeDetalle,
+    })
   })
 }
 
@@ -86,20 +125,16 @@ export async function softDeleteNotaVenta(id: number, eliminadoPor: string) {
 }
 
 export async function addDetalle(notaVentaId: number, data: NotaVentaDetalleCreateInput) {
-  const { calibreIds, ...detalle } = data
   return prisma.notaVentaDetalle.create({
-    data: {
-      ...detalle,
-      notaVentaId,
-      calibres: { create: calibreIds.map((calibreId) => ({ calibreId })) },
-    },
+    data: { ...data, notaVentaId },
     include: {
       especie: { select: { id: true, codigo: true, descripcion: true } },
       variedad: { select: { id: true, codigo: true, descripcion: true } },
-      articulo: { select: { id: true, codigo: true, descripcion: true } },
+      articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
       categoria: { select: { id: true, codigo: true, descripcion: true } },
       tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
-      calibres: { include: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
+      calibreInicio: { select: { id: true, codigo: true, descripcion: true } },
+      calibreFin: { select: { id: true, codigo: true, descripcion: true } },
     },
   })
 }
@@ -169,9 +204,23 @@ export async function getTipoPallet(id: number) {
   return prisma.tipoPallet.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
 }
 
-export async function getCalibres(calibreIds: number[]) {
-  return prisma.calibre.findMany({
-    where: { id: { in: calibreIds }, eliminadoEn: null, bloqueado: false },
-    select: { id: true, especieId: true },
+export async function getCalibre(id: number) {
+  return prisma.calibre.findFirst({
+    where: { id, eliminadoEn: null, bloqueado: false },
+    select: { id: true, especieId: true, orden: true },
+  })
+}
+
+export async function getCondicionPago(id: number) {
+  return prisma.condicionPago.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+// Valida que el Parametro exista, esté vigente y pertenezca al TipoParametro
+// esperado (ej. 'INCOTERM', 'TIPO_FLETE', 'MODALIDAD_VENTA') — evita que se
+// seleccione un valor de un catálogo genérico distinto al del campo.
+export async function getParametro(id: number, tipoParametroCodigo: string) {
+  return prisma.parametro.findFirst({
+    where: { id, eliminadoEn: null, bloqueado: false, tipoParametro: { codigo: tipoParametroCodigo } },
+    select: { id: true },
   })
 }

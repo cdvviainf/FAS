@@ -162,3 +162,85 @@ Confirmado sin tocar la suite: `ventas-compras.integration.test.ts` +
 cerrados. (Ver `mantenedores-generales.md` — QAS-MG-MP-005 — para una
 regresión distinta que este mismo cambio introdujo en otras 3 suites de
 integración no relacionadas con Cierre Comercial.)
+
+## Cierre Comercial v1 — CondicionPago + rango de calibre (Codex, 2026-07-27)
+
+Alcance: reemplazo de `formaPagoId`/`saldoPagoId` (sueltos) por
+`condicionPagoId` (FK a `CondicionPago`, snapshot inmutable de cuotas) y del
+multiselect de calibres por rango `calibreInicioId`/`calibreFinId`;
+`modalidadVentaId`/`clausulaVentaId`/`tipoFleteId` pasan a FK real de
+`Parametro`. Detalle completo de la decisión y del contrato en `ventas.md`
+§4.1 (supersesión) y R12. 4 rondas QA + 1 arbitraje.
+
+| ID | Severidad | Estado | Hallazgo / evidencia |
+|---|---|---|---|
+| CCOM-QA-001 | Alta | Postergado (decisión de negocio) | La suite `ventas-compras.integration.test.ts` no cubre las invariantes nuevas (condición de pago, pertenencia de parámetros a su `TipoParametro`, rango de calibre invertido en NV, inmutabilidad del snapshot). Arbitrado como `AMBIGUO` en ronda 2 (el contrato aún no estaba formalizado en el spec); tras formalizarlo, el usuario decidió explícitamente **"spec ahora, tests después"** — queda como gap conocido y aceptado, no como defecto de código. Pendiente para Codex o el usuario, igual que NV-IE-010. |
+| CCOM-QA-002 | Media | Corregido | El preview de cuotas de la Forma de Pago no reaccionaba a cambios en modo edición y no se ocultaba al limpiar la selección ("Sin definir"). Corregido en `nota-venta-form.tsx`: prioriza la condición actualmente seleccionada, cae al snapshot persistido solo si no cambió, y produce `[]` si `condicionPagoId` es `null`. |
+| CCOM-QA-003 | Alta | Corregido | El repository regeneraba el snapshot de cuotas en cualquier PATCH que incluyera `condicionPagoId`, aunque no hubiera cambiado — rompiendo la inmutabilidad de R12. Corregido en `notas-venta.repository.ts`: compara contra el valor persistido dentro de la transacción y solo regenera si difiere. |
+
+**Excepción documentada:** para CCOM-QA-001, el usuario autorizó explícitamente
+un arreglo *mínimo* del archivo de test (quitar el `TRUNCATE` de la tabla
+eliminada y migrar `calibreIds` → `calibreInicioId`/`calibreFinId`, sin lo
+cual la suite ni siquiera corría) como excepción puntual a la regla "Claude no
+edita archivos de test". La cobertura *nueva* que pide Codex no se agregó — se
+mantiene la regla por defecto para ese trabajo, igual que en NV-IE-010.
+
+**Verificación:** `npx tsc --noEmit` (API y web) OK; `npm run build` (API y
+web) OK; `npx prisma validate` OK; `npm run test:integration` → 84/84 OK tras
+cada corrección. Migraciones `20260727185626_...` y
+`20260727193500_...` aplicadas en `fas_db` y `fas_test`.
+
+**Resultado:** ciclo cerrado sin aprobación formal de Codex — bloqueado
+únicamente por CCOM-QA-001, que es un gap de cobertura aceptado
+conscientemente, no un defecto. Reabrir cuando se decida agregar esa
+cobertura.
+
+### Intento de Tests finales (Codex, 2026-07-27)
+
+`qa-ejecutar-tests` se ejecutó solicitado explícitamente por el usuario pese
+al `NO_APROBADO` de ronda 4. Resultado: **`TESTS_BLOQUEADOS`** — Codex detectó
+la contradicción entre el prompt ("ronda 4 fue aprobada") y el dictamen real
+del informe, y se negó a correr suites bajo una aprobación inexistente. 0
+pruebas ejecutadas, ningún archivo modificado. Confirma que la fase de tests
+finales permanece bloqueada mientras `CCOM-QA-001` siga abierto como hallazgo
+formal.
+
+### Arbitraje ronda 4 — CCOM-QA-001 (Codex, 2026-07-27)
+
+Solicitado por el usuario, enfocado en CCOM-QA-001, con el contexto explícito
+de que la falta de cobertura adicional fue aceptada como decisión de negocio.
+Veredicto: **`AMBIGUO`** — el árbitro confirma la brecha de cobertura pero
+señala que `ventas.md` §9 (plan de tests) no exigía expresamente probar R12,
+por lo que no puede clasificarlo como incumplimiento contractual ni como
+`NO_ES_BUG`. Acción sugerida: decidir si §9 debe exigir esa cobertura.
+
+**Resolución (Claude, 2026-07-27):** se actualiza `ventas.md` §9 con una nota
+explícita — la cobertura de integración de R12 (Cierre Comercial v1) **no es
+exigida** por esta sección; queda formalmente diferida por decisión del
+usuario. Con esto, `CCOM-QA-001` deja de ser una ambigüedad de spec: es un gap
+de cobertura conscientemente aceptado, documentado en el spec mismo. No
+requiere una quinta ronda QA — el estado del código no cambió, solo se cerró
+la ambigüedad documental que impedía clasificarlo con precisión.
+
+### Tests finales — TESTS_OK (Codex, 2026-07-27)
+
+Tras habilitar acceso real a Docker en el sandbox de la fase de tests y pedir
+comparación de lint contra `main` (ajuste a `run-codex-stage.sh`), se repitió
+la validación final. Resultado: **`TESTS_OK`**.
+
+- Integración API/PostgreSQL: 84/84 OK (6 suites).
+- Unitarios API: 7/7 OK.
+- Total: 91/91, 0 fallidas, 0 omitidas.
+- `prisma validate`, typecheck API/web, `git diff --check`: OK.
+- `fas_postgres` activo y saludable; ningún archivo modificado por la validación.
+- Único hallazgo de lint (`react-hooks/set-state-in-effect`,
+  `nota-venta-form.tsx`) comparado línea por línea contra `main`: ya existía
+  antes de esta implementación — deuda preexistente, no regresión del
+  alcance.
+
+**Cierre del ciclo:** Cierre Comercial v1 (CondicionPago + snapshot de cuotas
++ rango de calibre + Parametro real para Flete/Modalidad/Incoterm) queda
+validado de punta a punta — 4 rondas QA, 2 arbitrajes, Tests finales `OK`. El
+único ítem pendiente es la cobertura de integración específica para el
+contrato nuevo (`CCOM-QA-001`), diferida por decisión de negocio y ya
+documentada en `ventas.md` §9.

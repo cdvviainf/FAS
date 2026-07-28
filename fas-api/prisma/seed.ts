@@ -44,6 +44,41 @@ const itemsMenu = [
   { codigo: 'LIQ_PRODUCTOR', nombre: 'Liquidación Productor', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/productor', esAccion: false, orden: 83 },
 ]
 
+const SISTEMA_USER = 'system'
+
+// TipoParametro/Parametro para Cierre Comercial (Ventas). El catálogo
+// genérico Parametro no tiene `codigo` único a nivel de BD, por lo que el
+// upsert se hace manualmente (findFirst + create/update) en vez de
+// `prisma.<modelo>.upsert`.
+const tiposParametroVentas = [
+  {
+    codigo: 'TIPO_FLETE',
+    descripcion: 'Tipo de Flete',
+    valores: [
+      { codigo: 'COLLECT', descripcion: 'Collect' },
+      { codigo: 'PREPAID', descripcion: 'Prepaid' },
+    ],
+  },
+  {
+    codigo: 'MODALIDAD_VENTA',
+    descripcion: 'Modalidad de Venta',
+    valores: [
+      { codigo: 'FIRME', descripcion: 'Firme' },
+      { codigo: 'CONSIGNACION', descripcion: 'Consignación' },
+    ],
+  },
+  {
+    codigo: 'INCOTERM',
+    descripcion: 'Incoterm / Cláusula de Venta',
+    valores: [
+      { codigo: 'FOB', descripcion: 'FOB' },
+      { codigo: 'CFR', descripcion: 'CFR' },
+      { codigo: 'CIF', descripcion: 'CIF' },
+      { codigo: 'EXW', descripcion: 'EXW' },
+    ],
+  },
+]
+
 async function main() {
   console.log('Seeding ItemMenu...')
 
@@ -77,6 +112,36 @@ async function main() {
     }
     console.log(`PerfilAcceso ADMIN: ${allItems.length} accesos TOTAL sincronizados.`)
   }
+
+  console.log('Seeding TipoParametro/Parametro (Ventas — Cierre Comercial)...')
+
+  let parametrosCreados = 0
+  for (const tipo of tiposParametroVentas) {
+    let tipoParametro = await prisma.tipoParametro.findFirst({ where: { codigo: tipo.codigo, eliminadoEn: null } })
+    if (!tipoParametro) {
+      tipoParametro = await prisma.tipoParametro.create({
+        data: { codigo: tipo.codigo, descripcion: tipo.descripcion, creadoPor: SISTEMA_USER },
+      })
+    }
+
+    for (const valor of tipo.valores) {
+      const existente = await prisma.parametro.findFirst({
+        where: { codigo: valor.codigo, tipoParametroId: tipoParametro.id, eliminadoEn: null },
+      })
+      if (!existente) {
+        await prisma.parametro.create({
+          data: {
+            codigo: valor.codigo,
+            descripcion: valor.descripcion,
+            tipoParametroId: tipoParametro.id,
+            creadoPor: SISTEMA_USER,
+          },
+        })
+        parametrosCreados++
+      }
+    }
+  }
+  console.log(`TipoParametro: ${tiposParametroVentas.length} tipos verificados. Parametro: ${parametrosCreados} valores nuevos creados.`)
 
   console.log('Seed completado.')
 }

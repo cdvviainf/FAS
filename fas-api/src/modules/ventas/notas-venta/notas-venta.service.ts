@@ -16,13 +16,15 @@ interface ReferenciasHeader {
   puertoDestinoId?: number | null
   direccionId?: number | null
   monedaId: number
+  modalidadVentaId?: number | null
+  clausulaVentaId?: number | null
+  tipoFleteId?: number | null
+  condicionPagoId?: number | null
 }
 
 // NV-IE-004: valida existencia + vigencia (no eliminado/bloqueado) de cada
 // referencia del encabezado, y consistencia cruzada (dirección↔cliente,
-// puerto↔país/tipo de embarque). No valida modalidadVenta/clausulaVenta/
-// tipoFlete/formaPago/saldoPago: referencian Parametro genérico sin
-// TipoParametro dado de alta todavía (ver comentario en schema.prisma).
+// puerto↔país/tipo de embarque).
 async function validarReferenciasHeader(r: ReferenciasHeader) {
   const entidadIds = [r.clienteId, r.compradorId, r.notifyId, r.clienteFinalId].filter(
     (v): v is number => v != null,
@@ -75,6 +77,26 @@ async function validarReferenciasHeader(r: ReferenciasHeader) {
       throw new ValidationError('La dirección seleccionada no pertenece al cliente')
     }
   }
+
+  if (r.modalidadVentaId != null) {
+    const modalidadVenta = await repo.getParametro(r.modalidadVentaId, 'MODALIDAD_VENTA')
+    if (!modalidadVenta) throw new ValidationError('La modalidad de venta seleccionada no existe o está bloqueada')
+  }
+
+  if (r.clausulaVentaId != null) {
+    const clausulaVenta = await repo.getParametro(r.clausulaVentaId, 'INCOTERM')
+    if (!clausulaVenta) throw new ValidationError('La cláusula de venta (Incoterm) seleccionada no existe o está bloqueada')
+  }
+
+  if (r.tipoFleteId != null) {
+    const tipoFlete = await repo.getParametro(r.tipoFleteId, 'TIPO_FLETE')
+    if (!tipoFlete) throw new ValidationError('El tipo de flete seleccionado no existe o está bloqueado')
+  }
+
+  if (r.condicionPagoId != null) {
+    const condicionPago = await repo.getCondicionPago(r.condicionPagoId)
+    if (!condicionPago) throw new ValidationError('La forma de pago (condición de pago) seleccionada no existe o está bloqueada')
+  }
 }
 
 async function validarDetalle(data: NotaVentaDetalleCreateInput) {
@@ -107,13 +129,18 @@ async function validarDetalle(data: NotaVentaDetalleCreateInput) {
     if (!tipoPallet) throw new ValidationError('El tipo de pallet seleccionado no existe o está bloqueado')
   }
 
-  const calibres = await repo.getCalibres(data.calibreIds)
-  if (calibres.length !== data.calibreIds.length) {
-    throw new ValidationError('Uno o más calibres seleccionados no existen o están bloqueados')
+  const [calibreInicio, calibreFin] = await Promise.all([
+    repo.getCalibre(data.calibreInicioId),
+    repo.getCalibre(data.calibreFinId),
+  ])
+  if (!calibreInicio || !calibreFin) {
+    throw new ValidationError('El calibre de inicio o fin seleccionado no existe o está bloqueado')
   }
-  const calibresInvalidos = calibres.filter((c) => c.especieId !== data.especieId)
-  if (calibresInvalidos.length > 0) {
-    throw new ValidationError('Uno o más calibres seleccionados no pertenecen a la especie de la línea')
+  if (calibreInicio.especieId !== data.especieId || calibreFin.especieId !== data.especieId) {
+    throw new ValidationError('El calibre de inicio o fin no pertenece a la especie de la línea')
+  }
+  if (calibreInicio.orden > calibreFin.orden) {
+    throw new ValidationError('El calibre de inicio debe preceder (o igualar) al calibre de fin en el orden del maestro')
   }
 }
 
@@ -165,6 +192,10 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
     puertoDestinoId: body.puertoDestinoId !== undefined ? body.puertoDestinoId : existente.puertoDestinoId,
     direccionId: body.direccionId !== undefined ? body.direccionId : existente.direccionId,
     monedaId: body.monedaId ?? existente.monedaId,
+    modalidadVentaId: body.modalidadVentaId !== undefined ? body.modalidadVentaId : existente.modalidadVentaId,
+    clausulaVentaId: body.clausulaVentaId !== undefined ? body.clausulaVentaId : existente.clausulaVentaId,
+    tipoFleteId: body.tipoFleteId !== undefined ? body.tipoFleteId : existente.tipoFleteId,
+    condicionPagoId: body.condicionPagoId !== undefined ? body.condicionPagoId : existente.condicionPagoId,
   }
   await validarReferenciasHeader(efectivo)
 

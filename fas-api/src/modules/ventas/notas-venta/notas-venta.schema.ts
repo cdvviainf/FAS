@@ -15,8 +15,7 @@ export const notaVentaCreateSchema = z.object({
   modalidadVentaId: z.number().int().positive().optional().nullable(),
   clausulaVentaId: z.number().int().positive().optional().nullable(),
   tipoFleteId: z.number().int().positive().optional().nullable(),
-  formaPagoId: z.number().int().positive().optional().nullable(),
-  saldoPagoId: z.number().int().positive().optional().nullable(),
+  condicionPagoId: z.number().int().positive().optional().nullable(),
   monedaId: z.number().int().positive('La moneda es requerida'),
   observaciones: z.string().max(1000).trim().optional().nullable(),
 })
@@ -33,8 +32,9 @@ export const notaVentaDetalleCreateSchema = z.object({
   cantidadPallets: z.number().int().positive('La cantidad de pallets debe ser mayor a 0'),
   cajasPorPallet: z.number().int().positive('Las cajas por pallet deben ser mayor a 0'),
   cajas: z.number().int().positive('Las cajas deben ser mayor a 0'),
-  precio: z.number().positive('El precio debe ser mayor a 0'),
-  calibreIds: z.array(z.number().int().positive()).min(1, 'Debe seleccionar al menos un calibre'),
+  precio: z.number().positive('El valor por caja debe ser mayor a 0'),
+  calibreInicioId: z.number().int().positive('El calibre de inicio es requerido'),
+  calibreFinId: z.number().int().positive('El calibre de fin es requerido'),
 })
 
 export const notaVentaParamsSchema = z.object({
