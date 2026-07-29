@@ -211,8 +211,8 @@ model Variedad {
   // + base
   especieId       Int
   especie         Especie       @relation(fields: [especieId], references: [id])
-  grupoVariedadId Int?           // opcional: variedades nuevas pueden no tener grupo asignado
-  grupoVariedad   GrupoVariedad? @relation(fields: [grupoVariedadId], references: [id])
+  grupoVariedadId Int           // obligatorio: toda variedad pertenece a un grupo de variedad
+  grupoVariedad   GrupoVariedad @relation(fields: [grupoVariedadId], references: [id])
 }
 
 model Categoria {

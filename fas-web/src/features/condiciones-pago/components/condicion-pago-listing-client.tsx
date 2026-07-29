@@ -9,7 +9,7 @@ import { Icons } from '@/components/icons'
 import { AlertModal } from '@/components/modal/alert-modal'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { condicionesPagoService } from '../service'
-import { FECHA_REFERENCIA_LABELS } from '../types'
+import { FECHA_REFERENCIA_LABELS, TIPO_CONDICION_PAGO_LABELS } from '../types'
 import type { CondicionPago, CondicionPagoCuota } from '../types'
 import { CondicionPagoFormSheet } from './condicion-pago-form-sheet'
 
@@ -55,7 +55,10 @@ export function CondicionPagoListingClient() {
           {data!.data.map((c) => (
             <div key={c.id} className='rounded-md border p-3'>
               <div className='flex items-center justify-between'>
-                <p className='font-medium'>{c.codigo} — {c.descripcion}</p>
+                <p className='flex items-center gap-2 font-medium'>
+                  {c.codigo} — {c.descripcion}
+                  <Badge variant={c.tipo === 'COMPRA' ? 'default' : 'secondary'}>{TIPO_CONDICION_PAGO_LABELS[c.tipo]}</Badge>
+                </p>
                 {puedeEscribir && (
                   <div className='flex gap-1'>
                     <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => { setEditItem(c); setFormOpen(true) }}>

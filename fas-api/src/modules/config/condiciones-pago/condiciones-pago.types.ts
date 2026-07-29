@@ -1,5 +1,6 @@
 export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS'
 export type TipoValorCuota = 'PORCENTAJE' | 'MONTO_UNITARIO'
+export type TipoCondicionPago = 'COMPRA' | 'VENTA'
 
 export interface CondicionPagoCuotaInput {
   fechaReferencia: FechaReferenciaPago
@@ -15,6 +16,7 @@ export interface CondicionPagoCuotaInput {
 export interface CondicionPagoCreateInput {
   codigo: string
   descripcion: string
+  tipo: TipoCondicionPago
   bloqueado?: boolean
   cuotas: CondicionPagoCuotaInput[]
 }

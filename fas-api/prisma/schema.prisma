@@ -639,6 +639,7 @@ model Especie {
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
   ordenCompraLineas           OrdenCompraLinea[]
   contratosProductor          ProductorContrato[]
+  palletLineas                PalletLinea[]
 
   @@map("especies")
 }
@@ -669,10 +670,10 @@ model Variedad {
   descripcion           String
   descripcionExtranjera String?
   especieId             Int
-  especie               Especie        @relation(fields: [especieId], references: [id])
-  grupoVariedadId       Int?
-  grupoVariedad         GrupoVariedad? @relation(fields: [grupoVariedadId], references: [id])
-  bloqueado             Boolean        @default(false)
+  especie               Especie       @relation(fields: [especieId], references: [id])
+  grupoVariedadId       Int
+  grupoVariedad         GrupoVariedad @relation(fields: [grupoVariedadId], references: [id])
+  bloqueado             Boolean       @default(false)
   creadoEn              DateTime       @default(now())
   creadoPor             String
   actualizadoEn         DateTime?      @updatedAt
@@ -685,6 +686,7 @@ model Variedad {
   ordenCompraLineas           OrdenCompraLinea[]
   contratoProductorLineas     ProductorContratoLinea[]
   solicitudesInspeccion       SolicitudInspeccionVariedad[]
+  palletLineas                PalletLinea[]
 
   @@map("variedades")
 }
@@ -711,6 +713,7 @@ model Categoria {
   ordenCompraLineas           OrdenCompraLinea[]
   contratoProductorLineas     ProductorContratoLinea[]
   solicitudesInspeccion       SolicitudInspeccionCategoria[]
+  palletLineas                PalletLinea[]
 
   @@map("categorias")
 }
@@ -741,6 +744,7 @@ model Calibre {
   contratoProductorLineaDesde   ProductorContratoLinea[]     @relation("ProductorContratoCalibreDesde")
   contratoProductorLineaHasta   ProductorContratoLinea[]     @relation("ProductorContratoCalibreHasta")
   solicitudesInspeccion         SolicitudInspeccionCalibre[]
+  palletLineas                  PalletLinea[]
 
   @@map("calibres")
 }
@@ -984,6 +988,8 @@ model Entidad {
   notasVentaNotify             NotaVenta[]                 @relation("NotaVentaNotify")
   notasVentaClienteFinal       NotaVenta[]                 @relation("NotaVentaClienteFinal")
   ordenesCompraProductor       OrdenCompra[]               @relation("OrdenCompraProductor")
+  recepcionesPlanta            Recepcion[]                 @relation("RecepcionPlanta")
+  palletsProductor             Pallet[]                    @relation("PalletProductor")
 
   @@index([eliminadoEn])
   @@map("entidades")
@@ -994,7 +1000,7 @@ model EntidadDireccion {
   entidadId      Int
   entidad        Entidad   @relation(fields: [entidadId], references: [id])
   codigo         String
-  descripcion    String    // etiqueta legible, ej. "Casa matriz", "Bodega Norte"
+  descripcion    String // etiqueta legible, ej. "Casa matriz", "Bodega Norte"
   paisId         Int
   pais           Pais      @relation("DireccionPais", fields: [paisId], references: [id])
   comunaId       Int?
@@ -1012,6 +1018,7 @@ model EntidadDireccion {
 
   solicitudesInspeccion SolicitudInspeccion[]
   notasVenta            NotaVenta[]
+  recepciones           Recepcion[]
 
   @@index([entidadId])
   @@map("entidad_direcciones")
@@ -1313,6 +1320,7 @@ model Articulo {
   ordenCompraLineas           OrdenCompraLinea[]
   contratoProductorLineas     ProductorContratoLinea[]
   solicitudesInspeccion       SolicitudInspeccionEmbalaje[]
+  palletLineas                PalletLinea[]
 
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
@@ -1690,7 +1698,7 @@ model NotaVenta {
   // separado — las cuotas se snapshotean en NotaVentaCuotaPago al guardar
   // (mismo patrón que OrdenCompraCuotaPago, ver Docs/ventas.md R12).
   condicionPagoId Int?
-  condicionPago   CondicionPago? @relation(fields: [condicionPagoId], references: [id])
+  condicionPago   CondicionPago?       @relation(fields: [condicionPagoId], references: [id])
   cuotasPago      NotaVentaCuotaPago[]
 
   monedaId Int
@@ -1858,8 +1866,14 @@ model OrdenCompra {
   observaciones    String?
   estado           EstadoOrdenCompra @default(BORRADOR)
 
-  lineas     OrdenCompraLinea[]
-  cuotasPago OrdenCompraCuotaPago[]
+  lineas      OrdenCompraLinea[]
+  cuotasPago  OrdenCompraCuotaPago[]
+  // Array porque Prisma exige @unique en la FK para modelar 1:1, pero la
+  // unicidad real es solo entre Recepciones activas (índice parcial WHERE
+  // eliminadoEn IS NULL) — filas soft-deleted pueden repetir ordenCompraId.
+  // En la práctica una OC tiene a lo más una Recepcion ACTIVA a la vez
+  // (recepciones.repository.ts getRecepcionActivaPorOrdenCompra).
+  recepciones Recepcion[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -1877,14 +1891,23 @@ model OrdenCompra {
   @@map("ordenes_compra")
 }
 
+// COMPRA: usada en Órdenes de Compra (pago a productor). VENTA: usada en
+// Cierre Comercial / Notas de Venta (cobro a cliente). Exclusivo — son flujos
+// de caja distintos y no se comparten condiciones entre ambos.
+enum TipoCondicionPago {
+  COMPRA
+  VENTA
+}
+
 // Maestro: cabecera + cuotas (mismo patrón cabecera+matriz que ConceptoLiquidacion).
 // Determina automáticamente las cuotas de pago de la Orden de Compra al
 // seleccionarse — no se cargan manualmente por OC.
 model CondicionPago {
-  id          Int     @id @default(autoincrement())
+  id          Int               @id @default(autoincrement())
   codigo      String
   descripcion String
-  bloqueado   Boolean @default(false)
+  tipo        TipoCondicionPago
+  bloqueado   Boolean           @default(false)
 
   cuotas        CondicionPagoCuota[]
   ordenesCompra OrdenCompra[]
@@ -1983,4 +2006,169 @@ model OrdenCompraLinea {
 
   @@index([ordenCompraId])
   @@map("orden_compra_linea")
+}
+
+// ─── RECEPCIÓN DE STOCK (compras.md §4.4-4.7) ─────────────────────────────────
+
+enum OrigenRecepcion {
+  COMPRA
+  CONSIGNACION
+}
+
+enum EstadoRecepcion {
+  CARGADA // archivo subido, sin procesar (única alcanzable mientras no exista el motor de validación)
+  VALIDADA // cuadró contra la OC (o carga libre en consignación) y generó pallets
+  RECHAZADA // no cuadró contra la OC — no genera pallets
+}
+
+model Recepcion {
+  id     Int    @id @default(autoincrement())
+  numero String @unique // RC-{AAAA}-{NNNN}, correlativo por año (mismo patrón que OrdenCompra)
+
+  // Sin @unique de Prisma (no soporta índices parciales en el DSL): la
+  // unicidad real es un índice único parcial a nivel de BD, solo entre filas
+  // activas (WHERE eliminadoEn IS NULL, ver migration.sql) — permite que al
+  // eliminar (soft-delete) una Recepción CARGADA la OC quede libre para una
+  // Recepción nueva (QAR-RCT-004), sin perder protección contra duplicados
+  // concurrentes.
+  ordenCompraId Int? // nullable = modo CONSIGNACION
+  ordenCompra   OrdenCompra?    @relation(fields: [ordenCompraId], references: [id])
+  // Derivado server-side de ordenCompraId (no se acepta como input) — se
+  // propaga a todos los pallets generados por esta Recepción (compras.md §4.4).
+  origen        OrigenRecepcion
+
+  plantaId          Int // Entidad tipo PLANTA (compras.md: "Planta" no es mantenedor propio, es Entidad con tipos incluyendo PLANTA)
+  planta            Entidad          @relation("RecepcionPlanta", fields: [plantaId], references: [id])
+  direccionPlantaId Int // EntidadDireccion — debe pertenecer a plantaId
+  direccionPlanta   EntidadDireccion @relation(fields: [direccionPlantaId], references: [id])
+
+  // Mapeo de columnas del Excel a aplicar (config.md templates-carga) — opcional
+  // en esta etapa estructural; requerido cuando se implemente el parseo real.
+  templateCargaId Int?
+  templateCarga   TemplateCarga? @relation(fields: [templateCargaId], references: [id])
+
+  estado        EstadoRecepcion @default(CARGADA)
+  observaciones String?
+
+  adjuntos RecepcionAdjunto[]
+  pallets  Pallet[]
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@index([plantaId])
+  @@index([templateCargaId])
+  @@index([eliminadoEn])
+  @@map("recepciones")
+}
+
+model RecepcionAdjunto {
+  id          Int       @id @default(autoincrement())
+  recepcionId Int
+  recepcion   Recepcion @relation(fields: [recepcionId], references: [id], onDelete: Cascade)
+  nombre      String
+  mime        String
+  tamano      Int // bytes
+  subidoEn    DateTime  @default(now())
+  subidoPor   String // Usuario
+
+  contenido RecepcionAdjuntoContenido?
+
+  @@index([recepcionId])
+  @@map("recepcion_adjuntos")
+}
+
+model RecepcionAdjuntoContenido {
+  adjuntoId Int              @id
+  adjunto   RecepcionAdjunto @relation(fields: [adjuntoId], references: [id], onDelete: Cascade)
+  datos     Bytes
+
+  @@map("recepcion_adjuntos_contenido")
+}
+
+model Pallet {
+  id          Int       @id @default(autoincrement())
+  recepcionId Int
+  recepcion   Recepcion @relation(fields: [recepcionId], references: [id])
+
+  numeroPallet String // identificador de origen — usado para reconciliar con Packing List (ventas.md)
+  origen       OrigenRecepcion // heredado de Recepcion.origen
+  // embarqueId se agrega cuando exista el modelo Embarque (ventas.md, aún diferido)
+
+  productorId Int // Entidad tipo PRODUCTOR
+  productor   Entidad @relation("PalletProductor", fields: [productorId], references: [id])
+
+  lineas PalletLinea[]
+
+  creadoEn DateTime @default(now())
+
+  @@index([recepcionId])
+  @@index([productorId])
+  @@map("pallets")
+}
+
+model PalletLinea {
+  id       Int    @id @default(autoincrement())
+  palletId Int
+  pallet   Pallet @relation(fields: [palletId], references: [id], onDelete: Cascade)
+
+  especieId   Int
+  especie     Especie   @relation(fields: [especieId], references: [id])
+  variedadId  Int
+  variedad    Variedad  @relation(fields: [variedadId], references: [id])
+  categoriaId Int
+  categoria   Categoria @relation(fields: [categoriaId], references: [id])
+  articuloId  Int // FK → Artículo tipo EMBALAJE
+  articulo    Articulo  @relation(fields: [articuloId], references: [id])
+  calibreId   Int
+  calibre     Calibre   @relation(fields: [calibreId], references: [id])
+
+  cajas Int
+
+  @@index([palletId])
+  @@map("pallet_lineas")
+}
+
+// ─── TEMPLATES DE CARGA (compras.md §9.2 — mapeo Excel por planta/origen) ─────
+
+model TemplateCarga {
+  id                 Int     @id @default(autoincrement())
+  codigo             String
+  descripcion        String
+  tieneCabecera      Boolean @default(true)
+  filaCabecera       Int? // requerido si tieneCabecera = true
+  filaPrimerRegistro Int
+  bloqueado          Boolean @default(false)
+
+  campos      TemplateCargaCampo[]
+  recepciones Recepcion[]
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@index([eliminadoEn])
+  @@map("templates_carga")
+}
+
+// `campo` usa una whitelist validada en el backend (no enum Prisma) para poder
+// ampliar la lista de campos mapeables sin migración — mismo patrón que
+// MODELOS_CON_CODIGO en el módulo Prefijos de Código.
+model TemplateCargaCampo {
+  id              Int           @id @default(autoincrement())
+  templateCargaId Int
+  templateCarga   TemplateCarga @relation(fields: [templateCargaId], references: [id], onDelete: Cascade)
+
+  campo   String // NUMERO_PALLET | ESPECIE | VARIEDAD | CATEGORIA | ARTICULO | CALIBRE | CAJAS | PRODUCTOR
+  columna String // nombre de cabecera (si tieneCabecera=true) o letra de columna Excel A/B/C... (si false)
+
+  @@unique([templateCargaId, campo])
+  @@map("templates_carga_campos")
 }

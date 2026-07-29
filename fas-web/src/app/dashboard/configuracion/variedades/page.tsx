@@ -1,9 +1,8 @@
 import PageContainer from '@/components/layout/page-container'
 import { searchParamsCache } from '@/lib/searchparams'
 import { SearchParams } from 'nuqs/server'
-import MantenedorListing from '@/components/shared/mantenedor-simple/mantenedor-listing'
 import { VariedadFormSheetTrigger } from '@/features/variedades/components/variedad-form-sheet'
-import { variedadExtraColumns } from '@/features/variedades/components/variedad-columns'
+import { VariedadListingClient } from '@/features/variedades/components/variedad-listing-client'
 
 export const metadata = {
   title: 'FAS — Variedades'
@@ -23,7 +22,7 @@ export default async function Page(props: PageProps) {
       pageDescription='Variedades de fruta clasificadas por especie y grupo de variedad.'
       pageHeaderAction={<VariedadFormSheetTrigger />}
     >
-      <MantenedorListing recurso='variedades' titulo='Variedad' extraColumns={variedadExtraColumns} />
+      <VariedadListingClient />
     </PageContainer>
   )
 }

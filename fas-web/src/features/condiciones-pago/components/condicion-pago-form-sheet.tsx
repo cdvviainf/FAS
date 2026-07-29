@@ -27,8 +27,8 @@ import { Label } from '@/components/ui/label'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { condicionesPagoService } from '../service'
-import { FECHA_REFERENCIA_LABELS } from '../types'
-import type { CondicionPago, CondicionPagoCuotaInput, FechaReferenciaPago, TipoValorCuota } from '../types'
+import { FECHA_REFERENCIA_LABELS, TIPO_CONDICION_PAGO_LABELS } from '../types'
+import type { CondicionPago, CondicionPagoCuotaInput, FechaReferenciaPago, TipoValorCuota, TipoCondicionPago } from '../types'
 
 const ITEM = 'CONFIG_MANTENEDORES'
 const monedasService = createMantenedorService('monedas')
@@ -69,6 +69,7 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
 
   const [codigo, setCodigo] = useState('')
   const [descripcion, setDescripcion] = useState('')
+  const [tipo, setTipo] = useState<TipoCondicionPago | ''>('')
   const [cuotas, setCuotas] = useState<CondicionPagoCuotaInput[]>([cuotaVacia()])
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -89,6 +90,7 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
     if (item) {
       setCodigo(item.codigo)
       setDescripcion(item.descripcion)
+      setTipo(item.tipo)
       setCuotas(item.cuotas.length > 0
         ? item.cuotas.map((c) => ({
             fechaReferencia: c.fechaReferencia,
@@ -104,6 +106,7 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
     } else {
       setCodigo('')
       setDescripcion('')
+      setTipo('')
       setCuotas([cuotaVacia()])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,6 +146,7 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
     const e: Record<string, string> = {}
     if (!isEdit && !codigo.trim()) e.codigo = 'El código es requerido'
     if (!descripcion.trim()) e.descripcion = 'La descripción es requerida'
+    if (!isEdit && !tipo) e.tipo = 'El tipo (Compra/Venta) es requerido'
     if (cuotas.length === 0) e.cuotas = 'Debe agregar al menos una cuota'
     const errorRegla = validarReglaCuotas(cuotas)
     if (errorRegla) e.cuotas = errorRegla
@@ -162,7 +166,7 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
         cuotas: cuotas.map((c) => ({ ...c, descripcion: c.descripcion?.trim() || undefined })),
       }
       if (isEdit) return condicionesPagoService.update(item!.id, payload)
-      return condicionesPagoService.create({ ...payload, codigo: codigo.trim() })
+      return condicionesPagoService.create({ ...payload, codigo: codigo.trim(), tipo: tipo as TipoCondicionPago })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['condiciones-pago'] })
@@ -195,6 +199,18 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
             <Label>Descripción <span className='text-destructive'>*</span></Label>
             <Input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder='Ej: 50/50 a 30 y 60 días' />
             {errors.descripcion && <p className='text-xs text-destructive'>{errors.descripcion}</p>}
+          </div>
+          <div className='space-y-1.5'>
+            <Label>Tipo <span className='text-destructive'>*</span></Label>
+            <Select value={tipo} onValueChange={(v) => setTipo(v as TipoCondicionPago)} disabled={isEdit}>
+              <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+              <SelectContent>
+                {(Object.keys(TIPO_CONDICION_PAGO_LABELS) as TipoCondicionPago[]).map((k) => (
+                  <SelectItem key={k} value={k}>{TIPO_CONDICION_PAGO_LABELS[k]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.tipo && <p className='text-xs text-destructive'>{errors.tipo}</p>}
           </div>
 
           <div className='space-y-2'>

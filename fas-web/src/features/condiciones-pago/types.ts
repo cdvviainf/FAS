@@ -1,10 +1,16 @@
 export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS'
 export type TipoValorCuota = 'PORCENTAJE' | 'MONTO_UNITARIO'
+export type TipoCondicionPago = 'COMPRA' | 'VENTA'
 
 export const FECHA_REFERENCIA_LABELS: Record<FechaReferenciaPago, string> = {
   FACTURA: 'Fecha de Factura',
   ZARPE: 'Fecha de Zarpe',
   ENVIO_DOCUMENTOS: 'Fecha de Envío de Documentos',
+}
+
+export const TIPO_CONDICION_PAGO_LABELS: Record<TipoCondicionPago, string> = {
+  COMPRA: 'Compra',
+  VENTA: 'Venta',
 }
 
 export interface MantenedorRef {
@@ -31,6 +37,7 @@ export interface CondicionPago {
   id: number
   codigo: string
   descripcion: string
+  tipo: TipoCondicionPago
   bloqueado: boolean
   cuotas: CondicionPagoCuota[]
 }
@@ -49,6 +56,7 @@ export interface CondicionPagoCuotaInput {
 export interface CondicionPagoCreateInput {
   codigo: string
   descripcion: string
+  tipo: TipoCondicionPago
   bloqueado?: boolean
   cuotas: CondicionPagoCuotaInput[]
 }

@@ -684,3 +684,15 @@ transaccionales son una fotografía, no una vista en vivo del maestro. Si se
 prefiere bloquear la reasignación mientras haya usos vigentes, es una
 decisión de negocio distinta que debe confirmarse explícitamente (afecta el
 mantenedor de País, no solo Mercado/Cierre Comercial/Solicitud).
+
+### QAS-MG-L2-005 — supersedida (Claude, 2026-07-29)
+
+La decisión registrada en L2-05/L2-09 (`Variedad.grupoVariedadId` opcional,
+`Int?`) queda **reemplazada**: por decisión de negocio, toda Variedad debe
+tener un Grupo de Variedad asignado. `grupoVariedadId` pasó a `Int`
+obligatorio (spec `mantenedores-generales.md`, `schema.prisma`, schema Zod y
+`variedad-form-sheet.tsx`), con migración `20260729190000_variedad_grupo_obligatorio`
+que aborta explícitamente si detecta variedades existentes sin grupo (no
+hace backfill automático — asignar grupo es una decisión de negocio que debe
+tomarse fila por fila). La validación L2-09 (grupo debe pertenecer a la
+misma especie) se mantiene sin cambios.

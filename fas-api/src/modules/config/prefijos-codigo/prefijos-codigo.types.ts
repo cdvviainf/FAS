@@ -11,7 +11,7 @@ export const MODELOS_CON_CODIGO = [
   'temporada', 'bodega', 'conceptoCtaCte', 'motivoInspeccion', 'calificacion',
   // Módulos dedicados
   'entidad', 'articulo', 'condicionPago', 'receta', 'tipoMovimiento',
-  'conceptoLiquidacion', 'perfil',
+  'conceptoLiquidacion', 'perfil', 'templateCarga',
 ] as const
 
 export type ModeloConCodigo = (typeof MODELOS_CON_CODIGO)[number]

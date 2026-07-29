@@ -1,9 +1,12 @@
 import { api } from '@/lib/api'
-import type { CondicionPago, CondicionPagoCreateInput, CondicionPagoUpdateInput } from './types'
+import type { CondicionPago, CondicionPagoCreateInput, CondicionPagoUpdateInput, TipoCondicionPago } from './types'
 
 export const condicionesPagoService = {
-  async list(q?: string): Promise<{ data: CondicionPago[] }> {
-    return api.get('config/condiciones-pago', { searchParams: q ? { q } : undefined }).json()
+  async list(params?: { q?: string; tipo?: TipoCondicionPago }): Promise<{ data: CondicionPago[] }> {
+    const searchParams: Record<string, string> = {}
+    if (params?.q) searchParams.q = params.q
+    if (params?.tipo) searchParams.tipo = params.tipo
+    return api.get('config/condiciones-pago', { searchParams: Object.keys(searchParams).length ? searchParams : undefined }).json()
   },
   async getById(id: number): Promise<{ data: CondicionPago }> {
     return api.get(`config/condiciones-pago/${id}`).json()

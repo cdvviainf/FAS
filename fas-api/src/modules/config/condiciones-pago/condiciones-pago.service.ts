@@ -1,6 +1,6 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './condiciones-pago.repository.js'
-import type { CondicionPagoCreateInput, CondicionPagoUpdateInput, CondicionPagoCuotaInput } from './condiciones-pago.types.js'
+import type { CondicionPagoCreateInput, CondicionPagoUpdateInput, CondicionPagoCuotaInput, TipoCondicionPago } from './condiciones-pago.types.js'
 
 // La cuota de monto unitario solo admite unidad Caja o Kilo (codigo 'CAJA'
 // o 'KG', sembradas en el seed) — cualquier otra UnidadMedida se rechaza
@@ -22,8 +22,8 @@ async function validarCuotas(cuotas: CondicionPagoCuotaInput[]) {
   }
 }
 
-export async function listarCondicionesPago(q?: string) {
-  return repo.listCondicionesPago(q)
+export async function listarCondicionesPago(q?: string, tipo?: TipoCondicionPago) {
+  return repo.listCondicionesPago(q, tipo)
 }
 
 export async function obtenerCondicionPago(id: number) {

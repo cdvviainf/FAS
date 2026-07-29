@@ -83,7 +83,7 @@ export const grupoVariedadUpdateSchema = grupoVariedadBodySchema
 
 export const variedadBodySchema = mantenedorBaseSchema.extend({
   especieId: z.number().int().positive({ message: 'Selecciona una especie' }),
-  grupoVariedadId: z.number().int().positive().optional(),
+  grupoVariedadId: z.number().int().positive({ message: 'Selecciona un grupo de variedad' }),
 })
 
 export const variedadUpdateSchema = variedadBodySchema

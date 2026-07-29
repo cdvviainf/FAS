@@ -132,8 +132,8 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   })
   const { data: mercadosData } = useQuery({ queryKey: ['mercados-options'], queryFn: () => mercadosService.list({ limit: 500 }), staleTime: 5 * 60_000 })
   const { data: condicionesPagoData } = useQuery({
-    queryKey: ['condiciones-pago-options'],
-    queryFn: () => condicionesPagoService.list(),
+    queryKey: ['condiciones-pago-options', 'COMPRA'],
+    queryFn: () => condicionesPagoService.list({ tipo: 'COMPRA' }),
     staleTime: 60_000,
   })
   const { data: formasPagoData } = useQuery({ queryKey: ['formas-pago-options'], queryFn: () => formasPagoService.list({ limit: 200, soloActivos: true }), staleTime: 5 * 60_000 })

@@ -28,13 +28,14 @@ import { createMantenedorMutations } from '@/features/mantenedor-simple/mutation
 import { createMantenedorQueries } from '@/features/mantenedor-simple/queries'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 import { EspecieQuickCreate } from '@/features/especies/components/especie-quick-create'
+import { GrupoVariedadQuickCreate } from '@/features/grupos-variedad/components/grupo-variedad-quick-create'
 
 const variedadSchema = z.object({
   codigo: z.string().min(1, 'Requerido').max(50).trim(),
   descripcion: z.string().min(1, 'Requerido').max(200).trim(),
   descripcionExtranjera: z.string().max(200).trim().optional(),
   especieId: z.coerce.number().int().min(1, 'Selecciona una especie'),
-  grupoVariedadId: z.coerce.number().int().positive().optional().nullable()
+  grupoVariedadId: z.coerce.number().int().min(1, 'Selecciona un grupo de variedad')
 })
 
 type VariedadFormValues = z.infer<typeof variedadSchema>
@@ -43,7 +44,7 @@ interface VariedadItem extends MantenedorSimple {
   especieId?: number
   grupoVariedadId?: number
   especie?: { id: number; descripcion: string }
-  grupoVariedad?: { id: number; descripcion: string } | null
+  grupoVariedad?: { id: number; descripcion: string }
 }
 
 interface VariedadFormSheetProps {
@@ -69,7 +70,7 @@ export function VariedadFormSheet({ item, open, onOpenChange }: VariedadFormShee
       descripcion: item?.descripcion ?? '',
       descripcionExtranjera: item?.descripcionExtranjera ?? '',
       especieId: item?.especieId ?? 0,
-      grupoVariedadId: item?.grupoVariedadId ?? null
+      grupoVariedadId: item?.grupoVariedadId ?? 0
     } as VariedadFormValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validators: { onSubmit: variedadSchema as any },
@@ -116,7 +117,11 @@ export function VariedadFormSheet({ item, open, onOpenChange }: VariedadFormShee
 
   const handleEspecieCreada = (especie: MantenedorSimple) => {
     form.setFieldValue('especieId', especie.id)
-    form.setFieldValue('grupoVariedadId', null)
+    form.setFieldValue('grupoVariedadId', 0)
+  }
+
+  const handleGrupoCreado = (grupo: MantenedorSimple) => {
+    form.setFieldValue('grupoVariedadId', grupo.id)
   }
 
   // El Sheet permanece montado entre aperturas (lo controla el padre vía `open`),
@@ -155,7 +160,7 @@ export function VariedadFormSheet({ item, open, onOpenChange }: VariedadFormShee
                         value={field.state.value ? String(field.state.value) : ''}
                         onValueChange={(v) => {
                           field.handleChange(parseInt(v, 10))
-                          form.setFieldValue('grupoVariedadId', null)
+                          form.setFieldValue('grupoVariedadId', 0)
                         }}
                       >
                         <SelectTrigger className='flex-1'>
@@ -181,24 +186,31 @@ export function VariedadFormSheet({ item, open, onOpenChange }: VariedadFormShee
               <form.Field name='grupoVariedadId'>
                 {(field) => (
                   <div className='space-y-1.5'>
-                    <Label className='text-sm font-medium'>Grupo de Variedad</Label>
-                    <Select
-                      value={field.state.value ? String(field.state.value) : ''}
-                      onValueChange={(v) => field.handleChange(v ? parseInt(v, 10) : null)}
-                      disabled={!selectedEspecieId}
-                    >
-                      <SelectTrigger className='flex-1'>
-                        <SelectValue placeholder={selectedEspecieId ? 'Sin grupo (opcional)...' : 'Selecciona una especie primero'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value=''>Sin grupo</SelectItem>
-                        {grupos.map((g) => (
-                          <SelectItem key={g.id} value={String(g.id)}>
-                            {g.descripcion}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label className='text-sm font-medium'>
+                      Grupo de Variedad <span className='text-destructive'>*</span>
+                    </Label>
+                    <div className='flex gap-2'>
+                      <Select
+                        value={field.state.value ? String(field.state.value) : ''}
+                        onValueChange={(v) => field.handleChange(parseInt(v, 10))}
+                        disabled={!selectedEspecieId}
+                      >
+                        <SelectTrigger className='flex-1'>
+                          <SelectValue placeholder={selectedEspecieId ? 'Seleccionar grupo...' : 'Selecciona una especie primero'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {grupos.map((g) => (
+                            <SelectItem key={g.id} value={String(g.id)}>
+                              {g.descripcion}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <GrupoVariedadQuickCreate especieId={selectedEspecieId || undefined} onCreated={handleGrupoCreado} />
+                    </div>
+                    {field.state.meta.errors.length > 0 && (
+                      <p className='text-sm text-destructive'>{String(field.state.meta.errors[0])}</p>
+                    )}
                   </div>
                 )}
               </form.Field>

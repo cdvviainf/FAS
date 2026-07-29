@@ -37,6 +37,7 @@ export const MODELOS_CON_CODIGO_OPTIONS: { value: string; label: string }[] = [
   { value: 'tipoMovimiento', label: 'Tipo de Movimiento' },
   { value: 'conceptoLiquidacion', label: 'Concepto de Liquidación' },
   { value: 'perfil', label: 'Perfil' },
+  { value: 'templateCarga', label: 'Template de Carga' },
 ]
 
 // Los mantenedores genéricos se identifican en sus rutas/páginas por su

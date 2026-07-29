@@ -50,6 +50,7 @@ const MENSAJE_CUOTAS = 'La cuota con monto unitario debe ser la primera y es un 
 export const condicionPagoCreateSchema = z.object({
   codigo: z.string().min(1, 'El código es requerido').max(50).trim(),
   descripcion: z.string().min(1, 'La descripción es requerida').max(200).trim(),
+  tipo: z.enum(['COMPRA', 'VENTA'], { message: 'El tipo (Compra/Venta) es requerido' }),
   bloqueado: z.boolean().default(false),
   cuotas: z
     .array(cuotaSchema)
@@ -73,6 +74,7 @@ export const condicionPagoParamsSchema = z.object({
 
 export const condicionPagoListQuerySchema = z.object({
   q: z.string().trim().optional(),
+  tipo: z.enum(['COMPRA', 'VENTA']).optional(),
 })
 
 export type CondicionPagoCreateBody = z.infer<typeof condicionPagoCreateSchema>

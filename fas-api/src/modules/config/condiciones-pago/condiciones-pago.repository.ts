@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
-import type { CondicionPagoCreateInput, CondicionPagoUpdateInput } from './condiciones-pago.types.js'
+import type { CondicionPagoCreateInput, CondicionPagoUpdateInput, TipoCondicionPago } from './condiciones-pago.types.js'
 
 const includeCuotas = {
   cuotas: {
@@ -11,10 +11,11 @@ const includeCuotas = {
   },
 }
 
-export async function listCondicionesPago(q?: string) {
+export async function listCondicionesPago(q?: string, tipo?: TipoCondicionPago) {
   return prisma.condicionPago.findMany({
     where: {
       eliminadoEn: null,
+      ...(tipo ? { tipo } : {}),
       ...(q
         ? {
             OR: [

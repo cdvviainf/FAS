@@ -15,6 +15,7 @@ const itemsMenu = [
   { codigo: 'COMPRAS_INSTRUCTIVO', nombre: 'Instructivo de Embalaje', seccion: 'Compras', ruta: '/dashboard/compras/instructivo-embalaje', esAccion: false, orden: 19 },
   { codigo: 'COMPRAS_OC', nombre: 'Órdenes de Compra', seccion: 'Compras', ruta: '/dashboard/compras/ordenes', esAccion: false, orden: 20 },
   { codigo: 'OC_APROBACION', nombre: 'Aprobación de OC', seccion: 'Compras', ruta: null, esAccion: true, orden: 21 },
+  { codigo: 'COMPRAS_RECEPCION', nombre: 'Recepción de Stock', seccion: 'Compras', ruta: '/dashboard/compras/recepciones', esAccion: false, orden: 22 },
   // Productores
   { codigo: 'PROD_FICHA', nombre: 'Productores', seccion: 'Productores', ruta: '/dashboard/configuracion/productores', esAccion: false, orden: 30 },
   { codigo: 'PROD_CONTRATO', nombre: 'Contrato', seccion: 'Productores', ruta: '/dashboard/productores/contrato', esAccion: false, orden: 31 },

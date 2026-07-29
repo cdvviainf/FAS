@@ -35,6 +35,7 @@ async function limpiarDatos() {
       "calibres",
       "categorias",
       "variedades",
+      "grupos_variedad",
       "especies",
       "mercados",
       "grupos_mercado",
@@ -69,6 +70,7 @@ async function crearCondicionPago(cuotas: { porcentaje: number; plazoDias: numbe
     data: {
       codigo: 'CP-30-60',
       descripcion: '50/50 a 30 y 60 días',
+      tipo: 'COMPRA',
       creadoPor: 'test',
       cuotas: { create: cuotas },
     },
@@ -89,7 +91,8 @@ async function crearFixtures() {
   const tipoEmbarque = await prisma.tipoEmbarque.create({ data: { codigo: 'MARIT', descripcion: 'Marítimo', creadoPor: 'test' } })
   const moneda = await prisma.moneda.create({ data: { codigo: 'USD', descripcion: 'Dólar', creadoPor: 'test' } })
   const especie = await prisma.especie.create({ data: { codigo: 'UV', descripcion: 'Uva', creadoPor: 'test' } })
-  const variedad = await prisma.variedad.create({ data: { codigo: 'RG', descripcion: 'Red Globe', especieId: especie.id, creadoPor: 'test' } })
+  const grupoVariedad = await prisma.grupoVariedad.create({ data: { codigo: 'GV-UV', descripcion: 'Uva de Mesa', especieId: especie.id, creadoPor: 'test' } })
+  const variedad = await prisma.variedad.create({ data: { codigo: 'RG', descripcion: 'Red Globe', especieId: especie.id, grupoVariedadId: grupoVariedad.id, creadoPor: 'test' } })
   const categoria = await prisma.categoria.create({ data: { codigo: 'CAT1', descripcion: 'Categoría 1', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
   const calibreChico = await prisma.calibre.create({ data: { codigo: 'XL', descripcion: 'XL', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
   const calibreGrande = await prisma.calibre.create({ data: { codigo: 'XXL', descripcion: 'XXL', especieId: especie.id, orden: 2, control: [], creadoPor: 'test' } })
@@ -140,7 +143,8 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
     const nv = await crearNotaVenta(nvBase(f), 'test')
 
     const otraEspecie = await prisma.especie.create({ data: { codigo: 'CZ', descripcion: 'Cereza', creadoPor: 'test' } })
-    const variedadOtraEspecie = await prisma.variedad.create({ data: { codigo: 'BING', descripcion: 'Bing', especieId: otraEspecie.id, creadoPor: 'test' } })
+    const grupoVariedadOtraEspecie = await prisma.grupoVariedad.create({ data: { codigo: 'GV-CZ', descripcion: 'Cereza', especieId: otraEspecie.id, creadoPor: 'test' } })
+    const variedadOtraEspecie = await prisma.variedad.create({ data: { codigo: 'BING', descripcion: 'Bing', especieId: otraEspecie.id, grupoVariedadId: grupoVariedadOtraEspecie.id, creadoPor: 'test' } })
 
     await expect(
       agregarDetalle(nv.id, {

@@ -8,8 +8,8 @@ import {
 import * as service from './condiciones-pago.service.js'
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
-  const { q } = condicionPagoListQuerySchema.parse(req.query)
-  const condicionesPago = await service.listarCondicionesPago(q)
+  const { q, tipo } = condicionPagoListQuerySchema.parse(req.query)
+  const condicionesPago = await service.listarCondicionesPago(q, tipo)
   return reply.send({ data: condicionesPago })
 }
 

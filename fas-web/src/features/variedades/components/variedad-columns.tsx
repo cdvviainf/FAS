@@ -19,9 +19,6 @@ export const variedadExtraColumns: ColumnDef<MantenedorSimple>[] = [
     id: 'grupoVariedad',
     header: 'Grupo',
     enableSorting: false,
-    cell: ({ row }) => {
-      const gv = (row.original as VariedadItem).grupoVariedad
-      return gv?.descripcion ?? <span className='text-muted-foreground text-xs'>Sin grupo</span>
-    }
+    cell: ({ row }) => (row.original as VariedadItem).grupoVariedad?.descripcion ?? '—'
   }
 ]

@@ -237,7 +237,7 @@ export async function actualizarMantenedor(
   if (modelo === 'variedad' && data.grupoVariedadId !== undefined) {
     const current = await repo.getMantenedorById(modelo, id) as { especieId?: number } | null
     const targetEspecieId = data.especieId ?? current?.especieId
-    if (data.grupoVariedadId !== null && targetEspecieId) {
+    if (targetEspecieId) {
       const grupo = await repo.getMantenedorById('grupoVariedad', data.grupoVariedadId) as { especieId?: number } | null
       if (!grupo) throw new ValidationError(`El grupo de variedad no existe`)
       if (grupo.especieId !== targetEspecieId) {
