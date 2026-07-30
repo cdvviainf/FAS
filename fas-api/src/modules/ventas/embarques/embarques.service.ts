@@ -2,8 +2,9 @@ import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './embarques.repository.js'
 import type { EmbarqueCreateInput } from './embarques.types.js'
 
-export async function listarEmbarques(notaVentaId?: number) {
-  return repo.listEmbarques(notaVentaId)
+export async function listarEmbarques(page: number, limit: number, notaVentaId?: number) {
+  const { data, total } = await repo.listEmbarques(page, limit, notaVentaId)
+  return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
 export async function obtenerEmbarque(id: number) {

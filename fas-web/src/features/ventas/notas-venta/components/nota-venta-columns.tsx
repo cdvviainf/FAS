@@ -24,6 +24,7 @@ import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { GenerarEmbarqueDialog } from '@/features/ventas/embarques/components/generar-embarque-dialog'
 
 const ITEM = 'VENTAS_NV'
+const ITEM_EMBARQUES = 'VENTAS_EMBARQUES'
 
 function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -31,6 +32,7 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
   const queryClient = useQueryClient()
   const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
+  const puedeEscribirEmbarques = usePuedeEscribir(ITEM_EMBARQUES)
 
   const deleteMutation = useMutation({
     mutationFn: () => notasVentaService.remove(notaVenta.id),
@@ -64,7 +66,7 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
             <Icons.edit className='mr-2 h-4 w-4' />
             {puedeEscribir ? 'Editar' : 'Ver detalle'}
           </DropdownMenuItem>
-          {puedeEscribir && (
+          {puedeEscribirEmbarques && (
             <DropdownMenuItem onClick={() => setEmbarqueOpen(true)}>
               <Icons.post className='mr-2 h-4 w-4' />
               Generar Embarque

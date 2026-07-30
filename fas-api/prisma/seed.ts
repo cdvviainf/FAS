@@ -23,7 +23,8 @@ const itemsMenu = [
   { codigo: 'PROD_CONCEPTOS_LIQ', nombre: 'Conceptos de Liquidación', seccion: 'Productores', ruta: '/dashboard/configuracion/conceptos-liquidacion', esAccion: false, orden: 33 },
   // Ventas
   { codigo: 'VENTAS_NV', nombre: 'Cierre Comercial', seccion: 'Ventas', ruta: '/dashboard/ventas/cierre', esAccion: false, orden: 40 },
-  { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', seccion: 'Ventas', ruta: '/dashboard/ventas/cobranza', esAccion: false, orden: 41 },
+  { codigo: 'VENTAS_EMBARQUES', nombre: 'Embarques', seccion: 'Ventas', ruta: '/dashboard/ventas/embarques', esAccion: false, orden: 41 },
+  { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', seccion: 'Ventas', ruta: '/dashboard/ventas/cobranza', esAccion: false, orden: 42 },
   // Operaciones
   { codigo: 'OPER_MATERIALES', nombre: 'Materiales', seccion: 'Operaciones', ruta: '/dashboard/configuracion/articulos', esAccion: false, orden: 50 },
   { codigo: 'OPER_STOCK', nombre: 'Stock Fruta', seccion: 'Operaciones', ruta: '/dashboard/operaciones/stock', esAccion: false, orden: 51 },

@@ -7,12 +7,11 @@ export const embarquesKeys = {
   detail: (id: number) => ['embarques', 'detail', id] as const,
 }
 
-export function embarquesListOptions(filters: { notaVentaId?: number } = {}) {
+export function embarquesListOptions(filters: { notaVentaId?: number; page?: number; limit?: number } = {}) {
   return queryOptions({
     queryKey: embarquesKeys.list(filters),
     queryFn: () => embarquesService.list(filters),
     staleTime: 30_000,
-    enabled: !!filters.notaVentaId,
   })
 }
 

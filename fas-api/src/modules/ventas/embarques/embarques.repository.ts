@@ -3,12 +3,19 @@ import type { EmbarqueCreateInput } from './embarques.types.js'
 
 const notaVentaRefSelect = { id: true, folio: true }
 
-export async function listEmbarques(notaVentaId?: number) {
-  return prisma.embarque.findMany({
-    where: { eliminadoEn: null, ...(notaVentaId ? { notaVentaId } : {}) },
-    include: { notaVenta: { select: notaVentaRefSelect } },
-    orderBy: { creadoEn: 'desc' },
-  })
+export async function listEmbarques(page: number, limit: number, notaVentaId?: number) {
+  const where = { eliminadoEn: null, ...(notaVentaId ? { notaVentaId } : {}) }
+  const [data, total] = await Promise.all([
+    prisma.embarque.findMany({
+      where,
+      include: { notaVenta: { select: notaVentaRefSelect } },
+      orderBy: { creadoEn: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.embarque.count({ where }),
+  ])
+  return { data, total }
 }
 
 export async function getEmbarqueById(id: number) {

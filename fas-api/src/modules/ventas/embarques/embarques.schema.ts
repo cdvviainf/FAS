@@ -11,6 +11,8 @@ export const embarqueParamsSchema = z.object({
 
 export const embarqueListQuerySchema = z.object({
   notaVentaId: z.coerce.number().int().positive().optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(500).default(20),
 })
 
 export type EmbarqueCreateBody = z.infer<typeof embarqueCreateSchema>

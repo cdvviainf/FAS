@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { requireAuth, requireLevel } from '../../../plugins/auth-guard.js'
 import * as ctrl from './embarques.controller.js'
 
-const ITEM = 'VENTAS_NV' // Embarque nace desde Cierre Comercial — mismo permiso por ahora
+const ITEM = 'VENTAS_EMBARQUES'
 
 export async function embarquesRoutes(app: FastifyInstance) {
   app.get('/embarques', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)

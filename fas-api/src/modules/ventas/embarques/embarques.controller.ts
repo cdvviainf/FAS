@@ -3,9 +3,9 @@ import { embarqueCreateSchema, embarqueParamsSchema, embarqueListQuerySchema } f
 import * as service from './embarques.service.js'
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
-  const { notaVentaId } = embarqueListQuerySchema.parse(req.query)
-  const embarques = await service.listarEmbarques(notaVentaId)
-  return reply.send({ data: embarques })
+  const { page, limit, notaVentaId } = embarqueListQuerySchema.parse(req.query)
+  const result = await service.listarEmbarques(page, limit, notaVentaId)
+  return reply.send(result)
 }
 
 export async function getById(req: FastifyRequest, reply: FastifyReply) {
