@@ -51,10 +51,7 @@ export interface NotaVentaDetalleItem {
   cajasPorPallet: number
   cajas: number
   precio: string
-  calibreInicioId: number
-  calibreInicio: MantenedorRef
-  calibreFinId: number
-  calibreFin: MantenedorRef
+  calibres: { calibre: MantenedorRef }[]
 }
 
 export interface NotaVentaListItem {
@@ -136,6 +133,5 @@ export interface NotaVentaDetalleCreateInput {
   cajasPorPallet: number
   cajas: number
   precio: number
-  calibreInicioId: number
-  calibreFinId: number
+  calibreIds: number[]
 }

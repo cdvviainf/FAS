@@ -30,7 +30,7 @@ import { solicitudDetailOptions, solicitudesKeys } from '../queries'
 import { solicitudesService } from '../service'
 import { FUNCION_LABELS } from '../types'
 import type { AsignadoInput, FuncionAsignado, SolicitudCreateInput } from '../types'
-import { SelectMultiple } from './select-multiple'
+import { SelectMultiple } from '@/components/shared/select-multiple'
 
 const motivosService = createMantenedorService('motivos-inspeccion')
 const especiesService = createMantenedorService('especies')

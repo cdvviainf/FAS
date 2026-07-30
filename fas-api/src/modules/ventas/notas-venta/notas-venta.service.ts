@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './notas-venta.repository.js'
-import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaUpdateInput } from './notas-venta.types.js'
+import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleUpdateInput, NotaVentaUpdateInput } from './notas-venta.types.js'
 
 const TIPOS_CLIENTE = new Set(['CLIENTE_NACIONAL', 'CLIENTE_EXTRANJERO'])
 
@@ -129,18 +129,12 @@ async function validarDetalle(data: NotaVentaDetalleCreateInput) {
     if (!tipoPallet) throw new ValidationError('El tipo de pallet seleccionado no existe o está bloqueado')
   }
 
-  const [calibreInicio, calibreFin] = await Promise.all([
-    repo.getCalibre(data.calibreInicioId),
-    repo.getCalibre(data.calibreFinId),
-  ])
-  if (!calibreInicio || !calibreFin) {
-    throw new ValidationError('El calibre de inicio o fin seleccionado no existe o está bloqueado')
+  const calibres = await repo.getCalibresActivos(data.calibreIds)
+  if (calibres.length !== new Set(data.calibreIds).size) {
+    throw new ValidationError('Uno o más calibres seleccionados no existen o están bloqueados')
   }
-  if (calibreInicio.especieId !== data.especieId || calibreFin.especieId !== data.especieId) {
-    throw new ValidationError('El calibre de inicio o fin no pertenece a la especie de la línea')
-  }
-  if (calibreInicio.orden > calibreFin.orden) {
-    throw new ValidationError('El calibre de inicio debe preceder (o igualar) al calibre de fin en el orden del maestro')
+  if (calibres.some((c) => c.especieId !== data.especieId)) {
+    throw new ValidationError('Uno o más calibres no pertenecen a la especie de la línea')
   }
 }
 
@@ -204,6 +198,11 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
 
 export async function eliminarNotaVenta(id: number, eliminadoPor: string) {
   await obtenerNotaVenta(id)
+  // R3 (Docs/ventas.md): no se puede eliminar una NV con Embarque asociado.
+  const embarques = await repo.countEmbarques(id)
+  if (embarques > 0) {
+    throw new ValidationError('No se puede eliminar un Cierre Comercial que ya tiene un Embarque asociado')
+  }
   await repo.softDeleteNotaVenta(id, eliminadoPor)
 }
 
@@ -211,4 +210,22 @@ export async function agregarDetalle(notaVentaId: number, body: NotaVentaDetalle
   await obtenerNotaVenta(notaVentaId)
   await validarDetalle(body)
   return repo.addDetalle(notaVentaId, body)
+}
+
+async function obtenerDetalleDeNotaVenta(notaVentaId: number, detalleId: number) {
+  const detalle = await repo.getDetalleById(detalleId)
+  if (!detalle || detalle.notaVentaId !== notaVentaId) {
+    throw new NotFoundError('Línea de detalle', String(detalleId))
+  }
+}
+
+export async function actualizarDetalle(notaVentaId: number, detalleId: number, body: NotaVentaDetalleUpdateInput) {
+  await obtenerDetalleDeNotaVenta(notaVentaId, detalleId)
+  await validarDetalle(body)
+  return repo.updateDetalle(detalleId, body)
+}
+
+export async function eliminarDetalle(notaVentaId: number, detalleId: number) {
+  await obtenerDetalleDeNotaVenta(notaVentaId, detalleId)
+  await repo.removeDetalle(detalleId, notaVentaId)
 }

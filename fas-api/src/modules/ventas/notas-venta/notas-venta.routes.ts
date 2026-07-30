@@ -11,4 +11,6 @@ export async function notasVentaRoutes(app: FastifyInstance) {
   app.patch('/notas-venta/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.update)
   app.delete('/notas-venta/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.remove)
   app.post('/notas-venta/:id/detalles', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.addDetalle)
+  app.patch('/notas-venta/:id/detalles/:detalleId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.updateDetalle)
+  app.delete('/notas-venta/:id/detalles/:detalleId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.removeDetalle)
 }

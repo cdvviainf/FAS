@@ -21,11 +21,13 @@ import { notasVentaService } from '../service'
 import { notasVentaKeys } from '../queries'
 import type { NotaVentaListItem } from '../types'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { GenerarEmbarqueDialog } from '@/features/ventas/embarques/components/generar-embarque-dialog'
 
 const ITEM = 'VENTAS_NV'
 
 function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [embarqueOpen, setEmbarqueOpen] = useState(false)
   const queryClient = useQueryClient()
   const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
@@ -48,6 +50,7 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
         onConfirm={() => deleteMutation.mutate()}
         loading={deleteMutation.isPending}
       />
+      <GenerarEmbarqueDialog notaVentaId={notaVenta.id} open={embarqueOpen} onOpenChange={setEmbarqueOpen} />
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button variant='ghost' className='h-8 w-8 p-0'>
@@ -61,6 +64,12 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
             <Icons.edit className='mr-2 h-4 w-4' />
             {puedeEscribir ? 'Editar' : 'Ver detalle'}
           </DropdownMenuItem>
+          {puedeEscribir && (
+            <DropdownMenuItem onClick={() => setEmbarqueOpen(true)}>
+              <Icons.post className='mr-2 h-4 w-4' />
+              Generar Embarque
+            </DropdownMenuItem>
+          )}
           {puedeEscribir && (
             <>
               <DropdownMenuSeparator />

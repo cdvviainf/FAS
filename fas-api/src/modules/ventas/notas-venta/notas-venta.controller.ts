@@ -5,6 +5,8 @@ import {
   notaVentaParamsSchema,
   notaVentaListQuerySchema,
   notaVentaDetalleCreateSchema,
+  notaVentaDetalleUpdateSchema,
+  notaVentaDetalleParamsSchema,
 } from './notas-venta.schema.js'
 import * as service from './notas-venta.service.js'
 
@@ -44,4 +46,17 @@ export async function addDetalle(req: FastifyRequest, reply: FastifyReply) {
   const body = notaVentaDetalleCreateSchema.parse(req.body)
   const detalle = await service.agregarDetalle(id, body)
   return reply.status(201).send({ data: detalle })
+}
+
+export async function updateDetalle(req: FastifyRequest, reply: FastifyReply) {
+  const { id, detalleId } = notaVentaDetalleParamsSchema.parse(req.params)
+  const body = notaVentaDetalleUpdateSchema.parse(req.body)
+  const detalle = await service.actualizarDetalle(id, detalleId, body)
+  return reply.send({ data: detalle })
+}
+
+export async function removeDetalle(req: FastifyRequest, reply: FastifyReply) {
+  const { id, detalleId } = notaVentaDetalleParamsSchema.parse(req.params)
+  await service.eliminarDetalle(id, detalleId)
+  return reply.status(204).send()
 }

@@ -11,6 +11,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { AlertModal } from '@/components/modal/alert-modal'
+import { SelectMultiple } from '@/components/shared/select-multiple'
 import {
   Select,
   SelectContent,
@@ -28,7 +31,7 @@ import { condicionesPagoService } from '@/features/condiciones-pago/service'
 import { FECHA_REFERENCIA_LABELS } from '@/features/condiciones-pago/types'
 import { notaVentaDetailOptions, notasVentaKeys } from '../queries'
 import { notasVentaService } from '../service'
-import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput } from '../types'
+import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleItem } from '../types'
 
 const tiposEmbarqueService = createMantenedorService('tipos-embarque')
 const mercadosService = createMantenedorService('mercados')
@@ -94,8 +97,7 @@ interface NuevaLinea {
   cajasPorPallet: string
   cajas: string
   precio: string
-  calibreInicioId: number
-  calibreFinId: number
+  calibreIds: number[]
 }
 
 const LINEA_EMPTY: NuevaLinea = {
@@ -109,8 +111,7 @@ const LINEA_EMPTY: NuevaLinea = {
   cajasPorPallet: '',
   cajas: '',
   precio: '',
-  calibreInicioId: 0,
-  calibreFinId: 0,
+  calibreIds: [],
 }
 
 interface NotaVentaFormProps {
@@ -126,6 +127,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [linea, setLinea] = useState<NuevaLinea>(LINEA_EMPTY)
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
+  const [editingDetalleId, setEditingDetalleId] = useState<number | null>(null)
+  const [deleteDetalleId, setDeleteDetalleId] = useState<number | null>(null)
 
   const { data: notaVenta, isLoading } = useQuery({
     ...notaVentaDetailOptions(notaVentaId ?? 0),
@@ -276,6 +279,28 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     onError: (e: Error) => toast.error(e.message || 'Error al agregar la línea'),
   })
 
+  const updateDetalleMutation = useMutation({
+    mutationFn: (data: NotaVentaDetalleCreateInput) => notasVentaService.updateDetalle(notaVentaId!, editingDetalleId!, data),
+    onSuccess: () => {
+      toast.success('Línea actualizada')
+      setLinea(LINEA_EMPTY)
+      setLineaErrors({})
+      setEditingDetalleId(null)
+      queryClient.invalidateQueries({ queryKey: notasVentaKeys.detail(notaVentaId!) })
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al actualizar la línea'),
+  })
+
+  const removeDetalleMutation = useMutation({
+    mutationFn: (detalleId: number) => notasVentaService.removeDetalle(notaVentaId!, detalleId),
+    onSuccess: () => {
+      toast.success('Línea eliminada')
+      setDeleteDetalleId(null)
+      queryClient.invalidateQueries({ queryKey: notasVentaKeys.detail(notaVentaId!) })
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al eliminar la línea'),
+  })
+
   function handleSubmit() {
     if (!validate()) {
       toast.error('Hay campos por corregir')
@@ -296,15 +321,14 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     if (!linea.cajasPorPallet || Number(linea.cajasPorPallet) <= 0) e.cajasPorPallet = 'Debe ser mayor a 0'
     if (!linea.cajas || Number(linea.cajas) <= 0) e.cajas = 'Debe ser mayor a 0'
     if (!linea.precio || Number(linea.precio) <= 0) e.precio = 'Debe ser mayor a 0'
-    if (!linea.calibreInicioId) e.calibreInicioId = 'Requerido'
-    if (!linea.calibreFinId) e.calibreFinId = 'Requerido'
+    if (linea.calibreIds.length === 0) e.calibreIds = 'Selecciona al menos un calibre'
     setLineaErrors(e)
     return Object.keys(e).length === 0
   }
 
-  function handleAgregarLinea() {
+  function handleGuardarLinea() {
     if (!validarLinea()) return
-    addDetalleMutation.mutate({
+    const payload: NotaVentaDetalleCreateInput = {
       fechaCompromiso: linea.fechaCompromiso,
       especieId: linea.especieId,
       variedadId: linea.variedadId,
@@ -315,12 +339,38 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       cajasPorPallet: Number(linea.cajasPorPallet),
       cajas: Number(linea.cajas),
       precio: Number(linea.precio),
-      calibreInicioId: linea.calibreInicioId,
-      calibreFinId: linea.calibreFinId,
+      calibreIds: linea.calibreIds,
+    }
+    if (editingDetalleId) updateDetalleMutation.mutate(payload)
+    else addDetalleMutation.mutate(payload)
+  }
+
+  function handleEditarLinea(d: NotaVentaDetalleItem) {
+    setEditingDetalleId(d.id)
+    setLinea({
+      fechaCompromiso: d.fechaCompromiso.slice(0, 10),
+      especieId: d.especieId,
+      variedadId: d.variedadId,
+      articuloId: d.articuloId,
+      categoriaId: d.categoriaId,
+      tipoPalletId: d.tipoPalletId,
+      cantidadPallets: String(d.cantidadPallets),
+      cajasPorPallet: String(d.cajasPorPallet),
+      cajas: String(d.cajas),
+      precio: d.precio,
+      calibreIds: d.calibres.map((c) => c.calibre.id),
     })
+    setLineaErrors({})
+  }
+
+  function handleCancelarEdicionLinea() {
+    setEditingDetalleId(null)
+    setLinea(LINEA_EMPTY)
+    setLineaErrors({})
   }
 
   const articuloSeleccionado = (articulosData?.data ?? []).find((a) => a.id === linea.articuloId)
+  const lineaMutationPending = addDetalleMutation.isPending || updateDetalleMutation.isPending
 
   if (isEdit && isLoading) {
     return <p className='text-sm text-muted-foreground'>Cargando…</p>
@@ -499,7 +549,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </Select>
             </div>
             <div className='space-y-1.5'>
-              <Label>Forma de Pago</Label>
+              <Label>Condición de Pago</Label>
               <Select value={fields.condicionPagoId ? String(fields.condicionPagoId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, condicionPagoId: v === 'none' ? null : Number(v) }))}>
                 <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
                 <SelectContent>
@@ -514,7 +564,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
 
           {cuotasPreview.length > 0 && (
             <div className='rounded-md border p-3'>
-              <p className='mb-2 text-xs font-medium text-muted-foreground'>Plazo de pago (determinado por la Forma de Pago)</p>
+              <p className='mb-2 text-xs font-medium text-muted-foreground'>Plazo de pago (determinado por la Condición de Pago)</p>
               <div className='flex flex-wrap gap-2'>
                 {cuotasPreview.map((c, i) => (
                   <Badge key={i} variant='outline'>
@@ -548,18 +598,51 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
           </CardHeader>
           <CardContent className='space-y-4'>
             {(notaVenta?.data.detalles.length ?? 0) > 0 && (
-              <div className='space-y-2 rounded-md border p-2'>
-                {notaVenta!.data.detalles.map((d) => (
-                  <div key={d.id} className='flex flex-wrap items-center gap-2 border-b pb-2 text-sm last:border-b-0 last:pb-0'>
-                    <span className='font-medium'>{d.especie.descripcion} / {d.variedad.descripcion}</span>
-                    <span className='text-muted-foreground'>{d.articulo.descripcion}</span>
-                    {d.categoria && <span className='text-muted-foreground'>· {d.categoria.descripcion}</span>}
-                    <span className='text-muted-foreground'>· Calibre: {d.calibreInicio.codigo}–{d.calibreFin.codigo}</span>
-                    <span className='ml-auto text-muted-foreground'>{d.cantidadPallets} pallets × {d.cajasPorPallet} cj · ${d.precio}/cj</span>
-                  </div>
-                ))}
+              <div className='rounded-md border'>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Especie / Variedad</TableHead>
+                      <TableHead>Artículo</TableHead>
+                      <TableHead>Categoría</TableHead>
+                      <TableHead>Calibre</TableHead>
+                      <TableHead>Cantidad</TableHead>
+                      <TableHead>Precio</TableHead>
+                      <TableHead className='w-20 text-right'>Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {notaVenta!.data.detalles.map((d) => (
+                      <TableRow key={d.id}>
+                        <TableCell className='font-medium'>{d.especie.descripcion} / {d.variedad.descripcion}</TableCell>
+                        <TableCell className='text-muted-foreground'>{d.articulo.descripcion}</TableCell>
+                        <TableCell className='text-muted-foreground'>{d.categoria?.descripcion ?? '—'}</TableCell>
+                        <TableCell className='text-muted-foreground'>{d.calibres.map((c) => c.calibre.codigo).join(', ')}</TableCell>
+                        <TableCell className='text-muted-foreground'>{d.cantidadPallets} pallets × {d.cajasPorPallet} cj</TableCell>
+                        <TableCell className='text-muted-foreground'>${d.precio}/cj</TableCell>
+                        <TableCell className='text-right'>
+                          <div className='flex justify-end gap-1'>
+                            <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleEditarLinea(d)}>
+                              <Icons.edit className='h-4 w-4' />
+                            </Button>
+                            <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => setDeleteDetalleId(d.id)}>
+                              <Icons.trash className='h-4 w-4' />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
+
+            <AlertModal
+              isOpen={deleteDetalleId != null}
+              onClose={() => setDeleteDetalleId(null)}
+              onConfirm={() => deleteDetalleId && removeDetalleMutation.mutate(deleteDetalleId)}
+              loading={removeDetalleMutation.isPending}
+            />
 
             <Separator />
 
@@ -571,7 +654,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </div>
               <div className='space-y-1.5'>
                 <Label>Especie <span className='text-destructive'>*</span></Label>
-                <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: null, calibreInicioId: 0, calibreFinId: 0 }))}>
+                <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: null, calibreIds: [] }))}>
                   <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                   <SelectContent>
                     {(especiesData?.data ?? []).map((e) => (
@@ -650,31 +733,16 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </div>
             </div>
 
-            <div className='grid gap-3 sm:grid-cols-2'>
-              <div className='space-y-1.5'>
-                <Label>Calibre Inicio <span className='text-destructive'>*</span></Label>
-                <Select value={linea.calibreInicioId ? String(linea.calibreInicioId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, calibreInicioId: Number(v) }))} disabled={!linea.especieId}>
-                  <SelectTrigger><SelectValue placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'} /></SelectTrigger>
-                  <SelectContent>
-                    {(calibresData?.data ?? []).map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {lineaErrors.calibreInicioId && <p className='text-xs text-destructive'>{lineaErrors.calibreInicioId}</p>}
-              </div>
-              <div className='space-y-1.5'>
-                <Label>Calibre Fin <span className='text-destructive'>*</span></Label>
-                <Select value={linea.calibreFinId ? String(linea.calibreFinId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, calibreFinId: Number(v) }))} disabled={!linea.especieId}>
-                  <SelectTrigger><SelectValue placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'} /></SelectTrigger>
-                  <SelectContent>
-                    {(calibresData?.data ?? []).map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {lineaErrors.calibreFinId && <p className='text-xs text-destructive'>{lineaErrors.calibreFinId}</p>}
-              </div>
+            <div className='space-y-1.5'>
+              <Label>Calibres aceptados <span className='text-destructive'>*</span></Label>
+              <SelectMultiple
+                options={(calibresData?.data ?? []).map((c) => ({ id: c.id, label: c.descripcion }))}
+                selectedIds={linea.calibreIds}
+                onChange={(ids) => setLinea((l) => ({ ...l, calibreIds: ids }))}
+                placeholder={linea.especieId ? 'Agregar calibre...' : 'Elige una especie primero'}
+                disabled={!linea.especieId}
+              />
+              {lineaErrors.calibreIds && <p className='text-xs text-destructive'>{lineaErrors.calibreIds}</p>}
             </div>
 
             {articuloSeleccionado && (articuloSeleccionado.etiqueta || articuloSeleccionado.kgNetoEnvase) && (
@@ -683,9 +751,14 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </p>
             )}
 
-            <div className='flex justify-end'>
-              <Button variant='secondary' onClick={handleAgregarLinea} isLoading={addDetalleMutation.isPending}>
-                <Icons.add className='mr-1 h-4 w-4' /> Agregar línea
+            <div className='flex justify-end gap-2'>
+              {editingDetalleId && (
+                <Button variant='outline' onClick={handleCancelarEdicionLinea} disabled={lineaMutationPending}>
+                  Cancelar edición
+                </Button>
+              )}
+              <Button variant='secondary' onClick={handleGuardarLinea} isLoading={lineaMutationPending}>
+                {editingDetalleId ? <><Icons.check className='mr-1 h-4 w-4' /> Guardar cambios de línea</> : <><Icons.add className='mr-1 h-4 w-4' /> Agregar línea</>}
               </Button>
             </div>
           </CardContent>

@@ -33,12 +33,18 @@ export const notaVentaDetalleCreateSchema = z.object({
   cajasPorPallet: z.number().int().positive('Las cajas por pallet deben ser mayor a 0'),
   cajas: z.number().int().positive('Las cajas deben ser mayor a 0'),
   precio: z.number().positive('El valor por caja debe ser mayor a 0'),
-  calibreInicioId: z.number().int().positive('El calibre de inicio es requerido'),
-  calibreFinId: z.number().int().positive('El calibre de fin es requerido'),
+  calibreIds: z.array(z.number().int().positive()).min(1, 'Selecciona al menos un calibre'),
 })
+
+export const notaVentaDetalleUpdateSchema = notaVentaDetalleCreateSchema
 
 export const notaVentaParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
+})
+
+export const notaVentaDetalleParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  detalleId: z.coerce.number().int().positive(),
 })
 
 export const notaVentaListQuerySchema = z.object({
@@ -50,3 +56,4 @@ export const notaVentaListQuerySchema = z.object({
 export type NotaVentaCreateBody = z.infer<typeof notaVentaCreateSchema>
 export type NotaVentaUpdateBody = z.infer<typeof notaVentaUpdateSchema>
 export type NotaVentaDetalleCreateBody = z.infer<typeof notaVentaDetalleCreateSchema>
+export type NotaVentaDetalleUpdateBody = z.infer<typeof notaVentaDetalleUpdateSchema>

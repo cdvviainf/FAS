@@ -156,8 +156,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
         cajasPorPallet: 1,
         cajas: 1,
         precio: 1,
-        calibreInicioId: f.calibreChico.id,
-      calibreFinId: f.calibreChico.id,
+        calibreIds: [f.calibreChico.id],
       }),
     ).rejects.toMatchObject({ statusCode: 422 })
 
@@ -174,8 +173,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
         cajasPorPallet: 1,
         cajas: 1,
         precio: 1,
-        calibreInicioId: f.calibreChico.id,
-      calibreFinId: f.calibreChico.id,
+        calibreIds: [f.calibreChico.id],
       }),
     ).rejects.toMatchObject({ statusCode: 422 })
 
@@ -188,8 +186,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
       cajasPorPallet: 1,
       cajas: 1,
       precio: 1,
-      calibreInicioId: f.calibreChico.id,
-      calibreFinId: f.calibreChico.id,
+      calibreIds: [f.calibreChico.id],
     })
     expect(detalle.notaVentaId).toBe(nv.id)
   })

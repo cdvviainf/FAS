@@ -735,8 +735,7 @@ model Calibre {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  notaVentaDetalleCalibreInicio NotaVentaDetalle[]           @relation("NotaVentaCalibreInicio")
-  notaVentaDetalleCalibreFin    NotaVentaDetalle[]           @relation("NotaVentaCalibreFin")
+  notaVentaDetalleCalibres      NotaVentaDetalleCalibre[]
   instructivoEmbalajeDetalleMin InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeCalibreMin")
   instructivoEmbalajeDetalleMax InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeCalibreMax")
   ordenCompraLineaMin           OrdenCompraLinea[]           @relation("OrdenCompraCalibreMin")
@@ -1709,6 +1708,7 @@ model NotaVenta {
   detalles             NotaVentaDetalle[]
   instructivosEmbalaje InstructivoEmbalaje[]
   ordenesCompra        OrdenCompra[]
+  embarques            Embarque[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -1772,13 +1772,48 @@ model NotaVentaDetalle {
   cajas           Int
   precio          Decimal @db.Decimal(14, 4) // valor unitario por caja, en la moneda del encabezado
 
-  calibreInicioId Int
-  calibreInicio   Calibre @relation("NotaVentaCalibreInicio", fields: [calibreInicioId], references: [id])
-  calibreFinId    Int
-  calibreFin      Calibre @relation("NotaVentaCalibreFin", fields: [calibreFinId], references: [id])
+  // Multiselect de calibres aceptados (antes: rango calibreInicioId/calibreFinId).
+  calibres NotaVentaDetalleCalibre[]
 
   @@index([notaVentaId])
   @@map("notas_venta_detalle")
+}
+
+model NotaVentaDetalleCalibre {
+  id                 Int              @id @default(autoincrement())
+  notaVentaDetalleId Int
+  notaVentaDetalle   NotaVentaDetalle @relation(fields: [notaVentaDetalleId], references: [id], onDelete: Cascade)
+  calibreId          Int
+  calibre            Calibre          @relation(fields: [calibreId], references: [id])
+
+  @@unique([notaVentaDetalleId, calibreId])
+  @@map("notas_venta_detalle_calibre")
+}
+
+// ─── Ventas — Embarque (Docs/ventas.md §4.2) ────────────────────────────────
+// Versión mínima: solo el encabezado ancla (Folio = numeroInstructivo, R10),
+// para soportar la acción "Generar Embarque" desde el Cierre Comercial y el
+// workflow de pestañas (aún sin funcionalidad). Las tablas hijas del spec
+// (EmbarqueContenedor, AsignacionContenedor, InstructivoHijo,
+// SolicitudReserva) se agregan cuando se implemente cada pestaña.
+model Embarque {
+  id          Int       @id @default(autoincrement())
+  notaVentaId Int
+  notaVenta   NotaVenta @relation(fields: [notaVentaId], references: [id])
+
+  // Q1 resuelta en Docs/ventas.md: Folio = Número de Instructivo (mismo dato,
+  // manual, único). Identidad del instructivo padre.
+  numeroInstructivo String @unique
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@index([notaVentaId])
+  @@map("embarques")
 }
 
 // ─── Compras — Instructivo de Embalaje (Docs/compras.md §4.1) ───────────────

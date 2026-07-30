@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { ValidationError } from '../../../shared/errors.js'
-import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaUpdateInput } from './notas-venta.types.js'
+import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleUpdateInput, NotaVentaUpdateInput } from './notas-venta.types.js'
 
 const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: true }
 
@@ -33,8 +33,7 @@ const includeDetalle = {
       articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
       categoria: { select: { id: true, codigo: true, descripcion: true } },
       tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
-      calibreInicio: { select: { id: true, codigo: true, descripcion: true } },
-      calibreFin: { select: { id: true, codigo: true, descripcion: true } },
+      calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
     },
   },
 }
@@ -206,6 +205,11 @@ export async function updateNotaVenta(id: number, data: NotaVentaUpdateInput, ac
   })
 }
 
+// R3 (Docs/ventas.md): una NV con Embarque asociado no puede eliminarse.
+export async function countEmbarques(notaVentaId: number) {
+  return prisma.embarque.count({ where: { notaVentaId, eliminadoEn: null } })
+}
+
 export async function softDeleteNotaVenta(id: number, eliminadoPor: string) {
   return prisma.notaVenta.update({
     where: { id },
@@ -213,22 +217,51 @@ export async function softDeleteNotaVenta(id: number, eliminadoPor: string) {
   })
 }
 
+const detalleInclude = {
+  especie: { select: { id: true, codigo: true, descripcion: true } },
+  variedad: { select: { id: true, codigo: true, descripcion: true } },
+  articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+  categoria: { select: { id: true, codigo: true, descripcion: true } },
+  tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
+  calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
+}
+
 export async function addDetalle(notaVentaId: number, data: NotaVentaDetalleCreateInput) {
+  const { calibreIds, ...resto } = data
   return prisma.$transaction(async (tx) => {
     const detalle = await tx.notaVentaDetalle.create({
-      data: { ...data, notaVentaId },
-      include: {
-        especie: { select: { id: true, codigo: true, descripcion: true } },
-        variedad: { select: { id: true, codigo: true, descripcion: true } },
-        articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
-        categoria: { select: { id: true, codigo: true, descripcion: true } },
-        tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
-        calibreInicio: { select: { id: true, codigo: true, descripcion: true } },
-        calibreFin: { select: { id: true, codigo: true, descripcion: true } },
-      },
+      data: { ...resto, notaVentaId, calibres: { create: calibreIds.map((calibreId) => ({ calibreId })) } },
+      include: detalleInclude,
     })
     await recalcularCuotasMontoUnitario(tx, notaVentaId)
     return detalle
+  })
+}
+
+export async function getDetalleById(id: number) {
+  return prisma.notaVentaDetalle.findUnique({ where: { id }, select: { id: true, notaVentaId: true } })
+}
+
+export async function updateDetalle(id: number, data: NotaVentaDetalleUpdateInput) {
+  const { calibreIds, ...resto } = data
+  return prisma.$transaction(async (tx) => {
+    const detalle = await tx.notaVentaDetalle.update({
+      where: { id },
+      data: {
+        ...resto,
+        calibres: { deleteMany: {}, create: calibreIds.map((calibreId) => ({ calibreId })) },
+      },
+      include: detalleInclude,
+    })
+    await recalcularCuotasMontoUnitario(tx, detalle.notaVentaId)
+    return detalle
+  })
+}
+
+export async function removeDetalle(id: number, notaVentaId: number) {
+  return prisma.$transaction(async (tx) => {
+    await tx.notaVentaDetalle.delete({ where: { id } })
+    await recalcularCuotasMontoUnitario(tx, notaVentaId)
   })
 }
 
@@ -297,10 +330,10 @@ export async function getTipoPallet(id: number) {
   return prisma.tipoPallet.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
 }
 
-export async function getCalibre(id: number) {
-  return prisma.calibre.findFirst({
-    where: { id, eliminadoEn: null, bloqueado: false },
-    select: { id: true, especieId: true, orden: true },
+export async function getCalibresActivos(ids: number[]) {
+  return prisma.calibre.findMany({
+    where: { id: { in: ids }, eliminadoEn: null, bloqueado: false },
+    select: { id: true, especieId: true },
   })
 }
 

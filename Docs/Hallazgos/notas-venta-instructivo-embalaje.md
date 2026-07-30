@@ -244,3 +244,23 @@ validado de punta a punta — 4 rondas QA, 2 arbitrajes, Tests finales `OK`. El
 único ítem pendiente es la cobertura de integración específica para el
 contrato nuevo (`CCOM-QA-001`), diferida por decisión de negocio y ya
 documentada en `ventas.md` §9.
+
+## Embarque mínimo + calibre multiselect (2026-07-30)
+
+### CCOM-QA-005 — decisión (Claude, 2026-07-30)
+
+Codex detectó (ronda QA 2 del ciclo "Confirmado y desarrolla esto") que las
+acciones de agregar/editar/eliminar línea de detalle en
+`nota-venta-form.tsx` se muestran habilitadas sin comprobar
+`usePuedeEscribir('VENTAS_NV')` — un usuario con solo `LECTURA` puede
+intentarlas y recibir 403 del backend (que sí valida el nivel `TOTAL`
+correctamente, `notas-venta.routes.ts`). No es una vulnerabilidad de
+autorización, es una brecha de UX/cumplimiento de `Docs/usuarios-perfiles.md`
+RP3/CA3 (ocultar/deshabilitar acciones de escritura sin permiso).
+
+**Se acepta el comportamiento actual sin corregir por ahora** (decisión
+explícita del usuario, 2026-07-30): esta brecha ya existía en todo el
+formulario antes de esta implementación (incluido el botón de guardado del
+encabezado) — no es una regresión introducida hoy, y se prefiere resolverla
+en un pase de auditoría de autorización de todo el módulo Ventas en vez de un
+parche puntual sobre las acciones nuevas de la grilla.

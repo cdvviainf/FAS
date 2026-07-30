@@ -46,8 +46,8 @@ export const navGroups: NavGroup[] = [
         isActive: false,
         items: [
           { title: 'Solicitud de Inspección',    url: '/dashboard/calidad/solicitudes',    icon: 'calidad' },
-          { title: 'Instructivo de Embalaje',    url: '/dashboard/compras/instructivo-embalaje', icon: 'forms' },
           { title: 'Órdenes de Compra',          url: '/dashboard/compras/ordenes',         icon: 'post'    },
+          { title: 'Instructivo de Embalaje',    url: '/dashboard/compras/instructivo-embalaje', icon: 'forms' },
           { title: 'Recepción de Stock',         url: '/dashboard/compras/recepciones',    icon: 'bodega'  }
         ]
       },
@@ -165,7 +165,7 @@ export const navGroups: NavGroup[] = [
     label: 'Calidad',
     items: [
       {
-        title: 'Solicitud de Inspección',
+        title: 'Inspecciones',
         url: '/dashboard/calidad/solicitudes',
         icon: 'forms',
         isActive: false,

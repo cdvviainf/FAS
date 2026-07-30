@@ -31,6 +31,7 @@ export interface NotaVentaDetalleCreateInput {
   cajasPorPallet: number
   cajas: number
   precio: number
-  calibreInicioId: number
-  calibreFinId: number
+  calibreIds: number[]
 }
+
+export type NotaVentaDetalleUpdateInput = NotaVentaDetalleCreateInput

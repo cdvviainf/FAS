@@ -36,4 +36,12 @@ export const notasVentaService = {
   async addDetalle(id: number, data: NotaVentaDetalleCreateInput): Promise<{ data: NotaVentaDetalleItem }> {
     return api.post(`ventas/notas-venta/${id}/detalles`, { json: data }).json()
   },
+
+  async updateDetalle(id: number, detalleId: number, data: NotaVentaDetalleCreateInput): Promise<{ data: NotaVentaDetalleItem }> {
+    return api.patch(`ventas/notas-venta/${id}/detalles/${detalleId}`, { json: data }).json()
+  },
+
+  async removeDetalle(id: number, detalleId: number): Promise<void> {
+    await api.delete(`ventas/notas-venta/${id}/detalles/${detalleId}`)
+  },
 }

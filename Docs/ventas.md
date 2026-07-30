@@ -55,10 +55,12 @@ Sistematizar el ciclo comercial de exportación de Frutera Agrosan, desde el com
 
 > **⚠️ Supersesión (2026-07-27) — Cierre Comercial v1.** Por decisión de Christian, el contrato de esta sección se **reemplaza** en los siguientes puntos, ya implementados en `fas-api`/`fas-web`:
 > - `formaPagoId` + `saldoPagoId` (sueltos) → **`condicionPagoId`** (FK a `CondicionPago`, mismo maestro cuotas % + plazoDias que usa Compras). Las cuotas se **snapshotean** en `NotaVentaCuotaPago` al guardar — no cambian retroactivamente si se edita la plantilla `CondicionPago` después (ver R12).
-> - `calibres NotaVentaDetalleCalibre[]` (multiselect) → **`calibreInicioId`/`calibreFinId`** (FK a `Calibre`, rango sobre el maestro ordenado por especie — mismo patrón que `OrdenCompraLinea.calibreMinId/calibreMaxId` en `compras.md` §6.5).
+> - ~~`calibres NotaVentaDetalleCalibre[]` (multiselect) → `calibreInicioId`/`calibreFinId` (FK a `Calibre`, rango sobre el maestro ordenado por especie)~~ **Revertido en la supersesión de 2026-07-30 (ver abajo).**
 > - `modalidadVentaId`, `clausulaVentaId` (Incoterm), `tipoFleteId` quedan como FK reales al catálogo genérico `Parametro` (antes eran `Int` suelto a la espera de que existieran sus `TipoParametro`; ya se dieron de alta vía seed: `MODALIDAD_VENTA`, `INCOTERM`, `TIPO_FLETE`).
 > - **Fuera de esta implementación:** el bloque Embarque/Instructivo (§4.2) y Solicitud de Reserva (§4.3) siguen sin implementar, diferidos a una etapa posterior — no se tocan por esta supersesión.
 > Ver `Docs/Hallazgos/notas-venta-instructivo-embalaje.md` para el detalle de la reconciliación QA.
+>
+> **⚠️ Supersesión (2026-07-30).** Por decisión de Christian, se **revierte** el punto de calibre de la supersesión anterior: `NotaVentaDetalle` vuelve a usar **multiselect** (`calibres NotaVentaDetalleCalibre[]`, tabla intermedia, mismo patrón que `SolicitudInspeccionCalibre`) en vez del rango `calibreInicioId`/`calibreFinId`. Válido: cada `calibreId` debe existir, no estar bloqueado, y pertenecer a la misma especie de la línea (ya no aplica la comparación de `orden` entre inicio/fin). Además, se implementa una **versión mínima** del bloque Embarque (§4.2): solo el encabezado ancla (`id`, `notaVentaId`, `numeroInstructivo`/Folio, auditoría), suficiente para la acción "Generar Embarque" desde el Cierre Comercial y para navegar a una página con las 4 pestañas del workflow (Solicitud de Reserva, Generación de Instructivo, Selección de Fruta, Confirmación de Fruta) — **sin contenido ni lógica de negocio todavía**. Las tablas hijas del spec (`EmbarqueContenedor`, `AsignacionContenedor`, `InstructivoHijo`, `SolicitudReserva`) y la herencia de campos R4 se agregan cuando se implemente cada pestaña. R3 (bloquear borrado de NV con Embarque asociado) sí se implementó ya, dado que no depende de esos campos.
 
 ```prisma
 model NotaVenta {
@@ -147,14 +149,25 @@ model NotaVentaDetalle {
   cajas           Int
   precio          Decimal   @db.Decimal(14, 4)       // valor unitario por caja, en la moneda del encabezado
 
-  calibreInicioId Int                                // FK → Calibre, rango sobre el maestro ordenado por especie
-  calibreFinId    Int                                // FK → Calibre, idem (ver R12)
+  calibres NotaVentaDetalleCalibre[]                 // multiselect (ver supersesión 2026-07-30, R12)
 
   @@index([notaVentaId])
+}
+
+model NotaVentaDetalleCalibre {
+  id                 Int              @id @default(autoincrement())
+  notaVentaDetalleId Int
+  notaVentaDetalle   NotaVentaDetalle @relation(fields: [notaVentaDetalleId], references: [id], onDelete: Cascade)
+  calibreId          Int
+  calibre            Calibre          @relation(fields: [calibreId], references: [id])
+
+  @@unique([notaVentaDetalleId, calibreId])
 }
 ```
 
 ### 4.2 Instructivo / Orden de Embarque
+
+> **⚠️ Implementación parcial (2026-07-30).** Existe una **versión mínima** de `Embarque` en `fas-api`/`fas-web`: solo `id`, `notaVentaId`, `numeroInstructivo` (Folio) y auditoría — sin `EmbarqueContenedor`, `AsignacionContenedor`, `InstructivoHijo` ni herencia de campos (R4). Sostiene la acción "Generar Embarque" desde el Cierre Comercial y una página con las 4 pestañas del workflow (Solicitud de Reserva, Generación de Instructivo, Selección de Fruta, Confirmación de Fruta) **sin contenido ni lógica de negocio todavía**. El modelo completo de abajo sigue siendo el contrato autoritativo a implementar cuando se desarrolle cada pestaña. R3 (bloquear borrado de NV con Embarque asociado) ya está implementado.
 
 ```prisma
 model Embarque {
@@ -341,7 +354,7 @@ model SolicitudReserva {
 - **R9 — Stock (etapa posterior).** Tras crear el Instructivo, se asocia el stock; el stock **debe coincidir** con lo determinado en las características del Instructivo. Mecánica en Operaciones/Stock.
 - **R10 — Número de instructivo.** Texto ingresado **manualmente** en el campo `Folio` del Embarque (no correlativo), **único**, reutilizado en OC de Compras. Es la identidad del instructivo **padre**. **`Folio` = Número de Instructivo** (mismo dato; Q1 resuelta).
 - **R11 — Instructivos hijos por punto de retiro.** Cada Embarque genera **≥1** `InstructivoHijo`, uno por planta / punto de retiro que aporta fruta al contenedor. Código **autogenerado** `{numeroInstructivo}-{n}` (ej. `001A-1`, `001A-2`). Contiene la fecha/hora de retiro de esa planta (varían entre plantas). Con una sola planta de retiro hay un **único hijo** (`001A-1`), para mantener la nomenclatura actual. La partición se **deriva de la reserva de pallets** al embarque, agrupando por punto de retiro (mecánica en Operaciones/Stock). Fuente de las fechas de retiro: **AGL** (§2, `compras.md`).
-- **R12 — Forma de Pago y rango de calibre del detalle (Cierre Comercial v1, ver supersesión §4.1).** Al elegir una `CondicionPago` ("Forma de Pago") en el encabezado, sus cuotas (`porcentaje`/`plazoDias`) se **copian** a `NotaVentaCuotaPago` en el mismo momento (snapshot inmutable, igual que `OrdenCompraCuotaPago` en `compras.md` §4.2.1) — si la plantilla `CondicionPago` se edita después, los Cierres Comerciales ya guardados **no** cambian. Cada línea de detalle exige `calibreInicioId`/`calibreFinId` (rango, no multiselect), validado igual que `compras.md` §6.5: ambos deben pertenecer a la especie de la línea y `calibreInicio.orden <= calibreFin.orden` según el maestro ordenado.
+- **R12 — Forma de Pago y calibres aceptados del detalle (Cierre Comercial v1, ver supersesiones §4.1).** Al elegir una `CondicionPago` ("Forma de Pago") en el encabezado, sus cuotas (`porcentaje`/`plazoDias`) se **copian** a `NotaVentaCuotaPago` en el mismo momento (snapshot inmutable, igual que `OrdenCompraCuotaPago` en `compras.md` §4.2.1) — si la plantilla `CondicionPago` se edita después, los Cierres Comerciales ya guardados **no** cambian. Cada línea de detalle exige al menos un `calibreId` (multiselect, `NotaVentaDetalleCalibre`, ver supersesión 2026-07-30): cada calibre debe existir, no estar bloqueado, y pertenecer a la especie de la línea.
 
 ---
 
@@ -350,7 +363,7 @@ model SolicitudReserva {
 | Método | Ruta | Notas |
 |---|---|---|
 | GET/POST/PATCH/DELETE | `/notas-venta[/:id]` | DELETE solo sin embarque asociado (R3). PATCH bloquea campos heredados si hay embarque. |
-| POST | `/notas-venta/:id/detalles` | Línea de fruta (rango de calibre inicio/fin, ver R12). |
+| POST | `/notas-venta/:id/detalles` | Línea de fruta (multiselect de calibres, ver R12). |
 | GET/POST/PATCH/DELETE | `/embarques[/:id]` | Hereda campos de NV (R4). |
 | POST | `/embarques/:id/contenedores` | Encabezado de contenedor. |
 | POST | `/embarques/:id/contenedores/:cid/asignaciones` | Asignación de fruta, validada contra NV (R8), valor heredado (R5). |
