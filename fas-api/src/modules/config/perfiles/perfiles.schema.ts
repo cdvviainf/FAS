@@ -25,7 +25,7 @@ export const perfilIdParamSchema = z.object({
 
 export const perfilListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  limit: z.coerce.number().int().positive().max(500).default(20),
   q: z.string().optional(),
 })
 

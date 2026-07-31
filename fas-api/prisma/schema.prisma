@@ -127,6 +127,10 @@ model Usuario {
   perfilId           Int
   perfil             Perfil    @relation(fields: [perfilId], references: [id])
   esResponsableVenta Boolean   @default(false)
+  // Empresa activa por defecto al iniciar sesión (multi-empresa). Nullable:
+  // un usuario recién creado puede no tener empresas asignadas todavía.
+  empresaPredeterminadaId Int?
+  empresaPredeterminada   Empresa? @relation("UsuarioEmpresaPredeterminada", fields: [empresaPredeterminadaId], references: [id])
   creadoEn           DateTime  @default(now())
   creadoPor          String?
   actualizadoEn      DateTime? @updatedAt
@@ -138,7 +142,9 @@ model Usuario {
   avatar                   UsuarioAvatar?
   ordenesCompraResponsable OrdenCompra[]
   contratosProductorResponsable ProductorContrato[]
+  empresas                 UsuarioEmpresa[]
 
+  @@index([empresaPredeterminadaId])
   @@map("usuarios")
 }
 
@@ -153,6 +159,101 @@ model UsuarioAvatar {
   creadoEn  DateTime @default(now())
 
   @@map("usuarios_avatar")
+}
+
+// ─── EMPRESAS (multi-empresa / multi-tenant) ─────────────────────────────────
+// El sistema opera para dos empresas del cliente (Frutera Agrosan y AGDry),
+// cada una con sus propios maestros, transacciones y configuraciones. Fase 0:
+// se crea el modelo de Empresa + membresía de usuarios. El scoping por
+// `empresaId` en el resto de las tablas se agrega en la fase de tenancy.
+model Empresa {
+  id             Int       @id @default(autoincrement())
+  codigo         String    @unique
+  razonSocial    String
+  nombreFantasia String?
+  rut            String?
+  giro           String?
+  email          String?
+  telefono       String?
+  activo         Boolean   @default(true)
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  direcciones          EmpresaDireccion[]
+  contactos            EmpresaContacto[]
+  usuarios             UsuarioEmpresa[]
+  usuariosPredeterminada Usuario[]        @relation("UsuarioEmpresaPredeterminada")
+
+  @@map("empresas")
+}
+
+model EmpresaDireccion {
+  id             Int       @id @default(autoincrement())
+  empresaId      Int
+  empresa        Empresa   @relation(fields: [empresaId], references: [id])
+  codigo         String
+  descripcion    String // etiqueta legible, ej. "Casa matriz"
+  paisId         Int
+  pais           Pais      @relation("EmpresaDireccionPais", fields: [paisId], references: [id])
+  comunaId       Int?
+  comuna         Comuna?   @relation("EmpresaDireccionComuna", fields: [comunaId], references: [id])
+  direccion      String
+  esPorDefecto   Boolean   @default(false)
+  latitud        Decimal?  @db.Decimal(10, 7)
+  longitud       Decimal?  @db.Decimal(10, 7)
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@index([empresaId])
+  @@map("empresa_direcciones")
+}
+
+model EmpresaContacto {
+  id                   Int       @id @default(autoincrement())
+  empresaId            Int
+  empresa              Empresa   @relation(fields: [empresaId], references: [id])
+  codigo               String
+  nombre               String
+  rut                  String?
+  whatsapp             String?
+  email                String?
+  telefono             String?
+  tipo                 String?
+  esRepresentanteLegal Boolean   @default(false)
+  creadoEn             DateTime  @default(now())
+  creadoPor            String
+  actualizadoEn        DateTime? @updatedAt
+  actualizadoPor       String?
+  eliminadoEn          DateTime?
+  eliminadoPor         String?
+
+  @@index([empresaId])
+  @@map("empresa_contactos")
+}
+
+// Membresía N:M — un usuario puede tener acceso a una empresa, a ambas, o a
+// ninguna todavía. El perfil/permisos son globales por usuario (decisión de
+// negocio 2026-07-31), por lo que aquí NO se guarda perfil por empresa.
+model UsuarioEmpresa {
+  id        Int      @id @default(autoincrement())
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  empresaId Int
+  empresa   Empresa  @relation(fields: [empresaId], references: [id])
+  creadoEn  DateTime @default(now())
+  creadoPor String
+
+  @@unique([usuarioId, empresaId])
+  @@index([empresaId])
+  @@map("usuario_empresas")
 }
 
 // ─── ENTIDADES MAESTRAS ──────────────────────────────────────────────────────
@@ -341,6 +442,7 @@ model Pais {
   puertos                   Puerto[]
   entidades                 Entidad[]                 @relation("EntidadPais")
   entidadDirecciones        EntidadDireccion[]        @relation("DireccionPais")
+  empresaDirecciones        EmpresaDireccion[]        @relation("EmpresaDireccionPais")
   notasVenta                NotaVenta[]
   solicitudesInspeccionPais SolicitudInspeccionPais[]
 
@@ -610,6 +712,7 @@ model Comuna {
 
   bodegas            Bodega[]
   entidadDirecciones EntidadDireccion[]
+  empresaDirecciones EmpresaDireccion[] @relation("EmpresaDireccionComuna")
   predios            Predio[]
 
   @@map("comunas")

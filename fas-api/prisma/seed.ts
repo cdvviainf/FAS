@@ -52,6 +52,15 @@ const itemsMenu = [
 
 const SISTEMA_USER = 'system'
 
+// Empresas (multi-empresa). Agrosan es la empresa base a la que se hace
+// backfill de todos los datos existentes en la fase de tenancy; AGDry se crea
+// solo con el nombre (razón social) y el resto de sus datos se completa desde
+// la UI (decisión de negocio, Christian, 2026-07-31).
+const EMPRESAS = [
+  { codigo: 'AGROSAN', razonSocial: 'Frutera Agrosan SpA' },
+  { codigo: 'AGDRY', razonSocial: 'AGDry' },
+]
+
 // Código fijo de la Entidad placeholder "Cliente Sin Definir" (Cierre
 // Comercial). Debe coincidir con CLIENTE_SIN_DEFINIR_CODIGO en
 // fas-web/src/features/ventas/notas-venta/constants.ts.
@@ -91,6 +100,15 @@ const tiposParametroVentas = [
 ]
 
 async function main() {
+  console.log('Seeding Empresas...')
+  for (const emp of EMPRESAS) {
+    const existente = await prisma.empresa.findFirst({ where: { codigo: emp.codigo } })
+    if (!existente) {
+      await prisma.empresa.create({ data: { ...emp, creadoPor: SISTEMA_USER } })
+    }
+  }
+  console.log(`Empresas: ${EMPRESAS.length} verificadas.`)
+
   console.log('Seeding ItemMenu...')
 
   for (const item of itemsMenu) {
