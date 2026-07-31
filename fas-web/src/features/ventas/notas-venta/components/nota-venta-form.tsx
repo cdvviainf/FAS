@@ -13,7 +13,6 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { AlertModal } from '@/components/modal/alert-modal'
-import { SelectMultiple } from '@/components/shared/select-multiple'
 import {
   Select,
   SelectContent,
@@ -130,6 +129,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
   const [editingDetalleId, setEditingDetalleId] = useState<number | null>(null)
   const [deleteDetalleId, setDeleteDetalleId] = useState<number | null>(null)
+  const [calibreDesdeId, setCalibreDesdeId] = useState<number | null>(null)
+  const [calibreHastaId, setCalibreHastaId] = useState<number | null>(null)
 
   const { data: notaVenta, isLoading } = useQuery({
     ...notaVentaDetailOptions(notaVentaId ?? 0),
@@ -287,6 +288,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       toast.success('Línea agregada')
       setLinea(LINEA_EMPTY)
       setLineaErrors({})
+      resetCalibreRango()
       queryClient.invalidateQueries({ queryKey: notasVentaKeys.detail(notaVentaId!) })
     },
     onError: (e: Error) => toast.error(e.message || 'Error al agregar la línea'),
@@ -299,6 +301,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       setLinea(LINEA_EMPTY)
       setLineaErrors({})
       setEditingDetalleId(null)
+      resetCalibreRango()
       queryClient.invalidateQueries({ queryKey: notasVentaKeys.detail(notaVentaId!) })
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar la línea'),
@@ -374,12 +377,32 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       calibreIds: d.calibres.map((c) => c.calibre.id),
     })
     setLineaErrors({})
+    resetCalibreRango()
   }
 
   function handleCancelarEdicionLinea() {
     setEditingDetalleId(null)
     setLinea(LINEA_EMPTY)
     setLineaErrors({})
+    resetCalibreRango()
+  }
+
+  function resetCalibreRango() {
+    setCalibreDesdeId(null)
+    setCalibreHastaId(null)
+  }
+
+  function agregarRangoCalibres() {
+    if (!calibreDesdeId) return
+    const lista = calibresData?.data ?? []
+    const hastaId = calibreHastaId ?? calibreDesdeId
+    const idxDesde = lista.findIndex((c) => c.id === calibreDesdeId)
+    const idxHasta = lista.findIndex((c) => c.id === hastaId)
+    if (idxDesde === -1 || idxHasta === -1) return
+    const [ini, fin] = idxDesde <= idxHasta ? [idxDesde, idxHasta] : [idxHasta, idxDesde]
+    const nuevos = lista.slice(ini, fin + 1).map((c) => c.id)
+    setLinea((l) => ({ ...l, calibreIds: Array.from(new Set([...l.calibreIds, ...nuevos])) }))
+    resetCalibreRango()
   }
 
   const articuloSeleccionado = (articulosData?.data ?? []).find((a) => a.id === linea.articuloId)
@@ -621,55 +644,6 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
             <CardTitle>Detalle de fruta comprometida</CardTitle>
           </CardHeader>
           <CardContent className='space-y-4'>
-            {(notaVenta?.data.detalles.length ?? 0) > 0 && (
-              <div className='rounded-md border'>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Especie / Variedad</TableHead>
-                      <TableHead>Artículo</TableHead>
-                      <TableHead>Categoría</TableHead>
-                      <TableHead>Calibre</TableHead>
-                      <TableHead>Cantidad</TableHead>
-                      <TableHead>Precio</TableHead>
-                      <TableHead className='w-20 text-right'>Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {notaVenta!.data.detalles.map((d) => (
-                      <TableRow key={d.id}>
-                        <TableCell className='font-medium'>{d.especie.descripcion} / {d.variedad.descripcion}</TableCell>
-                        <TableCell className='text-muted-foreground'>{d.articulo.descripcion}</TableCell>
-                        <TableCell className='text-muted-foreground'>{d.categoria?.descripcion ?? '—'}</TableCell>
-                        <TableCell className='text-muted-foreground'>{d.calibres.map((c) => c.calibre.codigo).join(', ')}</TableCell>
-                        <TableCell className='text-muted-foreground'>{d.cantidadPallets} pallets × {d.cajasPorPallet} cj</TableCell>
-                        <TableCell className='text-muted-foreground'>${d.precio}/cj</TableCell>
-                        <TableCell className='text-right'>
-                          <div className='flex justify-end gap-1'>
-                            <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleEditarLinea(d)}>
-                              <Icons.edit className='h-4 w-4' />
-                            </Button>
-                            <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => setDeleteDetalleId(d.id)}>
-                              <Icons.trash className='h-4 w-4' />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-
-            <AlertModal
-              isOpen={deleteDetalleId != null}
-              onClose={() => setDeleteDetalleId(null)}
-              onConfirm={() => deleteDetalleId && removeDetalleMutation.mutate(deleteDetalleId)}
-              loading={removeDetalleMutation.isPending}
-            />
-
-            <Separator />
-
             <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
               <div className='space-y-1.5'>
                 <Label>Fecha Compromiso <span className='text-destructive'>*</span></Label>
@@ -678,7 +652,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </div>
               <div className='space-y-1.5'>
                 <Label>Especie <span className='text-destructive'>*</span></Label>
-                <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: null, calibreIds: [] }))}>
+                <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: null, calibreIds: [] })); resetCalibreRango() }}>
                   <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                   <SelectContent>
                     {(especiesData?.data ?? []).map((e) => (
@@ -759,13 +733,60 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
 
             <div className='space-y-1.5'>
               <Label>Calibres aceptados <span className='text-destructive'>*</span></Label>
-              <SelectMultiple
-                options={(calibresData?.data ?? []).map((c) => ({ id: c.id, label: c.descripcion }))}
-                selectedIds={linea.calibreIds}
-                onChange={(ids) => setLinea((l) => ({ ...l, calibreIds: ids }))}
-                placeholder={linea.especieId ? 'Agregar calibre...' : 'Elige una especie primero'}
-                disabled={!linea.especieId}
-              />
+              <div className='flex flex-wrap items-end gap-2'>
+                <div className='w-40 space-y-1'>
+                  <Label className='text-xs text-muted-foreground'>Calibre desde</Label>
+                  <Select
+                    value={calibreDesdeId ? String(calibreDesdeId) : ''}
+                    onValueChange={(v) => setCalibreDesdeId(Number(v))}
+                    disabled={!linea.especieId}
+                  >
+                    <SelectTrigger><SelectValue placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'} /></SelectTrigger>
+                    <SelectContent>
+                      {(calibresData?.data ?? []).map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className='w-40 space-y-1'>
+                  <Label className='text-xs text-muted-foreground'>Calibre hasta</Label>
+                  <Select
+                    value={calibreHastaId ? String(calibreHastaId) : ''}
+                    onValueChange={(v) => setCalibreHastaId(Number(v))}
+                    disabled={!linea.especieId}
+                  >
+                    <SelectTrigger><SelectValue placeholder='Igual a desde' /></SelectTrigger>
+                    <SelectContent>
+                      {(calibresData?.data ?? []).map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type='button' variant='secondary' onClick={agregarRangoCalibres} disabled={!linea.especieId || !calibreDesdeId}>
+                  <Icons.add className='mr-1 h-4 w-4' /> Agregar
+                </Button>
+              </div>
+              {linea.calibreIds.length > 0 && (
+                <div className='flex flex-wrap gap-1.5 pt-1'>
+                  {linea.calibreIds.map((id) => {
+                    const opt = (calibresData?.data ?? []).find((c) => c.id === id)
+                    return (
+                      <Badge key={id} variant='secondary' className='gap-1 pr-1'>
+                        {opt?.descripcion ?? id}
+                        <button
+                          type='button'
+                          onClick={() => setLinea((l) => ({ ...l, calibreIds: l.calibreIds.filter((x) => x !== id) }))}
+                          className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'
+                        >
+                          <Icons.close className='h-3 w-3' />
+                        </button>
+                      </Badge>
+                    )
+                  })}
+                </div>
+              )}
               {lineaErrors.calibreIds && <p className='text-xs text-destructive'>{lineaErrors.calibreIds}</p>}
             </div>
 
@@ -785,6 +806,62 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 {editingDetalleId ? <><Icons.check className='mr-1 h-4 w-4' /> Guardar cambios de línea</> : <><Icons.add className='mr-1 h-4 w-4' /> Agregar línea</>}
               </Button>
             </div>
+
+            {(notaVenta?.data.detalles.length ?? 0) > 0 && (
+              <>
+                <Separator />
+                <div className='overflow-x-auto rounded-md border'>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Especie / Variedad</TableHead>
+                        <TableHead>Artículo</TableHead>
+                        <TableHead>Categoría</TableHead>
+                        <TableHead className='max-w-[180px]'>Calibre</TableHead>
+                        <TableHead>Cantidad</TableHead>
+                        <TableHead>Precio</TableHead>
+                        <TableHead className='w-20 text-right'>Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {notaVenta!.data.detalles.map((d) => (
+                        <TableRow key={d.id}>
+                          <TableCell className='font-medium whitespace-nowrap'>{d.especie.descripcion} / {d.variedad.descripcion}</TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground'>{d.articulo.descripcion}</TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground'>{d.categoria?.descripcion ?? '—'}</TableCell>
+                          <TableCell className='max-w-[180px] text-muted-foreground'>
+                            <div className='flex flex-wrap gap-1'>
+                              {d.calibres.map((c) => (
+                                <Badge key={c.calibre.id} variant='outline' className='text-xs'>{c.calibre.codigo}</Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground'>{d.cantidadPallets} pallets × {d.cajasPorPallet} cj</TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground'>${d.precio}/cj</TableCell>
+                          <TableCell className='text-right'>
+                            <div className='flex justify-end gap-1'>
+                              <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleEditarLinea(d)}>
+                                <Icons.edit className='h-4 w-4' />
+                              </Button>
+                              <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => setDeleteDetalleId(d.id)}>
+                                <Icons.trash className='h-4 w-4' />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
+
+            <AlertModal
+              isOpen={deleteDetalleId != null}
+              onClose={() => setDeleteDetalleId(null)}
+              onConfirm={() => deleteDetalleId && removeDetalleMutation.mutate(deleteDetalleId)}
+              loading={removeDetalleMutation.isPending}
+            />
           </CardContent>
         </Card>
       )}

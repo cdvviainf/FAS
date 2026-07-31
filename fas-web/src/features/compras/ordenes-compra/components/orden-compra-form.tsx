@@ -282,8 +282,8 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
           <CardTitle>{isEdit ? `Orden de Compra ${ordenCompra?.data.numero}` : 'Nueva Orden de Compra'}</CardTitle>
         </CardHeader>
         <CardContent className='space-y-4'>
-          {/* Fila 1: Origen + Fecha */}
-          <div className='grid gap-4 sm:grid-cols-2'>
+          {/* Fila 1: Origen + Cierre Comercial (si aplica) + Fecha */}
+          <div className={`grid gap-4 sm:grid-cols-2 ${fields.origen === 'CIERRE' ? 'md:grid-cols-3' : ''}`}>
             <div className='space-y-1.5'>
               <Label>Origen</Label>
               <Select value={fields.origen} onValueChange={(v) => setFields((f) => ({ ...f, origen: v as Origen, notaVentaId: v === 'MANUAL' ? null : f.notaVentaId }))}>
@@ -294,12 +294,8 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 </SelectContent>
               </Select>
             </div>
-            <div className='space-y-1.5'>
-              <Label>Fecha</Label>
-              <Input type='date' value={fields.fecha} onChange={(e) => setFields((f) => ({ ...f, fecha: e.target.value }))} />
-            </div>
             {fields.origen === 'CIERRE' && (
-              <div className='space-y-1.5 sm:col-span-2'>
+              <div className='space-y-1.5'>
                 <Label>Cierre Comercial</Label>
                 <Select value={fields.notaVentaId ? String(fields.notaVentaId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, notaVentaId: Number(v) }))}>
                   <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
@@ -312,6 +308,10 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 {errors.notaVentaId && <p className='text-xs text-destructive'>{errors.notaVentaId}</p>}
               </div>
             )}
+            <div className='space-y-1.5'>
+              <Label>Fecha</Label>
+              <Input type='date' value={fields.fecha} onChange={(e) => setFields((f) => ({ ...f, fecha: e.target.value }))} />
+            </div>
           </div>
 
           <Separator />

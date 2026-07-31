@@ -33,13 +33,13 @@ export function EmbarqueDetailClient({ embarqueId }: { embarqueId: number }) {
 
       <Tabs defaultValue={tabInicial}>
         <TabsList>
-          <TabsTrigger value='espacio'>Solicitud de Espacio</TabsTrigger>
+          <TabsTrigger value='espacio'>Solicitar Espacio</TabsTrigger>
           <TabsTrigger value='pallets'>Seleccionar Pallets</TabsTrigger>
           <TabsTrigger value='instructivos'>Generar Instructivos</TabsTrigger>
           <TabsTrigger value='despacho'>Despachar</TabsTrigger>
         </TabsList>
         <TabsContent value='espacio'>
-          <TabPlaceholder titulo='Solicitud de Espacio' />
+          <TabPlaceholder titulo='Solicitar Espacio' />
         </TabsContent>
         <TabsContent value='pallets'>
           <TabPlaceholder titulo='Seleccionar Pallets' />

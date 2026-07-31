@@ -81,18 +81,6 @@ export const navGroups: NavGroup[] = [
           { title: 'Órdenes de Compra', url: '/dashboard/operaciones/ordenes-compra', icon: 'post'           },
           { title: 'Movimientos',        url: '/dashboard/operaciones/movimientos',    icon: 'tiposMovimiento' }
         ]
-      },
-      {
-        title: 'Mantenedores',
-        url: '#',
-        icon: 'adjustments',
-        isActive: false,
-        items: [
-          { title: 'Entidades',           url: '/dashboard/configuracion/entidades',         icon: 'teams'           },
-          { title: 'Artículos',           url: '/dashboard/configuracion/articulos',         icon: 'product'         },
-          { title: 'Recetas',             url: '/dashboard/configuracion/recetas',           icon: 'recetas'         },
-          { title: 'Tipos de Movimiento', url: '/dashboard/configuracion/tipos-movimiento',  icon: 'tiposMovimiento' }
-        ]
       }
     ]
   },
@@ -213,6 +201,20 @@ export const navGroups: NavGroup[] = [
           { title: 'Entidades',  url: '/dashboard/configuracion/entidades', icon: 'teams'   },
           { title: 'Artículos',  url: '/dashboard/configuracion/articulos', icon: 'product' },
           { title: 'Recetas',    url: '/dashboard/configuracion/recetas',   icon: 'recetas' }
+        ]
+      },
+
+      // ── Operaciones ──────────────────────────────────────────────────────
+      {
+        title: 'Operaciones',
+        url: '#',
+        icon: 'adjustments',
+        isActive: false,
+        items: [
+          { title: 'Entidades',           url: '/dashboard/configuracion/entidades',         icon: 'teams'           },
+          { title: 'Artículos',           url: '/dashboard/configuracion/articulos',         icon: 'product'         },
+          { title: 'Recetas',             url: '/dashboard/configuracion/recetas',           icon: 'recetas'         },
+          { title: 'Tipos de Movimiento', url: '/dashboard/configuracion/tipos-movimiento',  icon: 'tiposMovimiento' }
         ]
       },
 
