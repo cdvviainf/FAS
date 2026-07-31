@@ -28,7 +28,6 @@ export const MODELOS_CON_CODIGO_OPTIONS: { value: string; label: string }[] = [
   { value: 'temporada', label: 'Temporada' },
   { value: 'bodega', label: 'Bodega' },
   { value: 'conceptoCtaCte', label: 'Concepto Cta. Cte.' },
-  { value: 'motivoInspeccion', label: 'Motivo de Inspección' },
   { value: 'calificacion', label: 'Calificación' },
   { value: 'entidad', label: 'Entidad' },
   { value: 'articulo', label: 'Artículo' },
@@ -72,7 +71,6 @@ export const RECURSO_A_MODELO: Record<string, string> = {
   'conceptos-cta-cte': 'conceptoCtaCte',
   temporadas: 'temporada',
   bodegas: 'bodega',
-  'motivos-inspeccion': 'motivoInspeccion',
   calificaciones: 'calificacion',
 }
 

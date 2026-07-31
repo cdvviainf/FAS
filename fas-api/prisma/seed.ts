@@ -33,7 +33,11 @@ const itemsMenu = [
   { codigo: 'FIN_PAGOS', nombre: 'Gestión de Pagos', seccion: 'Finanzas', ruta: '/dashboard/finanzas/pagos', esAccion: false, orden: 61 },
   { codigo: 'FIN_FACTURACION', nombre: 'Facturación', seccion: 'Finanzas', ruta: '/dashboard/finanzas/facturacion', esAccion: false, orden: 62 },
   // Calidad
-  { codigo: 'CAL_SOLICITUDES', nombre: 'Solicitudes de Inspección', seccion: 'Calidad', ruta: '/dashboard/calidad/solicitudes', esAccion: false, orden: 69 },
+  // ruta = prefijo común '/dashboard/calidad' (no solo '/solicitudes'): cubre
+  // también /inspeccion-compra e /inspeccion-proceso, que comparten el mismo
+  // permiso (decisión de negocio, Christian, 2026-07-30) — son la misma
+  // Solicitud de Inspección, solo filtrada por tipoInspeccion.
+  { codigo: 'CAL_SOLICITUDES', nombre: 'Solicitudes de Inspección', seccion: 'Calidad', ruta: '/dashboard/calidad', esAccion: false, orden: 69 },
   { codigo: 'CAL_CONTROL', nombre: 'Control de Calidad', seccion: 'Calidad', ruta: '/dashboard/calidad/control', esAccion: false, orden: 70 },
   { codigo: 'CAL_LOTES', nombre: 'Validación de Lotes', seccion: 'Calidad', ruta: '/dashboard/calidad/lotes', esAccion: false, orden: 71 },
   { codigo: 'CAL_RECLAMOS', nombre: 'Reclamos', seccion: 'Calidad', ruta: '/dashboard/calidad/reclamos', esAccion: false, orden: 72 },
@@ -47,6 +51,11 @@ const itemsMenu = [
 ]
 
 const SISTEMA_USER = 'system'
+
+// Código fijo de la Entidad placeholder "Cliente Sin Definir" (Cierre
+// Comercial). Debe coincidir con CLIENTE_SIN_DEFINIR_CODIGO en
+// fas-web/src/features/ventas/notas-venta/constants.ts.
+const CLIENTE_SIN_DEFINIR_CODIGO = 'CLIENTE-SD'
 
 // TipoParametro/Parametro para Cierre Comercial (Ventas). El catálogo
 // genérico Parametro no tiene `codigo` único a nivel de BD, por lo que el
@@ -159,6 +168,30 @@ async function main() {
     }
   }
   console.log(`UnidadMedida: ${unidadesCreadas} unidades nuevas creadas.`)
+
+  // Entidad placeholder para Cierre Comercial sin cliente definido todavía
+  // (decisión de negocio, Christian, 2026-07-30) — preseleccionada al crear
+  // un Cierre Comercial nuevo, editable en cualquier momento después.
+  console.log('Seeding Entidad placeholder "Cliente Sin Definir"...')
+  const clientePlaceholderExistente = await prisma.entidad.findFirst({ where: { codigo: CLIENTE_SIN_DEFINIR_CODIGO } })
+  if (!clientePlaceholderExistente) {
+    const chile = await prisma.pais.findFirst({ where: { codigo: 'CHL', eliminadoEn: null } })
+    if (!chile) {
+      console.warn('  Omitido: no se encontró el país "CHL" (correr seed de geografía primero).')
+    } else {
+      await prisma.entidad.create({
+        data: {
+          codigo: CLIENTE_SIN_DEFINIR_CODIGO,
+          descripcion: 'Cliente Sin Definir',
+          razonSocial: 'Cliente Sin Definir',
+          paisId: chile.id,
+          tipos: ['CLIENTE_NACIONAL'],
+          creadoPor: SISTEMA_USER,
+        },
+      })
+      console.log('  Entidad placeholder creada.')
+    }
+  }
 
   console.log('Seed completado.')
 }

@@ -7,7 +7,7 @@ const TIPOS_CLIENTE = new Set(['CLIENTE_NACIONAL', 'CLIENTE_EXTRANJERO'])
 
 interface ReferenciasHeader {
   clienteId: number
-  compradorId?: number | null
+  compradorContactoId?: number | null
   notifyId?: number | null
   clienteFinalId?: number | null
   tipoEmbarqueId: number
@@ -26,7 +26,7 @@ interface ReferenciasHeader {
 // referencia del encabezado, y consistencia cruzada (dirección↔cliente,
 // puerto↔país/tipo de embarque).
 async function validarReferenciasHeader(r: ReferenciasHeader) {
-  const entidadIds = [r.clienteId, r.compradorId, r.notifyId, r.clienteFinalId].filter(
+  const entidadIds = [r.clienteId, r.notifyId, r.clienteFinalId].filter(
     (v): v is number => v != null,
   )
   const entidades = await repo.getEntidadTipos(entidadIds)
@@ -34,7 +34,7 @@ async function validarReferenciasHeader(r: ReferenciasHeader) {
   const faltantes = entidadIds.filter((id) => !encontrados.has(id))
   if (faltantes.length > 0) {
     throw new ValidationError(
-      `Una o más entidades (cliente/comprador/notify/cliente final) no existen o están inactivas: ${faltantes.join(', ')}`,
+      `Una o más entidades (cliente/notify/cliente final) no existen o están inactivas: ${faltantes.join(', ')}`,
     )
   }
   const cliente = encontrados.get(r.clienteId)
@@ -76,6 +76,11 @@ async function validarReferenciasHeader(r: ReferenciasHeader) {
     if (direccion.entidadId !== r.clienteId) {
       throw new ValidationError('La dirección seleccionada no pertenece al cliente')
     }
+  }
+
+  if (r.compradorContactoId != null) {
+    const contacto = await repo.getContactoDeEntidad(r.compradorContactoId, r.clienteId)
+    if (!contacto) throw new ValidationError('El comprador (contacto) seleccionado no pertenece al cliente')
   }
 
   if (r.modalidadVentaId != null) {
@@ -177,7 +182,7 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
   // que sí bloquearía — pero ese módulo [Embarque] no está implementado).
   const efectivo: ReferenciasHeader = {
     clienteId: body.clienteId ?? existente.clienteId,
-    compradorId: body.compradorId !== undefined ? body.compradorId : existente.compradorId,
+    compradorContactoId: body.compradorContactoId !== undefined ? body.compradorContactoId : existente.compradorContactoId,
     notifyId: body.notifyId !== undefined ? body.notifyId : existente.notifyId,
     clienteFinalId: body.clienteFinalId !== undefined ? body.clienteFinalId : existente.clienteFinalId,
     tipoEmbarqueId: body.tipoEmbarqueId ?? existente.tipoEmbarqueId,

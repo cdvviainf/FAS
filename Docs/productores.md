@@ -135,7 +135,10 @@ model ProductorContrato {
   especie         Especie    @relation(fields: [especieId], references: [id])
   fechaInicio     DateTime   @db.Date                         // sugerida desde temporada.fechaInicio, editable
   fechaTermino    DateTime   @db.Date                         // sugerida desde temporada.fechaTermino, editable
-  condicionPagoId Int?                                        // Parametro genérico (mismo patrón que incotermId en OrdenCompra)
+  condicionPagoId Int?                                        // FK -> CondicionPago tipo COMPRA (ver supersesión 2026-07-30)
+  condicionPago   CondicionPago? @relation(fields: [condicionPagoId], references: [id])
+  responsableId   String?                                     // FK -> Usuario (Usuario.esResponsableVenta), opcional
+  responsable     Usuario?   @relation(fields: [responsableId], references: [id])
 
   lineas          ProductorContratoLinea[]
   adjuntos        ProductorContratoAdjunto[]
@@ -340,7 +343,9 @@ model ProformaServicioDetalle {
 - **R1 — Predio de productor.** `Predio.entidadId` debe ser una entidad con `PRODUCTOR` en `tipos` → 422.
 - **R2 — Código de predio** único por productor entre no eliminados.
 - **R3 — Representante legal obligatorio.** Un productor debe tener un `EntidadContacto` con `esRepresentanteLegal = true` y `rut` válido (regla R9 de entidades). Bloquear operaciones que lo requieran si falta.
-- **R4 — Contrato.** Cabecera imputable: `temporadaId` y `especieId` obligatorios (el contrato es por especie), `fechaInicio`/`fechaTermino` sugeridas desde la temporada seleccionada pero editables, `condicionPagoId` opcional (Parametro genérico). El compromiso de volumen se detalla en `ProductorContratoLinea` (Embalaje, Variedad, Categoría, rango de Calibre, Unidad de Medida, cantidad comprometida y mínimo garantizado por línea) — mínimo 1 línea. Admite múltiples documentos adjuntos (`ProductorContratoAdjunto`). **R4b — Unicidad:** un productor no puede tener dos contratos activos (no eliminados) para la misma combinación especie-temporada → 422.
+- **R4 — Contrato.** Cabecera imputable: `temporadaId` y `especieId` obligatorios (el contrato es por especie), `fechaInicio`/`fechaTermino` sugeridas desde la temporada seleccionada pero editables, `condicionPagoId` opcional (FK a `CondicionPago`, ver supersesión), `responsableId` opcional (FK a `Usuario`, ver supersesión). El compromiso de volumen se detalla en `ProductorContratoLinea` (Embalaje, Variedad, Categoría, rango de Calibre, Unidad de Medida, cantidad comprometida y mínimo garantizado por línea) — mínimo 1 línea. Admite múltiples documentos adjuntos (`ProductorContratoAdjunto`). **R4b — Unicidad:** un productor no puede tener dos contratos activos (no eliminados) para la misma combinación especie-temporada → 422.
+
+> **⚠️ Supersesión (2026-07-30).** Por decisión de Christian: (a) `condicionPagoId` deja de ser un `Parametro` genérico (nunca llegó a tener catálogo real — el `TipoParametro` "Condición de Pago" nunca se creó) y pasa a ser FK real al mantenedor `CondicionPago`, filtrado en la UI por `tipo = 'COMPRA'` (Contrato de Productor es un compromiso de compra al productor, mismo patrón que Orden de Compra). Validación: debe existir y no estar bloqueada, sin distinción de `tipo` a nivel de API (mismo criterio ya usado en Orden de Compra). (b) Se agrega `responsableId` (FK opcional a `Usuario`, filtrado por `esResponsableVenta`), mismo patrón que `OrdenCompra.responsableId`, ubicado junto a Fecha Inicio/Fecha Término en el formulario. Migración: los valores existentes de `condicionPagoId` que no correspondan a un `CondicionPago` real (el campo nunca tuvo FK, así que cualquier valor previo era conceptualmente un id de `Parametro`) se limpian a `NULL` antes de agregar la FK.
 - **R5 — Cuenta corriente.** Movimientos inmutables; corrección por reverso. **R5b:** saldo = Σ(HABER) − Σ(DEBE). `% cumplimiento` del contrato queda fuera de Etapa 1 (dependía de "Valores/Condiciones de facturación", removidas de la cabecera; se retoma junto con el volumen real de Compras).
 - **R6 — Naturaleza CC.** `movimiento.naturaleza` debe ser compatible con `tipo.naturaleza`: si el tipo es `DEBE` → solo DEBE; `HABER` → solo HABER; `AMBOS` → cualquiera. → 422 si incompatible.
 - **R7 — Concepto por especie.** `valor` único por `(conceptoId, especieId)`. La `naturaleza` del concepto define el signo al aplicarlo (COBRO resta, ABONO suma).

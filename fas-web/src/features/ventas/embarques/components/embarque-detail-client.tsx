@@ -15,7 +15,7 @@ function TabPlaceholder({ titulo }: { titulo: string }) {
 
 export function EmbarqueDetailClient({ embarqueId }: { embarqueId: number }) {
   const searchParams = useSearchParams()
-  const tabInicial = searchParams.get('tab') ?? 'reserva'
+  const tabInicial = searchParams.get('tab') ?? 'espacio'
 
   const { data, isPending } = useQuery(embarqueDetailOptions(embarqueId))
 
@@ -33,22 +33,22 @@ export function EmbarqueDetailClient({ embarqueId }: { embarqueId: number }) {
 
       <Tabs defaultValue={tabInicial}>
         <TabsList>
-          <TabsTrigger value='reserva'>Solicitud de Reserva</TabsTrigger>
-          <TabsTrigger value='instructivo'>Generación de Instructivo</TabsTrigger>
-          <TabsTrigger value='seleccion-fruta'>Selección de Fruta</TabsTrigger>
-          <TabsTrigger value='confirmacion-fruta'>Confirmación de Fruta</TabsTrigger>
+          <TabsTrigger value='espacio'>Solicitud de Espacio</TabsTrigger>
+          <TabsTrigger value='pallets'>Seleccionar Pallets</TabsTrigger>
+          <TabsTrigger value='instructivos'>Generar Instructivos</TabsTrigger>
+          <TabsTrigger value='despacho'>Despachar</TabsTrigger>
         </TabsList>
-        <TabsContent value='reserva'>
-          <TabPlaceholder titulo='Solicitud de Reserva' />
+        <TabsContent value='espacio'>
+          <TabPlaceholder titulo='Solicitud de Espacio' />
         </TabsContent>
-        <TabsContent value='instructivo'>
-          <TabPlaceholder titulo='Generación de Instructivo' />
+        <TabsContent value='pallets'>
+          <TabPlaceholder titulo='Seleccionar Pallets' />
         </TabsContent>
-        <TabsContent value='seleccion-fruta'>
-          <TabPlaceholder titulo='Selección de Fruta' />
+        <TabsContent value='instructivos'>
+          <TabPlaceholder titulo='Generar Instructivos' />
         </TabsContent>
-        <TabsContent value='confirmacion-fruta'>
-          <TabPlaceholder titulo='Confirmación de Fruta' />
+        <TabsContent value='despacho'>
+          <TabPlaceholder titulo='Despachar' />
         </TabsContent>
       </Tabs>
     </div>

@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const notaVentaCreateSchema = z.object({
   fecha: z.coerce.date(),
   clienteId: z.number().int().positive('El cliente es requerido'),
-  compradorId: z.number().int().positive().optional().nullable(),
+  compradorContactoId: z.number().int().positive().optional().nullable(),
   notifyId: z.number().int().positive().optional().nullable(),
   clienteFinalId: z.number().int().positive().optional().nullable(),
   tipoEmbarqueId: z.number().int().positive('El tipo de embarque es requerido'),

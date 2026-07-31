@@ -2,8 +2,8 @@ import { NavGroup } from '@/types';
 
 // ─── Reglas de diseño del menú ────────────────────────────────────────────────
 //
-// 1. MANTENEDORES EN SECCIÓN: cada sección operativa incluye un ítem "Mantenedores"
-//    con los catálogos/maestros que son propios de esa sección.
+// 1. MANTENEDORES CENTRALIZADOS: los catálogos y maestros se acceden desde la
+//    sección "Configuración", sin repetirlos en las secciones operativas.
 //
 // 2. MANTENEDORES GENERALES: los maestros transversales (geografía, fruta, parámetros,
 //    operación general, configuración del sistema) viven en la sección "Gestión".
@@ -34,7 +34,6 @@ export const navGroups: NavGroup[] = [
 
   // ═══════════════════════════════════════════════════════════════════════════
   // GESTIÓN COMERCIAL
-  // Mantenedores propios: GrupoMercado · Mercado · TipoEmbarque
   // ═══════════════════════════════════════════════════════════════════════════
   {
     label: 'Gestión Comercial',
@@ -61,20 +60,6 @@ export const navGroups: NavGroup[] = [
           { title: 'Embarques',         url: '/dashboard/ventas/embarques',  icon: 'post'    },
           { title: 'Cobranza / CRM',    url: '/dashboard/ventas/cobranza',   icon: 'billing' },
           { title: 'Reclamos',          url: '/dashboard/ventas/reclamos',   icon: 'warning' }
-        ]
-      },
-      {
-        title: 'Mantenedores',
-        url: '#',
-        icon: 'adjustments',
-        isActive: false,
-        items: [
-          { title: 'Entidades',         url: '/dashboard/configuracion/entidades',      icon: 'teams'   },
-          { title: 'Grupos de Mercado', url: '/dashboard/configuracion/grupos-mercado', icon: 'page'    },
-          { title: 'Mercados',          url: '/dashboard/configuracion/mercados',        icon: 'page'    },
-          { title: 'Tipos de Embarque', url: '/dashboard/configuracion/tipos-embarque', icon: 'page'    },
-          { title: 'Formas de Pago',    url: '/dashboard/configuracion/formas-pago',    icon: 'billing' },
-          { title: 'Condiciones de Pago', url: '/dashboard/configuracion/condiciones-pago', icon: 'billing' }
         ]
       }
     ]
@@ -114,7 +99,6 @@ export const navGroups: NavGroup[] = [
 
   // ═══════════════════════════════════════════════════════════════════════════
   // GESTIÓN PRODUCTORES
-  // Mantenedores propios: Productores (maestro) · ConceptoLiquidación · MatrizCostos
   // ═══════════════════════════════════════════════════════════════════════════
   {
     label: 'Gestión Productores',
@@ -140,37 +124,16 @@ export const navGroups: NavGroup[] = [
           { title: 'Ajustes de Precios',    url: '/dashboard/liquidaciones/ajustes-precios', icon: 'adjustments' },
           { title: 'Liquidación Productor', url: '/dashboard/liquidaciones/productores',    icon: 'post'       }
         ]
-      },
-      {
-        title: 'Mantenedores',
-        url: '#',
-        icon: 'adjustments',
-        isActive: false,
-        items: [
-          { title: 'Entidades',                url: '/dashboard/configuracion/entidades',              icon: 'teams'   },
-          { title: 'Productores',              url: '/dashboard/configuracion/productores',            icon: 'teams'   },
-          { title: 'Conceptos de Liquidación', url: '/dashboard/configuracion/conceptos-liquidacion', icon: 'forms'   },
-          { title: 'Matriz de Costos',         url: '/dashboard/configuracion/matriz-costos',         icon: 'billing' }
-        ]
       }
     ]
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // CALIDAD
-  // Ítems operativos directos (sin grupo wrapper).
-  // Mantenedores propios: TipoDefecto · GrupoDefecto · Defecto · CaracteristicaMadurez
+  // CALIDAD — ítems operativos directos (sin grupo wrapper).
   // ═══════════════════════════════════════════════════════════════════════════
   {
     label: 'Calidad',
     items: [
-      {
-        title: 'Inspecciones',
-        url: '/dashboard/calidad/solicitudes',
-        icon: 'forms',
-        isActive: false,
-        items: []
-      },
       {
         title: 'Inspección Compra',
         url: '/dashboard/calidad/inspeccion-compra',
@@ -184,19 +147,6 @@ export const navGroups: NavGroup[] = [
         icon: 'calidad',
         isActive: false,
         items: []
-      },
-      {
-        title: 'Mantenedores',
-        url: '#',
-        icon: 'adjustments',
-        isActive: false,
-        items: [
-          { title: 'Tipos de Defecto',         url: '/dashboard/configuracion/tipos-defecto',            icon: 'page'  },
-          { title: 'Grupos de Defecto',         url: '/dashboard/configuracion/grupos-defecto',          icon: 'page'  },
-          { title: 'Defectos',                  url: '/dashboard/configuracion/defectos',                icon: 'page'  },
-          { title: 'Características Madurez',   url: '/dashboard/configuracion/caracteristicas-madurez', icon: 'forms' },
-          { title: 'Motivos de Inspección',     url: '/dashboard/configuracion/motivos-inspeccion',      icon: 'page'  }
-        ]
       }
     ]
   },
@@ -221,15 +171,16 @@ export const navGroups: NavGroup[] = [
     items: [
       { title: 'Stock Fruta',       url: '/dashboard/reportes/stock-fruta',      icon: 'bodega',     isActive: false, items: [] },
       { title: 'Stock Materiales',  url: '/dashboard/reportes/stock-materiales', icon: 'materiales', isActive: false, items: [] },
-      { title: 'Stock por Receta',  url: '/dashboard/reportes/stock-receta',     icon: 'recetas',    isActive: false, items: [] }
+      { title: 'Stock por Receta',  url: '/dashboard/reportes/stock-receta',     icon: 'recetas',    isActive: false, items: [] },
+      { title: 'Gestión de Riesgo', url: '/dashboard/reportes/gestion-riesgo',   icon: 'warning',    isActive: false, items: [] }
     ]
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CONFIGURACIÓN — hub central de todos los mantenedores, agrupados por área
   //
-  // Cada subsección replica los maestros de la sección operativa correspondiente
-  // para que el administrador tenga acceso directo desde un único punto.
+  // Cada subsección centraliza los maestros de su área para que el administrador
+  // tenga acceso directo desde un único punto.
   // ═══════════════════════════════════════════════════════════════════════════
   {
     label: 'Configuración',
@@ -291,8 +242,21 @@ export const navGroups: NavGroup[] = [
           { title: 'Grupos de Defecto',      url: '/dashboard/configuracion/grupos-defecto',           icon: 'page'  },
           { title: 'Defectos',               url: '/dashboard/configuracion/defectos',                 icon: 'page'  },
           { title: 'Características Madurez',url: '/dashboard/configuracion/caracteristicas-madurez',  icon: 'forms' },
-          { title: 'Motivos de Inspección',  url: '/dashboard/configuracion/motivos-inspeccion',       icon: 'page'  },
           { title: 'Calificaciones',         url: '/dashboard/configuracion/calificaciones',           icon: 'page'  }
+        ]
+      },
+
+      // ── Gestión del Riesgo ──────────────────────────────────────────────
+      {
+        title: 'Gestión del Riesgo',
+        url: '#',
+        icon: 'warning',
+        isActive: false,
+        items: [
+          { title: 'Escalas de Calificación', url: '/dashboard/configuracion/riesgo/escalas',      icon: 'page'        },
+          { title: 'Ponderadores',            url: '/dashboard/configuracion/riesgo/ponderadores', icon: 'adjustments' },
+          { title: 'Tasa Financiera Mensual', url: '/dashboard/configuracion/riesgo/tasa-mensual', icon: 'billing'     },
+          { title: 'Configuración del Score', url: '/dashboard/configuracion/riesgo/score',         icon: 'settings'    }
         ]
       },
 

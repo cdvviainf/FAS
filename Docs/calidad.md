@@ -92,6 +92,8 @@ Permitir: (a) configurar la norma de calidad por especie (defectos y madurez); (
 > - `calificacionId?` (FK → `Calificacion`, **nuevo mantenedor** `/api/config/calificaciones` — reemplaza el texto libre "B1" del spec original).
 > - Todos opcionales, consistente con la naturaleza de solicitud preliminar del modelo vigente. Formulario de alta/edición migrado de Sheet a página dedicada (mismo patrón que Orden de Compra), `/dashboard/calidad/solicitudes/nueva` y `/[id]`.
 > - Correos vía cola BullMQ `correos` (notificar / modificar / eliminar / cerrar / reabrir + recordatorio 24 h antes).
+>
+> **⚠️ Supersesión (2026-07-30).** Por decisión de Christian, `motivoId`/`MotivoInspeccion` (mantenedor abierto, catálogo libre) queda **eliminado** y reemplazado por un campo fijo `tipoInspeccion` de solo 2 valores: `TipoInspeccion { COMPRA PROCESO }`. *(Nota: este enum reutiliza el nombre `TipoInspeccion` del modelo v1 ya superseded en §69/157 — son conceptos distintos y sin relación; el enum `PROCESO | PRODUCTO_TERMINADO` del modelo v1 nunca se implementó en Prisma.)* Cada Solicitud de Inspección queda clasificada como Inspección de Compra o de Proceso, y el mantenedor de menú "Inspecciones" en la sección Calidad se reemplaza por dos vistas filtradas: "Inspección de Compra" e "Inspección de Proceso" (`/dashboard/calidad/inspeccion-compra` y `/inspeccion-proceso`), cada una con un DataTable de solicitudes de ese tipo. Ambas comparten el mismo permiso `CAL_SOLICITUDES` (no hay permisos independientes por tipo). La migración correspondiente hace backfill a `COMPRA` para solicitudes existentes sin tipo — revisar manualmente si alguna corresponde a Proceso.
 
 ```prisma
 // ───── Mantenedores (solo WEB) ─────

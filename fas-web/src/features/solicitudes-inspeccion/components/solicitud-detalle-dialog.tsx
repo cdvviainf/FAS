@@ -10,7 +10,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/components/icons'
 import { solicitudesService } from '../service'
-import { ESTADO_LABELS, FUNCION_LABELS } from '../types'
+import { ESTADO_LABELS, FUNCION_LABELS, TIPO_INSPECCION_LABELS } from '../types'
 import type { SolicitudInspeccion } from '../types'
 
 const fmt = new Intl.DateTimeFormat('es-CL', {
@@ -79,7 +79,7 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
               </Campo>
             )}
             <Campo label='Fecha y hora'>{fmt.format(new Date(solicitud.fechaHora))}</Campo>
-            <Campo label='Motivo'>{solicitud.motivo.descripcion}</Campo>
+            <Campo label='Tipo de Inspección'>{TIPO_INSPECCION_LABELS[solicitud.tipoInspeccion]}</Campo>
             {solicitud.mercado && <Campo label='Mercado'>{solicitud.mercado.descripcion}</Campo>}
             {solicitud.paises.length > 0 && (
               <Campo label='Países'>{solicitud.paises.map((p) => p.pais.descripcion).join(', ')}</Campo>

@@ -7,7 +7,7 @@ const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: 
 
 const includeDetalle = {
   cliente: { select: entidadSelect },
-  comprador: { select: entidadSelect },
+  compradorContacto: { select: { id: true, nombre: true, email: true, telefono: true, whatsapp: true } },
   notify: { select: entidadSelect },
   clienteFinal: { select: entidadSelect },
   tipoEmbarque: { select: { id: true, codigo: true, descripcion: true } },
@@ -335,6 +335,10 @@ export async function getCalibresActivos(ids: number[]) {
     where: { id: { in: ids }, eliminadoEn: null, bloqueado: false },
     select: { id: true, especieId: true },
   })
+}
+
+export async function getContactoDeEntidad(contactoId: number, entidadId: number) {
+  return prisma.entidadContacto.findFirst({ where: { id: contactoId, entidadId, eliminadoEn: null } })
 }
 
 export async function getCondicionPago(id: number) {

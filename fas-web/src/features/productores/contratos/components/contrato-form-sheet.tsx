@@ -26,6 +26,8 @@ import { Separator } from '@/components/ui/separator'
 import { Icons } from '@/components/icons'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { articulosService } from '@/features/materiales/articulos/service'
+import { condicionesPagoService } from '@/features/condiciones-pago/service'
+import { usuariosService } from '@/features/usuarios/service'
 import { contratosService } from '../service'
 import type { Contrato, ContratoLineaInput } from '../types'
 
@@ -35,8 +37,6 @@ const variedadesService = createMantenedorService('variedades')
 const categoriasService = createMantenedorService('categorias')
 const calibresService = createMantenedorService('calibres')
 const unidadesMedidaService = createMantenedorService('unidades-medida')
-const tiposParametroService = createMantenedorService('tipos-parametro')
-const parametrosService = createMantenedorService('parametros')
 
 interface TemporadaOption {
   id: number
@@ -76,6 +76,7 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
   const [fechaTermino, setFechaTermino] = useState('')
   const [fechasTocadas, setFechasTocadas] = useState(false)
   const [condicionPagoId, setCondicionPagoId] = useState<number | null>(null)
+  const [responsableId, setResponsableId] = useState<string | null>(null)
   const [lineas, setLineas] = useState<ContratoLineaInput[]>([nuevaLineaVacia()])
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -103,29 +104,25 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
     staleTime: 5 * 60_000,
     enabled: open,
   })
-  // Condición de Pago: Parametro genérico agrupado bajo el TipoParametro
-  // "Condición de Pago" — mismo patrón que Incoterm en Orden de Compra
-  // (Docs/Hallazgos/orden-de-compra.md, OC-002). Si el catálogo aún no existe
-  // el selector queda vacío/deshabilitado hasta que se cree en Configuración.
-  const { data: tiposParametroData } = useQuery({
-    queryKey: ['tipos-parametro-condicion-pago'],
-    queryFn: () => tiposParametroService.list({ q: 'Condición de Pago', limit: 10 }),
-    staleTime: 5 * 60_000,
+  // Condición de Pago: mantenedor real CondicionPago, tipo COMPRA (Contrato
+  // de Productor es un compromiso de compra al productor).
+  const { data: condicionesPagoData } = useQuery({
+    queryKey: ['condiciones-pago-options', 'COMPRA'],
+    queryFn: () => condicionesPagoService.list({ tipo: 'COMPRA' }),
+    staleTime: 60_000,
     enabled: open,
   })
-  const tipoCondicionPagoId = (tiposParametroData?.data ?? []).find((t) =>
-    t.descripcion.toLowerCase().includes('condici') && t.descripcion.toLowerCase().includes('pago'),
-  )?.id
-  const { data: condicionesPagoData } = useQuery({
-    queryKey: ['condiciones-pago-options', tipoCondicionPagoId],
-    queryFn: () => parametrosService.list({ tipoParametroId: tipoCondicionPagoId!, limit: 200 }),
+  const { data: responsablesData } = useQuery({
+    queryKey: ['usuarios-responsables-venta-options'],
+    queryFn: () => usuariosService.list({ limit: 500, esResponsableVenta: true }),
     staleTime: 60_000,
-    enabled: open && !!tipoCondicionPagoId,
+    enabled: open,
   })
 
   const especies = especiesData?.data ?? []
   const articulos = articulosData?.data ?? []
   const unidadesMedida = unidadesMedidaData?.data ?? []
+  const responsables = responsablesData?.data ?? []
 
   useEffect(() => {
     if (!open) return
@@ -136,6 +133,7 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
       setFechaTermino(item.fechaTermino.slice(0, 10))
       setFechasTocadas(true)
       setCondicionPagoId(item.condicionPagoId)
+      setResponsableId(item.responsableId)
       setLineas(item.lineas.length > 0 ? item.lineas.map((l) => ({
         articuloId: l.articuloId,
         variedadId: l.variedadId,
@@ -153,6 +151,7 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
       setFechaTermino('')
       setFechasTocadas(false)
       setCondicionPagoId(null)
+      setResponsableId(null)
       setLineas([nuevaLineaVacia()])
     }
     setErrors({})
@@ -210,6 +209,7 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
         fechaInicio,
         fechaTermino,
         condicionPagoId,
+        responsableId,
         lineas,
       }
       if (isEdit) return contratosService.update(entidadId, item!.id, payload)
@@ -278,7 +278,7 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
                 </div>
               </div>
 
-              <div className='grid gap-3 sm:grid-cols-2'>
+              <div className='grid gap-3 sm:grid-cols-3'>
                 <div className='space-y-1.5'>
                   <Label>Fecha inicio <span className='text-destructive'>*</span></Label>
                   <Input
@@ -297,6 +297,18 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
                   />
                   {errors.fechaTermino && <p className='text-xs text-destructive'>{errors.fechaTermino}</p>}
                 </div>
+                <div className='space-y-1.5'>
+                  <Label>Responsable</Label>
+                  <Select value={responsableId ?? '__none__'} onValueChange={(v) => setResponsableId(v === '__none__' ? null : v)}>
+                    <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='__none__'>Sin definir</SelectItem>
+                      {responsables.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className='space-y-1.5'>
@@ -304,11 +316,8 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
                 <Select
                   value={condicionPagoId ? String(condicionPagoId) : '__none__'}
                   onValueChange={(v) => setCondicionPagoId(v === '__none__' ? null : Number(v))}
-                  disabled={!tipoCondicionPagoId}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder={tipoCondicionPagoId ? 'Seleccionar...' : 'Sin catálogo disponible'} />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value='__none__'>Sin definir</SelectItem>
                     {(condicionesPagoData?.data ?? []).map((p) => (
@@ -316,11 +325,6 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
                     ))}
                   </SelectContent>
                 </Select>
-                {!tipoCondicionPagoId && (
-                  <p className='text-xs text-muted-foreground'>
-                    Crea el Tipo de Parámetro &quot;Condición de Pago&quot; en Configuración para habilitar este listado.
-                  </p>
-                )}
               </div>
             </CardContent>
           </Card>

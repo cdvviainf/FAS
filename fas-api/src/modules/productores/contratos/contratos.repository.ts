@@ -6,6 +6,8 @@ const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 const includeDetalle = {
   temporada: { select: mantenedorSelect },
   especie: { select: mantenedorSelect },
+  condicionPago: { select: mantenedorSelect },
+  responsable: { select: { id: true, nombre: true, email: true } },
   lineas: {
     include: {
       articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
@@ -159,6 +161,14 @@ export async function getCalibre(id: number) {
 
 export async function getUnidadMedida(id: number) {
   return prisma.unidadMedida.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getCondicionPago(id: number) {
+  return prisma.condicionPago.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getUsuarioResponsable(id: string) {
+  return prisma.usuario.findFirst({ where: { id, eliminadoEn: null, esResponsableVenta: true }, select: { id: true } })
 }
 
 // ─── Representante legal (R3) ────────────────────────────────────────────────

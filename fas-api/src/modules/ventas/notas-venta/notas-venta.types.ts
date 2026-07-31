@@ -1,7 +1,7 @@
 export interface NotaVentaCreateInput {
   fecha: Date
   clienteId: number
-  compradorId?: number | null
+  compradorContactoId?: number | null
   notifyId?: number | null
   clienteFinalId?: number | null
   tipoEmbarqueId: number

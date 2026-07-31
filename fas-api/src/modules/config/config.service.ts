@@ -70,9 +70,6 @@ const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceD
   temporada: [
     { delegateName: 'solicitudInspeccion', parentField: 'temporadaId', label: 'solicitudes de inspección' },
   ],
-  motivoInspeccion: [
-    { delegateName: 'solicitudInspeccion', parentField: 'motivoId', label: 'solicitudes de inspección' },
-  ],
   mercado: [
     { delegateName: 'solicitudInspeccion', parentField: 'mercadoId', label: 'solicitudes de inspección' },
   ],

@@ -27,7 +27,6 @@ async function limpiarDatos() {
       "especies",
       "mercados",
       "grupos_mercado",
-      "motivos_inspeccion",
       "temporadas",
       "entidad_direcciones",
       "entidades",
@@ -61,8 +60,6 @@ async function crearFixtures() {
   const temporada = await prisma.temporada.create({
     data: { codigo: 'T26', descripcion: 'Temporada 2026', fechaInicio: new Date('2026-01-01'), fechaTermino: new Date('2026-12-31'), creadoPor: 'test' },
   })
-  const motivo = await prisma.motivoInspeccion.create({ data: { codigo: 'MOT-01', descripcion: 'Inspección de rutina', creadoPor: 'test' } })
-
   const especie = await prisma.especie.create({ data: { codigo: 'UV', descripcion: 'Uva', creadoPor: 'test' } })
   const otraEspecie = await prisma.especie.create({ data: { codigo: 'CZ', descripcion: 'Cereza', creadoPor: 'test' } })
   const grupoVariedad = await prisma.grupoVariedad.create({ data: { codigo: 'GV-UV', descripcion: 'Uva de Mesa', especieId: especie.id, creadoPor: 'test' } })
@@ -89,7 +86,7 @@ async function crearFixtures() {
 
   return {
     chile, usa, productor, direccion, clienteExtranjero, clienteNoExtranjero,
-    temporada, motivo, especie, otraEspecie, variedad, variedadOtraEspecie, calibre, categoria,
+    temporada, especie, otraEspecie, variedad, variedadOtraEspecie, calibre, categoria,
     grupoMercado, mercado, unidad, embalaje, noEmbalaje, calificacion, usuario,
   }
 }
@@ -99,7 +96,7 @@ function payloadBase(f: Awaited<ReturnType<typeof crearFixtures>>) {
     temporadaId: f.temporada.id,
     entidadProductorId: f.productor.id,
     direccionId: f.direccion.id,
-    motivoId: f.motivo.id,
+    tipoInspeccion: 'COMPRA' as const,
     fechaHora: new Date('2026-08-01T15:00:00Z').toISOString(),
     asignados: [{ usuarioId: f.usuario.id, funcion: 'ACUDIR' as const }],
   }

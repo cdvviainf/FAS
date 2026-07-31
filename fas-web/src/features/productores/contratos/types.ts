@@ -41,6 +41,9 @@ export interface Contrato {
   fechaInicio: string
   fechaTermino: string
   condicionPagoId: number | null
+  condicionPago: RefSimple | null
+  responsableId: string | null
+  responsable: { id: string; nombre: string; email: string } | null
   lineas: ContratoLinea[]
   adjuntos: ContratoAdjunto[]
   creadoEn: string
@@ -63,6 +66,7 @@ export interface ContratoCreateInput {
   fechaInicio: string
   fechaTermino: string
   condicionPagoId?: number | null
+  responsableId?: string | null
   lineas: ContratoLineaInput[]
 }
 

@@ -15,6 +15,7 @@ export interface ContratoCreateInput {
   fechaInicio: string
   fechaTermino: string
   condicionPagoId?: number | null
+  responsableId?: string | null
   lineas: ContratoLineaInput[]
 }
 

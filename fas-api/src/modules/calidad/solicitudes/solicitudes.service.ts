@@ -58,7 +58,6 @@ async function validarReferencias(data: {
   entidadProductorId?: number
   direccionId?: number
   contactoId?: number | null
-  motivoId?: number
   especieId?: number | null
   mercadoId?: number | null
   clienteId?: number | null
@@ -84,10 +83,6 @@ async function validarReferencias(data: {
     if (!entidadId) throw new ValidationError('No se puede validar el contacto sin entidad')
     const contacto = await repo.getContactoDeEntidad(data.contactoId, entidadId)
     if (!contacto) throw new ValidationError('El contacto seleccionado no pertenece a la entidad productora o fue eliminado')
-  }
-  if (data.motivoId !== undefined) {
-    const motivo = await repo.getMotivoActivo(data.motivoId)
-    if (!motivo) throw new ValidationError('El motivo seleccionado no existe, está bloqueado o fue eliminado')
   }
   if (data.especieId != null) {
     const especie = await repo.getEspecieActiva(data.especieId)

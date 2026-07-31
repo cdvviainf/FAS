@@ -33,7 +33,6 @@ const modelMap: Record<MantenedorModelo, string> = {
   temporada: 'temporada',
   bodega: 'bodega',
   // Lote 6 — Calidad
-  motivoInspeccion: 'motivoInspeccion',
   calificacion: 'calificacion',
 }
 

@@ -26,7 +26,6 @@ const includeDetalle = {
     select: { id: true, nombre: true, email: true, telefono: true, whatsapp: true, tipo: true },
   },
   especie: { select: { id: true, codigo: true, descripcion: true } },
-  motivo: { select: { id: true, codigo: true, descripcion: true } },
   mercado: { select: { id: true, codigo: true, descripcion: true } },
   cliente: { select: { id: true, codigo: true, descripcion: true, razonSocial: true } },
   calificacion: { select: { id: true, codigo: true, descripcion: true } },
@@ -85,6 +84,7 @@ function buildWhere(filters: SolicitudListFilters): Prisma.SolicitudInspeccionWh
   return {
     eliminadoEn: null,
     ...(filters.estado ? { estado: filters.estado } : {}),
+    ...(filters.tipoInspeccion ? { tipoInspeccion: filters.tipoInspeccion } : {}),
     ...(filters.temporadaId ? { temporadaId: filters.temporadaId } : {}),
     ...(filters.entidadProductorId ? { entidadProductorId: filters.entidadProductorId } : {}),
     ...(filters.usuarioAsignadoId
@@ -104,7 +104,6 @@ function buildWhere(filters: SolicitudListFilters): Prisma.SolicitudInspeccionWh
             { codigo: { contains: filters.q, mode: 'insensitive' as const } },
             { observaciones: { contains: filters.q, mode: 'insensitive' as const } },
             { entidadProductor: { descripcion: { contains: filters.q, mode: 'insensitive' as const } } },
-            { motivo: { descripcion: { contains: filters.q, mode: 'insensitive' as const } } },
           ],
         }
       : {}),
@@ -140,7 +139,7 @@ export interface SolicitudCoreData {
   contactoId?: number | null
   especieId?: number | null
   fechaHora: Date
-  motivoId: number
+  tipoInspeccion: 'COMPRA' | 'PROCESO'
   mercadoId?: number | null
   clienteId?: number | null
   fechaDespacho?: Date | null
@@ -389,12 +388,6 @@ export async function getUsuarioById(id: string) {
 }
 
 // QAS-SI-002: los maestros referenciados no deben estar bloqueados
-export async function getMotivoActivo(motivoId: number) {
-  return prisma.motivoInspeccion.findFirst({
-    where: { id: motivoId, eliminadoEn: null, bloqueado: false },
-  })
-}
-
 export async function getEspecieActiva(especieId: number) {
   return prisma.especie.findFirst({
     where: { id: especieId, eliminadoEn: null, bloqueado: false },
@@ -446,7 +439,7 @@ export async function getArticulosEmbalaje(ids: number[]) {
 // ─── Conteo de referencias (para bloquear soft delete de maestros, QAS-SI-001) ─
 
 export async function countSolicitudesPorCampo(
-  campo: 'motivoId' | 'temporadaId' | 'especieId' | 'entidadProductorId' | 'direccionId' | 'contactoId',
+  campo: 'temporadaId' | 'especieId' | 'entidadProductorId' | 'direccionId' | 'contactoId',
   valor: number,
 ): Promise<number> {
   return prisma.solicitudInspeccion.count({

@@ -36,7 +36,7 @@ import { useTemporada } from '@/contexts/temporada-context'
 import { solicitudesListOptions, solicitudesKeys } from '../queries'
 import { solicitudesService } from '../service'
 import { ESTADO_LABELS } from '../types'
-import type { SolicitudInspeccion, EstadoSolicitud } from '../types'
+import type { SolicitudInspeccion, EstadoSolicitud, TipoInspeccion } from '../types'
 import { SolicitudCerrarDialog } from './solicitud-cerrar-dialog'
 import { SolicitudDetalleDialog } from './solicitud-detalle-dialog'
 
@@ -54,7 +54,11 @@ const estadoVariant: Record<EstadoSolicitud, 'secondary' | 'default' | 'outline'
   CERRADA: 'outline',
 }
 
-export function SolicitudListingClient() {
+interface SolicitudListingClientProps {
+  tipoInspeccion?: TipoInspeccion
+}
+
+export function SolicitudListingClient({ tipoInspeccion }: SolicitudListingClientProps = {}) {
   const queryClient = useQueryClient()
   const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
@@ -78,6 +82,7 @@ export function SolicitudListingClient() {
   const filters = {
     page: params.page,
     limit: params.perPage,
+    ...(tipoInspeccion ? { tipoInspeccion } : {}),
     ...(params.q ? { q: params.q } : {}),
     ...(params.estado ? { estado: params.estado } : {}),
     ...(temporada ? { temporadaId: temporada.id } : {}),
@@ -128,11 +133,6 @@ export function SolicitudListingClient() {
       id: 'fechaHora',
       header: 'Fecha visita',
       cell: ({ row }) => fmt.format(new Date(row.original.fechaHora)),
-    },
-    {
-      id: 'motivo',
-      header: 'Motivo',
-      cell: ({ row }) => row.original.motivo.descripcion,
     },
     {
       accessorKey: 'estado',
@@ -214,13 +214,13 @@ export function SolicitudListingClient() {
     initialState: { columnPinning: { right: ['actions'] } },
   })
 
-  if (isPending) return <DataTableSkeleton columnCount={6} rowCount={10} />
+  if (isPending) return <DataTableSkeleton columnCount={5} rowCount={10} />
 
   return (
     <div className='flex flex-1 flex-col space-y-3'>
       <div className='flex flex-wrap items-center gap-2'>
         <Input
-          placeholder='Buscar código, motivo, productor...'
+          placeholder='Buscar código, productor...'
           value={params.q ?? ''}
           onChange={(e) => setParams({ q: e.target.value || null, page: 1 })}
           className='h-9 w-[260px]'

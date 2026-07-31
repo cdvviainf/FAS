@@ -17,6 +17,7 @@ export const contratoCreateSchema = z.object({
   fechaInicio: z.string().date(),
   fechaTermino: z.string().date(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
+  responsableId: z.string().min(1).optional().nullable(),
   lineas: z.array(contratoLineaSchema).min(1, 'Debe agregar al menos una línea de características'),
 }).refine((d) => d.fechaInicio <= d.fechaTermino, {
   message: 'La fecha de inicio no puede ser posterior a la fecha de término',
@@ -29,6 +30,7 @@ export const contratoUpdateSchema = z.object({
   fechaInicio: z.string().date().optional(),
   fechaTermino: z.string().date().optional(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
+  responsableId: z.string().min(1).optional().nullable(),
   lineas: z.array(contratoLineaSchema).min(1, 'Debe agregar al menos una línea de características').optional(),
 }).superRefine((d, ctx) => {
   if (d.fechaInicio && d.fechaTermino && d.fechaInicio > d.fechaTermino) {

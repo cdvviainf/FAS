@@ -29,7 +29,6 @@ export type MantenedorModelo =
   | 'temporada'
   | 'bodega'
   // Lote 6 — Calidad
-  | 'motivoInspeccion'
   | 'calificacion'
 
 export interface MantenedorListFilters {

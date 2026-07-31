@@ -65,8 +65,8 @@ export interface NotaVentaListItem {
 }
 
 export interface NotaVentaDetalle extends NotaVentaListItem {
-  compradorId: number | null
-  comprador: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
+  compradorContactoId: number | null
+  compradorContacto: { id: number; nombre: string; email: string | null; telefono: string | null; whatsapp: string | null } | null
   notifyId: number | null
   notify: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
   clienteFinalId: number | null
@@ -103,7 +103,7 @@ export interface NotaVentaListResponse {
 export interface NotaVentaCreateInput {
   fecha: string
   clienteId: number
-  compradorId?: number | null
+  compradorContactoId?: number | null
   notifyId?: number | null
   clienteFinalId?: number | null
   tipoEmbarqueId: number

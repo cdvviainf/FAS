@@ -25,14 +25,12 @@ import { articulosService } from '@/features/materiales/articulos/service'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { useTemporada } from '@/contexts/temporada-context'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
-import { MotivoQuickCreate } from '@/features/motivos-inspeccion/components/motivo-quick-create'
 import { solicitudDetailOptions, solicitudesKeys } from '../queries'
 import { solicitudesService } from '../service'
-import { FUNCION_LABELS } from '../types'
-import type { AsignadoInput, FuncionAsignado, SolicitudCreateInput } from '../types'
+import { FUNCION_LABELS, TIPO_INSPECCION_LABELS } from '../types'
+import type { AsignadoInput, FuncionAsignado, SolicitudCreateInput, TipoInspeccion } from '../types'
 import { SelectMultiple } from '@/components/shared/select-multiple'
 
-const motivosService = createMantenedorService('motivos-inspeccion')
 const especiesService = createMantenedorService('especies')
 const variedadesService = createMantenedorService('variedades')
 const calibresService = createMantenedorService('calibres')
@@ -72,7 +70,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const [productorId, setProductorId] = useState<number | null>(null)
   const [direccionId, setDireccionId] = useState<number | null>(null)
   const [contactoId, setContactoId] = useState<number | null>(null)
-  const [motivoId, setMotivoId] = useState<number | null>(null)
+  const [tipoInspeccion, setTipoInspeccion] = useState<TipoInspeccion | null>(null)
   const [fechaHora, setFechaHora] = useState(() => toLocalInput(new Date().toISOString()))
   const [mercadoId, setMercadoId] = useState<number | null>(null)
   const [paisIds, setPaisIds] = useState<number[]>([])
@@ -103,11 +101,6 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const { data: usuarios } = useQuery({
     queryKey: ['usuarios-options'],
     queryFn: () => usuariosService.list({ limit: 500 }),
-    staleTime: 60_000,
-  })
-  const { data: motivos } = useQuery({
-    queryKey: ['motivos-options'],
-    queryFn: () => motivosService.list({ soloActivos: true, limit: 500 }),
     staleTime: 60_000,
   })
   const { data: especies } = useQuery({
@@ -177,7 +170,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       setProductorId(d.entidadProductorId)
       setDireccionId(d.direccionId)
       setContactoId(d.contactoId)
-      setMotivoId(d.motivoId)
+      setTipoInspeccion(d.tipoInspeccion)
       setFechaHora(toLocalInput(d.fechaHora))
       setMercadoId(d.mercadoId)
       setPaisIds(d.paises.map((p) => p.pais.id))
@@ -218,7 +211,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     if (!isEdit && !temporada) e.temporada = 'Selecciona una temporada activa en la barra superior'
     if (!productorId) e.productor = 'El productor es requerido'
     if (!direccionId) e.direccion = 'La dirección es requerida'
-    if (!motivoId) e.motivo = 'El motivo es requerido'
+    if (!tipoInspeccion) e.tipoInspeccion = 'El tipo de inspección es requerido'
     if (!fechaHora) e.fechaHora = 'La fecha y hora son requeridas'
     if (asignados.length === 0) e.asignados = 'Debe asignar al menos un usuario'
     else if (!asignados.some((a) => a.funcion === 'ACUDIR')) e.asignados = 'Al menos un asignado debe tener función Acudir'
@@ -232,7 +225,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       entidadProductorId: productorId!,
       direccionId: direccionId!,
       contactoId,
-      motivoId: motivoId!,
+      tipoInspeccion: tipoInspeccion!,
       fechaHora: new Date(fechaHora).toISOString(),
       mercadoId,
       paisIds,
@@ -385,24 +378,16 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
               </Select>
             </div>
             <div className='space-y-1.5'>
-              <Label>Motivo <span className='text-destructive'>*</span></Label>
-              <div className='flex items-end gap-2'>
-                <div className='flex-1'>
-                  <Select value={motivoId ? String(motivoId) : ''} onValueChange={(v) => setMotivoId(Number(v))}>
-                    <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
-                    <SelectContent>
-                      {(motivos?.data ?? []).map((m) => (
-                        <SelectItem key={m.id} value={String(m.id)}>{m.descripcion}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <MotivoQuickCreate onCreated={(m) => {
-                  queryClient.invalidateQueries({ queryKey: ['motivos-options'] })
-                  setMotivoId(m.id)
-                }} />
-              </div>
-              {errors.motivo && <p className='text-xs text-destructive'>{errors.motivo}</p>}
+              <Label>Tipo de Inspección <span className='text-destructive'>*</span></Label>
+              <Select value={tipoInspeccion ?? ''} onValueChange={(v) => setTipoInspeccion(v as TipoInspeccion)}>
+                <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(TIPO_INSPECCION_LABELS) as TipoInspeccion[]).map((t) => (
+                    <SelectItem key={t} value={t}>{TIPO_INSPECCION_LABELS[t]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.tipoInspeccion && <p className='text-xs text-destructive'>{errors.tipoInspeccion}</p>}
             </div>
             <div className='space-y-1.5'>
               <Label>Fecha y hora de visita <span className='text-destructive'>*</span></Label>

@@ -70,6 +70,14 @@ async function validarReferenciasHeader(body: ContratoCreateInput | ContratoUpda
     const especie = await repo.getEspecie(body.especieId)
     if (!especie) throw new ValidationError('La especie seleccionada no existe o está bloqueada')
   }
+  if (body.condicionPagoId != null) {
+    const condicionPago = await repo.getCondicionPago(body.condicionPagoId)
+    if (!condicionPago) throw new ValidationError('La condición de pago seleccionada no existe o está bloqueada')
+  }
+  if (body.responsableId != null) {
+    const responsable = await repo.getUsuarioResponsable(body.responsableId)
+    if (!responsable) throw new ValidationError('El responsable seleccionado no existe o no tiene el permiso de responsable de venta')
+  }
 }
 
 // Un solo contrato activo por combinación especie-temporada, por productor

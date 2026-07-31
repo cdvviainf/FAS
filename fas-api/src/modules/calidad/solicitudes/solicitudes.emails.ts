@@ -13,7 +13,7 @@ interface SolicitudParaCorreo {
     comuna?: { descripcion: string } | null
   }
   contacto?: { nombre: string; telefono?: string | null; whatsapp?: string | null; email?: string | null } | null
-  motivo: { descripcion: string }
+  tipoInspeccion: 'COMPRA' | 'PROCESO'
   especie?: { descripcion: string } | null
   mercado?: { descripcion: string } | null
   cliente?: { razonSocial: string } | null
@@ -26,6 +26,11 @@ interface SolicitudParaCorreo {
   categorias?: { categoria: { descripcion: string } }[]
   embalajes?: { articulo: { descripcion: string } }[]
   asignados: { funcion: string; usuario: { nombre: string; email: string } }[]
+}
+
+const TIPO_INSPECCION_LABELS: Record<'COMPRA' | 'PROCESO', string> = {
+  COMPRA: 'Inspección de Compra',
+  PROCESO: 'Inspección de Proceso',
 }
 
 const fmtFechaCorta = new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeZone: 'America/Santiago' })
@@ -64,7 +69,7 @@ ${fila('Productor', esc(s.entidadProductor.razonSocial))}
 ${fila('Lugar', `${esc(lugar)}${mapa}`)}
 ${contactoStr ? fila('Contacto en terreno', contactoStr) : ''}
 ${fila('Fecha y hora', fmtFecha.format(s.fechaHora))}
-${fila('Motivo', esc(s.motivo.descripcion))}
+${fila('Tipo', TIPO_INSPECCION_LABELS[s.tipoInspeccion])}
 ${s.mercado ? fila('Mercado', esc(s.mercado.descripcion)) : ''}
 ${s.paises && s.paises.length > 0 ? fila('Países', s.paises.map((p) => esc(p.pais.descripcion)).join(', ')) : ''}
 ${s.cliente ? fila('Cliente', esc(s.cliente.razonSocial)) : ''}

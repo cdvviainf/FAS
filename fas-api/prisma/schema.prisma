@@ -137,6 +137,7 @@ model Usuario {
   solicitudesAsignadas     SolicitudInspeccionAsignado[]
   avatar                   UsuarioAvatar?
   ordenesCompraResponsable OrdenCompra[]
+  contratosProductorResponsable ProductorContrato[]
 
   @@map("usuarios")
 }
@@ -983,7 +984,6 @@ model Entidad {
   contratos                    ProductorContrato[]         @relation("ContratosProductor")
   movimientosCC                MovimientoCuentaCorriente[] @relation("CCProductor")
   notasVentaCliente            NotaVenta[]                 @relation("NotaVentaCliente")
-  notasVentaComprador          NotaVenta[]                 @relation("NotaVentaComprador")
   notasVentaNotify             NotaVenta[]                 @relation("NotaVentaNotify")
   notasVentaClienteFinal       NotaVenta[]                 @relation("NotaVentaClienteFinal")
   ordenesCompraProductor       OrdenCompra[]               @relation("OrdenCompraProductor")
@@ -1043,6 +1043,7 @@ model EntidadContacto {
   eliminadoPor         String?
 
   solicitudesInspeccion SolicitudInspeccion[]
+  notasVentaComprador   NotaVenta[]
 
   @@index([entidadId])
   @@map("entidad_contactos")
@@ -1061,23 +1062,12 @@ enum FuncionAsignadoInspeccion {
   NOTIFICAR
 }
 
-// Mantenedor: Motivo de Inspección (base común de mantenedores generales)
-model MotivoInspeccion {
-  id                    Int       @id @default(autoincrement())
-  codigo                String
-  descripcion           String
-  descripcionExtranjera String?
-  bloqueado             Boolean   @default(false)
-  creadoEn              DateTime  @default(now())
-  creadoPor             String
-  actualizadoEn         DateTime? @updatedAt
-  actualizadoPor        String?
-  eliminadoEn           DateTime?
-  eliminadoPor          String?
-
-  solicitudes SolicitudInspeccion[]
-
-  @@map("motivos_inspeccion")
+// Reemplaza al mantenedor MotivoInspeccion (abierto/libre) — decisión de
+// negocio (Christian, 2026-07-30): toda Solicitud de Inspección genera
+// exactamente una Inspección de Compra o de Proceso, sin más variantes.
+enum TipoInspeccion {
+  COMPRA
+  PROCESO
 }
 
 model SolicitudInspeccion {
@@ -1095,8 +1085,7 @@ model SolicitudInspeccion {
   especieId             Int?
   especie               Especie?                  @relation(fields: [especieId], references: [id])
   fechaHora             DateTime // fecha y hora de la visita
-  motivoId              Int
-  motivo                MotivoInspeccion          @relation(fields: [motivoId], references: [id])
+  tipoInspeccion        TipoInspeccion
   // Documento N° 107 (calidad.md §3) — retomados por decisión de negocio (2026-07-26)
   mercadoId             Int?
   mercado               Mercado?                  @relation(fields: [mercadoId], references: [id])
@@ -1525,10 +1514,15 @@ model ProductorContrato {
   especie         Especie   @relation(fields: [especieId], references: [id])
   fechaInicio     DateTime  @db.Date
   fechaTermino    DateTime  @db.Date
-  // Parametro genérico (Condición de Pago) — mismo patrón que incotermId en
-  // OrdenCompra: el TipoParametro "Condición de Pago" todavía no está dado de
-  // alta (se crea en Configuración → Tipos de Parámetro cuando se necesite).
+  // Mantenedor real CondicionPago (tipo COMPRA) — decisión de negocio,
+  // Christian, 2026-07-30. Reemplaza el hack anterior de Parametro suelto
+  // (que nunca llegó a tener catálogo real).
   condicionPagoId Int?
+  condicionPago   CondicionPago? @relation(fields: [condicionPagoId], references: [id])
+  // Usuario responsable (mismo patrón que OrdenCompra.responsableId,
+  // filtrado por esResponsableVenta).
+  responsableId   String?
+  responsable     Usuario?  @relation(fields: [responsableId], references: [id])
 
   lineas   ProductorContratoLinea[]
   adjuntos ProductorContratoAdjunto[]
@@ -1543,6 +1537,7 @@ model ProductorContrato {
   @@index([entidadId])
   @@index([especieId])
   @@index([temporadaId])
+  @@index([responsableId])
   @@map("productor_contratos")
 }
 
@@ -1663,8 +1658,10 @@ model NotaVenta {
 
   clienteId      Int
   cliente        Entidad  @relation("NotaVentaCliente", fields: [clienteId], references: [id])
-  compradorId    Int?
-  comprador      Entidad? @relation("NotaVentaComprador", fields: [compradorId], references: [id])
+  // Comprador es un Contacto de la Entidad Cliente (no una Entidad completa) —
+  // decisión de negocio, Christian, 2026-07-30.
+  compradorContactoId Int?
+  compradorContacto   EntidadContacto? @relation(fields: [compradorContactoId], references: [id])
   notifyId       Int?
   notify         Entidad? @relation("NotaVentaNotify", fields: [notifyId], references: [id])
   clienteFinalId Int?
@@ -1944,9 +1941,10 @@ model CondicionPago {
   tipo        TipoCondicionPago
   bloqueado   Boolean           @default(false)
 
-  cuotas        CondicionPagoCuota[]
-  ordenesCompra OrdenCompra[]
-  notasVenta    NotaVenta[]
+  cuotas             CondicionPagoCuota[]
+  ordenesCompra      OrdenCompra[]
+  notasVenta         NotaVenta[]
+  contratosProductor ProductorContrato[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String

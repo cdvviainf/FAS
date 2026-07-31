@@ -43,7 +43,6 @@ const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'temporada', prefixRuta: 'temporadas', label: 'Temporada', schemaKey: 'temporada' },
   { modelo: 'bodega', prefixRuta: 'bodegas', label: 'Bodega', schemaKey: 'bodega' },
   // Lote 6 — Calidad
-  { modelo: 'motivoInspeccion', prefixRuta: 'motivos-inspeccion', label: 'Motivo de Inspección' },
   { modelo: 'calificacion', prefixRuta: 'calificaciones', label: 'Calificación' },
 ]
 

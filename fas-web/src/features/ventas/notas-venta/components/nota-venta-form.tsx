@@ -31,6 +31,7 @@ import { condicionesPagoService } from '@/features/condiciones-pago/service'
 import { FECHA_REFERENCIA_LABELS } from '@/features/condiciones-pago/types'
 import { notaVentaDetailOptions, notasVentaKeys } from '../queries'
 import { notasVentaService } from '../service'
+import { CLIENTE_SIN_DEFINIR_CODIGO } from '../constants'
 import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleItem } from '../types'
 
 const tiposEmbarqueService = createMantenedorService('tipos-embarque')
@@ -49,7 +50,7 @@ const parametrosService = createMantenedorService('parametros')
 interface HeaderFields {
   fecha: string
   clienteId: number
-  compradorId: number | null
+  compradorContactoId: number | null
   notifyId: number | null
   clienteFinalId: number | null
   tipoEmbarqueId: number
@@ -69,7 +70,7 @@ interface HeaderFields {
 const HEADER_EMPTY: HeaderFields = {
   fecha: new Date().toISOString().slice(0, 10),
   clienteId: 0,
-  compradorId: null,
+  compradorContactoId: null,
   notifyId: null,
   clienteFinalId: null,
   tipoEmbarqueId: 0,
@@ -143,6 +144,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   const clientes = (clientesData?.data ?? []).filter(
     (e) => e.tipos.includes('CLIENTE_NACIONAL') || e.tipos.includes('CLIENTE_EXTRANJERO'),
   )
+  const clientePlaceholder = (clientesData?.data ?? []).find((e) => e.codigo === CLIENTE_SIN_DEFINIR_CODIGO)
   const { data: entidadesData } = useQuery({
     queryKey: ['entidades-todas-options'],
     queryFn: () => entidadesService.list({ limit: 500, activo: true }),
@@ -188,6 +190,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     enabled: !!fields.clienteId,
   })
   const direccionesCliente = clienteDetalle?.direcciones ?? []
+  const contactosCliente = clienteDetalle?.contactos ?? []
 
   useEffect(() => {
     if (notaVenta) {
@@ -195,7 +198,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       setFields({
         fecha: d.fecha.slice(0, 10),
         clienteId: d.clienteId,
-        compradorId: d.compradorId,
+        compradorContactoId: d.compradorContactoId,
         notifyId: d.notifyId,
         clienteFinalId: d.clienteFinalId,
         tipoEmbarqueId: d.tipoEmbarqueId,
@@ -214,6 +217,16 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     }
   }, [notaVenta])
 
+  // Al crear un Cierre Comercial nuevo, si aún no se eligió cliente, se
+  // preselecciona la Entidad placeholder "Cliente Sin Definir" — editable
+  // en cualquier momento, incluso después de guardado (ver badge más abajo).
+  useEffect(() => {
+    if (!isEdit && !fields.clienteId && clientePlaceholder) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFields((f) => ({ ...f, clienteId: clientePlaceholder.id }))
+    }
+  }, [isEdit, fields.clienteId, clientePlaceholder])
+
   function validate(): boolean {
     const e: Record<string, string> = {}
     if (!fields.fecha) e.fecha = 'La fecha es requerida'
@@ -230,7 +243,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     return {
       fecha: fields.fecha,
       clienteId: fields.clienteId,
-      compradorId: fields.compradorId,
+      compradorContactoId: fields.compradorContactoId,
       notifyId: fields.notifyId,
       clienteFinalId: fields.clienteFinalId,
       tipoEmbarqueId: fields.tipoEmbarqueId,
@@ -392,10 +405,15 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               {errors.fecha && <p className='text-xs text-destructive'>{errors.fecha}</p>}
             </div>
             <div className='space-y-1.5'>
-              <Label>Cliente <span className='text-destructive'>*</span></Label>
+              <Label className='flex items-center gap-2'>
+                Cliente <span className='text-destructive'>*</span>
+                {clientePlaceholder && fields.clienteId === clientePlaceholder.id && (
+                  <Badge variant='secondary'>Cliente sin definir</Badge>
+                )}
+              </Label>
               <Combobox
                 value={fields.clienteId ? String(fields.clienteId) : ''}
-                onChange={(v) => setFields((f) => ({ ...f, clienteId: Number(v), direccionId: null }))}
+                onChange={(v) => setFields((f) => ({ ...f, clienteId: Number(v), direccionId: null, compradorContactoId: null }))}
                 placeholder='Seleccionar cliente...'
                 searchPlaceholder='Buscar cliente...'
                 options={clientes.map((c) => ({ value: String(c.id), label: `${c.descripcion} — ${c.razonSocial}` }))}
@@ -404,14 +422,20 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
             </div>
 
             <div className='space-y-1.5'>
-              <Label>Comprador</Label>
-              <Combobox
-                value={fields.compradorId ? String(fields.compradorId) : 'none'}
-                onChange={(v) => setFields((f) => ({ ...f, compradorId: v === 'none' ? null : Number(v) }))}
-                placeholder='Sin comprador'
-                searchPlaceholder='Buscar entidad...'
-                options={[{ value: 'none', label: 'Sin comprador' }, ...entidades.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
-              />
+              <Label>Comprador (Contacto del Cliente)</Label>
+              <Select
+                value={fields.compradorContactoId ? String(fields.compradorContactoId) : 'none'}
+                onValueChange={(v) => setFields((f) => ({ ...f, compradorContactoId: v === 'none' ? null : Number(v) }))}
+                disabled={!fields.clienteId}
+              >
+                <SelectTrigger><SelectValue placeholder={fields.clienteId ? 'Sin comprador' : 'Selecciona un cliente primero'} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none'>Sin comprador</SelectItem>
+                  {contactosCliente.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className='space-y-1.5'>
               <Label>Notify</Label>
