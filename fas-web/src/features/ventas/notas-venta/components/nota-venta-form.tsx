@@ -86,6 +86,11 @@ const HEADER_EMPTY: HeaderFields = {
   observaciones: '',
 }
 
+// Cajas por pallet aún no tiene mantenedor propio (pendiente de desarrollar).
+// Mientras tanto se asume un valor fijo, usado para precalcular "Cajas" y
+// que el usuario puede sobrescribir manualmente en el campo.
+const CAJAS_POR_PALLET_DEFAULT = 108
+
 interface NuevaLinea {
   fechaCompromiso: string
   especieId: number
@@ -108,7 +113,7 @@ const LINEA_EMPTY: NuevaLinea = {
   categoriaId: null,
   tipoPalletId: null,
   cantidadPallets: '',
-  cajasPorPallet: '',
+  cajasPorPallet: String(CAJAS_POR_PALLET_DEFAULT),
   cajas: '',
   precio: '',
   calibreIds: [],
@@ -406,6 +411,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   }
 
   const articuloSeleccionado = (articulosData?.data ?? []).find((a) => a.id === linea.articuloId)
+  const cajasPorPalletValor = Number(linea.cajasPorPallet) || CAJAS_POR_PALLET_DEFAULT
   const lineaMutationPending = addDetalleMutation.isPending || updateDetalleMutation.isPending
 
   if (isEdit && isLoading) {
@@ -644,12 +650,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
             <CardTitle>Detalle de fruta comprometida</CardTitle>
           </CardHeader>
           <CardContent className='space-y-4'>
-            <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
-              <div className='space-y-1.5'>
-                <Label>Fecha Compromiso <span className='text-destructive'>*</span></Label>
-                <Input type='date' value={linea.fechaCompromiso} onChange={(e) => setLinea((l) => ({ ...l, fechaCompromiso: e.target.value }))} />
-                {lineaErrors.fechaCompromiso && <p className='text-xs text-destructive'>{lineaErrors.fechaCompromiso}</p>}
-              </div>
+            <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
+              {/* Fila 1: Especie, Variedad, Categoría */}
               <div className='space-y-1.5'>
                 <Label>Especie <span className='text-destructive'>*</span></Label>
                 <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: null, calibreIds: [] })); resetCalibreRango() }}>
@@ -675,6 +677,19 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 {lineaErrors.variedadId && <p className='text-xs text-destructive'>{lineaErrors.variedadId}</p>}
               </div>
               <div className='space-y-1.5'>
+                <Label>Categoría</Label>
+                <Select value={linea.categoriaId ? String(linea.categoriaId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, categoriaId: v ? Number(v) : null }))} disabled={!linea.especieId}>
+                  <SelectTrigger><SelectValue placeholder='Sin categoría' /></SelectTrigger>
+                  <SelectContent>
+                    {(categoriasData?.data ?? []).map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Fila 2: Artículo (2 columnas), Tipo Pallet */}
+              <div className='space-y-1.5 sm:col-span-2'>
                 <Label>Artículo (Embalaje) <span className='text-destructive'>*</span></Label>
                 <Select value={linea.articuloId ? String(linea.articuloId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}>
                   <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
@@ -687,17 +702,6 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 {lineaErrors.articuloId && <p className='text-xs text-destructive'>{lineaErrors.articuloId}</p>}
               </div>
               <div className='space-y-1.5'>
-                <Label>Categoría</Label>
-                <Select value={linea.categoriaId ? String(linea.categoriaId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, categoriaId: v ? Number(v) : null }))} disabled={!linea.especieId}>
-                  <SelectTrigger><SelectValue placeholder='Sin categoría' /></SelectTrigger>
-                  <SelectContent>
-                    {(categoriasData?.data ?? []).map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className='space-y-1.5'>
                 <Label>Tipo Pallet</Label>
                 <Select value={linea.tipoPalletId ? String(linea.tipoPalletId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, tipoPalletId: v ? Number(v) : null }))}>
                   <SelectTrigger><SelectValue placeholder='Sin tipo pallet' /></SelectTrigger>
@@ -708,18 +712,22 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Fila 3: Cant. Pallets, Cajas (auto = pallets × cajas/pallet, editable), Valor por Caja */}
               <div className='space-y-1.5'>
                 <Label>Cant. Pallets <span className='text-destructive'>*</span></Label>
-                <Input type='number' value={linea.cantidadPallets} onChange={(e) => setLinea((l) => ({ ...l, cantidadPallets: e.target.value }))} />
+                <Input
+                  type='number'
+                  value={linea.cantidadPallets}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setLinea((l) => ({ ...l, cantidadPallets: v, cajas: v ? String(Number(v) * cajasPorPalletValor) : l.cajas }))
+                  }}
+                />
                 {lineaErrors.cantidadPallets && <p className='text-xs text-destructive'>{lineaErrors.cantidadPallets}</p>}
               </div>
               <div className='space-y-1.5'>
-                <Label>Cajas x Pallet <span className='text-destructive'>*</span></Label>
-                <Input type='number' value={linea.cajasPorPallet} onChange={(e) => setLinea((l) => ({ ...l, cajasPorPallet: e.target.value }))} />
-                {lineaErrors.cajasPorPallet && <p className='text-xs text-destructive'>{lineaErrors.cajasPorPallet}</p>}
-              </div>
-              <div className='space-y-1.5'>
-                <Label>Cajas <span className='text-destructive'>*</span></Label>
+                <Label>Cajas ({cajasPorPalletValor} por pallet) <span className='text-destructive'>*</span></Label>
                 <Input type='number' value={linea.cajas} onChange={(e) => setLinea((l) => ({ ...l, cajas: e.target.value }))} />
                 {lineaErrors.cajas && <p className='text-xs text-destructive'>{lineaErrors.cajas}</p>}
               </div>
@@ -729,47 +737,47 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 <p className='text-xs text-muted-foreground'>En la moneda del encabezado ({(monedasData?.data ?? []).find((m) => m.id === fields.monedaId)?.codigo ?? '—'})</p>
                 {lineaErrors.precio && <p className='text-xs text-destructive'>{lineaErrors.precio}</p>}
               </div>
+
+              {/* Fila 4: Calibre Inicio, Calibre Fin, Agregar, Fecha Compromiso */}
+              <div className='min-w-0 space-y-1.5'>
+                <Label>Calibre Inicio</Label>
+                <Select value={calibreDesdeId ? String(calibreDesdeId) : ''} onValueChange={(v) => setCalibreDesdeId(Number(v))} disabled={!linea.especieId}>
+                  <SelectTrigger><SelectValue placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'} /></SelectTrigger>
+                  <SelectContent>
+                    {(calibresData?.data ?? []).map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className='min-w-0 space-y-1.5'>
+                <Label>Calibre Fin</Label>
+                <Select value={calibreHastaId ? String(calibreHastaId) : ''} onValueChange={(v) => setCalibreHastaId(Number(v))} disabled={!linea.especieId}>
+                  <SelectTrigger><SelectValue placeholder='Igual a inicio' /></SelectTrigger>
+                  <SelectContent>
+                    {(calibresData?.data ?? []).map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className='space-y-1.5'>
+                <Label className='invisible'>Agregar</Label>
+                <Button type='button' variant='secondary' className='w-full' onClick={agregarRangoCalibres} disabled={!linea.especieId || !calibreDesdeId}>
+                  <Icons.add className='mr-1 h-4 w-4' /> Agregar
+                </Button>
+              </div>
+              <div className='space-y-1.5'>
+                <Label>Fecha Compromiso <span className='text-destructive'>*</span></Label>
+                <Input type='date' value={linea.fechaCompromiso} onChange={(e) => setLinea((l) => ({ ...l, fechaCompromiso: e.target.value }))} />
+                {lineaErrors.fechaCompromiso && <p className='text-xs text-destructive'>{lineaErrors.fechaCompromiso}</p>}
+              </div>
             </div>
 
             <div className='space-y-1.5'>
               <Label>Calibres aceptados <span className='text-destructive'>*</span></Label>
-              <div className='flex flex-wrap items-end gap-2'>
-                <div className='w-40 space-y-1'>
-                  <Label className='text-xs text-muted-foreground'>Calibre desde</Label>
-                  <Select
-                    value={calibreDesdeId ? String(calibreDesdeId) : ''}
-                    onValueChange={(v) => setCalibreDesdeId(Number(v))}
-                    disabled={!linea.especieId}
-                  >
-                    <SelectTrigger><SelectValue placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'} /></SelectTrigger>
-                    <SelectContent>
-                      {(calibresData?.data ?? []).map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className='w-40 space-y-1'>
-                  <Label className='text-xs text-muted-foreground'>Calibre hasta</Label>
-                  <Select
-                    value={calibreHastaId ? String(calibreHastaId) : ''}
-                    onValueChange={(v) => setCalibreHastaId(Number(v))}
-                    disabled={!linea.especieId}
-                  >
-                    <SelectTrigger><SelectValue placeholder='Igual a desde' /></SelectTrigger>
-                    <SelectContent>
-                      {(calibresData?.data ?? []).map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button type='button' variant='secondary' onClick={agregarRangoCalibres} disabled={!linea.especieId || !calibreDesdeId}>
-                  <Icons.add className='mr-1 h-4 w-4' /> Agregar
-                </Button>
-              </div>
-              {linea.calibreIds.length > 0 && (
-                <div className='flex flex-wrap gap-1.5 pt-1'>
+              {linea.calibreIds.length > 0 ? (
+                <div className='flex flex-wrap gap-1.5'>
                   {linea.calibreIds.map((id) => {
                     const opt = (calibresData?.data ?? []).find((c) => c.id === id)
                     return (
@@ -786,6 +794,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                     )
                   })}
                 </div>
+              ) : (
+                <p className='text-xs text-muted-foreground'>Selecciona Calibre Inicio / Fin arriba y agrega.</p>
               )}
               {lineaErrors.calibreIds && <p className='text-xs text-destructive'>{lineaErrors.calibreIds}</p>}
             </div>
@@ -802,7 +812,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                   Cancelar edición
                 </Button>
               )}
-              <Button variant='secondary' onClick={handleGuardarLinea} isLoading={lineaMutationPending}>
+              <Button onClick={handleGuardarLinea} isLoading={lineaMutationPending}>
                 {editingDetalleId ? <><Icons.check className='mr-1 h-4 w-4' /> Guardar cambios de línea</> : <><Icons.add className='mr-1 h-4 w-4' /> Agregar línea</>}
               </Button>
             </div>
