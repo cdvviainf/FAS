@@ -109,6 +109,31 @@ async function main() {
   }
   console.log(`Empresas: ${EMPRESAS.length} verificadas.`)
 
+  // Backfill (Fase 1 multi-empresa): usuarios existentes sin ninguna empresa
+  // asignada quedan como miembros de AGROSAN, con AGROSAN como predeterminada.
+  // Idempotente — solo toca usuarios sin membresías, así que reintentar el
+  // seed no duplica ni pisa asignaciones manuales posteriores.
+  const agrosan = await prisma.empresa.findFirst({ where: { codigo: 'AGROSAN' } })
+  if (agrosan) {
+    const usuariosSinEmpresa = await prisma.usuario.findMany({
+      where: { eliminadoEn: null, empresas: { none: {} } },
+      select: { id: true },
+    })
+    for (const u of usuariosSinEmpresa) {
+      await prisma.usuarioEmpresa.create({
+        data: { usuarioId: u.id, empresaId: agrosan.id, creadoPor: SISTEMA_USER },
+      })
+    }
+    // Solo usuarios que SON miembros de AGROSAN (recién creados arriba, o ya
+    // asignados manualmente antes) — nunca pisar la predeterminada de un
+    // usuario cuya única membresía sea otra empresa (ej. solo AGDRY).
+    await prisma.usuario.updateMany({
+      where: { eliminadoEn: null, empresaPredeterminadaId: null, empresas: { some: { empresaId: agrosan.id } } },
+      data: { empresaPredeterminadaId: agrosan.id },
+    })
+    console.log(`Usuarios backfill a AGROSAN: ${usuariosSinEmpresa.length} membresías nuevas.`)
+  }
+
   console.log('Seeding ItemMenu...')
 
   for (const item of itemsMenu) {

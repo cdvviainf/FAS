@@ -4,6 +4,7 @@ import { ActiveThemeProvider } from '../themes/active-theme';
 import QueryProvider from './query-provider';
 import { TemporadaProvider } from '@/contexts/temporada-context';
 import { MenuAccesoProvider } from '@/contexts/menu-acceso-context';
+import { EmpresaProvider } from '@/contexts/empresa-context';
 
 export default function Providers({
   activeThemeValue,
@@ -15,11 +16,13 @@ export default function Providers({
   return (
     <ActiveThemeProvider initialTheme={activeThemeValue}>
       <QueryProvider>
-        <MenuAccesoProvider>
-          <TemporadaProvider>
-            {children}
-          </TemporadaProvider>
-        </MenuAccesoProvider>
+        <EmpresaProvider>
+          <MenuAccesoProvider>
+            <TemporadaProvider>
+              {children}
+            </TemporadaProvider>
+          </MenuAccesoProvider>
+        </EmpresaProvider>
       </QueryProvider>
     </ActiveThemeProvider>
   );

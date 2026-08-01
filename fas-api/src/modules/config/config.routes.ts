@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { makeControllers, getTemporadaPredeterminada, getMiMenu } from './config.controller.js'
+import { makeControllers, getTemporadaPredeterminada, getMiMenu, getMisEmpresas } from './config.controller.js'
 import type { MantenedorConfig } from './config.types.js'
 import { requireAuth, requireLevel } from '../../plugins/auth-guard.js'
 import { perfilesRoutes } from './perfiles/perfiles.routes.js'
@@ -59,6 +59,9 @@ export async function configRoutes(app: FastifyInstance) {
 
   // Menú accesible del usuario autenticado
   app.get('/me/menu', { preHandler: [requireAuth] }, getMiMenu)
+
+  // Empresas accesibles del usuario autenticado (multi-empresa, Fase 1)
+  app.get('/me/empresas', { preHandler: [requireAuth] }, getMisEmpresas)
 
   // Ruta especial: temporada predeterminada (antes del loop para evitar que :id capture "predeterminada")
   app.get('/temporadas/predeterminada', { preHandler: [requireAuth, requireLevel('CONFIG_MANTENEDORES', 'LECTURA')] }, getTemporadaPredeterminada)

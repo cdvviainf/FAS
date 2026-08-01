@@ -1,9 +1,10 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { createMantenedorQueries } from '@/features/mantenedor-simple/queries'
+import { useEmpresa } from '@/contexts/empresa-context'
 
 interface TemporadaItem {
   id: number
@@ -26,8 +27,28 @@ const TemporadaContext = createContext<TemporadaContextValue>({
 const STORAGE_KEY = 'fas_temporada'
 
 export function TemporadaProvider({ children }: { children: React.ReactNode }) {
+  const { empresaActiva } = useEmpresa()
   const [temporada, setTemporadaState] = useState<TemporadaItem | null>(null)
   const [initialized, setInitialized] = useState(false)
+  const empresaIdRef = useRef<number | null | undefined>(undefined)
+
+  // Decisión #8 (Docs/empresas.md): cambiar de empresa resetea la Temporada a
+  // la predeterminada de la nueva empresa. Hoy Temporada sigue siendo un
+  // mantenedor global (empresaId llega recién en Fase 2/3), así que este
+  // reset todavía no cambia qué temporada se obtiene — pero deja el mecanismo
+  // listo para cuando el endpoint de predeterminada quede scoped por empresa.
+  useEffect(() => {
+    const empresaId = empresaActiva?.id ?? null
+    if (empresaIdRef.current === undefined) {
+      empresaIdRef.current = empresaId
+      return
+    }
+    if (empresaIdRef.current === empresaId) return
+    empresaIdRef.current = empresaId
+    localStorage.removeItem(STORAGE_KEY)
+    setTemporadaState(null)
+    setInitialized(false)
+  }, [empresaActiva])
 
   // Fetch predeterminada from API
   const { data: predeterminada, isLoading } = useQuery({

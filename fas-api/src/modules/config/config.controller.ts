@@ -85,6 +85,33 @@ export async function getMiMenu(req: FastifyRequest, reply: FastifyReply) {
   return reply.send(items)
 }
 
+// Retorna las empresas a las que tiene acceso el usuario autenticado + su
+// empresa predeterminada (multi-empresa, Fase 1 — usado por el selector de
+// empresa del frontend).
+export async function getMisEmpresas(req: FastifyRequest, reply: FastifyReply) {
+  const usuarioId = req.fasUserId
+  if (!usuarioId) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Sin sesión.' } })
+
+  const [membresias, usuario] = await Promise.all([
+    prisma.usuarioEmpresa.findMany({
+      where: { usuarioId, empresa: { activo: true, eliminadoEn: null } },
+      select: {
+        empresa: { select: { id: true, codigo: true, razonSocial: true } },
+      },
+      orderBy: { empresa: { razonSocial: 'asc' } },
+    }),
+    prisma.usuario.findFirst({
+      where: { id: usuarioId },
+      select: { empresaPredeterminadaId: true },
+    }),
+  ])
+
+  return reply.send({
+    empresas: membresias.map((m) => m.empresa),
+    empresaPredeterminadaId: usuario?.empresaPredeterminadaId ?? null,
+  })
+}
+
 export function makeControllers(modelo: MantenedorModelo, schemaKey?: string) {
   const [createSchema, updateSchema] = schemaKey && schemaRegistry[schemaKey]
     ? schemaRegistry[schemaKey]

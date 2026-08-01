@@ -10,7 +10,7 @@
 > | **Frontend** | `fas-web` · `app/dashboard/configuracion/empresas/` (Fase 4) |
 > | **Depende de** | Mantenedores Generales (`Pais`, `Comuna`), Usuarios/Perfiles |
 > | **Usado por** | TODO el sistema (scoping por `empresaId` en la fase de tenancy) |
-> | **Estado** | Fase 0 en desarrollo (fundación de datos) |
+> | **Estado** | Fase 1 implementada (contexto de empresa) — QA ronda 3: `APROBADO_CON_OBSERVACIONES` |
 
 ---
 
@@ -58,6 +58,24 @@ Empresa activa por defecto al iniciar sesión.
 
 ---
 
+## 2.b Contexto de empresa — Fase 1 (implementado)
+
+### Backend
+
+- **`empresaContext`** (`src/lib/empresa-context.ts`): `AsyncLocalStorage<{ empresaId: number | null }>`. Se inicializa en un hook `onRequest` global (`app.ts`) con `{ empresaId: null }` y se **muta** (no se reemplaza) dentro de `requireAuth` una vez resuelto el valor real — la misma referencia de store persiste a través de todo el ciclo del request, incluida la capa de repositorio que en Fase 2 (Prisma Client Extension) lo leerá sin depender de `request`.
+- **`requireAuth`** (`src/plugins/auth-guard.ts`) resuelve `empresaId` así: si viene el header `X-Empresa-Id`, valida que el usuario sea miembro (`UsuarioEmpresa`) — `400 EMPRESA_INVALIDA` si no es un entero, `403 EMPRESA_NO_AUTORIZADA` si no es miembro. Si no viene el header, usa `empresaPredeterminadaId` como fallback. El resultado queda en `request.fasEmpresaId` y en el store ALS.
+- **Modo soft:** si el usuario no tiene ninguna empresa asignada (ni header ni predeterminada), `fasEmpresaId` queda `null` y el request **no se bloquea** — todavía no hay `empresaId` en ninguna tabla raíz, el aislamiento real llega en Fase 2. Este modo es transitorio y se retira cuando el backfill de Fase 3 garantice que todo usuario activo tiene al menos una empresa.
+- **Endpoint `GET /api/config/me/empresas`** (solo `requireAuth`, sin ítem de menú — es información propia del usuario, no un mantenedor administrable): retorna `{ empresas: [{id, codigo, razonSocial}], empresaPredeterminadaId }`, usado por el selector del frontend.
+- **Seed:** además de crear `AGROSAN`/`AGDRY`, asigna (idempotente, solo usuarios sin membresías) `UsuarioEmpresa` → AGROSAN y `empresaPredeterminadaId` = AGROSAN a todo `Usuario` existente. Es un backfill de **membresía**, no de `empresaId` en tablas raíz (eso sigue siendo Fase 3) — decisión tomada para que el mecanismo de Fase 1 tenga datos reales con los que probarse.
+
+### Frontend
+
+- **`EmpresaProvider`** (`src/contexts/empresa-context.tsx`), espejo de `TemporadaProvider`: consulta `config/me/empresas`, persiste `empresaActiva.id` en `localStorage` (`fas_empresa_id`), valida contra la lista recibida y auto-selecciona si el usuario solo tiene una empresa. Se registra en `providers.tsx` **antes** de `MenuAccesoProvider`/`TemporadaProvider` (empresa es de mayor jerarquía).
+- **Header `X-Empresa-Id`:** `lib/api.ts` agrega un hook `beforeRequest` a `ky` que lee `fas_empresa_id` de `localStorage` directamente (no vía React Context — `api` es un singleton de módulo fuera del árbol de componentes). El proxy genérico de Next.js (`app/api/[...path]/route.ts`) ya reenvía todos los headers, incluido este.
+- **Reset de Temporada al cambiar de empresa (decisión #8):** `TemporadaProvider` ahora consume `useEmpresa()` y, cuando `empresaActiva.id` cambia (no en el mount inicial), limpia su `localStorage` y su estado para forzar un refetch de la predeterminada. `EmpresaProvider.setEmpresaActiva` además invalida todo el cache de TanStack Query. **Nota:** como `Temporada` sigue siendo un mantenedor global (sin `empresaId` — eso llega en Fase 2/3), este reset hoy no cambia qué temporada se obtiene; el mecanismo queda listo para cuando el endpoint de predeterminada quede scoped por empresa.
+
+---
+
 ## 3. Seed y migración
 
 - **Seed:** crea `AGROSAN` ("Frutera Agrosan SpA") y `AGDRY` ("AGDry", solo el nombre; el resto se completa en la UI). Idempotente vía `findFirst`+`create`, ahora protegido por `codigo @unique`.
@@ -71,7 +89,7 @@ Empresa activa por defecto al iniciar sesión.
 | Fase | Contenido | Estado |
 |---|---|---|
 | **0** | `Empresa` + `EmpresaDireccion` + `EmpresaContacto` + `UsuarioEmpresa` + `Usuario.empresaPredeterminadaId` + seed | **En desarrollo** |
-| **1** | Contexto de empresa: `requireAuth` valida `X-Empresa-Id` (AsyncLocalStorage) · `EmpresaProvider` en front · cambio de empresa resetea Temporada | Pendiente |
+| **1** | Contexto de empresa: `requireAuth` valida `X-Empresa-Id` (AsyncLocalStorage) · `EmpresaProvider` en front · cambio de empresa resetea Temporada | **Implementada (QA ronda 3: APROBADO_CON_OBSERVACIONES)** |
 | **2** | Prisma Client Extension · `empresaId` en modelos raíz · uniques `@@unique([empresaId, codigo])` · folios por empresa · `ConfiguracionCorreo` por empresa | Pendiente |
 | **3** | Migración de datos self-safe por lotes del resto de tablas | Pendiente |
 | **4** | UI: mantenedor de Empresas (RUT, direcciones, contactos, SMTP) · form de Usuario ampliado (empresas + predeterminada, con validación de invariante §2) | Pendiente |

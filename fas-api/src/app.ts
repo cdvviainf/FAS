@@ -1,6 +1,7 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import { env } from './config/env.js'
 import { auth } from './lib/auth.js'
+import { empresaContext } from './lib/empresa-context.js'
 import { errorHandler } from './plugins/error-handler.js'
 import { swaggerPlugin } from './plugins/swagger.plugin.js'
 import { validatePasswordComplexity } from './shared/password-validator.js'
@@ -36,6 +37,13 @@ export async function buildApp(options: { logger?: boolean } = {}) {
   })
   await errorHandler(app)
   await swaggerPlugin(app)
+
+  // Contexto de empresa activa (multi-empresa, Fase 1). Se inicializa vacío
+  // acá para todo request; `requireAuth` lo completa una vez resuelto el
+  // usuario y el header X-Empresa-Id.
+  app.addHook('onRequest', (_req, _reply, done) => {
+    empresaContext.run({ empresaId: null }, done)
+  })
 
   app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
     if (req.url?.startsWith('/api/auth')) {

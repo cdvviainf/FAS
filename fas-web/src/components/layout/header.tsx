@@ -8,6 +8,7 @@ import { ThemeModeToggle } from '../themes/theme-mode-toggle';
 import CtaGithub from './cta-github';
 import { NotificationCenter } from '@/features/notifications/components/notification-center';
 import { TemporadaSelector } from './temporada-selector';
+import { EmpresaSelector } from './empresa-selector';
 
 export default function Header() {
   return (
@@ -23,6 +24,7 @@ export default function Header() {
         <div className='hidden md:flex'>
           <SearchInput />
         </div>
+        <EmpresaSelector />
         <TemporadaSelector />
         <ThemeModeToggle />
         <div className='hidden sm:block'>
