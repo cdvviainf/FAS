@@ -92,7 +92,10 @@ async function crearFixtures() {
   const empresa = await obtenerEmpresaTest()
   const grupoMercado = await prisma.grupoMercado.create({ data: { empresaId: empresa.id, codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
   const mercado = await prisma.mercado.create({ data: { empresaId: empresa.id, codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, creadoPor: 'test' } })
-  const pais = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, creadoPor: 'test' } })
+  const pais = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', creadoPor: 'test' } })
+  await prisma.mercadoPais.create({
+    data: { empresaId: empresa.id, mercadoId: mercado.id, paisId: pais.id, creadoPor: 'test' },
+  })
   const cliente = await prisma.entidad.create({
     data: { codigo: 'CLI-01', descripcion: 'Cliente Uno', razonSocial: 'Cliente Uno SpA', paisId: pais.id, tipos: ['CLIENTE_NACIONAL'], creadoPor: 'test' },
   })

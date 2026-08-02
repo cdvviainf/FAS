@@ -290,7 +290,15 @@ export async function getMercado(id: number) {
 }
 
 export async function getPais(id: number) {
-  return prisma.pais.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true, mercadoId: true } })
+  return prisma.pais.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+// Fase 2b: Pais ya no tiene mercadoId propio (ver MercadoPais) — la
+// pertenencia se verifica contra la tabla puente, tenant-scoped por la
+// extensión de Prisma.
+export async function paisPerteneceAMercado(paisId: number, mercadoId: number): Promise<boolean> {
+  const fila = await prisma.mercadoPais.findFirst({ where: { paisId, mercadoId } })
+  return fila != null
 }
 
 export async function getPuerto(id: number) {

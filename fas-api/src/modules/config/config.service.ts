@@ -21,7 +21,8 @@ const childrenMap: Partial<Record<MantenedorModelo, ChildDef[]>> = {
   grupoVariedad: [{ childModelo: 'variedad', parentField: 'grupoVariedadId', label: 'variedades' }],
   tipoParametro: [{ childModelo: 'parametro', parentField: 'tipoParametroId', label: 'parámetros' }],
   grupoMercado: [{ childModelo: 'mercado', parentField: 'grupoMercadoId', label: 'mercados' }],
-  mercado: [{ childModelo: 'pais', parentField: 'mercadoId', label: 'países' }],
+  // mercado -> pais: manejo dedicado en eliminarMantenedor (ya no es un FK
+  // directo, ver MercadoPais/Fase 2b — no encaja en countChildren genérico).
   pais: [
     { childModelo: 'puerto', parentField: 'paisId', label: 'puertos' },
   ],
@@ -157,6 +158,14 @@ export async function crearMantenedor(
     if (!grupo) throw new ValidationError('El grupo de mercado seleccionado no existe o no pertenece a esta empresa')
   }
 
+  // Fase 2b: Pais — mercadoId debe pertenecer al tenant activo (mismo patrón
+  // que Mercado/GrupoMercado arriba; Pais ya no tiene mercadoId propio, se
+  // valida contra Mercado antes de upsertear MercadoPais más abajo).
+  if (modelo === 'pais' && data.mercadoId) {
+    const mercado = await repo.getMantenedorById('mercado', data.mercadoId)
+    if (!mercado) throw new ValidationError('El mercado seleccionado no existe o no pertenece a esta empresa')
+  }
+
   // QAS-MG-L4-004: Bodega — validate active FK comunaId
   if (modelo === 'bodega' && data.comunaId) {
     const comuna = await repo.getMantenedorById('comuna', data.comunaId)
@@ -201,7 +210,11 @@ export async function crearMantenedor(
     }
   }
 
-  const { contactos, ...coreData } = data as MantenedorCreateInput & { contactos?: import('./config.types.js').BodegaContactoInput[] }
+  // Fase 2b: mercadoId de Pais no es una columna propia — se extrae acá y se
+  // resuelve aparte (MercadoPais) después de crear el país.
+  const { contactos, mercadoId, ...coreData } = data as MantenedorCreateInput & {
+    contactos?: import('./config.types.js').BodegaContactoInput[]
+  }
 
   // Temporada: convertir strings YYYY-MM-DD a Date para Prisma DateTime
   if (modelo === 'temporada') {
@@ -213,6 +226,11 @@ export async function crearMantenedor(
 
   if (modelo === 'bodega' && contactos && contactos.length > 0) {
     await repo.createBodegaContactos(created.id, contactos)
+    return repo.getMantenedorById(modelo, created.id)
+  }
+
+  if (modelo === 'pais' && mercadoId != null) {
+    await repo.upsertMercadoPais(created.id, mercadoId, userId)
     return repo.getMantenedorById(modelo, created.id)
   }
 
@@ -268,6 +286,12 @@ export async function actualizarMantenedor(
   if (modelo === 'mercado' && data.grupoMercadoId !== undefined) {
     const grupo = await repo.getMantenedorById('grupoMercado', data.grupoMercadoId)
     if (!grupo) throw new ValidationError('El grupo de mercado seleccionado no existe o no pertenece a esta empresa')
+  }
+
+  // Fase 2b: Pais — mercadoId debe pertenecer al tenant activo (on update)
+  if (modelo === 'pais' && data.mercadoId !== undefined && data.mercadoId !== null) {
+    const mercado = await repo.getMantenedorById('mercado', data.mercadoId)
+    if (!mercado) throw new ValidationError('El mercado seleccionado no existe o no pertenece a esta empresa')
   }
 
   // QAS-MG-L4-004: Bodega — validate active FK comunaId on update
@@ -335,7 +359,9 @@ export async function actualizarMantenedor(
     }
   }
 
-  const { contactos, ...coreData } = data as Partial<MantenedorCreateInput> & { contactos?: import('./config.types.js').BodegaContactoInput[] }
+  const { contactos, mercadoId, ...coreData } = data as Partial<MantenedorCreateInput> & {
+    contactos?: import('./config.types.js').BodegaContactoInput[]
+  }
 
   // Temporada: convertir strings YYYY-MM-DD a Date para Prisma DateTime
   if (modelo === 'temporada') {
@@ -348,7 +374,20 @@ export async function actualizarMantenedor(
     return repo.updateBodegaConContactos(id, coreData, contactos, userId)
   }
 
-  return repo.updateMantenedor(modelo, id, coreData, userId)
+  const updated = await repo.updateMantenedor(modelo, id, coreData, userId)
+
+  if (modelo === 'pais') {
+    if (mercadoId !== undefined && mercadoId !== null) {
+      await repo.upsertMercadoPais(id, mercadoId, userId)
+    }
+    // Siempre re-consultar (aunque este PATCH no haya tocado mercadoId): el
+    // contrato de respuesta de Pais incluye mercadoId/mercado reconstruidos
+    // vía MercadoPais (aplanarMercado), que `updated` (registro Prisma crudo)
+    // no tiene.
+    return repo.getMantenedorById(modelo, id)
+  }
+
+  return updated
 }
 
 export async function eliminarMantenedor(
@@ -366,6 +405,18 @@ export async function eliminarMantenedor(
   // Cannot delete the predeterminada temporada
   if (modelo === 'temporada' && (item as AnyRecord).predeterminada) {
     throw new ConflictError('No se puede eliminar la temporada predeterminada: designa otra como predeterminada primero')
+  }
+
+  // Fase 2b: Mercado -> Pais ya no es un FK directo (ver MercadoPais) — no
+  // encaja en el countChildren genérico de abajo (que asume [parentField]:
+  // parentId sobre el propio modelo hijo).
+  if (modelo === 'mercado') {
+    const count = await repo.countPaisesPorMercado(id)
+    if (count > 0) {
+      throw new ConflictError(
+        `No se puede eliminar: tiene ${count} país${count === 1 ? '' : 'es'} vigente${count === 1 ? '' : 's'} asociado${count === 1 ? '' : 's'}. Para dar de baja este registro, inactívalo (bloquéalo) en lugar de eliminarlo.`,
+      )
+    }
   }
 
   // R8: check children before softdelete

@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../../src/lib/prisma.js'
+import { empresaContext } from '../../src/lib/empresa-context.js'
 import {
   actualizarMantenedor,
   crearMantenedor,
@@ -50,7 +51,10 @@ async function crearGeografia() {
     data: { empresaId: empresa.id, codigo: 'M-TEST', descripcion: 'Mercado prueba', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
   })
   const pais = await prisma.pais.create({
-    data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, creadoPor: 'test' },
+    data: { codigo: 'CHL', descripcion: 'Chile', creadoPor: 'test' },
+  })
+  await prisma.mercadoPais.create({
+    data: { empresaId: empresa.id, mercadoId: mercado.id, paisId: pais.id, creadoPor: 'test' },
   })
   const region = await prisma.region.create({
     data: { codigo: 'RM', descripcion: 'Metropolitana', creadoPor: 'test' },
@@ -160,17 +164,23 @@ describe('mantenedores contra PostgreSQL', () => {
     const mercado = await prisma.mercado.create({
       data: { empresaId: empresa.id, codigo: 'M-ARG', descripcion: 'Mercado Argentina', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
     })
-    const pais = await crearMantenedor('pais', {
-      codigo: 'ARG',
-      descripcion: 'Argentina',
-      mercadoId: mercado.id,
-    })
-    await eliminarMantenedor('pais', pais.id, 'test')
+    // Fase 2b: crear/eliminar un Pais con mercadoId pasa por MercadoPais
+    // (tenant-scoped) — hace falta contexto de empresa activa, que fuera de
+    // un request HTTP no existe por defecto.
+    const { pais, reemplazo } = await empresaContext.run({ empresaId: empresa.id }, async () => {
+      const pais = await crearMantenedor('pais', {
+        codigo: 'ARG',
+        descripcion: 'Argentina',
+        mercadoId: mercado.id,
+      })
+      await eliminarMantenedor('pais', pais.id, 'test')
 
-    const reemplazo = await crearMantenedor('pais', {
-      codigo: 'ARG',
-      descripcion: 'Argentina nueva',
-      mercadoId: mercado.id,
+      const reemplazo = await crearMantenedor('pais', {
+        codigo: 'ARG',
+        descripcion: 'Argentina nueva',
+        mercadoId: mercado.id,
+      })
+      return { pais, reemplazo }
     })
 
     expect(reemplazo.id).not.toBe(pais.id)

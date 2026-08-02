@@ -53,9 +53,9 @@ async function validarReferenciasHeader(r: ReferenciasHeader) {
   if (!paisDestino) throw new ValidationError('El país destino seleccionado no existe o está bloqueado')
   if (!moneda) throw new ValidationError('La moneda seleccionada no existe o está bloqueada')
 
-  // NV-IE-009: el país destino debe pertenecer al mercado seleccionado
-  // (un Mercado agrupa varios Países, mantenedores-generales.md).
-  if (paisDestino && paisDestino.mercadoId !== r.mercadoId) {
+  // NV-IE-009: el país destino debe pertenecer al mercado seleccionado, para
+  // la empresa activa (Fase 2b: MercadoPais, ya no un FK directo país->mercado).
+  if (paisDestino && !(await repo.paisPerteneceAMercado(r.paisDestinoId, r.mercadoId))) {
     throw new ValidationError('El país destino no pertenece al mercado seleccionado')
   }
 

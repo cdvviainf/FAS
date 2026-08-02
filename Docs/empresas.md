@@ -10,7 +10,7 @@
 > | **Frontend** | `fas-web` · `app/dashboard/configuracion/empresas/` (Fase 4) |
 > | **Depende de** | Mantenedores Generales (`Pais`, `Comuna`), Usuarios/Perfiles |
 > | **Usado por** | TODO el sistema (scoping por `empresaId` en la fase de tenancy) |
-> | **Estado** | Fase 2a implementada (Prisma Client Extension + Mercado/GrupoMercado/ConfiguracionCorreo/PrefijoCodigo) — QA ronda 8: `APROBADO_CON_OBSERVACIONES`, `TESTS_OK` |
+> | **Estado** | Fase 2b implementada (refactor País↔Mercado vía `MercadoPais`) — QA ronda 4: `APROBADO_CON_OBSERVACIONES`, `TESTS_OK` |
 
 ---
 
@@ -112,21 +112,25 @@ Empresa activa por defecto al iniciar sesión.
 | **0** | `Empresa` + `EmpresaDireccion` + `EmpresaContacto` + `UsuarioEmpresa` + `Usuario.empresaPredeterminadaId` + seed | **Implementada** |
 | **1** | Contexto de empresa: `requireAuth` valida `X-Empresa-Id` (AsyncLocalStorage) · `EmpresaProvider` en front · cambio de empresa resetea Temporada | **Implementada (QA ronda 3: APROBADO_CON_OBSERVACIONES)** |
 | **2a** | Prisma Client Extension (tenancy) · `empresaId` en `Mercado`/`GrupoMercado`/`ConfiguracionCorreo`/`PrefijoCodigo` · `ConfiguracionCorreo` por empresa | **En desarrollo** |
-| **2b** | Refactor País↔Mercado: elimina `Pais.mercadoId`, crea `MercadoPais` | Pendiente |
+| **2b** | Refactor País↔Mercado: elimina `Pais.mercadoId`, crea `MercadoPais` | **Implementada** |
 | **3** | Migración de datos self-safe por lotes del resto de tablas raíz (~62 modelos) | Pendiente |
 | **4** | UI: mantenedor de Empresas (RUT, direcciones, contactos, SMTP) · form de Usuario ampliado (empresas + predeterminada, con validación de invariante §2) | Pendiente |
 
 ---
 
-## 5. Refactor País ↔ Mercado (Fase 2)
+## 5. Refactor País ↔ Mercado — Fase 2b (implementada)
 
-`Pais` es geografía global, pero **a qué mercado pertenece un país es una decisión comercial de cada empresa**. Como `Mercado`/`GrupoMercado` pasan a ser por empresa (decisión #4), la FK global→tenant `Pais.mercadoId` deja de ser válida. Resolución:
+`Pais` es geografía global, pero **a qué mercado pertenece un país es una decisión comercial de cada empresa**. Como `Mercado`/`GrupoMercado` pasan a ser por empresa (decisión #4), la FK global→tenant `Pais.mercadoId` dejó de ser válida. Resolución:
 
-- Se **elimina `Pais.mercadoId`**.
-- Nace **`MercadoPais`** (`empresaId`, `mercadoId`, `paisId`, `@@unique([empresaId, paisId])`): cada empresa mapea sus países a sus mercados.
-- El lookup "países de un mercado" (form de Cierre Comercial, Solicitud de Inspección) pasa a resolverse vía `MercadoPais` filtrado por la empresa activa.
+- Se **eliminó `Pais.mercadoId`**.
+- Nace **`MercadoPais`** (`empresaId`, `mercadoId`, `paisId`, `@@unique([empresaId, paisId])`): cada empresa mapea sus países a sus mercados. Un país pertenece a lo sumo un mercado **por empresa** (no es N:M real — decisión de negocio 2026-08-01: la misma fila de `Pais` puede mapear a mercados distintos en empresas distintas, pero dentro de una empresa el mapeo es 1:1). Sin soft-delete: cambiar el mercado de un país es un `UPDATE` de la misma fila. Se agregó a `MODELOS_TENANT` en `prisma-tenancy.ts` — hereda automáticamente todo el enforcement de Fase 2a (incluida la protección de escrituras anidadas vía DMMF).
+- Migración con backfill de datos reales (no solo columna nueva): cada `Pais` existente ya tenía un `mercadoId` — antes de borrar esa columna, se crea una fila `MercadoPais` por cada país, asociada a AGROSAN (mismo patrón self-safe que Fase 2a: la migración asegura que AGROSAN exista antes del backfill).
+- **Contrato de API sin cambios** (decisión de diseño clave — evita tocar el frontend): `config.repository.ts`/`config.service.ts` tratan `pais` como caso especial (mismo patrón que `bodega`+`contactos`): el body de create/update sigue recibiendo `mercadoId`, pero internamente se separa de los campos propios de `Pais` y se resuelve con `upsertMercadoPais` (upsert de la fila `MercadoPais`) en vez de una columna directa. Al listar/leer, se arma `mercado: {...}` en la respuesta incluyendo `mercadoPaises` filtrado por la empresa activa y aplanando el resultado — mismo shape de siempre. El filtro `?mercadoId=X` se resuelve vía `where: { mercadoPaises: { some: { empresaId, mercadoId } } }`. **Importante:** los `include`/`select` anidados no pasan por la extensión de tenancy (riesgo residual de Fase 2a) — el filtro por empresa activa en `mercadoPaises` se agrega a mano (`getEmpresaIdActual() ?? -1` como centinela sin empresa resuelta), no se puede confiar en que la extensión lo haga.
+- El bloqueo de borrado "no se puede eliminar un Mercado con países asociados" pasa de contar `Pais.mercadoId` a contar `MercadoPais` (`countPaisesPorMercado`) — ya no encaja en el `childrenMap`/`countChildren` genérico.
+- Las validaciones cruzadas país↔mercado de Notas de Venta (`notas-venta.service.ts`) y Solicitudes de Inspección (`solicitudes.service.ts`) pasan de comparar `pais.mercadoId !== mercadoId` a verificar existencia en `MercadoPais` (tenant-scoped automáticamente).
+- `OrdenCompra.destinoMercadoId` queda **fuera de este refactor**: no tiene campo de país (es una referencia de mercado suelta, sin país destino en el modelo) — no hay nada contra qué cruzar.
 
-Es el **único** conflicto global→tenant del schema (los demás son tenant→global, ej. `Puerto→Pais`, `Bodega→Comuna`, `Entidad→Pais`, que son válidos).
+Era el **único** conflicto global→tenant del schema (los demás son tenant→global, ej. `Puerto→Pais`, `Bodega→Comuna`, `Entidad→Pais`, que son válidos).
 
 ---
 

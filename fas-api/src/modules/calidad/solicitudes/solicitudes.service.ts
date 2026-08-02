@@ -116,10 +116,12 @@ async function validarReferencias(data: {
       throw new ValidationError('No se pueden seleccionar países sin definir un mercado')
     }
     const paises = await repo.getPaisesActivos(paisIdsEfectivos)
-    if (paises.length !== new Set(paisIdsEfectivos).size) {
+    const cantidadUnica = new Set(paisIdsEfectivos).size
+    if (paises.length !== cantidadUnica) {
       throw new ValidationError('Uno o más países seleccionados no existen o están bloqueados')
     }
-    if (paises.some((p) => p.mercadoId !== mercadoId)) {
+    const enMercado = await repo.contarPaisesEnMercado(paisIdsEfectivos, mercadoId)
+    if (enMercado !== cantidadUnica) {
       throw new ValidationError('Uno o más países seleccionados no pertenecen al mercado indicado')
     }
   }

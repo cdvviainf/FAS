@@ -191,6 +191,7 @@ model Empresa {
   gruposMercado        GrupoMercado[]
   configuracionesCorreo ConfiguracionCorreo[]
   prefijosCodigo       PrefijoCodigo[]
+  mercadoPaises        MercadoPais[]
 
   @@map("empresas")
 }
@@ -440,8 +441,11 @@ model Pais {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  mercadoId Int
-  mercado   Mercado @relation(fields: [mercadoId], references: [id])
+  // Pais.mercadoId (FK directo global->tenant) fue reemplazado en Fase 2b por
+  // MercadoPais: a qué mercado pertenece un país es una decisión comercial de
+  // cada empresa (Mercado es por-empresa desde Fase 2a), Pais sigue siendo
+  // geografía global (Docs/empresas.md §5).
+  mercadoPaises MercadoPais[]
 
   puertos                   Puerto[]
   entidades                 Entidad[]                 @relation("EntidadPais")
@@ -451,6 +455,31 @@ model Pais {
   solicitudesInspeccionPais SolicitudInspeccionPais[]
 
   @@map("paises")
+}
+
+// ─── País ↔ Mercado (Fase 2b) ────────────────────────────────────────────────
+// Cada empresa mapea sus países a sus mercados. Un país pertenece a lo sumo un
+// mercado POR EMPRESA (decisión de negocio 2026-08-01) — no es N:M real: la
+// misma fila de País puede mapear a mercados distintos en empresas distintas,
+// pero dentro de una empresa el mapeo es 1:1 (@@unique([empresaId, paisId])).
+// Sin soft-delete: cambiar el mercado de un país es un UPDATE de esta misma
+// fila, no un alta/baja.
+model MercadoPais {
+  id             Int      @id @default(autoincrement())
+  empresaId      Int
+  empresa        Empresa  @relation(fields: [empresaId], references: [id])
+  mercadoId      Int
+  mercado        Mercado  @relation(fields: [mercadoId], references: [id])
+  paisId         Int
+  pais           Pais     @relation(fields: [paisId], references: [id])
+  creadoEn       DateTime @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+
+  @@unique([empresaId, paisId])
+  @@index([empresaId, mercadoId])
+  @@map("mercado_paises")
 }
 
 model Zona {
@@ -917,7 +946,7 @@ model Mercado {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  paises                Pais[]
+  mercadoPaises         MercadoPais[]
   notasVenta            NotaVenta[]
   ordenesCompra         OrdenCompra[]
   solicitudesInspeccion SolicitudInspeccion[]

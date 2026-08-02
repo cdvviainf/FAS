@@ -322,7 +322,10 @@ describe('contrato HTTP de la API', () => {
       data: { empresaId: empresa.id, codigo: 'M-QA', descripcion: 'Mercado QA', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
     })
     const pais = await prisma.pais.create({
-      data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, creadoPor: 'test' },
+      data: { codigo: 'CHL', descripcion: 'Chile', creadoPor: 'test' },
+    })
+    await prisma.mercadoPais.create({
+      data: { empresaId: empresa.id, mercadoId: mercado.id, paisId: pais.id, creadoPor: 'test' },
     })
     const productor = await prisma.entidad.create({
       data: {

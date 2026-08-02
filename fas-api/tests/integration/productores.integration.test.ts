@@ -76,9 +76,13 @@ async function crearEntidad(tipos: ('PRODUCTOR' | 'PROVEEDOR')[], codigo: string
       id: 1,
       codigo: 'CHL',
       descripcion: 'Chile',
-      mercadoId: mercado.id,
       creadoPor: 'test',
     },
+  })
+  await prisma.mercadoPais.upsert({
+    where: { empresaId_paisId: { empresaId: empresa.id, paisId: pais.id } },
+    update: { mercadoId: mercado.id },
+    create: { empresaId: empresa.id, mercadoId: mercado.id, paisId: pais.id, creadoPor: 'test' },
   })
   return prisma.entidad.create({
     data: {

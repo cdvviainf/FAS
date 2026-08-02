@@ -417,7 +417,14 @@ export async function getCalificacionActiva(id: number) {
 }
 
 export async function getPaisesActivos(ids: number[]) {
-  return prisma.pais.findMany({ where: { id: { in: ids }, eliminadoEn: null, bloqueado: false }, select: { id: true, mercadoId: true } })
+  return prisma.pais.findMany({ where: { id: { in: ids }, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+// Fase 2b: Pais ya no tiene mercadoId propio (ver MercadoPais) — cuenta
+// cuántos de los países dados están mapeados al mercado indicado, para la
+// empresa activa (tenant-scoped por la extensión de Prisma).
+export async function contarPaisesEnMercado(paisIds: number[], mercadoId: number): Promise<number> {
+  return prisma.mercadoPais.count({ where: { paisId: { in: paisIds }, mercadoId } })
 }
 
 export async function getVariedadesActivas(ids: number[]) {

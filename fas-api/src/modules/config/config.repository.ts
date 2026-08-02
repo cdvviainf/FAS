@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../lib/empresa-context.js'
 import type { MantenedorModelo, MantenedorListFilters, MantenedorCreateInput, BodegaContactoInput } from './config.types.js'
 
 // Mapeo de modelo a nombre de delegado en Prisma Client
@@ -52,9 +53,9 @@ const includeMap: Partial<Record<MantenedorModelo, object>> = {
   mercado: {
     grupoMercado: { select: { id: true, descripcion: true } },
   },
-  pais: {
-    mercado: { select: { id: true, descripcion: true } },
-  },
+  // pais: manejo dedicado en listPaises/getPaisById — su "mercado" ya no es
+  // una FK directa (ver MercadoPais, Fase 2b) y necesita filtrarse por la
+  // empresa activa, algo que el includeMap genérico no resuelve.
   puerto: {
     pais: { select: { id: true, descripcion: true, codigo: true, puedeSerOrigen: true } },
     tipoEmbarque: { select: { id: true, descripcion: true } },
@@ -88,7 +89,7 @@ const fkFilterMap: Partial<Record<MantenedorModelo, FkFilterKey[]>> = {
   mercado: ['grupoMercadoId'],
   puerto: ['paisId', 'tipoEmbarqueId'],
   bodega: ['comunaId'],
-  pais: ['mercadoId'],
+  // pais.mercadoId: manejo dedicado en listPaises (ya no es una FK directa).
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -98,6 +99,8 @@ function getDelegate(modelo: MantenedorModelo): any {
 }
 
 export async function listMantenedor(modelo: MantenedorModelo, filters: MantenedorListFilters) {
+  if (modelo === 'pais') return listPaises(filters)
+
   const { q, page = 1, limit = 20, soloActivos } = filters
 
   // Build FK filters
@@ -148,11 +151,101 @@ export async function listMantenedor(modelo: MantenedorModelo, filters: Mantened
 }
 
 export async function getMantenedorById(modelo: MantenedorModelo, id: number) {
+  if (modelo === 'pais') return getPaisById(id)
+
   const includeClause = includeMap[modelo]
   return getDelegate(modelo).findFirst({
     where: { id, eliminadoEn: null },
     ...(includeClause ? { include: includeClause } : {}),
   })
+}
+
+// ─── Pais ↔ Mercado (Fase 2b) ────────────────────────────────────────────────
+// Pais ya no tiene mercadoId propio (ver MercadoPais). Los reads anidados NO
+// pasan por la extensión de tenancy (riesgo residual documentado en
+// Docs/empresas.md §2.c) — el filtro por empresa activa se agrega a mano acá,
+// con -1 como centinela cuando no hay empresa resuelta (sin coincidencias,
+// en vez de reventar la consulta).
+// mercadoId se reconstruye además de `mercado` porque el form de edición del
+// frontend (pais-form-sheet.tsx) precarga el select leyendo `item.mercadoId`
+// directamente — mismo contrato que cuando era una columna propia.
+type PaisConMercado = { mercadoId: number | null; mercado: { id: number; descripcion: string } | null }
+
+function aplanarMercado<T extends { mercadoPaises: { mercadoId: number; mercado: { id: number; descripcion: string } }[] }>(
+  pais: T,
+): Omit<T, 'mercadoPaises'> & PaisConMercado {
+  const { mercadoPaises, ...resto } = pais
+  return { ...resto, mercadoId: mercadoPaises[0]?.mercadoId ?? null, mercado: mercadoPaises[0]?.mercado ?? null }
+}
+
+async function listPaises(filters: MantenedorListFilters) {
+  const { q, page = 1, limit = 20, soloActivos, mercadoId } = filters
+  const empresaId = getEmpresaIdActual() ?? -1
+
+  const where = {
+    eliminadoEn: null,
+    ...(soloActivos ? { bloqueado: false } : {}),
+    ...(mercadoId != null ? { mercadoPaises: { some: { empresaId, mercadoId } } } : {}),
+    ...(q
+      ? {
+          OR: [
+            { descripcion: { contains: q, mode: 'insensitive' as const } },
+            { codigo: { contains: q, mode: 'insensitive' as const } },
+          ],
+        }
+      : {}),
+  }
+
+  const includeMercadoActivo = {
+    mercadoPaises: {
+      where: { empresaId },
+      select: { mercadoId: true, mercado: { select: { id: true, descripcion: true } } },
+    },
+  }
+
+  const [rows, total] = await Promise.all([
+    prisma.pais.findMany({
+      where,
+      orderBy: { codigo: 'asc' },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: includeMercadoActivo,
+    }),
+    prisma.pais.count({ where }),
+  ])
+
+  return { data: rows.map(aplanarMercado), total }
+}
+
+async function getPaisById(id: number) {
+  const empresaId = getEmpresaIdActual() ?? -1
+  const row = await prisma.pais.findFirst({
+    where: { id, eliminadoEn: null },
+    include: {
+      mercadoPaises: {
+        where: { empresaId },
+        select: { mercadoId: true, mercado: { select: { id: true, descripcion: true } } },
+      },
+    },
+  })
+  return row ? aplanarMercado(row) : null
+}
+
+export async function upsertMercadoPais(paisId: number, mercadoId: number, userId: string) {
+  // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
+  // valor con el resuelto en el request (o lanza EMPRESA_REQUERIDA si no hay
+  // ninguno) — el valor acá solo satisface el tipo generado por Prisma.
+  const empresaId = getEmpresaIdActual()!
+  return prisma.mercadoPais.upsert({
+    where: { empresaId_paisId: { empresaId, paisId } },
+    create: { empresaId, paisId, mercadoId, creadoPor: userId },
+    update: { mercadoId, actualizadoPor: userId },
+  })
+}
+
+export async function countPaisesPorMercado(mercadoId: number): Promise<number> {
+  // R8: solo países vigentes (no soft-deleted) bloquean el borrado del mercado.
+  return prisma.mercadoPais.count({ where: { mercadoId, pais: { eliminadoEn: null } } })
 }
 
 export async function findMantenedorByCodigo(

@@ -52,8 +52,14 @@ async function crearFixtures() {
   const empresa = await obtenerEmpresaTest()
   const grupoMercado = await prisma.grupoMercado.create({ data: { empresaId: empresa.id, codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
   const mercado = await prisma.mercado.create({ data: { empresaId: empresa.id, codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, creadoPor: 'test' } })
-  const chile = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, esPaisNacional: true, puedeSerOrigen: true, creadoPor: 'test' } })
-  const usa = await prisma.pais.create({ data: { codigo: 'USA', descripcion: 'Estados Unidos', mercadoId: mercado.id, creadoPor: 'test' } })
+  const chile = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', esPaisNacional: true, puedeSerOrigen: true, creadoPor: 'test' } })
+  const usa = await prisma.pais.create({ data: { codigo: 'USA', descripcion: 'Estados Unidos', creadoPor: 'test' } })
+  await prisma.mercadoPais.createMany({
+    data: [
+      { empresaId: empresa.id, mercadoId: mercado.id, paisId: chile.id, creadoPor: 'test' },
+      { empresaId: empresa.id, mercadoId: mercado.id, paisId: usa.id, creadoPor: 'test' },
+    ],
+  })
 
   const productor = await prisma.entidad.create({
     data: { codigo: 'PROD-01', descripcion: 'Productor Uno', razonSocial: 'Productor Uno SpA', paisId: chile.id, tipos: ['PRODUCTOR'], creadoPor: 'test' },
