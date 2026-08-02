@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../../src/lib/prisma.js'
+import { empresaContext } from '../../src/lib/empresa-context.js'
 import {
   crearNotaVenta,
   agregarDetalle,
@@ -88,6 +89,19 @@ async function obtenerEmpresaTest() {
   return prisma.empresa.create({ data: { codigo: 'EMP-TEST', razonSocial: 'Empresa de prueba', creadoPor: 'test' } })
 }
 
+// Muchos de los servicios probados en este archivo (crearNotaVenta,
+// agregarDetalle, crearOrdenCompra, etc.) validan FKs contra modelos
+// por-empresa desde Fase 3 (TipoEmbarque, Especie, Variedad, Categoria,
+// Calibre...) — necesitan contexto ALS, que fuera de un request HTTP no
+// existe por defecto. `enterWith` (a diferencia de `.run()`) no requiere
+// envolver cada test individualmente: alcanza con llamarlo una vez por test
+// desde `beforeEach`, y el contexto persiste para toda la ejecución async de
+// ese test (Node propaga el store de ALS a través de la cadena causal).
+async function entrarContextoEmpresa() {
+  const empresa = await obtenerEmpresaTest()
+  empresaContext.enterWith({ empresaId: empresa.id })
+}
+
 async function crearFixtures() {
   const empresa = await obtenerEmpresaTest()
   const grupoMercado = await prisma.grupoMercado.create({ data: { empresaId: empresa.id, codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
@@ -102,18 +116,18 @@ async function crearFixtures() {
   const productor = await prisma.entidad.create({
     data: { codigo: 'PROD-01', descripcion: 'Productor Uno', razonSocial: 'Productor Uno SpA', paisId: pais.id, tipos: ['PRODUCTOR'], creadoPor: 'test' },
   })
-  const tipoEmbarque = await prisma.tipoEmbarque.create({ data: { codigo: 'MARIT', descripcion: 'Marítimo', creadoPor: 'test' } })
+  const tipoEmbarque = await prisma.tipoEmbarque.create({ data: { empresaId: empresa.id, codigo: 'MARIT', descripcion: 'Marítimo', creadoPor: 'test' } })
   const moneda = await prisma.moneda.create({ data: { codigo: 'USD', descripcion: 'Dólar', creadoPor: 'test' } })
-  const especie = await prisma.especie.create({ data: { codigo: 'UV', descripcion: 'Uva', creadoPor: 'test' } })
-  const grupoVariedad = await prisma.grupoVariedad.create({ data: { codigo: 'GV-UV', descripcion: 'Uva de Mesa', especieId: especie.id, creadoPor: 'test' } })
-  const variedad = await prisma.variedad.create({ data: { codigo: 'RG', descripcion: 'Red Globe', especieId: especie.id, grupoVariedadId: grupoVariedad.id, creadoPor: 'test' } })
-  const categoria = await prisma.categoria.create({ data: { codigo: 'CAT1', descripcion: 'Categoría 1', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
-  const calibreChico = await prisma.calibre.create({ data: { codigo: 'XL', descripcion: 'XL', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
-  const calibreGrande = await prisma.calibre.create({ data: { codigo: 'XXL', descripcion: 'XXL', especieId: especie.id, orden: 2, control: [], creadoPor: 'test' } })
+  const especie = await prisma.especie.create({ data: { empresaId: empresa.id, codigo: 'UV', descripcion: 'Uva', creadoPor: 'test' } })
+  const grupoVariedad = await prisma.grupoVariedad.create({ data: { empresaId: empresa.id, codigo: 'GV-UV', descripcion: 'Uva de Mesa', especieId: especie.id, creadoPor: 'test' } })
+  const variedad = await prisma.variedad.create({ data: { empresaId: empresa.id, codigo: 'RG', descripcion: 'Red Globe', especieId: especie.id, grupoVariedadId: grupoVariedad.id, creadoPor: 'test' } })
+  const categoria = await prisma.categoria.create({ data: { empresaId: empresa.id, codigo: 'CAT1', descripcion: 'Categoría 1', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
+  const calibreChico = await prisma.calibre.create({ data: { empresaId: empresa.id, codigo: 'XL', descripcion: 'XL', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
+  const calibreGrande = await prisma.calibre.create({ data: { empresaId: empresa.id, codigo: 'XXL', descripcion: 'XXL', especieId: especie.id, orden: 2, control: [], creadoPor: 'test' } })
   const unidad = await prisma.unidadMedida.upsert({
     where: { id: 1 },
     update: {},
-    create: { id: 1, codigo: 'CAJA', descripcion: 'Caja', creadoPor: 'test' },
+    create: { id: 1, empresaId: empresa.id, codigo: 'CAJA', descripcion: 'Caja', creadoPor: 'test' },
   })
   const articulo = await prisma.articulo.create({
     data: { tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
@@ -135,6 +149,7 @@ function nvBase(f: Awaited<ReturnType<typeof crearFixtures>>) {
 
 describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
   beforeEach(limpiarDatos)
+  beforeEach(entrarContextoEmpresa)
   afterAll(async () => {
     await limpiarDatos()
     await prisma.$disconnect()
@@ -156,9 +171,9 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
     const f = await crearFixtures()
     const nv = await crearNotaVenta(nvBase(f), 'test')
 
-    const otraEspecie = await prisma.especie.create({ data: { codigo: 'CZ', descripcion: 'Cereza', creadoPor: 'test' } })
-    const grupoVariedadOtraEspecie = await prisma.grupoVariedad.create({ data: { codigo: 'GV-CZ', descripcion: 'Cereza', especieId: otraEspecie.id, creadoPor: 'test' } })
-    const variedadOtraEspecie = await prisma.variedad.create({ data: { codigo: 'BING', descripcion: 'Bing', especieId: otraEspecie.id, grupoVariedadId: grupoVariedadOtraEspecie.id, creadoPor: 'test' } })
+    const otraEspecie = await prisma.especie.create({ data: { empresaId: f.empresa.id, codigo: 'CZ', descripcion: 'Cereza', creadoPor: 'test' } })
+    const grupoVariedadOtraEspecie = await prisma.grupoVariedad.create({ data: { empresaId: f.empresa.id, codigo: 'GV-CZ', descripcion: 'Cereza', especieId: otraEspecie.id, creadoPor: 'test' } })
+    const variedadOtraEspecie = await prisma.variedad.create({ data: { empresaId: f.empresa.id, codigo: 'BING', descripcion: 'Bing', especieId: otraEspecie.id, grupoVariedadId: grupoVariedadOtraEspecie.id, creadoPor: 'test' } })
 
     await expect(
       agregarDetalle(nv.id, {
@@ -291,6 +306,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
 
 describe('Orden de Compra contra PostgreSQL', () => {
   beforeEach(limpiarDatos)
+  beforeEach(entrarContextoEmpresa)
   afterAll(async () => {
     await limpiarDatos()
     await prisma.$disconnect()

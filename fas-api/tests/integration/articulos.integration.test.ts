@@ -23,9 +23,21 @@ async function limpiarDatos() {
   `)
 }
 
+// UnidadMedida es por-empresa desde Fase 3 — esta fixture crea filas vía
+// prisma crudo, fuera de cualquier request (sin contexto ALS), así que
+// necesita empresaId explícito. "empresas" no se trunca entre tests (no
+// participa del aislamiento que este archivo ejercita).
+async function obtenerEmpresaTest() {
+  const existente = await prisma.empresa.findFirst({ where: { codigo: 'EMP-TEST' } })
+  if (existente) return existente
+  return prisma.empresa.create({ data: { codigo: 'EMP-TEST', razonSocial: 'Empresa de prueba', creadoPor: 'test' } })
+}
+
 async function crearUnidad() {
+  const empresa = await obtenerEmpresaTest()
   return prisma.unidadMedida.create({
     data: {
+      empresaId: empresa.id,
       codigo: 'UN',
       descripcion: 'Unidad',
       creadoPor: 'test',
@@ -138,8 +150,10 @@ describe('maestro de Artículos contra PostgreSQL', () => {
   })
 
   it('ART-04: rechaza unidades bloqueadas o eliminadas', async () => {
+    const empresa = await obtenerEmpresaTest()
     const bloqueada = await prisma.unidadMedida.create({
       data: {
+        empresaId: empresa.id,
         codigo: 'BLQ',
         descripcion: 'Bloqueada',
         bloqueado: true,
@@ -148,6 +162,7 @@ describe('maestro de Artículos contra PostgreSQL', () => {
     })
     const eliminada = await prisma.unidadMedida.create({
       data: {
+        empresaId: empresa.id,
         codigo: 'DEL',
         descripcion: 'Eliminada',
         eliminadoEn: new Date(),

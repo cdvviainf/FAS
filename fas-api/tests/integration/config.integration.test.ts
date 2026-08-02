@@ -86,17 +86,22 @@ describe('mantenedores contra PostgreSQL', () => {
   })
 
   it('garantiza una temporada predeterminada desde el primer registro', async () => {
-    const temporada = await crearMantenedor('temporada', {
-      codigo: '2026-2027',
-      descripcion: 'Temporada 2026-2027',
-      fechaInicio: '2026-07-01',
-      fechaTermino: '2027-06-30',
-      predeterminada: false,
-    })
+    // Temporada es por-empresa desde Fase 3 — necesita contexto ALS (fuera
+    // de un request HTTP no existe por defecto).
+    const empresa = await obtenerEmpresaTest()
+    await empresaContext.run({ empresaId: empresa.id }, async () => {
+      const temporada = await crearMantenedor('temporada', {
+        codigo: '2026-2027',
+        descripcion: 'Temporada 2026-2027',
+        fechaInicio: '2026-07-01',
+        fechaTermino: '2027-06-30',
+        predeterminada: false,
+      })
 
-    expect(temporada.predeterminada).toBe(true)
-    await expect(eliminarMantenedor('temporada', temporada.id)).rejects.toMatchObject({
-      statusCode: 409,
+      expect(temporada.predeterminada).toBe(true)
+      await expect(eliminarMantenedor('temporada', temporada.id)).rejects.toMatchObject({
+        statusCode: 409,
+      })
     })
   })
 

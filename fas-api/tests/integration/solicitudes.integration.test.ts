@@ -75,18 +75,18 @@ async function crearFixtures() {
   })
 
   const temporada = await prisma.temporada.create({
-    data: { codigo: 'T26', descripcion: 'Temporada 2026', fechaInicio: new Date('2026-01-01'), fechaTermino: new Date('2026-12-31'), creadoPor: 'test' },
+    data: { empresaId: empresa.id, codigo: 'T26', descripcion: 'Temporada 2026', fechaInicio: new Date('2026-01-01'), fechaTermino: new Date('2026-12-31'), creadoPor: 'test' },
   })
-  const especie = await prisma.especie.create({ data: { codigo: 'UV', descripcion: 'Uva', creadoPor: 'test' } })
-  const otraEspecie = await prisma.especie.create({ data: { codigo: 'CZ', descripcion: 'Cereza', creadoPor: 'test' } })
-  const grupoVariedad = await prisma.grupoVariedad.create({ data: { codigo: 'GV-UV', descripcion: 'Uva de Mesa', especieId: especie.id, creadoPor: 'test' } })
-  const grupoVariedadOtraEspecie = await prisma.grupoVariedad.create({ data: { codigo: 'GV-CZ', descripcion: 'Cereza', especieId: otraEspecie.id, creadoPor: 'test' } })
-  const variedad = await prisma.variedad.create({ data: { codigo: 'RG', descripcion: 'Red Globe', especieId: especie.id, grupoVariedadId: grupoVariedad.id, creadoPor: 'test' } })
-  const variedadOtraEspecie = await prisma.variedad.create({ data: { codigo: 'BING', descripcion: 'Bing', especieId: otraEspecie.id, grupoVariedadId: grupoVariedadOtraEspecie.id, creadoPor: 'test' } })
-  const calibre = await prisma.calibre.create({ data: { codigo: 'XL', descripcion: 'XL', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
-  const categoria = await prisma.categoria.create({ data: { codigo: 'CAT1', descripcion: 'Categoría 1', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
+  const especie = await prisma.especie.create({ data: { empresaId: empresa.id, codigo: 'UV', descripcion: 'Uva', creadoPor: 'test' } })
+  const otraEspecie = await prisma.especie.create({ data: { empresaId: empresa.id, codigo: 'CZ', descripcion: 'Cereza', creadoPor: 'test' } })
+  const grupoVariedad = await prisma.grupoVariedad.create({ data: { empresaId: empresa.id, codigo: 'GV-UV', descripcion: 'Uva de Mesa', especieId: especie.id, creadoPor: 'test' } })
+  const grupoVariedadOtraEspecie = await prisma.grupoVariedad.create({ data: { empresaId: empresa.id, codigo: 'GV-CZ', descripcion: 'Cereza', especieId: otraEspecie.id, creadoPor: 'test' } })
+  const variedad = await prisma.variedad.create({ data: { empresaId: empresa.id, codigo: 'RG', descripcion: 'Red Globe', especieId: especie.id, grupoVariedadId: grupoVariedad.id, creadoPor: 'test' } })
+  const variedadOtraEspecie = await prisma.variedad.create({ data: { empresaId: empresa.id, codigo: 'BING', descripcion: 'Bing', especieId: otraEspecie.id, grupoVariedadId: grupoVariedadOtraEspecie.id, creadoPor: 'test' } })
+  const calibre = await prisma.calibre.create({ data: { empresaId: empresa.id, codigo: 'XL', descripcion: 'XL', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
+  const categoria = await prisma.categoria.create({ data: { empresaId: empresa.id, codigo: 'CAT1', descripcion: 'Categoría 1', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
 
-  const unidad = await prisma.unidadMedida.create({ data: { codigo: 'CAJA', descripcion: 'Caja', creadoPor: 'test' } })
+  const unidad = await prisma.unidadMedida.create({ data: { empresaId: empresa.id, codigo: 'CAJA', descripcion: 'Caja', creadoPor: 'test' } })
   const embalaje = await prisma.articulo.create({
     data: { tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
@@ -94,7 +94,7 @@ async function crearFixtures() {
     data: { tipo: 'SERVICIO', codigo: 'ART-SERV', descripcion: 'Servicio', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
 
-  const calificacion = await prisma.calificacion.create({ data: { codigo: 'B1', descripcion: 'B1', creadoPor: 'test' } })
+  const calificacion = await prisma.calificacion.create({ data: { empresaId: empresa.id, codigo: 'B1', descripcion: 'B1', creadoPor: 'test' } })
 
   const perfil = await prisma.perfil.create({ data: { codigo: 'PERFIL-1', descripcion: 'Perfil de prueba', creadoPor: 'test' } })
   const usuario = await prisma.usuario.create({

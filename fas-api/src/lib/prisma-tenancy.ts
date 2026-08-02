@@ -5,7 +5,33 @@ import { EmpresaRequeridaError } from '../shared/errors.js'
 // Modelos con `empresaId` propio (Fase 2) — la lista crece a medida que Fase 3
 // migre el resto de tablas raíz. Nombres tal como los expone el Prisma Client
 // (camelCase del nombre del modelo, no el @@map de la tabla).
-const MODELOS_TENANT = new Set(['Mercado', 'GrupoMercado', 'ConfiguracionCorreo', 'PrefijoCodigo', 'MercadoPais'])
+const MODELOS_TENANT = new Set([
+  'Mercado',
+  'GrupoMercado',
+  'ConfiguracionCorreo',
+  'PrefijoCodigo',
+  'MercadoPais',
+  // Fase 3, lote Config/Mantenedores:
+  'TipoEmbarque',
+  'FormaPago',
+  'UnidadMedida',
+  'TipoPallet',
+  'Altura',
+  'TipoProduccion',
+  'TipoDefecto',
+  'TipoParametro',
+  'Puerto',
+  'Temporada',
+  'Bodega',
+  'ConceptoCtaCte',
+  'Especie',
+  'GrupoVariedad',
+  'Variedad',
+  'Categoria',
+  'Calibre',
+  'Parametro',
+  'Calificacion',
+])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar
 // cambiar el tenant). `update`/`updateMany` se manejan aparte porque además

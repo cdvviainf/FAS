@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../../src/lib/prisma.js'
+import { empresaContext } from '../../src/lib/empresa-context.js'
 import { crearContacto } from '../../src/modules/config/entidades/entidades.service.js'
 import {
   crearPredio,
@@ -97,21 +98,22 @@ async function crearEntidad(tipos: ('PRODUCTOR' | 'PROVEEDOR')[], codigo: string
 }
 
 async function crearFixturesContrato() {
+  const empresa = await obtenerEmpresaTest()
   const temporada = await prisma.temporada.create({
-    data: { codigo: 'T26', descripcion: 'Temporada 2026', fechaInicio: new Date('2026-01-01'), fechaTermino: new Date('2026-12-31'), creadoPor: 'test' },
+    data: { empresaId: empresa.id, codigo: 'T26', descripcion: 'Temporada 2026', fechaInicio: new Date('2026-01-01'), fechaTermino: new Date('2026-12-31'), creadoPor: 'test' },
   })
-  const especie = await prisma.especie.create({ data: { codigo: 'UV', descripcion: 'Uva', creadoPor: 'test' } })
-  const grupoVariedad = await prisma.grupoVariedad.create({ data: { codigo: 'GV-UV', descripcion: 'Uva de Mesa', especieId: especie.id, creadoPor: 'test' } })
-  const variedad = await prisma.variedad.create({ data: { codigo: 'RG', descripcion: 'Red Globe', especieId: especie.id, grupoVariedadId: grupoVariedad.id, creadoPor: 'test' } })
-  const categoria = await prisma.categoria.create({ data: { codigo: 'CAT1', descripcion: 'Categoría 1', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
-  const calibreDesde = await prisma.calibre.create({ data: { codigo: 'XL', descripcion: 'XL', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
-  const calibreHasta = await prisma.calibre.create({ data: { codigo: 'XXL', descripcion: 'XXL', especieId: especie.id, orden: 2, control: [], creadoPor: 'test' } })
-  const unidad = await prisma.unidadMedida.create({ data: { codigo: 'KG', descripcion: 'Kilos', creadoPor: 'test' } })
+  const especie = await prisma.especie.create({ data: { empresaId: empresa.id, codigo: 'UV', descripcion: 'Uva', creadoPor: 'test' } })
+  const grupoVariedad = await prisma.grupoVariedad.create({ data: { empresaId: empresa.id, codigo: 'GV-UV', descripcion: 'Uva de Mesa', especieId: especie.id, creadoPor: 'test' } })
+  const variedad = await prisma.variedad.create({ data: { empresaId: empresa.id, codigo: 'RG', descripcion: 'Red Globe', especieId: especie.id, grupoVariedadId: grupoVariedad.id, creadoPor: 'test' } })
+  const categoria = await prisma.categoria.create({ data: { empresaId: empresa.id, codigo: 'CAT1', descripcion: 'Categoría 1', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
+  const calibreDesde = await prisma.calibre.create({ data: { empresaId: empresa.id, codigo: 'XL', descripcion: 'XL', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
+  const calibreHasta = await prisma.calibre.create({ data: { empresaId: empresa.id, codigo: 'XXL', descripcion: 'XXL', especieId: especie.id, orden: 2, control: [], creadoPor: 'test' } })
+  const unidad = await prisma.unidadMedida.create({ data: { empresaId: empresa.id, codigo: 'KG', descripcion: 'Kilos', creadoPor: 'test' } })
   const articulo = await prisma.articulo.create({
     data: { tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
 
-  return { temporada, especie, variedad, categoria, calibreDesde, calibreHasta, unidad, articulo }
+  return { empresa, temporada, especie, variedad, categoria, calibreDesde, calibreHasta, unidad, articulo }
 }
 
 function lineaBase(f: Awaited<ReturnType<typeof crearFixturesContrato>>) {
@@ -185,14 +187,19 @@ describe('maestro de Productores contra PostgreSQL', () => {
       esRepresentanteLegal: true,
     }, 'test')).rejects.toMatchObject({ statusCode: 422 })
 
-    await expect(crearContrato(productor.id, {
-      temporadaId: f.temporada.id,
-      especieId: f.especie.id,
-      fechaInicio: '2026-01-01',
-      fechaTermino: '2026-12-31',
-      lineas: [lineaBase(f)],
-    }, 'test')).rejects.toMatchObject({
-      statusCode: 422,
+    // crearContrato valida temporadaId/especieId/variedad/categoria/calibre
+    // contra modelos por-empresa desde Fase 3 — necesita contexto ALS (fuera
+    // de un request HTTP no existe por defecto).
+    await empresaContext.run({ empresaId: f.empresa.id }, async () => {
+      await expect(crearContrato(productor.id, {
+        temporadaId: f.temporada.id,
+        especieId: f.especie.id,
+        fechaInicio: '2026-01-01',
+        fechaTermino: '2026-12-31',
+        lineas: [lineaBase(f)],
+      }, 'test')).rejects.toMatchObject({
+        statusCode: 422,
+      })
     })
   })
 
@@ -206,13 +213,15 @@ describe('maestro de Productores contra PostgreSQL', () => {
       esRepresentanteLegal: true,
     }, 'test')
 
-    const contrato = await crearContrato(productor.id, {
-      temporadaId: f.temporada.id,
-      especieId: f.especie.id,
-      fechaInicio: '2026-01-01',
-      fechaTermino: '2026-12-31',
-      lineas: [lineaBase(f)],
-    }, 'test')
+    const contrato = await empresaContext.run({ empresaId: f.empresa.id }, () =>
+      crearContrato(productor.id, {
+        temporadaId: f.temporada.id,
+        especieId: f.especie.id,
+        fechaInicio: '2026-01-01',
+        fechaTermino: '2026-12-31',
+        lineas: [lineaBase(f)],
+      }, 'test'),
+    )
 
     expect(contrato.especieId).toBe(f.especie.id)
     expect(contrato.lineas).toHaveLength(1)
@@ -244,15 +253,18 @@ describe('maestro de Productores contra PostgreSQL', () => {
       fechaTermino: '2026-12-31',
       lineas: [lineaBase(f)],
     }
-    await crearContrato(productor.id, datos, 'test')
-
-    await expect(crearContrato(productor.id, datos, 'test')).rejects.toMatchObject({ statusCode: 422 })
+    await empresaContext.run({ empresaId: f.empresa.id }, async () => {
+      await crearContrato(productor.id, datos, 'test')
+      await expect(crearContrato(productor.id, datos, 'test')).rejects.toMatchObject({ statusCode: 422 })
+    })
   })
 
   it('CA5/CA6: calcula saldo y valida la naturaleza del concepto', async () => {
+    const empresa = await obtenerEmpresaTest()
     const productor = await crearEntidad(['PRODUCTOR'], 'PROD-01')
     const haber = await prisma.conceptoCtaCte.create({
       data: {
+        empresaId: empresa.id,
         codigo: 'ANTICIPO',
         descripcion: 'Anticipo',
         naturaleza: 'HABER',
@@ -261,6 +273,7 @@ describe('maestro de Productores contra PostgreSQL', () => {
     })
     const ambos = await prisma.conceptoCtaCte.create({
       data: {
+        empresaId: empresa.id,
         codigo: 'AJUSTE',
         descripcion: 'Ajuste',
         naturaleza: 'AMBOS',
@@ -268,25 +281,30 @@ describe('maestro de Productores contra PostgreSQL', () => {
       },
     })
 
-    await imputarMovimiento(productor.id, {
-      tipoId: haber.id,
-      naturaleza: 'HABER',
-      fecha: '2026-07-23',
-      monto: 1_000,
-    }, 'test')
-    await imputarMovimiento(productor.id, {
-      tipoId: ambos.id,
-      naturaleza: 'DEBE',
-      fecha: '2026-07-23',
-      monto: 300,
-    }, 'test')
+    // ConceptoCtaCte es por-empresa desde Fase 3 — imputarMovimiento valida
+    // tipoId contra ese modelo, así que necesita contexto ALS (fuera de un
+    // request HTTP no existe por defecto).
+    await empresaContext.run({ empresaId: empresa.id }, async () => {
+      await imputarMovimiento(productor.id, {
+        tipoId: haber.id,
+        naturaleza: 'HABER',
+        fecha: '2026-07-23',
+        monto: 1_000,
+      }, 'test')
+      await imputarMovimiento(productor.id, {
+        tipoId: ambos.id,
+        naturaleza: 'DEBE',
+        fecha: '2026-07-23',
+        monto: 300,
+      }, 'test')
 
-    await expect(imputarMovimiento(productor.id, {
-      tipoId: haber.id,
-      naturaleza: 'DEBE',
-      fecha: '2026-07-23',
-      monto: 1,
-    }, 'test')).rejects.toMatchObject({ statusCode: 422 })
+      await expect(imputarMovimiento(productor.id, {
+        tipoId: haber.id,
+        naturaleza: 'DEBE',
+        fecha: '2026-07-23',
+        monto: 1,
+      }, 'test')).rejects.toMatchObject({ statusCode: 422 })
+    })
 
     const informe = await obtenerInforme(productor.id, {})
     expect(informe.saldo).toBe(700)

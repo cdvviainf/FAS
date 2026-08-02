@@ -10,7 +10,7 @@
 > | **Frontend** | `fas-web` · `app/dashboard/configuracion/empresas/` (Fase 4) |
 > | **Depende de** | Mantenedores Generales (`Pais`, `Comuna`), Usuarios/Perfiles |
 > | **Usado por** | TODO el sistema (scoping por `empresaId` en la fase de tenancy) |
-> | **Estado** | Fase 2b implementada (refactor País↔Mercado vía `MercadoPais`) — QA ronda 4: `APROBADO_CON_OBSERVACIONES`, `TESTS_OK` |
+> | **Estado** | Fase 3, lote 1/7 (Config/Mantenedores) implementado — QA ronda 2: `APROBADO_CON_OBSERVACIONES`, `TESTS_OK` |
 
 ---
 
@@ -113,7 +113,7 @@ Empresa activa por defecto al iniciar sesión.
 | **1** | Contexto de empresa: `requireAuth` valida `X-Empresa-Id` (AsyncLocalStorage) · `EmpresaProvider` en front · cambio de empresa resetea Temporada | **Implementada (QA ronda 3: APROBADO_CON_OBSERVACIONES)** |
 | **2a** | Prisma Client Extension (tenancy) · `empresaId` en `Mercado`/`GrupoMercado`/`ConfiguracionCorreo`/`PrefijoCodigo` · `ConfiguracionCorreo` por empresa | **En desarrollo** |
 | **2b** | Refactor País↔Mercado: elimina `Pais.mercadoId`, crea `MercadoPais` | **Implementada** |
-| **3** | Migración de datos self-safe por lotes del resto de tablas raíz (~62 modelos) | Pendiente |
+| **3** | Migración de datos self-safe por lotes del resto de tablas raíz (~38 modelos, ver §7) | **Lote 1/7 implementado** (Config/Mantenedores) |
 | **4** | UI: mantenedor de Empresas (RUT, direcciones, contactos, SMTP) · form de Usuario ampliado (empresas + predeterminada, con validación de invariante §2) | Pendiente |
 
 ---
@@ -138,3 +138,48 @@ Era el **único** conflicto global→tenant del schema (los demás son tenant→
 
 - **Límite de selectores:** los endpoints usados como selectores (ej. `/config/perfiles`, mantenedores) aceptan `limit` hasta **500** (convención común). El de perfiles se subió de 100→500 para que el selector del form de Usuario cargue todos los perfiles.
 - **`ConfiguracionCorreo`:** hoy es fila única global. Pasa a por-empresa en Fase 2 (acoplado a que el emisor de correos gane contexto de empresa; la cola BullMQ manda desde `SolicitudInspeccion`, que recién ahí tendrá `empresaId`). Agrosan hereda la config actual; AGDry queda vacía hasta configurarla.
+
+---
+
+## 7. Fase 3 — plan de sub-lotes y detalle del Lote 1
+
+Fase 3 (backfill de `empresaId` al resto de ~38 modelos raíz candidatos) se hace **en sub-lotes por módulo**, cada uno su propio ciclo QA completo — mismo criterio que la partición 2a/2b, necesaria por el volumen y la cantidad de relaciones tenant→tenant que van apareciendo.
+
+**Decisión de negocio (Christian, 2026-08-02):** el usuario nunca elige a qué empresa pertenece un mantenedor — igual que la Temporada seleccionada queda implícita en cada transacción, el `empresaId` que se estampa en cada registro es siempre la empresa activa del selector del header (contexto ALS), nunca un campo visible en ningún formulario.
+
+### Sub-lotes planeados
+
+| Lote | Módulo | Modelos | Estado |
+|---|---|---|---|
+| 1 | Config/Mantenedores | 19 (ver abajo) | **Implementado** |
+| 2 | Entidades | `Entidad` | Pendiente |
+| 3 | Calidad | `SolicitudInspeccion` | Pendiente |
+| 4 | Materiales | `Articulo`, `Receta`, `TipoMovimiento`, `Movimiento`, `SaldoArticulo` | Pendiente |
+| 5 | Productores | `Predio`, `ProductorContrato`, `MovimientoCuentaCorriente`, `ConceptoLiquidacion` | Pendiente |
+| 6 | Ventas | `NotaVenta`, `Embarque`, `InstructivoEmbalaje` | Pendiente |
+| 7 | Compras | `OrdenCompra`, `CondicionPago`, `Recepcion`, `Pallet`, `TemplateCarga` | Pendiente |
+
+Tablas hijas/detalle (líneas, adjuntos, joins) heredan del padre vía FK — no llevan `empresaId` propio (decisión #5).
+
+### Lote 1 — Config/Mantenedores (implementado)
+
+19 modelos agregan `empresaId` (self-safe: nullable → backfill AGROSAN → `NOT NULL`) + único parcial `(empresaId, codigo)` (ninguno tenía `@@unique(codigo)` antes) y se agregan a `MODELOS_TENANT`: `TipoEmbarque`, `FormaPago`, `UnidadMedida`, `TipoPallet`, `Altura`, `TipoProduccion`, `TipoDefecto`, `TipoParametro`, `Puerto`, `Temporada`, `Bodega`, `ConceptoCtaCte`, `Especie`, `GrupoVariedad`, `Variedad`, `Categoria`, `Calibre`, `Parametro`, `Calificacion`.
+
+**8 relaciones tenant→tenant** (el doble que Fase 2a) cerradas con FK compuesta, mismo patrón que `Mercado↔GrupoMercado`:
+
+1. `Puerto ↔ TipoEmbarque` (Puerto→Pais se mantiene FK simple: Pais sigue global)
+2. `Especie ↔ UnidadMedida` (`unidadMedidaCalidadId`, nullable — Postgres exime la FK compuesta si cualquier columna del par es NULL)
+3. `GrupoVariedad ↔ Especie`
+4. `Variedad ↔ Especie`
+5. `Variedad ↔ GrupoVariedad`
+6. `Categoria ↔ Especie`
+7. `Calibre ↔ Especie`
+8. `Parametro ↔ TipoParametro`
+
+Esto exigió agregar `@@unique([empresaId, id])` en los 5 modelos "padre" de estas relaciones (`TipoEmbarque`, `UnidadMedida`, `Especie`, `GrupoVariedad`, `TipoParametro`) — mismo motivo que `GrupoMercado` en Fase 2a (Postgres exige el índice único explícito sobre esa tupla exacta).
+
+**Validaciones de servicio:** de las 8 relaciones, 3 ya tenían un chequeo de existencia preexistente en `config.service.ts` (`Puerto.tipoEmbarqueId`, `Especie.unidadMedidaCalidadId`, `Variedad.grupoVariedadId`) que se volvió tenant-scoped **automáticamente** al agregar el modelo destino a `MODELOS_TENANT` — cero cambio de código. Las otras 4 (`GrupoVariedad.especieId`, `Categoria.especieId`, `Calibre.especieId`, `Parametro.tipoParametroId`) nunca tuvieron validación de existencia — se agregaron ahora, mismo patrón que `Mercado→GrupoMercado` en Fase 2a.
+
+**Contrato de API sin cambios** — verificado con `tsc --noEmit` en `fas-web`, cero archivos tocados: la generic CRUD de mantenedores (`config.repository.ts`) ya filtra/incluye de forma data-driven, así que una vez que un modelo tiene `empresaId`, el filtro es transparente para el frontend.
+
+**Lección de QA ronda 1 (FAS-EMP-F3-R1-001/002):** a diferencia de `Mercado`/`GrupoMercado` en Fase 2a (que nunca tuvieron ningún unique), varios de estos 19 modelos **ya tenían** un índice único parcial GLOBAL sobre `codigo` de migraciones previas a multi-empresa (ej. `20260713_add_unique_partial_indexes*`) — invisibles en `schema.prisma` porque son índices parciales, no representables en el DSL de Prisma (mismo motivo que `PrefijoCodigo`). Revisar solo el `@@unique` del schema **no alcanza** para saber si un modelo ya tiene unicidad — hay que revisar también las migraciones SQL crudas. La migración de este lote los elimina explícitamente antes de crear los nuevos `(empresaId, codigo)`. Mismo problema con la temporada predeterminada: el índice `ux_temporadas_una_predeterminada` era global (a lo sumo una en todo el sistema) y se reemplazó por uno acotado a `empresaId` (a lo sumo una por empresa) — **al tocar cualquier modelo en los próximos lotes de Fase 3, revisar primero si ya tiene índices únicos parciales crudos que necesiten el mismo tratamiento.**

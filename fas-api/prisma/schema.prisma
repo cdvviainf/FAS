@@ -192,6 +192,25 @@ model Empresa {
   configuracionesCorreo ConfiguracionCorreo[]
   prefijosCodigo       PrefijoCodigo[]
   mercadoPaises        MercadoPais[]
+  tiposEmbarque        TipoEmbarque[]
+  formasPago           FormaPago[]
+  unidadesMedida       UnidadMedida[]
+  tiposPallet          TipoPallet[]
+  alturas              Altura[]
+  tiposProduccion      TipoProduccion[]
+  tiposDefecto         TipoDefecto[]
+  tiposParametro       TipoParametro[]
+  puertos              Puerto[]
+  temporadas           Temporada[]
+  bodegas              Bodega[]
+  conceptosCtaCte      ConceptoCtaCte[]
+  especies             Especie[]
+  gruposVariedad       GrupoVariedad[]
+  variedades           Variedad[]
+  categorias           Categoria[]
+  calibres             Calibre[]
+  parametros           Parametro[]
+  calificaciones       Calificacion[]
 
   @@map("empresas")
 }
@@ -532,6 +551,8 @@ model GrupoMercado {
 
 model TipoEmbarque {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -546,11 +567,15 @@ model TipoEmbarque {
   puertos    Puerto[]
   notasVenta NotaVenta[]
 
+  @@unique([empresaId, id])
+  @@index([empresaId])
   @@map("tipos_embarque")
 }
 
 model FormaPago {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -564,11 +589,14 @@ model FormaPago {
 
   ordenesCompra OrdenCompra[]
 
+  @@index([empresaId])
   @@map("formas_pago")
 }
 
 model UnidadMedida {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -587,11 +615,15 @@ model UnidadMedida {
   ordenCompraCuotasPago   OrdenCompraCuotaPago[]
   notaVentaCuotasPago     NotaVentaCuotaPago[]
 
+  @@unique([empresaId, id])
+  @@index([empresaId])
   @@map("unidades_medida")
 }
 
 model TipoPallet {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -605,11 +637,14 @@ model TipoPallet {
 
   notaVentaDetalles NotaVentaDetalle[]
 
+  @@index([empresaId])
   @@map("tipos_pallet")
 }
 
 model Altura {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -621,11 +656,14 @@ model Altura {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
+  @@index([empresaId])
   @@map("alturas")
 }
 
 model TipoProduccion {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -639,11 +677,14 @@ model TipoProduccion {
 
   predios Predio[]
 
+  @@index([empresaId])
   @@map("tipos_produccion")
 }
 
 model TipoDefecto {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -655,6 +696,7 @@ model TipoDefecto {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
+  @@index([empresaId])
   @@map("tipos_defecto")
 }
 
@@ -688,6 +730,8 @@ model PrefijoCodigo {
 
 model TipoParametro {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -701,6 +745,8 @@ model TipoParametro {
 
   parametros Parametro[]
 
+  @@unique([empresaId, id])
+  @@index([empresaId])
   @@map("tipos_parametro")
 }
 
@@ -769,11 +815,17 @@ model Comuna {
 
 model Especie {
   id                    Int           @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa       @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   unidadMedidaCalidadId Int?
-  unidadMedidaCalidad   UnidadMedida? @relation("UnidadMedidaCalidadEspecie", fields: [unidadMedidaCalidadId], references: [id])
+  // FK compuesta (empresaId, unidadMedidaCalidadId) -> UnidadMedida(empresaId,
+  // id): UnidadMedida pasa a ser por-empresa en este lote — mismo patrón que
+  // Mercado↔GrupoMercado. Nullable: Postgres exime la FK cuando cualquier
+  // columna del par es NULL.
+  unidadMedidaCalidad   UnidadMedida? @relation("UnidadMedidaCalidadEspecie", fields: [empresaId, unidadMedidaCalidadId], references: [empresaId, id])
   bloqueado             Boolean       @default(false)
   creadoEn              DateTime      @default(now())
   creadoPor             String
@@ -794,16 +846,22 @@ model Especie {
   contratosProductor          ProductorContrato[]
   palletLineas                PalletLinea[]
 
+  @@unique([empresaId, id])
+  @@index([empresaId])
   @@map("especies")
 }
 
 model GrupoVariedad {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   especieId             Int
-  especie               Especie   @relation(fields: [especieId], references: [id])
+  // FK compuesta (empresaId, especieId) -> Especie(empresaId, id) — mismo
+  // patrón que Mercado↔GrupoMercado.
+  especie               Especie   @relation(fields: [empresaId, especieId], references: [empresaId, id])
   bloqueado             Boolean   @default(false)
   creadoEn              DateTime  @default(now())
   creadoPor             String
@@ -814,18 +872,25 @@ model GrupoVariedad {
 
   variedades Variedad[]
 
+  @@unique([empresaId, id])
+  @@index([empresaId])
   @@map("grupos_variedad")
 }
 
 model Variedad {
   id                    Int            @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa        @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   especieId             Int
-  especie               Especie       @relation(fields: [especieId], references: [id])
+  // FK compuestas (empresaId, especieId/grupoVariedadId) -> mismo patrón que
+  // Mercado↔GrupoMercado, ambas relaciones hacia modelos que también pasan a
+  // ser por-empresa en este lote.
+  especie               Especie       @relation(fields: [empresaId, especieId], references: [empresaId, id])
   grupoVariedadId       Int
-  grupoVariedad         GrupoVariedad @relation(fields: [grupoVariedadId], references: [id])
+  grupoVariedad         GrupoVariedad @relation(fields: [empresaId, grupoVariedadId], references: [empresaId, id])
   bloqueado             Boolean       @default(false)
   creadoEn              DateTime       @default(now())
   creadoPor             String
@@ -841,16 +906,20 @@ model Variedad {
   solicitudesInspeccion       SolicitudInspeccionVariedad[]
   palletLineas                PalletLinea[]
 
+  @@index([empresaId])
   @@map("variedades")
 }
 
 model Categoria {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   especieId             Int
-  especie               Especie   @relation(fields: [especieId], references: [id])
+  // FK compuesta (empresaId, especieId) -> Especie(empresaId, id).
+  especie               Especie   @relation(fields: [empresaId, especieId], references: [empresaId, id])
   orden                 Int
   control               String[]
   bloqueado             Boolean   @default(false)
@@ -868,16 +937,20 @@ model Categoria {
   solicitudesInspeccion       SolicitudInspeccionCategoria[]
   palletLineas                PalletLinea[]
 
+  @@index([empresaId])
   @@map("categorias")
 }
 
 model Calibre {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   especieId             Int
-  especie               Especie   @relation(fields: [especieId], references: [id])
+  // FK compuesta (empresaId, especieId) -> Especie(empresaId, id).
+  especie               Especie   @relation(fields: [empresaId, especieId], references: [empresaId, id])
   orden                 Int
   control               String[]
   bloqueado             Boolean   @default(false)
@@ -898,16 +971,20 @@ model Calibre {
   solicitudesInspeccion         SolicitudInspeccionCalibre[]
   palletLineas                  PalletLinea[]
 
+  @@index([empresaId])
   @@map("calibres")
 }
 
 model Parametro {
   id                    Int           @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa       @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   tipoParametroId       Int
-  tipoParametro         TipoParametro @relation(fields: [tipoParametroId], references: [id])
+  // FK compuesta (empresaId, tipoParametroId) -> TipoParametro(empresaId, id).
+  tipoParametro         TipoParametro @relation(fields: [empresaId, tipoParametroId], references: [empresaId, id])
   bloqueado             Boolean       @default(false)
   creadoEn              DateTime      @default(now())
   creadoPor             String
@@ -920,6 +997,7 @@ model Parametro {
   notasVentaClausula  NotaVenta[] @relation("NotaVentaClausulaVenta")
   notasVentaTipoFlete NotaVenta[] @relation("NotaVentaTipoFlete")
 
+  @@index([empresaId])
   @@map("parametros")
 }
 
@@ -957,13 +1035,18 @@ model Mercado {
 
 model Puerto {
   id                    Int          @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa      @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   paisId                Int
   pais                  Pais         @relation(fields: [paisId], references: [id])
   tipoEmbarqueId        Int
-  tipoEmbarque          TipoEmbarque @relation(fields: [tipoEmbarqueId], references: [id])
+  // FK compuesta (empresaId, tipoEmbarqueId) -> TipoEmbarque(empresaId, id):
+  // TipoEmbarque pasa a ser por-empresa en este lote (Fase 3), a diferencia
+  // de Pais que sigue global — mismo patrón que Mercado↔GrupoMercado.
+  tipoEmbarque          TipoEmbarque @relation(fields: [empresaId, tipoEmbarqueId], references: [empresaId, id])
   latitud               Decimal?     @db.Decimal(10, 7)
   longitud              Decimal?     @db.Decimal(10, 7)
   bloqueado             Boolean      @default(false)
@@ -976,6 +1059,7 @@ model Puerto {
 
   notasVenta NotaVenta[]
 
+  @@index([empresaId])
   @@map("puertos")
 }
 
@@ -1018,6 +1102,8 @@ enum TipoBodega {
 
 model Temporada {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -1035,11 +1121,14 @@ model Temporada {
   solicitudesInspeccion SolicitudInspeccion[]
   contratosProductor    ProductorContrato[]
 
+  @@index([empresaId])
   @@map("temporadas")
 }
 
 model Bodega {
   id                    Int          @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa      @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -1062,6 +1151,7 @@ model Bodega {
   movimientosOrigen  Movimiento[]     @relation("MovOrigen")
   movimientosDestino Movimiento[]     @relation("MovDestino")
 
+  @@index([empresaId])
   @@map("bodegas")
 }
 
@@ -1080,6 +1170,8 @@ model BodegaContacto {
 
 model ConceptoCtaCte {
   id                    Int                       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa                   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -1094,6 +1186,7 @@ model ConceptoCtaCte {
 
   movimientosCC MovimientoCuentaCorriente[]
 
+  @@index([empresaId])
   @@map("conceptos_cta_cte")
 }
 
@@ -1342,6 +1435,8 @@ model SolicitudInspeccionEmbalaje {
 
 model Calificacion {
   id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -1355,6 +1450,7 @@ model Calificacion {
 
   solicitudesInspeccion SolicitudInspeccion[]
 
+  @@index([empresaId])
   @@map("calificaciones")
 }
 

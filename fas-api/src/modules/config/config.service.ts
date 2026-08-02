@@ -137,6 +137,19 @@ export async function crearMantenedor(
     }
   }
 
+  // Fase 3: GrupoVariedad/Categoria/Calibre — especieId debe pertenecer al
+  // tenant activo (mismo patrón que Mercado→GrupoMercado en Fase 2a).
+  if ((modelo === 'grupoVariedad' || modelo === 'categoria' || modelo === 'calibre') && data.especieId) {
+    const especie = await repo.getMantenedorById('especie', data.especieId)
+    if (!especie) throw new ValidationError('La especie seleccionada no existe o no pertenece a esta empresa')
+  }
+
+  // Fase 3: Parametro — tipoParametroId debe pertenecer al tenant activo.
+  if (modelo === 'parametro' && data.tipoParametroId) {
+    const tipoParametro = await repo.getMantenedorById('tipoParametro', data.tipoParametroId)
+    if (!tipoParametro) throw new ValidationError('El tipo de parámetro seleccionado no existe o no pertenece a esta empresa')
+  }
+
   // QAS-MG-L3-006: Puerto — validate active FKs
   if (modelo === 'puerto') {
     if (data.paisId) {
@@ -268,6 +281,19 @@ export async function actualizarMantenedor(
         throw new ValidationError(`El grupo de variedad no pertenece a la especie seleccionada`)
       }
     }
+  }
+
+  // Fase 3: GrupoVariedad/Categoria/Calibre — especieId debe pertenecer al
+  // tenant activo (on update).
+  if ((modelo === 'grupoVariedad' || modelo === 'categoria' || modelo === 'calibre') && data.especieId !== undefined && data.especieId !== null) {
+    const especie = await repo.getMantenedorById('especie', data.especieId)
+    if (!especie) throw new ValidationError('La especie seleccionada no existe o no pertenece a esta empresa')
+  }
+
+  // Fase 3: Parametro — tipoParametroId debe pertenecer al tenant activo (on update).
+  if (modelo === 'parametro' && data.tipoParametroId !== undefined && data.tipoParametroId !== null) {
+    const tipoParametro = await repo.getMantenedorById('tipoParametro', data.tipoParametroId)
+    if (!tipoParametro) throw new ValidationError('El tipo de parámetro seleccionado no existe o no pertenece a esta empresa')
   }
 
   // QAS-MG-L3-006: Puerto — validate active FKs on update

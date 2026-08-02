@@ -338,9 +338,9 @@ describe('contrato HTTP de la API', () => {
       },
     })
     const temporada = await prisma.temporada.create({
-      data: { codigo: 'T26-QA', descripcion: 'Temporada QA', fechaInicio: new Date('2026-01-01'), fechaTermino: new Date('2026-12-31'), creadoPor: 'test' },
+      data: { empresaId: empresa.id, codigo: 'T26-QA', descripcion: 'Temporada QA', fechaInicio: new Date('2026-01-01'), fechaTermino: new Date('2026-12-31'), creadoPor: 'test' },
     })
-    const especie = await prisma.especie.create({ data: { codigo: 'UV-QA', descripcion: 'Uva QA', creadoPor: 'test' } })
+    const especie = await prisma.especie.create({ data: { empresaId: empresa.id, codigo: 'UV-QA', descripcion: 'Uva QA', creadoPor: 'test' } })
     await prisma.productorContrato.create({
       data: {
         entidadId: productor.id,
