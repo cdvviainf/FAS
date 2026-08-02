@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { EmbarqueCreateInput } from './embarques.types.js'
 
 const notaVentaRefSelect = { id: true, folio: true }
@@ -35,7 +36,10 @@ export async function getNotaVenta(id: number) {
 
 export async function createEmbarque(data: EmbarqueCreateInput, creadoPor: string) {
   return prisma.embarque.create({
-    data: { ...data, creadoPor },
+    // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
+    // valor con la empresa activa del contexto — se declara aquí solo para
+    // satisfacer el tipo requerido por Prisma.
+    data: { empresaId: getEmpresaIdActual()!, ...data, creadoPor },
     include: { notaVenta: { select: notaVentaRefSelect } },
   })
 }

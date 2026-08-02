@@ -218,6 +218,11 @@ export async function agregarDetalle(notaVentaId: number, body: NotaVentaDetalle
 }
 
 async function obtenerDetalleDeNotaVenta(notaVentaId: number, detalleId: number) {
+  // La Nota de Venta se valida primero vía la consulta tenant-scoped
+  // (obtenerNotaVenta) — NotaVentaDetalle no es un modelo tenant, así que sin
+  // esto una línea de otra empresa sería alcanzable si el atacante conoce
+  // ambos IDs (FAS-EMP-F3-VEN-R1-001).
+  await obtenerNotaVenta(notaVentaId)
   const detalle = await repo.getDetalleById(detalleId)
   if (!detalle || detalle.notaVentaId !== notaVentaId) {
     throw new NotFoundError('Línea de detalle', String(detalleId))

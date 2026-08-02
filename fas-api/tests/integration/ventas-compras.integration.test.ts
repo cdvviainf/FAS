@@ -2,18 +2,44 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../../src/lib/prisma.js'
 import { empresaContext } from '../../src/lib/empresa-context.js'
 import {
-  crearNotaVenta,
-  agregarDetalle,
-  actualizarNotaVenta,
-  eliminarNotaVenta,
+  crearNotaVenta as crearNotaVentaSvc,
+  agregarDetalle as agregarDetalleSvc,
+  actualizarNotaVenta as actualizarNotaVentaSvc,
+  eliminarNotaVenta as eliminarNotaVentaSvc,
 } from '../../src/modules/ventas/notas-venta/notas-venta.service.js'
-import { crearInstructivo } from '../../src/modules/compras/instructivo-embalaje/instructivo-embalaje.service.js'
+import { crearInstructivo as crearInstructivoSvc } from '../../src/modules/compras/instructivo-embalaje/instructivo-embalaje.service.js'
 import {
   crearOrdenCompra,
   actualizarOrdenCompra,
   eliminarOrdenCompra,
   obtenerOrdenCompra,
 } from '../../src/modules/compras/ordenes-compra/ordenes-compra.service.js'
+import type { NotaVentaCreateInput, NotaVentaUpdateInput, NotaVentaDetalleCreateInput } from '../../src/modules/ventas/notas-venta/notas-venta.types.js'
+import type { InstructivoEmbalajeCreateInput } from '../../src/modules/compras/instructivo-embalaje/instructivo-embalaje.types.js'
+
+// NotaVenta/InstructivoEmbalaje son por-empresa desde Fase 3 (lote Ventas) —
+// sus repos crean la fila DENTRO de un prisma.$transaction(), y
+// getEmpresaIdActual() ahí devuelve null cuando el contexto ALS se estableció
+// vía `entrarContextoEmpresa` (enterWith) en el beforeEach: Codex demostró
+// que enterWith no se propaga de forma confiable a través del límite de una
+// transacción de Prisma (FAS-EMP-F3-VEN, tests ronda 2). Se envuelve cada
+// llamada individualmente en `.run()` en vez de depender del beforeEach
+// compartido — mismo patrón ya usado en el lote Calidad/Materiales.
+async function crearNotaVenta(empresaId: number, body: NotaVentaCreateInput, userId: string) {
+  return empresaContext.run({ empresaId }, () => crearNotaVentaSvc(body, userId))
+}
+async function actualizarNotaVenta(empresaId: number, id: number, body: NotaVentaUpdateInput, userId: string) {
+  return empresaContext.run({ empresaId }, () => actualizarNotaVentaSvc(id, body, userId))
+}
+async function eliminarNotaVenta(empresaId: number, id: number, userId: string) {
+  return empresaContext.run({ empresaId }, () => eliminarNotaVentaSvc(id, userId))
+}
+async function agregarDetalle(empresaId: number, notaVentaId: number, body: NotaVentaDetalleCreateInput) {
+  return empresaContext.run({ empresaId }, () => agregarDetalleSvc(notaVentaId, body))
+}
+async function crearInstructivo(empresaId: number, body: InstructivoEmbalajeCreateInput, userId: string) {
+  return empresaContext.run({ empresaId }, () => crearInstructivoSvc(body, userId))
+}
 
 const databaseName = new URL(process.env.DATABASE_URL ?? '').pathname.slice(1)
 if (databaseName !== 'fas_test') {
@@ -157,26 +183,26 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
 
   it('genera folios correlativos y rechaza cliente sin tipo Cliente', async () => {
     const f = await crearFixtures()
-    const nv1 = await crearNotaVenta(nvBase(f), 'test')
-    const nv2 = await crearNotaVenta(nvBase(f), 'test')
+    const nv1 = await crearNotaVenta(f.empresa.id, nvBase(f), 'test')
+    const nv2 = await crearNotaVenta(f.empresa.id, nvBase(f), 'test')
     expect(nv1.folio).toBe(1)
     expect(nv2.folio).toBe(2)
 
     await expect(
-      crearNotaVenta({ ...nvBase(f), clienteId: f.productor.id }, 'test'),
+      crearNotaVenta(f.empresa.id, { ...nvBase(f), clienteId: f.productor.id }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
   })
 
   it('valida especie/variedad/categoría/calibre y tipo Embalaje del artículo en el detalle de NV', async () => {
     const f = await crearFixtures()
-    const nv = await crearNotaVenta(nvBase(f), 'test')
+    const nv = await crearNotaVenta(f.empresa.id, nvBase(f), 'test')
 
     const otraEspecie = await prisma.especie.create({ data: { empresaId: f.empresa.id, codigo: 'CZ', descripcion: 'Cereza', creadoPor: 'test' } })
     const grupoVariedadOtraEspecie = await prisma.grupoVariedad.create({ data: { empresaId: f.empresa.id, codigo: 'GV-CZ', descripcion: 'Cereza', especieId: otraEspecie.id, creadoPor: 'test' } })
     const variedadOtraEspecie = await prisma.variedad.create({ data: { empresaId: f.empresa.id, codigo: 'BING', descripcion: 'Bing', especieId: otraEspecie.id, grupoVariedadId: grupoVariedadOtraEspecie.id, creadoPor: 'test' } })
 
     await expect(
-      agregarDetalle(nv.id, {
+      agregarDetalle(f.empresa.id, nv.id, {
         fechaCompromiso: new Date(),
         especieId: f.especie.id,
         variedadId: variedadOtraEspecie.id,
@@ -193,7 +219,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
       data: { empresaId: f.empresa.id, tipo: 'SERVICIO', codigo: 'ART-SRV', descripcion: 'Servicio', unidadId: (await prisma.unidadMedida.findFirstOrThrow()).id, tipoCosteo: 'PROMEDIO_PONDERADO' },
     })
     await expect(
-      agregarDetalle(nv.id, {
+      agregarDetalle(f.empresa.id, nv.id, {
         fechaCompromiso: new Date(),
         especieId: f.especie.id,
         variedadId: f.variedad.id,
@@ -206,7 +232,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
       }),
     ).rejects.toMatchObject({ statusCode: 422 })
 
-    const detalle = await agregarDetalle(nv.id, {
+    const detalle = await agregarDetalle(f.empresa.id, nv.id, {
       fechaCompromiso: new Date(),
       especieId: f.especie.id,
       variedadId: f.variedad.id,
@@ -222,10 +248,10 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
 
   it('rechaza rango de calibre invertido en Instructivo de Embalaje (compras.md §6.5)', async () => {
     const f = await crearFixtures()
-    const nv = await crearNotaVenta(nvBase(f), 'test')
+    const nv = await crearNotaVenta(f.empresa.id, nvBase(f), 'test')
 
     await expect(
-      crearInstructivo({
+      crearInstructivo(f.empresa.id, {
         notaVentaId: nv.id,
         detalle: [{
           articuloId: f.articulo.id,
@@ -240,7 +266,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
       }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
-    const instructivo = await crearInstructivo({
+    const instructivo = await crearInstructivo(f.empresa.id, {
       notaVentaId: nv.id,
       detalle: [{
         articuloId: f.articulo.id,
@@ -258,8 +284,8 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
 
   it('el Instructivo de Embalaje NO bloquea la edición ni el borrado de la Nota de Venta (decisión de negocio)', async () => {
     const f = await crearFixtures()
-    const nv = await crearNotaVenta(nvBase(f), 'test')
-    await crearInstructivo({
+    const nv = await crearNotaVenta(f.empresa.id, nvBase(f), 'test')
+    await crearInstructivo(f.empresa.id, {
       notaVentaId: nv.id,
       detalle: [{
         articuloId: f.articulo.id,
@@ -273,17 +299,17 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
       }],
     }, 'test')
 
-    const editada = await actualizarNotaVenta(nv.id, { observaciones: 'edición permitida' }, 'test')
+    const editada = await actualizarNotaVenta(f.empresa.id, nv.id, { observaciones: 'edición permitida' }, 'test')
     expect(editada.observaciones).toBe('edición permitida')
 
-    await expect(eliminarNotaVenta(nv.id, 'test')).resolves.toBeUndefined()
+    await expect(eliminarNotaVenta(f.empresa.id, nv.id, 'test')).resolves.toBeUndefined()
   })
 
   it('rechaza referencias bloqueadas o eliminadas en el encabezado de NV', async () => {
     const f = await crearFixtures()
     await prisma.mercado.update({ where: { id: f.mercado.id }, data: { bloqueado: true } })
 
-    await expect(crearNotaVenta(nvBase(f), 'test')).rejects.toMatchObject({ statusCode: 422 })
+    await expect(crearNotaVenta(f.empresa.id, nvBase(f), 'test')).rejects.toMatchObject({ statusCode: 422 })
   })
 
   it('NV-IE-009: rechaza un país destino que no pertenece al mercado seleccionado', async () => {
@@ -299,7 +325,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
     })
 
     await expect(
-      crearNotaVenta({ ...nvBase(f), mercadoId: otroMercado.id }, 'test'),
+      crearNotaVenta(f.empresa.id, { ...nvBase(f), mercadoId: otroMercado.id }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
   })
 })

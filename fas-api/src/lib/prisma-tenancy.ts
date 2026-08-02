@@ -46,6 +46,10 @@ const MODELOS_TENANT = new Set([
   'ProductorContrato',
   'MovimientoCuentaCorriente',
   'ConceptoLiquidacion',
+  // Fase 3, lote Ventas:
+  'NotaVenta',
+  'Embarque',
+  'InstructivoEmbalaje',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

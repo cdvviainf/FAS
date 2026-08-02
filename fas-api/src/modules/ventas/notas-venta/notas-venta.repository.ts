@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleUpdateInput, NotaVentaUpdateInput } from './notas-venta.types.js'
 
@@ -177,7 +178,10 @@ export async function createNotaVenta(data: NotaVentaCreateInput, creadoPor: str
     const cuotasPago = await cuotasDesdeCondicionPago(tx, data.condicionPagoId, [])
 
     return tx.notaVenta.create({
-      data: { ...data, folio, creadoPor, cuotasPago: { create: cuotasPago } },
+      // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
+      // este valor con la empresa activa del contexto — se declara aquí solo
+      // para satisfacer el tipo requerido por Prisma.
+      data: { empresaId: getEmpresaIdActual()!, ...data, folio, creadoPor, cuotasPago: { create: cuotasPago } },
       include: includeDetalle,
     })
   })

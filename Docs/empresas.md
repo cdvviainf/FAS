@@ -10,7 +10,7 @@
 > | **Frontend** | `fas-web` · `app/dashboard/configuracion/empresas/` (Fase 4) |
 > | **Depende de** | Mantenedores Generales (`Pais`, `Comuna`), Usuarios/Perfiles |
 > | **Usado por** | TODO el sistema (scoping por `empresaId` en la fase de tenancy) |
-> | **Estado** | Fase 3, lote 5/7 (Productores) implementado — pendiente de QA |
+> | **Estado** | Fase 3, lote 6/7 (Ventas) implementado — pendiente de QA |
 
 ---
 
@@ -156,7 +156,7 @@ Fase 3 (backfill de `empresaId` al resto de ~38 modelos raíz candidatos) se hac
 | 3 | Calidad | `SolicitudInspeccion` | **Implementado** |
 | 4 | Materiales | `Articulo`, `Receta`, `TipoMovimiento`, `Movimiento`, `SaldoArticulo` | **Implementado** |
 | 5 | Productores | `Predio`, `ProductorContrato`, `MovimientoCuentaCorriente`, `ConceptoLiquidacion` | **Implementado** |
-| 6 | Ventas | `NotaVenta`, `Embarque`, `InstructivoEmbalaje` | Pendiente |
+| 6 | Ventas | `NotaVenta`, `Embarque`, `InstructivoEmbalaje` | **Implementado** |
 | 7 | Compras | `OrdenCompra`, `CondicionPago`, `Recepcion`, `Pallet`, `TemplateCarga` | Pendiente |
 
 Tablas hijas/detalle (líneas, adjuntos, joins) heredan del padre vía FK — no llevan `empresaId` propio (decisión #5).
@@ -269,5 +269,33 @@ El lote con más FK compuestas hasta ahora (8), repartidas en 5 modelos con estr
 **Repos ajustados:** `predios`/`contratos`/`cuenta-corriente.repository.ts` (módulo Productores) y `conceptos-liquidacion.repository.ts` (módulo Config) — `empresaId` explícito en sus `create`. Ningún `findUnique({where:{codigo}})` que romper esta vez (todo ya usaba `findFirst`).
 
 **Fixtures de test:** `productores.integration.test.ts` ya usaba el patrón `.run()` (no `enterWith`) para varias llamadas, pero 3 casos (`CA1`, `CA2`×2) llamaban `crearPredio`/`eliminarPredio` sin ningún contexto ALS — se envolvieron ahora. `agregarAdjunto` y `obtenerInforme` se llamaban *fuera* de los bloques `.run()` existentes (no fallaban porque en modo "sin store" la lectura pasa sin filtrar, pero no ejercían aislamiento real) — se movieron adentro. Un `prisma.productorContrato.create()` crudo en `http.integration.test.ts` (el mismo test de la ficha de productor ya tocado en el lote 2) recibió `empresaId` explícito.
+
+**Contrato de API sin cambios** — verificado con `tsc --noEmit` en `fas-web`, cero archivos tocados.
+
+### Lote 6 — Ventas (implementado)
+
+`NotaVenta` es el modelo con más FK compuestas de cualquier lote hasta ahora — **9 en su propio encabezado**, más 2 adicionales desde `Embarque`/`InstructivoEmbalaje` (11 en total, supera las 8 de los lotes 1 y 4):
+
+1-3. `NotaVenta ↔ Entidad` ("Cliente" obligatorio, "Notify" y "ClienteFinal" opcionales — 3 FK separadas al mismo modelo)
+4. `NotaVenta ↔ TipoEmbarque`
+5. `NotaVenta ↔ Mercado`
+6. `NotaVenta ↔ Puerto` (`puertoDestinoId`, opcional)
+7-9. `NotaVenta ↔ Parametro` ("ModalidadVenta", "ClausulaVenta", "TipoFlete" — 3 FK separadas al mismo modelo, opcionales)
+10. `Embarque ↔ NotaVenta` (`notaVentaId`)
+11. `InstructivoEmbalaje ↔ NotaVenta` (`notaVentaId`)
+
+`Puerto` y `Parametro` no tenían `@@unique([empresaId, id])` (nunca habían sido "padre" de una FK compuesta) — se agrega ahora, junto con `NotaVenta` misma (nueva destino de `Embarque`/`InstructivoEmbalaje`). `Entidad`, `TipoEmbarque` y `Mercado` ya lo tenían.
+
+**FK que quedan simples a propósito:** `compradorContactoId`/`direccionId` (hijos de `Entidad`, sin `empresaId`), `paisDestinoId`/`monedaId` (mantenedores globales) y `condicionPagoId` (`CondicionPago` aún no es tenant — mismo caso que `ProductorContrato` en el lote 5, pendiente de retrofitear cuando llegue el lote Compras).
+
+**3 índices únicos globales convertidos a `(empresaId, ...)`:** `NotaVenta.folio` y `Embarque.numeroInstructivo` (ambos con `eliminadoEn`, únicos parciales) e `InstructivoEmbalaje.numero` (sin `eliminadoEn`, único normal — mismo caso que `Articulo`/`Receta`/`TipoMovimiento` en el lote Materiales).
+
+**Tablas de detalle sin `empresaId` propio** (`NotaVentaDetalle`→`Especie`/`Variedad`/`Articulo`/`Categoria`/`TipoPallet`, `NotaVentaDetalleCalibre`→`Calibre`, `NotaVentaCuotaPago`→`UnidadMedida`, `InstructivoEmbalajeDetalle`→`Articulo`/`Especie`/`Variedad`/`Categoria`/`Calibre`×2) — mismo patrón que los lotes 3-5: sin FK compuesta posible, aislamiento vía validación de servicio.
+
+**El módulo ya estaba bien construido — cero hallazgos de QA en este lote:** a diferencia de los lotes 4 y 5 (donde se encontraron funciones de servicio que saltaban la validación tenant-scoped del padre), se revisó individualmente cada función de `notas-venta.service.ts`, `embarques.service.ts` e `instructivo-embalaje.service.ts` ANTES de implementar. `validarReferenciasHeader` en `notas-venta.service.ts` ya validaba **las 9 referencias del encabezado** (incluyendo los 3 `Parametro` contra su `tipoParametroCodigo` esperado); `generarEmbarque` y `crearInstructivo` ya validaban el `NotaVenta` padre primero. Todas se volvieron tenant-scoped automáticamente al agregar los modelos destino a `MODELOS_TENANT`, sin cambio de código en los servicios.
+
+**Repos ajustados:** `notas-venta`/`embarques.repository.ts` (módulo Ventas) e `instructivo-embalaje.repository.ts` (módulo Compras) — `empresaId` explícito en sus `create`. Los `aggregate({_max:{folio}})`/`aggregate({_max:{numero}})` para los correlativos se auto-escopan gratis (`aggregate` ya estaba clasificado en la extensión desde Fase 2a).
+
+**Fixtures de test — `enterWith` falla también dentro de `$transaction()` (hallazgo de QA, tests ronda 2):** ningún archivo de test crea `NotaVenta`/`Embarque`/`InstructivoEmbalaje` vía `prisma.<modelo>.create()` crudo — todo el acceso pasa por el service layer. Se asumió inicialmente que `ventas-compras.integration.test.ts` podía seguir usando el patrón `enterWith`-en-`beforeEach` para estas llamadas (ya validado para llamadas de servicio en los lotes 1 y 4), pero Codex encontró que **`getEmpresaIdActual()` devuelve `null` cuando se invoca dentro de un `prisma.$transaction(async (tx) => {...})`** si el contexto ALS se estableció vía `enterWith` — `createNotaVenta`, `updateNotaVenta`, `addDetalle`/`updateDetalle`/`removeDetalle` y `createInstructivo` usan `$transaction` internamente, y ninguna llamada anterior (lotes 1/4/5) había ejercitado esta combinación exacta (contexto vía `enterWith` + `getEmpresaIdActual()` leído dentro de una transacción). Se corrigió envolviendo específicamente `crearNotaVenta`/`actualizarNotaVenta`/`eliminarNotaVenta`/`agregarDetalle`/`crearInstructivo` en `empresaContext.run()` vía wrappers locales (mismo patrón que el lote Calidad), dejando el resto del archivo (que no atraviesa un límite de `$transaction` para leer `getEmpresaIdActual()`) sin cambios. **Lección para lotes futuros: `enterWith` no es confiable para NINGÚN código que lea el contexto ALS después de cruzar un `prisma.$transaction()`** — cualquier `create()`/`update()` dentro de una transacción que necesite `getEmpresaIdActual()` debe probarse con `.run()`, no asumir que `enterWith` alcanza solo porque otras llamadas del mismo archivo ya funcionaron.
 
 **Contrato de API sin cambios** — verificado con `tsc --noEmit` en `fas-web`, cero archivos tocados.

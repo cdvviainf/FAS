@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { InstructivoEmbalajeDetalleInput } from './instructivo-embalaje.types.js'
 
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
@@ -51,6 +52,10 @@ export async function createInstructivo(notaVentaId: number, detalle: Instructiv
 
     return tx.instructivoEmbalaje.create({
       data: {
+        // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
+        // este valor con la empresa activa del contexto — se declara aquí
+        // solo para satisfacer el tipo requerido por Prisma.
+        empresaId: getEmpresaIdActual()!,
         numero,
         notaVentaId,
         creadoPor,

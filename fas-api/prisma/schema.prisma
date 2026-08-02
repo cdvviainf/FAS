@@ -222,6 +222,9 @@ model Empresa {
   contratosProductor   ProductorContrato[]
   movimientosCC        MovimientoCuentaCorriente[]
   conceptosLiquidacion ConceptoLiquidacion[]
+  notasVenta           NotaVenta[]
+  embarques            Embarque[]
+  instructivosEmbalaje InstructivoEmbalaje[]
 
   @@map("empresas")
 }
@@ -1009,6 +1012,7 @@ model Parametro {
   notasVentaClausula  NotaVenta[] @relation("NotaVentaClausulaVenta")
   notasVentaTipoFlete NotaVenta[] @relation("NotaVentaTipoFlete")
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@map("parametros")
 }
@@ -1072,6 +1076,7 @@ model Puerto {
 
   notasVenta NotaVenta[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@map("puertos")
 }
@@ -1985,29 +1990,32 @@ model ConceptoLiquidacionEspecie {
 // diferidos — no están implementados todavía.
 
 model NotaVenta {
-  id    Int      @id @default(autoincrement())
-  folio Int      @unique // correlativo autonumérico (R1)
-  fecha DateTime
+  id        Int      @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa  @relation(fields: [empresaId], references: [id])
+  folio     Int      // correlativo autonumérico (R1), único por empresa
+  fecha     DateTime
 
   clienteId      Int
-  cliente        Entidad  @relation("NotaVentaCliente", fields: [clienteId], references: [id])
+  // FK compuesta (empresaId, clienteId) -> Entidad(empresaId, id).
+  cliente        Entidad  @relation("NotaVentaCliente", fields: [empresaId, clienteId], references: [empresaId, id])
   // Comprador es un Contacto de la Entidad Cliente (no una Entidad completa) —
   // decisión de negocio, Christian, 2026-07-30.
   compradorContactoId Int?
   compradorContacto   EntidadContacto? @relation(fields: [compradorContactoId], references: [id])
   notifyId       Int?
-  notify         Entidad? @relation("NotaVentaNotify", fields: [notifyId], references: [id])
+  notify         Entidad? @relation("NotaVentaNotify", fields: [empresaId, notifyId], references: [empresaId, id])
   clienteFinalId Int?
-  clienteFinal   Entidad? @relation("NotaVentaClienteFinal", fields: [clienteFinalId], references: [id])
+  clienteFinal   Entidad? @relation("NotaVentaClienteFinal", fields: [empresaId, clienteFinalId], references: [empresaId, id])
 
   tipoEmbarqueId   Int
-  tipoEmbarque     TipoEmbarque      @relation(fields: [tipoEmbarqueId], references: [id])
+  tipoEmbarque     TipoEmbarque      @relation(fields: [empresaId, tipoEmbarqueId], references: [empresaId, id])
   mercadoId        Int
-  mercado          Mercado           @relation(fields: [mercadoId], references: [id])
+  mercado          Mercado           @relation(fields: [empresaId, mercadoId], references: [empresaId, id])
   paisDestinoId    Int
   paisDestino      Pais              @relation(fields: [paisDestinoId], references: [id])
   puertoDestinoId  Int?
-  puertoDestino    Puerto?           @relation(fields: [puertoDestinoId], references: [id])
+  puertoDestino    Puerto?           @relation(fields: [empresaId, puertoDestinoId], references: [empresaId, id])
   direccionId      Int?
   direccion        EntidadDireccion? @relation(fields: [direccionId], references: [id])
   direccionDetalle String?
@@ -2016,16 +2024,17 @@ model NotaVenta {
   // genérico Parametro (mantenedores-generales.md), cada uno filtrado por su
   // propio TipoParametro (ver seed).
   modalidadVentaId Int?
-  modalidadVenta   Parametro? @relation("NotaVentaModalidadVenta", fields: [modalidadVentaId], references: [id])
+  modalidadVenta   Parametro? @relation("NotaVentaModalidadVenta", fields: [empresaId, modalidadVentaId], references: [empresaId, id])
   clausulaVentaId  Int?
-  clausulaVenta    Parametro? @relation("NotaVentaClausulaVenta", fields: [clausulaVentaId], references: [id])
+  clausulaVenta    Parametro? @relation("NotaVentaClausulaVenta", fields: [empresaId, clausulaVentaId], references: [empresaId, id])
   tipoFleteId      Int?
-  tipoFlete        Parametro? @relation("NotaVentaTipoFlete", fields: [tipoFleteId], references: [id])
+  tipoFlete        Parametro? @relation("NotaVentaTipoFlete", fields: [empresaId, tipoFleteId], references: [empresaId, id])
 
   // Forma de pago: condición de pago con cuotas (% + plazo en días), mismo
   // modelo que Compras (CondicionPago). No existe un campo de "saldo pago"
   // separado — las cuotas se snapshotean en NotaVentaCuotaPago al guardar
   // (mismo patrón que OrdenCompraCuotaPago, ver Docs/ventas.md R12).
+  // CondicionPago aún no es tenant (pendiente Fase 3 lote Compras) — FK simple.
   condicionPagoId Int?
   condicionPago   CondicionPago?       @relation(fields: [condicionPagoId], references: [id])
   cuotasPago      NotaVentaCuotaPago[]
@@ -2047,9 +2056,11 @@ model NotaVenta {
   eliminadoEn    DateTime?
   eliminadoPor   String?
 
+  @@unique([empresaId, id])
   @@index([clienteId])
   @@index([fecha])
   @@index([condicionPagoId])
+  @@index([empresaId])
   @@map("notas_venta")
 }
 
@@ -2128,12 +2139,15 @@ model NotaVentaDetalleCalibre {
 // SolicitudReserva) se agregan cuando se implemente cada pestaña.
 model Embarque {
   id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
   notaVentaId Int
-  notaVenta   NotaVenta @relation(fields: [notaVentaId], references: [id])
+  // FK compuesta (empresaId, notaVentaId) -> NotaVenta(empresaId, id).
+  notaVenta   NotaVenta @relation(fields: [empresaId, notaVentaId], references: [empresaId, id])
 
   // Q1 resuelta en Docs/ventas.md: Folio = Número de Instructivo (mismo dato,
-  // manual, único). Identidad del instructivo padre.
-  numeroInstructivo String @unique
+  // manual, único por empresa). Identidad del instructivo padre.
+  numeroInstructivo String
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -2143,6 +2157,7 @@ model Embarque {
   eliminadoPor   String?
 
   @@index([notaVentaId])
+  @@index([empresaId])
   @@map("embarques")
 }
 
@@ -2152,11 +2167,14 @@ model Embarque {
 // es solo un documento emitido, no editable ni eliminable.
 
 model InstructivoEmbalaje {
-  id     Int @id @default(autoincrement())
-  numero Int @unique // correlativo propio
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  numero    Int     // correlativo propio, único por empresa
 
   notaVentaId Int
-  notaVenta   NotaVenta @relation(fields: [notaVentaId], references: [id])
+  // FK compuesta (empresaId, notaVentaId) -> NotaVenta(empresaId, id).
+  notaVenta   NotaVenta @relation(fields: [empresaId, notaVentaId], references: [empresaId, id])
 
   detalle InstructivoEmbalajeDetalle[]
 
@@ -2164,6 +2182,7 @@ model InstructivoEmbalaje {
   creadoPor String
 
   @@index([notaVentaId])
+  @@index([empresaId])
   @@map("instructivos_embalaje")
 }
 
