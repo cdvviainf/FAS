@@ -118,10 +118,10 @@ async function crearFixtures() {
 
   const unidad = await prisma.unidadMedida.create({ data: { empresaId: empresa.id, codigo: 'CAJA', descripcion: 'Caja', creadoPor: 'test' } })
   const embalaje = await prisma.articulo.create({
-    data: { tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
+    data: { empresaId: empresa.id, tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
   const noEmbalaje = await prisma.articulo.create({
-    data: { tipo: 'SERVICIO', codigo: 'ART-SERV', descripcion: 'Servicio', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
+    data: { empresaId: empresa.id, tipo: 'SERVICIO', codigo: 'ART-SERV', descripcion: 'Servicio', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
 
   const calificacion = await prisma.calificacion.create({ data: { empresaId: empresa.id, codigo: 'B1', descripcion: 'B1', creadoPor: 'test' } })

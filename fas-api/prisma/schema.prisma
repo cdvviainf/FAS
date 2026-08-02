@@ -213,6 +213,11 @@ model Empresa {
   calificaciones       Calificacion[]
   entidades            Entidad[]
   solicitudesInspeccion SolicitudInspeccion[]
+  articulos            Articulo[]
+  recetas              Receta[]
+  tiposMovimiento      TipoMovimiento[]
+  saldosArticulo       SaldoArticulo[]
+  movimientos          Movimiento[]
 
   @@map("empresas")
 }
@@ -1155,6 +1160,7 @@ model Bodega {
   movimientosOrigen  Movimiento[]     @relation("MovOrigen")
   movimientosDestino Movimiento[]     @relation("MovDestino")
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@map("bodegas")
 }
@@ -1556,12 +1562,16 @@ enum ClaseMovimiento {
 
 model Articulo {
   id                    Int          @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa      @relation(fields: [empresaId], references: [id])
   tipo                  TipoArticulo
-  codigo                String       @unique
+  codigo                String
   descripcion           String
   descripcionExtranjera String?
   unidadId              Int
-  unidad                UnidadMedida @relation(fields: [unidadId], references: [id])
+  // FK compuesta (empresaId, unidadId) -> UnidadMedida(empresaId, id): mismo
+  // patrón que Mercado↔GrupoMercado (Fase 2a).
+  unidad                UnidadMedida @relation(fields: [empresaId, unidadId], references: [empresaId, id])
   tipoCosteo            TipoCosteo
   valorEstandar         Decimal?     @db.Decimal(14, 4) // requerido si ESTANDAR (R3)
   controlaStock         Boolean      @default(true) // false si ESTANDAR (R3)
@@ -1588,8 +1598,11 @@ model Articulo {
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
 
+  @@unique([empresaId, codigo])
+  @@unique([empresaId, id])
   @@index([tipo])
   @@index([activo])
+  @@index([empresaId])
   @@map("articulos")
 }
 
@@ -1620,9 +1633,12 @@ model DocumentoArticuloContenido {
 
 model Receta {
   id                Int      @id @default(autoincrement())
+  empresaId         Int
+  empresa           Empresa  @relation(fields: [empresaId], references: [id])
   embalajeId        Int // FK a Articulo tipo EMBALAJE (R13)
-  embalaje          Articulo @relation("EmbalajeRecetas", fields: [embalajeId], references: [id])
-  codigo            String   @unique
+  // FK compuesta (empresaId, embalajeId) -> Articulo(empresaId, id).
+  embalaje          Articulo @relation("EmbalajeRecetas", fields: [empresaId, embalajeId], references: [empresaId, id])
+  codigo            String
   descripcion       String
   cantidadAProducir Decimal  @db.Decimal(14, 3)
   activo            Boolean  @default(true)
@@ -1632,7 +1648,9 @@ model Receta {
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
 
+  @@unique([empresaId, codigo])
   @@index([embalajeId])
+  @@index([empresaId])
   @@map("recetas")
 }
 
@@ -1650,7 +1668,9 @@ model RecetaDetalle {
 
 model TipoMovimiento {
   id                 Int             @id @default(autoincrement())
-  codigo             String          @unique
+  empresaId          Int
+  empresa            Empresa         @relation(fields: [empresaId], references: [id])
+  codigo             String
   descripcion        String
   modulos            ModuloSistema[]
   clase              ClaseMovimiento
@@ -1663,42 +1683,53 @@ model TipoMovimiento {
 
   creadoEn DateTime @default(now())
 
+  @@unique([empresaId, codigo])
+  @@unique([empresaId, id])
   @@index([clase])
+  @@index([empresaId])
   @@map("tipos_movimiento")
 }
 
 model SaldoArticulo {
   id            Int      @id @default(autoincrement())
+  empresaId     Int
+  empresa       Empresa  @relation(fields: [empresaId], references: [id])
   articuloId    Int
-  articulo      Articulo @relation(fields: [articuloId], references: [id])
+  // FK compuesta (empresaId, articuloId) -> Articulo(empresaId, id).
+  articulo      Articulo @relation(fields: [empresaId, articuloId], references: [empresaId, id])
   bodegaId      Int
-  bodega        Bodega   @relation(fields: [bodegaId], references: [id])
+  // FK compuesta (empresaId, bodegaId) -> Bodega(empresaId, id).
+  bodega        Bodega   @relation(fields: [empresaId, bodegaId], references: [empresaId, id])
   cantidad      Decimal  @default(0) @db.Decimal(14, 3)
   costoPromedio Decimal  @default(0) @db.Decimal(14, 4)
   actualizadoEn DateTime @updatedAt
 
   @@unique([articuloId, bodegaId])
   @@index([articuloId])
+  @@index([empresaId])
   @@map("saldos_articulo")
 }
 
 model Movimiento {
   id               Int            @id @default(autoincrement())
+  empresaId        Int
+  empresa          Empresa        @relation(fields: [empresaId], references: [id])
   tipoMovimientoId Int
-  tipoMovimiento   TipoMovimiento @relation(fields: [tipoMovimientoId], references: [id])
+  // FK compuesta (empresaId, tipoMovimientoId) -> TipoMovimiento(empresaId, id).
+  tipoMovimiento   TipoMovimiento @relation(fields: [empresaId, tipoMovimientoId], references: [empresaId, id])
   entidadId        Int?
-  entidad          Entidad?       @relation("MovEntidad", fields: [entidadId], references: [id])
+  entidad          Entidad?       @relation("MovEntidad", fields: [empresaId, entidadId], references: [empresaId, id])
   fechaRegistro    DateTime       @default(now())
   fechaMovimiento  DateTime
   bodegaOrigenId   Int?
-  bodegaOrigen     Bodega?        @relation("MovOrigen", fields: [bodegaOrigenId], references: [id])
+  bodegaOrigen     Bodega?        @relation("MovOrigen", fields: [empresaId, bodegaOrigenId], references: [empresaId, id])
   bodegaDestinoId  Int?
-  bodegaDestino    Bodega?        @relation("MovDestino", fields: [bodegaDestinoId], references: [id])
+  bodegaDestino    Bodega?        @relation("MovDestino", fields: [empresaId, bodegaDestinoId], references: [empresaId, id])
   guiaReferencia   String?
 
   // Datos de transporte — requeridos si tipoMovimiento.emiteDTE = true (R10)
   transporteEntidadId Int?
-  transporteEntidad   Entidad?  @relation("MovTransporte", fields: [transporteEntidadId], references: [id])
+  transporteEntidad   Entidad?  @relation("MovTransporte", fields: [empresaId, transporteEntidadId], references: [empresaId, id])
   choferRut           String?
   choferNombre        String?
   placaCamion         String?
@@ -1712,6 +1743,7 @@ model Movimiento {
 
   @@index([tipoMovimientoId])
   @@index([fechaMovimiento])
+  @@index([empresaId])
   @@map("movimientos")
 }
 

@@ -111,7 +111,7 @@ async function crearFixturesContrato() {
   const calibreHasta = await prisma.calibre.create({ data: { empresaId: empresa.id, codigo: 'XXL', descripcion: 'XXL', especieId: especie.id, orden: 2, control: [], creadoPor: 'test' } })
   const unidad = await prisma.unidadMedida.create({ data: { empresaId: empresa.id, codigo: 'KG', descripcion: 'Kilos', creadoPor: 'test' } })
   const articulo = await prisma.articulo.create({
-    data: { tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
+    data: { empresaId: empresa.id, tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
 
   return { empresa, temporada, especie, variedad, categoria, calibreDesde, calibreHasta, unidad, articulo }

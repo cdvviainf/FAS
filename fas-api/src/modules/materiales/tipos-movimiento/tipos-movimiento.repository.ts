@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/prisma.js'
 import type { Prisma } from '@prisma/client'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type {
   TipoMovimientoCreateInput,
   TipoMovimientoUpdateInput,
@@ -34,11 +35,14 @@ export async function getTipoMovimientoById(id: number) {
 }
 
 export async function findTipoMovimientoByCodigo(codigo: string) {
-  return prisma.tipoMovimiento.findUnique({ where: { codigo } })
+  return prisma.tipoMovimiento.findFirst({ where: { codigo } })
 }
 
 export async function createTipoMovimiento(data: TipoMovimientoCreateInput) {
-  return prisma.tipoMovimiento.create({ data })
+  // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
+  // valor con la empresa activa del contexto — se declara aquí solo para
+  // satisfacer el tipo requerido por Prisma.
+  return prisma.tipoMovimiento.create({ data: { ...data, empresaId: getEmpresaIdActual()! } })
 }
 
 export async function updateTipoMovimiento(id: number, data: TipoMovimientoUpdateInput) {

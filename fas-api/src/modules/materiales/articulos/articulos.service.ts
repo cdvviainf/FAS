@@ -106,6 +106,7 @@ export async function listarDocumentos(articuloId: number) {
 }
 
 export async function descargarDocumento(articuloId: number, documentoId: number) {
+  await obtenerArticulo(articuloId)
   const meta = await repo.getDocumentoMeta(articuloId, documentoId)
   if (!meta) throw new NotFoundError('Documento', String(documentoId))
   const contenido = await repo.getDocumentoContenido(documentoId)
@@ -114,6 +115,7 @@ export async function descargarDocumento(articuloId: number, documentoId: number
 }
 
 export async function eliminarDocumento(articuloId: number, documentoId: number) {
+  await obtenerArticulo(articuloId)
   const meta = await repo.getDocumentoMeta(articuloId, documentoId)
   if (!meta) throw new NotFoundError('Documento', String(documentoId))
   await repo.deleteDocumento(documentoId)

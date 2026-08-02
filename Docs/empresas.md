@@ -10,7 +10,7 @@
 > | **Frontend** | `fas-web` · `app/dashboard/configuracion/empresas/` (Fase 4) |
 > | **Depende de** | Mantenedores Generales (`Pais`, `Comuna`), Usuarios/Perfiles |
 > | **Usado por** | TODO el sistema (scoping por `empresaId` en la fase de tenancy) |
-> | **Estado** | Fase 3, lote 3/7 (Calidad) implementado — pendiente de QA |
+> | **Estado** | Fase 3, lote 4/7 (Materiales) implementado — pendiente de QA |
 
 ---
 
@@ -154,7 +154,7 @@ Fase 3 (backfill de `empresaId` al resto de ~38 modelos raíz candidatos) se hac
 | 1 | Config/Mantenedores | 19 (ver abajo) | **Implementado** |
 | 2 | Entidades | `Entidad` | **Implementado** |
 | 3 | Calidad | `SolicitudInspeccion` | **Implementado** |
-| 4 | Materiales | `Articulo`, `Receta`, `TipoMovimiento`, `Movimiento`, `SaldoArticulo` | Pendiente |
+| 4 | Materiales | `Articulo`, `Receta`, `TipoMovimiento`, `Movimiento`, `SaldoArticulo` | **Implementado** |
 | 5 | Productores | `Predio`, `ProductorContrato`, `MovimientoCuentaCorriente`, `ConceptoLiquidacion` | Pendiente |
 | 6 | Ventas | `NotaVenta`, `Embarque`, `InstructivoEmbalaje` | Pendiente |
 | 7 | Compras | `OrdenCompra`, `CondicionPago`, `Recepcion`, `Pallet`, `TemplateCarga` | Pendiente |
@@ -214,5 +214,32 @@ De los 5 modelos destino, solo `Especie` ya tenía `@@unique([empresaId, id])` (
 **Tablas de detalle sin `empresaId` propio, aislamiento vía servicio (decisión #5 aplicada, no un vacío):** `SolicitudInspeccionVariedad/Calibre/Categoria` referencian `Variedad`/`Calibre`/`Categoria` (ya tenant) pero, al ser tablas de detalle sin `empresaId` propio, no pueden tener FK compuesta — no hay columna con la que componerla. El aislamiento ahí depende exclusivamente de la validación de servicio ya existente en `solicitudes.service.ts` (`validarReferencias`), que se volvió tenant-scoped automáticamente porque los modelos destino ya son tenant desde el lote 1 — mismo patrón "gratis" que `Puerto.tipoEmbarqueId`/`Especie.unidadMedidaCalidadId` en el lote 1, sin cambio de código. `createSolicitud`/`updateSolicitud` pasan estas relaciones como FK escalar plano (`variedadId: X`), nunca como sintaxis de relación anidada (`variedad: { connect: {...} }`), así que tampoco activan el guard de escrituras anidadas de la extensión.
 
 **Lección de lote 2 aplicada — se evitó el patrón `enterWith` en `beforeEach`:** `solicitudes.integration.test.ts` llama a los servicios (`crearSolicitud`, `actualizarSolicitud`, `obtenerSolicitud`, `eliminarMantenedor`, `eliminarEntidad`) directamente, sin contexto ALS — funcionaba porque hasta este lote ningún modelo tocado en el nivel superior era tenant. En vez de repetir `empresaContext.enterWith(...)` en un `beforeEach` compartido (que Codex demostró en el lote Entidades que no se propaga de forma confiable entre el hook y el cuerpo del test), se envolvió cada llamada de servicio individualmente en `empresaContext.run(...)` vía wrappers locales del archivo de test — más verboso pero determinístico, sin depender de cómo el test runner programe la transición entre hook y test.
+
+**Contrato de API sin cambios** — verificado con `tsc --noEmit` en `fas-web`, cero archivos tocados.
+
+### Lote 4 — Materiales (implementado)
+
+El lote con más FK compuestas hasta ahora (8), repartidas en 5 modelos con estructura propia (no genérica vía `config.repository.ts` como los lotes 1 y 3):
+
+1. `Articulo ↔ UnidadMedida` (`unidadId`)
+2. `Receta ↔ Articulo` (`embalajeId`)
+3. `SaldoArticulo ↔ Articulo` (`articuloId`)
+4. `SaldoArticulo ↔ Bodega` (`bodegaId`)
+5. `Movimiento ↔ TipoMovimiento` (`tipoMovimientoId`)
+6. `Movimiento ↔ Entidad` ("MovEntidad", `entidadId`, opcional)
+7. `Movimiento ↔ Bodega` ("MovOrigen"/"MovDestino", `bodegaOrigenId`/`bodegaDestinoId`, opcionales — 2 FK compuestas separadas hacia el mismo modelo)
+8. `Movimiento ↔ Entidad` ("MovTransporte", `transporteEntidadId`, opcional)
+
+`Bodega` no tenía `@@unique([empresaId, id])` (nunca había sido "padre" de una FK compuesta) — se agrega ahora junto con `Articulo` y `TipoMovimiento` (nuevos destinos). `Entidad` ya lo tenía desde el lote 3.
+
+**Diferencia con lotes anteriores — único de `codigo` sin condición parcial:** `Articulo`, `Receta` y `TipoMovimiento` tienen `codigo` con `@unique` **directo en el DSL** (no un índice parcial crudo oculto) y **no usan `eliminadoEn`** (usan `activo` boolean) — el reemplazo es `@@unique([empresaId, codigo])` normal, sin `WHERE`, más simple que el patrón de los lotes 1 y 2.
+
+**Tablas de detalle sin `empresaId` propio** (`RecetaDetalle`, `MovimientoDetalle`, `DocumentoArticulo`) referencian `Articulo` mediante FK escalar plano — mismo patrón que el lote 3 (`SolicitudInspeccionVariedad` etc.): sin FK compuesta posible (no hay `empresaId` con qué componerla), el aislamiento depende de la validación de servicio ya existente (`getArticulosPorIds`, `getArticulosTipos`, `getArticuloTipo`), que se vuelve tenant-scoped automáticamente porque `Articulo` ya es tenant — sin cambio de código.
+
+**Repos ajustados:** `articulos`/`recetas`/`tipos-movimiento.repository.ts` — `empresaId` explícito en `create` (satisface la validación de campo requerido de Prisma, que la extensión sobrescribe en runtime) y `findXByCodigo` cambia de `findUnique({where:{codigo}})` a `findFirst({where:{codigo}})`, porque `codigo` deja de ser único por sí solo. `movimientos.repository.ts` — `empresaId` explícito tanto en `tx.movimiento.create` como en `getOrCreateSaldo`'s `tx.saldoArticulo.create` (motor transaccional de stock, dentro de `prisma.$transaction`).
+
+**Otros módulos sin cambios:** Compras, Ventas, Productores y Calidad ya referenciaban `Articulo` por FK escalar simple vía `findUnique({where:{id}})` (no por `codigo`) — se vuelven tenant-scoped gratis, mismo patrón que siempre, sin tocar esos módulos (ninguno de ellos es tenant todavía).
+
+**Cobertura de tests:** solo `Articulo` tenía suite de integración dedicada (`articulos.integration.test.ts`) — se adaptó con el patrón `.run()` del lote 3. `Receta`, `TipoMovimiento`, `Movimiento` y `SaldoArticulo` no tienen tests de integración propios hoy (deuda preexistente, no introducida por este lote). Además, 4 `prisma.articulo.create()` crudos en `productores`/`ventas-compras`(x2)/`solicitudes.integration.test.ts` recibieron `empresaId` explícito.
 
 **Contrato de API sin cambios** — verificado con `tsc --noEmit` en `fas-web`, cero archivos tocados.

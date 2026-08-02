@@ -130,7 +130,7 @@ async function crearFixtures() {
     create: { id: 1, empresaId: empresa.id, codigo: 'CAJA', descripcion: 'Caja', creadoPor: 'test' },
   })
   const articulo = await prisma.articulo.create({
-    data: { tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
+    data: { empresaId: empresa.id, tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
 
   return { empresa, pais, cliente, productor, tipoEmbarque, mercado, moneda, especie, variedad, categoria, calibreChico, calibreGrande, articulo }
@@ -190,7 +190,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
     ).rejects.toMatchObject({ statusCode: 422 })
 
     const noEmbalaje = await prisma.articulo.create({
-      data: { tipo: 'SERVICIO', codigo: 'ART-SRV', descripcion: 'Servicio', unidadId: (await prisma.unidadMedida.findFirstOrThrow()).id, tipoCosteo: 'PROMEDIO_PONDERADO' },
+      data: { empresaId: f.empresa.id, tipo: 'SERVICIO', codigo: 'ART-SRV', descripcion: 'Servicio', unidadId: (await prisma.unidadMedida.findFirstOrThrow()).id, tipoCosteo: 'PROMEDIO_PONDERADO' },
     })
     await expect(
       agregarDetalle(nv.id, {

@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { RecetaCreateInput, RecetaUpdateInput } from './recetas.types.js'
 
 const componenteSelect = { id: true, codigo: true, descripcion: true, tipo: true }
@@ -23,13 +24,17 @@ export async function getRecetaById(id: number) {
 }
 
 export async function findRecetaByCodigo(codigo: string) {
-  return prisma.receta.findUnique({ where: { codigo } })
+  return prisma.receta.findFirst({ where: { codigo } })
 }
 
 export async function createReceta(data: RecetaCreateInput) {
   const { detalle, ...cabecera } = data
   return prisma.receta.create({
     data: {
+      // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
+      // este valor con la empresa activa del contexto — se declara aquí solo
+      // para satisfacer el tipo requerido por Prisma.
+      empresaId: getEmpresaIdActual()!,
       ...cabecera,
       detalle: { create: detalle },
     },

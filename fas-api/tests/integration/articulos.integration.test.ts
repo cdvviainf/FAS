@@ -1,11 +1,28 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '../../src/lib/prisma.js'
+import { empresaContext } from '../../src/lib/empresa-context.js'
 import {
-  actualizarArticulo,
-  crearArticulo,
-  obtenerArticulo,
+  actualizarArticulo as actualizarArticuloSvc,
+  crearArticulo as crearArticuloSvc,
+  obtenerArticulo as obtenerArticuloSvc,
 } from '../../src/modules/materiales/articulos/articulos.service.js'
 import { articuloCreateSchema, articuloListQuerySchema } from '../../src/modules/materiales/articulos/articulos.schema.js'
+import type { ArticuloCreateInput, ArticuloUpdateInput } from '../../src/modules/materiales/articulos/articulos.types.js'
+
+// Articulo es por-empresa desde Fase 3 (lote Materiales) — los servicios que
+// lo tocan necesitan contexto ALS, que fuera de un request HTTP no existe por
+// defecto. Cada llamada se envuelve individualmente en `.run()` (mismo patrón
+// que el lote Calidad) en vez de `enterWith` en `beforeEach` (frágil, ver
+// Docs/empresas.md §7 lote Entidades).
+async function crearArticulo(empresaId: number, body: ArticuloCreateInput) {
+  return empresaContext.run({ empresaId }, () => crearArticuloSvc(body))
+}
+async function actualizarArticulo(empresaId: number, id: number, body: ArticuloUpdateInput) {
+  return empresaContext.run({ empresaId }, () => actualizarArticuloSvc(id, body))
+}
+async function obtenerArticulo(empresaId: number, id: number) {
+  return empresaContext.run({ empresaId }, () => obtenerArticuloSvc(id))
+}
 
 const databaseName = new URL(process.env.DATABASE_URL ?? '').pathname.slice(1)
 if (databaseName !== 'fas_test') {
@@ -53,9 +70,10 @@ describe('maestro de Artículos contra PostgreSQL', () => {
   })
 
   it('CA1: rechaza costeo Estándar sin valor estándar', async () => {
+    const empresa = await obtenerEmpresaTest()
     const unidad = await crearUnidad()
 
-    await expect(crearArticulo({
+    await expect(crearArticulo(empresa.id, {
       tipo: 'ENVASE',
       codigo: 'ENV-001',
       descripcion: 'Envase de prueba',
@@ -65,9 +83,10 @@ describe('maestro de Artículos contra PostgreSQL', () => {
   })
 
   it('CA1: fuerza controlaStock=false para costeo Estándar', async () => {
+    const empresa = await obtenerEmpresaTest()
     const unidad = await crearUnidad()
 
-    const articulo = await crearArticulo({
+    const articulo = await crearArticulo(empresa.id, {
       tipo: 'ENVASE',
       codigo: 'ENV-001',
       descripcion: 'Envase de prueba',
@@ -81,9 +100,10 @@ describe('maestro de Artículos contra PostgreSQL', () => {
   })
 
   it('CA2: rechaza un Servicio con costeo Promedio Ponderado', async () => {
+    const empresa = await obtenerEmpresaTest()
     const unidad = await crearUnidad()
 
-    await expect(crearArticulo({
+    await expect(crearArticulo(empresa.id, {
       tipo: 'SERVICIO',
       codigo: 'SER-001',
       descripcion: 'Servicio de prueba',
@@ -93,9 +113,10 @@ describe('maestro de Artículos contra PostgreSQL', () => {
   })
 
   it('fuerza controlaStock=true para costeo Promedio Ponderado', async () => {
+    const empresa = await obtenerEmpresaTest()
     const unidad = await crearUnidad()
 
-    const articulo = await crearArticulo({
+    const articulo = await crearArticulo(empresa.id, {
       tipo: 'MATERIAL_EMBALAJE',
       codigo: 'MAT-001',
       descripcion: 'Material de prueba',
@@ -108,8 +129,9 @@ describe('maestro de Artículos contra PostgreSQL', () => {
   })
 
   it('mantiene el código inmutable y valida R3/R4 al editar', async () => {
+    const empresa = await obtenerEmpresaTest()
     const unidad = await crearUnidad()
-    const articulo = await crearArticulo({
+    const articulo = await crearArticulo(empresa.id, {
       tipo: 'MATERIAL_EMBALAJE',
       codigo: 'MAT-001',
       descripcion: 'Material de prueba',
@@ -117,19 +139,19 @@ describe('maestro de Artículos contra PostgreSQL', () => {
       tipoCosteo: 'PROMEDIO_PONDERADO',
     })
 
-    const actualizado = await actualizarArticulo(articulo.id, {
+    const actualizado = await actualizarArticulo(empresa.id, articulo.id, {
       tipoCosteo: 'ESTANDAR',
       valorEstandar: 99,
     })
     expect(actualizado.codigo).toBe('MAT-001')
     expect(actualizado.controlaStock).toBe(false)
 
-    await expect(actualizarArticulo(articulo.id, {
+    await expect(actualizarArticulo(empresa.id, articulo.id, {
       tipo: 'SERVICIO',
       tipoCosteo: 'PROMEDIO_PONDERADO',
     })).rejects.toMatchObject({ statusCode: 422 })
 
-    const almacenado = await obtenerArticulo(articulo.id)
+    const almacenado = await obtenerArticulo(empresa.id, articulo.id)
     expect(almacenado.tipo).toBe('MATERIAL_EMBALAJE')
   })
 
@@ -172,7 +194,7 @@ describe('maestro de Artículos contra PostgreSQL', () => {
     })
 
     for (const unidadId of [bloqueada.id, eliminada.id]) {
-      await expect(crearArticulo({
+      await expect(crearArticulo(empresa.id, {
         tipo: 'ENVASE',
         codigo: `ENV-${unidadId}`,
         descripcion: 'Envase inválido',

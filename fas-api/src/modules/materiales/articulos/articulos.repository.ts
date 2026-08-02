@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/prisma.js'
 import type { Prisma } from '@prisma/client'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ArticuloCreateInput, ArticuloUpdateInput, ArticuloListFilters } from './articulos.types.js'
 
 const unidadSelect = { id: true, codigo: true, descripcion: true }
@@ -48,7 +49,7 @@ export async function getArticuloById(id: number) {
 }
 
 export async function findArticuloByCodigo(codigo: string) {
-  return prisma.articulo.findUnique({ where: { codigo } })
+  return prisma.articulo.findFirst({ where: { codigo } })
 }
 
 // ART-04: valida que la unidad de medida exista, no esté eliminada ni bloqueada
@@ -60,7 +61,10 @@ export async function getUnidadMedidaActiva(unidadId: number) {
 
 export async function createArticulo(data: ArticuloCreateInput) {
   return prisma.articulo.create({
-    data,
+    // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
+    // valor con la empresa activa del contexto — se declara aquí solo para
+    // satisfacer el tipo requerido por Prisma.
+    data: { ...data, empresaId: getEmpresaIdActual()! },
     include: { unidad: { select: unidadSelect } },
   })
 }

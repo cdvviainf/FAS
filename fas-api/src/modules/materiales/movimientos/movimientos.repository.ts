@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/prisma.js'
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { MovimientoCreateInput, MovimientoListFilters } from './movimientos.types.js'
 
 const includeDetalle = {
@@ -76,8 +77,11 @@ async function getOrCreateSaldo(tx: Tx, articuloId: number, bodegaId: number) {
     where: { articuloId_bodegaId: { articuloId, bodegaId } },
   })
   if (existente) return existente
+  // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
+  // valor con la empresa activa del contexto — se declara aquí solo para
+  // satisfacer el tipo requerido por Prisma.
   return tx.saldoArticulo.create({
-    data: { articuloId, bodegaId, cantidad: 0, costoPromedio: 0 },
+    data: { empresaId: getEmpresaIdActual()!, articuloId, bodegaId, cantidad: 0, costoPromedio: 0 },
   })
 }
 
@@ -97,6 +101,10 @@ export async function createMovimientoTransaccional(
 
     const movimiento = await tx.movimiento.create({
       data: {
+        // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
+        // este valor con la empresa activa del contexto — se declara aquí
+        // solo para satisfacer el tipo requerido por Prisma.
+        empresaId: getEmpresaIdActual()!,
         ...cabecera,
         fechaMovimiento: new Date(fechaMovimiento),
         horaSalida: horaSalida ? new Date(horaSalida) : null,
