@@ -124,8 +124,10 @@ describe('mantenedores contra PostgreSQL', () => {
 
   it('bloquea eliminar una comuna usada por una dirección vigente', async () => {
     const { pais, comuna } = await crearGeografia()
+    const empresa = await obtenerEmpresaTest()
     const entidad = await prisma.entidad.create({
       data: {
+        empresaId: empresa.id,
         codigo: 'CLI-1',
         descripcion: 'Cliente prueba',
         razonSocial: 'Cliente prueba SpA',

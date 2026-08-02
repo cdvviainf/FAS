@@ -31,6 +31,8 @@ const MODELOS_TENANT = new Set([
   'Calibre',
   'Parametro',
   'Calificacion',
+  // Fase 3, lote Entidades:
+  'Entidad',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

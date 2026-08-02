@@ -10,7 +10,7 @@
 > | **Frontend** | `fas-web` · `app/dashboard/configuracion/empresas/` (Fase 4) |
 > | **Depende de** | Mantenedores Generales (`Pais`, `Comuna`), Usuarios/Perfiles |
 > | **Usado por** | TODO el sistema (scoping por `empresaId` en la fase de tenancy) |
-> | **Estado** | Fase 3, lote 1/7 (Config/Mantenedores) implementado — QA ronda 2: `APROBADO_CON_OBSERVACIONES`, `TESTS_OK` |
+> | **Estado** | Fase 3, lote 2/7 (Entidades) implementado — pendiente de QA |
 
 ---
 
@@ -152,7 +152,7 @@ Fase 3 (backfill de `empresaId` al resto de ~38 modelos raíz candidatos) se hac
 | Lote | Módulo | Modelos | Estado |
 |---|---|---|---|
 | 1 | Config/Mantenedores | 19 (ver abajo) | **Implementado** |
-| 2 | Entidades | `Entidad` | Pendiente |
+| 2 | Entidades | `Entidad` | **Implementado** |
 | 3 | Calidad | `SolicitudInspeccion` | Pendiente |
 | 4 | Materiales | `Articulo`, `Receta`, `TipoMovimiento`, `Movimiento`, `SaldoArticulo` | Pendiente |
 | 5 | Productores | `Predio`, `ProductorContrato`, `MovimientoCuentaCorriente`, `ConceptoLiquidacion` | Pendiente |
@@ -183,3 +183,15 @@ Esto exigió agregar `@@unique([empresaId, id])` en los 5 modelos "padre" de est
 **Contrato de API sin cambios** — verificado con `tsc --noEmit` en `fas-web`, cero archivos tocados: la generic CRUD de mantenedores (`config.repository.ts`) ya filtra/incluye de forma data-driven, así que una vez que un modelo tiene `empresaId`, el filtro es transparente para el frontend.
 
 **Lección de QA ronda 1 (FAS-EMP-F3-R1-001/002):** a diferencia de `Mercado`/`GrupoMercado` en Fase 2a (que nunca tuvieron ningún unique), varios de estos 19 modelos **ya tenían** un índice único parcial GLOBAL sobre `codigo` de migraciones previas a multi-empresa (ej. `20260713_add_unique_partial_indexes*`) — invisibles en `schema.prisma` porque son índices parciales, no representables en el DSL de Prisma (mismo motivo que `PrefijoCodigo`). Revisar solo el `@@unique` del schema **no alcanza** para saber si un modelo ya tiene unicidad — hay que revisar también las migraciones SQL crudas. La migración de este lote los elimina explícitamente antes de crear los nuevos `(empresaId, codigo)`. Mismo problema con la temporada predeterminada: el índice `ux_temporadas_una_predeterminada` era global (a lo sumo una en todo el sistema) y se reemplazó por uno acotado a `empresaId` (a lo sumo una por empresa) — **al tocar cualquier modelo en los próximos lotes de Fase 3, revisar primero si ya tiene índices únicos parciales crudos que necesiten el mismo tratamiento.**
+
+### Lote 2 — Entidades (implementado)
+
+El más simple de los sub-lotes: un único modelo (`Entidad`), sin relaciones tenant→tenant propias (`Entidad.paisId → Pais` se mantiene FK simple porque `Pais` sigue global). Mismo patrón self-safe: `empresaId` nullable → backfill AGROSAN → `NOT NULL` → FK + índice regular, agregado a `MODELOS_TENANT`, y `empresaId` explícito en `entidades.repository.ts#createEntidad` (la extensión de tenancy lo sobrescribe en runtime; se declara solo para satisfacer el tipo requerido por Prisma — mismo patrón que `correo.repository.ts`/`prefijos-codigo.repository.ts`).
+
+**Decisión de negocio (Christian, 2026-08-03):** la unicidad de `codigo` e `identificador` (RUT) de `Entidad` pasa a ser **por empresa**, no global — dos empresas pueden tener productores/clientes con el mismo RUT sin conflicto.
+
+**Índices únicos parciales globales preexistentes → `(empresaId, ...)`:** aplicando la lección del lote 1 proactivamente (revisado ANTES de implementar, no descubierto por QA), `entidades` ya tenía 2 índices únicos parciales GLOBALES de una migración previa a multi-empresa (`20260722000001_ent_enum_fields_indexes`): `ux_entidades_codigo` y `ux_entidades_identificador` (esta última condicionada además a `identificador IS NOT NULL`). Ambos se eliminan explícitamente y se reemplazan por `entidades_empresa_codigo_activo_key` y `entidades_empresa_identificador_activo_key` sobre `(empresaId, codigo)` / `(empresaId, identificador)`.
+
+**Fixtures de test rotas (esperado, mismo patrón que lotes anteriores):** 4 archivos de integración creaban `Entidad` vía `prisma.entidad.create()` crudo sin `empresaId` — se corrigieron agregando el campo explícito (`config.integration.test.ts`, `productores.integration.test.ts`, `solicitudes.integration.test.ts`, `ventas-compras.integration.test.ts` ya lo tenía cubierto por su `beforeEach(entrarContextoEmpresa)`). Un caso adicional en `http.integration.test.ts` ("no filtra contratos a un perfil con Ficha pero sin permiso de Contratos") fallaba con 409 en vez de 200: la sesión de prueba no tenía ninguna membresía de empresa (`UsuarioEmpresa`), así que `requireAuth` la dejaba en modo "soft" (`empresaId: null`) — al tocar ahora `Entidad` (tenant), la ruta `/api/productores/:id` lanzaba `EmpresaRequeridaError`. Se corrigió creando la membresía (`UsuarioEmpresa` + `empresaPredeterminadaId`) para ese usuario de prueba antes del request.
+
+**Contrato de API sin cambios** — verificado con `tsc --noEmit` en `fas-web`, cero archivos tocados.

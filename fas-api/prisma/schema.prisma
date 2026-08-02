@@ -211,6 +211,7 @@ model Empresa {
   calibres             Calibre[]
   parametros           Parametro[]
   calificaciones       Calificacion[]
+  entidades            Entidad[]
 
   @@map("empresas")
 }
@@ -1209,6 +1210,8 @@ enum TipoEntidad {
 
 model Entidad {
   id                           Int                         @id @default(autoincrement())
+  empresaId                    Int
+  empresa                      Empresa                     @relation(fields: [empresaId], references: [id])
   codigo                       String
   descripcion                  String
   descripcionExtranjera        String?
@@ -1245,6 +1248,7 @@ model Entidad {
   palletsProductor             Pallet[]                    @relation("PalletProductor")
 
   @@index([eliminadoEn])
+  @@index([empresaId])
   @@map("entidades")
 }
 

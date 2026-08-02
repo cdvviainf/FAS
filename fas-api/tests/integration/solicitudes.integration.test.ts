@@ -62,16 +62,16 @@ async function crearFixtures() {
   })
 
   const productor = await prisma.entidad.create({
-    data: { codigo: 'PROD-01', descripcion: 'Productor Uno', razonSocial: 'Productor Uno SpA', paisId: chile.id, tipos: ['PRODUCTOR'], creadoPor: 'test' },
+    data: { empresaId: empresa.id, codigo: 'PROD-01', descripcion: 'Productor Uno', razonSocial: 'Productor Uno SpA', paisId: chile.id, tipos: ['PRODUCTOR'], creadoPor: 'test' },
   })
   const direccion = await prisma.entidadDireccion.create({
     data: { entidadId: productor.id, codigo: 'D1', descripcion: 'Predio principal', paisId: chile.id, direccion: 'Camino Interior 123', creadoPor: 'test' },
   })
   const clienteExtranjero = await prisma.entidad.create({
-    data: { codigo: 'CLI-EXT', descripcion: 'Cliente USA', razonSocial: 'Cliente USA Inc', paisId: usa.id, tipos: ['CLIENTE_EXTRANJERO'], creadoPor: 'test' },
+    data: { empresaId: empresa.id, codigo: 'CLI-EXT', descripcion: 'Cliente USA', razonSocial: 'Cliente USA Inc', paisId: usa.id, tipos: ['CLIENTE_EXTRANJERO'], creadoPor: 'test' },
   })
   const clienteNoExtranjero = await prisma.entidad.create({
-    data: { codigo: 'CLI-NAC', descripcion: 'Cliente Nacional', razonSocial: 'Cliente Nacional SpA', paisId: chile.id, tipos: ['CLIENTE_NACIONAL'], creadoPor: 'test' },
+    data: { empresaId: empresa.id, codigo: 'CLI-NAC', descripcion: 'Cliente Nacional', razonSocial: 'Cliente Nacional SpA', paisId: chile.id, tipos: ['CLIENTE_NACIONAL'], creadoPor: 'test' },
   })
 
   const temporada = await prisma.temporada.create({

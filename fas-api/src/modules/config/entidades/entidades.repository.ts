@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { TipoEntidad } from '@prisma/client'
 import type {
   EntidadCreateInput,
@@ -144,6 +145,10 @@ export async function createEntidad(
 ) {
   return prisma.entidad.create({
     data: {
+      // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
+      // valor con la empresa activa del contexto — se declara aquí solo para
+      // satisfacer el tipo requerido por Prisma.
+      empresaId: getEmpresaIdActual()!,
       codigo: data.codigo,
       descripcion: data.descripcion,
       descripcionExtranjera: data.descripcionExtranjera,

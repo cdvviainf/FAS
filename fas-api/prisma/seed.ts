@@ -215,24 +215,35 @@ async function main() {
   // Entidad placeholder para Cierre Comercial sin cliente definido todavía
   // (decisión de negocio, Christian, 2026-07-30) — preseleccionada al crear
   // un Cierre Comercial nuevo, editable en cualquier momento después.
+  // Entidad es por-empresa desde Fase 3 (lote Entidades) — este seed corre
+  // fuera de cualquier request (sin contexto ALS), así que se acota
+  // explícitamente a AGROSAN, mismo patrón que el backfill de arriba.
   console.log('Seeding Entidad placeholder "Cliente Sin Definir"...')
-  const clientePlaceholderExistente = await prisma.entidad.findFirst({ where: { codigo: CLIENTE_SIN_DEFINIR_CODIGO } })
-  if (!clientePlaceholderExistente) {
-    const chile = await prisma.pais.findFirst({ where: { codigo: 'CHL', eliminadoEn: null } })
-    if (!chile) {
-      console.warn('  Omitido: no se encontró el país "CHL" (correr seed de geografía primero).')
-    } else {
-      await prisma.entidad.create({
-        data: {
-          codigo: CLIENTE_SIN_DEFINIR_CODIGO,
-          descripcion: 'Cliente Sin Definir',
-          razonSocial: 'Cliente Sin Definir',
-          paisId: chile.id,
-          tipos: ['CLIENTE_NACIONAL'],
-          creadoPor: SISTEMA_USER,
-        },
-      })
-      console.log('  Entidad placeholder creada.')
+  const agrosanParaPlaceholder = await prisma.empresa.findFirst({ where: { codigo: 'AGROSAN' } })
+  if (!agrosanParaPlaceholder) {
+    console.warn('  Omitido: no se encontró la empresa "AGROSAN".')
+  } else {
+    const clientePlaceholderExistente = await prisma.entidad.findFirst({
+      where: { empresaId: agrosanParaPlaceholder.id, codigo: CLIENTE_SIN_DEFINIR_CODIGO },
+    })
+    if (!clientePlaceholderExistente) {
+      const chile = await prisma.pais.findFirst({ where: { codigo: 'CHL', eliminadoEn: null } })
+      if (!chile) {
+        console.warn('  Omitido: no se encontró el país "CHL" (correr seed de geografía primero).')
+      } else {
+        await prisma.entidad.create({
+          data: {
+            empresaId: agrosanParaPlaceholder.id,
+            codigo: CLIENTE_SIN_DEFINIR_CODIGO,
+            descripcion: 'Cliente Sin Definir',
+            razonSocial: 'Cliente Sin Definir',
+            paisId: chile.id,
+            tipos: ['CLIENTE_NACIONAL'],
+            creadoPor: SISTEMA_USER,
+          },
+        })
+        console.log('  Entidad placeholder creada.')
+      }
     }
   }
 

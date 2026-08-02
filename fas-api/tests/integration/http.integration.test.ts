@@ -313,8 +313,17 @@ describe('contrato HTTP de la API', () => {
   })
 
   it('no filtra contratos a un perfil con Ficha pero sin permiso de Contratos', async () => {
-    const { cookie } = await crearSesion('LECTURA', 'PROD_FICHA')
+    const { cookie, userId } = await crearSesion('LECTURA', 'PROD_FICHA')
     const empresa = await obtenerEmpresaTest()
+    // Entidad es por-empresa desde Fase 3 (lote Entidades) — sin membresía el
+    // usuario queda en modo "soft" (empresaId null) y la ruta responde 409.
+    await prisma.usuarioEmpresa.create({
+      data: { usuarioId: userId, empresaId: empresa.id, creadoPor: 'test' },
+    })
+    await prisma.usuario.update({
+      where: { id: userId },
+      data: { empresaPredeterminadaId: empresa.id },
+    })
     const grupoMercado = await prisma.grupoMercado.create({
       data: { empresaId: empresa.id, codigo: 'GM-QA', descripcion: 'Grupo QA', creadoPor: 'test' },
     })
@@ -329,6 +338,7 @@ describe('contrato HTTP de la API', () => {
     })
     const productor = await prisma.entidad.create({
       data: {
+        empresaId: empresa.id,
         codigo: 'PROD-QA',
         descripcion: 'Productor QA',
         razonSocial: 'Productor QA SpA',

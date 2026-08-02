@@ -87,6 +87,7 @@ async function crearEntidad(tipos: ('PRODUCTOR' | 'PROVEEDOR')[], codigo: string
   })
   return prisma.entidad.create({
     data: {
+      empresaId: empresa.id,
       codigo,
       descripcion: `Entidad ${codigo}`,
       razonSocial: `Entidad ${codigo} SpA`,
