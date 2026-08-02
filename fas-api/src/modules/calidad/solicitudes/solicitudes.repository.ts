@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/prisma.js'
 import type { Prisma } from '@prisma/client'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ConflictError } from '../../../shared/errors.js'
 import type {
   AsignadoInput,
@@ -184,6 +185,10 @@ export async function createSolicitud(
 
     return tx.solicitudInspeccion.create({
       data: {
+        // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
+        // este valor con la empresa activa del contexto — se declara aquí
+        // solo para satisfacer el tipo requerido por Prisma.
+        empresaId: getEmpresaIdActual()!,
         numero,
         codigo,
         temporadaId,

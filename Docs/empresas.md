@@ -10,7 +10,7 @@
 > | **Frontend** | `fas-web` · `app/dashboard/configuracion/empresas/` (Fase 4) |
 > | **Depende de** | Mantenedores Generales (`Pais`, `Comuna`), Usuarios/Perfiles |
 > | **Usado por** | TODO el sistema (scoping por `empresaId` en la fase de tenancy) |
-> | **Estado** | Fase 3, lote 2/7 (Entidades) implementado — pendiente de QA |
+> | **Estado** | Fase 3, lote 3/7 (Calidad) implementado — pendiente de QA |
 
 ---
 
@@ -153,7 +153,7 @@ Fase 3 (backfill de `empresaId` al resto de ~38 modelos raíz candidatos) se hac
 |---|---|---|---|
 | 1 | Config/Mantenedores | 19 (ver abajo) | **Implementado** |
 | 2 | Entidades | `Entidad` | **Implementado** |
-| 3 | Calidad | `SolicitudInspeccion` | Pendiente |
+| 3 | Calidad | `SolicitudInspeccion` | **Implementado** |
 | 4 | Materiales | `Articulo`, `Receta`, `TipoMovimiento`, `Movimiento`, `SaldoArticulo` | Pendiente |
 | 5 | Productores | `Predio`, `ProductorContrato`, `MovimientoCuentaCorriente`, `ConceptoLiquidacion` | Pendiente |
 | 6 | Ventas | `NotaVenta`, `Embarque`, `InstructivoEmbalaje` | Pendiente |
@@ -193,5 +193,26 @@ El más simple de los sub-lotes: un único modelo (`Entidad`), sin relaciones te
 **Índices únicos parciales globales preexistentes → `(empresaId, ...)`:** aplicando la lección del lote 1 proactivamente (revisado ANTES de implementar, no descubierto por QA), `entidades` ya tenía 2 índices únicos parciales GLOBALES de una migración previa a multi-empresa (`20260722000001_ent_enum_fields_indexes`): `ux_entidades_codigo` y `ux_entidades_identificador` (esta última condicionada además a `identificador IS NOT NULL`). Ambos se eliminan explícitamente y se reemplazan por `entidades_empresa_codigo_activo_key` y `entidades_empresa_identificador_activo_key` sobre `(empresaId, codigo)` / `(empresaId, identificador)`.
 
 **Fixtures de test rotas (esperado, mismo patrón que lotes anteriores):** 4 archivos de integración creaban `Entidad` vía `prisma.entidad.create()` crudo sin `empresaId` — se corrigieron agregando el campo explícito (`config.integration.test.ts`, `productores.integration.test.ts`, `solicitudes.integration.test.ts`, `ventas-compras.integration.test.ts` ya lo tenía cubierto por su `beforeEach(entrarContextoEmpresa)`). Un caso adicional en `http.integration.test.ts` ("no filtra contratos a un perfil con Ficha pero sin permiso de Contratos") fallaba con 409 en vez de 200: la sesión de prueba no tenía ninguna membresía de empresa (`UsuarioEmpresa`), así que `requireAuth` la dejaba en modo "soft" (`empresaId: null`) — al tocar ahora `Entidad` (tenant), la ruta `/api/productores/:id` lanzaba `EmpresaRequeridaError`. Se corrigió creando la membresía (`UsuarioEmpresa` + `empresaPredeterminadaId`) para ese usuario de prueba antes del request.
+
+**Contrato de API sin cambios** — verificado con `tsc --noEmit` en `fas-web`, cero archivos tocados.
+
+### Lote 3 — Calidad (implementado)
+
+`SolicitudInspeccion` es el modelo con más relaciones tenant→tenant de cualquier lote hasta ahora: 6 FK compuestas hacia 5 modelos ya-tenant (`entidadProductorId` y `clienteId` apuntan ambos a `Entidad`, con nombres de relación distintos):
+
+1. `SolicitudInspeccion ↔ Temporada` (`temporadaId`, obligatorio)
+2. `SolicitudInspeccion ↔ Entidad` ("Productor", `entidadProductorId`, obligatorio)
+3. `SolicitudInspeccion ↔ Entidad` ("Cliente", `clienteId`, opcional)
+4. `SolicitudInspeccion ↔ Especie` (`especieId`, opcional)
+5. `SolicitudInspeccion ↔ Mercado` (`mercadoId`, opcional)
+6. `SolicitudInspeccion ↔ Calificacion` (`calificacionId`, opcional)
+
+De los 5 modelos destino, solo `Especie` ya tenía `@@unique([empresaId, id])` (lote 1). Este lote agrega ese índice a `Temporada`, `Entidad`, `Mercado` y `Calificacion`. `direccionId`/`contactoId` (→ `EntidadDireccion`/`EntidadContacto`) se mantienen como FK simples: son tablas hijas de `Entidad`, sin `empresaId` propio.
+
+**Backfill derivado del padre, no de AGROSAN a ciegas:** a diferencia de lotes anteriores, el backfill de `empresaId` en la migración no asume un valor fijo — lo deriva con un `UPDATE ... FROM temporadas` usando el `empresaId` real de la `Temporada` de cada solicitud (que ya es tenant desde el lote 1). Más preciso, mismo principio self-safe.
+
+**Tablas de detalle sin `empresaId` propio, aislamiento vía servicio (decisión #5 aplicada, no un vacío):** `SolicitudInspeccionVariedad/Calibre/Categoria` referencian `Variedad`/`Calibre`/`Categoria` (ya tenant) pero, al ser tablas de detalle sin `empresaId` propio, no pueden tener FK compuesta — no hay columna con la que componerla. El aislamiento ahí depende exclusivamente de la validación de servicio ya existente en `solicitudes.service.ts` (`validarReferencias`), que se volvió tenant-scoped automáticamente porque los modelos destino ya son tenant desde el lote 1 — mismo patrón "gratis" que `Puerto.tipoEmbarqueId`/`Especie.unidadMedidaCalidadId` en el lote 1, sin cambio de código. `createSolicitud`/`updateSolicitud` pasan estas relaciones como FK escalar plano (`variedadId: X`), nunca como sintaxis de relación anidada (`variedad: { connect: {...} }`), así que tampoco activan el guard de escrituras anidadas de la extensión.
+
+**Lección de lote 2 aplicada — se evitó el patrón `enterWith` en `beforeEach`:** `solicitudes.integration.test.ts` llama a los servicios (`crearSolicitud`, `actualizarSolicitud`, `obtenerSolicitud`, `eliminarMantenedor`, `eliminarEntidad`) directamente, sin contexto ALS — funcionaba porque hasta este lote ningún modelo tocado en el nivel superior era tenant. En vez de repetir `empresaContext.enterWith(...)` en un `beforeEach` compartido (que Codex demostró en el lote Entidades que no se propaga de forma confiable entre el hook y el cuerpo del test), se envolvió cada llamada de servicio individualmente en `empresaContext.run(...)` vía wrappers locales del archivo de test — más verboso pero determinístico, sin depender de cómo el test runner programe la transición entre hook y test.
 
 **Contrato de API sin cambios** — verificado con `tsc --noEmit` en `fas-web`, cero archivos tocados.

@@ -212,6 +212,7 @@ model Empresa {
   parametros           Parametro[]
   calificaciones       Calificacion[]
   entidades            Entidad[]
+  solicitudesInspeccion SolicitudInspeccion[]
 
   @@map("empresas")
 }
@@ -1030,6 +1031,7 @@ model Mercado {
   ordenesCompra         OrdenCompra[]
   solicitudesInspeccion SolicitudInspeccion[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@map("mercados")
 }
@@ -1122,6 +1124,7 @@ model Temporada {
   solicitudesInspeccion SolicitudInspeccion[]
   contratosProductor    ProductorContrato[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@map("temporadas")
 }
@@ -1247,6 +1250,7 @@ model Entidad {
   recepcionesPlanta            Recepcion[]                 @relation("RecepcionPlanta")
   palletsProductor             Pallet[]                    @relation("PalletProductor")
 
+  @@unique([empresaId, id])
   @@index([eliminadoEn])
   @@index([empresaId])
   @@map("entidades")
@@ -1330,29 +1334,34 @@ enum TipoInspeccion {
 
 model SolicitudInspeccion {
   id                    Int                       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa                   @relation(fields: [empresaId], references: [id])
   numero                Int // correlativo por temporada
   codigo                String // SI-{codTemporada}-{NNNN}
   temporadaId           Int
-  temporada             Temporada                 @relation(fields: [temporadaId], references: [id])
+  // FK compuesta (empresaId, temporadaId) -> Temporada(empresaId, id): impide
+  // a nivel de BD que una SolicitudInspeccion quede en una empresa distinta a
+  // la de su Temporada (mismo patrón que Mercado↔GrupoMercado en Fase 2a).
+  temporada             Temporada                 @relation(fields: [empresaId, temporadaId], references: [empresaId, id])
   entidadProductorId    Int // Entidad tipo PRODUCTOR
-  entidadProductor      Entidad                   @relation("SolicitudInspeccionProductor", fields: [entidadProductorId], references: [id])
+  entidadProductor      Entidad                   @relation("SolicitudInspeccionProductor", fields: [empresaId, entidadProductorId], references: [empresaId, id])
   direccionId           Int // EntidadDireccion de la entidad productora
   direccion             EntidadDireccion          @relation(fields: [direccionId], references: [id])
   contactoId            Int? // EntidadContacto de la entidad productora (opcional)
   contacto              EntidadContacto?          @relation(fields: [contactoId], references: [id])
   especieId             Int?
-  especie               Especie?                  @relation(fields: [especieId], references: [id])
+  especie               Especie?                  @relation(fields: [empresaId, especieId], references: [empresaId, id])
   fechaHora             DateTime // fecha y hora de la visita
   tipoInspeccion        TipoInspeccion
   // Documento N° 107 (calidad.md §3) — retomados por decisión de negocio (2026-07-26)
   mercadoId             Int?
-  mercado               Mercado?                  @relation(fields: [mercadoId], references: [id])
+  mercado               Mercado?                  @relation(fields: [empresaId, mercadoId], references: [empresaId, id])
   clienteId             Int? // Entidad tipo CLIENTE_EXTRANJERO (opcional)
-  cliente               Entidad?                  @relation("SolicitudInspeccionCliente", fields: [clienteId], references: [id])
+  cliente               Entidad?                  @relation("SolicitudInspeccionCliente", fields: [empresaId, clienteId], references: [empresaId, id])
   fechaDespacho         DateTime?                 @db.Date
   cantidadPallets       Int?
   calificacionId        Int?
-  calificacion          Calificacion?             @relation(fields: [calificacionId], references: [id])
+  calificacion          Calificacion?             @relation(fields: [empresaId, calificacionId], references: [empresaId, id])
   observaciones         String?
   estado                EstadoSolicitudInspeccion @default(PENDIENTE)
   notificadaEn          DateTime?
@@ -1379,6 +1388,7 @@ model SolicitudInspeccion {
   @@index([estado])
   @@index([entidadProductorId])
   @@index([eliminadoEn])
+  @@index([empresaId])
   @@map("solicitudes_inspeccion")
 }
 
@@ -1454,6 +1464,7 @@ model Calificacion {
 
   solicitudesInspeccion SolicitudInspeccion[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@map("calificaciones")
 }
