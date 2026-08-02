@@ -30,12 +30,24 @@ async function limpiarDatos() {
   `)
 }
 
+// Mercado/GrupoMercado son por-empresa desde Fase 2a — estas fixtures crean
+// filas vía prisma crudo, fuera de cualquier request (sin contexto ALS), así
+// que necesitan empresaId explícito. No se trunca "empresas" entre tests
+// (mismo motivo que Fase 1: Empresa no participa del aislamiento de datos que
+// estos tests ejercitan), así que se reutiliza la misma fila entre corridas.
+async function obtenerEmpresaTest() {
+  const existente = await prisma.empresa.findFirst({ where: { codigo: 'EMP-TEST' } })
+  if (existente) return existente
+  return prisma.empresa.create({ data: { codigo: 'EMP-TEST', razonSocial: 'Empresa de prueba', creadoPor: 'test' } })
+}
+
 async function crearGeografia() {
+  const empresa = await obtenerEmpresaTest()
   const grupoMercado = await prisma.grupoMercado.create({
-    data: { codigo: 'GM-TEST', descripcion: 'Grupo prueba', creadoPor: 'test' },
+    data: { empresaId: empresa.id, codigo: 'GM-TEST', descripcion: 'Grupo prueba', creadoPor: 'test' },
   })
   const mercado = await prisma.mercado.create({
-    data: { codigo: 'M-TEST', descripcion: 'Mercado prueba', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
+    data: { empresaId: empresa.id, codigo: 'M-TEST', descripcion: 'Mercado prueba', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
   })
   const pais = await prisma.pais.create({
     data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, creadoPor: 'test' },
@@ -141,11 +153,12 @@ describe('mantenedores contra PostgreSQL', () => {
   })
 
   it('permite reutilizar un código después del soft delete', async () => {
+    const empresa = await obtenerEmpresaTest()
     const grupoMercado = await prisma.grupoMercado.create({
-      data: { codigo: 'GM-ARG', descripcion: 'Grupo Argentina', creadoPor: 'test' },
+      data: { empresaId: empresa.id, codigo: 'GM-ARG', descripcion: 'Grupo Argentina', creadoPor: 'test' },
     })
     const mercado = await prisma.mercado.create({
-      data: { codigo: 'M-ARG', descripcion: 'Mercado Argentina', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
+      data: { empresaId: empresa.id, codigo: 'M-ARG', descripcion: 'Mercado Argentina', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
     })
     const pais = await crearMantenedor('pais', {
       codigo: 'ARG',

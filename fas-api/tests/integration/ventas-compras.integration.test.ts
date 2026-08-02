@@ -78,9 +78,20 @@ async function crearCondicionPago(cuotas: { porcentaje: number; plazoDias: numbe
   })
 }
 
+// Mercado/GrupoMercado son por-empresa desde Fase 2a — estas fixtures crean
+// filas vía prisma crudo, fuera de cualquier request (sin contexto ALS), así
+// que necesitan empresaId explícito. "empresas" no se trunca entre tests (no
+// participa del aislamiento que este archivo ejercita).
+async function obtenerEmpresaTest() {
+  const existente = await prisma.empresa.findFirst({ where: { codigo: 'EMP-TEST' } })
+  if (existente) return existente
+  return prisma.empresa.create({ data: { codigo: 'EMP-TEST', razonSocial: 'Empresa de prueba', creadoPor: 'test' } })
+}
+
 async function crearFixtures() {
-  const grupoMercado = await prisma.grupoMercado.create({ data: { codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
-  const mercado = await prisma.mercado.create({ data: { codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, creadoPor: 'test' } })
+  const empresa = await obtenerEmpresaTest()
+  const grupoMercado = await prisma.grupoMercado.create({ data: { empresaId: empresa.id, codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
+  const mercado = await prisma.mercado.create({ data: { empresaId: empresa.id, codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, creadoPor: 'test' } })
   const pais = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, creadoPor: 'test' } })
   const cliente = await prisma.entidad.create({
     data: { codigo: 'CLI-01', descripcion: 'Cliente Uno', razonSocial: 'Cliente Uno SpA', paisId: pais.id, tipos: ['CLIENTE_NACIONAL'], creadoPor: 'test' },
@@ -105,7 +116,7 @@ async function crearFixtures() {
     data: { tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
 
-  return { pais, cliente, productor, tipoEmbarque, mercado, moneda, especie, variedad, categoria, calibreChico, calibreGrande, articulo }
+  return { empresa, pais, cliente, productor, tipoEmbarque, mercado, moneda, especie, variedad, categoria, calibreChico, calibreGrande, articulo }
 }
 
 function nvBase(f: Awaited<ReturnType<typeof crearFixtures>>) {
@@ -261,6 +272,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
     const f = await crearFixtures()
     const otroMercado = await prisma.mercado.create({
       data: {
+        empresaId: f.empresa.id,
         codigo: 'MK2',
         descripcion: 'Mercado 2',
         grupoMercadoId: f.mercado.grupoMercadoId,

@@ -148,6 +148,15 @@ export async function crearMantenedor(
     }
   }
 
+  // FAS-EMP-F2-R1-001: Mercado — grupoMercadoId debe pertenecer al tenant
+  // activo. getMantenedorById('grupoMercado', ...) ya queda tenant-scoped por
+  // la extensión de Prisma (prisma-tenancy.ts); si el grupo es de otra
+  // empresa, esta consulta simplemente no lo encuentra.
+  if (modelo === 'mercado' && data.grupoMercadoId) {
+    const grupo = await repo.getMantenedorById('grupoMercado', data.grupoMercadoId)
+    if (!grupo) throw new ValidationError('El grupo de mercado seleccionado no existe o no pertenece a esta empresa')
+  }
+
   // QAS-MG-L4-004: Bodega — validate active FK comunaId
   if (modelo === 'bodega' && data.comunaId) {
     const comuna = await repo.getMantenedorById('comuna', data.comunaId)
@@ -253,6 +262,12 @@ export async function actualizarMantenedor(
       const embarque = await repo.getMantenedorById('tipoEmbarque', data.tipoEmbarqueId)
       if (!embarque) throw new ValidationError('El tipo de embarque seleccionado no existe o fue eliminado')
     }
+  }
+
+  // FAS-EMP-F2-R1-001: Mercado — grupoMercadoId debe pertenecer al tenant activo (on update)
+  if (modelo === 'mercado' && data.grupoMercadoId !== undefined) {
+    const grupo = await repo.getMantenedorById('grupoMercado', data.grupoMercadoId)
+    if (!grupo) throw new ValidationError('El grupo de mercado seleccionado no existe o no pertenece a esta empresa')
   }
 
   // QAS-MG-L4-004: Bodega — validate active FK comunaId on update

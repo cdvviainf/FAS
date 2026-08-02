@@ -47,16 +47,27 @@ async function limpiarDatos() {
   `)
 }
 
+// Mercado/GrupoMercado son por-empresa desde Fase 2a — estas fixtures crean
+// filas vía prisma crudo, fuera de cualquier request (sin contexto ALS), así
+// que necesitan empresaId explícito. "empresas" no se trunca entre tests (no
+// participa del aislamiento que este archivo ejercita).
+async function obtenerEmpresaTest() {
+  const existente = await prisma.empresa.findFirst({ where: { codigo: 'EMP-TEST' } })
+  if (existente) return existente
+  return prisma.empresa.create({ data: { codigo: 'EMP-TEST', razonSocial: 'Empresa de prueba', creadoPor: 'test' } })
+}
+
 async function crearEntidad(tipos: ('PRODUCTOR' | 'PROVEEDOR')[], codigo: string) {
+  const empresa = await obtenerEmpresaTest()
   const grupoMercado = await prisma.grupoMercado.upsert({
     where: { id: 1 },
     update: {},
-    create: { id: 1, codigo: 'GM-TEST', descripcion: 'Grupo prueba', creadoPor: 'test' },
+    create: { id: 1, empresaId: empresa.id, codigo: 'GM-TEST', descripcion: 'Grupo prueba', creadoPor: 'test' },
   })
   const mercado = await prisma.mercado.upsert({
     where: { id: 1 },
     update: {},
-    create: { id: 1, codigo: 'M-TEST', descripcion: 'Mercado prueba', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
+    create: { id: 1, empresaId: empresa.id, codigo: 'M-TEST', descripcion: 'Mercado prueba', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
   })
   const pais = await prisma.pais.upsert({
     where: { id: 1 },

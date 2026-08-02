@@ -13,6 +13,17 @@ if (databaseName !== 'fas_test') {
 
 let app: FastifyInstance
 
+// Mercado/GrupoMercado son por-empresa desde Fase 2a — la fixture de abajo
+// crea filas vía prisma crudo, fuera de cualquier request (sin contexto ALS),
+// así que necesita empresaId explícito. "empresas" no se trunca entre tests
+// (no participa del aislamiento que este archivo ejercita), así que se
+// reutiliza la misma fila entre corridas.
+async function obtenerEmpresaTest() {
+  const existente = await prisma.empresa.findFirst({ where: { codigo: 'EMP-TEST' } })
+  if (existente) return existente
+  return prisma.empresa.create({ data: { codigo: 'EMP-TEST', razonSocial: 'Empresa de prueba', creadoPor: 'test' } })
+}
+
 async function limpiarDatos() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
@@ -303,11 +314,12 @@ describe('contrato HTTP de la API', () => {
 
   it('no filtra contratos a un perfil con Ficha pero sin permiso de Contratos', async () => {
     const { cookie } = await crearSesion('LECTURA', 'PROD_FICHA')
+    const empresa = await obtenerEmpresaTest()
     const grupoMercado = await prisma.grupoMercado.create({
-      data: { codigo: 'GM-QA', descripcion: 'Grupo QA', creadoPor: 'test' },
+      data: { empresaId: empresa.id, codigo: 'GM-QA', descripcion: 'Grupo QA', creadoPor: 'test' },
     })
     const mercado = await prisma.mercado.create({
-      data: { codigo: 'M-QA', descripcion: 'Mercado QA', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
+      data: { empresaId: empresa.id, codigo: 'M-QA', descripcion: 'Mercado QA', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
     })
     const pais = await prisma.pais.create({
       data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, creadoPor: 'test' },

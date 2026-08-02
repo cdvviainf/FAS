@@ -10,7 +10,7 @@
 > | **Frontend** | `fas-web` · `app/dashboard/configuracion/empresas/` (Fase 4) |
 > | **Depende de** | Mantenedores Generales (`Pais`, `Comuna`), Usuarios/Perfiles |
 > | **Usado por** | TODO el sistema (scoping por `empresaId` en la fase de tenancy) |
-> | **Estado** | Fase 1 implementada (contexto de empresa) — QA ronda 3: `APROBADO_CON_OBSERVACIONES` |
+> | **Estado** | Fase 2a implementada (Prisma Client Extension + Mercado/GrupoMercado/ConfiguracionCorreo/PrefijoCodigo) — QA ronda 8: `APROBADO_CON_OBSERVACIONES`, `TESTS_OK` |
 
 ---
 
@@ -76,6 +76,27 @@ Empresa activa por defecto al iniciar sesión.
 
 ---
 
+## 2.c Prisma Client Extension y primer slice tenant — Fase 2a (en desarrollo)
+
+- **`prisma-tenancy.ts`** (`src/lib/prisma-tenancy.ts`): extensión de Prisma Client (`$extends`) que intercepta todas las operaciones (`$allOperations`) sobre un set fijo de "modelos tenant" (`Mercado`, `GrupoMercado`, `ConfiguracionCorreo`, `PrefijoCodigo` — la lista crece con Fase 3). Para esos modelos: inyecta `empresaId` en `where` (reads/deletes/count/aggregate/groupBy), en `data` (`create`/`createMany`/`createManyAndReturn`), y en ambos `where`+`data` para `update`/`updateMany`/`upsert` (incluida la rama `update` del propio `upsert`) — siempre con el valor resuelto por el servidor prevaleciendo sobre cualquier valor que el caller pudiera incluir. Cualquier operación no clasificada explícitamente lanza un error (fail-closed) en vez de dejarla pasar sin aislamiento.
+  - **Sin store ALS** (fuera de un request — seed, scripts): no enforce, el caller debe pasar `empresaId` explícito.
+  - **Store presente pero `empresaId` null** (request sin empresa resuelta): lanza `EmpresaRequeridaError` (`EMPRESA_REQUERIDA`, 409).
+  - **Escrituras anidadas (limitación de Prisma Client Extensions, no de este código):** la extensión solo ve el modelo de nivel superior de cada operación — una escritura *anidada* (ej. `pais.update({ data: { mercado: { update: {...} } } })`, `empresa.update({ data: { mercados: { create: {...} } } })`) no vuelve a pasar por `$allOperations` para el modelo anidado, así que no se le inyecta `empresaId` ahí. Mantener a mano una lista de "modelo.campo" a bloquear no escala — cada relación nueva hacia un modelo tenant fue apareciendo como un vector nuevo en rondas sucesivas de QA (`Pais`, `SolicitudInspeccion`, `NotaVenta`, `Empresa`). Diseño final, en `contieneEscrituraAnidadaTenant`:
+    - `RELACIONES_POR_MODELO` deriva del **DMMF** que Prisma genera con el schema completo (`Prisma.dmmf.datamodel.models`) el mapa, **por modelo**, de qué campo es una relación real y a qué modelo apunta.
+    - El recorrido rastrea el modelo de contexto en cada nivel: solo avanza a `modeloDestino` cuando la clave actual **es** una relación real de ese modelo; si no lo es (los verbos-envoltorio de Prisma `create`/`update`/`upsert`/`where`/`data`, o cualquier otro campo), sigue recorriendo con el **mismo** modelo — así destapa envoltorios como `{ update: [{ where, data: {...} }] }` sin perder de vista a qué modelo pertenece `data`, y evita bloquear un campo escalar homónimo (ej. `Cliente.mercado` es un enum, no aparece en el mapa de relaciones de `Cliente`).
+    - Objetos y arreglos se recorren por igual (una relación a-muchos con `update: [...]` se descompone elemento por elemento).
+    - **Sin límite de profundidad**: los payloads vienen de JSON (body HTTP parseado por Fastify/Zod), acíclico por construcción — no hay riesgo de recursión infinita, y un límite arbitrario dejaría relaciones legítimas más profundas sin inspeccionar.
+    - Se ejecuta con cualquier contexto ALS presente, **incluso si `empresaId` es null** (modo soft de Fase 1) — en ese caso lanza `EmpresaRequeridaError` igual que una operación directa sin empresa; con empresa resuelta, lanza un error genérico de tenant-hijack. Sin contexto ALS (scripts/seed) sigue sin enforcement, igual que el resto de la extensión.
+    - Adicionalmente, `Mercado`↔`GrupoMercado` queda cerrado también a nivel de BD con una FK compuesta `(empresaId, grupoMercadoId) → grupos_mercado(empresaId, id)` (ver migración).
+  - Aplicada sobre el cliente exportado en `src/lib/prisma.ts` (`withTenancy(new PrismaClient(...))`).
+- **`Mercado`/`GrupoMercado`**: agregan `empresaId` (self-safe: nullable → backfill AGROSAN → `NOT NULL`) + único parcial `(empresaId, codigo)` solo entre filas activas (mismo patrón que `PrefijoCodigo`, no representable en el DSL de Prisma — ver migración). No existía ningún `@unique`/`@@unique` de código antes de esta fase. La migración también asegura (`INSERT ... ON CONFLICT DO NOTHING`) que `AGROSAN` exista antes del backfill — el entrypoint de despliegue corre `prisma migrate deploy` sin ejecutar el seed antes, así que la migración no puede depender de que alguien ya lo haya corrido manualmente.
+- **`ConfiguracionCorreo`**: pasa de singleton global a una fila por empresa (`empresaId @unique`). `mailer.ts` cachea el transporter por empresa (`Map<empresaId, Transporter>`) en vez de una única variable global.
+- **`PrefijoCodigo`**: único pasa de `(modelo)` a `(empresaId, modelo)` — cada empresa configura su propio prefijo/dígitos por mantenedor.
+- **Cola de correos (BullMQ):** el worker corre fuera de cualquier request Fastify, así que no hay contexto ALS por defecto. `CorreoJobData`/`RecordatorioJobData` ahora llevan `empresaId`, y `iniciarWorkerCorreos` envuelve el procesamiento de cada job en `empresaContext.run({ empresaId: job.data.empresaId }, ...)` antes de invocar `enviarCorreo`/`procesarRecordatorio`. Los 6 sitios de `solicitudes.service.ts` que encolan correo pasan `empresaId: getEmpresaIdActual()` (resuelto en el momento de encolar, dentro del request original). **Decisión (Christian, 2026-08-02):** los jobs ya encolados en Redis antes de este deploy (sin `empresaId`) no se migran — se acepta que fallen (`EMPRESA_REQUERIDA`, 3 reintentos y luego dead-letter, visibles en Redis Commander). No hay usuarios reales en producción todavía.
+- **Explícitamente fuera de este sub-ciclo:** el refactor País↔Mercado (`MercadoPais`, Fase 2b) y el resto de ~62 modelos candidatos a `empresaId` (Fase 3) — sus folios (OC/Recepción/NV/Solicitudes/Instructivo) siguen globales hasta que sus propias tablas se migren.
+
+---
+
 ## 3. Seed y migración
 
 - **Seed:** crea `AGROSAN` ("Frutera Agrosan SpA") y `AGDRY` ("AGDry", solo el nombre; el resto se completa en la UI). Idempotente vía `findFirst`+`create`, ahora protegido por `codigo @unique`.
@@ -88,10 +109,11 @@ Empresa activa por defecto al iniciar sesión.
 
 | Fase | Contenido | Estado |
 |---|---|---|
-| **0** | `Empresa` + `EmpresaDireccion` + `EmpresaContacto` + `UsuarioEmpresa` + `Usuario.empresaPredeterminadaId` + seed | **En desarrollo** |
+| **0** | `Empresa` + `EmpresaDireccion` + `EmpresaContacto` + `UsuarioEmpresa` + `Usuario.empresaPredeterminadaId` + seed | **Implementada** |
 | **1** | Contexto de empresa: `requireAuth` valida `X-Empresa-Id` (AsyncLocalStorage) · `EmpresaProvider` en front · cambio de empresa resetea Temporada | **Implementada (QA ronda 3: APROBADO_CON_OBSERVACIONES)** |
-| **2** | Prisma Client Extension · `empresaId` en modelos raíz · uniques `@@unique([empresaId, codigo])` · folios por empresa · `ConfiguracionCorreo` por empresa | Pendiente |
-| **3** | Migración de datos self-safe por lotes del resto de tablas | Pendiente |
+| **2a** | Prisma Client Extension (tenancy) · `empresaId` en `Mercado`/`GrupoMercado`/`ConfiguracionCorreo`/`PrefijoCodigo` · `ConfiguracionCorreo` por empresa | **En desarrollo** |
+| **2b** | Refactor País↔Mercado: elimina `Pais.mercadoId`, crea `MercadoPais` | Pendiente |
+| **3** | Migración de datos self-safe por lotes del resto de tablas raíz (~62 modelos) | Pendiente |
 | **4** | UI: mantenedor de Empresas (RUT, direcciones, contactos, SMTP) · form de Usuario ampliado (empresas + predeterminada, con validación de invariante §2) | Pendiente |
 
 ---

@@ -2,20 +2,26 @@ import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
 import { prisma } from './prisma.js'
 import { decrypt } from './crypto.js'
+import { getEmpresaIdActual } from './empresa-context.js'
 import { BusinessError } from '../shared/errors.js'
 
-// Transport cacheado — se invalida cuando se actualiza la configuración SMTP
-let cachedTransport: Transporter | null = null
-let cachedFrom: string | null = null
+// Transport cacheado por empresa (Fase 2: ConfiguracionCorreo es por-empresa)
+// — se invalida entero cuando se actualiza cualquier configuración SMTP.
+const transportCache = new Map<number, { transport: Transporter; from: string }>()
 
 export function invalidateMailer() {
-  cachedTransport = null
-  cachedFrom = null
+  transportCache.clear()
 }
 
 async function getTransport(): Promise<{ transport: Transporter; from: string }> {
-  if (cachedTransport && cachedFrom) return { transport: cachedTransport, from: cachedFrom }
+  const empresaId = getEmpresaIdActual()
+  if (empresaId != null) {
+    const cached = transportCache.get(empresaId)
+    if (cached) return cached
+  }
 
+  // Sin `where` explícito: la extensión de tenancy (prisma-tenancy.ts)
+  // inyecta empresaId — o lanza EMPRESA_REQUERIDA si no hay una activa.
   const config = await prisma.configuracionCorreo.findFirst({ orderBy: { id: 'desc' } })
   if (!config) {
     throw new BusinessError(
@@ -36,9 +42,9 @@ async function getTransport(): Promise<{ transport: Transporter; from: string }>
     },
   })
 
-  cachedTransport = transport
-  cachedFrom = `"${config.remitenteNombre}" <${config.remitenteEmail}>`
-  return { transport, from: cachedFrom }
+  const from = `"${config.remitenteNombre}" <${config.remitenteEmail}>`
+  if (empresaId != null) transportCache.set(empresaId, { transport, from })
+  return { transport, from }
 }
 
 export interface EnviarCorreoInput {

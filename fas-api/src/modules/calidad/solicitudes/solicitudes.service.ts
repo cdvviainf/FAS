@@ -1,6 +1,7 @@
 import { NotFoundError, ValidationError, ConflictError, ForbiddenError } from '../../../shared/errors.js'
 import { encolarCorreo, encolarCorreoDiferido, cancelarCorreoDiferido } from '../../correos/correos.queue.js'
 import { enviarCorreo } from '../../../lib/mailer.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import * as repo from './solicitudes.repository.js'
 import * as emails from './solicitudes.emails.js'
 import type { SolicitudCreateBody, SolicitudUpdateBody, SolicitudCerrarBody } from './solicitudes.schema.js'
@@ -35,7 +36,7 @@ async function programarRecordatorio(solicitud: SolicitudDetalle) {
   }
   await encolarCorreoDiferido(
     recordatorioJobId(solicitud.id),
-    { solicitudId: solicitud.id },
+    { solicitudId: solicitud.id, empresaId: getEmpresaIdActual() },
     delay,
   )
 }
@@ -254,7 +255,7 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
   if (actual.estado === 'NOTIFICADA') {
     const destinatarios = [...new Set([...destinatariosPrevios, ...(await destinatariosDe(actualizada))])]
     const { subject, html } = emails.correoModificacion(actualizada)
-    await encolarCorreo({ to: destinatarios, subject, html })
+    await encolarCorreo({ to: destinatarios, subject, html, empresaId: getEmpresaIdActual() })
     await programarRecordatorio(actualizada)
   }
 
@@ -273,7 +274,7 @@ export async function eliminarSolicitud(id: number, userId: string) {
   // Si estaba notificada: avisar la eliminación
   if (actual.estado === 'NOTIFICADA') {
     const { subject, html } = emails.correoEliminacion(actual)
-    await encolarCorreo({ to: await destinatariosDe(actual), subject, html })
+    await encolarCorreo({ to: await destinatariosDe(actual), subject, html, empresaId: getEmpresaIdActual() })
   }
 }
 
@@ -297,7 +298,7 @@ export async function notificarSolicitud(id: number, userId: string) {
   const notificada = await repo.marcarNotificada(id, userId)
 
   const { subject, html } = emails.correoNotificacion(notificada)
-  await encolarCorreo({ to: await destinatariosDe(notificada), subject, html })
+  await encolarCorreo({ to: await destinatariosDe(notificada), subject, html, empresaId: getEmpresaIdActual() })
   await programarRecordatorio(notificada)
   return notificada
 }
@@ -327,7 +328,7 @@ export async function cerrarSolicitud(
 
   const adjuntosCierre = cerrada.adjuntos.filter((a) => a.etapa === 'CIERRE').length
   const { subject, html } = emails.correoCierre(cerrada, body.comentarios, adjuntosCierre)
-  await encolarCorreo({ to: await destinatariosDe(cerrada), subject, html })
+  await encolarCorreo({ to: await destinatariosDe(cerrada), subject, html, empresaId: getEmpresaIdActual() })
 
   return cerrada
 }
@@ -342,7 +343,7 @@ export async function reabrirSolicitud(id: number, userId: string) {
   await programarRecordatorio(reabierta)
 
   const { subject, html } = emails.correoReapertura(reabierta)
-  await encolarCorreo({ to: await destinatariosDe(reabierta), subject, html })
+  await encolarCorreo({ to: await destinatariosDe(reabierta), subject, html, empresaId: getEmpresaIdActual() })
 
   return reabierta
 }

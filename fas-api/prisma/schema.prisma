@@ -187,6 +187,10 @@ model Empresa {
   contactos            EmpresaContacto[]
   usuarios             UsuarioEmpresa[]
   usuariosPredeterminada Usuario[]        @relation("UsuarioEmpresaPredeterminada")
+  mercados             Mercado[]
+  gruposMercado        GrupoMercado[]
+  configuracionesCorreo ConfiguracionCorreo[]
+  prefijosCodigo       PrefijoCodigo[]
 
   @@map("empresas")
 }
@@ -469,6 +473,12 @@ model Zona {
 
 model GrupoMercado {
   id                    Int       @id @default(autoincrement())
+  // empresaId + codigo: único solo entre filas activas (índice parcial en la
+  // migración, mismo patrón que PrefijoCodigo — no representable en el DSL
+  // de Prisma). Mercado/GrupoMercado pasan a ser por empresa (Fase 2,
+  // Docs/empresas.md decisión #4).
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -482,6 +492,12 @@ model GrupoMercado {
 
   mercados Mercado[]
 
+  @@index([empresaId])
+  // Target de la FK compuesta de Mercado (empresaId, grupoMercadoId) — hace
+  // estructuralmente imposible que un Mercado y su GrupoMercado pertenezcan a
+  // empresas distintas, aunque una escritura anidada de Prisma bypasee la
+  // extensión de tenancy (FAS-EMP-F2-R3-005).
+  @@unique([empresaId, id])
   @@map("grupos_mercado")
 }
 
@@ -623,7 +639,10 @@ model PrefijoCodigo {
   // unicidad real está en un índice único parcial a nivel de BD, solo entre
   // filas activas (WHERE eliminadoEn IS NULL, ver migration.sql), para que
   // el soft-delete permita recrear un prefijo sin perder protección contra
-  // duplicados concurrentes (FAS-PMQ-R1-006).
+  // duplicados concurrentes (FAS-PMQ-R1-006). Desde Fase 2, el índice es
+  // (empresaId, modelo) — cada empresa configura su propio prefijo/dígitos.
+  empresaId      Int
+  empresa        Empresa   @relation(fields: [empresaId], references: [id])
   modelo         String
   prefijo        String
   digitos        Int
@@ -634,6 +653,7 @@ model PrefijoCodigo {
   eliminadoEn    DateTime?
   eliminadoPor   String?
 
+  @@index([empresaId])
   @@map("prefijos_codigo")
 }
 
@@ -876,11 +896,19 @@ model Parametro {
 
 model Mercado {
   id                    Int          @id @default(autoincrement())
+  // empresaId + codigo: único solo entre filas activas (índice parcial en la
+  // migración, mismo patrón que GrupoMercado/PrefijoCodigo).
+  empresaId             Int
+  empresa               Empresa      @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   grupoMercadoId        Int
-  grupoMercado          GrupoMercado @relation(fields: [grupoMercadoId], references: [id])
+  // FK compuesta (empresaId, grupoMercadoId) -> GrupoMercado(empresaId, id):
+  // impide a nivel de BD que un Mercado quede en una empresa distinta a la de
+  // su GrupoMercado (FAS-EMP-F2-R3-005) — cierra el vector de escrituras
+  // anidadas que la extensión de tenancy no puede interceptar.
+  grupoMercado          GrupoMercado @relation(fields: [empresaId, grupoMercadoId], references: [empresaId, id])
   bloqueado             Boolean      @default(false)
   creadoEn              DateTime     @default(now())
   creadoPor             String
@@ -894,6 +922,7 @@ model Mercado {
   ordenesCompra         OrdenCompra[]
   solicitudesInspeccion SolicitudInspeccion[]
 
+  @@index([empresaId])
   @@map("mercados")
 }
 
@@ -1342,6 +1371,9 @@ model SolicitudInspeccionAdjuntoContenido {
 
 model ConfiguracionCorreo {
   id              Int       @id @default(autoincrement())
+  // Una fila por empresa (Fase 2) — antes era singleton global.
+  empresaId       Int       @unique
+  empresa         Empresa   @relation(fields: [empresaId], references: [id])
   host            String // ej. smtp.office365.com
   puerto          Int       @default(587)
   seguridad       String    @default("STARTTLS") // STARTTLS | SSL | NINGUNA

@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { PrefijoCodigoCreateInput, PrefijoCodigoUpdateInput } from './prefijos-codigo.types.js'
 
 export async function listPrefijosCodigo() {
@@ -17,7 +18,10 @@ export async function findPrefijoCodigoByModelo(modelo: string) {
 }
 
 export async function createPrefijoCodigo(data: PrefijoCodigoCreateInput, creadoPor: string) {
-  return prisma.prefijoCodigo.create({ data: { ...data, creadoPor } })
+  // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
+  // valor con el resuelto en el request (o lanza EMPRESA_REQUERIDA si no hay
+  // ninguno) — el `!` solo satisface el tipo generado por Prisma.
+  return prisma.prefijoCodigo.create({ data: { ...data, empresaId: getEmpresaIdActual()!, creadoPor } })
 }
 
 export async function updatePrefijoCodigo(id: number, data: PrefijoCodigoUpdateInput, actualizadoPor: string) {

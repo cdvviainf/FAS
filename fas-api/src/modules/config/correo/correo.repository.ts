@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 
 export async function getConfiguracionCorreo() {
   return prisma.configuracionCorreo.findFirst({ orderBy: { id: 'desc' } })
@@ -23,6 +24,9 @@ export async function upsertConfiguracionCorreo(data: ConfiguracionCorreoData, u
     })
   }
   return prisma.configuracionCorreo.create({
-    data: { ...data, creadoPor: userId },
+    // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
+    // valor con el resuelto en el request (o lanza EMPRESA_REQUERIDA si no
+    // hay ninguno) — el `!` solo satisface el tipo generado por Prisma.
+    data: { ...data, empresaId: getEmpresaIdActual()!, creadoPor: userId },
   })
 }

@@ -38,9 +38,20 @@ async function limpiarDatos() {
   `)
 }
 
+// Mercado/GrupoMercado son por-empresa desde Fase 2a — estas fixtures crean
+// filas vía prisma crudo, fuera de cualquier request (sin contexto ALS), así
+// que necesitan empresaId explícito. "empresas" no se trunca entre tests (no
+// participa del aislamiento que este archivo ejercita).
+async function obtenerEmpresaTest() {
+  const existente = await prisma.empresa.findFirst({ where: { codigo: 'EMP-TEST' } })
+  if (existente) return existente
+  return prisma.empresa.create({ data: { codigo: 'EMP-TEST', razonSocial: 'Empresa de prueba', creadoPor: 'test' } })
+}
+
 async function crearFixtures() {
-  const grupoMercado = await prisma.grupoMercado.create({ data: { codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
-  const mercado = await prisma.mercado.create({ data: { codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, creadoPor: 'test' } })
+  const empresa = await obtenerEmpresaTest()
+  const grupoMercado = await prisma.grupoMercado.create({ data: { empresaId: empresa.id, codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
+  const mercado = await prisma.mercado.create({ data: { empresaId: empresa.id, codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, creadoPor: 'test' } })
   const chile = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', mercadoId: mercado.id, esPaisNacional: true, puedeSerOrigen: true, creadoPor: 'test' } })
   const usa = await prisma.pais.create({ data: { codigo: 'USA', descripcion: 'Estados Unidos', mercadoId: mercado.id, creadoPor: 'test' } })
 
@@ -85,7 +96,7 @@ async function crearFixtures() {
   })
 
   return {
-    chile, usa, productor, direccion, clienteExtranjero, clienteNoExtranjero,
+    empresa, chile, usa, productor, direccion, clienteExtranjero, clienteNoExtranjero,
     temporada, especie, otraEspecie, variedad, variedadOtraEspecie, calibre, categoria,
     grupoMercado, mercado, unidad, embalaje, noEmbalaje, calificacion, usuario,
   }
@@ -188,6 +199,7 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
     const f = await crearFixtures()
     const otroMercado = await prisma.mercado.create({
       data: {
+        empresaId: f.empresa.id,
         codigo: 'MK2',
         descripcion: 'Mercado 2',
         grupoMercadoId: f.grupoMercado.id,
@@ -213,6 +225,7 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
     }, 'test')
     const otroMercado = await prisma.mercado.create({
       data: {
+        empresaId: f.empresa.id,
         codigo: 'MK2',
         descripcion: 'Mercado 2',
         grupoMercadoId: f.grupoMercado.id,

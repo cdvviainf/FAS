@@ -39,3 +39,9 @@ export class ValidationError extends BusinessError {
     super('VALIDATION_ERROR', message, 422, details)
   }
 }
+
+export class EmpresaRequeridaError extends BusinessError {
+  constructor(message = 'Esta operación requiere una empresa activa.') {
+    super('EMPRESA_REQUERIDA', message, 409)
+  }
+}
