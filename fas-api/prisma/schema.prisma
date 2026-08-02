@@ -218,6 +218,10 @@ model Empresa {
   tiposMovimiento      TipoMovimiento[]
   saldosArticulo       SaldoArticulo[]
   movimientos          Movimiento[]
+  predios              Predio[]
+  contratosProductor   ProductorContrato[]
+  movimientosCC        MovimientoCuentaCorriente[]
+  conceptosLiquidacion ConceptoLiquidacion[]
 
   @@map("empresas")
 }
@@ -684,6 +688,7 @@ model TipoProduccion {
 
   predios Predio[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@map("tipos_produccion")
 }
@@ -1196,6 +1201,7 @@ model ConceptoCtaCte {
 
   movimientosCC MovimientoCuentaCorriente[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@map("conceptos_cta_cte")
 }
@@ -1782,8 +1788,11 @@ enum NaturalezaConcepto {
 
 model Predio {
   id               Int             @id @default(autoincrement())
+  empresaId        Int
+  empresa          Empresa         @relation(fields: [empresaId], references: [id])
   entidadId        Int // Entidad tipo PRODUCTOR (R1)
-  entidad          Entidad         @relation("PrediosProductor", fields: [entidadId], references: [id])
+  // FK compuesta (empresaId, entidadId) -> Entidad(empresaId, id).
+  entidad          Entidad         @relation("PrediosProductor", fields: [empresaId, entidadId], references: [empresaId, id])
   codigo           String // único por productor (R2, índice parcial)
   descripcion      String
   codigoCsg        String?
@@ -1794,7 +1803,8 @@ model Predio {
   comunaId         Int?
   comuna           Comuna?         @relation(fields: [comunaId], references: [id])
   tipoProduccionId Int?
-  tipoProduccion   TipoProduccion? @relation(fields: [tipoProduccionId], references: [id])
+  // FK compuesta (empresaId, tipoProduccionId) -> TipoProduccion(empresaId, id).
+  tipoProduccion   TipoProduccion? @relation(fields: [empresaId, tipoProduccionId], references: [empresaId, id])
   zonaId           Int?
   zona             Zona?           @relation(fields: [zonaId], references: [id])
   latitud          Decimal?        @db.Decimal(10, 7)
@@ -1808,22 +1818,29 @@ model Predio {
   eliminadoPor   String?
 
   @@index([entidadId])
+  @@index([empresaId])
   @@map("predios")
 }
 
 model ProductorContrato {
   id              Int       @id @default(autoincrement())
+  empresaId       Int
+  empresa         Empresa   @relation(fields: [empresaId], references: [id])
   entidadId       Int
-  entidad         Entidad   @relation("ContratosProductor", fields: [entidadId], references: [id])
+  // FK compuesta (empresaId, entidadId) -> Entidad(empresaId, id).
+  entidad         Entidad   @relation("ContratosProductor", fields: [empresaId, entidadId], references: [empresaId, id])
   temporadaId     Int
-  temporada       Temporada @relation(fields: [temporadaId], references: [id])
+  // FK compuesta (empresaId, temporadaId) -> Temporada(empresaId, id).
+  temporada       Temporada @relation(fields: [empresaId, temporadaId], references: [empresaId, id])
   especieId       Int
-  especie         Especie   @relation(fields: [especieId], references: [id])
+  // FK compuesta (empresaId, especieId) -> Especie(empresaId, id).
+  especie         Especie   @relation(fields: [empresaId, especieId], references: [empresaId, id])
   fechaInicio     DateTime  @db.Date
   fechaTermino    DateTime  @db.Date
   // Mantenedor real CondicionPago (tipo COMPRA) — decisión de negocio,
   // Christian, 2026-07-30. Reemplaza el hack anterior de Parametro suelto
-  // (que nunca llegó a tener catálogo real).
+  // (que nunca llegó a tener catálogo real). CondicionPago aún no es tenant
+  // (pendiente de Fase 3 lote Compras) — FK simple por ahora.
   condicionPagoId Int?
   condicionPago   CondicionPago? @relation(fields: [condicionPagoId], references: [id])
   // Usuario responsable (mismo patrón que OrdenCompra.responsableId,
@@ -1845,6 +1862,7 @@ model ProductorContrato {
   @@index([especieId])
   @@index([temporadaId])
   @@index([responsableId])
+  @@index([empresaId])
   @@map("productor_contratos")
 }
 
@@ -1902,10 +1920,14 @@ model ProductorContratoAdjuntoContenido {
 
 model MovimientoCuentaCorriente {
   id          Int                    @id @default(autoincrement()) // operativo, inmutable (R5)
+  empresaId   Int
+  empresa     Empresa                @relation(fields: [empresaId], references: [id])
   entidadId   Int // productor
-  entidad     Entidad                @relation("CCProductor", fields: [entidadId], references: [id])
+  // FK compuesta (empresaId, entidadId) -> Entidad(empresaId, id).
+  entidad     Entidad                @relation("CCProductor", fields: [empresaId, entidadId], references: [empresaId, id])
   tipoId      Int
-  tipo        ConceptoCtaCte         @relation(fields: [tipoId], references: [id])
+  // FK compuesta (empresaId, tipoId) -> ConceptoCtaCte(empresaId, id).
+  tipo        ConceptoCtaCte         @relation(fields: [empresaId, tipoId], references: [empresaId, id])
   naturaleza  NaturalezaMovimientoCC // DEBE o HABER (consistente con tipo.naturaleza, R6)
   fecha       DateTime
   glosa       String?
@@ -1919,11 +1941,14 @@ model MovimientoCuentaCorriente {
 
   @@index([entidadId, fecha])
   @@index([tipoId])
+  @@index([empresaId])
   @@map("movimientos_cuenta_corriente")
 }
 
 model ConceptoLiquidacion {
   id              Int                          @id @default(autoincrement())
+  empresaId       Int
+  empresa         Empresa                      @relation(fields: [empresaId], references: [id])
   codigo          String
   descripcion     String
   formaAplicacion FormaAplicacionConcepto
@@ -1937,6 +1962,7 @@ model ConceptoLiquidacion {
   eliminadoEn    DateTime?
   eliminadoPor   String?
 
+  @@index([empresaId])
   @@map("conceptos_liquidacion")
 }
 

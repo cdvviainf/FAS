@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { PredioCreateInput, PredioUpdateInput } from './predios.types.js'
 
 const includeRefs = {
@@ -35,7 +36,10 @@ export async function findPredioByCodigo(entidadId: number, codigo: string, excl
 
 export async function createPredio(entidadId: number, data: PredioCreateInput, creadoPor: string) {
   return prisma.predio.create({
-    data: { ...data, entidadId, creadoPor },
+    // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
+    // valor con la empresa activa del contexto — se declara aquí solo para
+    // satisfacer el tipo requerido por Prisma.
+    data: { ...data, empresaId: getEmpresaIdActual()!, entidadId, creadoPor },
     include: includeRefs,
   })
 }

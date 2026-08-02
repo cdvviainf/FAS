@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ContratoCreateInput, ContratoUpdateInput } from './contratos.types.js'
 
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
@@ -61,6 +62,10 @@ export async function createContrato(entidadId: number, data: ContratoCreateInpu
   const { lineas, ...cabecera } = data
   return prisma.productorContrato.create({
     data: {
+      // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
+      // este valor con la empresa activa del contexto — se declara aquí solo
+      // para satisfacer el tipo requerido por Prisma.
+      empresaId: getEmpresaIdActual()!,
       ...cabecera,
       fechaInicio: new Date(cabecera.fechaInicio),
       fechaTermino: new Date(cabecera.fechaTermino),

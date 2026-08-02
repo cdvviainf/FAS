@@ -353,6 +353,7 @@ describe('contrato HTTP de la API', () => {
     const especie = await prisma.especie.create({ data: { empresaId: empresa.id, codigo: 'UV-QA', descripcion: 'Uva QA', creadoPor: 'test' } })
     await prisma.productorContrato.create({
       data: {
+        empresaId: empresa.id,
         entidadId: productor.id,
         temporadaId: temporada.id,
         especieId: especie.id,

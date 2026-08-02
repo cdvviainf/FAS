@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/prisma.js'
 import type { Prisma } from '@prisma/client'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { MovimientoCCCreateInput, CuentaCorrienteFilters } from './cuenta-corriente.types.js'
 
 const includeRefs = {
@@ -49,7 +50,10 @@ export async function calcularSaldo(entidadId: number): Promise<number> {
 export async function createMovimiento(entidadId: number, data: MovimientoCCCreateInput, usuarioId: string) {
   const { fecha, ...rest } = data
   return prisma.movimientoCuentaCorriente.create({
-    data: { ...rest, entidadId, fecha: new Date(fecha), usuarioId },
+    // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
+    // valor con la empresa activa del contexto — se declara aquí solo para
+    // satisfacer el tipo requerido por Prisma.
+    data: { empresaId: getEmpresaIdActual()!, ...rest, entidadId, fecha: new Date(fecha), usuarioId },
     include: includeRefs,
   })
 }

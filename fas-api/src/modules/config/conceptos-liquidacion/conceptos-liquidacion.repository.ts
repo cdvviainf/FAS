@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ConceptoLiquidacionCreateInput, ConceptoLiquidacionUpdateInput } from './conceptos-liquidacion.types.js'
 
 const includeValores = {
@@ -26,10 +27,18 @@ export async function findConceptoByCodigo(codigo: string) {
   return prisma.conceptoLiquidacion.findFirst({ where: { codigo, eliminadoEn: null } })
 }
 
+export async function getEspeciesPorIds(ids: number[]) {
+  return prisma.especie.findMany({ where: { id: { in: ids }, eliminadoEn: null }, select: { id: true } })
+}
+
 export async function createConcepto(data: ConceptoLiquidacionCreateInput, creadoPor: string) {
   const { valores, ...cabecera } = data
   return prisma.conceptoLiquidacion.create({
     data: {
+      // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
+      // este valor con la empresa activa del contexto — se declara aquí solo
+      // para satisfacer el tipo requerido por Prisma.
+      empresaId: getEmpresaIdActual()!,
       ...cabecera,
       creadoPor,
       valores: { create: valores },

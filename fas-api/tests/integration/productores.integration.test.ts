@@ -138,42 +138,52 @@ describe('maestro de Productores contra PostgreSQL', () => {
   })
 
   it('CA1: rechaza crear un predio para una entidad que no es Productor', async () => {
+    const empresa = await obtenerEmpresaTest()
     const proveedor = await crearEntidad(['PROVEEDOR'], 'PROV-01')
 
-    await expect(crearPredio(proveedor.id, {
-      codigo: 'P-01',
-      descripcion: 'Predio inválido',
-    }, 'test')).rejects.toMatchObject({ statusCode: 422 })
+    await empresaContext.run({ empresaId: empresa.id }, async () => {
+      await expect(crearPredio(proveedor.id, {
+        codigo: 'P-01',
+        descripcion: 'Predio inválido',
+      }, 'test')).rejects.toMatchObject({ statusCode: 422 })
+    })
   })
 
   it('CA2: exige código de predio único por productor y permite reutilizarlo tras soft delete', async () => {
+    const empresa = await obtenerEmpresaTest()
     const productor = await crearEntidad(['PRODUCTOR'], 'PROD-01')
-    const primero = await crearPredio(productor.id, {
-      codigo: 'P-01',
-      descripcion: 'Predio uno',
-    }, 'test')
 
-    await expect(crearPredio(productor.id, {
-      codigo: 'P-01',
-      descripcion: 'Predio duplicado',
-    }, 'test')).rejects.toMatchObject({ statusCode: 422 })
+    await empresaContext.run({ empresaId: empresa.id }, async () => {
+      const primero = await crearPredio(productor.id, {
+        codigo: 'P-01',
+        descripcion: 'Predio uno',
+      }, 'test')
 
-    await eliminarPredio(productor.id, primero.id, 'test')
-    const reemplazo = await crearPredio(productor.id, {
-      codigo: 'P-01',
-      descripcion: 'Predio reemplazo',
-    }, 'test')
-    expect(reemplazo.id).not.toBe(primero.id)
+      await expect(crearPredio(productor.id, {
+        codigo: 'P-01',
+        descripcion: 'Predio duplicado',
+      }, 'test')).rejects.toMatchObject({ statusCode: 422 })
+
+      await eliminarPredio(productor.id, primero.id, 'test')
+      const reemplazo = await crearPredio(productor.id, {
+        codigo: 'P-01',
+        descripcion: 'Predio reemplazo',
+      }, 'test')
+      expect(reemplazo.id).not.toBe(primero.id)
+    })
   })
 
   it('CA2: permite el mismo código de predio en productores diferentes', async () => {
+    const empresa = await obtenerEmpresaTest()
     const productorA = await crearEntidad(['PRODUCTOR'], 'PROD-A')
     const productorB = await crearEntidad(['PRODUCTOR'], 'PROD-B')
 
-    const [predioA, predioB] = await Promise.all([
-      crearPredio(productorA.id, { codigo: 'CENTRAL', descripcion: 'Predio A' }, 'test'),
-      crearPredio(productorB.id, { codigo: 'CENTRAL', descripcion: 'Predio B' }, 'test'),
-    ])
+    const [predioA, predioB] = await empresaContext.run({ empresaId: empresa.id }, () =>
+      Promise.all([
+        crearPredio(productorA.id, { codigo: 'CENTRAL', descripcion: 'Predio A' }, 'test'),
+        crearPredio(productorB.id, { codigo: 'CENTRAL', descripcion: 'Predio B' }, 'test'),
+      ]),
+    )
 
     expect(predioA.entidadId).not.toBe(predioB.entidadId)
   })
@@ -214,26 +224,27 @@ describe('maestro de Productores contra PostgreSQL', () => {
       esRepresentanteLegal: true,
     }, 'test')
 
-    const contrato = await empresaContext.run({ empresaId: f.empresa.id }, () =>
-      crearContrato(productor.id, {
+    const { contrato, adjunto } = await empresaContext.run({ empresaId: f.empresa.id }, async () => {
+      const contrato = await crearContrato(productor.id, {
         temporadaId: f.temporada.id,
         especieId: f.especie.id,
         fechaInicio: '2026-01-01',
         fechaTermino: '2026-12-31',
         lineas: [lineaBase(f)],
-      }, 'test'),
-    )
+      }, 'test')
+
+      const adjunto = await agregarAdjunto(productor.id, contrato.id, {
+        nombre: 'contrato.pdf',
+        mime: 'application/pdf',
+        datos: Buffer.from('%PDF-1.4 prueba'),
+      }, 'test')
+
+      return { contrato, adjunto }
+    })
 
     expect(contrato.especieId).toBe(f.especie.id)
     expect(contrato.lineas).toHaveLength(1)
     expect(contrato.lineas[0].cantidadComprometida.toString()).toBe('10000')
-
-    const adjunto = await agregarAdjunto(productor.id, contrato.id, {
-      nombre: 'contrato.pdf',
-      mime: 'application/pdf',
-      datos: Buffer.from('%PDF-1.4 prueba'),
-    }, 'test')
-
     expect(adjunto.nombre).toBe('contrato.pdf')
   })
 
@@ -305,10 +316,10 @@ describe('maestro de Productores contra PostgreSQL', () => {
         fecha: '2026-07-23',
         monto: 1,
       }, 'test')).rejects.toMatchObject({ statusCode: 422 })
-    })
 
-    const informe = await obtenerInforme(productor.id, {})
-    expect(informe.saldo).toBe(700)
-    expect(informe.movimientos).toHaveLength(2)
+      const informe = await obtenerInforme(productor.id, {})
+      expect(informe.saldo).toBe(700)
+      expect(informe.movimientos).toHaveLength(2)
+    })
   })
 })
