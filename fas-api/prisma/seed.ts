@@ -10,6 +10,7 @@ const itemsMenu = [
   { codigo: 'CONFIG_USUARIOS', nombre: 'Usuarios', seccion: 'Configuración', ruta: '/dashboard/configuracion/usuarios', esAccion: false, orden: 11 },
   { codigo: 'CONFIG_PERFILES', nombre: 'Perfiles', seccion: 'Configuración', ruta: '/dashboard/configuracion/perfiles', esAccion: false, orden: 12 },
   { codigo: 'CONFIG_ENTIDADES', nombre: 'Entidades', seccion: 'Configuración', ruta: '/dashboard/configuracion/entidades', esAccion: false, orden: 9 },
+  { codigo: 'CONFIG_EMPRESAS', nombre: 'Empresas', seccion: 'Configuración', ruta: '/dashboard/configuracion/empresas', esAccion: false, orden: 8 },
   { codigo: 'CONFIG_GENERAL', nombre: 'Configuración General', seccion: 'Configuración', ruta: '/dashboard/configuracion/general', esAccion: false, orden: 13 },
   // Compras
   { codigo: 'COMPRAS_INSTRUCTIVO', nombre: 'Instructivo de Embalaje', seccion: 'Compras', ruta: '/dashboard/compras/instructivo-embalaje', esAccion: false, orden: 19 },

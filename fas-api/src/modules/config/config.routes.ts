@@ -5,6 +5,7 @@ import { requireAuth, requireLevel } from '../../plugins/auth-guard.js'
 import { perfilesRoutes } from './perfiles/perfiles.routes.js'
 import { usuariosRoutes } from './usuarios/usuarios.routes.js'
 import { entidadesRoutes } from './entidades/entidades.routes.js'
+import { empresasRoutes } from './empresas/empresas.routes.js'
 import { correoRoutes } from './correo/correo.routes.js'
 import { conceptosLiquidacionRoutes } from './conceptos-liquidacion/conceptos-liquidacion.routes.js'
 import { condicionesPagoRoutes } from './condiciones-pago/condiciones-pago.routes.js'
@@ -51,6 +52,7 @@ export async function configRoutes(app: FastifyInstance) {
   await app.register(perfilesRoutes)
   await app.register(usuariosRoutes)
   await app.register(entidadesRoutes)
+  await app.register(empresasRoutes)
   await app.register(correoRoutes)
   await app.register(conceptosLiquidacionRoutes)
   await app.register(condicionesPagoRoutes)
