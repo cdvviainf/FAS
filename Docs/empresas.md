@@ -32,7 +32,7 @@ El aislamiento es una **partición de datos a nivel de servidor** (`empresaId` e
 | 4 | Mercado / GrupoMercado | **Por empresa** (no globales). Fuerza el refactor País↔Mercado (ver §5) |
 | 5 | Tablas hijas/detalle | **Heredan** del padre vía FK; NO llevan `empresaId` propio |
 | 6 | Enforcement | Prisma Client Extension + AsyncLocalStorage (inyecta `empresaId` en modelos raíz) |
-| 7 | Empresa activa | Selector espejo del de Temporada. 1 empresa → autoselección; 2 → el usuario elige. Header `X-Empresa-Id`, validado en `requireAuth` contra las membresías |
+| 7 | Empresa activa | Selector espejo del de Temporada, **siempre visible** (igual que TemporadaSelector, sin ocultarse con 1 sola empresa — corrección 2026-08-03). Con 1 empresa queda autoseleccionada pero el selector se muestra igual. Header `X-Empresa-Id`, validado en `requireAuth` contra las membresías |
 | 8 | Cambio de empresa | Resetea la Temporada a la predeterminada de la empresa seleccionada + invalida cache de TanStack Query |
 
 ---

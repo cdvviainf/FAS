@@ -8,14 +8,12 @@ import { IconBuilding, IconCheck, IconChevronDown } from '@tabler/icons-react'
 import { useEmpresa, type EmpresaItem } from '@/contexts/empresa-context'
 import { cn } from '@/lib/utils'
 
-// Espejo de TemporadaSelector (decisión #7, Docs/empresas.md). Se oculta si
-// el usuario no tiene ninguna empresa (aún sin backfill/asignación) o si solo
-// tiene una (queda auto-seleccionada, sin necesidad de elegir).
+// Espejo de TemporadaSelector (decisión #7, Docs/empresas.md). Siempre
+// visible, igual que TemporadaSelector — con una sola empresa queda
+// auto-seleccionada pero el selector se muestra igual.
 export function EmpresaSelector() {
   const { empresaActiva, empresas, setEmpresaActiva } = useEmpresa()
   const [open, setOpen] = useState(false)
-
-  if (empresas.length < 2) return null
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
