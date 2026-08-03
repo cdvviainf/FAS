@@ -312,6 +312,7 @@ export const navGroups: NavGroup[] = [
         icon: 'settings',
         isActive: false,
         items: [
+          { title: 'Empresas',              url: '/dashboard/configuracion/empresas',          icon: 'building'        },
           { title: 'Usuarios',              url: '/dashboard/configuracion/usuarios',          icon: 'user2'           },
           { title: 'Perfiles',              url: '/dashboard/configuracion/perfiles',          icon: 'lock'            },
           { title: 'Bodegas',               url: '/dashboard/configuracion/bodegas',           icon: 'bodega'          },

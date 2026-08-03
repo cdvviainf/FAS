@@ -12,6 +12,7 @@ import {
   IconBrandGithub,
   IconBrandTwitter,
   IconBrightness,
+  IconBuilding,
   IconBuildingWarehouse,
   IconCalendar,
   IconCheck,
@@ -243,6 +244,7 @@ export const Icons = {
   calidad: IconClipboardCheck,
   finanzas: IconCoin,
   bodega: IconBuildingWarehouse,
+  building: IconBuilding,
   tiposMovimiento: IconClipboardList,
   leaf: IconLeaf
 };
