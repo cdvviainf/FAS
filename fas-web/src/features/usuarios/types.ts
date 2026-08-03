@@ -1,3 +1,10 @@
+export interface EmpresaAsignada {
+  id: number
+  codigo: string
+  razonSocial: string
+  activo: boolean
+}
+
 export interface Usuario {
   id: string
   nombre: string
@@ -7,6 +14,8 @@ export interface Usuario {
   perfilId: number
   perfil: { id: number; codigo: string; descripcion: string }
   esResponsableVenta: boolean
+  empresaPredeterminadaId: number | null
+  empresas: EmpresaAsignada[]
   creadoEn: string
   actualizadoEn: string | null
 }
@@ -24,6 +33,8 @@ export interface UsuarioCreateInput {
   esResponsableVenta?: boolean
   password: string
   passwordConfirm: string
+  empresas: number[]
+  empresaPredeterminadaId?: number | null
 }
 
 export interface UsuarioUpdateInput {
@@ -31,4 +42,6 @@ export interface UsuarioUpdateInput {
   whatsapp?: string | null
   perfilId?: number
   esResponsableVenta?: boolean
+  empresas?: number[]
+  empresaPredeterminadaId?: number | null
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
   Select,
@@ -21,6 +22,7 @@ import {
 import { Icons } from '@/components/icons'
 import { useAppForm, useFormFields } from '@/components/ui/tanstack-form'
 import { perfilesListOptions } from '@/features/perfiles/queries'
+import { empresasListOptions } from '@/features/empresas/queries'
 import { usuarioDetailOptions, usuariosKeys } from '../queries'
 import { usuariosService } from '../service'
 import { PasswordStrengthIndicator } from './password-strength-indicator'
@@ -32,18 +34,38 @@ const usuarioBaseSchema = z.object({
   whatsapp: z.string().max(50).trim().optional().or(z.literal('')),
   perfilId: z.coerce.number().int().min(1, 'El perfil es requerido'),
   esResponsableVenta: z.boolean(),
+  // Multi-empresa (Fase 4b): empresas asignadas + predeterminada. Invariante
+  // §2 de empresas.md (la predeterminada debe estar entre las asignadas) se
+  // valida con .refine() en cada schema final, no acá — .extend() no está
+  // disponible sobre el resultado de .refine().
+  empresas: z.array(z.number().int().positive()).default([]),
+  empresaPredeterminadaId: z.number().int().positive().nullable().optional(),
 })
 
-const usuarioCreateSchema = usuarioBaseSchema.extend({
-  email: z.string().email('Email inválido').max(200).trim(),
-  password: z.string().min(1, 'La contraseña es requerida'),
-  passwordConfirm: z.string().min(1, 'Confirma la contraseña'),
-})
+const usuarioCreateSchema = usuarioBaseSchema
+  .extend({
+    email: z.string().email('Email inválido').max(200).trim(),
+    password: z.string().min(1, 'La contraseña es requerida'),
+    passwordConfirm: z.string().min(1, 'Confirma la contraseña'),
+  })
+  .refine(
+    (data) => data.empresaPredeterminadaId == null || data.empresas.includes(data.empresaPredeterminadaId),
+    { message: 'La empresa predeterminada debe estar entre las empresas asignadas', path: ['empresaPredeterminadaId'] },
+  )
 
-const usuarioEditSchema = usuarioBaseSchema
+const usuarioEditSchema = usuarioBaseSchema.refine(
+  (data) => data.empresaPredeterminadaId == null || data.empresas.includes(data.empresaPredeterminadaId),
+  { message: 'La empresa predeterminada debe estar entre las empresas asignadas', path: ['empresaPredeterminadaId'] },
+)
 
 type UsuarioCreateValues = z.infer<typeof usuarioCreateSchema>
 type UsuarioEditValues = z.infer<typeof usuarioEditSchema>
+
+interface EmpresaAsignable {
+  id: number
+  razonSocial: string
+  activo: boolean
+}
 
 interface UsuarioFormProps {
   usuarioId?: string
@@ -64,6 +86,19 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
   )
   const perfiles = (perfilesData?.data ?? []) as Perfil[]
 
+  const { data: empresasData, isLoading: loadingEmpresas } = useQuery(
+    empresasListOptions({ activo: true, limit: 200 })
+  )
+  // Solo empresas activas pueden agregarse, pero una empresa ya asignada que
+  // luego se desactivó se sigue mostrando (atenuada) para no perder el dato
+  // ni forzar una desasignación silenciosa.
+  const empresasAsignables: EmpresaAsignable[] = useMemo(() => {
+    const activas = empresasData?.data ?? []
+    const inactivasAsignadas = (usuario?.empresas ?? []).filter((e) => !e.activo)
+    return [...activas, ...inactivasAsignadas]
+      .sort((a, b) => a.razonSocial.localeCompare(b.razonSocial))
+  }, [empresasData, usuario])
+
   const createMutation = useMutation({
     mutationFn: (values: UsuarioCreateValues) =>
       usuariosService.create({
@@ -74,6 +109,8 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
         esResponsableVenta: values.esResponsableVenta,
         password: values.password,
         passwordConfirm: values.passwordConfirm,
+        empresas: values.empresas,
+        empresaPredeterminadaId: values.empresaPredeterminadaId ?? null,
       }),
     onSuccess: () => {
       toast.success('Usuario creado correctamente')
@@ -90,6 +127,8 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
         whatsapp: values.whatsapp || null,
         perfilId: values.perfilId,
         esResponsableVenta: values.esResponsableVenta,
+        empresas: values.empresas,
+        empresaPredeterminadaId: values.empresaPredeterminadaId ?? null,
       }),
     onSuccess: () => {
       toast.success('Usuario actualizado correctamente')
@@ -112,6 +151,8 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       esResponsableVenta: false,
       password: '',
       passwordConfirm: '',
+      empresas: [],
+      empresaPredeterminadaId: null,
     } as UsuarioCreateValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validators: { onSubmit: usuarioCreateSchema as any },
@@ -127,6 +168,8 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       whatsapp: usuario?.whatsapp ?? '',
       perfilId: usuario?.perfilId ?? 0,
       esResponsableVenta: usuario?.esResponsableVenta ?? false,
+      empresas: usuario?.empresas.map((e) => e.id) ?? [],
+      empresaPredeterminadaId: usuario?.empresaPredeterminadaId ?? null,
     } as UsuarioEditValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validators: { onSubmit: usuarioEditSchema as any },
@@ -141,11 +184,13 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       editForm.setFieldValue('whatsapp', usuario.whatsapp ?? '')
       editForm.setFieldValue('perfilId', usuario.perfilId)
       editForm.setFieldValue('esResponsableVenta', usuario.esResponsableVenta)
+      editForm.setFieldValue('empresas', usuario.empresas.map((e) => e.id))
+      editForm.setFieldValue('empresaPredeterminadaId', usuario.empresaPredeterminadaId)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario])
 
-  const isLoading = (isEdit && loadingUsuario) || loadingPerfiles
+  const isLoading = (isEdit && loadingUsuario) || loadingPerfiles || loadingEmpresas
 
   if (isLoading) {
     return (
@@ -256,6 +301,73 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
                     </div>
                   )}
                 </editForm.Field>
+
+                {/* Empresas asignadas + predeterminada */}
+                <div className='sm:col-span-2 space-y-4'>
+                  <Separator />
+                  <editForm.Field name='empresas'>
+                    {(empresasField) => (
+                      <div className='space-y-4'>
+                        <div className='space-y-2'>
+                          <Label>Empresas</Label>
+                          {empresasAsignables.length === 0 ? (
+                            <p className='text-sm text-muted-foreground'>No hay empresas disponibles.</p>
+                          ) : (
+                            empresasAsignables.map((emp) => (
+                              <div key={emp.id} className='flex items-center gap-2'>
+                                <Checkbox
+                                  id={`empresa-${emp.id}-edit`}
+                                  checked={empresasField.state.value.includes(emp.id)}
+                                  onCheckedChange={(v) => {
+                                    const checked = v === true
+                                    const next = checked
+                                      ? [...empresasField.state.value, emp.id]
+                                      : empresasField.state.value.filter((id) => id !== emp.id)
+                                    empresasField.handleChange(next)
+                                    if (!checked && editForm.getFieldValue('empresaPredeterminadaId') === emp.id) {
+                                      editForm.setFieldValue('empresaPredeterminadaId', null)
+                                    }
+                                  }}
+                                />
+                                <Label htmlFor={`empresa-${emp.id}-edit`} className='cursor-pointer font-normal flex items-center gap-1.5'>
+                                  {emp.razonSocial}
+                                  {!emp.activo && <Badge variant='outline' className='text-xs'>Inactiva</Badge>}
+                                </Label>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        <editForm.Field name='empresaPredeterminadaId'>
+                          {(predField) => (
+                            <div className='space-y-1.5'>
+                              <Label>Empresa predeterminada</Label>
+                              <Select
+                                value={predField.state.value ? String(predField.state.value) : ''}
+                                onValueChange={(v) => predField.handleChange(v ? parseInt(v, 10) : null)}
+                                disabled={empresasField.state.value.length === 0}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder='Sin predeterminada' />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {empresasAsignables
+                                    .filter((e) => empresasField.state.value.includes(e.id))
+                                    .map((e) => (
+                                      <SelectItem key={e.id} value={String(e.id)}>{e.razonSocial}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                              {predField.state.meta.errors.length > 0 && (
+                                <p className='text-sm text-destructive'>{String(predField.state.meta.errors[0])}</p>
+                              )}
+                            </div>
+                          )}
+                        </editForm.Field>
+                      </div>
+                    )}
+                  </editForm.Field>
+                </div>
               </editForm.Form>
             </editForm.AppForm>
           </CardContent>
@@ -378,6 +490,76 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
                 )}
               </createForm.Field>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Empresas asignadas + predeterminada */}
+        <Card>
+          <CardHeader>
+            <CardTitle className='text-base'>Empresas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <createForm.Field name='empresas'>
+              {(empresasField) => (
+                <div className='space-y-4'>
+                  <div className='space-y-2'>
+                    {empresasAsignables.length === 0 ? (
+                      <p className='text-sm text-muted-foreground'>No hay empresas disponibles.</p>
+                    ) : (
+                      empresasAsignables.map((emp) => (
+                        <div key={emp.id} className='flex items-center gap-2'>
+                          <Checkbox
+                            id={`empresa-${emp.id}-create`}
+                            checked={empresasField.state.value.includes(emp.id)}
+                            onCheckedChange={(v) => {
+                              const checked = v === true
+                              const next = checked
+                                ? [...empresasField.state.value, emp.id]
+                                : empresasField.state.value.filter((id) => id !== emp.id)
+                              empresasField.handleChange(next)
+                              if (!checked && createForm.getFieldValue('empresaPredeterminadaId') === emp.id) {
+                                createForm.setFieldValue('empresaPredeterminadaId', null)
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`empresa-${emp.id}-create`} className='cursor-pointer font-normal flex items-center gap-1.5'>
+                            {emp.razonSocial}
+                            {!emp.activo && <Badge variant='outline' className='text-xs'>Inactiva</Badge>}
+                          </Label>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <createForm.Field name='empresaPredeterminadaId'>
+                    {(predField) => (
+                      <div className='space-y-1.5 max-w-sm'>
+                        <Label>Empresa predeterminada</Label>
+                        <Select
+                          value={predField.state.value ? String(predField.state.value) : ''}
+                          onValueChange={(v) => predField.handleChange(v ? parseInt(v, 10) : null)}
+                          disabled={empresasField.state.value.length === 0}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder='Sin predeterminada' />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {empresasAsignables
+                              .filter((e) => empresasField.state.value.includes(e.id))
+                              .map((e) => (
+                                <SelectItem key={e.id} value={String(e.id)}>{e.razonSocial}</SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        {predField.state.meta.errors.length > 0 && (
+                          <p className='text-sm text-destructive'>{String(predField.state.meta.errors[0])}</p>
+                        )}
+                      </div>
+                    )}
+                  </createForm.Field>
+                </div>
+              )}
+            </createForm.Field>
           </CardContent>
         </Card>
 

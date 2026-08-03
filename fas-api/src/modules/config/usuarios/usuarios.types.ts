@@ -1,3 +1,10 @@
+export interface EmpresaAsignada {
+  id: number
+  codigo: string
+  razonSocial: string
+  activo: boolean
+}
+
 export interface UsuarioListItem {
   id: string
   nombre: string
@@ -7,6 +14,8 @@ export interface UsuarioListItem {
   perfilId: number
   perfil: { id: number; codigo: string; descripcion: string }
   esResponsableVenta: boolean
+  empresaPredeterminadaId: number | null
+  empresas: EmpresaAsignada[]
   creadoEn: Date
 }
 
@@ -23,6 +32,8 @@ export interface UsuarioCreateInput {
   esResponsableVenta?: boolean
   password: string
   passwordConfirm: string
+  empresas: number[]
+  empresaPredeterminadaId?: number | null
 }
 
 export interface UsuarioUpdateInput {
@@ -31,6 +42,8 @@ export interface UsuarioUpdateInput {
   imagenUrl?: string
   perfilId?: number
   esResponsableVenta?: boolean
+  empresas?: number[]
+  empresaPredeterminadaId?: number | null
 }
 
 export interface CambiarPasswordInput {
