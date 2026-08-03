@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { TemplateCargaCreateInput, TemplateCargaUpdateInput } from './templates-carga.types.js'
 
 const includeCampos = { campos: { orderBy: { id: 'asc' as const } } }
@@ -25,7 +26,10 @@ export async function findTemplateCargaByCodigo(codigo: string) {
 export async function createTemplateCarga(data: TemplateCargaCreateInput, creadoPor: string) {
   const { campos, ...cabecera } = data
   return prisma.templateCarga.create({
-    data: { ...cabecera, creadoPor, campos: { create: campos } },
+    // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
+    // valor con la empresa activa del contexto — se declara aquí solo para
+    // satisfacer el tipo requerido por Prisma.
+    data: { empresaId: getEmpresaIdActual()!, ...cabecera, creadoPor, campos: { create: campos } },
     include: includeCampos,
   })
 }

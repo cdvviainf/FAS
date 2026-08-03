@@ -122,6 +122,11 @@ export async function subirAdjunto(
 }
 
 export async function descargarAdjunto(recepcionId: number, adjuntoId: number) {
+  // La Recepción se valida primero vía la consulta tenant-scoped
+  // (obtenerRecepcion) — RecepcionAdjunto no es un modelo tenant, así que sin
+  // esto un adjunto de otra empresa sería alcanzable si el atacante conoce
+  // ambos IDs (mismo patrón que el hallazgo de adjuntos del lote Materiales).
+  await obtenerRecepcion(recepcionId)
   const meta = await repo.getAdjuntoMeta(recepcionId, adjuntoId)
   if (!meta) throw new NotFoundError('Adjunto', String(adjuntoId))
   const contenido = await repo.getAdjuntoContenido(adjuntoId)

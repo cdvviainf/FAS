@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { CondicionPagoCreateInput, CondicionPagoUpdateInput, TipoCondicionPago } from './condiciones-pago.types.js'
 
 const includeCuotas = {
@@ -45,6 +46,10 @@ export async function createCondicionPago(data: CondicionPagoCreateInput, creado
   const { cuotas, ...cabecera } = data
   return prisma.condicionPago.create({
     data: {
+      // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
+      // este valor con la empresa activa del contexto — se declara aquí solo
+      // para satisfacer el tipo requerido por Prisma.
+      empresaId: getEmpresaIdActual()!,
       ...cabecera,
       creadoPor,
       cuotas: { create: cuotas },

@@ -10,7 +10,7 @@
 > | **Frontend** | `fas-web` · `app/dashboard/configuracion/empresas/` (Fase 4) |
 > | **Depende de** | Mantenedores Generales (`Pais`, `Comuna`), Usuarios/Perfiles |
 > | **Usado por** | TODO el sistema (scoping por `empresaId` en la fase de tenancy) |
-> | **Estado** | Fase 3, lote 6/7 (Ventas) implementado — pendiente de QA |
+> | **Estado** | Fase 3, lote 7/7 (Compras, último) implementado — pendiente de QA. Fase 3 completa tras este lote. |
 
 ---
 
@@ -157,7 +157,7 @@ Fase 3 (backfill de `empresaId` al resto de ~38 modelos raíz candidatos) se hac
 | 4 | Materiales | `Articulo`, `Receta`, `TipoMovimiento`, `Movimiento`, `SaldoArticulo` | **Implementado** |
 | 5 | Productores | `Predio`, `ProductorContrato`, `MovimientoCuentaCorriente`, `ConceptoLiquidacion` | **Implementado** |
 | 6 | Ventas | `NotaVenta`, `Embarque`, `InstructivoEmbalaje` | **Implementado** |
-| 7 | Compras | `OrdenCompra`, `CondicionPago`, `Recepcion`, `Pallet`, `TemplateCarga` | Pendiente |
+| 7 | Compras | `OrdenCompra`, `CondicionPago`, `Recepcion`, `Pallet`, `TemplateCarga` | **Implementado** |
 
 Tablas hijas/detalle (líneas, adjuntos, joins) heredan del padre vía FK — no llevan `empresaId` propio (decisión #5).
 
@@ -299,3 +299,40 @@ El lote con más FK compuestas hasta ahora (8), repartidas en 5 modelos con estr
 **Fixtures de test — `enterWith` falla también dentro de `$transaction()` (hallazgo de QA, tests ronda 2):** ningún archivo de test crea `NotaVenta`/`Embarque`/`InstructivoEmbalaje` vía `prisma.<modelo>.create()` crudo — todo el acceso pasa por el service layer. Se asumió inicialmente que `ventas-compras.integration.test.ts` podía seguir usando el patrón `enterWith`-en-`beforeEach` para estas llamadas (ya validado para llamadas de servicio en los lotes 1 y 4), pero Codex encontró que **`getEmpresaIdActual()` devuelve `null` cuando se invoca dentro de un `prisma.$transaction(async (tx) => {...})`** si el contexto ALS se estableció vía `enterWith` — `createNotaVenta`, `updateNotaVenta`, `addDetalle`/`updateDetalle`/`removeDetalle` y `createInstructivo` usan `$transaction` internamente, y ninguna llamada anterior (lotes 1/4/5) había ejercitado esta combinación exacta (contexto vía `enterWith` + `getEmpresaIdActual()` leído dentro de una transacción). Se corrigió envolviendo específicamente `crearNotaVenta`/`actualizarNotaVenta`/`eliminarNotaVenta`/`agregarDetalle`/`crearInstructivo` en `empresaContext.run()` vía wrappers locales (mismo patrón que el lote Calidad), dejando el resto del archivo (que no atraviesa un límite de `$transaction` para leer `getEmpresaIdActual()`) sin cambios. **Lección para lotes futuros: `enterWith` no es confiable para NINGÚN código que lea el contexto ALS después de cruzar un `prisma.$transaction()`** — cualquier `create()`/`update()` dentro de una transacción que necesite `getEmpresaIdActual()` debe probarse con `.run()`, no asumir que `enterWith` alcanza solo porque otras llamadas del mismo archivo ya funcionaron.
 
 **Contrato de API sin cambios** — verificado con `tsc --noEmit` en `fas-web`, cero archivos tocados.
+
+### Lote 7 — Compras (implementado, último de Fase 3)
+
+5 modelos: `OrdenCompra`, `CondicionPago`, `Recepcion`, `Pallet`, `TemplateCarga`. **12 FK compuestas — nuevo récord** (supera las 11 del lote Ventas), incluyendo 2 retrofits de FKs simples que quedaron pendientes en lotes anteriores porque `CondicionPago` no era tenant todavía:
+
+1. `OrdenCompra ↔ Entidad` (`entidadProductorId`)
+2. `OrdenCompra ↔ NotaVenta` (`notaVentaId`, opcional)
+3. `OrdenCompra ↔ FormaPago` (`formaPagoId`, opcional)
+4. `OrdenCompra ↔ CondicionPago` (`condicionPagoId`, opcional)
+5. `OrdenCompra ↔ Mercado` (`destinoMercadoId`, opcional)
+6. `Recepcion ↔ OrdenCompra` (`ordenCompraId`, opcional — modo CONSIGNACION)
+7. `Recepcion ↔ Entidad` (`plantaId`)
+8. `Recepcion ↔ TemplateCarga` (`templateCargaId`, opcional)
+9. `Pallet ↔ Recepcion` (`recepcionId`)
+10. `Pallet ↔ Entidad` (`productorId`)
+11. **Retrofit** `ProductorContrato.condicionPagoId → CondicionPago` (pendiente desde el lote Productores)
+12. **Retrofit** `NotaVenta.condicionPagoId → CondicionPago` (pendiente desde el lote Ventas)
+
+`FormaPago`, `CondicionPago`, `OrdenCompra`, `TemplateCarga` y `Recepcion` necesitaban `@@unique([empresaId, id])` nuevo. `Entidad`, `NotaVenta` y `Mercado` ya lo tenían.
+
+**4 índices únicos convertidos a `(empresaId, ...)`:** `OrdenCompra.numero` y `Recepcion.numero` (parciales, con `eliminadoEn`); `CondicionPago.codigo` y `TemplateCarga.codigo` — estos dos **eran índices únicos parciales crudos GLOBALES preexistentes, invisibles en el DSL de Prisma** (mismo patrón que lotes 1/2/4) — se detectaron proactivamente ANTES de implementar, no por hallazgo de QA. El índice de negocio `Recepcion.ordenCompraId` ("una Recepción activa por OC") queda igual, sin `empresaId` — transitivamente scoped vía `ordenCompraId`.
+
+**`Pallet` no tiene código de creación todavía** — el motor de validación que generaría pallets desde una Recepción está diferido (comentario propio del schema). Solo requirió el cambio de schema/migración/`MODELOS_TENANT`, sin tocar repos ni servicios (no existe ninguna llamada `prisma.pallet.create` en el código).
+
+**Dos hallazgos aplicando lecciones de lotes anteriores, corregidos ANTES de que Codex tuviera que encontrarlos:**
+1. **Bug real, mismo tipo que el lote Materiales:** `descargarAdjunto` en `recepciones.service.ts` no validaba la `Recepcion` padre (`obtenerRecepcion`) antes de servir el adjunto, a diferencia de `subirAdjunto`/`eliminarAdjunto` que sí lo hacían — corregido con la misma validación tenant-scoped.
+2. **Mismo patrón de test que el lote Ventas:** `createOrdenCompra` usa `prisma.$transaction()` internamente (igual que `createNotaVenta`), así que la sección "Orden de Compra" de `ventas-compras.integration.test.ts` se envolvió proactivamente en `.run()` (no se esperó a que Codex repitiera el hallazgo de `enterWith`+`$transaction` del lote Ventas). También se corrigió el helper local `crearCondicionPago` (`prisma.condicionPago.create()` crudo) para recibir `empresaId` explícito.
+
+**Repos ajustados:** `ordenes-compra`/`recepciones.repository.ts` (módulo Compras) y `condiciones-pago`/`templates-carga.repository.ts` (módulo Config) — `empresaId` explícito en sus `create`. Todas las validaciones de encabezado y línea ya existentes (`ordenes-compra.service.ts#validarReferenciasHeader`/`validarLinea`, `recepciones.service.ts#validarOrdenCompra`/`validarPlantaYDireccion`/`validarTemplateCarga`) ya estaban completas y se volvieron tenant-scoped automáticamente, sin cambio de código.
+
+**Contrato de API sin cambios** — verificado con `tsc --noEmit` en `fas-web`, cero archivos tocados.
+
+---
+
+## Fase 3 — completa
+
+Los 7 sub-lotes de Fase 3 (Config/Mantenedores, Entidades, Calidad, Materiales, Productores, Ventas, Compras) quedan implementados. Todo modelo raíz del sistema con datos de negocio real es ahora tenant-scoped por `empresaId`, enforced server-side por la Prisma Client Extension de Fase 2a. Quedan como trabajo futuro (fuera del alcance original de Fase 3): Fase 4 (UI de administración de Empresas) y la cobertura de tests de aislamiento cruzado entre dos empresas explícitamente señalada como deuda en cada lote.

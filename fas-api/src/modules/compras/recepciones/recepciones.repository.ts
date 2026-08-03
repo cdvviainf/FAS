@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { RecepcionCreateInput, RecepcionUpdateInput } from './recepciones.types.js'
 
 const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: true }
@@ -62,6 +63,10 @@ export async function createRecepcion(data: RecepcionCreateInput, creadoPor: str
 
     return tx.recepcion.create({
       data: {
+        // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
+        // este valor con la empresa activa del contexto — se declara aquí
+        // solo para satisfacer el tipo requerido por Prisma.
+        empresaId: getEmpresaIdActual()!,
         ...resto,
         ordenCompraId: ordenCompraId ?? null,
         origen: ordenCompraId ? 'COMPRA' : 'CONSIGNACION',

@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import type { OrdenCompraCreateInput, OrdenCompraUpdateInput } from './ordenes-compra.types.js'
 
@@ -177,6 +178,10 @@ export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor:
 
     return tx.ordenCompra.create({
       data: {
+        // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
+        // este valor con la empresa activa del contexto — se declara aquí
+        // solo para satisfacer el tipo requerido por Prisma.
+        empresaId: getEmpresaIdActual()!,
         ...cabecera,
         numero,
         creadoPor,

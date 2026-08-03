@@ -50,6 +50,12 @@ const MODELOS_TENANT = new Set([
   'NotaVenta',
   'Embarque',
   'InstructivoEmbalaje',
+  // Fase 3, lote Compras (7/7, último):
+  'OrdenCompra',
+  'CondicionPago',
+  'Recepcion',
+  'Pallet',
+  'TemplateCarga',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

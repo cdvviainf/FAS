@@ -225,6 +225,11 @@ model Empresa {
   notasVenta           NotaVenta[]
   embarques            Embarque[]
   instructivosEmbalaje InstructivoEmbalaje[]
+  ordenesCompra        OrdenCompra[]
+  condicionesPago      CondicionPago[]
+  recepciones          Recepcion[]
+  pallets              Pallet[]
+  templatesCarga       TemplateCarga[]
 
   @@map("empresas")
 }
@@ -603,6 +608,7 @@ model FormaPago {
 
   ordenesCompra OrdenCompra[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@map("formas_pago")
 }
@@ -1844,10 +1850,11 @@ model ProductorContrato {
   fechaTermino    DateTime  @db.Date
   // Mantenedor real CondicionPago (tipo COMPRA) — decisión de negocio,
   // Christian, 2026-07-30. Reemplaza el hack anterior de Parametro suelto
-  // (que nunca llegó a tener catálogo real). CondicionPago aún no es tenant
-  // (pendiente de Fase 3 lote Compras) — FK simple por ahora.
+  // (que nunca llegó a tener catálogo real). CondicionPago pasa a ser tenant
+  // en Fase 3 lote Compras — FK compuesta (empresaId, condicionPagoId) ->
+  // CondicionPago(empresaId, id).
   condicionPagoId Int?
-  condicionPago   CondicionPago? @relation(fields: [condicionPagoId], references: [id])
+  condicionPago   CondicionPago? @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
   // Usuario responsable (mismo patrón que OrdenCompra.responsableId,
   // filtrado por esResponsableVenta).
   responsableId   String?
@@ -2034,9 +2041,9 @@ model NotaVenta {
   // modelo que Compras (CondicionPago). No existe un campo de "saldo pago"
   // separado — las cuotas se snapshotean en NotaVentaCuotaPago al guardar
   // (mismo patrón que OrdenCompraCuotaPago, ver Docs/ventas.md R12).
-  // CondicionPago aún no es tenant (pendiente Fase 3 lote Compras) — FK simple.
+  // CondicionPago pasa a ser tenant en Fase 3 lote Compras — FK compuesta.
   condicionPagoId Int?
-  condicionPago   CondicionPago?       @relation(fields: [condicionPagoId], references: [id])
+  condicionPago   CondicionPago?       @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
   cuotasPago      NotaVentaCuotaPago[]
 
   monedaId Int
@@ -2224,27 +2231,30 @@ enum EstadoOrdenCompra {
 }
 
 model OrdenCompra {
-  id     Int    @id @default(autoincrement())
-  numero String @unique // OC-{AAAA}-{NNNN}, correlativo por año
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  numero    String  // OC-{AAAA}-{NNNN}, correlativo por año, único por empresa
 
   entidadProductorId Int // Entidad tipo PRODUCTOR
-  entidadProductor   Entidad    @relation("OrdenCompraProductor", fields: [entidadProductorId], references: [id])
+  // FK compuesta (empresaId, entidadProductorId) -> Entidad(empresaId, id).
+  entidadProductor   Entidad    @relation("OrdenCompraProductor", fields: [empresaId, entidadProductorId], references: [empresaId, id])
   notaVentaId        Int? // origen Cierre Comercial; null = Manual
-  notaVenta          NotaVenta? @relation(fields: [notaVentaId], references: [id])
+  notaVenta          NotaVenta? @relation(fields: [empresaId, notaVentaId], references: [empresaId, id])
 
   fecha             DateTime  @default(now())
   fechaEntregaDesde DateTime? @db.Date
   fechaEntregaHasta DateTime? @db.Date
 
   formaPagoId      Int?
-  formaPago        FormaPago?        @relation(fields: [formaPagoId], references: [id])
+  formaPago        FormaPago?        @relation(fields: [empresaId, formaPagoId], references: [empresaId, id])
   condicionPagoId  Int?
-  condicionPago    CondicionPago?    @relation(fields: [condicionPagoId], references: [id])
+  condicionPago    CondicionPago?    @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
   monedaId         Int
   moneda           Moneda            @relation(fields: [monedaId], references: [id])
   incotermId       Int? // Parametro genérico (Incoterm de compra) — ver nota en NotaVenta
   destinoMercadoId Int?
-  destinoMercado   Mercado?          @relation(fields: [destinoMercadoId], references: [id])
+  destinoMercado   Mercado?          @relation(fields: [empresaId, destinoMercadoId], references: [empresaId, id])
   responsableId    String?
   responsable      Usuario?          @relation(fields: [responsableId], references: [id])
   observaciones    String?
@@ -2266,12 +2276,14 @@ model OrdenCompra {
   eliminadoEn    DateTime?
   eliminadoPor   String?
 
+  @@unique([empresaId, id])
   @@index([entidadProductorId])
   @@index([notaVentaId])
   @@index([formaPagoId])
   @@index([condicionPagoId])
   @@index([destinoMercadoId])
   @@index([responsableId])
+  @@index([empresaId])
   @@map("ordenes_compra")
 }
 
@@ -2288,6 +2300,8 @@ enum TipoCondicionPago {
 // seleccionarse — no se cargan manualmente por OC.
 model CondicionPago {
   id          Int               @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa           @relation(fields: [empresaId], references: [id])
   codigo      String
   descripcion String
   tipo        TipoCondicionPago
@@ -2305,6 +2319,8 @@ model CondicionPago {
   eliminadoEn    DateTime?
   eliminadoPor   String?
 
+  @@unique([empresaId, id])
+  @@index([empresaId])
   @@map("condiciones_pago")
 }
 
@@ -2407,8 +2423,10 @@ enum EstadoRecepcion {
 }
 
 model Recepcion {
-  id     Int    @id @default(autoincrement())
-  numero String @unique // RC-{AAAA}-{NNNN}, correlativo por año (mismo patrón que OrdenCompra)
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  numero    String  // RC-{AAAA}-{NNNN}, correlativo por año (mismo patrón que OrdenCompra), único por empresa
 
   // Sin @unique de Prisma (no soporta índices parciales en el DSL): la
   // unicidad real es un índice único parcial a nivel de BD, solo entre filas
@@ -2417,20 +2435,23 @@ model Recepcion {
   // Recepción nueva (QAR-RCT-004), sin perder protección contra duplicados
   // concurrentes.
   ordenCompraId Int? // nullable = modo CONSIGNACION
-  ordenCompra   OrdenCompra?    @relation(fields: [ordenCompraId], references: [id])
+  // FK compuesta (empresaId, ordenCompraId) -> OrdenCompra(empresaId, id).
+  ordenCompra   OrdenCompra?    @relation(fields: [empresaId, ordenCompraId], references: [empresaId, id])
   // Derivado server-side de ordenCompraId (no se acepta como input) — se
   // propaga a todos los pallets generados por esta Recepción (compras.md §4.4).
   origen        OrigenRecepcion
 
   plantaId          Int // Entidad tipo PLANTA (compras.md: "Planta" no es mantenedor propio, es Entidad con tipos incluyendo PLANTA)
-  planta            Entidad          @relation("RecepcionPlanta", fields: [plantaId], references: [id])
+  // FK compuesta (empresaId, plantaId) -> Entidad(empresaId, id).
+  planta            Entidad          @relation("RecepcionPlanta", fields: [empresaId, plantaId], references: [empresaId, id])
   direccionPlantaId Int // EntidadDireccion — debe pertenecer a plantaId
   direccionPlanta   EntidadDireccion @relation(fields: [direccionPlantaId], references: [id])
 
   // Mapeo de columnas del Excel a aplicar (config.md templates-carga) — opcional
   // en esta etapa estructural; requerido cuando se implemente el parseo real.
   templateCargaId Int?
-  templateCarga   TemplateCarga? @relation(fields: [templateCargaId], references: [id])
+  // FK compuesta (empresaId, templateCargaId) -> TemplateCarga(empresaId, id).
+  templateCarga   TemplateCarga? @relation(fields: [empresaId, templateCargaId], references: [empresaId, id])
 
   estado        EstadoRecepcion @default(CARGADA)
   observaciones String?
@@ -2445,9 +2466,11 @@ model Recepcion {
   eliminadoEn    DateTime?
   eliminadoPor   String?
 
+  @@unique([empresaId, id])
   @@index([plantaId])
   @@index([templateCargaId])
   @@index([eliminadoEn])
+  @@index([empresaId])
   @@map("recepciones")
 }
 
@@ -2477,15 +2500,19 @@ model RecepcionAdjuntoContenido {
 
 model Pallet {
   id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
   recepcionId Int
-  recepcion   Recepcion @relation(fields: [recepcionId], references: [id])
+  // FK compuesta (empresaId, recepcionId) -> Recepcion(empresaId, id).
+  recepcion   Recepcion @relation(fields: [empresaId, recepcionId], references: [empresaId, id])
 
   numeroPallet String // identificador de origen — usado para reconciliar con Packing List (ventas.md)
   origen       OrigenRecepcion // heredado de Recepcion.origen
   // embarqueId se agrega cuando exista el modelo Embarque (ventas.md, aún diferido)
 
   productorId Int // Entidad tipo PRODUCTOR
-  productor   Entidad @relation("PalletProductor", fields: [productorId], references: [id])
+  // FK compuesta (empresaId, productorId) -> Entidad(empresaId, id).
+  productor   Entidad @relation("PalletProductor", fields: [empresaId, productorId], references: [empresaId, id])
 
   lineas PalletLinea[]
 
@@ -2493,6 +2520,7 @@ model Pallet {
 
   @@index([recepcionId])
   @@index([productorId])
+  @@index([empresaId])
   @@map("pallets")
 }
 
@@ -2522,6 +2550,8 @@ model PalletLinea {
 
 model TemplateCarga {
   id                 Int     @id @default(autoincrement())
+  empresaId          Int
+  empresa            Empresa @relation(fields: [empresaId], references: [id])
   codigo             String
   descripcion        String
   tieneCabecera      Boolean @default(true)
@@ -2539,7 +2569,9 @@ model TemplateCarga {
   eliminadoEn    DateTime?
   eliminadoPor   String?
 
+  @@unique([empresaId, id])
   @@index([eliminadoEn])
+  @@index([empresaId])
   @@map("templates_carga")
 }
 
