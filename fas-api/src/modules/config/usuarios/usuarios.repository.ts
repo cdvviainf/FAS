@@ -12,7 +12,7 @@ const usuarioSelect = {
   creadoEn: true,
   actualizadoEn: true,
   perfil: { select: { id: true, codigo: true, descripcion: true } },
-  usuarioEmpresas: {
+  empresas: {
     select: {
       empresa: { select: { id: true, codigo: true, razonSocial: true, activo: true } },
     },
@@ -21,12 +21,13 @@ const usuarioSelect = {
 }
 
 // Prisma no puede aplanar una relación 1:N directamente en el select; se
-// devuelve `usuarioEmpresas: [{ empresa: {...} }]` y aquí se aplana a
-// `empresas: [{...}]`, que es la forma que consume el frontend.
+// devuelve `empresas: [{ empresa: {...} }]` (filas de UsuarioEmpresa) y aquí
+// se aplana a `empresas: [{...}]` (los Empresa en sí), que es la forma que
+// consume el frontend.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapUsuario<T extends { usuarioEmpresas: { empresa: any }[] }>(row: T) {
-  const { usuarioEmpresas, ...rest } = row
-  return { ...rest, empresas: usuarioEmpresas.map((ue) => ue.empresa) }
+function mapUsuario<T extends { empresas: { empresa: any }[] }>(row: T) {
+  const { empresas, ...rest } = row
+  return { ...rest, empresas: empresas.map((ue) => ue.empresa) }
 }
 
 export async function findAllUsuarios(page: number, limit: number, q?: string, perfilId?: number, esResponsableVenta?: boolean) {
