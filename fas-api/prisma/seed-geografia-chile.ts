@@ -1,6 +1,6 @@
 /**
  * Carga masiva de la división político-administrativa oficial de Chile:
- * Región → Provincia → Comuna (16 regiones, 56 provincias, 346 comunas).
+ * País (CHL) → Región → Provincia → Comuna (16 regiones, 56 provincias, 346 comunas).
  *
  * Fuente: "Códigos Únicos Territoriales, vigentes a partir del 6 de septiembre
  * de 2018" — Ministerio del Interior, Subsecretaría de Desarrollo Regional y
@@ -19,6 +19,19 @@ import { REGIONES_CHILE } from './regiones-chile-data.ts'
 
 const prisma = new PrismaClient()
 const SISTEMA = 'sistema'
+
+async function upsertPaisChile() {
+  const existente = await prisma.pais.findFirst({ where: { codigo: 'CHL', eliminadoEn: null } })
+  if (existente) {
+    return prisma.pais.update({
+      where: { id: existente.id },
+      data: { descripcion: 'Chile', esPaisNacional: true, actualizadoPor: SISTEMA },
+    })
+  }
+  return prisma.pais.create({
+    data: { codigo: 'CHL', descripcion: 'Chile', esPaisNacional: true, creadoPor: SISTEMA },
+  })
+}
 
 async function upsertRegion(codigo: string, descripcion: string) {
   const existente = await prisma.region.findFirst({ where: { codigo, eliminadoEn: null } })
@@ -57,6 +70,9 @@ async function main() {
   let regiones = 0
   let provincias = 0
   let comunas = 0
+
+  await upsertPaisChile()
+  console.log('País Chile (CHL) verificado.')
 
   for (const r of REGIONES_CHILE) {
     const region = await upsertRegion(r.codigo, r.descripcion)
