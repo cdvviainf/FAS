@@ -5,15 +5,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Icons } from '@/components/icons'
 import { AlertModal } from '@/components/modal/alert-modal'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { templatesCargaService } from '../service'
-import { CAMPO_TEMPLATE_CARGA_LABELS } from '../types'
-import type { TemplateCarga } from '../types'
+import { TIPOS_TEMPLATE_CARGA, TIPO_TEMPLATE_CARGA_LABELS, CAMPO_TEMPLATE_CARGA_LABELS } from '../types'
+import type { TemplateCarga, TipoTemplateCarga } from '../types'
 import { TemplateCargaFormSheet } from './template-carga-form-sheet'
 
 const ITEM = 'CONFIG_MANTENEDORES'
+const FILTRO_TODOS = 'TODOS'
 
 export function TemplateCargaListingClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)
@@ -21,10 +23,11 @@ export function TemplateCargaListingClient() {
   const [editItem, setEditItem] = useState<TemplateCarga | undefined>()
   const [formOpen, setFormOpen] = useState(false)
   const [deleteItem, setDeleteItem] = useState<TemplateCarga | undefined>()
+  const [filtroTipo, setFiltroTipo] = useState<typeof FILTRO_TODOS | TipoTemplateCarga>(FILTRO_TODOS)
 
   const { data, isPending } = useQuery({
-    queryKey: ['templates-carga'],
-    queryFn: () => templatesCargaService.list(),
+    queryKey: ['templates-carga', filtroTipo],
+    queryFn: () => templatesCargaService.list(filtroTipo === FILTRO_TODOS ? {} : { tipo: filtroTipo }),
   })
 
   const deleteMutation = useMutation({
@@ -37,11 +40,20 @@ export function TemplateCargaListingClient() {
     onError: (e: Error) => toast.error(e.message || 'Error al eliminar el Template de Carga'),
   })
 
-  if (isPending) return <p className='text-sm text-muted-foreground'>Cargando...</p>
-
   return (
     <div className='space-y-3'>
-      {(data?.data ?? []).length === 0 ? (
+      <Tabs value={filtroTipo} onValueChange={(v) => setFiltroTipo(v as typeof FILTRO_TODOS | TipoTemplateCarga)}>
+        <TabsList>
+          <TabsTrigger value={FILTRO_TODOS}>Todos</TabsTrigger>
+          {TIPOS_TEMPLATE_CARGA.map((t) => (
+            <TabsTrigger key={t} value={t}>{TIPO_TEMPLATE_CARGA_LABELS[t]}</TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      {isPending ? (
+        <p className='text-sm text-muted-foreground'>Cargando...</p>
+      ) : (data?.data ?? []).length === 0 ? (
         <p className='text-sm text-muted-foreground'>No hay templates de carga creados.</p>
       ) : (
         <div className='space-y-2'>
@@ -49,7 +61,9 @@ export function TemplateCargaListingClient() {
             <div key={t.id} className='rounded-md border p-3'>
               <div className='flex items-center justify-between'>
                 <div>
-                  <p className='font-medium'>{t.codigo} — {t.descripcion}</p>
+                  <p className='font-medium'>
+                    {t.codigo} — {t.descripcion} <Badge variant='secondary' className='ml-1 align-middle'>{TIPO_TEMPLATE_CARGA_LABELS[t.tipo]}</Badge>
+                  </p>
                   <p className='text-xs text-muted-foreground'>
                     {t.tieneCabecera ? `Con cabecera (fila ${t.filaCabecera})` : 'Sin cabecera'} · Primer registro: fila {t.filaPrimerRegistro}
                   </p>

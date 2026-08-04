@@ -2553,6 +2553,10 @@ model TemplateCarga {
   empresaId          Int
   empresa            Empresa @relation(fields: [empresaId], references: [id])
   codigo             String
+  // Whitelist en código (TIPOS_TEMPLATE_CARGA), no enum Prisma — mismo
+  // criterio que `campo` abajo: agregar un tipo nuevo no debe requerir
+  // migración. Inmutable tras crear (ver templates-carga.schema.ts).
+  tipo               String
   descripcion        String
   tieneCabecera      Boolean @default(true)
   filaCabecera       Int? // requerido si tieneCabecera = true

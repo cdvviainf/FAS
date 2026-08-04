@@ -8,8 +8,8 @@ import {
 import * as service from './templates-carga.service.js'
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
-  const { q } = templateCargaListQuerySchema.parse(req.query)
-  const templates = await service.listarTemplatesCarga(q)
+  const { q, tipo } = templateCargaListQuerySchema.parse(req.query)
+  const templates = await service.listarTemplatesCarga(q, tipo)
   return reply.send({ data: templates })
 }
 

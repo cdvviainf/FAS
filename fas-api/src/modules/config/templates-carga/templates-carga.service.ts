@@ -1,10 +1,11 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './templates-carga.repository.js'
-import { CAMPOS_TEMPLATE_CARGA } from './templates-carga.types.js'
-import type { TemplateCargaCreateInput, TemplateCargaUpdateInput, TemplateCargaCampoInput } from './templates-carga.types.js'
+import { CAMPOS_POR_TIPO, TIPO_TEMPLATE_CARGA_LABELS } from './templates-carga.types.js'
+import type { TemplateCargaCreateInput, TemplateCargaUpdateInput, TemplateCargaCampoInput, TipoTemplateCarga } from './templates-carga.types.js'
 
 interface TemplateCoherencia {
+  tipo: TipoTemplateCarga
   tieneCabecera: boolean
   filaCabecera?: number | null
   filaPrimerRegistro: number
@@ -24,15 +25,28 @@ function validarCoherenciaTemplate(d: TemplateCoherencia) {
     throw new ValidationError('La fila del primer registro debe ser posterior a la fila de cabecera')
   }
 
-  // El motor de carga necesita los 8 campos para materializar Pallet/PalletLinea
-  // (compras.md §4.5-4.6, §7) — un template incompleto nunca podría procesarse
-  // (QAR-RCT-001). Dos campos distintos no pueden apuntar a la misma columna:
-  // una sola celda no puede representar dos datos simultáneamente (QAR-RCT-001,
-  // ronda 2) — comparación normalizada (trim + mayúsculas) para atrapar
-  // duplicados por capitalización o espacios.
+  // Whitelist de campos mapeables del tipo (compras.md §9.2). Un tipo sin
+  // campos definidos todavía (ej. PACKING_LIST) no puede crear/editar
+  // templates — mensaje explícito en vez de un rechazo confuso campo por
+  // campo.
+  const camposDelTipo = CAMPOS_POR_TIPO[d.tipo]
+  if (camposDelTipo.length === 0) {
+    throw new ValidationError(`El tipo "${TIPO_TEMPLATE_CARGA_LABELS[d.tipo]}" todavía no tiene campos definidos`)
+  }
+
+  // El motor de carga necesita todos los campos del tipo para materializar
+  // Pallet/PalletLinea (compras.md §4.5-4.6, §7) — un template incompleto
+  // nunca podría procesarse (QAR-RCT-001). Dos campos distintos no pueden
+  // apuntar a la misma columna: una sola celda no puede representar dos
+  // datos simultáneamente (QAR-RCT-001, ronda 2) — comparación normalizada
+  // (trim + mayúsculas) para atrapar duplicados por capitalización o
+  // espacios.
   const camposVistos = new Set<string>()
   const columnasVistas = new Map<string, string>()
   for (const c of d.campos) {
+    if (!camposDelTipo.includes(c.campo)) {
+      throw new ValidationError(`El campo "${c.campo}" no es válido para el tipo "${TIPO_TEMPLATE_CARGA_LABELS[d.tipo]}"`)
+    }
     if (camposVistos.has(c.campo)) throw new ValidationError(`El campo "${c.campo}" está repetido`)
     camposVistos.add(c.campo)
     if (!d.tieneCabecera && !/^[A-Za-z]+$/.test(c.columna)) {
@@ -45,14 +59,14 @@ function validarCoherenciaTemplate(d: TemplateCoherencia) {
     }
     columnasVistas.set(columnaNormalizada, c.campo)
   }
-  const faltantes = CAMPOS_TEMPLATE_CARGA.filter((campo) => !camposVistos.has(campo))
+  const faltantes = camposDelTipo.filter((campo) => !camposVistos.has(campo))
   if (faltantes.length > 0) {
     throw new ValidationError(`Deben mapearse todos los campos. Faltan: ${faltantes.join(', ')}`)
   }
 }
 
-export async function listarTemplatesCarga(q?: string) {
-  return repo.listTemplatesCarga(q)
+export async function listarTemplatesCarga(q?: string, tipo?: TipoTemplateCarga) {
+  return repo.listTemplatesCarga(q, tipo)
 }
 
 export async function obtenerTemplateCarga(id: number) {
@@ -62,7 +76,13 @@ export async function obtenerTemplateCarga(id: number) {
 }
 
 export async function crearTemplateCarga(body: TemplateCargaCreateInput, userId: string) {
-  validarCoherenciaTemplate(body)
+  validarCoherenciaTemplate({
+    tipo: body.tipo,
+    tieneCabecera: body.tieneCabecera,
+    filaCabecera: body.filaCabecera,
+    filaPrimerRegistro: body.filaPrimerRegistro,
+    campos: body.campos,
+  })
   const existente = await repo.findTemplateCargaByCodigo(body.codigo)
   if (existente) throw new ValidationError(`Ya existe un template de carga con código "${body.codigo}"`)
   try {
@@ -78,6 +98,7 @@ export async function crearTemplateCarga(body: TemplateCargaCreateInput, userId:
 export async function actualizarTemplateCarga(id: number, body: TemplateCargaUpdateInput, userId: string) {
   const existente = await obtenerTemplateCarga(id)
   validarCoherenciaTemplate({
+    tipo: existente.tipo as TipoTemplateCarga,
     tieneCabecera: body.tieneCabecera ?? existente.tieneCabecera,
     filaCabecera: body.filaCabecera !== undefined ? body.filaCabecera : existente.filaCabecera,
     filaPrimerRegistro: body.filaPrimerRegistro ?? existente.filaPrimerRegistro,

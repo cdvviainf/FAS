@@ -1,9 +1,12 @@
 import { api } from '@/lib/api'
-import type { TemplateCarga, TemplateCargaCreateInput, TemplateCargaUpdateInput } from './types'
+import type { TemplateCarga, TemplateCargaCreateInput, TemplateCargaUpdateInput, TipoTemplateCarga } from './types'
 
 export const templatesCargaService = {
-  async list(q?: string): Promise<{ data: TemplateCarga[] }> {
-    return api.get('config/templates-carga', { searchParams: q ? { q } : undefined }).json()
+  async list(params: { q?: string; tipo?: TipoTemplateCarga } = {}): Promise<{ data: TemplateCarga[] }> {
+    const searchParams: Record<string, string> = {}
+    if (params.q) searchParams.q = params.q
+    if (params.tipo) searchParams.tipo = params.tipo
+    return api.get('config/templates-carga', { searchParams }).json()
   },
   async getById(id: number): Promise<{ data: TemplateCarga }> {
     return api.get(`config/templates-carga/${id}`).json()

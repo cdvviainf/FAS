@@ -37,6 +37,11 @@ async function validarTemplateCarga(templateCargaId?: number | null) {
   const template = await repo.getTemplateCarga(templateCargaId)
   if (!template) throw new ValidationError('El template de carga seleccionado no existe')
   if (template.bloqueado) throw new ValidationError('El template de carga seleccionado está bloqueado')
+  // Defensa en profundidad: el picker del frontend ya filtra por
+  // tipo=RECEPCION, esto cubre un request armado a mano saltándose el filtro.
+  if (template.tipo !== 'RECEPCION') {
+    throw new ValidationError('El template de carga seleccionado no es de tipo Recepción')
+  }
 }
 
 export async function listarRecepciones(page: number, limit: number, plantaId?: number, origen?: string, estado?: string) {

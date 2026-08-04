@@ -1,13 +1,14 @@
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
-import type { TemplateCargaCreateInput, TemplateCargaUpdateInput } from './templates-carga.types.js'
+import type { TemplateCargaCreateInput, TemplateCargaUpdateInput, TipoTemplateCarga } from './templates-carga.types.js'
 
 const includeCampos = { campos: { orderBy: { id: 'asc' as const } } }
 
-export async function listTemplatesCarga(q?: string) {
+export async function listTemplatesCarga(q?: string, tipo?: TipoTemplateCarga) {
   return prisma.templateCarga.findMany({
     where: {
       eliminadoEn: null,
+      ...(tipo ? { tipo } : {}),
       ...(q ? { OR: [{ codigo: { contains: q, mode: 'insensitive' as const } }, { descripcion: { contains: q, mode: 'insensitive' as const } }] } : {}),
     },
     include: includeCampos,

@@ -91,8 +91,8 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
     enabled: fields.tieneOc === 'SI',
   })
   const { data: templatesCargaData } = useQuery({
-    queryKey: ['templates-carga-options'],
-    queryFn: () => templatesCargaService.list(),
+    queryKey: ['templates-carga-options', 'RECEPCION'],
+    queryFn: () => templatesCargaService.list({ tipo: 'RECEPCION' }),
     staleTime: 60_000,
   })
   const { data: plantaDetalle } = useQuery({
