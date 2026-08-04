@@ -130,10 +130,10 @@ export interface OrdenCompraCreateInput {
   destinoMercadoId?: number | null
   responsableId?: string | null
   observaciones?: string | null
-  lineas: OrdenCompraLineaInput[]
 }
 
-export type OrdenCompraUpdateInput = Partial<Omit<OrdenCompraCreateInput, 'lineas'>> & {
+export type OrdenCompraUpdateInput = Partial<OrdenCompraCreateInput> & {
   estado?: EstadoOrdenCompra
-  lineas?: OrdenCompraLineaInput[]
 }
+
+export type OrdenCompraLineaCreateInput = OrdenCompraLineaInput

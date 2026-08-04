@@ -25,7 +25,6 @@ export const ordenCompraCreateSchema = z.object({
   destinoMercadoId: z.number().int().positive().optional().nullable(),
   responsableId: z.string().min(1).optional().nullable(),
   observaciones: z.string().max(2000).trim().optional().nullable(),
-  lineas: z.array(lineaSchema).min(1, 'La OC debe tener al menos una línea'),
 }).refine(
   (d) => !d.fechaEntregaDesde || !d.fechaEntregaHasta || d.fechaEntregaDesde <= d.fechaEntregaHasta,
   { message: 'La fecha de entrega desde no puede ser posterior a la fecha hasta', path: ['fechaEntregaHasta'] },
@@ -48,7 +47,6 @@ export const ordenCompraUpdateSchema = z.object({
   // asignará el futuro flujo de Recepción de Stock (compras.md §4.4/§8),
   // no este endpoint (OC-001).
   estado: z.enum(['BORRADOR', 'EMITIDA']).optional(),
-  lineas: z.array(lineaSchema).min(1).optional(),
 }).superRefine((d, ctx) => {
   if (d.fechaEntregaDesde && d.fechaEntregaHasta && d.fechaEntregaDesde > d.fechaEntregaHasta) {
     ctx.addIssue({
@@ -59,8 +57,16 @@ export const ordenCompraUpdateSchema = z.object({
   }
 })
 
+export const ordenCompraLineaCreateSchema = lineaSchema
+export const ordenCompraLineaUpdateSchema = lineaSchema
+
 export const ordenCompraParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
+})
+
+export const ordenCompraLineaParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  lineaId: z.coerce.number().int().positive(),
 })
 
 export const ordenCompraListQuerySchema = z.object({
@@ -72,3 +78,5 @@ export const ordenCompraListQuerySchema = z.object({
 
 export type OrdenCompraCreateBody = z.infer<typeof ordenCompraCreateSchema>
 export type OrdenCompraUpdateBody = z.infer<typeof ordenCompraUpdateSchema>
+export type OrdenCompraLineaCreateBody = z.infer<typeof ordenCompraLineaCreateSchema>
+export type OrdenCompraLineaUpdateBody = z.infer<typeof ordenCompraLineaUpdateSchema>

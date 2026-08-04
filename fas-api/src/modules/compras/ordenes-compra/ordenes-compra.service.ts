@@ -3,6 +3,8 @@ import * as repo from './ordenes-compra.repository.js'
 import type {
   OrdenCompraCreateInput,
   OrdenCompraLineaInput,
+  OrdenCompraLineaCreateInput,
+  OrdenCompraLineaUpdateInput,
   OrdenCompraUpdateInput,
 } from './ordenes-compra.types.js'
 
@@ -100,9 +102,6 @@ export async function obtenerOrdenCompra(id: number) {
 
 export async function crearOrdenCompra(body: OrdenCompraCreateInput, creadoPor: string) {
   await validarReferenciasHeader(body)
-  for (const [index, linea] of body.lineas.entries()) {
-    await validarLinea(linea, index)
-  }
   return repo.createOrdenCompra(body, creadoPor)
 }
 
@@ -115,11 +114,6 @@ export async function actualizarOrdenCompra(id: number, body: OrdenCompraUpdateI
     throw new ValidationError('La Orden de Compra ya fue recepcionada y no puede editarse')
   }
   await validarReferenciasHeader(body)
-  if (body.lineas) {
-    for (const [index, linea] of body.lineas.entries()) {
-      await validarLinea(linea, index)
-    }
-  }
   return repo.updateOrdenCompra(id, body, actualizadoPor)
 }
 
@@ -129,4 +123,44 @@ export async function eliminarOrdenCompra(id: number, eliminadoPor: string) {
     throw new ValidationError('La Orden de Compra ya fue recepcionada y no puede eliminarse')
   }
   await repo.softDeleteOrdenCompra(id, eliminadoPor)
+}
+
+function assertEditable(orden: { estado: string }) {
+  if (orden.estado === 'RECEPCIONADA') {
+    throw new ValidationError('La Orden de Compra ya fue recepcionada y no puede editarse')
+  }
+}
+
+export async function agregarLinea(ordenCompraId: number, body: OrdenCompraLineaCreateInput) {
+  const orden = await obtenerOrdenCompra(ordenCompraId)
+  assertEditable(orden)
+  await validarLinea(body, 0)
+  return repo.addLinea(ordenCompraId, body)
+}
+
+// La OrdenCompraLinea no es un modelo tenant (tabla hija, decisión #5 de
+// empresas.md) — se valida el padre primero vía obtenerOrdenCompra (que sí es
+// tenant-scoped) antes de tocar la línea directamente, o una línea de otra
+// empresa sería alcanzable conociendo ambos IDs (mismo motivo que
+// obtenerDetalleDeNotaVenta en notas-venta.service.ts).
+async function obtenerLineaDeOrdenCompra(ordenCompraId: number, lineaId: number) {
+  const orden = await obtenerOrdenCompra(ordenCompraId)
+  const linea = await repo.getLineaById(lineaId)
+  if (!linea || linea.ordenCompraId !== ordenCompraId) {
+    throw new NotFoundError('Línea de Orden de Compra', String(lineaId))
+  }
+  return orden
+}
+
+export async function actualizarLinea(ordenCompraId: number, lineaId: number, body: OrdenCompraLineaUpdateInput) {
+  const orden = await obtenerLineaDeOrdenCompra(ordenCompraId, lineaId)
+  assertEditable(orden)
+  await validarLinea(body, 0)
+  return repo.updateLinea(lineaId, body)
+}
+
+export async function eliminarLinea(ordenCompraId: number, lineaId: number) {
+  const orden = await obtenerLineaDeOrdenCompra(ordenCompraId, lineaId)
+  assertEditable(orden)
+  await repo.removeLinea(lineaId, ordenCompraId)
 }

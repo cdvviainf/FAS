@@ -4,6 +4,8 @@ import type {
   OrdenCompraDetalle,
   OrdenCompraCreateInput,
   OrdenCompraUpdateInput,
+  OrdenCompraLineaCreateInput,
+  OrdenCompraLineaItem,
   EstadoOrdenCompra,
 } from './types'
 
@@ -31,5 +33,17 @@ export const ordenesCompraService = {
 
   async remove(id: number): Promise<void> {
     await api.delete(`compras/ordenes-compra/${id}`)
+  },
+
+  async addLinea(id: number, data: OrdenCompraLineaCreateInput): Promise<{ data: OrdenCompraLineaItem }> {
+    return api.post(`compras/ordenes-compra/${id}/lineas`, { json: data }).json()
+  },
+
+  async updateLinea(id: number, lineaId: number, data: OrdenCompraLineaCreateInput): Promise<{ data: OrdenCompraLineaItem }> {
+    return api.patch(`compras/ordenes-compra/${id}/lineas/${lineaId}`, { json: data }).json()
+  },
+
+  async removeLinea(id: number, lineaId: number): Promise<void> {
+    await api.delete(`compras/ordenes-compra/${id}/lineas/${lineaId}`)
   },
 }

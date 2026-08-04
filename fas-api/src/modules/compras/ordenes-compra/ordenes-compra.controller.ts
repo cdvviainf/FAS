@@ -4,6 +4,9 @@ import {
   ordenCompraUpdateSchema,
   ordenCompraParamsSchema,
   ordenCompraListQuerySchema,
+  ordenCompraLineaCreateSchema,
+  ordenCompraLineaUpdateSchema,
+  ordenCompraLineaParamsSchema,
 } from './ordenes-compra.schema.js'
 import * as service from './ordenes-compra.service.js'
 
@@ -35,5 +38,25 @@ export async function update(req: FastifyRequest, reply: FastifyReply) {
 export async function remove(req: FastifyRequest, reply: FastifyReply) {
   const { id } = ordenCompraParamsSchema.parse(req.params)
   await service.eliminarOrdenCompra(id, req.fasUserId!)
+  return reply.status(204).send()
+}
+
+export async function addLinea(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = ordenCompraParamsSchema.parse(req.params)
+  const body = ordenCompraLineaCreateSchema.parse(req.body)
+  const linea = await service.agregarLinea(id, body)
+  return reply.status(201).send({ data: linea })
+}
+
+export async function updateLinea(req: FastifyRequest, reply: FastifyReply) {
+  const { id, lineaId } = ordenCompraLineaParamsSchema.parse(req.params)
+  const body = ordenCompraLineaUpdateSchema.parse(req.body)
+  const linea = await service.actualizarLinea(id, lineaId, body)
+  return reply.send({ data: linea })
+}
+
+export async function removeLinea(req: FastifyRequest, reply: FastifyReply) {
+  const { id, lineaId } = ordenCompraLineaParamsSchema.parse(req.params)
+  await service.eliminarLinea(id, lineaId)
   return reply.status(204).send()
 }

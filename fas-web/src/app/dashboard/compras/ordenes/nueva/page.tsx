@@ -9,7 +9,7 @@ export default function Page() {
   return (
     <PageContainer
       pageTitle='Nueva Orden de Compra'
-      pageDescription='Encabezado, cuotas de pago y detalle de fruta a comprar.'
+      pageDescription='Completa el encabezado. Podrás agregar el detalle de fruta después de crearla.'
     >
       <div className='max-w-5xl'>
         <OrdenCompraForm />

@@ -2,7 +2,12 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
-import type { OrdenCompraCreateInput, OrdenCompraUpdateInput } from './ordenes-compra.types.js'
+import type {
+  OrdenCompraCreateInput,
+  OrdenCompraUpdateInput,
+  OrdenCompraLineaCreateInput,
+  OrdenCompraLineaUpdateInput,
+} from './ordenes-compra.types.js'
 
 const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: true }
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
@@ -144,18 +149,20 @@ async function cuotasDesdeCondicionPago(
 }
 
 // Recalcula `montoCalculado` de las cuotas MONTO_UNITARIO ya guardadas contra
-// las líneas actuales — se llama cada vez que se editan las líneas de una OC
-// (mientras condicionPagoId no cambió), para que el monto no quede congelado
-// contra cantidades viejas (FAS-PMQ-R1-004).
-async function recalcularCuotasMontoUnitario(
-  tx: Tx,
-  ordenCompraId: number,
-  lineas: { cantidadPallets: number; cajasPorPallet: number; articuloId: number }[],
-) {
+// las líneas actuales — se llama cada vez que se agrega/edita/elimina una
+// línea de la OC, para que el monto no quede congelado contra cantidades
+// viejas (FAS-PMQ-R1-004). Consulta las líneas vigentes internamente (mismo
+// patrón que notas-venta.repository.ts) en vez de recibirlas del caller.
+async function recalcularCuotasMontoUnitario(tx: Tx, ordenCompraId: number) {
   const cuotasMontoUnitario = await tx.ordenCompraCuotaPago.findMany({
     where: { ordenCompraId, tipoValor: 'MONTO_UNITARIO' },
   })
   if (cuotasMontoUnitario.length === 0) return
+
+  const lineas = await tx.ordenCompraLinea.findMany({
+    where: { ordenCompraId },
+    select: { cantidadPallets: true, cajasPorPallet: true, articuloId: true },
+  })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const cuota of cuotasMontoUnitario as any[]) {
@@ -165,7 +172,6 @@ async function recalcularCuotasMontoUnitario(
 }
 
 export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor: string) {
-  const { lineas, ...cabecera } = data
   const anio = (data.fecha ?? new Date()).getFullYear()
   const prefijo = `OC-${anio}-`
 
@@ -174,7 +180,9 @@ export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor:
 
     const total = await tx.ordenCompra.count({ where: { numero: { startsWith: prefijo } } })
     const numero = `${prefijo}${String(total + 1).padStart(4, '0')}`
-    const cuotasPago = await cuotasDesdeCondicionPago(tx, data.condicionPagoId, lineas)
+    // Sin líneas al crear (se agregan de a una después, ver addLinea) —
+    // mismo patrón que createNotaVenta.
+    const cuotasPago = await cuotasDesdeCondicionPago(tx, data.condicionPagoId, [])
 
     return tx.ordenCompra.create({
       data: {
@@ -182,10 +190,9 @@ export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor:
         // este valor con la empresa activa del contexto — se declara aquí
         // solo para satisfacer el tipo requerido por Prisma.
         empresaId: getEmpresaIdActual()!,
-        ...cabecera,
+        ...data,
         numero,
         creadoPor,
-        lineas: { create: lineas },
         cuotasPago: { create: cuotasPago },
       },
       include: includeDetalle,
@@ -194,13 +201,7 @@ export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor:
 }
 
 export async function updateOrdenCompra(id: number, data: OrdenCompraUpdateInput, actualizadoPor: string) {
-  const { lineas, ...cabecera } = data
-
   return prisma.$transaction(async (tx) => {
-    if (lineas !== undefined) {
-      await tx.ordenCompraLinea.deleteMany({ where: { ordenCompraId: id } })
-      await tx.ordenCompraLinea.createMany({ data: lineas.map((l) => ({ ordenCompraId: id, ...l })) })
-    }
     if (data.condicionPagoId !== undefined) {
       // El snapshot es inmutable (mismo patrón que Cierre Comercial): solo se
       // regenera si condicionPagoId realmente cambió respecto del valor
@@ -208,23 +209,60 @@ export async function updateOrdenCompra(id: number, data: OrdenCompraUpdateInput
       // PATCH (ej. al editar Observaciones).
       const actual = await tx.ordenCompra.findUniqueOrThrow({ where: { id }, select: { condicionPagoId: true } })
       if (data.condicionPagoId !== actual.condicionPagoId) {
-        const lineasActuales = lineas ?? (await tx.ordenCompraLinea.findMany({ where: { ordenCompraId: id } }))
+        const lineasActuales = await tx.ordenCompraLinea.findMany({ where: { ordenCompraId: id } })
         const cuotasPago = await cuotasDesdeCondicionPago(tx, data.condicionPagoId, lineasActuales)
         await tx.ordenCompraCuotaPago.deleteMany({ where: { ordenCompraId: id } })
         await tx.ordenCompraCuotaPago.createMany({ data: cuotasPago.map((c) => ({ ordenCompraId: id, ...c })) })
-      } else if (lineas !== undefined) {
-        // condicionPagoId no cambió, pero sí las líneas: el monto de la
-        // cuota unitaria debe seguir la cantidad real vigente.
-        await recalcularCuotasMontoUnitario(tx, id, lineas)
       }
-    } else if (lineas !== undefined) {
-      await recalcularCuotasMontoUnitario(tx, id, lineas)
     }
     return tx.ordenCompra.update({
       where: { id },
-      data: { ...cabecera, actualizadoPor },
+      data: { ...data, actualizadoPor },
       include: includeDetalle,
     })
+  })
+}
+
+const lineaInclude = {
+  especie: { select: mantenedorSelect },
+  variedad: { select: mantenedorSelect },
+  categoria: { select: mantenedorSelect },
+  articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+  calibreMin: { select: mantenedorSelect },
+  calibreMax: { select: mantenedorSelect },
+}
+
+export async function addLinea(ordenCompraId: number, data: OrdenCompraLineaCreateInput) {
+  return prisma.$transaction(async (tx) => {
+    const linea = await tx.ordenCompraLinea.create({
+      data: { ...data, ordenCompraId },
+      include: lineaInclude,
+    })
+    await recalcularCuotasMontoUnitario(tx, ordenCompraId)
+    return linea
+  })
+}
+
+export async function getLineaById(id: number) {
+  return prisma.ordenCompraLinea.findUnique({ where: { id }, select: { id: true, ordenCompraId: true } })
+}
+
+export async function updateLinea(id: number, data: OrdenCompraLineaUpdateInput) {
+  return prisma.$transaction(async (tx) => {
+    const linea = await tx.ordenCompraLinea.update({
+      where: { id },
+      data,
+      include: lineaInclude,
+    })
+    await recalcularCuotasMontoUnitario(tx, linea.ordenCompraId)
+    return linea
+  })
+}
+
+export async function removeLinea(id: number, ordenCompraId: number) {
+  return prisma.$transaction(async (tx) => {
+    await tx.ordenCompraLinea.delete({ where: { id } })
+    await recalcularCuotasMontoUnitario(tx, ordenCompraId)
   })
 }
 

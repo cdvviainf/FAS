@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { AlertModal } from '@/components/modal/alert-modal'
 import {
   Select,
   SelectContent,
@@ -59,6 +61,8 @@ export function InstructivoEmbalajeForm() {
   const [linea, setLinea] = useState<NuevaLinea>(LINEA_EMPTY)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null)
 
   const { data: notasVentaData } = useQuery({
     queryKey: ['notas-venta-options'],
@@ -96,27 +100,55 @@ export function InstructivoEmbalajeForm() {
     return Object.keys(e).length === 0
   }
 
-  function agregarLinea() {
+  function handleGuardarLinea() {
     if (!validarLinea()) return
-    setDetalle((prev) => [
-      ...prev,
-      {
-        articuloId: linea.articuloId,
-        especieId: linea.especieId,
-        variedadId: linea.variedadId,
-        categoriaId: linea.categoriaId,
-        calibreMinId: linea.calibreMinId,
-        calibreMaxId: linea.calibreMaxId,
-        cantidadPallets: Number(linea.cantidadPallets),
-        cajasPorPallet: Number(linea.cajasPorPallet),
-      },
-    ])
+    const nueva: InstructivoEmbalajeDetalleInput = {
+      articuloId: linea.articuloId,
+      especieId: linea.especieId,
+      variedadId: linea.variedadId,
+      categoriaId: linea.categoriaId,
+      calibreMinId: linea.calibreMinId,
+      calibreMaxId: linea.calibreMaxId,
+      cantidadPallets: Number(linea.cantidadPallets),
+      cajasPorPallet: Number(linea.cajasPorPallet),
+    }
+    if (editingIndex != null) {
+      setDetalle((prev) => prev.map((d, i) => (i === editingIndex ? nueva : d)))
+      setEditingIndex(null)
+    } else {
+      setDetalle((prev) => [...prev, nueva])
+    }
     setLinea(LINEA_EMPTY)
     setLineaErrors({})
   }
 
-  function quitarLinea(index: number) {
-    setDetalle((prev) => prev.filter((_, i) => i !== index))
+  function handleEditarLinea(index: number) {
+    const d = detalle[index]
+    setEditingIndex(index)
+    setLinea({
+      articuloId: d.articuloId,
+      especieId: d.especieId,
+      variedadId: d.variedadId,
+      categoriaId: d.categoriaId,
+      calibreMinId: d.calibreMinId,
+      calibreMaxId: d.calibreMaxId,
+      cantidadPallets: String(d.cantidadPallets),
+      cajasPorPallet: String(d.cajasPorPallet),
+    })
+    setLineaErrors({})
+  }
+
+  function handleCancelarEdicionLinea() {
+    setEditingIndex(null)
+    setLinea(LINEA_EMPTY)
+    setLineaErrors({})
+  }
+
+  function confirmarEliminarLinea() {
+    if (deleteIndex == null) return
+    setDetalle((prev) => prev.filter((_, i) => i !== deleteIndex))
+    if (editingIndex === deleteIndex) handleCancelarEdicionLinea()
+    setDeleteIndex(null)
   }
 
   const createMutation = useMutation({
@@ -169,22 +201,6 @@ export function InstructivoEmbalajeForm() {
           <CardTitle>Detalle — qué embalar</CardTitle>
         </CardHeader>
         <CardContent className='space-y-4'>
-          {detalle.length > 0 && (
-            <div className='space-y-2 rounded-md border p-2'>
-              {detalle.map((d, i) => (
-                <div key={i} className='flex flex-wrap items-center gap-2 border-b pb-2 text-sm last:border-b-0 last:pb-0'>
-                  <span className='font-medium'>{nombre(especies, d.especieId)} / {nombre(variedades, d.variedadId)}</span>
-                  <span className='text-muted-foreground'>{nombre(articulos, d.articuloId)}</span>
-                  <span className='text-muted-foreground'>· {nombre(categorias, d.categoriaId)}</span>
-                  <span className='text-muted-foreground'>· Calibre {nombre(calibres, d.calibreMinId)} a {nombre(calibres, d.calibreMaxId)}</span>
-                  <span className='text-muted-foreground'>· {d.cantidadPallets} pallets × {d.cajasPorPallet} cj</span>
-                  <Button type='button' variant='ghost' size='icon' className='ml-auto h-8 w-8' onClick={() => quitarLinea(i)}>
-                    <Icons.trash className='h-4 w-4' />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
           {errors.detalle && <p className='text-xs text-destructive'>{errors.detalle}</p>}
 
           <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
@@ -273,11 +289,61 @@ export function InstructivoEmbalajeForm() {
             </div>
           </div>
 
-          <div className='flex justify-end'>
-            <Button type='button' variant='secondary' onClick={agregarLinea}>
-              <Icons.add className='mr-1 h-4 w-4' /> Agregar línea
+          <div className='flex justify-end gap-2'>
+            {editingIndex != null && (
+              <Button type='button' variant='outline' onClick={handleCancelarEdicionLinea}>
+                Cancelar edición
+              </Button>
+            )}
+            <Button type='button' variant='secondary' onClick={handleGuardarLinea}>
+              {editingIndex != null ? <><Icons.check className='mr-1 h-4 w-4' /> Guardar cambios de línea</> : <><Icons.add className='mr-1 h-4 w-4' /> Agregar línea</>}
             </Button>
           </div>
+
+          {detalle.length > 0 && (
+            <div className='overflow-x-auto rounded-md border'>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Especie / Variedad</TableHead>
+                    <TableHead>Artículo</TableHead>
+                    <TableHead>Categoría</TableHead>
+                    <TableHead>Calibre</TableHead>
+                    <TableHead>Cantidad</TableHead>
+                    <TableHead className='w-20 text-right'>Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {detalle.map((d, i) => (
+                    <TableRow key={i}>
+                      <TableCell className='font-medium whitespace-nowrap'>{nombre(especies, d.especieId)} / {nombre(variedades, d.variedadId)}</TableCell>
+                      <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(articulos, d.articuloId)}</TableCell>
+                      <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(categorias, d.categoriaId)}</TableCell>
+                      <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(calibres, d.calibreMinId)} – {nombre(calibres, d.calibreMaxId)}</TableCell>
+                      <TableCell className='whitespace-nowrap text-muted-foreground'>{d.cantidadPallets} pallets × {d.cajasPorPallet} cj</TableCell>
+                      <TableCell className='text-right'>
+                        <div className='flex justify-end gap-1'>
+                          <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleEditarLinea(i)}>
+                            <Icons.edit className='h-4 w-4' />
+                          </Button>
+                          <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => setDeleteIndex(i)}>
+                            <Icons.trash className='h-4 w-4' />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          <AlertModal
+            isOpen={deleteIndex != null}
+            onClose={() => setDeleteIndex(null)}
+            onConfirm={confirmarEliminarLinea}
+            loading={false}
+          />
         </CardContent>
       </Card>
 

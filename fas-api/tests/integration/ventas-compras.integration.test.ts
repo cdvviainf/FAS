@@ -13,10 +13,17 @@ import {
   actualizarOrdenCompra as actualizarOrdenCompraSvc,
   eliminarOrdenCompra as eliminarOrdenCompraSvc,
   obtenerOrdenCompra as obtenerOrdenCompraSvc,
+  agregarLinea as agregarLineaSvc,
+  actualizarLinea as actualizarLineaSvc,
 } from '../../src/modules/compras/ordenes-compra/ordenes-compra.service.js'
 import type { NotaVentaCreateInput, NotaVentaUpdateInput, NotaVentaDetalleCreateInput } from '../../src/modules/ventas/notas-venta/notas-venta.types.js'
 import type { InstructivoEmbalajeCreateInput } from '../../src/modules/compras/instructivo-embalaje/instructivo-embalaje.types.js'
-import type { OrdenCompraCreateInput, OrdenCompraUpdateInput } from '../../src/modules/compras/ordenes-compra/ordenes-compra.types.js'
+import type {
+  OrdenCompraCreateInput,
+  OrdenCompraUpdateInput,
+  OrdenCompraLineaCreateInput,
+  OrdenCompraLineaUpdateInput,
+} from '../../src/modules/compras/ordenes-compra/ordenes-compra.types.js'
 
 // NotaVenta/InstructivoEmbalaje son por-empresa desde Fase 3 (lote Ventas) —
 // sus repos crean la fila DENTRO de un prisma.$transaction(), y
@@ -58,6 +65,12 @@ async function eliminarOrdenCompra(empresaId: number, id: number, userId: string
 }
 async function obtenerOrdenCompra(empresaId: number, id: number) {
   return empresaContext.run({ empresaId }, () => obtenerOrdenCompraSvc(id))
+}
+async function agregarLinea(empresaId: number, ordenCompraId: number, body: OrdenCompraLineaCreateInput) {
+  return empresaContext.run({ empresaId }, () => agregarLineaSvc(ordenCompraId, body))
+}
+async function actualizarLinea(empresaId: number, ordenCompraId: number, lineaId: number, body: OrdenCompraLineaUpdateInput) {
+  return empresaContext.run({ empresaId }, () => actualizarLineaSvc(ordenCompraId, lineaId, body))
 }
 
 const databaseName = new URL(process.env.DATABASE_URL ?? '').pathname.slice(1)
@@ -374,60 +387,54 @@ describe('Orden de Compra contra PostgreSQL', () => {
 
   it('genera correlativo OC-{año}-{NNNN} y rechaza productor sin tipo Productor', async () => {
     const f = await crearFixtures()
-    const oc1 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, lineas: [ocLinea(f)] }, 'test')
-    const oc2 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, lineas: [ocLinea(f)] }, 'test')
+    const oc1 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
+    const oc2 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
     const anio = new Date().getFullYear()
     expect(oc1.numero).toBe(`OC-${anio}-0001`)
     expect(oc2.numero).toBe(`OC-${anio}-0002`)
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.cliente.id, monedaId: f.moneda.id, lineas: [ocLinea(f)] }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.cliente.id, monedaId: f.moneda.id }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
   })
 
-  it('deriva las cuotas de pago desde la Condición de Pago seleccionada (no se cargan manualmente) y valida el rango de calibre por especie', async () => {
+  it('deriva las cuotas de pago desde la Condición de Pago seleccionada (no se cargan manualmente) y valida el rango de calibre por especie al agregar una línea', async () => {
     const f = await crearFixtures()
     const condicionPago = await crearCondicionPago(f.empresa.id, [
       { porcentaje: 80, plazoDias: 30, descripcion: 'Anticipo' },
       { porcentaje: 20, plazoDias: 60, descripcion: 'Saldo' },
     ])
 
+    const ocParaLineaInvalida = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
     await expect(
-      crearOrdenCompra(f.empresa.id, {
-        entidadProductorId: f.productor.id,
-        monedaId: f.moneda.id,
-        lineas: [{ ...ocLinea(f), calibreMinId: f.calibreGrande.id, calibreMaxId: f.calibreChico.id }],
-      }, 'test'),
+      agregarLinea(f.empresa.id, ocParaLineaInvalida.id, { ...ocLinea(f), calibreMinId: f.calibreGrande.id, calibreMaxId: f.calibreChico.id }),
     ).rejects.toMatchObject({ statusCode: 422 })
 
-    const oc = await crearOrdenCompra(f.empresa.id, {
+    const ocCreada = await crearOrdenCompra(f.empresa.id, {
       entidadProductorId: f.productor.id,
       monedaId: f.moneda.id,
       condicionPagoId: condicionPago.id,
-      lineas: [ocLinea(f)],
     }, 'test')
+    await agregarLinea(f.empresa.id, ocCreada.id, ocLinea(f))
+    const oc = await obtenerOrdenCompra(f.empresa.id, ocCreada.id)
     expect(oc.cuotasPago).toHaveLength(2)
     expect(oc.cuotasPago.map((c) => Number(c.porcentaje)).sort()).toEqual([20, 80])
     expect(oc.lineas).toHaveLength(1)
 
     // Sin condición de pago no hay cuotas (no quedan pendientes de carga manual)
-    const ocSinCuotas = await crearOrdenCompra(f.empresa.id, {
-      entidadProductorId: f.productor.id,
-      monedaId: f.moneda.id,
-      lineas: [ocLinea(f)],
-    }, 'test')
+    const ocSinCuotas = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
     expect(ocSinCuotas.cuotasPago).toHaveLength(0)
   })
 
-  it('permite editar líneas y cuotas de una OC en Borrador', async () => {
+  it('permite agregar y editar líneas de una OC en Borrador', async () => {
     const f = await crearFixtures()
-    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, lineas: [ocLinea(f)] }, 'test')
+    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
     expect(oc.estado).toBe('BORRADOR')
 
-    const editada = await actualizarOrdenCompra(f.empresa.id, oc.id, {
-      estado: 'EMITIDA',
-      lineas: [{ ...ocLinea(f), cantidadPallets: 50 }],
-    }, 'test')
+    const linea = await agregarLinea(f.empresa.id, oc.id, ocLinea(f))
+    await actualizarLinea(f.empresa.id, oc.id, linea.id, { ...ocLinea(f), cantidadPallets: 50 })
+    const editada = await actualizarOrdenCompra(f.empresa.id, oc.id, { estado: 'EMITIDA' }, 'test')
+
     expect(editada.estado).toBe('EMITIDA')
     expect(editada.lineas).toHaveLength(1)
     expect(editada.lineas[0].cantidadPallets).toBe(50)
@@ -438,24 +445,24 @@ describe('Orden de Compra contra PostgreSQL', () => {
     const usuarioSinFlag = await crearUsuarioResponsable(false, 'no-resp')
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, notaVentaId: 999999, lineas: [ocLinea(f)] }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, notaVentaId: 999999 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, destinoMercadoId: 999999, lineas: [ocLinea(f)] }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, destinoMercadoId: 999999 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, condicionPagoId: 999999, lineas: [ocLinea(f)] }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, condicionPagoId: 999999 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, formaPagoId: 999999, lineas: [ocLinea(f)] }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, formaPagoId: 999999 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     // Solo usuarios marcados como Responsable de Venta pueden asignarse
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, responsableId: usuarioSinFlag.id, lineas: [ocLinea(f)] }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, responsableId: usuarioSinFlag.id }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     const usuarioResponsable = await crearUsuarioResponsable(true, 'si-resp')
@@ -464,27 +471,29 @@ describe('Orden de Compra contra PostgreSQL', () => {
       monedaId: f.moneda.id,
       destinoMercadoId: f.mercado.id,
       responsableId: usuarioResponsable.id,
-      lineas: [ocLinea(f)],
     }, 'test')
     expect(oc.destinoMercado?.id).toBe(f.mercado.id)
     expect(oc.responsable?.id).toBe(usuarioResponsable.id)
   })
 
-  it('permite eliminar (soft delete) una OC en Borrador/Emitida, pero bloquea edición y eliminación tras Recepcionada', async () => {
+  it('permite eliminar (soft delete) una OC en Borrador/Emitida, pero bloquea edición, eliminación y edición de líneas tras Recepcionada', async () => {
     const f = await crearFixtures()
-    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, lineas: [ocLinea(f)] }, 'test')
+    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
 
     await eliminarOrdenCompra(f.empresa.id, oc.id, 'test')
     await expect(obtenerOrdenCompra(f.empresa.id, oc.id)).rejects.toMatchObject({ statusCode: 404 })
 
     // Simula el estado que en el futuro solo asignará el flujo de Recepción
     // (compras.md §4.4/§8) — no seteable manualmente vía la API (OC-001).
-    const oc2 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, lineas: [ocLinea(f)] }, 'test')
+    const oc2 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
+    const linea2 = await agregarLinea(f.empresa.id, oc2.id, ocLinea(f))
     await prisma.ordenCompra.update({ where: { id: oc2.id }, data: { estado: 'RECEPCIONADA' } })
 
     await expect(
       actualizarOrdenCompra(f.empresa.id, oc2.id, { observaciones: 'no debería aplicar' }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
     await expect(eliminarOrdenCompra(f.empresa.id, oc2.id, 'test')).rejects.toMatchObject({ statusCode: 422 })
+    await expect(agregarLinea(f.empresa.id, oc2.id, ocLinea(f))).rejects.toMatchObject({ statusCode: 422 })
+    await expect(actualizarLinea(f.empresa.id, oc2.id, linea2.id, ocLinea(f))).rejects.toMatchObject({ statusCode: 422 })
   })
 })

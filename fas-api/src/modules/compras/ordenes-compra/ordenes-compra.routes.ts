@@ -10,4 +10,7 @@ export async function ordenesCompraRoutes(app: FastifyInstance) {
   app.post('/ordenes-compra', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)
   app.patch('/ordenes-compra/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.update)
   app.delete('/ordenes-compra/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.remove)
+  app.post('/ordenes-compra/:id/lineas', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.addLinea)
+  app.patch('/ordenes-compra/:id/lineas/:lineaId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.updateLinea)
+  app.delete('/ordenes-compra/:id/lineas/:lineaId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.removeLinea)
 }
