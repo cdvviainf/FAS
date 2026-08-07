@@ -45,8 +45,15 @@ const especiesService = createMantenedorService('especies')
 const variedadesService = createMantenedorService('variedades')
 const categoriasService = createMantenedorService('categorias')
 const calibresService = createMantenedorService('calibres')
+const tiposPalletService = createMantenedorService('tipos-pallet')
 const formasPagoService = createMantenedorService('formas-pago')
 const mercadosService = createMantenedorService('mercados')
+
+// Cajas por pallet aún no tiene mantenedor propio (pendiente de desarrollar).
+// Mientras tanto se asume un valor fijo, usado para precalcular "Cantidad de
+// Cajas" y que el usuario puede sobrescribir manualmente (mismo criterio que
+// nota-venta-form.tsx).
+const CAJAS_POR_PALLET_DEFAULT = 108
 
 type Origen = 'CIERRE' | 'MANUAL'
 
@@ -55,8 +62,6 @@ interface HeaderFields {
   entidadProductorId: number
   notaVentaId: number | null
   fecha: string
-  fechaEntregaDesde: string
-  fechaEntregaHasta: string
   responsableId: string | null
   destinoMercadoId: number | null
   condicionPagoId: number | null
@@ -71,8 +76,6 @@ const HEADER_EMPTY: HeaderFields = {
   entidadProductorId: 0,
   notaVentaId: null,
   fecha: new Date().toISOString().slice(0, 10),
-  fechaEntregaDesde: '',
-  fechaEntregaHasta: '',
   responsableId: null,
   destinoMercadoId: null,
   condicionPagoId: null,
@@ -89,8 +92,10 @@ const LINEA_EMPTY: OrdenCompraLineaInput = {
   articuloId: 0,
   calibreMinId: 0,
   calibreMaxId: 0,
+  tipoPalletId: null,
   cantidadPallets: 0,
-  cajasPorPallet: 0,
+  cajasPorPallet: CAJAS_POR_PALLET_DEFAULT,
+  cajas: 0,
   precioUsdCaja: 0,
 }
 
@@ -112,6 +117,8 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
   const [editingLineaId, setEditingLineaId] = useState<number | null>(null)
   const [deleteLineaId, setDeleteLineaId] = useState<number | null>(null)
+  const [calibreDesdeId, setCalibreDesdeId] = useState<number | null>(null)
+  const [calibreHastaId, setCalibreHastaId] = useState<number | null>(null)
 
   const { data: ordenCompra, isLoading } = useQuery({
     ...ordenCompraDetailOptions(ordenCompraId ?? 0),
@@ -147,6 +154,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const { data: variedadesData } = useQuery({ queryKey: ['variedades-options', linea.especieId], queryFn: () => variedadesService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
   const { data: categoriasData } = useQuery({ queryKey: ['categorias-options', linea.especieId], queryFn: () => categoriasService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
   const { data: calibresData } = useQuery({ queryKey: ['calibres-options', linea.especieId], queryFn: () => calibresService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
+  const { data: tiposPalletData } = useQuery({ queryKey: ['tipos-pallet-options'], queryFn: () => tiposPalletService.list({ limit: 200 }), staleTime: 5 * 60_000 })
 
   const productores = productoresData?.data ?? []
   const responsables = responsablesData?.data ?? []
@@ -166,8 +174,6 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
         entidadProductorId: d.entidadProductorId,
         notaVentaId: d.notaVentaId,
         fecha: d.fecha.slice(0, 10),
-        fechaEntregaDesde: d.fechaEntregaDesde?.slice(0, 10) ?? '',
-        fechaEntregaHasta: d.fechaEntregaHasta?.slice(0, 10) ?? '',
         responsableId: d.responsableId,
         destinoMercadoId: d.destinoMercadoId,
         condicionPagoId: d.condicionPagoId,
@@ -184,9 +190,6 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     if (!fields.entidadProductorId) e.entidadProductorId = 'El productor es requerido'
     if (!fields.monedaId) e.monedaId = 'La moneda es requerida'
     if (fields.origen === 'CIERRE' && !fields.notaVentaId) e.notaVentaId = 'Selecciona el Cierre Comercial'
-    if (fields.fechaEntregaDesde && fields.fechaEntregaHasta && fields.fechaEntregaDesde > fields.fechaEntregaHasta) {
-      e.fechaEntregaHasta = 'No puede ser anterior a la fecha desde'
-    }
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -196,8 +199,6 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       entidadProductorId: fields.entidadProductorId,
       notaVentaId: fields.origen === 'CIERRE' ? fields.notaVentaId : null,
       fecha: fields.fecha,
-      fechaEntregaDesde: fields.fechaEntregaDesde || null,
-      fechaEntregaHasta: fields.fechaEntregaHasta || null,
       responsableId: fields.responsableId,
       destinoMercadoId: fields.destinoMercadoId,
       condicionPagoId: fields.condicionPagoId,
@@ -233,6 +234,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       toast.success('Línea agregada')
       setLinea(LINEA_EMPTY)
       setLineaErrors({})
+      resetCalibreRango()
       queryClient.invalidateQueries({ queryKey: ordenesCompraKeys.detail(ordenCompraId!) })
     },
     onError: (e: Error) => toast.error(e.message || 'Error al agregar la línea'),
@@ -245,6 +247,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       setLinea(LINEA_EMPTY)
       setLineaErrors({})
       setEditingLineaId(null)
+      resetCalibreRango()
       queryClient.invalidateQueries({ queryKey: ordenesCompraKeys.detail(ordenCompraId!) })
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar la línea'),
@@ -276,10 +279,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     if (!linea.variedadId) e.variedadId = 'Requerida'
     if (!linea.categoriaId) e.categoriaId = 'Requerida'
     if (!linea.articuloId) e.articuloId = 'Requerido'
-    if (!linea.calibreMinId) e.calibreMinId = 'Requerido'
-    if (!linea.calibreMaxId) e.calibreMaxId = 'Requerido'
+    if (!linea.calibreMinId || !linea.calibreMaxId) e.calibre = 'Selecciona un rango de calibre y agrégalo'
     if (!linea.cantidadPallets || linea.cantidadPallets <= 0) e.cantidadPallets = 'Debe ser mayor a 0'
-    if (!linea.cajasPorPallet || linea.cajasPorPallet <= 0) e.cajasPorPallet = 'Debe ser mayor a 0'
+    if (!linea.cajas || linea.cajas <= 0) e.cajas = 'Debe ser mayor a 0'
     if (linea.precioUsdCaja < 0) e.precioUsdCaja = 'No puede ser negativo'
     setLineaErrors(e)
     return Object.keys(e).length === 0
@@ -300,17 +302,38 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       articuloId: l.articuloId,
       calibreMinId: l.calibreMinId,
       calibreMaxId: l.calibreMaxId,
+      tipoPalletId: l.tipoPalletId,
       cantidadPallets: l.cantidadPallets,
       cajasPorPallet: l.cajasPorPallet,
+      cajas: l.cajas,
       precioUsdCaja: Number(l.precioUsdCaja),
     })
     setLineaErrors({})
+    resetCalibreRango()
   }
 
   function handleCancelarEdicionLinea() {
     setEditingLineaId(null)
     setLinea(LINEA_EMPTY)
     setLineaErrors({})
+    resetCalibreRango()
+  }
+
+  function resetCalibreRango() {
+    setCalibreDesdeId(null)
+    setCalibreHastaId(null)
+  }
+
+  function agregarRangoCalibre() {
+    if (!calibreDesdeId) return
+    const lista = calibresData?.data ?? []
+    const hastaId = calibreHastaId ?? calibreDesdeId
+    const idxDesde = lista.findIndex((c) => c.id === calibreDesdeId)
+    const idxHasta = lista.findIndex((c) => c.id === hastaId)
+    if (idxDesde === -1 || idxHasta === -1) return
+    const [iniIdx, finIdx] = idxDesde <= idxHasta ? [idxDesde, idxHasta] : [idxHasta, idxDesde]
+    setLinea((l) => ({ ...l, calibreMinId: lista[iniIdx].id, calibreMaxId: lista[finIdx].id }))
+    resetCalibreRango()
   }
 
   if (isEdit && isLoading) {
@@ -370,8 +393,8 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
 
           <Separator />
 
-          {/* Fila 2: Productor + Responsable */}
-          <div className='grid gap-4 sm:grid-cols-2'>
+          {/* Fila 2: Productor + Responsable + Destino */}
+          <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Productor <span className='text-destructive'>*</span></Label>
               <Combobox
@@ -395,12 +418,6 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <Separator />
-
-          {/* Fila 3: Destino + Fecha entrega desde/hasta */}
-          <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Destino</Label>
               <Select value={fields.destinoMercadoId ? String(fields.destinoMercadoId) : '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, destinoMercadoId: v === '__none__' ? null : Number(v) }))}>
@@ -413,20 +430,11 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 </SelectContent>
               </Select>
             </div>
-            <div className='space-y-1.5'>
-              <Label>Fecha entrega desde</Label>
-              <Input type='date' value={fields.fechaEntregaDesde} onChange={(e) => setFields((f) => ({ ...f, fechaEntregaDesde: e.target.value }))} />
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Fecha entrega hasta</Label>
-              <Input type='date' value={fields.fechaEntregaHasta} onChange={(e) => setFields((f) => ({ ...f, fechaEntregaHasta: e.target.value }))} />
-              {errors.fechaEntregaHasta && <p className='text-xs text-destructive'>{errors.fechaEntregaHasta}</p>}
-            </div>
           </div>
 
           <Separator />
 
-          {/* Fila 4: Condición de pago + Forma de pago + Moneda */}
+          {/* Fila 3: Condición de pago + Forma de pago + Moneda */}
           <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Condición de Pago</Label>
@@ -483,7 +491,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
 
           <Separator />
 
-          {/* Fila 5: Observaciones */}
+          {/* Fila 4: Observaciones */}
           <div className='space-y-1.5'>
             <Label>Observaciones</Label>
             <Textarea value={fields.observaciones} onChange={(e) => setFields((f) => ({ ...f, observaciones: e.target.value }))} rows={2} />
@@ -517,11 +525,11 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
           </CardHeader>
           <CardContent className='space-y-4'>
             <div className='space-y-3'>
-              {/* Fila 1: Especie, Variedad, Categoría */}
+              {/* Fila 1: Especie, Embalaje (2 columnas) */}
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
                 <div className='space-y-1.5'>
                   <Label>Especie <span className='text-destructive'>*</span></Label>
-                  <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreMinId: 0, calibreMaxId: 0 }))}>
+                  <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreMinId: 0, calibreMaxId: 0 })); resetCalibreRango() }}>
                     <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                     <SelectContent>
                       {especies.map((e) => (
@@ -531,6 +539,22 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   </Select>
                   {lineaErrors.especieId && <p className='text-xs text-destructive'>{lineaErrors.especieId}</p>}
                 </div>
+                <div className='space-y-1.5 md:col-span-2'>
+                  <Label>Embalaje <span className='text-destructive'>*</span></Label>
+                  <Select value={linea.articuloId ? String(linea.articuloId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}>
+                    <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+                    <SelectContent>
+                      {articulos.map((a) => (
+                        <SelectItem key={a.id} value={String(a.id)}>{a.codigo} — {a.descripcion}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {lineaErrors.articuloId && <p className='text-xs text-destructive'>{lineaErrors.articuloId}</p>}
+                </div>
+              </div>
+
+              {/* Fila 2: Variedad, Categoría */}
+              <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
                 <div className='space-y-1.5'>
                   <Label>Variedad <span className='text-destructive'>*</span></Label>
                   <Select value={linea.variedadId ? String(linea.variedadId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, variedadId: Number(v) }))} disabled={!linea.especieId}>
@@ -557,58 +581,95 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 </div>
               </div>
 
-              {/* Fila 2: Embalaje, Calibre Inicio, Calibre Fin */}
+              {/* Fila 3: Calibre Inicio, Calibre Fin, Agregar */}
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
-                <div className='space-y-1.5'>
-                  <Label>Embalaje <span className='text-destructive'>*</span></Label>
-                  <Select value={linea.articuloId ? String(linea.articuloId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}>
-                    <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
-                    <SelectContent>
-                      {articulos.map((a) => (
-                        <SelectItem key={a.id} value={String(a.id)}>{a.codigo} — {a.descripcion}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {lineaErrors.articuloId && <p className='text-xs text-destructive'>{lineaErrors.articuloId}</p>}
-                </div>
-                <div className='space-y-1.5'>
-                  <Label>Calibre Inicio <span className='text-destructive'>*</span></Label>
-                  <Select value={linea.calibreMinId ? String(linea.calibreMinId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, calibreMinId: Number(v) }))} disabled={!linea.especieId}>
-                    <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+                <div className='min-w-0 space-y-1.5'>
+                  <Label>Calibre Inicio</Label>
+                  <Select value={calibreDesdeId ? String(calibreDesdeId) : ''} onValueChange={(v) => setCalibreDesdeId(Number(v))} disabled={!linea.especieId}>
+                    <SelectTrigger><SelectValue placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'} /></SelectTrigger>
                     <SelectContent>
                       {(calibresData?.data ?? []).map((c) => (
                         <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {lineaErrors.calibreMinId && <p className='text-xs text-destructive'>{lineaErrors.calibreMinId}</p>}
                 </div>
-                <div className='space-y-1.5'>
-                  <Label>Calibre Fin <span className='text-destructive'>*</span></Label>
-                  <Select value={linea.calibreMaxId ? String(linea.calibreMaxId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, calibreMaxId: Number(v) }))} disabled={!linea.especieId}>
-                    <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+                <div className='min-w-0 space-y-1.5'>
+                  <Label>Calibre Fin</Label>
+                  <Select value={calibreHastaId ? String(calibreHastaId) : ''} onValueChange={(v) => setCalibreHastaId(Number(v))} disabled={!linea.especieId}>
+                    <SelectTrigger><SelectValue placeholder='Igual a inicio' /></SelectTrigger>
                     <SelectContent>
                       {(calibresData?.data ?? []).map((c) => (
                         <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {lineaErrors.calibreMaxId && <p className='text-xs text-destructive'>{lineaErrors.calibreMaxId}</p>}
+                </div>
+                <div className='space-y-1.5'>
+                  <Label className='invisible'>Agregar</Label>
+                  <Button type='button' variant='secondary' className='w-full' onClick={agregarRangoCalibre} disabled={!linea.especieId || !calibreDesdeId}>
+                    <Icons.add className='mr-1 h-4 w-4' /> Agregar
+                  </Button>
                 </div>
               </div>
 
-              {/* Fila 3: Cant. Pallets, Cajas x Pallet, Valor USD/Caja */}
+              <div className='space-y-1.5'>
+                <Label>Calibre <span className='text-destructive'>*</span></Label>
+                {linea.calibreMinId && linea.calibreMaxId ? (
+                  <Badge variant='secondary' className='gap-1 pr-1'>
+                    {(calibresData?.data ?? []).find((c) => c.id === linea.calibreMinId)?.descripcion ?? linea.calibreMinId}
+                    {' – '}
+                    {(calibresData?.data ?? []).find((c) => c.id === linea.calibreMaxId)?.descripcion ?? linea.calibreMaxId}
+                    <button
+                      type='button'
+                      onClick={() => setLinea((l) => ({ ...l, calibreMinId: 0, calibreMaxId: 0 }))}
+                      className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'
+                    >
+                      <Icons.close className='h-3 w-3' />
+                    </button>
+                  </Badge>
+                ) : (
+                  <p className='text-xs text-muted-foreground'>Selecciona Calibre Inicio / Fin arriba y agrega.</p>
+                )}
+                {lineaErrors.calibre && <p className='text-xs text-destructive'>{lineaErrors.calibre}</p>}
+              </div>
+
+              {/* Fila 4: Tipo Pallet, Cant. Pallets, Cantidad de Cajas */}
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
                 <div className='space-y-1.5'>
+                  <Label>Tipo Pallet</Label>
+                  <Select value={linea.tipoPalletId ? String(linea.tipoPalletId) : '__none__'} onValueChange={(v) => setLinea((l) => ({ ...l, tipoPalletId: v === '__none__' ? null : Number(v) }))}>
+                    <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='__none__'>Sin definir</SelectItem>
+                      {(tiposPalletData?.data ?? []).map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)}>{t.descripcion}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className='space-y-1.5'>
                   <Label>Cant. Pallets <span className='text-destructive'>*</span></Label>
-                  <Input type='number' value={linea.cantidadPallets || ''} onChange={(e) => setLinea((l) => ({ ...l, cantidadPallets: Number(e.target.value) }))} />
+                  <Input
+                    type='number'
+                    value={linea.cantidadPallets || ''}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      const pallets = Number(v)
+                      setLinea((l) => ({ ...l, cantidadPallets: pallets, cajas: v ? pallets * CAJAS_POR_PALLET_DEFAULT : l.cajas }))
+                    }}
+                  />
                   {lineaErrors.cantidadPallets && <p className='text-xs text-destructive'>{lineaErrors.cantidadPallets}</p>}
                 </div>
                 <div className='space-y-1.5'>
-                  <Label>Cajas x Pallet <span className='text-destructive'>*</span></Label>
-                  <Input type='number' value={linea.cajasPorPallet || ''} onChange={(e) => setLinea((l) => ({ ...l, cajasPorPallet: Number(e.target.value) }))} />
-                  {lineaErrors.cajasPorPallet && <p className='text-xs text-destructive'>{lineaErrors.cajasPorPallet}</p>}
+                  <Label>Cantidad de Cajas <span className='text-destructive'>*</span></Label>
+                  <Input type='number' value={linea.cajas || ''} onChange={(e) => setLinea((l) => ({ ...l, cajas: Number(e.target.value) }))} />
+                  {lineaErrors.cajas && <p className='text-xs text-destructive'>{lineaErrors.cajas}</p>}
                 </div>
+              </div>
+
+              {/* Fila 5: Valor USD/Caja */}
+              <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
                 <div className='space-y-1.5'>
                   <Label>Valor (USD/Caja)</Label>
                   <Input type='number' step='0.01' value={linea.precioUsdCaja || ''} onChange={(e) => setLinea((l) => ({ ...l, precioUsdCaja: Number(e.target.value) }))} />
@@ -622,9 +683,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 Etiqueta: {articuloSeleccionado.etiqueta ?? '—'} · Kg Neto: {articuloSeleccionado.kgNetoEnvase ?? '—'} · Kg Bruto: {articuloSeleccionado.kgBrutoEnvase ?? '—'}
               </p>
             )}
-            {(linea.cantidadPallets > 0 || linea.cajasPorPallet > 0) && (
+            {linea.cajas > 0 && (
               <p className='text-right text-sm text-muted-foreground'>
-                Total: {linea.cantidadPallets * linea.cajasPorPallet} cajas × ${linea.precioUsdCaja || 0} = ${(linea.cantidadPallets * linea.cajasPorPallet * linea.precioUsdCaja).toFixed(2)}
+                Total: {linea.cajas} cajas × ${linea.precioUsdCaja || 0} = ${(linea.cajas * linea.precioUsdCaja).toFixed(2)}
               </p>
             )}
 
@@ -662,7 +723,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{l.articulo.descripcion}</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{l.categoria.descripcion}</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{l.calibreMin.codigo} – {l.calibreMax.codigo}</TableCell>
-                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.cantidadPallets} pallets × {l.cajasPorPallet} cj</TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.cantidadPallets} pallets · {l.cajas} cajas</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>${l.precioUsdCaja}/cj</TableCell>
                           <TableCell className='text-right'>
                             <div className='flex justify-end gap-1'>

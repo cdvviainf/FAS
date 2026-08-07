@@ -264,3 +264,15 @@ formulario antes de esta implementación (incluido el botón de guardado del
 encabezado) — no es una regresión introducida hoy, y se prefiere resolverla
 en un pase de auditoría de autorización de todo el módulo Ventas en vez de un
 parche puntual sobre las acciones nuevas de la grilla.
+
+## Instructivo de Embalaje — calibre Desde/Hasta + Tipo Pallet/Cajas (2026-08-07)
+
+Se agregó `tipoPalletId` (FK → TipoPallet, nullable) y `cajas` (Int, total
+independiente y editable) a `InstructivoEmbalajeDetalle` — mismo criterio que
+`OrdenCompraLinea` (ver `Docs/Hallazgos/orden-de-compra.md`, batch calibre/tipo
+pallet) y que `NotaVentaDetalle` (`ventas.md`). El widget de calibre
+(`Calibre Mínimo`/`Calibre Máximo` como selects directos) pasó al mismo patrón
+Desde/Hasta + botón "Agregar" que ya usaba Cierre Comercial. `compras.md` §4.1
+se actualizó para reflejar los dos campos nuevos. Cobertura de integración
+para estos campos nuevos queda pendiente (ver `FAS-PLAN-003` en
+`orden-de-compra.md`) — diferida a propósito, mismo criterio que `CCOM-QA-001`.

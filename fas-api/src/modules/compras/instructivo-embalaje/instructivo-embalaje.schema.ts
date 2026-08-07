@@ -7,8 +7,10 @@ const instructivoEmbalajeDetalleSchema = z.object({
   categoriaId: z.number().int().positive('La categoría es requerida'),
   calibreMinId: z.number().int().positive('El calibre mínimo es requerido'),
   calibreMaxId: z.number().int().positive('El calibre máximo es requerido'),
+  tipoPalletId: z.number().int().positive().optional().nullable(),
   cantidadPallets: z.number().int().positive('La cantidad de pallets debe ser mayor a 0'),
   cajasPorPallet: z.number().int().positive('Las cajas por pallet deben ser mayor a 0'),
+  cajas: z.number().int().positive('Las cajas deben ser mayor a 0'),
 })
 
 export const instructivoEmbalajeCreateSchema = z.object({

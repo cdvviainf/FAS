@@ -42,6 +42,11 @@ async function validarLinea(linea: InstructivoEmbalajeDetalleInput, index: numbe
   if (calibreMin.orden > calibreMax.orden) {
     throw new ValidationError(`${prefijo} el calibre mínimo debe preceder (o igualar) al calibre máximo en el orden del maestro`)
   }
+
+  if (linea.tipoPalletId != null) {
+    const tipoPallet = await repo.getTipoPallet(linea.tipoPalletId)
+    if (!tipoPallet) throw new ValidationError(`${prefijo} el tipo de pallet seleccionado no existe o está bloqueado`)
+  }
 }
 
 export async function listarInstructivos(page: number, limit: number, notaVentaId?: number) {

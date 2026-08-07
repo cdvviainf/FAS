@@ -5,8 +5,10 @@ export interface OrdenCompraLineaInput {
   articuloId: number
   calibreMinId: number
   calibreMaxId: number
+  tipoPalletId?: number | null
   cantidadPallets: number
   cajasPorPallet: number
+  cajas: number
   precioUsdCaja: number
 }
 
@@ -14,12 +16,9 @@ export interface OrdenCompraCreateInput {
   entidadProductorId: number
   notaVentaId?: number | null
   fecha?: Date
-  fechaEntregaDesde?: string | null
-  fechaEntregaHasta?: string | null
   formaPagoId?: number | null
   condicionPagoId?: number | null
   monedaId: number
-  incotermId?: number | null
   destinoMercadoId?: number | null
   responsableId?: string | null
   observaciones?: string | null

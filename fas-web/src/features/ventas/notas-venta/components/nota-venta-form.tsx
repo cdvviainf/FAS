@@ -776,6 +776,32 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 </div>
               </div>
 
+              <div className='space-y-1.5'>
+                <Label>Calibres aceptados <span className='text-destructive'>*</span></Label>
+                {linea.calibreIds.length > 0 ? (
+                  <div className='flex flex-wrap gap-1.5'>
+                    {linea.calibreIds.map((id) => {
+                      const opt = (calibresData?.data ?? []).find((c) => c.id === id)
+                      return (
+                        <Badge key={id} variant='secondary' className='gap-1 pr-1'>
+                          {opt?.descripcion ?? id}
+                          <button
+                            type='button'
+                            onClick={() => setLinea((l) => ({ ...l, calibreIds: l.calibreIds.filter((x) => x !== id) }))}
+                            className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'
+                          >
+                            <Icons.close className='h-3 w-3' />
+                          </button>
+                        </Badge>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className='text-xs text-muted-foreground'>Selecciona Calibre Inicio / Fin arriba y agrega.</p>
+                )}
+                {lineaErrors.calibreIds && <p className='text-xs text-destructive'>{lineaErrors.calibreIds}</p>}
+              </div>
+
               {/* Fila 5: Fecha Compromiso */}
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
                 <div className='space-y-1.5'>
@@ -784,32 +810,6 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                   {lineaErrors.fechaCompromiso && <p className='text-xs text-destructive'>{lineaErrors.fechaCompromiso}</p>}
                 </div>
               </div>
-            </div>
-
-            <div className='space-y-1.5'>
-              <Label>Calibres aceptados <span className='text-destructive'>*</span></Label>
-              {linea.calibreIds.length > 0 ? (
-                <div className='flex flex-wrap gap-1.5'>
-                  {linea.calibreIds.map((id) => {
-                    const opt = (calibresData?.data ?? []).find((c) => c.id === id)
-                    return (
-                      <Badge key={id} variant='secondary' className='gap-1 pr-1'>
-                        {opt?.descripcion ?? id}
-                        <button
-                          type='button'
-                          onClick={() => setLinea((l) => ({ ...l, calibreIds: l.calibreIds.filter((x) => x !== id) }))}
-                          className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'
-                        >
-                          <Icons.close className='h-3 w-3' />
-                        </button>
-                      </Badge>
-                    )
-                  })}
-                </div>
-              ) : (
-                <p className='text-xs text-muted-foreground'>Selecciona Calibre Inicio / Fin arriba y agrega.</p>
-              )}
-              {lineaErrors.calibreIds && <p className='text-xs text-destructive'>{lineaErrors.calibreIds}</p>}
             </div>
 
             {articuloSeleccionado && (articuloSeleccionado.etiqueta || articuloSeleccionado.kgNetoEnvase) && (

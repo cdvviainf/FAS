@@ -295,6 +295,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
           calibreMaxId: f.calibreChico.id,
           cantidadPallets: 1,
           cajasPorPallet: 1,
+          cajas: 1,
         }],
       }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
@@ -310,6 +311,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
         calibreMaxId: f.calibreGrande.id,
         cantidadPallets: 1,
         cajasPorPallet: 1,
+        cajas: 1,
       }],
     }, 'test')
     expect(instructivo.numero).toBe(1)
@@ -329,6 +331,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
         calibreMaxId: f.calibreGrande.id,
         cantidadPallets: 1,
         cajasPorPallet: 1,
+        cajas: 1,
       }],
     }, 'test')
 
@@ -381,6 +384,7 @@ describe('Orden de Compra contra PostgreSQL', () => {
       calibreMaxId: f.calibreGrande.id,
       cantidadPallets: 40,
       cajasPorPallet: 114,
+      cajas: 40 * 114,
       precioUsdCaja: 8.5,
     }
   }

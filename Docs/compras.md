@@ -50,7 +50,7 @@ Instrucción de qué embalar. **Sin estado propio** — es solo un documento que
 - `id` (PK)
 - `numero` (correlativo propio)
 - `notaVentaId` (FK → NotaVenta) — el instructivo se emite en el contexto de un cierre (ver nota de reconciliación en §3)
-- Detalle (1..N líneas): `articuloId` (FK → Artículo/Embalaje), `especieId`, `variedadId`, `categoriaId`, rango de calibre (`calibreMinId`, `calibreMaxId`), `cantidadPallets`, `cajasPorPallet`
+- Detalle (1..N líneas): `articuloId` (FK → Artículo/Embalaje), `especieId`, `variedadId`, `categoriaId`, rango de calibre (`calibreMinId`, `calibreMaxId`), `tipoPalletId` (FK → TipoPallet, nullable) **(nuevo, 2026-08-07)**, `cantidadPallets`, `cajasPorPallet`, `cajas` **(nuevo, 2026-08-07 — ver nota en §4.3, mismo criterio)**
 - `createdAt`, `createdBy`
 
 > El detalle usa **artículos maestros** (ej. `UV0001103 — CAJA MARCA AGROSAN ETIQUETA TAIWAN PLÁSTICO`), no descripciones libres.
@@ -75,13 +75,13 @@ Especificación de la compra.
 - `numero` (correlativo propio, formato `OC-{AAAA}-{NNNN}` por año — CLAUDE.md §7)
 - `entidadProductorId` (FK → Entidad tipo PRODUCTOR) **(nuevo)** — obligatorio; el documento real siempre identifica al productor/proveedor de la compra
 - `notaVentaId` (FK → NotaVenta, **nullable**) — origen de la OC: "Cierre Comercial" (con Nota de Venta) o "Manual" (sin ella, OC suelta permitida). *Ligar una OC suelta a un Cierre a posteriori: flujo/UX diferido (ver §10).*
-- `fechaEntregaDesde` / `fechaEntregaHasta` (Date, opcionales) **(nuevo, 2026-07-26)** — ventana de entrega comprometida
+- ~~`fechaEntregaDesde` / `fechaEntregaHasta`~~ **(eliminado 2026-08-07)** — decisión de negocio (Christian): la ventana de entrega no se usa en la operación real de compras; se quita del formulario, del contrato API y del modelo. Si se retoma, debe reintroducirse explícitamente aquí primero.
 - `responsableId` (FK → Usuario, nullable) **(nuevo, 2026-07-26)** — solo usuarios marcados `esResponsableVenta` en su ficha
 - `destinoMercadoId` (FK → Mercado, nullable) **(nuevo, 2026-07-26)** — "Destino" de la OC
 - `formaPagoId` (FK → FormaPago, nullable) **(nuevo, 2026-07-26)** — mantenedor propio (`Docs/mantenedores-generales.md`); reemplaza el texto libre original
 - `condicionPagoId` (FK → CondicionPago, nullable) **(nuevo, 2026-07-26)** — reemplaza `condicionPagoTexto`; ver §4.2.1
 - `monedaId` (FK → Moneda) **(nuevo)**
-- `incotermId` (Parametro genérico, sin TipoParametro aún — mismo patrón que `clausulaVentaId` en ventas.md) **(nuevo)**
+- ~~`incotermId`~~ **(eliminado 2026-08-07)** — decisión de negocio (Christian): superaba a `OC-002` (`Docs/Hallazgos/orden-de-compra.md`), que lo dejaba en el modelo "para cuando exista el catálogo" de Incoterm; se decidió quitarlo directamente en vez de mantenerlo sin UI.
 - ~~`facturarAId`~~ **(eliminado 2026-07-26)** — decisión de negocio: la OC no factura a una entidad distinta del productor
 - `observaciones` **(nuevo)**
 - `estado` (ver §8)
@@ -106,8 +106,10 @@ La OC es **multilínea**. Cada línea es una combinación completa de caracterí
 - `ordenCompraId` (FK → OrdenCompra)
 - `especieId`, `variedadId`, `categoriaId`, `articuloId` (embalaje)
 - `calibreMinId` (FK → Calibre), `calibreMaxId` (FK → Calibre) — **rango** sobre el maestro ordenado de la especie
+- `tipoPalletId` (FK → TipoPallet, nullable) **(nuevo, 2026-08-07)**
 - `cantidadPallets` (Int)
-- `cajasPorPallet` (Int) — usado para calcular el total esperado (`cantidadPallets × cajasPorPallet`); **no** es restricción por pallet individual
+- `cajasPorPallet` (Int) **(referencial, 2026-08-07)** — cajas por pallet aún no tiene mantenedor propio; hoy es un valor fijo (108) que la UI usa solo para precalcular `cajas`. **No** es la fuente de verdad del total ni una restricción por pallet individual.
+- `cajas` (Int) **(nuevo, 2026-08-07)** — **total de cajas de la línea, campo independiente y editable** (mismo patrón que `NotaVentaDetalle.cajas` en `ventas.md`). Se precalcula como `cantidadPallets × 108` al cambiar `cantidadPallets`, pero el usuario puede sobrescribirlo (ej. último pallet parcial). Es la cantidad que alimenta el cálculo de cuotas `MONTO_UNITARIO` (§4.2.1) y, a futuro, la validación de Recepción (§7.2) — **no** se recalcula ni se fuerza a coincidir con `cantidadPallets × cajasPorPallet`.
 - `precioUsdCaja` (Decimal) — **precio de compra** (lo que paga Agrosan). Alimenta Costos (ver §10)
 
 > **Etiqueta y peso del envase (2026-07-24):** un documento real de Agrosan
@@ -296,7 +298,7 @@ Agrupar las líneas del Excel por la combinación **especie + variedad + categor
 Para cada línea de OC, contra el grupo correspondiente del Excel:
 
 1. **N° de pallets:** total OC = total Excel.
-2. **Cajas:** total OC (`cantidadPallets × cajasPorPallet`) = total Excel.
+2. **Cajas:** total OC (**campo `cajas` de la línea**, no `cantidadPallets × cajasPorPallet` — ver nota en §4.3, 2026-08-07) = total Excel.
 3. **Calibre (rango):** **ningún** calibre del Excel fuera del rango `[calibreMin, calibreMax]` de la línea (sobre el orden por especie). Ej.: OC permite calibres 3–8 → si aparece 1 o 2 en el Excel, rechazo. La distribución entre pallets no bloquea; lo que bloquea es un calibre fuera de rango en los totales.
 4. **Cobertura:** cualquier combinación/característica del Excel que **no** corresponda a ninguna línea de OC → diferencia reportada.
 

@@ -80,6 +80,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const [articuloIds, setArticuloIds] = useState<number[]>([])
   const [variedadIds, setVariedadIds] = useState<number[]>([])
   const [calibreIds, setCalibreIds] = useState<number[]>([])
+  const [calibreDesdeId, setCalibreDesdeId] = useState<number | null>(null)
+  const [calibreHastaId, setCalibreHastaId] = useState<number | null>(null)
   const [categoriaIds, setCategoriaIds] = useState<number[]>([])
   const [calificacionId, setCalificacionId] = useState<number | null>(null)
   const [cantidadPallets, setCantidadPallets] = useState('')
@@ -204,6 +206,24 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   }
   function nombreUsuario(id: string) {
     return usuarios?.data.find((u) => u.id === id)?.nombre ?? id
+  }
+
+  function resetCalibreRango() {
+    setCalibreDesdeId(null)
+    setCalibreHastaId(null)
+  }
+
+  function agregarRangoCalibres() {
+    if (!calibreDesdeId) return
+    const lista = calibresData?.data ?? []
+    const hastaId = calibreHastaId ?? calibreDesdeId
+    const idxDesde = lista.findIndex((c) => c.id === calibreDesdeId)
+    const idxHasta = lista.findIndex((c) => c.id === hastaId)
+    if (idxDesde === -1 || idxHasta === -1) return
+    const [ini, fin] = idxDesde <= idxHasta ? [idxDesde, idxHasta] : [idxHasta, idxDesde]
+    const nuevos = lista.slice(ini, fin + 1).map((c) => c.id)
+    setCalibreIds((prev) => Array.from(new Set([...prev, ...nuevos])))
+    resetCalibreRango()
   }
 
   function validate(): boolean {
@@ -436,8 +456,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
             </div>
           </div>
 
-          {/* Fila 4: Especie, Embalaje, Variedades, Calibres */}
-          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
+          {/* Fila 4: Especie, Embalaje, Variedades */}
+          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Especie</Label>
               <Select
@@ -446,6 +466,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
                   const nuevo = v === 'none' ? null : Number(v)
                   setEspecieId(nuevo)
                   setVariedadIds([]); setCalibreIds([]); setCategoriaIds([])
+                  resetCalibreRango()
                 }}
               >
                 <SelectTrigger><SelectValue placeholder='Sin especie...' /></SelectTrigger>
@@ -476,16 +497,63 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
                 disabled={!especieId}
               />
             </div>
+          </div>
+
+          {/* Fila 4b: Calibre Inicio, Calibre Fin, Agregar */}
+          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
             <div className='space-y-1.5'>
-              <Label>Calibres</Label>
-              <SelectMultiple
-                options={(calibresData?.data ?? []).map((c) => ({ id: c.id, label: c.descripcion }))}
-                selectedIds={calibreIds}
-                onChange={setCalibreIds}
-                placeholder={especieId ? 'Agregar calibre...' : 'Selecciona una especie primero'}
-                disabled={!especieId}
-              />
+              <Label>Calibre Inicio</Label>
+              <Select value={calibreDesdeId ? String(calibreDesdeId) : ''} onValueChange={(v) => setCalibreDesdeId(Number(v))} disabled={!especieId}>
+                <SelectTrigger><SelectValue placeholder={especieId ? 'Seleccionar...' : 'Selecciona una especie primero'} /></SelectTrigger>
+                <SelectContent>
+                  {(calibresData?.data ?? []).map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            <div className='space-y-1.5'>
+              <Label>Calibre Fin</Label>
+              <Select value={calibreHastaId ? String(calibreHastaId) : ''} onValueChange={(v) => setCalibreHastaId(Number(v))} disabled={!especieId}>
+                <SelectTrigger><SelectValue placeholder='Igual a inicio' /></SelectTrigger>
+                <SelectContent>
+                  {(calibresData?.data ?? []).map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label className='invisible'>Agregar</Label>
+              <Button type='button' variant='secondary' className='w-full' onClick={agregarRangoCalibres} disabled={!especieId || !calibreDesdeId}>
+                <Icons.add className='mr-1 h-4 w-4' /> Agregar
+              </Button>
+            </div>
+          </div>
+
+          <div className='space-y-1.5'>
+            <Label>Calibres</Label>
+            {calibreIds.length > 0 ? (
+              <div className='flex flex-wrap gap-1.5'>
+                {calibreIds.map((id) => {
+                  const opt = (calibresData?.data ?? []).find((c) => c.id === id)
+                  return (
+                    <Badge key={id} variant='secondary' className='gap-1 pr-1'>
+                      {opt?.descripcion ?? id}
+                      <button
+                        type='button'
+                        onClick={() => setCalibreIds((prev) => prev.filter((x) => x !== id))}
+                        className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'
+                      >
+                        <Icons.close className='h-3 w-3' />
+                      </button>
+                    </Badge>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className='text-xs text-muted-foreground'>Selecciona Calibre Inicio / Fin arriba y agrega.</p>
+            )}
           </div>
 
           {/* Fila 5: Categorías, Calificación, Cantidad de pallet */}

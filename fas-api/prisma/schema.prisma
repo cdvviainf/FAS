@@ -655,7 +655,9 @@ model TipoPallet {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  notaVentaDetalles NotaVentaDetalle[]
+  notaVentaDetalles          NotaVentaDetalle[]
+  ordenCompraLineas          OrdenCompraLinea[]
+  instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
 
   @@index([empresaId])
   @@map("tipos_pallet")
@@ -2210,9 +2212,12 @@ model InstructivoEmbalajeDetalle {
   calibreMin   Calibre   @relation("InstructivoEmbalajeCalibreMin", fields: [calibreMinId], references: [id])
   calibreMaxId Int
   calibreMax   Calibre   @relation("InstructivoEmbalajeCalibreMax", fields: [calibreMaxId], references: [id])
+  tipoPalletId Int?
+  tipoPallet   TipoPallet? @relation(fields: [tipoPalletId], references: [id])
 
   cantidadPallets Int
   cajasPorPallet  Int
+  cajas           Int
 
   @@index([instructivoId])
   @@map("instructivo_embalaje_detalle")
@@ -2242,9 +2247,7 @@ model OrdenCompra {
   notaVentaId        Int? // origen Cierre Comercial; null = Manual
   notaVenta          NotaVenta? @relation(fields: [empresaId, notaVentaId], references: [empresaId, id])
 
-  fecha             DateTime  @default(now())
-  fechaEntregaDesde DateTime? @db.Date
-  fechaEntregaHasta DateTime? @db.Date
+  fecha DateTime @default(now())
 
   formaPagoId      Int?
   formaPago        FormaPago?        @relation(fields: [empresaId, formaPagoId], references: [empresaId, id])
@@ -2252,7 +2255,6 @@ model OrdenCompra {
   condicionPago    CondicionPago?    @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
   monedaId         Int
   moneda           Moneda            @relation(fields: [monedaId], references: [id])
-  incotermId       Int? // Parametro genérico (Incoterm de compra) — ver nota en NotaVenta
   destinoMercadoId Int?
   destinoMercado   Mercado?          @relation(fields: [empresaId, destinoMercadoId], references: [empresaId, id])
   responsableId    String?
@@ -2400,9 +2402,12 @@ model OrdenCompraLinea {
   calibreMin   Calibre   @relation("OrdenCompraCalibreMin", fields: [calibreMinId], references: [id])
   calibreMaxId Int
   calibreMax   Calibre   @relation("OrdenCompraCalibreMax", fields: [calibreMaxId], references: [id])
+  tipoPalletId Int?
+  tipoPallet   TipoPallet? @relation(fields: [tipoPalletId], references: [id])
 
   cantidadPallets Int
   cajasPorPallet  Int
+  cajas           Int
   precioUsdCaja   Decimal @db.Decimal(14, 4)
 
   @@index([ordenCompraId])

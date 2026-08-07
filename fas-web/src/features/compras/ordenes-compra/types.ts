@@ -39,8 +39,11 @@ export interface OrdenCompraLineaItem {
   calibreMin: MantenedorRef
   calibreMaxId: number
   calibreMax: MantenedorRef
+  tipoPalletId: number | null
+  tipoPallet: MantenedorRef | null
   cantidadPallets: number
   cajasPorPallet: number
+  cajas: number
   precioUsdCaja: string
 }
 
@@ -82,13 +85,10 @@ export interface OrdenCompraListItem {
 export interface OrdenCompraDetalle extends OrdenCompraListItem {
   monedaId: number
   notaVentaId: number | null
-  fechaEntregaDesde: string | null
-  fechaEntregaHasta: string | null
   formaPagoId: number | null
   formaPago: MantenedorRef | null
   condicionPagoId: number | null
   condicionPago: CondicionPagoRef | null
-  incotermId: number | null
   destinoMercadoId: number | null
   destinoMercado: MantenedorRef | null
   responsableId: string | null
@@ -112,8 +112,10 @@ export interface OrdenCompraLineaInput {
   articuloId: number
   calibreMinId: number
   calibreMaxId: number
+  tipoPalletId: number | null
   cantidadPallets: number
   cajasPorPallet: number
+  cajas: number
   precioUsdCaja: number
 }
 
@@ -121,12 +123,9 @@ export interface OrdenCompraCreateInput {
   entidadProductorId: number
   notaVentaId?: number | null
   fecha?: string
-  fechaEntregaDesde?: string | null
-  fechaEntregaHasta?: string | null
   formaPagoId?: number | null
   condicionPagoId?: number | null
   monedaId: number
-  incotermId?: number | null
   destinoMercadoId?: number | null
   responsableId?: string | null
   observaciones?: string | null

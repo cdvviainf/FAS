@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { AlertModal } from '@/components/modal/alert-modal'
 import {
@@ -29,6 +30,13 @@ const especiesService = createMantenedorService('especies')
 const variedadesService = createMantenedorService('variedades')
 const categoriasService = createMantenedorService('categorias')
 const calibresService = createMantenedorService('calibres')
+const tiposPalletService = createMantenedorService('tipos-pallet')
+
+// Cajas por pallet aún no tiene mantenedor propio (pendiente de desarrollar).
+// Mientras tanto se asume un valor fijo, usado para precalcular "Cantidad de
+// Cajas" y que el usuario puede sobrescribir manualmente (mismo criterio que
+// nota-venta-form.tsx / orden-compra-form.tsx).
+const CAJAS_POR_PALLET_DEFAULT = 108
 
 interface NuevaLinea {
   articuloId: number
@@ -37,8 +45,10 @@ interface NuevaLinea {
   categoriaId: number
   calibreMinId: number
   calibreMaxId: number
+  tipoPalletId: number | null
   cantidadPallets: string
   cajasPorPallet: string
+  cajas: string
 }
 
 const LINEA_EMPTY: NuevaLinea = {
@@ -48,8 +58,10 @@ const LINEA_EMPTY: NuevaLinea = {
   categoriaId: 0,
   calibreMinId: 0,
   calibreMaxId: 0,
+  tipoPalletId: null,
   cantidadPallets: '',
-  cajasPorPallet: '',
+  cajasPorPallet: String(CAJAS_POR_PALLET_DEFAULT),
+  cajas: '',
 }
 
 export function InstructivoEmbalajeForm() {
@@ -63,6 +75,8 @@ export function InstructivoEmbalajeForm() {
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null)
+  const [calibreDesdeId, setCalibreDesdeId] = useState<number | null>(null)
+  const [calibreHastaId, setCalibreHastaId] = useState<number | null>(null)
 
   const { data: notasVentaData } = useQuery({
     queryKey: ['notas-venta-options'],
@@ -74,12 +88,14 @@ export function InstructivoEmbalajeForm() {
   const { data: categoriasData } = useQuery({ queryKey: ['categorias-options', linea.especieId], queryFn: () => categoriasService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
   const { data: calibresData } = useQuery({ queryKey: ['calibres-options', linea.especieId], queryFn: () => calibresService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
   const { data: articulosData } = useQuery({ queryKey: ['articulos-embalaje-options'], queryFn: () => articulosService.list({ limit: 500, tipo: 'EMBALAJE', activo: true }), staleTime: 60_000 })
+  const { data: tiposPalletData } = useQuery({ queryKey: ['tipos-pallet-options'], queryFn: () => tiposPalletService.list({ limit: 200 }), staleTime: 5 * 60_000 })
 
   const especies = especiesData?.data ?? []
   const variedades = variedadesData?.data ?? []
   const categorias = categoriasData?.data ?? []
   const calibres = calibresData?.data ?? []
   const articulos = articulosData?.data ?? []
+  const tiposPallet = tiposPalletData?.data ?? []
 
   function nombre(lista: { id: number; codigo?: string; descripcion: string }[], id: number) {
     const item = lista.find((i) => i.id === id)
@@ -92,10 +108,9 @@ export function InstructivoEmbalajeForm() {
     if (!linea.especieId) e.especieId = 'Requerida'
     if (!linea.variedadId) e.variedadId = 'Requerida'
     if (!linea.categoriaId) e.categoriaId = 'Requerida'
-    if (!linea.calibreMinId) e.calibreMinId = 'Requerido'
-    if (!linea.calibreMaxId) e.calibreMaxId = 'Requerido'
+    if (!linea.calibreMinId || !linea.calibreMaxId) e.calibre = 'Selecciona un rango de calibre y agrégalo'
     if (!linea.cantidadPallets || Number(linea.cantidadPallets) <= 0) e.cantidadPallets = 'Debe ser mayor a 0'
-    if (!linea.cajasPorPallet || Number(linea.cajasPorPallet) <= 0) e.cajasPorPallet = 'Debe ser mayor a 0'
+    if (!linea.cajas || Number(linea.cajas) <= 0) e.cajas = 'Debe ser mayor a 0'
     setLineaErrors(e)
     return Object.keys(e).length === 0
   }
@@ -109,8 +124,10 @@ export function InstructivoEmbalajeForm() {
       categoriaId: linea.categoriaId,
       calibreMinId: linea.calibreMinId,
       calibreMaxId: linea.calibreMaxId,
+      tipoPalletId: linea.tipoPalletId,
       cantidadPallets: Number(linea.cantidadPallets),
       cajasPorPallet: Number(linea.cajasPorPallet),
+      cajas: Number(linea.cajas),
     }
     if (editingIndex != null) {
       setDetalle((prev) => prev.map((d, i) => (i === editingIndex ? nueva : d)))
@@ -120,6 +137,7 @@ export function InstructivoEmbalajeForm() {
     }
     setLinea(LINEA_EMPTY)
     setLineaErrors({})
+    resetCalibreRango()
   }
 
   function handleEditarLinea(index: number) {
@@ -132,16 +150,37 @@ export function InstructivoEmbalajeForm() {
       categoriaId: d.categoriaId,
       calibreMinId: d.calibreMinId,
       calibreMaxId: d.calibreMaxId,
+      tipoPalletId: d.tipoPalletId,
       cantidadPallets: String(d.cantidadPallets),
       cajasPorPallet: String(d.cajasPorPallet),
+      cajas: String(d.cajas),
     })
     setLineaErrors({})
+    resetCalibreRango()
   }
 
   function handleCancelarEdicionLinea() {
     setEditingIndex(null)
     setLinea(LINEA_EMPTY)
     setLineaErrors({})
+    resetCalibreRango()
+  }
+
+  function resetCalibreRango() {
+    setCalibreDesdeId(null)
+    setCalibreHastaId(null)
+  }
+
+  function agregarRangoCalibre() {
+    if (!calibreDesdeId) return
+    const lista = calibres
+    const hastaId = calibreHastaId ?? calibreDesdeId
+    const idxDesde = lista.findIndex((c) => c.id === calibreDesdeId)
+    const idxHasta = lista.findIndex((c) => c.id === hastaId)
+    if (idxDesde === -1 || idxHasta === -1) return
+    const [iniIdx, finIdx] = idxDesde <= idxHasta ? [idxDesde, idxHasta] : [idxHasta, idxDesde]
+    setLinea((l) => ({ ...l, calibreMinId: lista[iniIdx].id, calibreMaxId: lista[finIdx].id }))
+    resetCalibreRango()
   }
 
   function confirmarEliminarLinea() {
@@ -203,10 +242,11 @@ export function InstructivoEmbalajeForm() {
         <CardContent className='space-y-4'>
           {errors.detalle && <p className='text-xs text-destructive'>{errors.detalle}</p>}
 
+          {/* Fila 1: Especie, Embalaje (2 columnas) */}
           <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Especie <span className='text-destructive'>*</span></Label>
-              <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreMinId: 0, calibreMaxId: 0 }))}>
+              <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreMinId: 0, calibreMaxId: 0 })); resetCalibreRango() }}>
                 <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                 <SelectContent>
                   {especies.map((e) => (
@@ -216,6 +256,22 @@ export function InstructivoEmbalajeForm() {
               </Select>
               {lineaErrors.especieId && <p className='text-xs text-destructive'>{lineaErrors.especieId}</p>}
             </div>
+            <div className='space-y-1.5 md:col-span-2'>
+              <Label>Artículo (Embalaje) <span className='text-destructive'>*</span></Label>
+              <Select value={linea.articuloId ? String(linea.articuloId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+                <SelectContent>
+                  {articulos.map((a) => (
+                    <SelectItem key={a.id} value={String(a.id)}>{a.codigo} — {a.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {lineaErrors.articuloId && <p className='text-xs text-destructive'>{lineaErrors.articuloId}</p>}
+            </div>
+          </div>
+
+          {/* Fila 2: Variedad, Categoría */}
+          <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Variedad <span className='text-destructive'>*</span></Label>
               <Select value={linea.variedadId ? String(linea.variedadId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, variedadId: Number(v) }))} disabled={!linea.especieId}>
@@ -229,18 +285,6 @@ export function InstructivoEmbalajeForm() {
               {lineaErrors.variedadId && <p className='text-xs text-destructive'>{lineaErrors.variedadId}</p>}
             </div>
             <div className='space-y-1.5'>
-              <Label>Artículo (Embalaje) <span className='text-destructive'>*</span></Label>
-              <Select value={linea.articuloId ? String(linea.articuloId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}>
-                <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
-                <SelectContent>
-                  {articulos.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>{a.codigo} — {a.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {lineaErrors.articuloId && <p className='text-xs text-destructive'>{lineaErrors.articuloId}</p>}
-            </div>
-            <div className='space-y-1.5'>
               <Label>Categoría <span className='text-destructive'>*</span></Label>
               <Select value={linea.categoriaId ? String(linea.categoriaId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, categoriaId: Number(v) }))} disabled={!linea.especieId}>
                 <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
@@ -252,40 +296,92 @@ export function InstructivoEmbalajeForm() {
               </Select>
               {lineaErrors.categoriaId && <p className='text-xs text-destructive'>{lineaErrors.categoriaId}</p>}
             </div>
-            <div className='space-y-1.5'>
-              <Label>Calibre Mínimo <span className='text-destructive'>*</span></Label>
-              <Select value={linea.calibreMinId ? String(linea.calibreMinId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, calibreMinId: Number(v) }))} disabled={!linea.especieId}>
-                <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+          </div>
+
+          {/* Fila 3: Calibre Inicio, Calibre Fin, Agregar */}
+          <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
+            <div className='min-w-0 space-y-1.5'>
+              <Label>Calibre Inicio</Label>
+              <Select value={calibreDesdeId ? String(calibreDesdeId) : ''} onValueChange={(v) => setCalibreDesdeId(Number(v))} disabled={!linea.especieId}>
+                <SelectTrigger><SelectValue placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'} /></SelectTrigger>
                 <SelectContent>
                   {calibres.map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {lineaErrors.calibreMinId && <p className='text-xs text-destructive'>{lineaErrors.calibreMinId}</p>}
+            </div>
+            <div className='min-w-0 space-y-1.5'>
+              <Label>Calibre Fin</Label>
+              <Select value={calibreHastaId ? String(calibreHastaId) : ''} onValueChange={(v) => setCalibreHastaId(Number(v))} disabled={!linea.especieId}>
+                <SelectTrigger><SelectValue placeholder='Igual a inicio' /></SelectTrigger>
+                <SelectContent>
+                  {calibres.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className='space-y-1.5'>
-              <Label>Calibre Máximo <span className='text-destructive'>*</span></Label>
-              <Select value={linea.calibreMaxId ? String(linea.calibreMaxId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, calibreMaxId: Number(v) }))} disabled={!linea.especieId}>
-                <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+              <Label className='invisible'>Agregar</Label>
+              <Button type='button' variant='secondary' className='w-full' onClick={agregarRangoCalibre} disabled={!linea.especieId || !calibreDesdeId}>
+                <Icons.add className='mr-1 h-4 w-4' /> Agregar
+              </Button>
+            </div>
+          </div>
+
+          <div className='space-y-1.5'>
+            <Label>Calibre <span className='text-destructive'>*</span></Label>
+            {linea.calibreMinId && linea.calibreMaxId ? (
+              <Badge variant='secondary' className='gap-1 pr-1'>
+                {calibres.find((c) => c.id === linea.calibreMinId)?.descripcion ?? linea.calibreMinId}
+                {' – '}
+                {calibres.find((c) => c.id === linea.calibreMaxId)?.descripcion ?? linea.calibreMaxId}
+                <button
+                  type='button'
+                  onClick={() => setLinea((l) => ({ ...l, calibreMinId: 0, calibreMaxId: 0 }))}
+                  className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'
+                >
+                  <Icons.close className='h-3 w-3' />
+                </button>
+              </Badge>
+            ) : (
+              <p className='text-xs text-muted-foreground'>Selecciona Calibre Inicio / Fin arriba y agrega.</p>
+            )}
+            {lineaErrors.calibre && <p className='text-xs text-destructive'>{lineaErrors.calibre}</p>}
+            <p className='text-xs text-muted-foreground'>El orden lo define el maestro de Calibres por especie.</p>
+          </div>
+
+          {/* Fila 4: Tipo Pallet, Cant. Pallets, Cantidad de Cajas */}
+          <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
+            <div className='space-y-1.5'>
+              <Label>Tipo Pallet</Label>
+              <Select value={linea.tipoPalletId ? String(linea.tipoPalletId) : '__none__'} onValueChange={(v) => setLinea((l) => ({ ...l, tipoPalletId: v === '__none__' ? null : Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
                 <SelectContent>
-                  {calibres.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                  <SelectItem value='__none__'>Sin definir</SelectItem>
+                  {tiposPallet.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>{t.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {lineaErrors.calibreMaxId && <p className='text-xs text-destructive'>{lineaErrors.calibreMaxId}</p>}
-              <p className='text-xs text-muted-foreground'>El orden lo define el maestro de Calibres por especie.</p>
             </div>
             <div className='space-y-1.5'>
               <Label>Cant. Pallets <span className='text-destructive'>*</span></Label>
-              <Input type='number' value={linea.cantidadPallets} onChange={(e) => setLinea((l) => ({ ...l, cantidadPallets: e.target.value }))} />
+              <Input
+                type='number'
+                value={linea.cantidadPallets}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setLinea((l) => ({ ...l, cantidadPallets: v, cajas: v ? String(Number(v) * CAJAS_POR_PALLET_DEFAULT) : l.cajas }))
+                }}
+              />
               {lineaErrors.cantidadPallets && <p className='text-xs text-destructive'>{lineaErrors.cantidadPallets}</p>}
             </div>
             <div className='space-y-1.5'>
-              <Label>Cajas x Pallet <span className='text-destructive'>*</span></Label>
-              <Input type='number' value={linea.cajasPorPallet} onChange={(e) => setLinea((l) => ({ ...l, cajasPorPallet: e.target.value }))} />
-              {lineaErrors.cajasPorPallet && <p className='text-xs text-destructive'>{lineaErrors.cajasPorPallet}</p>}
+              <Label>Cantidad de Cajas <span className='text-destructive'>*</span></Label>
+              <Input type='number' value={linea.cajas} onChange={(e) => setLinea((l) => ({ ...l, cajas: e.target.value }))} />
+              {lineaErrors.cajas && <p className='text-xs text-destructive'>{lineaErrors.cajas}</p>}
             </div>
           </div>
 
@@ -320,7 +416,7 @@ export function InstructivoEmbalajeForm() {
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(articulos, d.articuloId)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(categorias, d.categoriaId)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(calibres, d.calibreMinId)} – {nombre(calibres, d.calibreMaxId)}</TableCell>
-                      <TableCell className='whitespace-nowrap text-muted-foreground'>{d.cantidadPallets} pallets × {d.cajasPorPallet} cj</TableCell>
+                      <TableCell className='whitespace-nowrap text-muted-foreground'>{d.cantidadPallets} pallets · {d.cajas} cajas</TableCell>
                       <TableCell className='text-right'>
                         <div className='flex justify-end gap-1'>
                           <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleEditarLinea(i)}>

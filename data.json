@@ -42,14 +42,13 @@
     },
     {
       "modulo": "Compras — Ciclo de compras",
-      "progreso": 60,
+      "progreso": 80,
       "estado": "Spec listo · modelo cerrado"
     },
     {
       "modulo": "Ventas — Ciclo de ventas",
-      "progreso": 20,
-      "estado": "En definición"
-    },
+      "progreso": 40,
+      "estado": "Spec listo · modelo cerrado"    },
     {
       "modulo": "Cobranza — Facturación y Pagos",
       "progreso": 0,
@@ -139,14 +138,14 @@
         "etapa": 1,
         "inicioSemana": 3,
         "duracionSemanas": 2,
-        "progreso": 60
+        "progreso": 80
       },
       {
         "nombre": "Ventas — Ciclo de ventas",
         "etapa": 1,
         "inicioSemana": 5,
         "duracionSemanas": 3,
-        "progreso": 20
+        "progreso": 40
       },
       {
         "nombre": "Integración AGL (embarque)",
@@ -160,7 +159,7 @@
         "etapa": 1,
         "inicioSemana": 8,
         "duracionSemanas": 2,
-        "progreso": 0
+        "progreso": 20
       },
       {
         "nombre": "Ingreso y valorización de reclamos (Ventas)",

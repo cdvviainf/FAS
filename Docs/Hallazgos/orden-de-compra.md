@@ -16,7 +16,7 @@ de esta versión.
 | ID | Severidad | Estado | Hallazgo / evidencia |
 |---|---|---|---|
 | OC-001 | Alta | Corregido | No existía máquina de estados ni bloqueo posterior a recepción. `ordenCompraUpdateSchema` aceptaba cualquiera de los tres estados y `actualizarOrdenCompra`/`eliminarOrdenCompra` no revisaban el estado actual. |
-| OC-002 | Media | Aceptado | `incotermId` forma parte del modelo y del contrato de creación, pero no se captura ni muestra en el formulario; el backend acepta cualquier entero positivo sin FK. |
+| OC-002 | Media | Cerrado (2026-08-07, campo eliminado — ver batch calibre/tipo pallet) | `incotermId` forma parte del modelo y del contrato de creación, pero no se captura ni muestra en el formulario; el backend acepta cualquier entero positivo sin FK. |
 | OC-003 | Media | Corregido | El modo lectura del frontend no era real: el listado mostraba “Ver detalle” pero abría el mismo formulario editable. |
 | OC-004 | Baja | Corregido | Los campos opcionales `notaVentaId` y `facturarAId` no tenían opción para volver a “Sin Cierre”/“Sin definir”. |
 | OC-005 | Alta | Corregido | Cobertura automatizada incompleta: faltaban pruebas HTTP, eliminación, transiciones/bloqueo por estado y referencias inexistentes. |
@@ -76,3 +76,40 @@ de esta versión.
 
 **Conclusión:** no quedan defectos abiertos de Orden de Compra para el alcance
 acordado. Queda habilitada la prueba funcional manual con perfiles reales.
+
+## Batch calibre/tipo pallet + limpieza de campos (Codex ronda QA 1, 2026-08-07)
+
+Alcance: unificación del widget de calibre (Desde/Hasta + Agregar, igual a
+Cierre Comercial) en OC, Instructivo de Embalaje y Solicitud de Inspección;
+`tipoPalletId` + `cajas` en OC e Instructivo; eliminación de
+`fechaEntregaDesde`/`fechaEntregaHasta`/`incotermId` de OC. Codex (ronda 1,
+solo lectura) devolvió `NO_APROBADO` con 3 hallazgos:
+
+- **FAS-PLAN-001 — Alta — `NUEVO` → `CORREGIDO` (vía spec, no vía código).**
+  La migración elimina `fechaEntregaDesde`/`fechaEntregaHasta`/`incotermId`,
+  contradiciendo el spec vigente y **supersede explícitamente `OC-002`** (que
+  dejaba `incotermId` en el modelo "para cuando exista el catálogo"). Es una
+  decisión de negocio explícita de Christian, no un descuido — `OC-002` queda
+  **cerrado por eliminación del campo** en vez de "Aceptado". `compras.md`
+  §4.2 se actualizó (2026-08-07) para reflejar la eliminación con nota de
+  supersesión.
+- **FAS-PLAN-002 — Alta — `NUEVO` → `CORREGIDO` (vía spec).** `cajas` se
+  introdujo como total independiente y editable (no
+  `cantidadPallets × cajasPorPallet`), sin que el spec lo reflejara. Decisión
+  del usuario: opción **(b)** — `cajas` es la fuente de verdad (mismo patrón
+  que `NotaVentaDetalle.cajas` en `ventas.md`); `cajasPorPallet` pasa a ser
+  puramente referencial. `compras.md` §4.3 y §7.2 se actualizaron
+  (2026-08-07) para que la futura validación de Recepción compare contra
+  `cajas`, no contra el producto.
+- **FAS-PLAN-003 — Media — abierto, diferido a propósito.** Falta cobertura
+  de integración para `tipoPalletId` (válido/bloqueado/inexistente), `cajas`
+  divergente de `cantidadPallets × cajasPorPallet`, cálculo de cuotas con el
+  nuevo campo y backfill de la migración. **No se agrega en esta ronda** —
+  Claude no escribe tests dentro del ciclo QA de este skill; queda como deuda
+  de cobertura conocida, mismo tratamiento que `CCOM-QA-001`
+  (`project-cierre-comercial`, memoria de sesión).
+
+Los 3 errores de lint `react-hooks/set-state-in-effect` señalados por Codex
+en esta ronda son preexistentes a este diff (mismo patrón ya rastreado en
+`feedback-eslint-set-state-in-effect`, memoria de sesión) — no se registran
+como hallazgo nuevo de este módulo.

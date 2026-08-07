@@ -40,7 +40,7 @@ export function InstructivoDetalleView({ id }: { id: number }) {
               <span className='text-muted-foreground'>{d.articulo.codigo} — {d.articulo.descripcion}</span>
               <span className='text-muted-foreground'>· {d.categoria.descripcion}</span>
               <span className='text-muted-foreground'>· Calibre {d.calibreMin.descripcion} a {d.calibreMax.descripcion}</span>
-              <span className='ml-auto text-muted-foreground'>{d.cantidadPallets} pallets × {d.cajasPorPallet} cj</span>
+              <span className='ml-auto text-muted-foreground'>{d.cantidadPallets} pallets · {d.cajas} cajas</span>
             </div>
           ))}
         </CardContent>

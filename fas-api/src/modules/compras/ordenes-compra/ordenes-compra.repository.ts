@@ -30,6 +30,7 @@ const includeDetalle = {
       articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
       calibreMin: { select: mantenedorSelect },
       calibreMax: { select: mantenedorSelect },
+      tipoPallet: { select: mantenedorSelect },
     },
   },
   cuotasPago: {
@@ -74,17 +75,18 @@ const LOCK_NAMESPACE_ORDEN_COMPRA = 490236
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any
 
-// Suma cajas totales (cantidadPallets × cajasPorPallet) de las líneas. Si la
-// unidad de la cuota es "KG", convierte a kilos usando el kgNetoEnvase del
-// artículo (embalaje) de cada línea — rechaza (422) si algún artículo
-// involucrado no tiene peso cargado, en vez de valorizar en cero en
+// Suma cajas totales (columna `cajas`, no `cantidadPallets × cajasPorPallet`
+// — cajasPorPallet es solo referencial, ver comentario en el schema/form) de
+// las líneas. Si la unidad de la cuota es "KG", convierte a kilos usando el
+// kgNetoEnvase del artículo (embalaje) de cada línea — rechaza (422) si algún
+// artículo involucrado no tiene peso cargado, en vez de valorizar en cero en
 // silencio (FAS-PMQ-R1-003).
 async function calcularCantidadReal(
   tx: Tx,
-  lineas: { cantidadPallets: number; cajasPorPallet: number; articuloId: number }[],
+  lineas: { cajas: number; articuloId: number }[],
   unidadId: number,
 ): Promise<Prisma.Decimal> {
-  const totalCajas = lineas.reduce((acc, l) => acc + l.cantidadPallets * l.cajasPorPallet, 0)
+  const totalCajas = lineas.reduce((acc, l) => acc + l.cajas, 0)
 
   const unidad = await tx.unidadMedida.findUnique({ where: { id: unidadId }, select: { codigo: true } })
   if (unidad?.codigo !== 'KG') return new Prisma.Decimal(totalCajas)
@@ -104,7 +106,7 @@ async function calcularCantidadReal(
         `No se puede calcular la cuota en Kilo: el artículo de una línea no tiene kg neto de envase cargado (id ${l.articuloId})`,
       )
     }
-    total = total.plus(peso.mul(l.cantidadPallets * l.cajasPorPallet))
+    total = total.plus(peso.mul(l.cajas))
   }
   return total
 }
@@ -117,7 +119,7 @@ async function calcularCantidadReal(
 async function cuotasDesdeCondicionPago(
   tx: Tx,
   condicionPagoId: number | null | undefined,
-  lineas: { cantidadPallets: number; cajasPorPallet: number; articuloId: number }[],
+  lineas: { cajas: number; articuloId: number }[],
 ) {
   if (!condicionPagoId) return []
   const condicionPago = await tx.condicionPago.findFirst({
@@ -161,7 +163,7 @@ async function recalcularCuotasMontoUnitario(tx: Tx, ordenCompraId: number) {
 
   const lineas = await tx.ordenCompraLinea.findMany({
     where: { ordenCompraId },
-    select: { cantidadPallets: true, cajasPorPallet: true, articuloId: true },
+    select: { cajas: true, articuloId: true },
   })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -230,6 +232,7 @@ const lineaInclude = {
   articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
   calibreMin: { select: mantenedorSelect },
   calibreMax: { select: mantenedorSelect },
+  tipoPallet: { select: mantenedorSelect },
 }
 
 export async function addLinea(ordenCompraId: number, data: OrdenCompraLineaCreateInput) {
@@ -325,4 +328,8 @@ export async function getCalibre(id: number) {
 
 export async function getArticuloTipo(id: number) {
   return prisma.articulo.findUnique({ where: { id }, select: { id: true, tipo: true, activo: true } })
+}
+
+export async function getTipoPallet(id: number) {
+  return prisma.tipoPallet.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
 }

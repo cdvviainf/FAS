@@ -5,8 +5,10 @@ export interface InstructivoEmbalajeDetalleInput {
   categoriaId: number
   calibreMinId: number
   calibreMaxId: number
+  tipoPalletId?: number | null
   cantidadPallets: number
   cajasPorPallet: number
+  cajas: number
 }
 
 export interface InstructivoEmbalajeCreateInput {

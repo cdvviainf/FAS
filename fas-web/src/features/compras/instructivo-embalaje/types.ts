@@ -19,8 +19,11 @@ export interface InstructivoEmbalajeDetalleItem {
   calibreMin: MantenedorRef
   calibreMaxId: number
   calibreMax: MantenedorRef
+  tipoPalletId: number | null
+  tipoPallet: MantenedorRef | null
   cantidadPallets: number
   cajasPorPallet: number
+  cajas: number
 }
 
 export interface InstructivoEmbalajeListItem {
@@ -49,8 +52,10 @@ export interface InstructivoEmbalajeDetalleInput {
   categoriaId: number
   calibreMinId: number
   calibreMaxId: number
+  tipoPalletId: number | null
   cantidadPallets: number
   cajasPorPallet: number
+  cajas: number
 }
 
 export interface InstructivoEmbalajeCreateInput {

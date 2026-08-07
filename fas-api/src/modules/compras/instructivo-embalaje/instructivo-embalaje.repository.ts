@@ -14,6 +14,7 @@ const includeDetalle = {
       categoria: { select: mantenedorSelect },
       calibreMin: { select: mantenedorSelect },
       calibreMax: { select: mantenedorSelect },
+      tipoPallet: { select: mantenedorSelect },
     },
   },
 }
@@ -97,4 +98,8 @@ export async function getCalibre(calibreId: number) {
     where: { id: calibreId, eliminadoEn: null, bloqueado: false },
     select: { id: true, especieId: true, orden: true },
   })
+}
+
+export async function getTipoPallet(id: number) {
+  return prisma.tipoPallet.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
 }

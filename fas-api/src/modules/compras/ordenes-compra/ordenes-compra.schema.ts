@@ -7,8 +7,10 @@ const lineaSchema = z.object({
   articuloId: z.number().int().positive('El artículo de embalaje es requerido'),
   calibreMinId: z.number().int().positive('El calibre mínimo es requerido'),
   calibreMaxId: z.number().int().positive('El calibre máximo es requerido'),
+  tipoPalletId: z.number().int().positive().optional().nullable(),
   cantidadPallets: z.number().int().positive('La cantidad de pallets debe ser mayor a 0'),
   cajasPorPallet: z.number().int().positive('Las cajas por pallet deben ser mayor a 0'),
+  cajas: z.number().int().positive('Las cajas deben ser mayor a 0'),
   precioUsdCaja: z.number().nonnegative('El precio no puede ser negativo'),
 })
 
@@ -16,30 +18,21 @@ export const ordenCompraCreateSchema = z.object({
   entidadProductorId: z.number().int().positive('El productor es requerido'),
   notaVentaId: z.number().int().positive().optional().nullable(),
   fecha: z.coerce.date().optional(),
-  fechaEntregaDesde: z.string().date().optional().nullable(),
-  fechaEntregaHasta: z.string().date().optional().nullable(),
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
   monedaId: z.number().int().positive('La moneda es requerida'),
-  incotermId: z.number().int().positive().optional().nullable(),
   destinoMercadoId: z.number().int().positive().optional().nullable(),
   responsableId: z.string().min(1).optional().nullable(),
   observaciones: z.string().max(2000).trim().optional().nullable(),
-}).refine(
-  (d) => !d.fechaEntregaDesde || !d.fechaEntregaHasta || d.fechaEntregaDesde <= d.fechaEntregaHasta,
-  { message: 'La fecha de entrega desde no puede ser posterior a la fecha hasta', path: ['fechaEntregaHasta'] },
-)
+})
 
 export const ordenCompraUpdateSchema = z.object({
   entidadProductorId: z.number().int().positive().optional(),
   notaVentaId: z.number().int().positive().optional().nullable(),
   fecha: z.coerce.date().optional(),
-  fechaEntregaDesde: z.string().date().optional().nullable(),
-  fechaEntregaHasta: z.string().date().optional().nullable(),
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
   monedaId: z.number().int().positive().optional(),
-  incotermId: z.number().int().positive().optional().nullable(),
   destinoMercadoId: z.number().int().positive().optional().nullable(),
   responsableId: z.string().min(1).optional().nullable(),
   observaciones: z.string().max(2000).trim().optional().nullable(),
@@ -47,14 +40,6 @@ export const ordenCompraUpdateSchema = z.object({
   // asignará el futuro flujo de Recepción de Stock (compras.md §4.4/§8),
   // no este endpoint (OC-001).
   estado: z.enum(['BORRADOR', 'EMITIDA']).optional(),
-}).superRefine((d, ctx) => {
-  if (d.fechaEntregaDesde && d.fechaEntregaHasta && d.fechaEntregaDesde > d.fechaEntregaHasta) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'La fecha de entrega desde no puede ser posterior a la fecha hasta',
-      path: ['fechaEntregaHasta'],
-    })
-  }
 })
 
 export const ordenCompraLineaCreateSchema = lineaSchema
