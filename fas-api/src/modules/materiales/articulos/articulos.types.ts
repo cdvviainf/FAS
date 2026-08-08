@@ -12,7 +12,7 @@ export interface ArticuloCreateInput {
   stockCritico?: number | null
   activo?: boolean
   controlaStock?: boolean // calculado por el service a partir de tipoCosteo (R3)
-  etiqueta?: string | null
+  etiquetaId?: number | null
   kgNetoEnvase?: number | null
   kgBrutoEnvase?: number | null
 }

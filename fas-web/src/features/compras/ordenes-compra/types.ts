@@ -34,7 +34,7 @@ export interface OrdenCompraLineaItem {
   categoriaId: number
   categoria: MantenedorRef
   articuloId: number
-  articulo: MantenedorRef & { etiqueta: string | null; kgNetoEnvase: string | null; kgBrutoEnvase: string | null }
+  articulo: MantenedorRef & { etiqueta: MantenedorRef | null; kgNetoEnvase: string | null; kgBrutoEnvase: string | null }
   calibreMinId: number
   calibreMin: MantenedorRef
   calibreMaxId: number

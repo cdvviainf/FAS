@@ -6,6 +6,7 @@ export type MantenedorModelo =
   | 'formaPago'
   | 'unidadMedida'
   | 'tipoPallet'
+  | 'etiqueta'
   | 'altura'
   | 'tipoProduccion'
   | 'tipoDefecto'

@@ -25,6 +25,7 @@ import { Switch } from '@/components/ui/switch'
 import { Icons } from '@/components/icons'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { UnidadMedidaQuickCreate } from '@/features/unidades-medida/components/unidad-medida-quick-create'
+import { EtiquetaQuickCreate } from '@/features/etiquetas/components/etiqueta-quick-create'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { prefijosCodigoService } from '@/features/prefijos-codigo/service'
 import { articulosService } from '../service'
@@ -33,6 +34,7 @@ import { TIPO_ARTICULO_LABELS, TIPO_COSTEO_LABELS } from '../types'
 import type { Articulo, TipoArticulo, TipoCosteo } from '../types'
 
 const unidadesService = createMantenedorService('unidades-medida')
+const etiquetasService = createMantenedorService('etiquetas')
 const ITEM = 'OPER_MATERIALES'
 
 interface ArticuloFormSheetProps {
@@ -54,7 +56,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
   const [valorEstandar, setValorEstandar] = useState('')
   const [stockCritico, setStockCritico] = useState('')
   const [activo, setActivo] = useState(true)
-  const [etiqueta, setEtiqueta] = useState('')
+  const [etiquetaId, setEtiquetaId] = useState<number | null>(null)
   const [kgNetoEnvase, setKgNetoEnvase] = useState('')
   const [kgBrutoEnvase, setKgBrutoEnvase] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -62,6 +64,13 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
   const { data: unidades } = useQuery({
     queryKey: ['unidades-medida-options'],
     queryFn: () => unidadesService.list({ soloActivos: true, limit: 500 }),
+    staleTime: 60_000,
+    enabled: open,
+  })
+
+  const { data: etiquetas } = useQuery({
+    queryKey: ['etiquetas-options'],
+    queryFn: () => etiquetasService.list({ soloActivos: true, limit: 500 }),
     staleTime: 60_000,
     enabled: open,
   })
@@ -92,7 +101,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setValorEstandar(item.valorEstandar ?? '')
       setStockCritico(item.stockCritico ?? '')
       setActivo(item.activo)
-      setEtiqueta(item.etiqueta ?? '')
+      setEtiquetaId(item.etiquetaId)
       setKgNetoEnvase(item.kgNetoEnvase ?? '')
       setKgBrutoEnvase(item.kgBrutoEnvase ?? '')
     } else {
@@ -105,7 +114,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setValorEstandar('')
       setStockCritico('')
       setActivo(true)
-      setEtiqueta('')
+      setEtiquetaId(null)
       setKgNetoEnvase('')
       setKgBrutoEnvase('')
     }
@@ -124,7 +133,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
         valorEstandar: valorEstandar ? Number(valorEstandar) : null,
         stockCritico: stockCritico ? Number(stockCritico) : null,
         activo,
-        etiqueta: tipo === 'EMBALAJE' ? (etiqueta.trim() || null) : null,
+        etiquetaId: tipo === 'EMBALAJE' ? etiquetaId : null,
         kgNetoEnvase: tipo === 'EMBALAJE' && kgNetoEnvase ? Number(kgNetoEnvase) : null,
         kgBrutoEnvase: tipo === 'EMBALAJE' && kgBrutoEnvase ? Number(kgBrutoEnvase) : null,
       }
@@ -147,6 +156,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
     if (!descripcion.trim()) e.descripcion = 'La descripción es requerida'
     if (!unidadId) e.unidadId = 'La unidad de medida es requerida'
     if (tipoCosteo === 'ESTANDAR' && !valorEstandar) e.valorEstandar = 'El valor estándar es requerido (R3)'
+    if (tipo === 'EMBALAJE' && !etiquetaId) e.etiquetaId = 'La etiqueta es requerida para artículos de tipo Embalaje'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -257,8 +267,24 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
           {tipo === 'EMBALAJE' && (
             <>
               <div className='space-y-1.5'>
-                <Label>Etiqueta</Label>
-                <Input value={etiqueta} onChange={(e) => setEtiqueta(e.target.value)} placeholder='Ej: Standard' />
+                <Label>Etiqueta <span className='text-destructive'>*</span></Label>
+                <div className='flex items-end gap-2'>
+                  <div className='flex-1'>
+                    <Select value={etiquetaId ? String(etiquetaId) : ''} onValueChange={(v) => setEtiquetaId(parseInt(v))}>
+                      <SelectTrigger><SelectValue placeholder='Seleccionar etiqueta...' /></SelectTrigger>
+                      <SelectContent>
+                        {(etiquetas?.data ?? []).map((e) => (
+                          <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <EtiquetaQuickCreate onCreated={(e) => {
+                    queryClient.invalidateQueries({ queryKey: ['etiquetas-options'] })
+                    setEtiquetaId(e.id)
+                  }} />
+                </div>
+                {errors.etiquetaId && <p className='text-xs text-destructive'>{errors.etiquetaId}</p>}
               </div>
               <div className='grid grid-cols-2 gap-3'>
                 <div className='space-y-1.5'>

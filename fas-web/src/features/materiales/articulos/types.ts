@@ -34,7 +34,8 @@ export interface Articulo {
   stockCritico: string | null
   activo: boolean
   creadoEn: string
-  etiqueta: string | null
+  etiquetaId: number | null
+  etiqueta: { id: number; codigo: string; descripcion: string } | null
   kgNetoEnvase: string | null
   kgBrutoEnvase: string | null
   saldos?: SaldoBodega[]
@@ -50,7 +51,7 @@ export interface ArticuloCreateInput {
   valorEstandar?: number | null
   stockCritico?: number | null
   activo?: boolean
-  etiqueta?: string | null
+  etiquetaId?: number | null
   kgNetoEnvase?: number | null
   kgBrutoEnvase?: number | null
 }

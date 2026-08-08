@@ -118,6 +118,15 @@ La OC es **multilínea**. Cada línea es una combinación completa de caracterí
 > de OC — la línea los hereda del artículo elegido, sin duplicarlos.
 > `Articulo` gana los campos `etiqueta`, `kgNetoEnvase`, `kgBrutoEnvase`
 > (opcionales, aplican a artículos tipo EMBALAJE).
+>
+> **Supersesión (2026-08-13):** `Articulo.etiqueta` deja de ser texto libre y
+> pasa a `etiquetaId` (FK al nuevo mantenedor `Etiqueta`,
+> `mantenedores-generales.md` §4.3) — elegible desde un selector en el
+> maestro de Artículos, con creación rápida inline (mismo patrón que
+> `unidadId`). Pasa a ser **requerido** (antes era opcional) cuando
+> `tipo = EMBALAJE`, validado en `articulos.service.ts`, no a nivel de
+> columna. Migración destructiva: los valores de texto libre existentes no
+> se preservan (decisión aceptada, sistema en desarrollo).
 
 ### 4.4 Recepcion
 Módulo único, dos modos según presencia de OC. Una Recepción se valida contra **una** OC o contra **ninguna** (nunca varias).

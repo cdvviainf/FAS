@@ -42,6 +42,7 @@ type ExternalReferenceDef = {
     | 'solicitudInspeccionCalibre'
     | 'solicitudInspeccionCategoria'
     | 'solicitudInspeccionEmbalaje'
+    | 'articulo'
   parentField: string
   label: string
   usesSoftDelete?: boolean
@@ -85,6 +86,9 @@ const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceD
   ],
   calificacion: [
     { delegateName: 'solicitudInspeccion', parentField: 'calificacionId', label: 'solicitudes de inspección' },
+  ],
+  etiqueta: [
+    { delegateName: 'articulo', parentField: 'etiquetaId', label: 'artículos', usesSoftDelete: false },
   ],
 }
 

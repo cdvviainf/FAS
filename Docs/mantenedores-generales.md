@@ -237,6 +237,13 @@ model TipoPallet {
   // + base
 }
 
+model Etiqueta {
+  // + base (nuevo, 2026-08-13) — elegible en el maestro de Artículos
+  // (materiales.md), requerida solo si Articulo.tipo = EMBALAJE (validado en
+  // el service, no a nivel de columna — ver compras.md).
+  // back-relation articulos Articulo[] vive en materiales.md
+}
+
 model TipoProduccion {
   // + base
 }
@@ -257,7 +264,7 @@ model TipoCuentaCorriente {
 
 - **Geografía:** Zona · Región · Provincia · Comuna · País · Puerto
 - **Comercial:** Grupo mercado · Mercado · Moneda · Temporada · Tipo de embarque · Tipo cuenta corriente
-- **Operación:** Bodega · Unidad de medida · Tipo de pallet · Altura · Tipo Producción
+- **Operación:** Bodega · Unidad de medida · Tipo de pallet · Etiqueta · Altura · Tipo Producción
 - **Fruta:** Especie · Grupo Variedad · Variedad · Categoría · Calibre
 - **Parámetros:** Tipo Parámetro · Parámetro
 
@@ -281,7 +288,7 @@ model TipoCuentaCorriente {
 ## 6. Contratos API (Fastify, prefijo `/api/config`)
 
 > Auth + acceso por perfil al ítem del mantenedor (`LECTURA` lectura / `TOTAL` escritura). Patrón **CRUD genérico** por mantenedor en `/{recurso}` (recurso en kebab/plural):
-> `temporadas`, `paises`, `tipos-embarque`, `zonas`, `regiones`, `provincias`, `comunas`, `puertos`, `grupos-mercado`, `mercados`, `monedas`, `bodegas`, `tipos-parametro`, `parametros`, `especies`, `grupos-variedad`, `variedades`, `categorias`, `calibres`, `alturas`, `tipos-pallet`, `tipos-produccion`, `unidades-medida`, `tipos-cuenta-corriente`.
+> `temporadas`, `paises`, `tipos-embarque`, `zonas`, `regiones`, `provincias`, `comunas`, `puertos`, `grupos-mercado`, `mercados`, `monedas`, `bodegas`, `tipos-parametro`, `parametros`, `especies`, `grupos-variedad`, `variedades`, `categorias`, `calibres`, `alturas`, `tipos-pallet`, `etiquetas`, `tipos-produccion`, `unidades-medida`, `tipos-cuenta-corriente`.
 
 | Método | Ruta | Notas |
 |---|---|---|

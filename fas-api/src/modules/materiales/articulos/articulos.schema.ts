@@ -11,8 +11,10 @@ export const articuloCreateSchema = z.object({
   stockCritico: z.number().min(0).optional().nullable(),
   activo: z.boolean().default(true),
   // Atributos físicos del embalaje, usados por Compras (Orden de Compra hereda
-  // estos valores de la línea, ver compras.md §4.3).
-  etiqueta: z.string().max(100).trim().optional().nullable(),
+  // estos valores de la línea, ver compras.md §4.3). etiquetaId es requerido
+  // solo si tipo=EMBALAJE — validado en articulos.service.ts (mismo criterio
+  // que valorEstandar/ESTANDAR), no aquí.
+  etiquetaId: z.number().int().positive().optional().nullable(),
   kgNetoEnvase: z.number().min(0).optional().nullable(),
   kgBrutoEnvase: z.number().min(0).optional().nullable(),
 })

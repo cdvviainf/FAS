@@ -11,6 +11,7 @@ const modelMap: Record<MantenedorModelo, string> = {
   formaPago: 'formaPago',
   unidadMedida: 'unidadMedida',
   tipoPallet: 'tipoPallet',
+  etiqueta: 'etiqueta',
   altura: 'altura',
   tipoProduccion: 'tipoProduccion',
   tipoDefecto: 'tipoDefecto',
@@ -301,7 +302,8 @@ export async function countActiveReferences(
     | 'solicitudInspeccionVariedad'
     | 'solicitudInspeccionCalibre'
     | 'solicitudInspeccionCategoria'
-    | 'solicitudInspeccionEmbalaje',
+    | 'solicitudInspeccionEmbalaje'
+    | 'articulo',
   parentId: number,
   parentField: string,
   usesSoftDelete = true,

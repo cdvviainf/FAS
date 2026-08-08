@@ -196,6 +196,7 @@ model Empresa {
   formasPago           FormaPago[]
   unidadesMedida       UnidadMedida[]
   tiposPallet          TipoPallet[]
+  etiquetas            Etiqueta[]
   alturas              Altura[]
   tiposProduccion      TipoProduccion[]
   tiposDefecto         TipoDefecto[]
@@ -661,6 +662,28 @@ model TipoPallet {
 
   @@index([empresaId])
   @@map("tipos_pallet")
+}
+
+model Etiqueta {
+  id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  articulos Articulo[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  @@map("etiquetas")
 }
 
 model Altura {
@@ -1598,7 +1621,12 @@ model Articulo {
   activo                Boolean      @default(true)
   // Atributos físicos del embalaje (Orden de Compra hereda estos valores del
   // artículo elegido en la línea, no los duplica — ver compras.md §4.3).
-  etiqueta              String?
+  etiquetaId            Int?
+  // FK compuesta (empresaId, etiquetaId) -> Etiqueta(empresaId, id): mismo
+  // patrón que Articulo.unidadId. Requerida solo si tipo = EMBALAJE (validado
+  // en articulos.service.ts, no a nivel de columna — mismo criterio que
+  // valorEstandar/ESTANDAR).
+  etiqueta              Etiqueta?    @relation(fields: [empresaId, etiquetaId], references: [empresaId, id])
   kgNetoEnvase          Decimal?     @db.Decimal(10, 3)
   kgBrutoEnvase         Decimal?     @db.Decimal(10, 3)
 

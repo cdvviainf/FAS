@@ -343,7 +343,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const isPending = createMutation.isPending || updateMutation.isPending
   const yaRecepcionada = ordenCompra?.data.estado === 'RECEPCIONADA'
   const soloLectura = !puedeEscribir || yaRecepcionada
-  const articuloSeleccionado = articulos.find((a) => a.id === linea.articuloId) as { etiqueta?: string | null; kgNetoEnvase?: string | null; kgBrutoEnvase?: string | null } | undefined
+  const articuloSeleccionado = articulos.find((a) => a.id === linea.articuloId) as { etiqueta?: { descripcion: string } | null; kgNetoEnvase?: string | null; kgBrutoEnvase?: string | null } | undefined
   const lineaMutationPending = addLineaMutation.isPending || updateLineaMutation.isPending
 
   return (
@@ -680,7 +680,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
 
             {articuloSeleccionado && (articuloSeleccionado.etiqueta || articuloSeleccionado.kgNetoEnvase) && (
               <p className='text-xs text-muted-foreground'>
-                Etiqueta: {articuloSeleccionado.etiqueta ?? '—'} · Kg Neto: {articuloSeleccionado.kgNetoEnvase ?? '—'} · Kg Bruto: {articuloSeleccionado.kgBrutoEnvase ?? '—'}
+                Etiqueta: {articuloSeleccionado.etiqueta?.descripcion ?? '—'} · Kg Neto: {articuloSeleccionado.kgNetoEnvase ?? '—'} · Kg Bruto: {articuloSeleccionado.kgBrutoEnvase ?? '—'}
               </p>
             )}
             {linea.cajas > 0 && (

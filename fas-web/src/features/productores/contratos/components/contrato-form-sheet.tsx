@@ -394,7 +394,7 @@ function LineaContrato({
   const { data: categoriasData } = useQuery({ queryKey: ['categorias-options-contrato', especieId], queryFn: () => categoriasService.list({ limit: 200, especieId: especieId! }), staleTime: 60_000, enabled: !!especieId })
   const { data: calibresData } = useQuery({ queryKey: ['calibres-options-contrato', especieId], queryFn: () => calibresService.list({ limit: 200, especieId: especieId! }), staleTime: 60_000, enabled: !!especieId })
 
-  const articuloSeleccionado = articulos.find((a) => a.id === linea.articuloId) as { etiqueta?: string | null; kgNetoEnvase?: string | null; kgBrutoEnvase?: string | null } | undefined
+  const articuloSeleccionado = articulos.find((a) => a.id === linea.articuloId) as { etiqueta?: { descripcion: string } | null; kgNetoEnvase?: string | null; kgBrutoEnvase?: string | null } | undefined
 
   return (
     <div className='space-y-2 rounded-md border p-3'>
@@ -484,7 +484,7 @@ function LineaContrato({
       </div>
       {articuloSeleccionado && (articuloSeleccionado.etiqueta || articuloSeleccionado.kgNetoEnvase) && (
         <p className='text-xs text-muted-foreground'>
-          Etiqueta: {articuloSeleccionado.etiqueta ?? '—'} · Kg Neto: {articuloSeleccionado.kgNetoEnvase ?? '—'} · Kg Bruto: {articuloSeleccionado.kgBrutoEnvase ?? '—'}
+          Etiqueta: {articuloSeleccionado.etiqueta?.descripcion ?? '—'} · Kg Neto: {articuloSeleccionado.kgNetoEnvase ?? '—'} · Kg Bruto: {articuloSeleccionado.kgBrutoEnvase ?? '—'}
         </p>
       )}
       {error && <p className='text-xs text-destructive'>{error}</p>}

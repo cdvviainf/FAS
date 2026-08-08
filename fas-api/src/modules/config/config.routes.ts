@@ -20,6 +20,7 @@ const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'formaPago', prefixRuta: 'formas-pago', label: 'Forma de Pago' },
   { modelo: 'unidadMedida', prefixRuta: 'unidades-medida', label: 'Unidad de Medida' },
   { modelo: 'tipoPallet', prefixRuta: 'tipos-pallet', label: 'Tipo de Pallet' },
+  { modelo: 'etiqueta', prefixRuta: 'etiquetas', label: 'Etiqueta' },
   { modelo: 'altura', prefixRuta: 'alturas', label: 'Altura' },
   { modelo: 'tipoProduccion', prefixRuta: 'tipos-produccion', label: 'Tipo de Producción' },
   { modelo: 'tipoDefecto', prefixRuta: 'tipos-defecto', label: 'Tipo de Defecto' },

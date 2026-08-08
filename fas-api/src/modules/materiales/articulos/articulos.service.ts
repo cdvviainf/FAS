@@ -12,6 +12,13 @@ function validarCosteo(tipo: string | undefined, tipoCosteo: string | undefined,
   }
 }
 
+// La etiqueta es requerida solo para artículos tipo Embalaje.
+function validarEtiqueta(tipo: string | undefined, etiquetaId: number | null | undefined) {
+  if (tipo === 'EMBALAJE' && etiquetaId == null) {
+    throw new ValidationError('La etiqueta es requerida para artículos de tipo Embalaje')
+  }
+}
+
 function controlaStockDe(tipoCosteo: string): boolean {
   return tipoCosteo === 'PROMEDIO_PONDERADO'
 }
@@ -33,10 +40,16 @@ export async function crearArticulo(body: ArticuloCreateInput) {
   if (existente) throw new ValidationError(`Ya existe un artículo con código "${body.codigo}"`)
 
   validarCosteo(body.tipo, body.tipoCosteo, body.valorEstandar)
+  validarEtiqueta(body.tipo, body.etiquetaId)
 
   // ART-04: la unidad de medida debe existir, no estar eliminada ni bloqueada
   const unidad = await repo.getUnidadMedidaActiva(body.unidadId)
   if (!unidad) throw new ValidationError('La unidad de medida seleccionada no existe, está bloqueada o fue eliminada')
+
+  if (body.etiquetaId != null) {
+    const etiqueta = await repo.getEtiquetaActiva(body.etiquetaId)
+    if (!etiqueta) throw new ValidationError('La etiqueta seleccionada no existe, está bloqueada o fue eliminada')
+  }
 
   return repo.createArticulo({
     ...body,
@@ -52,10 +65,19 @@ export async function actualizarArticulo(id: number, body: ArticuloUpdateInput) 
   const valorEstandar = body.valorEstandar !== undefined ? body.valorEstandar : actual.valorEstandar ? Number(actual.valorEstandar) : null
   validarCosteo(tipo, tipoCosteo, valorEstandar)
 
+  const etiquetaId = body.etiquetaId !== undefined ? body.etiquetaId : actual.etiquetaId
+  validarEtiqueta(tipo, etiquetaId)
+
   // ART-04: si se cambia la unidad, validar que la nueva esté activa
   if (body.unidadId !== undefined) {
     const unidad = await repo.getUnidadMedidaActiva(body.unidadId)
     if (!unidad) throw new ValidationError('La unidad de medida seleccionada no existe, está bloqueada o fue eliminada')
+  }
+
+  // Si se cambia la etiqueta, validar que la nueva esté activa
+  if (body.etiquetaId !== undefined && body.etiquetaId !== null) {
+    const etiqueta = await repo.getEtiquetaActiva(body.etiquetaId)
+    if (!etiqueta) throw new ValidationError('La etiqueta seleccionada no existe, está bloqueada o fue eliminada')
   }
 
   const data: ArticuloUpdateInput & { controlaStock?: boolean } = { ...body }

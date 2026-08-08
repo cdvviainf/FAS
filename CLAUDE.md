@@ -202,7 +202,7 @@ fas-web/
 
 | Spec (`Docs/`) | Modelos principales |
 |---|---|
-| `mantenedores-generales.md` | 24 maestros (Temporada, Pais, Region, Provincia, Comuna, Puerto, GrupoMercado, Mercado, Moneda, Bodega, TipoParametro, Parametro, Especie, GrupoVariedad, Variedad, Categoria, Calibre, Altura, TipoPallet, TipoProduccion, UnidadMedida, TipoCuentaCorriente, TipoEmbarque, Zona) |
+| `mantenedores-generales.md` | 25 maestros (Temporada, Pais, Region, Provincia, Comuna, Puerto, GrupoMercado, Mercado, Moneda, Bodega, TipoParametro, Parametro, Especie, GrupoVariedad, Variedad, Categoria, Calibre, Altura, TipoPallet, Etiqueta, TipoProduccion, UnidadMedida, TipoCuentaCorriente, TipoEmbarque, Zona) |
 | `entidades.md` | Entidad, EntidadDireccion, EntidadContacto (`TipoEntidad` multiselect) |
 | `usuarios-perfiles.md` | Usuario, Perfil, PerfilAcceso, ItemMenu |
 | `empresas.md` | Empresa, EmpresaDireccion, EmpresaContacto, UsuarioEmpresa (multi-empresa/tenant; `empresaId` en tablas raíz — ver spec) |

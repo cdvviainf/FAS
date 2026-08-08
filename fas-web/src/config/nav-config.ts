@@ -285,6 +285,7 @@ export const navGroups: NavGroup[] = [
         isActive: false,
         items: [
           { title: 'Tipos de Pallet',     url: '/dashboard/configuracion/tipos-pallet',     icon: 'page'        },
+          { title: 'Etiquetas',           url: '/dashboard/configuracion/etiquetas',        icon: 'page'        },
           { title: 'Alturas',             url: '/dashboard/configuracion/alturas',           icon: 'page'        },
           { title: 'Tipos de Producción', url: '/dashboard/configuracion/tipos-produccion', icon: 'adjustments' }
         ]

@@ -42,7 +42,7 @@ export interface NotaVentaDetalleItem {
   variedadId: number
   variedad: MantenedorRef
   articuloId: number
-  articulo: MantenedorRef & { etiqueta: string | null; kgNetoEnvase: string | null; kgBrutoEnvase: string | null }
+  articulo: MantenedorRef & { etiqueta: MantenedorRef | null; kgNetoEnvase: string | null; kgBrutoEnvase: string | null }
   categoriaId: number | null
   categoria: MantenedorRef | null
   tipoPalletId: number | null

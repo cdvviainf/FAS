@@ -7,7 +7,7 @@ interface RefSimple {
 export interface ContratoLinea {
   id: number
   articuloId: number
-  articulo: RefSimple & { etiqueta?: string | null; kgNetoEnvase?: string | null; kgBrutoEnvase?: string | null }
+  articulo: RefSimple & { etiqueta?: RefSimple | null; kgNetoEnvase?: string | null; kgBrutoEnvase?: string | null }
   variedadId: number
   variedad: RefSimple
   calibreDesdeId: number
