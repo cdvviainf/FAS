@@ -35,10 +35,7 @@ export interface OrdenCompraLineaItem {
   categoria: MantenedorRef
   articuloId: number
   articulo: MantenedorRef & { etiqueta: MantenedorRef | null; kgNetoEnvase: string | null; kgBrutoEnvase: string | null }
-  calibreMinId: number
-  calibreMin: MantenedorRef
-  calibreMaxId: number
-  calibreMax: MantenedorRef
+  calibres: { calibre: MantenedorRef }[]
   tipoPalletId: number | null
   tipoPallet: MantenedorRef | null
   cantidadPallets: number
@@ -112,8 +109,7 @@ export interface OrdenCompraLineaInput {
   variedadId: number
   categoriaId: number
   articuloId: number
-  calibreMinId: number
-  calibreMaxId: number
+  calibreIds: number[]
   tipoPalletId: number | null
   cantidadPallets: number
   cajasPorPallet: number

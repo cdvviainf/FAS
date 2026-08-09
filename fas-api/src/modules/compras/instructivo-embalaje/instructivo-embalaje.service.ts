@@ -27,20 +27,12 @@ async function validarLinea(linea: InstructivoEmbalajeDetalleInput, index: numbe
     throw new ValidationError(`${prefijo} la categoría no pertenece a la especie seleccionada`)
   }
 
-  const [calibreMin, calibreMax] = await Promise.all([
-    repo.getCalibre(linea.calibreMinId),
-    repo.getCalibre(linea.calibreMaxId),
-  ])
-  if (!calibreMin || !calibreMax) {
-    throw new ValidationError(`${prefijo} uno o ambos calibres del rango no existen o están bloqueados`)
+  const calibres = await repo.getCalibresActivos(linea.calibreIds)
+  if (calibres.length !== new Set(linea.calibreIds).size) {
+    throw new ValidationError(`${prefijo} uno o más calibres seleccionados no existen o están bloqueados`)
   }
-  if (calibreMin.especieId !== linea.especieId || calibreMax.especieId !== linea.especieId) {
-    throw new ValidationError(`${prefijo} el rango de calibre no pertenece a la especie seleccionada`)
-  }
-  // Maestro de Calibres ordenado por especie (Docs/compras.md §6.5): el rango
-  // se evalúa por `orden`, no por el id.
-  if (calibreMin.orden > calibreMax.orden) {
-    throw new ValidationError(`${prefijo} el calibre mínimo debe preceder (o igualar) al calibre máximo en el orden del maestro`)
+  if (calibres.some((c) => c.especieId !== linea.especieId)) {
+    throw new ValidationError(`${prefijo} uno o más calibres no pertenecen a la especie seleccionada`)
   }
 
   if (linea.tipoPalletId != null) {

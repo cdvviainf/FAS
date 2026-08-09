@@ -43,8 +43,7 @@ interface NuevaLinea {
   especieId: number
   variedadId: number
   categoriaId: number
-  calibreMinId: number
-  calibreMaxId: number
+  calibreIds: number[]
   tipoPalletId: number | null
   cantidadPallets: string
   cajasPorPallet: string
@@ -56,8 +55,7 @@ const LINEA_EMPTY: NuevaLinea = {
   especieId: 0,
   variedadId: 0,
   categoriaId: 0,
-  calibreMinId: 0,
-  calibreMaxId: 0,
+  calibreIds: [],
   tipoPalletId: null,
   cantidadPallets: '',
   cajasPorPallet: String(CAJAS_POR_PALLET_DEFAULT),
@@ -108,7 +106,7 @@ export function InstructivoEmbalajeForm() {
     if (!linea.especieId) e.especieId = 'Requerida'
     if (!linea.variedadId) e.variedadId = 'Requerida'
     if (!linea.categoriaId) e.categoriaId = 'Requerida'
-    if (!linea.calibreMinId || !linea.calibreMaxId) e.calibre = 'Selecciona un rango de calibre y agrégalo'
+    if (linea.calibreIds.length === 0) e.calibreIds = 'Selecciona al menos un calibre'
     if (!linea.cantidadPallets || Number(linea.cantidadPallets) <= 0) e.cantidadPallets = 'Debe ser mayor a 0'
     if (!linea.cajas || Number(linea.cajas) <= 0) e.cajas = 'Debe ser mayor a 0'
     setLineaErrors(e)
@@ -122,8 +120,7 @@ export function InstructivoEmbalajeForm() {
       especieId: linea.especieId,
       variedadId: linea.variedadId,
       categoriaId: linea.categoriaId,
-      calibreMinId: linea.calibreMinId,
-      calibreMaxId: linea.calibreMaxId,
+      calibreIds: linea.calibreIds,
       tipoPalletId: linea.tipoPalletId,
       cantidadPallets: Number(linea.cantidadPallets),
       cajasPorPallet: Number(linea.cajasPorPallet),
@@ -148,8 +145,7 @@ export function InstructivoEmbalajeForm() {
       especieId: d.especieId,
       variedadId: d.variedadId,
       categoriaId: d.categoriaId,
-      calibreMinId: d.calibreMinId,
-      calibreMaxId: d.calibreMaxId,
+      calibreIds: d.calibreIds,
       tipoPalletId: d.tipoPalletId,
       cantidadPallets: String(d.cantidadPallets),
       cajasPorPallet: String(d.cajasPorPallet),
@@ -178,8 +174,9 @@ export function InstructivoEmbalajeForm() {
     const idxDesde = lista.findIndex((c) => c.id === calibreDesdeId)
     const idxHasta = lista.findIndex((c) => c.id === hastaId)
     if (idxDesde === -1 || idxHasta === -1) return
-    const [iniIdx, finIdx] = idxDesde <= idxHasta ? [idxDesde, idxHasta] : [idxHasta, idxDesde]
-    setLinea((l) => ({ ...l, calibreMinId: lista[iniIdx].id, calibreMaxId: lista[finIdx].id }))
+    const [ini, fin] = idxDesde <= idxHasta ? [idxDesde, idxHasta] : [idxHasta, idxDesde]
+    const nuevos = lista.slice(ini, fin + 1).map((c) => c.id)
+    setLinea((l) => ({ ...l, calibreIds: Array.from(new Set([...l.calibreIds, ...nuevos])) }))
     resetCalibreRango()
   }
 
@@ -246,7 +243,7 @@ export function InstructivoEmbalajeForm() {
           <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Especie <span className='text-destructive'>*</span></Label>
-              <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreMinId: 0, calibreMaxId: 0 })); resetCalibreRango() }}>
+              <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreIds: [] })); resetCalibreRango() }}>
                 <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                 <SelectContent>
                   {especies.map((e) => (
@@ -331,24 +328,29 @@ export function InstructivoEmbalajeForm() {
           </div>
 
           <div className='space-y-1.5'>
-            <Label>Calibre <span className='text-destructive'>*</span></Label>
-            {linea.calibreMinId && linea.calibreMaxId ? (
-              <Badge variant='secondary' className='gap-1 pr-1'>
-                {calibres.find((c) => c.id === linea.calibreMinId)?.descripcion ?? linea.calibreMinId}
-                {' – '}
-                {calibres.find((c) => c.id === linea.calibreMaxId)?.descripcion ?? linea.calibreMaxId}
-                <button
-                  type='button'
-                  onClick={() => setLinea((l) => ({ ...l, calibreMinId: 0, calibreMaxId: 0 }))}
-                  className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'
-                >
-                  <Icons.close className='h-3 w-3' />
-                </button>
-              </Badge>
+            <Label>Calibres <span className='text-destructive'>*</span></Label>
+            {linea.calibreIds.length > 0 ? (
+              <div className='flex flex-wrap gap-1.5'>
+                {linea.calibreIds.map((id) => {
+                  const opt = calibres.find((c) => c.id === id)
+                  return (
+                    <Badge key={id} variant='secondary' className='gap-1 pr-1'>
+                      {opt?.descripcion ?? id}
+                      <button
+                        type='button'
+                        onClick={() => setLinea((l) => ({ ...l, calibreIds: l.calibreIds.filter((x) => x !== id) }))}
+                        className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'
+                      >
+                        <Icons.close className='h-3 w-3' />
+                      </button>
+                    </Badge>
+                  )
+                })}
+              </div>
             ) : (
               <p className='text-xs text-muted-foreground'>Selecciona Calibre Inicio / Fin arriba y agrega.</p>
             )}
-            {lineaErrors.calibre && <p className='text-xs text-destructive'>{lineaErrors.calibre}</p>}
+            {lineaErrors.calibreIds && <p className='text-xs text-destructive'>{lineaErrors.calibreIds}</p>}
             <p className='text-xs text-muted-foreground'>El orden lo define el maestro de Calibres por especie.</p>
           </div>
 
@@ -415,7 +417,13 @@ export function InstructivoEmbalajeForm() {
                       <TableCell className='font-medium whitespace-nowrap'>{nombre(especies, d.especieId)} / {nombre(variedades, d.variedadId)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(articulos, d.articuloId)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(categorias, d.categoriaId)}</TableCell>
-                      <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(calibres, d.calibreMinId)} – {nombre(calibres, d.calibreMaxId)}</TableCell>
+                      <TableCell className='max-w-[180px] text-muted-foreground'>
+                        <div className='flex flex-wrap gap-1'>
+                          {d.calibreIds.map((id) => (
+                            <Badge key={id} variant='outline' className='text-xs'>{nombre(calibres, id)}</Badge>
+                          ))}
+                        </div>
+                      </TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{d.cantidadPallets} pallets · {d.cajas} cajas</TableCell>
                       <TableCell className='text-right'>
                         <div className='flex justify-end gap-1'>

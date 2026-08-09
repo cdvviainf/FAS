@@ -3,8 +3,7 @@ export interface InstructivoEmbalajeDetalleInput {
   especieId: number
   variedadId: number
   categoriaId: number
-  calibreMinId: number
-  calibreMaxId: number
+  calibreIds: number[]
   tipoPalletId?: number | null
   cantidadPallets: number
   cajasPorPallet: number

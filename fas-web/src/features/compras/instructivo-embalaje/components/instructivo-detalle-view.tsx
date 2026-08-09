@@ -39,7 +39,12 @@ export function InstructivoDetalleView({ id }: { id: number }) {
               <span className='font-medium'>{d.especie.descripcion} / {d.variedad.descripcion}</span>
               <span className='text-muted-foreground'>{d.articulo.codigo} — {d.articulo.descripcion}</span>
               <span className='text-muted-foreground'>· {d.categoria.descripcion}</span>
-              <span className='text-muted-foreground'>· Calibre {d.calibreMin.descripcion} a {d.calibreMax.descripcion}</span>
+              <span className='flex flex-wrap items-center gap-1 text-muted-foreground'>
+                · Calibres:
+                {d.calibres.map((c) => (
+                  <Badge key={c.calibre.id} variant='outline' className='text-xs'>{c.calibre.codigo}</Badge>
+                ))}
+              </span>
               <span className='ml-auto text-muted-foreground'>{d.cantidadPallets} pallets · {d.cajas} cajas</span>
             </div>
           ))}

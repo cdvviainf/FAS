@@ -12,8 +12,7 @@ const includeDetalle = {
       especie: { select: mantenedorSelect },
       variedad: { select: mantenedorSelect },
       categoria: { select: mantenedorSelect },
-      calibreMin: { select: mantenedorSelect },
-      calibreMax: { select: mantenedorSelect },
+      calibres: { select: { calibre: { select: mantenedorSelect } } },
       tipoPallet: { select: mantenedorSelect },
     },
   },
@@ -60,7 +59,12 @@ export async function createInstructivo(notaVentaId: number, detalle: Instructiv
         numero,
         notaVentaId,
         creadoPor,
-        detalle: { create: detalle },
+        detalle: {
+          create: detalle.map(({ calibreIds, ...resto }) => ({
+            ...resto,
+            calibres: { create: calibreIds.map((calibreId) => ({ calibreId })) },
+          })),
+        },
       },
       include: includeDetalle,
     })
@@ -93,10 +97,10 @@ export async function getCategoria(categoriaId: number) {
   })
 }
 
-export async function getCalibre(calibreId: number) {
-  return prisma.calibre.findFirst({
-    where: { id: calibreId, eliminadoEn: null, bloqueado: false },
-    select: { id: true, especieId: true, orden: true },
+export async function getCalibresActivos(ids: number[]) {
+  return prisma.calibre.findMany({
+    where: { id: { in: ids }, eliminadoEn: null, bloqueado: false },
+    select: { id: true, especieId: true },
   })
 }
 

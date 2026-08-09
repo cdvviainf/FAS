@@ -324,26 +324,9 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
     expect(detalle.notaVentaId).toBe(nv.id)
   })
 
-  it('rechaza rango de calibre invertido en Instructivo de Embalaje (compras.md §6.5)', async () => {
+  it('crea un Instructivo de Embalaje con lista de calibres (compras.md §4.3/§6.5)', async () => {
     const f = await crearFixtures()
     const nv = await crearNotaVenta(f.empresa.id, nvBase(f), 'test')
-
-    await expect(
-      crearInstructivo(f.empresa.id, {
-        notaVentaId: nv.id,
-        detalle: [{
-          articuloId: f.articulo.id,
-          especieId: f.especie.id,
-          variedadId: f.variedad.id,
-          categoriaId: f.categoria.id,
-          calibreMinId: f.calibreGrande.id,
-          calibreMaxId: f.calibreChico.id,
-          cantidadPallets: 1,
-          cajasPorPallet: 1,
-          cajas: 1,
-        }],
-      }, 'test'),
-    ).rejects.toMatchObject({ statusCode: 422 })
 
     const instructivo = await crearInstructivo(f.empresa.id, {
       notaVentaId: nv.id,
@@ -352,8 +335,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
         especieId: f.especie.id,
         variedadId: f.variedad.id,
         categoriaId: f.categoria.id,
-        calibreMinId: f.calibreChico.id,
-        calibreMaxId: f.calibreGrande.id,
+        calibreIds: [f.calibreChico.id, f.calibreGrande.id],
         cantidadPallets: 1,
         cajasPorPallet: 1,
         cajas: 1,
@@ -372,8 +354,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
         especieId: f.especie.id,
         variedadId: f.variedad.id,
         categoriaId: f.categoria.id,
-        calibreMinId: f.calibreChico.id,
-        calibreMaxId: f.calibreGrande.id,
+        calibreIds: [f.calibreChico.id, f.calibreGrande.id],
         cantidadPallets: 1,
         cajasPorPallet: 1,
         cajas: 1,
@@ -425,8 +406,7 @@ describe('Orden de Compra contra PostgreSQL', () => {
       variedadId: f.variedad.id,
       categoriaId: f.categoria.id,
       articuloId: f.articulo.id,
-      calibreMinId: f.calibreChico.id,
-      calibreMaxId: f.calibreGrande.id,
+      calibreIds: [f.calibreChico.id, f.calibreGrande.id],
       cantidadPallets: 40,
       cajasPorPallet: 114,
       cajas: 40 * 114,
@@ -447,17 +427,12 @@ describe('Orden de Compra contra PostgreSQL', () => {
     ).rejects.toMatchObject({ statusCode: 422 })
   })
 
-  it('deriva las cuotas de pago desde la Condición de Pago seleccionada (no se cargan manualmente) y valida el rango de calibre por especie al agregar una línea', async () => {
+  it('deriva las cuotas de pago desde la Condición de Pago seleccionada (no se cargan manualmente) y valida la lista de calibres por especie al agregar una línea', async () => {
     const f = await crearFixtures()
     const condicionPago = await crearCondicionPago(f.empresa.id, [
       { porcentaje: 80, plazoDias: 30, descripcion: 'Anticipo' },
       { porcentaje: 20, plazoDias: 60, descripcion: 'Saldo' },
     ])
-
-    const ocParaLineaInvalida = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
-    await expect(
-      agregarLinea(f.empresa.id, ocParaLineaInvalida.id, { ...ocLinea(f), calibreMinId: f.calibreGrande.id, calibreMaxId: f.calibreChico.id }),
-    ).rejects.toMatchObject({ statusCode: 422 })
 
     const ocCreada = await crearOrdenCompra(f.empresa.id, {
       entidadProductorId: f.productor.id,

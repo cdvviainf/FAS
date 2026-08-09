@@ -1009,10 +1009,8 @@ model Calibre {
   eliminadoPor          String?
 
   notaVentaDetalleCalibres      NotaVentaDetalleCalibre[]
-  instructivoEmbalajeDetalleMin InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeCalibreMin")
-  instructivoEmbalajeDetalleMax InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeCalibreMax")
-  ordenCompraLineaMin           OrdenCompraLinea[]           @relation("OrdenCompraCalibreMin")
-  ordenCompraLineaMax           OrdenCompraLinea[]           @relation("OrdenCompraCalibreMax")
+  instructivoEmbalajeDetalleCalibres InstructivoEmbalajeDetalleCalibre[]
+  ordenCompraLineaCalibres      OrdenCompraLineaCalibre[]
   contratoProductorLineaDesde   ProductorContratoLinea[]     @relation("ProductorContratoCalibreDesde")
   contratoProductorLineaHasta   ProductorContratoLinea[]     @relation("ProductorContratoCalibreHasta")
   solicitudesInspeccion         SolicitudInspeccionCalibre[]
@@ -2253,10 +2251,6 @@ model InstructivoEmbalajeDetalle {
   variedad     Variedad  @relation(fields: [variedadId], references: [id])
   categoriaId  Int
   categoria    Categoria @relation(fields: [categoriaId], references: [id])
-  calibreMinId Int
-  calibreMin   Calibre   @relation("InstructivoEmbalajeCalibreMin", fields: [calibreMinId], references: [id])
-  calibreMaxId Int
-  calibreMax   Calibre   @relation("InstructivoEmbalajeCalibreMax", fields: [calibreMaxId], references: [id])
   tipoPalletId Int?
   tipoPallet   TipoPallet? @relation(fields: [tipoPalletId], references: [id])
 
@@ -2264,8 +2258,26 @@ model InstructivoEmbalajeDetalle {
   cajasPorPallet  Int
   cajas           Int
 
+  // Multiselect de calibres (antes: rango calibreMinId/calibreMaxId — ver
+  // supersesión 2026-08-15, mismo patrón que NotaVentaDetalleCalibre).
+  calibres InstructivoEmbalajeDetalleCalibre[]
+
   @@index([instructivoId])
   @@map("instructivo_embalaje_detalle")
+}
+
+model InstructivoEmbalajeDetalleCalibre {
+  // Nombres de columna cortos a propósito: el nombre de tabla ya es largo y
+  // Postgres trunca identificadores a 63 bytes (índices/constraints
+  // generados por Prisma con el nombre completo del campo lo superarían).
+  id        Int                        @id @default(autoincrement())
+  detalleId Int
+  detalle   InstructivoEmbalajeDetalle @relation(fields: [detalleId], references: [id], onDelete: Cascade)
+  calibreId Int
+  calibre   Calibre                    @relation(fields: [calibreId], references: [id])
+
+  @@unique([detalleId, calibreId])
+  @@map("instructivo_embalaje_detalle_calibre")
 }
 
 // ─── Compras — Orden de Compra (Docs/compras.md §4.2/§4.3) ──────────────────
@@ -2450,10 +2462,6 @@ model OrdenCompraLinea {
   categoria    Categoria @relation(fields: [categoriaId], references: [id])
   articuloId   Int // FK → Artículo tipo EMBALAJE (etiqueta/pesos se leen del artículo)
   articulo     Articulo  @relation(fields: [articuloId], references: [id])
-  calibreMinId Int
-  calibreMin   Calibre   @relation("OrdenCompraCalibreMin", fields: [calibreMinId], references: [id])
-  calibreMaxId Int
-  calibreMax   Calibre   @relation("OrdenCompraCalibreMax", fields: [calibreMaxId], references: [id])
   tipoPalletId Int?
   tipoPallet   TipoPallet? @relation(fields: [tipoPalletId], references: [id])
 
@@ -2462,8 +2470,23 @@ model OrdenCompraLinea {
   cajas           Int
   precioUsdCaja   Decimal @db.Decimal(14, 4)
 
+  // Multiselect de calibres (antes: rango calibreMinId/calibreMaxId — ver
+  // supersesión 2026-08-15, mismo patrón que NotaVentaDetalleCalibre).
+  calibres OrdenCompraLineaCalibre[]
+
   @@index([ordenCompraId])
   @@map("orden_compra_linea")
+}
+
+model OrdenCompraLineaCalibre {
+  id                 Int              @id @default(autoincrement())
+  ordenCompraLineaId Int
+  ordenCompraLinea   OrdenCompraLinea @relation(fields: [ordenCompraLineaId], references: [id], onDelete: Cascade)
+  calibreId          Int
+  calibre            Calibre          @relation(fields: [calibreId], references: [id])
+
+  @@unique([ordenCompraLineaId, calibreId])
+  @@map("orden_compra_linea_calibre")
 }
 
 // ─── RECEPCIÓN DE STOCK (compras.md §4.4-4.7) ─────────────────────────────────

@@ -3,8 +3,7 @@ export interface OrdenCompraLineaInput {
   variedadId: number
   categoriaId: number
   articuloId: number
-  calibreMinId: number
-  calibreMaxId: number
+  calibreIds: number[]
   tipoPalletId?: number | null
   cantidadPallets: number
   cajasPorPallet: number

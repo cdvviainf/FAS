@@ -50,7 +50,7 @@ Instrucción de qué embalar. **Sin estado propio** — es solo un documento que
 - `id` (PK)
 - `numero` (correlativo propio)
 - `notaVentaId` (FK → NotaVenta) — el instructivo se emite en el contexto de un cierre (ver nota de reconciliación en §3)
-- Detalle (1..N líneas): `articuloId` (FK → Artículo/Embalaje), `especieId`, `variedadId`, `categoriaId`, rango de calibre (`calibreMinId`, `calibreMaxId`), `tipoPalletId` (FK → TipoPallet, nullable) **(nuevo, 2026-08-07)**, `cantidadPallets`, `cajasPorPallet`, `cajas` **(nuevo, 2026-08-07 — ver nota en §4.3, mismo criterio)**
+- Detalle (1..N líneas): `articuloId` (FK → Artículo/Embalaje), `especieId`, `variedadId`, `categoriaId`, lista de calibres (`InstructivoEmbalajeDetalleCalibre`, multiselect — ver nota de supersesión en §4.3), `tipoPalletId` (FK → TipoPallet, nullable) **(nuevo, 2026-08-07)**, `cantidadPallets`, `cajasPorPallet`, `cajas` **(nuevo, 2026-08-07 — ver nota en §4.3, mismo criterio)**
 - `createdAt`, `createdBy`
 
 > El detalle usa **artículos maestros** (ej. `UV0001103 — CAJA MARCA AGROSAN ETIQUETA TAIWAN PLÁSTICO`), no descripciones libres.
@@ -107,12 +107,12 @@ Snapshot inmutable de las cuotas al momento de crear/editar la OC (se copian des
 - `montoCalculado` (Decimal, solo cuota `MONTO_UNITARIO`) — `valorUnitario × cantidad real` (cajas o kilos embarcados según `unidadId`, calculado desde las líneas de la OC). Se **recalcula automáticamente** cada vez que cambian las líneas de la OC (no solo cuando cambia `condicionPagoId`).
 
 ### 4.3 OrdenCompraLinea
-La OC es **multilínea**. Cada línea es una combinación completa de características + rango de calibre + cantidades + precio.
+La OC es **multilínea**. Cada línea es una combinación completa de características + lista de calibres + cantidades + precio.
 
 - `id` (PK)
 - `ordenCompraId` (FK → OrdenCompra)
 - `especieId`, `variedadId`, `categoriaId`, `articuloId` (embalaje)
-- `calibreMinId` (FK → Calibre), `calibreMaxId` (FK → Calibre) — **rango** sobre el maestro ordenado de la especie
+- `calibres` (`OrdenCompraLineaCalibre`, N:M contra Calibre) — **lista** de calibres puntuales, no un rango. **(Supersesión, 2026-08-15)**: reemplaza los antiguos `calibreMinId`/`calibreMaxId` (FK → Calibre). Motivo: la UI debía mostrar/quitar cada calibre individualmente (igual que `NotaVentaDetalleCalibre`, `ventas.md`) en vez de un rango colapsado; el formulario sigue ofreciendo Desde/Hasta como atajo de captura (usa `Calibre.orden` de la especie para expandir el rango en el momento de agregar), pero lo que persiste es la lista resultante, editable calibre a calibre. Mismo patrón replicado en `InstructivoEmbalajeDetalle` (§4.1). Impacta la validación de Recepción: ver nota en §7.2.
 - `tipoPalletId` (FK → TipoPallet, nullable) **(nuevo, 2026-08-07)**
 - `cantidadPallets` (Int)
 - `cajasPorPallet` (Int) **(referencial, 2026-08-07)** — cajas por pallet aún no tiene mantenedor propio; hoy es un valor fijo (108) que la UI usa solo para precalcular `cajas`. **No** es la fuente de verdad del total ni una restricción por pallet individual.
@@ -289,7 +289,7 @@ Como las cantidades son validación dura (§7), la OC debe poder editarse hasta 
 El pallet es la unidad mínima; no se divide. Pertenece a **un solo** Embarque a la vez. Debe existir la función de **desvincular/eliminar** el pallet de un embarque **mientras el despacho no esté confirmado**; una vez confirmado, se bloquea.
 
 ### 6.5 Maestro de Calibres ordenado, por especie
-El maestro de Calibres tiene un campo de **orden/secuencia**, definido **por especie** (uva ≠ cereza). El orden es imprescindible para evaluar los rangos de calibre de la OC.
+El maestro de Calibres tiene un campo de **orden/secuencia**, definido **por especie** (uva ≠ cereza). **(Supersesión, 2026-08-15)**: la OC y el Instructivo de Embalaje ya no persisten un rango `[calibreMin, calibreMax]` — persisten una **lista** de calibres puntuales (§4.3). El orden por especie se sigue usando solo como **atajo de captura** en el formulario (Desde/Hasta → expande y agrega todos los calibres del tramo a la lista); no es una restricción de la validación de Recepción, que ahora evalúa pertenencia a la lista (§7.2).
 
 ### 6.6 Documentos de compra (captura externa)
 
@@ -315,14 +315,14 @@ Para cada línea de OC, contra el grupo correspondiente del Excel:
 
 1. **N° de pallets:** total OC = total Excel.
 2. **Cajas:** total OC (**campo `cajas` de la línea**, no `cantidadPallets × cajasPorPallet` — ver nota en §4.3, 2026-08-07) = total Excel.
-3. **Calibre (rango):** **ningún** calibre del Excel fuera del rango `[calibreMin, calibreMax]` de la línea (sobre el orden por especie). Ej.: OC permite calibres 3–8 → si aparece 1 o 2 en el Excel, rechazo. La distribución entre pallets no bloquea; lo que bloquea es un calibre fuera de rango en los totales.
+3. **Calibre (pertenencia a la lista):** **(Supersesión, 2026-08-15 — reemplaza la validación por rango)** **ningún** calibre del Excel puede quedar fuera de la **lista** de calibres de la línea (`OrdenCompraLineaCalibre`, §4.3). Ej.: OC permite calibres {3, 5, 7, 8} → si aparece 1, 2, 4 o 6 en el Excel, rechazo (ya no basta con estar "dentro del rango" 3–8, debe **pertenecer a la lista** exacta). La distribución entre pallets no bloquea; lo que bloquea es un calibre no listado en los totales.
 4. **Cobertura:** cualquier combinación/característica del Excel que **no** corresponda a ninguna línea de OC → diferencia reportada.
 
 ### 7.3 Resultado
 - **Todo cuadra** → se cargan los pallets a Stock (con `origen = COMPRA`).
 - **Algo falla** → **rechazo total** de la carga. Mensaje: *"No coincide la OC con la carga"* + lista de diferencias, referenciando las líneas del Excel:
   - *Embalaje / categoría / variedad `XXXX` de las líneas `w,x,y,z` del Excel no está en la OC.*
-  - *Calibre `N` de las líneas `a,b,c` del Excel fuera del rango de la OC.*
+  - *Calibre `N` de las líneas `a,b,c` del Excel no está en la lista de calibres de la OC.*
   - *Suma de cajas: hay `X` cajas de más del calibre/línea `AB` y `J` de menos del calibre/línea `CD` respecto de la OC.*
 
 > El detalle de diferencias existe para que la planta corrija y reenvíe el archivo.

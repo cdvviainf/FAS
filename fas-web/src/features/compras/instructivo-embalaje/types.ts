@@ -15,10 +15,7 @@ export interface InstructivoEmbalajeDetalleItem {
   variedad: MantenedorRef
   categoriaId: number
   categoria: MantenedorRef
-  calibreMinId: number
-  calibreMin: MantenedorRef
-  calibreMaxId: number
-  calibreMax: MantenedorRef
+  calibres: { calibre: MantenedorRef }[]
   tipoPalletId: number | null
   tipoPallet: MantenedorRef | null
   cantidadPallets: number
@@ -50,8 +47,7 @@ export interface InstructivoEmbalajeDetalleInput {
   especieId: number
   variedadId: number
   categoriaId: number
-  calibreMinId: number
-  calibreMaxId: number
+  calibreIds: number[]
   tipoPalletId: number | null
   cantidadPallets: number
   cajasPorPallet: number

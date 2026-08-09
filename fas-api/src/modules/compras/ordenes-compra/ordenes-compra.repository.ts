@@ -29,8 +29,7 @@ const includeDetalle = {
       variedad: { select: mantenedorSelect },
       categoria: { select: mantenedorSelect },
       articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
-      calibreMin: { select: mantenedorSelect },
-      calibreMax: { select: mantenedorSelect },
+      calibres: { select: { calibre: { select: mantenedorSelect } } },
       tipoPallet: { select: mantenedorSelect },
     },
   },
@@ -231,15 +230,15 @@ const lineaInclude = {
   variedad: { select: mantenedorSelect },
   categoria: { select: mantenedorSelect },
   articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
-  calibreMin: { select: mantenedorSelect },
-  calibreMax: { select: mantenedorSelect },
+  calibres: { select: { calibre: { select: mantenedorSelect } } },
   tipoPallet: { select: mantenedorSelect },
 }
 
 export async function addLinea(ordenCompraId: number, data: OrdenCompraLineaCreateInput) {
+  const { calibreIds, ...resto } = data
   return prisma.$transaction(async (tx) => {
     const linea = await tx.ordenCompraLinea.create({
-      data: { ...data, ordenCompraId },
+      data: { ...resto, ordenCompraId, calibres: { create: calibreIds.map((calibreId) => ({ calibreId })) } },
       include: lineaInclude,
     })
     await recalcularCuotasMontoUnitario(tx, ordenCompraId)
@@ -252,10 +251,14 @@ export async function getLineaById(id: number) {
 }
 
 export async function updateLinea(id: number, data: OrdenCompraLineaUpdateInput) {
+  const { calibreIds, ...resto } = data
   return prisma.$transaction(async (tx) => {
     const linea = await tx.ordenCompraLinea.update({
       where: { id },
-      data,
+      data: {
+        ...resto,
+        calibres: { deleteMany: {}, create: calibreIds.map((calibreId) => ({ calibreId })) },
+      },
       include: lineaInclude,
     })
     await recalcularCuotasMontoUnitario(tx, linea.ordenCompraId)
@@ -333,8 +336,11 @@ export async function getCategoria(id: number) {
   return prisma.categoria.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true, especieId: true } })
 }
 
-export async function getCalibre(id: number) {
-  return prisma.calibre.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true, especieId: true, orden: true } })
+export async function getCalibresActivos(ids: number[]) {
+  return prisma.calibre.findMany({
+    where: { id: { in: ids }, eliminadoEn: null, bloqueado: false },
+    select: { id: true, especieId: true },
+  })
 }
 
 export async function getArticuloTipo(id: number) {
