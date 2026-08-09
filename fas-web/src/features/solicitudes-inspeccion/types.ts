@@ -1,4 +1,5 @@
-export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'CERRADA'
+export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA'
+export type ResultadoCierre = 'APROBADA' | 'RECHAZADA'
 export type FuncionAsignado = 'ACUDIR' | 'NOTIFICAR'
 export type EtapaAdjunto = 'CREACION' | 'CIERRE'
 export type TipoInspeccion = 'COMPRA' | 'PROCESO'
@@ -6,7 +7,13 @@ export type TipoInspeccion = 'COMPRA' | 'PROCESO'
 export const ESTADO_LABELS: Record<EstadoSolicitud, string> = {
   PENDIENTE: 'Pendiente',
   NOTIFICADA: 'Notificada',
-  CERRADA: 'Cerrada',
+  APROBADA: 'Aprobada',
+  RECHAZADA: 'Rechazada',
+}
+
+export const RESULTADO_CIERRE_LABELS: Record<ResultadoCierre, string> = {
+  APROBADA: 'Aprobada',
+  RECHAZADA: 'Rechazada',
 }
 
 export const TIPO_INSPECCION_LABELS: Record<TipoInspeccion, string> = {
@@ -47,6 +54,8 @@ export interface SolicitudInspeccion {
   codigo: string
   temporadaId: number
   temporada: { id: number; codigo: string; descripcion: string }
+  usuarioSolicitanteId: string
+  usuarioSolicitante: { id: string; nombre: string; email: string }
   entidadProductorId: number
   entidadProductor: { id: number; codigo: string; descripcion: string; razonSocial: string }
   direccionId: number
@@ -100,6 +109,7 @@ export interface SolicitudInspeccion {
 
 export interface SolicitudCreateInput {
   temporadaId: number
+  usuarioSolicitanteId: string
   entidadProductorId: number
   direccionId: number
   contactoId?: number | null

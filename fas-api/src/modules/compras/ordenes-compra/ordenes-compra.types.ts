@@ -15,6 +15,7 @@ export interface OrdenCompraLineaInput {
 export interface OrdenCompraCreateInput {
   entidadProductorId: number
   notaVentaId?: number | null
+  solicitudInspeccionId: number
   fecha?: Date
   formaPagoId?: number | null
   condicionPagoId?: number | null

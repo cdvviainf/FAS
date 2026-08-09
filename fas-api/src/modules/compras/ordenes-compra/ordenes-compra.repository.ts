@@ -15,6 +15,7 @@ const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 const includeDetalle = {
   entidadProductor: { select: entidadSelect },
   notaVenta: { select: { id: true, folio: true } },
+  solicitudInspeccion: { select: { id: true, codigo: true, estado: true } },
   moneda: { select: mantenedorSelect },
   formaPago: { select: mantenedorSelect },
   destinoMercado: { select: mantenedorSelect },
@@ -285,6 +286,16 @@ export async function getEntidadProductor(id: number) {
 
 export async function getNotaVenta(id: number) {
   return prisma.notaVenta.findFirst({ where: { id, eliminadoEn: null }, select: { id: true } })
+}
+
+// La OC exige una Inspección de Compra Aprobada del mismo productor
+// (compras.md §4.2) — se valida completa (tipo, estado y productor) desde el
+// service; este helper solo trae los datos necesarios para esa validación.
+export async function getSolicitudInspeccion(id: number) {
+  return prisma.solicitudInspeccion.findFirst({
+    where: { id, eliminadoEn: null },
+    select: { id: true, tipoInspeccion: true, estado: true, entidadProductorId: true },
+  })
 }
 
 export async function getMoneda(id: number) {

@@ -85,6 +85,8 @@ export interface OrdenCompraListItem {
 export interface OrdenCompraDetalle extends OrdenCompraListItem {
   monedaId: number
   notaVentaId: number | null
+  solicitudInspeccionId: number | null
+  solicitudInspeccion: { id: number; codigo: string; estado: string } | null
   formaPagoId: number | null
   formaPago: MantenedorRef | null
   condicionPagoId: number | null
@@ -122,6 +124,9 @@ export interface OrdenCompraLineaInput {
 export interface OrdenCompraCreateInput {
   entidadProductorId: number
   notaVentaId?: number | null
+  // Requerido al crear (validate() en el form lo exige); opcional en el
+  // update para no forzar el backfill de OCs previas a este campo.
+  solicitudInspeccionId?: number
   fecha?: string
   formaPagoId?: number | null
   condicionPagoId?: number | null

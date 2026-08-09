@@ -125,12 +125,13 @@ export function correoEliminacion(s: SolicitudParaCorreo) {
   }
 }
 
-export function correoCierre(s: SolicitudParaCorreo, comentarios: string, cantidadAdjuntos: number) {
+export function correoCierre(s: SolicitudParaCorreo, comentarios: string, cantidadAdjuntos: number, resultado: 'APROBADA' | 'RECHAZADA') {
+  const label = resultado === 'APROBADA' ? 'APROBADA' : 'RECHAZADA'
   return {
-    subject: `[FAS] Solicitud de inspección ${s.codigo} CERRADA`,
+    subject: `[FAS] Solicitud de inspección ${s.codigo} ${label}`,
     html: envolver(
       'Inspección cerrada',
-      `<p>La inspección fue realizada y la solicitud quedó <strong>cerrada</strong>.</p>
+      `<p>La inspección fue realizada y la solicitud quedó <strong>${label.toLowerCase()}</strong>.</p>
 ${cuerpoDetalle(s)}
 <h4 style="margin-bottom:4px">Comentarios del inspector</h4>
 <p>${esc(comentarios).replace(/\n/g, '<br>')}</p>

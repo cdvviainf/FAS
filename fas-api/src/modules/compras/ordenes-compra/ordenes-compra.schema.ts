@@ -17,6 +17,7 @@ const lineaSchema = z.object({
 export const ordenCompraCreateSchema = z.object({
   entidadProductorId: z.number().int().positive('El productor es requerido'),
   notaVentaId: z.number().int().positive().optional().nullable(),
+  solicitudInspeccionId: z.number().int().positive('La inspección de compra es requerida'),
   fecha: z.coerce.date().optional(),
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
@@ -29,6 +30,7 @@ export const ordenCompraCreateSchema = z.object({
 export const ordenCompraUpdateSchema = z.object({
   entidadProductorId: z.number().int().positive().optional(),
   notaVentaId: z.number().int().positive().optional().nullable(),
+  solicitudInspeccionId: z.number().int().positive().optional(),
   fecha: z.coerce.date().optional(),
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),

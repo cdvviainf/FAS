@@ -48,10 +48,11 @@ const fmt = new Intl.DateTimeFormat('es-CL', {
   timeZone: 'America/Santiago',
 })
 
-const estadoVariant: Record<EstadoSolicitud, 'secondary' | 'default' | 'outline'> = {
+const estadoVariant: Record<EstadoSolicitud, 'secondary' | 'default' | 'outline' | 'destructive'> = {
   PENDIENTE: 'secondary',
   NOTIFICADA: 'default',
-  CERRADA: 'outline',
+  APROBADA: 'outline',
+  RECHAZADA: 'destructive',
 }
 
 interface SolicitudListingClientProps {
@@ -71,7 +72,7 @@ export function SolicitudListingClient({ tipoInspeccion }: SolicitudListingClien
     page: parseAsInteger.withDefault(1),
     perPage: parseAsInteger.withDefault(20),
     q: parseAsString,
-    estado: parseAsStringEnum<EstadoSolicitud>(['PENDIENTE', 'NOTIFICADA', 'CERRADA']),
+    estado: parseAsStringEnum<EstadoSolicitud>(['PENDIENTE', 'NOTIFICADA', 'APROBADA', 'RECHAZADA']),
   })
 
   // Dialog state
@@ -148,7 +149,7 @@ export function SolicitudListingClient({ tipoInspeccion }: SolicitudListingClien
         // Máquina de estados (QAS-SI-003): notificar solo PENDIENTE, cerrar solo NOTIFICADA
         const esPendiente = s.estado === 'PENDIENTE'
         const esNotificada = s.estado === 'NOTIFICADA'
-        const esCerrada = s.estado === 'CERRADA'
+        const esCerrada = s.estado === 'APROBADA' || s.estado === 'RECHAZADA'
         // QAS-SI-007: un asignado ACUDIR con solo LECTURA también puede cerrar
         const esInspectorAcudir = s.asignados.some((a) => a.usuarioId === currentUserId && a.funcion === 'ACUDIR')
         const puedeCerrar = esNotificada && (puedeEscribir || (esInspectorAcudir && puedeLeer))
@@ -236,7 +237,8 @@ export function SolicitudListingClient({ tipoInspeccion }: SolicitudListingClien
             <SelectItem value='all'>Todos los estados</SelectItem>
             <SelectItem value='PENDIENTE'>Pendiente</SelectItem>
             <SelectItem value='NOTIFICADA'>Notificada</SelectItem>
-            <SelectItem value='CERRADA'>Cerrada</SelectItem>
+            <SelectItem value='APROBADA'>Aprobada</SelectItem>
+            <SelectItem value='RECHAZADA'>Rechazada</SelectItem>
           </SelectContent>
         </Select>
         <div className='flex-1' />

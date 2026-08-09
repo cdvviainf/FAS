@@ -51,6 +51,7 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
 
         <div className='space-y-4'>
           <div className='space-y-2'>
+            <Campo label='Solicitante'>{solicitud.usuarioSolicitante.nombre}</Campo>
             <Campo label='Productor'>{solicitud.entidadProductor.razonSocial}</Campo>
             <Campo label='Lugar'>
               {direccion.descripcion} — {direccion.direccion}{direccion.comuna ? `, ${direccion.comuna.descripcion}` : ''}
@@ -124,9 +125,11 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
             </div>
           </div>
 
-          {solicitud.estado === 'CERRADA' && (
+          {(solicitud.estado === 'APROBADA' || solicitud.estado === 'RECHAZADA') && (
             <div className='rounded-md border bg-muted/40 p-3'>
-              <h4 className='mb-1 text-sm font-medium'>Cierre</h4>
+              <h4 className='mb-1 text-sm font-medium'>
+                Cierre — <Badge variant={solicitud.estado === 'APROBADA' ? 'outline' : 'destructive'}>{ESTADO_LABELS[solicitud.estado]}</Badge>
+              </h4>
               {solicitud.fechaCierre && (
                 <p className='text-xs text-muted-foreground'>Cerrada el {fmt.format(new Date(solicitud.fechaCierre))}</p>
               )}

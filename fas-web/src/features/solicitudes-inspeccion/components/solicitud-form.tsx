@@ -23,6 +23,7 @@ import { entidadesService } from '@/features/entidades/service'
 import { usuariosService } from '@/features/usuarios/service'
 import { articulosService } from '@/features/materiales/articulos/service'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
+import { authClient } from '@/lib/auth-client'
 import { useTemporada } from '@/contexts/temporada-context'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { solicitudDetailOptions, solicitudesKeys } from '../queries'
@@ -66,7 +67,9 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const { temporada } = useTemporada()
   const puedeEscribir = usePuedeEscribir(ITEM)
   const inputAdjuntoRef = useRef<HTMLInputElement>(null)
+  const { data: session } = authClient.useSession()
 
+  const [usuarioSolicitanteId, setUsuarioSolicitanteId] = useState<string | null>(null)
   const [productorId, setProductorId] = useState<number | null>(null)
   const [direccionId, setDireccionId] = useState<number | null>(null)
   const [contactoId, setContactoId] = useState<number | null>(null)
@@ -166,9 +169,19 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const direccionSel = direcciones.find((d) => d.id === direccionId)
   const contactos = productorDetalle?.contactos ?? []
 
+  // Al crear, el solicitante se precarga con el usuario de la sesión actual
+  // (editable — alguien puede crear la solicitud en nombre de otro usuario).
+  useEffect(() => {
+    if (!isEdit && !usuarioSolicitanteId && session?.user?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setUsuarioSolicitanteId(session.user.id)
+    }
+  }, [isEdit, usuarioSolicitanteId, session])
+
   useEffect(() => {
     if (solicitud) {
       const d = solicitud.data
+      setUsuarioSolicitanteId(d.usuarioSolicitanteId)
       setProductorId(d.entidadProductorId)
       setDireccionId(d.direccionId)
       setContactoId(d.contactoId)
@@ -229,6 +242,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   function validate(): boolean {
     const e: Record<string, string> = {}
     if (!isEdit && !temporada) e.temporada = 'Selecciona una temporada activa en la barra superior'
+    if (!usuarioSolicitanteId) e.usuarioSolicitanteId = 'El solicitante es requerido'
     if (!productorId) e.productor = 'El productor es requerido'
     if (!direccionId) e.direccion = 'La dirección es requerida'
     if (!tipoInspeccion) e.tipoInspeccion = 'El tipo de inspección es requerido'
@@ -242,6 +256,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   function buildPayload(): SolicitudCreateInput {
     return {
       temporadaId: temporada?.id ?? 0,
+      usuarioSolicitanteId: usuarioSolicitanteId!,
       entidadProductorId: productorId!,
       direccionId: direccionId!,
       contactoId,
@@ -323,7 +338,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
 
   const adjuntosExistentes = solicitud?.data.adjuntos.filter((a) => a.etapa === 'CREACION') ?? []
   const puedeGestionarAdjuntos = isEdit && solicitud?.data.estado === 'NOTIFICADA'
-  const estaCerrada = solicitud?.data.estado === 'CERRADA'
+  const estaCerrada = solicitud?.data.estado === 'APROBADA' || solicitud?.data.estado === 'RECHAZADA'
   const soloLectura = !puedeEscribir || estaCerrada
   const isPending = mutation.isPending
 
@@ -341,6 +356,20 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
         </CardHeader>
         <CardContent className='space-y-4'>
           {!isEdit && errors.temporada && <p className='text-xs text-destructive'>{errors.temporada}</p>}
+
+          {/* Fila 0: Solicitante */}
+          <div className='space-y-1.5'>
+            <Label>Solicitante <span className='text-destructive'>*</span></Label>
+            <Select value={usuarioSolicitanteId ?? ''} onValueChange={setUsuarioSolicitanteId}>
+              <SelectTrigger className='sm:w-1/2'><SelectValue placeholder='Seleccionar solicitante...' /></SelectTrigger>
+              <SelectContent>
+                {(usuarios?.data ?? []).map((u) => (
+                  <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.usuarioSolicitanteId && <p className='text-xs text-destructive'>{errors.usuarioSolicitanteId}</p>}
+          </div>
 
           {/* Fila 1: Productor, Dirección */}
           <div className='grid gap-4 sm:grid-cols-2'>

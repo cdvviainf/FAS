@@ -7,6 +7,7 @@ import type {
   SolicitudUpdateInput,
   SolicitudAdjunto,
   EtapaAdjunto,
+  ResultadoCierre,
 } from './types'
 
 export const solicitudesService = {
@@ -45,8 +46,8 @@ export const solicitudesService = {
     return api.post(`calidad/solicitudes/${id}/notificar`).json()
   },
 
-  async cerrar(id: number, comentarios: string): Promise<{ data: SolicitudInspeccion }> {
-    return api.post(`calidad/solicitudes/${id}/cerrar`, { json: { comentarios } }).json()
+  async cerrar(id: number, comentarios: string, resultado: ResultadoCierre): Promise<{ data: SolicitudInspeccion }> {
+    return api.post(`calidad/solicitudes/${id}/cerrar`, { json: { comentarios, resultado } }).json()
   },
 
   async reabrir(id: number): Promise<{ data: SolicitudInspeccion }> {

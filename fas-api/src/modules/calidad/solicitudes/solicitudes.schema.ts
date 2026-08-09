@@ -7,6 +7,10 @@ export const asignadoSchema = z.object({
 
 export const solicitudCreateSchema = z.object({
   temporadaId: z.number().int().positive('La temporada es requerida'),
+  // Opcional: si se omite, el service lo defaultea al usuario autenticado
+  // (ver crearSolicitud) — igual que hace la UI, pero también para
+  // cualquier otro consumidor de la API (QA-R2-SI-001).
+  usuarioSolicitanteId: z.string().min(1).optional(),
   entidadProductorId: z.number().int().positive('El productor es requerido'),
   direccionId: z.number().int().positive('La dirección es requerida'),
   contactoId: z.number().int().positive().nullable().optional(),
@@ -51,7 +55,7 @@ export const solicitudListQuerySchema = z.object({
   q: z.string().max(200).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(500).default(20),
-  estado: z.enum(['PENDIENTE', 'NOTIFICADA', 'CERRADA']).optional(),
+  estado: z.enum(['PENDIENTE', 'NOTIFICADA', 'APROBADA', 'RECHAZADA']).optional(),
   tipoInspeccion: z.enum(['COMPRA', 'PROCESO']).optional(),
   temporadaId: z.coerce.number().int().positive().optional(),
   entidadProductorId: z.coerce.number().int().positive().optional(),
@@ -62,6 +66,7 @@ export const solicitudListQuerySchema = z.object({
 
 export const solicitudCerrarSchema = z.object({
   comentarios: z.string().min(1, 'Los comentarios de cierre son requeridos').max(5000),
+  resultado: z.enum(['APROBADA', 'RECHAZADA'], { message: 'El resultado (Aprobado/Rechazado) es requerido' }),
 })
 
 export type SolicitudCreateBody = z.infer<typeof solicitudCreateSchema>

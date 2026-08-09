@@ -485,3 +485,56 @@ que antes fallaba.
 - Prisma, build API y build web: **OK**.
 
 QAS-SI-019, QAS-SI-020 y QAS-SI-021 quedan validados.
+
+## Solicitante editable + veredicto de cierre (Claude, 2026-08-14)
+
+Dos cambios de negocio pedidos por Christian:
+
+1. **Solicitante editable.** Hasta ahora "el solicitante" era `creadoPor`
+   (campo de auditoría, inmutable, nunca expuesto como input — SI-17/QAS-SI-001
+   asumían que solicitante = quien ejecutó el alta). Se agrega
+   `usuarioSolicitanteId` (FK a `Usuario`, **distinto** de `creadoPor`):
+   por defecto es el usuario de la sesión al crear, pero editable — alguien
+   puede crear la solicitud en nombre de otro usuario. Toda la lógica que
+   antes usaba `creadoPor` como "solicitante" pasa a usar este campo:
+   - `destinatariosDe` (correos de notificación/cierre/reapertura).
+   - `validarInvolucrado` (permiso para gestionar adjuntos).
+   - `countSolicitudesVinculadas` (`usuarios.repository.ts` — bloquea borrar
+     un usuario que figura como solicitante de una solicitud vigente).
+   `creadoPor` se mantiene como auditoría pura, sin cambios de significado.
+   Migración con backfill: las solicitudes existentes toman `creadoPor` como
+   `usuarioSolicitanteId` inicial (es la mejor aproximación real disponible).
+
+2. **Cierre con veredicto.** `EstadoSolicitudInspeccion.CERRADA` (genérico,
+   sin resultado) se reemplaza por dos estados terminales: `APROBADA` y
+   `RECHAZADA`. El endpoint `POST /solicitudes/:id/cerrar` ahora exige
+   `resultado: 'APROBADA' | 'RECHAZADA'` además de `comentarios`. `Reabrir`
+   sigue funcionando igual, ahora desde cualquiera de los dos estados
+   terminales, vuelve a `NOTIFICADA`. `CERRADA` se mantiene en el enum de
+   Postgres (no se puede eliminar un valor de enum sin recrear el tipo) pero
+   la aplicación ya no lo escribe — las filas que lo tuvieran se migraron a
+   `APROBADA` (no existía antes el concepto de rechazo).
+
+Habilita a Compras: `ordenes-compra.md` ahora exige una
+`SolicitudInspeccion` de `tipoInspeccion=COMPRA` en estado `APROBADA` para
+crear una Orden de Compra — ver `Docs/compras.md` §4.2.
+
+Migración en dos archivos separados (`20260814100000_...enum...` +
+`20260814100100_...`): Postgres no permite usar un valor de enum recién
+agregado (`ADD VALUE`) dentro de la misma transacción en que se agregó, y
+Prisma Migrate aplica cada migration.sql en una transacción.
+
+**Cobertura de tests:** no se agregó cobertura específica nueva en este
+cambio (ver ciclo QA de Codex para el veredicto); mismo criterio que
+QAS-SI-010 (Codex es quien escribe/ejecuta las pruebas, no Claude).
+
+### QA-R2-SI-001 — Corrección (Claude, 2026-08-14)
+
+Codex detectó que `usuarioSolicitanteId` era obligatorio en el schema de
+creación — solo la UI lo defaulteaba al usuario de sesión; cualquier otro
+consumidor de la API (o los tests) debía enviarlo explícito o recibía 422.
+Se corrigió: `usuarioSolicitanteId` pasa a opcional en
+`solicitudCreateSchema`, y `crearSolicitud` (service) lo resuelve como
+`body.usuarioSolicitanteId ?? userId` (el usuario autenticado) antes de
+validar y persistir — coherente con "por defecto el usuario de sesión,
+editable" ya documentado arriba.

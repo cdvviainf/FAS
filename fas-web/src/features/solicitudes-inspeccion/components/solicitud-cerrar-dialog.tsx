@@ -14,10 +14,18 @@ import {
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Icons } from '@/components/icons'
 import { solicitudesService } from '../service'
 import { solicitudesKeys } from '../queries'
-import type { SolicitudInspeccion } from '../types'
+import { RESULTADO_CIERRE_LABELS } from '../types'
+import type { SolicitudInspeccion, ResultadoCierre } from '../types'
 
 const MAX_BYTES = 10 * 1024 * 1024
 const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.heic'
@@ -37,6 +45,7 @@ interface SolicitudCerrarDialogProps {
 export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: SolicitudCerrarDialogProps) {
   const queryClient = useQueryClient()
   const [comentarios, setComentarios] = useState('')
+  const [resultado, setResultado] = useState<ResultadoCierre | ''>('')
   const [pendientes, setPendientes] = useState<File[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -46,13 +55,14 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
       for (const archivo of pendientes) {
         await solicitudesService.subirAdjunto(solicitud.id, archivo, 'CIERRE')
       }
-      return solicitudesService.cerrar(solicitud.id, comentarios.trim())
+      return solicitudesService.cerrar(solicitud.id, comentarios.trim(), resultado as ResultadoCierre)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: solicitudesKeys.all })
-      toast.success('Inspección cerrada. Se notificó a los involucrados.')
+      toast.success(resultado === 'RECHAZADA' ? 'Inspección cerrada y rechazada. Se notificó a los involucrados.' : 'Inspección cerrada y aprobada. Se notificó a los involucrados.')
       onOpenChange(false)
       setComentarios('')
+      setResultado('')
       setPendientes([])
     },
     onError: (e: Error) => toast.error(e.message || 'Error al cerrar la inspección'),
@@ -81,6 +91,10 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
       toast.error('Los comentarios de cierre son requeridos')
       return
     }
+    if (!resultado) {
+      toast.error('Debes indicar si la inspección quedó Aprobada o Rechazada')
+      return
+    }
     cerrarMutation.mutate()
   }
 
@@ -96,6 +110,18 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
         </DialogHeader>
 
         <div className='space-y-4 py-2'>
+          <div className='space-y-1.5'>
+            <Label>Resultado <span className='text-destructive'>*</span></Label>
+            <Select value={resultado} onValueChange={(v) => setResultado(v as ResultadoCierre)}>
+              <SelectTrigger><SelectValue placeholder='Selecciona un resultado...' /></SelectTrigger>
+              <SelectContent>
+                {(Object.keys(RESULTADO_CIERRE_LABELS) as ResultadoCierre[]).map((r) => (
+                  <SelectItem key={r} value={r}>{RESULTADO_CIERRE_LABELS[r]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className='space-y-1.5'>
             <Label>Comentarios <span className='text-destructive'>*</span></Label>
             <Textarea

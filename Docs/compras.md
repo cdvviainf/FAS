@@ -70,11 +70,18 @@ Especificación de la compra.
 > legacy en PDF) se detectó que el modelo original no tenía forma de
 > identificar al productor ni las condiciones comerciales — se agregaron los
 > campos abajo marcados **(nuevo)**.
+>
+> **Supersesión (2026-08-14):** decisión de negocio (Christian) — la OC
+> **vuelve a exigir** trazabilidad con Calidad, ahora contra el modelo real
+> implementado (`SolicitudInspeccion` v1, `calidad.md` / `Docs/Hallazgos/solicitud-inspeccion.md`)
+> en vez del `InformeInspeccion` diferido. Se agrega `solicitudInspeccionId`
+> (ver abajo).
 
 - `id` (PK)
 - `numero` (correlativo propio, formato `OC-{AAAA}-{NNNN}` por año — CLAUDE.md §7)
 - `entidadProductorId` (FK → Entidad tipo PRODUCTOR) **(nuevo)** — obligatorio; el documento real siempre identifica al productor/proveedor de la compra
 - `notaVentaId` (FK → NotaVenta, **nullable**) — origen de la OC: "Cierre Comercial" (con Nota de Venta) o "Manual" (sin ella, OC suelta permitida). *Ligar una OC suelta a un Cierre a posteriori: flujo/UX diferido (ver §10).*
+- `solicitudInspeccionId` (FK → SolicitudInspeccion, nullable a nivel de columna) **(nuevo, 2026-08-14)** — reinstala la trazabilidad Compras↔Calidad diferida arriba. Requerido **a nivel de aplicación** al crear una OC (no de columna, para no forzar backfill de OCs de desarrollo previas a este campo): debe ser una solicitud con `tipoInspeccion = COMPRA`, `estado = APROBADA` (ver calidad.md) y el **mismo `entidadProductorId`** que la OC — se rechaza (422) si no corresponde al mismo productor.
 - ~~`fechaEntregaDesde` / `fechaEntregaHasta`~~ **(eliminado 2026-08-07)** — decisión de negocio (Christian): la ventana de entrega no se usa en la operación real de compras; se quita del formulario, del contrato API y del modelo. Si se retoma, debe reintroducirse explícitamente aquí primero.
 - `responsableId` (FK → Usuario, nullable) **(nuevo, 2026-07-26)** — solo usuarios marcados `esResponsableVenta` en su ficha
 - `destinoMercadoId` (FK → Mercado, nullable) **(nuevo, 2026-07-26)** — "Destino" de la OC

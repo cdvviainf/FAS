@@ -141,6 +141,7 @@ async function crearFixtures() {
 function payloadBase(f: Awaited<ReturnType<typeof crearFixtures>>) {
   return {
     temporadaId: f.temporada.id,
+    usuarioSolicitanteId: f.usuario.id,
     entidadProductorId: f.productor.id,
     direccionId: f.direccion.id,
     tipoInspeccion: 'COMPRA' as const,

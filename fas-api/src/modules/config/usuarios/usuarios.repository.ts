@@ -227,8 +227,10 @@ export async function softDeleteUsuario(id: string, deletedBy: string) {
 
 /**
  * Solicitudes de inspección vigentes vinculadas al usuario, ya sea como
- * asignado (Acudir/Notificar) o como solicitante (`creadoPor`). QAS-SI-001
- * re-test: el solicitante no quedaba cubierto, solo los asignados.
+ * asignado (Acudir/Notificar) o como solicitante (`usuarioSolicitanteId`,
+ * 2026-08-14 — antes se verificaba `creadoPor`, que es auditoría pura y ya
+ * no representa necesariamente al solicitante). QAS-SI-001 re-test: el
+ * solicitante no quedaba cubierto, solo los asignados.
  */
 export async function countSolicitudesVinculadas(usuarioId: string): Promise<number> {
   const [comoAsignado, comoSolicitante] = await Promise.all([
@@ -236,7 +238,7 @@ export async function countSolicitudesVinculadas(usuarioId: string): Promise<num
       where: { usuarioId, solicitud: { eliminadoEn: null } },
     }),
     prisma.solicitudInspeccion.count({
-      where: { creadoPor: usuarioId, eliminadoEn: null },
+      where: { usuarioSolicitanteId: usuarioId, eliminadoEn: null },
     }),
   ])
   return comoAsignado + comoSolicitante

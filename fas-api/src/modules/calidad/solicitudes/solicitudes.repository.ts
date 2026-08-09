@@ -10,6 +10,7 @@ import type {
 
 const includeDetalle = {
   temporada: { select: { id: true, codigo: true, descripcion: true } },
+  usuarioSolicitante: { select: { id: true, nombre: true, email: true } },
   entidadProductor: { select: { id: true, codigo: true, descripcion: true, razonSocial: true } },
   direccion: {
     select: {
@@ -135,6 +136,7 @@ export async function getSolicitudById(id: number) {
 }
 
 export interface SolicitudCoreData {
+  usuarioSolicitanteId: string
   entidadProductorId: number
   direccionId: number
   contactoId?: number | null
@@ -260,12 +262,16 @@ export async function updateSolicitud(
  */
 async function transicionAtomica(
   id: number,
-  estadoEsperado: 'PENDIENTE' | 'NOTIFICADA' | 'CERRADA',
+  estadoEsperado: 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA' | ('APROBADA' | 'RECHAZADA')[],
   data: Prisma.SolicitudInspeccionUpdateInput,
 ) {
   return prisma.$transaction(async (tx) => {
     const result = await tx.solicitudInspeccion.updateMany({
-      where: { id, estado: estadoEsperado, eliminadoEn: null },
+      where: {
+        id,
+        estado: Array.isArray(estadoEsperado) ? { in: estadoEsperado } : estadoEsperado,
+        eliminadoEn: null,
+      },
       data,
     })
     if (result.count === 0) {
@@ -285,9 +291,9 @@ export async function marcarNotificada(id: number, userId: string) {
   })
 }
 
-export async function cerrarSolicitud(id: number, comentarios: string, userId: string) {
+export async function cerrarSolicitud(id: number, comentarios: string, resultado: 'APROBADA' | 'RECHAZADA', userId: string) {
   return transicionAtomica(id, 'NOTIFICADA', {
-    estado: 'CERRADA',
+    estado: resultado,
     comentariosCierre: comentarios,
     fechaCierre: new Date(),
     cerradaPor: userId,
@@ -298,7 +304,7 @@ export async function cerrarSolicitud(id: number, comentarios: string, userId: s
 export async function reabrirSolicitud(id: number, userId: string) {
   // QAS-SI-004: al reabrir se limpian los datos de cierre para no dejar una
   // solicitud NOTIFICADA con evidencia de que sigue cerrada.
-  return transicionAtomica(id, 'CERRADA', {
+  return transicionAtomica(id, ['APROBADA', 'RECHAZADA'], {
     estado: 'NOTIFICADA',
     comentariosCierre: null,
     fechaCierre: null,

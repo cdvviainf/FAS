@@ -12,13 +12,18 @@ const HORAS_RECORDATORIO = 24
 // Tipo del detalle que retorna el repository (con includes)
 type SolicitudDetalle = NonNullable<Awaited<ReturnType<typeof repo.getSolicitudById>>>
 
+// APROBADA/RECHAZADA son los dos estados terminales tras el cierre — CERRADA
+// queda obsoleto (ver schema.prisma).
+function estaCerrada(estado: string): boolean {
+  return estado === 'APROBADA' || estado === 'RECHAZADA'
+}
+
 // ─── Helpers de correo ───────────────────────────────────────────────────────
 
 /** Emails únicos de asignados + solicitante. */
 async function destinatariosDe(solicitud: SolicitudDetalle): Promise<string[]> {
   const correos = solicitud.asignados.map((a) => a.usuario.email)
-  const solicitante = await repo.getUsuarioById(solicitud.creadoPor)
-  if (solicitante?.email) correos.push(solicitante.email)
+  if (solicitud.usuarioSolicitante?.email) correos.push(solicitud.usuarioSolicitante.email)
   return [...new Set(correos.filter(Boolean))]
 }
 
@@ -47,7 +52,7 @@ async function programarRecordatorio(solicitud: SolicitudDetalle) {
  */
 export async function procesarRecordatorio(solicitudId: number) {
   const solicitud = await repo.getSolicitudById(solicitudId)
-  if (!solicitud || solicitud.estado === 'CERRADA') return
+  if (!solicitud || estaCerrada(solicitud.estado)) return
   const { subject, html } = emails.correoRecordatorio(solicitud)
   await enviarCorreo({ to: await destinatariosDe(solicitud), subject, html })
   await repo.marcarRecordatorioEnviado(solicitudId)
@@ -56,6 +61,7 @@ export async function procesarRecordatorio(solicitudId: number) {
 // ─── Validaciones comunes ────────────────────────────────────────────────────
 
 async function validarReferencias(data: {
+  usuarioSolicitanteId?: string
   entidadProductorId?: number
   direccionId?: number
   contactoId?: number | null
@@ -70,6 +76,10 @@ async function validarReferencias(data: {
   articuloIds?: number[]
   asignados?: { usuarioId: string; funcion: string }[]
 }, entidadIdParaDireccion?: number, especieIdVigente?: number | null, mercadoIdVigente?: number | null, paisIdsVigente?: number[]) {
+  if (data.usuarioSolicitanteId !== undefined) {
+    const solicitante = await repo.getUsuarioById(data.usuarioSolicitanteId)
+    if (!solicitante) throw new ValidationError('El solicitante seleccionado no existe o fue eliminado')
+  }
   if (data.entidadProductorId !== undefined) {
     const entidad = await repo.getEntidadProductor(data.entidadProductorId)
     if (!entidad) throw new ValidationError('La entidad seleccionada no existe, está inactiva/eliminada o no es de tipo Productor')
@@ -195,7 +205,11 @@ export async function crearSolicitud(body: SolicitudCreateBody, userId: string) 
   const temporada = await repo.getTemporadaActiva(body.temporadaId)
   if (!temporada) throw new ValidationError('La temporada seleccionada no existe o fue eliminada')
 
-  await validarReferencias(body)
+  // Si se omite, el solicitante por defecto es el usuario autenticado —
+  // igual que ya hace la UI, pero también para cualquier otro consumidor de
+  // la API (QA-R2-SI-001). Sigue siendo editable a otro usuario.
+  const usuarioSolicitanteId = body.usuarioSolicitanteId ?? userId
+  await validarReferencias({ ...body, usuarioSolicitanteId })
 
   const {
     temporadaId, asignados, fechaHora,
@@ -205,7 +219,7 @@ export async function crearSolicitud(body: SolicitudCreateBody, userId: string) 
   return repo.createSolicitud(
     temporadaId,
     temporada.codigo,
-    { ...core, fechaHora: new Date(fechaHora), fechaDespacho: core.fechaDespacho ? new Date(core.fechaDespacho) : null },
+    { ...core, usuarioSolicitanteId, fechaHora: new Date(fechaHora), fechaDespacho: core.fechaDespacho ? new Date(core.fechaDespacho) : null },
     { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds },
     asignados,
     userId,
@@ -214,7 +228,7 @@ export async function crearSolicitud(body: SolicitudCreateBody, userId: string) 
 
 export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody, userId: string) {
   const actual = await obtenerSolicitud(id)
-  if (actual.estado === 'CERRADA') {
+  if (estaCerrada(actual.estado)) {
     throw new ConflictError('No se puede editar una solicitud cerrada')
   }
 
@@ -266,7 +280,7 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
 
 export async function eliminarSolicitud(id: number, userId: string) {
   const actual = await obtenerSolicitud(id)
-  if (actual.estado === 'CERRADA') {
+  if (estaCerrada(actual.estado)) {
     throw new ConflictError('No se puede eliminar una solicitud cerrada')
   }
 
@@ -313,7 +327,7 @@ export async function cerrarSolicitud(
 ) {
   const solicitud = await obtenerSolicitud(id)
   // QAS-SI-003: solo se cierra una solicitud ya notificada.
-  if (solicitud.estado === 'CERRADA') {
+  if (estaCerrada(solicitud.estado)) {
     throw new ConflictError('La solicitud ya está cerrada')
   }
   if (solicitud.estado !== 'NOTIFICADA') {
@@ -325,11 +339,11 @@ export async function cerrarSolicitud(
     throw new ForbiddenError('Solo un asignado con función Acudir (o un usuario con acceso total) puede cerrar la inspección')
   }
 
-  const cerrada = await repo.cerrarSolicitud(id, body.comentarios, userId)
+  const cerrada = await repo.cerrarSolicitud(id, body.comentarios, body.resultado, userId)
   await cancelarCorreoDiferido(recordatorioJobId(id))
 
   const adjuntosCierre = cerrada.adjuntos.filter((a) => a.etapa === 'CIERRE').length
-  const { subject, html } = emails.correoCierre(cerrada, body.comentarios, adjuntosCierre)
+  const { subject, html } = emails.correoCierre(cerrada, body.comentarios, adjuntosCierre, body.resultado)
   await encolarCorreo({ to: await destinatariosDe(cerrada), subject, html, empresaId: getEmpresaIdActual() })
 
   return cerrada
@@ -337,7 +351,7 @@ export async function cerrarSolicitud(
 
 export async function reabrirSolicitud(id: number, userId: string) {
   const solicitud = await obtenerSolicitud(id)
-  if (solicitud.estado !== 'CERRADA') {
+  if (!estaCerrada(solicitud.estado)) {
     throw new ConflictError('Solo se puede reabrir una solicitud cerrada')
   }
 
@@ -369,7 +383,7 @@ export const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024 // 10 MB
 /** Solo el solicitante, un asignado o un usuario con nivel TOTAL pueden tocar adjuntos. */
 function validarInvolucrado(solicitud: SolicitudDetalle, userId: string, tieneNivelTotal: boolean) {
   const esInvolucrado =
-    solicitud.creadoPor === userId || solicitud.asignados.some((a) => a.usuarioId === userId)
+    solicitud.usuarioSolicitanteId === userId || solicitud.asignados.some((a) => a.usuarioId === userId)
   if (!esInvolucrado && !tieneNivelTotal) {
     throw new ForbiddenError('Solo el solicitante o un asignado pueden gestionar los adjuntos de esta solicitud')
   }
@@ -386,7 +400,7 @@ export async function subirAdjunto(
   validarInvolucrado(solicitud, userId, tieneNivelTotal)
   // Los adjuntos solo tienen sentido una vez notificada la visita (el inspector
   // los usa para respaldar la inspección en terreno); antes (PENDIENTE) no aplica,
-  // y después de CERRADA la solicitud queda congelada.
+  // y después de aprobada/rechazada la solicitud queda congelada.
   if (solicitud.estado !== 'NOTIFICADA') {
     throw new ConflictError('Los adjuntos solo pueden agregarse mientras la solicitud está notificada')
   }

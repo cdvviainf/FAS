@@ -139,6 +139,7 @@ model Usuario {
   eliminadoPor       String?
 
   solicitudesAsignadas     SolicitudInspeccionAsignado[]
+  solicitudesComoSolicitante SolicitudInspeccion[] @relation("SolicitudInspeccionSolicitante")
   avatar                   UsuarioAvatar?
   ordenesCompraResponsable OrdenCompra[]
   contratosProductorResponsable ProductorContrato[]
@@ -1364,7 +1365,13 @@ model EntidadContacto {
 enum EstadoSolicitudInspeccion {
   PENDIENTE
   NOTIFICADA
+  // CERRADA queda obsoleto (supersedido 2026-08-14): el cierre ahora exige un
+  // veredicto explícito. Se mantiene el valor en el enum de Postgres (no se
+  // puede eliminar un valor de enum sin recrear el tipo) pero la aplicación
+  // ya no lo escribe — las filas CERRADA existentes se migraron a APROBADA.
   CERRADA
+  APROBADA
+  RECHAZADA
 }
 
 enum FuncionAsignadoInspeccion {
@@ -1411,6 +1418,13 @@ model SolicitudInspeccion {
   calificacionId        Int?
   calificacion          Calificacion?             @relation(fields: [empresaId, calificacionId], references: [empresaId, id])
   observaciones         String?
+  // Solicitante de negocio (2026-08-14): distinto de `creadoPor` (auditoría
+  // pura, "quién hizo el request"). Por defecto es el usuario de sesión al
+  // crear, pero es editable — alguien puede crear la solicitud en nombre de
+  // otro. Toda lógica de "quién es el solicitante" (correos, permisos sobre
+  // adjuntos) usa este campo, no `creadoPor`.
+  usuarioSolicitanteId  String
+  usuarioSolicitante    Usuario                   @relation("SolicitudInspeccionSolicitante", fields: [usuarioSolicitanteId], references: [id])
   estado                EstadoSolicitudInspeccion @default(PENDIENTE)
   notificadaEn          DateTime?
   recordatorioEnviadoEn DateTime?
@@ -1418,7 +1432,7 @@ model SolicitudInspeccion {
   fechaCierre           DateTime?
   cerradaPor            String? // Usuario
   creadoEn              DateTime                  @default(now())
-  creadoPor             String // solicitante
+  creadoPor             String // auditoría — quién ejecutó el alta, no necesariamente el solicitante (ver usuarioSolicitanteId)
   actualizadoEn         DateTime?                 @updatedAt
   actualizadoPor        String?
   eliminadoEn           DateTime?
@@ -1432,7 +1446,10 @@ model SolicitudInspeccion {
   categorias SolicitudInspeccionCategoria[]
   embalajes  SolicitudInspeccionEmbalaje[]
 
+  ordenesCompra OrdenCompra[]
+
   @@unique([temporadaId, numero])
+  @@unique([empresaId, id])
   @@index([estado])
   @@index([entidadProductorId])
   @@index([eliminadoEn])
@@ -2274,6 +2291,13 @@ model OrdenCompra {
   entidadProductor   Entidad    @relation("OrdenCompraProductor", fields: [empresaId, entidadProductorId], references: [empresaId, id])
   notaVentaId        Int? // origen Cierre Comercial; null = Manual
   notaVenta          NotaVenta? @relation(fields: [empresaId, notaVentaId], references: [empresaId, id])
+  // Inspección de Compra que habilita la OC (2026-08-14, reinstala la
+  // trazabilidad Compras↔Calidad diferida en el spec original — ver
+  // compras.md §4.2). Requerida solo a nivel de aplicación (no de columna,
+  // por si existen OCs de desarrollo previas a este cambio): debe tener
+  // tipoInspeccion=COMPRA, estado=APROBADA y el mismo entidadProductorId.
+  solicitudInspeccionId Int?
+  solicitudInspeccion   SolicitudInspeccion? @relation(fields: [empresaId, solicitudInspeccionId], references: [empresaId, id])
 
   fecha DateTime @default(now())
 

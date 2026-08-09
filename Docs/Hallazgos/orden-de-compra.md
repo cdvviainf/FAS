@@ -113,3 +113,29 @@ Los 3 errores de lint `react-hooks/set-state-in-effect` señalados por Codex
 en esta ronda son preexistentes a este diff (mismo patrón ya rastreado en
 `feedback-eslint-set-state-in-effect`, memoria de sesión) — no se registran
 como hallazgo nuevo de este módulo.
+
+## Inspección de Compra requerida (Claude, 2026-08-14)
+
+Decisión de negocio (Christian): la OC vuelve a exigir trazabilidad con
+Calidad — supersede la nota de `4.2` que decía "por ahora no se requiere
+Calidad aprobada para emitir una OC" (2026-07-24). Se agrega
+`solicitudInspeccionId` al encabezado de la OC (ver `compras.md` §4.2):
+
+- Requerido **solo a nivel de aplicación** al crear (schema Zod de create lo
+  exige; el de update lo deja opcional) — la columna queda nullable para no
+  forzar el backfill de OCs de desarrollo creadas antes de este campo.
+- Validado en `ordenes-compra.service.ts` (`validarReferenciasHeader`): la
+  solicitud debe existir, tener `tipoInspeccion = COMPRA`,
+  `estado = APROBADA` (ver `Docs/Hallazgos/solicitud-inspeccion.md`) y el
+  **mismo `entidadProductorId`** que la OC — en `actualizarOrdenCompra` el
+  productor "vigente" (de la OC ya guardada) se usa como fallback si el PATCH
+  no reenvía `entidadProductorId`, mismo patrón que
+  `solicitudes.service.ts#validarReferencias`.
+- Frontend: nuevo selector "Inspección de Compra" en `orden-compra-form.tsx`,
+  filtrado por productor (cliente-side, sobre la lista ya filtrada por
+  `tipoInspeccion=COMPRA&estado=APROBADA` que trae el backend) y
+  deshabilitado hasta elegir un productor. Se limpia si el productor cambia.
+
+Cobertura de tests: no se agregó cobertura de integración específica en este
+cambio (mismo criterio que `FAS-PLAN-003`/`CCOM-QA-001` — diferida a
+propósito, Codex es quien escribe/ejecuta las pruebas).

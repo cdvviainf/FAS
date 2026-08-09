@@ -16,6 +16,11 @@ import {
   agregarLinea as agregarLineaSvc,
   actualizarLinea as actualizarLineaSvc,
 } from '../../src/modules/compras/ordenes-compra/ordenes-compra.service.js'
+import {
+  crearSolicitud as crearSolicitudSvc,
+  notificarSolicitud as notificarSolicitudSvc,
+  cerrarSolicitud as cerrarSolicitudSvc,
+} from '../../src/modules/calidad/solicitudes/solicitudes.service.js'
 import type { NotaVentaCreateInput, NotaVentaUpdateInput, NotaVentaDetalleCreateInput } from '../../src/modules/ventas/notas-venta/notas-venta.types.js'
 import type { InstructivoEmbalajeCreateInput } from '../../src/modules/compras/instructivo-embalaje/instructivo-embalaje.types.js'
 import type {
@@ -24,6 +29,7 @@ import type {
   OrdenCompraLineaCreateInput,
   OrdenCompraLineaUpdateInput,
 } from '../../src/modules/compras/ordenes-compra/ordenes-compra.types.js'
+import type { SolicitudCreateBody } from '../../src/modules/calidad/solicitudes/solicitudes.schema.js'
 
 // NotaVenta/InstructivoEmbalaje son por-empresa desde Fase 3 (lote Ventas) —
 // sus repos crean la fila DENTRO de un prisma.$transaction(), y
@@ -73,6 +79,19 @@ async function actualizarLinea(empresaId: number, ordenCompraId: number, lineaId
   return empresaContext.run({ empresaId }, () => actualizarLineaSvc(ordenCompraId, lineaId, body))
 }
 
+// SolicitudInspeccion: la OC exige una Aprobada de tipo Compra (compras.md
+// §4.2) — se crea/notifica/cierra una en `crearFixtures()` para que los
+// tests de OC de este archivo puedan referenciarla.
+async function crearSolicitudInspeccion(empresaId: number, body: SolicitudCreateBody, userId: string) {
+  return empresaContext.run({ empresaId }, () => crearSolicitudSvc(body, userId))
+}
+async function notificarSolicitudInspeccion(empresaId: number, id: number, userId: string) {
+  return empresaContext.run({ empresaId }, () => notificarSolicitudSvc(id, userId))
+}
+async function cerrarSolicitudInspeccion(empresaId: number, id: number, resultado: 'APROBADA' | 'RECHAZADA', userId: string) {
+  return empresaContext.run({ empresaId }, () => cerrarSolicitudSvc(id, { comentarios: 'OK', resultado }, userId, true))
+}
+
 const databaseName = new URL(process.env.DATABASE_URL ?? '').pathname.slice(1)
 if (databaseName !== 'fas_test') {
   throw new Error(`Seguridad: las pruebas de Ventas/Compras requieren fas_test; recibido "${databaseName}"`)
@@ -100,6 +119,7 @@ async function limpiarDatos() {
       "grupos_mercado",
       "monedas",
       "tipos_embarque",
+      "temporadas",
       "entidades",
       "paises",
       "usuarios",
@@ -192,7 +212,32 @@ async function crearFixtures() {
     data: { empresaId: empresa.id, tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
 
-  return { empresa, pais, cliente, productor, tipoEmbarque, mercado, moneda, especie, variedad, categoria, calibreChico, calibreGrande, articulo }
+  // La OC exige una Inspección de Compra Aprobada del mismo productor
+  // (compras.md §4.2) — se crea, notifica y cierra (APROBADA) una acá para
+  // que los tests de OC de este archivo la referencien.
+  const perfilInspector = await prisma.perfil.create({ data: { codigo: 'PERFIL-INSPECTOR', descripcion: 'Inspector', creadoPor: 'test' } })
+  const usuarioInspector = await prisma.usuario.create({
+    data: { id: 'usuario-inspector', nombre: 'Usuario Inspector', email: 'inspector@example.invalid', perfilId: perfilInspector.id, creadoPor: 'test' },
+  })
+  const temporada = await prisma.temporada.create({
+    data: { empresaId: empresa.id, codigo: 'TEMP-1', descripcion: 'Temporada 1', fechaInicio: new Date('2026-01-01'), fechaTermino: new Date('2026-12-31'), creadoPor: 'test' },
+  })
+  const direccionProductor = await prisma.entidadDireccion.create({
+    data: { entidadId: productor.id, codigo: 'DIR-1', descripcion: 'Predio', paisId: pais.id, direccion: 'Camino Rural s/n', creadoPor: 'test' },
+  })
+  const solicitudCreada = await crearSolicitudInspeccion(empresa.id, {
+    temporadaId: temporada.id,
+    usuarioSolicitanteId: usuarioInspector.id,
+    entidadProductorId: productor.id,
+    direccionId: direccionProductor.id,
+    tipoInspeccion: 'COMPRA',
+    fechaHora: new Date('2026-08-01T15:00:00Z').toISOString(),
+    asignados: [{ usuarioId: usuarioInspector.id, funcion: 'ACUDIR' }],
+  }, 'test')
+  await notificarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'test')
+  const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'APROBADA', 'test')
+
+  return { empresa, pais, cliente, productor, tipoEmbarque, mercado, moneda, especie, variedad, categoria, calibreChico, calibreGrande, articulo, solicitudInspeccionCompraAprobada }
 }
 
 function nvBase(f: Awaited<ReturnType<typeof crearFixtures>>) {
@@ -391,14 +436,14 @@ describe('Orden de Compra contra PostgreSQL', () => {
 
   it('genera correlativo OC-{año}-{NNNN} y rechaza productor sin tipo Productor', async () => {
     const f = await crearFixtures()
-    const oc1 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
-    const oc2 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
+    const oc1 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
+    const oc2 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
     const anio = new Date().getFullYear()
     expect(oc1.numero).toBe(`OC-${anio}-0001`)
     expect(oc2.numero).toBe(`OC-${anio}-0002`)
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.cliente.id, monedaId: f.moneda.id }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.cliente.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
   })
 
@@ -409,13 +454,14 @@ describe('Orden de Compra contra PostgreSQL', () => {
       { porcentaje: 20, plazoDias: 60, descripcion: 'Saldo' },
     ])
 
-    const ocParaLineaInvalida = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
+    const ocParaLineaInvalida = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
     await expect(
       agregarLinea(f.empresa.id, ocParaLineaInvalida.id, { ...ocLinea(f), calibreMinId: f.calibreGrande.id, calibreMaxId: f.calibreChico.id }),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     const ocCreada = await crearOrdenCompra(f.empresa.id, {
       entidadProductorId: f.productor.id,
+      solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id,
       monedaId: f.moneda.id,
       condicionPagoId: condicionPago.id,
     }, 'test')
@@ -426,13 +472,13 @@ describe('Orden de Compra contra PostgreSQL', () => {
     expect(oc.lineas).toHaveLength(1)
 
     // Sin condición de pago no hay cuotas (no quedan pendientes de carga manual)
-    const ocSinCuotas = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
+    const ocSinCuotas = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
     expect(ocSinCuotas.cuotasPago).toHaveLength(0)
   })
 
   it('permite agregar y editar líneas de una OC en Borrador', async () => {
     const f = await crearFixtures()
-    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
+    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
     expect(oc.estado).toBe('BORRADOR')
 
     const linea = await agregarLinea(f.empresa.id, oc.id, ocLinea(f))
@@ -449,29 +495,30 @@ describe('Orden de Compra contra PostgreSQL', () => {
     const usuarioSinFlag = await crearUsuarioResponsable(false, 'no-resp')
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, notaVentaId: 999999 }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id, notaVentaId: 999999 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, destinoMercadoId: 999999 }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id, destinoMercadoId: 999999 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, condicionPagoId: 999999 }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id, condicionPagoId: 999999 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, formaPagoId: 999999 }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id, formaPagoId: 999999 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     // Solo usuarios marcados como Responsable de Venta pueden asignarse
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id, responsableId: usuarioSinFlag.id }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id, responsableId: usuarioSinFlag.id }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     const usuarioResponsable = await crearUsuarioResponsable(true, 'si-resp')
     const oc = await crearOrdenCompra(f.empresa.id, {
       entidadProductorId: f.productor.id,
+      solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id,
       monedaId: f.moneda.id,
       destinoMercadoId: f.mercado.id,
       responsableId: usuarioResponsable.id,
@@ -482,14 +529,14 @@ describe('Orden de Compra contra PostgreSQL', () => {
 
   it('permite eliminar (soft delete) una OC en Borrador/Emitida, pero bloquea edición, eliminación y edición de líneas tras Recepcionada', async () => {
     const f = await crearFixtures()
-    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
+    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
 
     await eliminarOrdenCompra(f.empresa.id, oc.id, 'test')
     await expect(obtenerOrdenCompra(f.empresa.id, oc.id)).rejects.toMatchObject({ statusCode: 404 })
 
     // Simula el estado que en el futuro solo asignará el flujo de Recepción
     // (compras.md §4.4/§8) — no seteable manualmente vía la API (OC-001).
-    const oc2 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, monedaId: f.moneda.id }, 'test')
+    const oc2 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
     const linea2 = await agregarLinea(f.empresa.id, oc2.id, ocLinea(f))
     await prisma.ordenCompra.update({ where: { id: oc2.id }, data: { estado: 'RECEPCIONADA' } })
 

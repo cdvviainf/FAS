@@ -1,4 +1,5 @@
-export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'CERRADA'
+export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA'
+export type ResultadoCierre = 'APROBADA' | 'RECHAZADA'
 export type FuncionAsignado = 'ACUDIR' | 'NOTIFICAR'
 export type EtapaAdjunto = 'CREACION' | 'CIERRE'
 export type TipoInspeccion = 'COMPRA' | 'PROCESO'
@@ -9,6 +10,7 @@ export interface AsignadoInput {
 }
 
 export interface SolicitudCreateInput {
+  usuarioSolicitanteId: string
   entidadProductorId: number
   direccionId: number
   contactoId?: number | null
@@ -30,6 +32,7 @@ export interface SolicitudCreateInput {
 }
 
 export interface SolicitudUpdateInput {
+  usuarioSolicitanteId?: string
   entidadProductorId?: number
   direccionId?: number
   contactoId?: number | null

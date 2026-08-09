@@ -55,12 +55,13 @@ async function validarLinea(linea: OrdenCompraLineaInput, index: number) {
 async function validarReferenciasHeader(data: {
   entidadProductorId?: number
   notaVentaId?: number | null
+  solicitudInspeccionId?: number
   monedaId?: number
   formaPagoId?: number | null
   destinoMercadoId?: number | null
   condicionPagoId?: number | null
   responsableId?: string | null
-}) {
+}, vigente?: { entidadProductorId?: number; solicitudInspeccionId?: number | null }) {
   if (data.entidadProductorId != null) {
     const productor = await repo.getEntidadProductor(data.entidadProductorId)
     if (!productor) throw new ValidationError('El productor seleccionado no existe o está inactivo')
@@ -75,6 +76,24 @@ async function validarReferenciasHeader(data: {
   if (data.notaVentaId != null) {
     const notaVenta = await repo.getNotaVenta(data.notaVentaId)
     if (!notaVenta) throw new ValidationError('El Cierre Comercial (Nota de Venta) seleccionado no existe')
+  }
+  // Efectivos: si el PATCH no reenvía el campo, se usa el valor ya guardado
+  // en la OC — así un cambio de productor sin reenviar la inspección (o
+  // viceversa) sigue revalidando que ambos correspondan entre sí (QA-R1-OC-001).
+  const productorIdEfectivo = data.entidadProductorId ?? vigente?.entidadProductorId
+  const solicitudInspeccionIdEfectivo = data.solicitudInspeccionId ?? vigente?.solicitudInspeccionId
+  if (solicitudInspeccionIdEfectivo != null) {
+    const solicitud = await repo.getSolicitudInspeccion(solicitudInspeccionIdEfectivo)
+    if (!solicitud) throw new ValidationError('La inspección de compra seleccionada no existe')
+    if (solicitud.tipoInspeccion !== 'COMPRA') {
+      throw new ValidationError('La inspección seleccionada debe ser de tipo Compra')
+    }
+    if (solicitud.estado !== 'APROBADA') {
+      throw new ValidationError('La inspección de compra seleccionada debe estar Aprobada')
+    }
+    if (productorIdEfectivo != null && solicitud.entidadProductorId !== productorIdEfectivo) {
+      throw new ValidationError('La inspección de compra seleccionada no corresponde al productor de esta Orden de Compra')
+    }
   }
   if (data.formaPagoId != null) {
     const formaPago = await repo.getFormaPago(data.formaPagoId)
@@ -106,6 +125,14 @@ export async function obtenerOrdenCompra(id: number) {
 }
 
 export async function crearOrdenCompra(body: OrdenCompraCreateInput, creadoPor: string) {
+  // La columna es nullable (para no romper OCs de desarrollo previas a este
+  // campo — ver compras.md §4.2), así que la obligatoriedad al crear vive
+  // acá, no en el schema Zod ni en una constraint de BD: cualquier caller
+  // directo del service (incluidos los tests) debe cumplirla igual que el
+  // HTTP (QA-R1-TEST-001).
+  if (!body.solicitudInspeccionId) {
+    throw new ValidationError('La inspección de compra es requerida')
+  }
   await validarReferenciasHeader(body)
   return repo.createOrdenCompra(body, creadoPor)
 }
@@ -118,7 +145,10 @@ export async function actualizarOrdenCompra(id: number, body: OrdenCompraUpdateI
   if (existente.estado === 'RECEPCIONADA') {
     throw new ValidationError('La Orden de Compra ya fue recepcionada y no puede editarse')
   }
-  await validarReferenciasHeader(body)
+  await validarReferenciasHeader(body, {
+    entidadProductorId: existente.entidadProductorId,
+    solicitudInspeccionId: existente.solicitudInspeccionId,
+  })
   return repo.updateOrdenCompra(id, body, actualizadoPor)
 }
 
