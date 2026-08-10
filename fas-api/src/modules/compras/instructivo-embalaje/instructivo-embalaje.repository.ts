@@ -1,6 +1,6 @@
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
-import type { InstructivoEmbalajeDetalleInput } from './instructivo-embalaje.types.js'
+import type { InstructivoEmbalajeDetalleInput, InstructivoEmbalajeUpdateInput } from './instructivo-embalaje.types.js'
 
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 
@@ -68,6 +68,32 @@ export async function createInstructivo(notaVentaId: number, detalle: Instructiv
       },
       include: includeDetalle,
     })
+  })
+}
+
+// Reemplazo atómico: si viene `detalle`, se dropea toda la línea previa y se
+// recrea completa (mismo patrón que `calibres: { deleteMany, create }` en
+// ordenes-compra.repository.ts updateLinea) — el Instructivo se crea/edita
+// como documento completo, no por línea individual (a diferencia de la OC).
+export async function updateInstructivo(id: number, data: InstructivoEmbalajeUpdateInput) {
+  const { detalle, ...resto } = data
+  return prisma.instructivoEmbalaje.update({
+    where: { id },
+    data: {
+      ...resto,
+      ...(detalle
+        ? {
+            detalle: {
+              deleteMany: {},
+              create: detalle.map(({ calibreIds, ...linea }) => ({
+                ...linea,
+                calibres: { create: calibreIds.map((calibreId) => ({ calibreId })) },
+              })),
+            },
+          }
+        : {}),
+    },
+    include: includeDetalle,
   })
 }
 

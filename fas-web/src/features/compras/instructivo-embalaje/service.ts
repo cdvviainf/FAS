@@ -3,6 +3,7 @@ import type {
   InstructivoEmbalajeListResponse,
   InstructivoEmbalajeDetalle,
   InstructivoEmbalajeCreateInput,
+  InstructivoEmbalajeUpdateInput,
 } from './types'
 
 export const instructivoEmbalajeService = {
@@ -20,5 +21,9 @@ export const instructivoEmbalajeService = {
 
   async create(data: InstructivoEmbalajeCreateInput): Promise<{ data: InstructivoEmbalajeDetalle }> {
     return api.post('compras/instructivos-embalaje', { json: data }).json()
+  },
+
+  async update(id: number, data: InstructivoEmbalajeUpdateInput): Promise<{ data: InstructivoEmbalajeDetalle }> {
+    return api.patch(`compras/instructivos-embalaje/${id}`, { json: data }).json()
   },
 }

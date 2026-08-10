@@ -9,7 +9,7 @@ export default function Page() {
   return (
     <PageContainer
       pageTitle='Nuevo Instructivo de Embalaje'
-      pageDescription='Documento que instruye qué embalar. Una vez emitido no se puede editar.'
+      pageDescription='Documento que instruye qué embalar.'
     >
       <div className='max-w-4xl'>
         <InstructivoEmbalajeForm />

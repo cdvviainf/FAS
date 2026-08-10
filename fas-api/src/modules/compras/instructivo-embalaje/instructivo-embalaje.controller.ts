@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import {
   instructivoEmbalajeCreateSchema,
+  instructivoEmbalajeUpdateSchema,
   instructivoEmbalajeParamsSchema,
   instructivoEmbalajeListQuerySchema,
 } from './instructivo-embalaje.schema.js'
@@ -22,4 +23,11 @@ export async function create(req: FastifyRequest, reply: FastifyReply) {
   const body = instructivoEmbalajeCreateSchema.parse(req.body)
   const instructivo = await service.crearInstructivo(body, req.fasUserId!)
   return reply.status(201).send({ data: instructivo })
+}
+
+export async function update(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = instructivoEmbalajeParamsSchema.parse(req.params)
+  const body = instructivoEmbalajeUpdateSchema.parse(req.body)
+  const instructivo = await service.actualizarInstructivo(id, body)
+  return reply.send({ data: instructivo })
 }

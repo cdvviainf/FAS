@@ -14,3 +14,8 @@ export interface InstructivoEmbalajeCreateInput {
   notaVentaId: number
   detalle: InstructivoEmbalajeDetalleInput[]
 }
+
+export interface InstructivoEmbalajeUpdateInput {
+  notaVentaId?: number
+  detalle?: InstructivoEmbalajeDetalleInput[]
+}

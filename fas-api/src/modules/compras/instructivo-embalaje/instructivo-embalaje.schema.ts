@@ -17,6 +17,19 @@ export const instructivoEmbalajeCreateSchema = z.object({
   detalle: z.array(instructivoEmbalajeDetalleSchema).min(1, 'El instructivo debe tener al menos una línea'),
 })
 
+// El Instructivo no tiene estado propio (compras.md §4.1) — a diferencia de
+// la OC no hay transición que lo bloquee, así que el PATCH acepta reemplazar
+// el encabezado y/o el detalle completo en cualquier momento. Debe traer al
+// menos uno de los dos: un body vacío no representa ningún cambio.
+export const instructivoEmbalajeUpdateSchema = z
+  .object({
+    notaVentaId: z.number().int().positive('El Cierre Comercial (Nota de Venta) es requerido').optional(),
+    detalle: z.array(instructivoEmbalajeDetalleSchema).min(1, 'El instructivo debe tener al menos una línea').optional(),
+  })
+  .refine((data) => data.notaVentaId !== undefined || data.detalle !== undefined, {
+    message: 'Debe incluir al menos notaVentaId o detalle',
+  })
+
 export const instructivoEmbalajeParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
 })
@@ -28,3 +41,4 @@ export const instructivoEmbalajeListQuerySchema = z.object({
 })
 
 export type InstructivoEmbalajeCreateBody = z.infer<typeof instructivoEmbalajeCreateSchema>
+export type InstructivoEmbalajeUpdateBody = z.infer<typeof instructivoEmbalajeUpdateSchema>

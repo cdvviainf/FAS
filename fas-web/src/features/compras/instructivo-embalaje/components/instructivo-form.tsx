@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -19,12 +19,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Icons } from '@/components/icons'
+import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { articulosService } from '@/features/materiales/articulos/service'
 import { notasVentaService } from '@/features/ventas/notas-venta/service'
-import { instructivosEmbalajeKeys } from '../queries'
+import { instructivoEmbalajeDetailOptions, instructivosEmbalajeKeys } from '../queries'
 import { instructivoEmbalajeService } from '../service'
 import type { InstructivoEmbalajeDetalleInput } from '../types'
+
+const ITEM = 'COMPRAS_INSTRUCTIVO'
 
 const especiesService = createMantenedorService('especies')
 const variedadesService = createMantenedorService('variedades')
@@ -62,9 +65,15 @@ const LINEA_EMPTY: NuevaLinea = {
   cajas: '',
 }
 
-export function InstructivoEmbalajeForm() {
+interface InstructivoEmbalajeFormProps {
+  instructivoId?: number
+}
+
+export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFormProps) {
+  const isEdit = !!instructivoId
   const router = useRouter()
   const queryClient = useQueryClient()
+  const puedeEscribir = usePuedeEscribir(ITEM)
 
   const [notaVentaId, setNotaVentaId] = useState(0)
   const [detalle, setDetalle] = useState<InstructivoEmbalajeDetalleInput[]>([])
@@ -75,6 +84,11 @@ export function InstructivoEmbalajeForm() {
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null)
   const [calibreDesdeId, setCalibreDesdeId] = useState<number | null>(null)
   const [calibreHastaId, setCalibreHastaId] = useState<number | null>(null)
+
+  const { data: instructivo, isLoading: isLoadingInstructivo } = useQuery({
+    ...instructivoEmbalajeDetailOptions(instructivoId ?? 0),
+    enabled: isEdit,
+  })
 
   const { data: notasVentaData } = useQuery({
     queryKey: ['notas-venta-options'],
@@ -92,13 +106,59 @@ export function InstructivoEmbalajeForm() {
   const variedades = variedadesData?.data ?? []
   const categorias = categoriasData?.data ?? []
   const calibres = calibresData?.data ?? []
-  const articulos = articulosData?.data ?? []
   const tiposPallet = tiposPalletData?.data ?? []
+
+  // Con permiso TOTAL en COMPRAS_INSTRUCTIVO pero sin VENTAS_NV/OPER_MATERIALES,
+  // esas dos consultas devuelven 403 y su lista queda vacía — el Select no
+  // tiene con qué mostrar el nombre del valor ya guardado y se ve en blanco,
+  // aunque el dato sigue correcto por dentro (IE-EDIT-QA-003, arbitrado
+  // BUG_REAL). Se inyecta la referencia ya conocida por el propio GET del
+  // instructivo para que su nombre siga visible; elegir una Nota de Venta o
+  // Artículo nuevo que el usuario no puede listar sigue sin ser posible, por
+  // diseño (no se puede elegir de un catálogo al que no se tiene acceso).
+  const notaVentaOptions: { id: number; folio: number; cliente: { descripcion: string } }[] = (() => {
+    const base = notasVentaData?.data ?? []
+    if (isEdit && instructivo && !base.some((nv) => nv.id === instructivo.data.notaVenta.id)) {
+      return [instructivo.data.notaVenta, ...base]
+    }
+    return base
+  })()
+
+  const articulos: { id: number; codigo: string; descripcion: string }[] = (() => {
+    const base = articulosData?.data ?? []
+    if (!isEdit || !instructivo) return base
+    const faltantes = instructivo.data.detalle
+      .map((d) => d.articulo)
+      .filter((a) => !base.some((b) => b.id === a.id))
+    const faltantesUnicos = Array.from(new Map(faltantes.map((a) => [a.id, a])).values())
+    return faltantesUnicos.length ? [...faltantesUnicos, ...base] : base
+  })()
 
   function nombre(lista: { id: number; codigo?: string; descripcion: string }[], id: number) {
     const item = lista.find((i) => i.id === id)
     return item ? (item.codigo ? `${item.codigo} — ${item.descripcion}` : item.descripcion) : String(id)
   }
+
+  useEffect(() => {
+    if (instructivo) {
+      const d = instructivo.data
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación desde la consulta al entrar en modo edición, no un derivado de props/estado local.
+      setNotaVentaId(d.notaVentaId)
+      setDetalle(
+        d.detalle.map((linea) => ({
+          articuloId: linea.articuloId,
+          especieId: linea.especieId,
+          variedadId: linea.variedadId,
+          categoriaId: linea.categoriaId,
+          calibreIds: linea.calibres.map((c) => c.calibre.id),
+          tipoPalletId: linea.tipoPalletId,
+          cantidadPallets: linea.cantidadPallets,
+          cajasPorPallet: linea.cajasPorPallet,
+          cajas: linea.cajas,
+        })),
+      )
+    }
+  }, [instructivo])
 
   function validarLinea(): boolean {
     const e: Record<string, string> = {}
@@ -197,6 +257,16 @@ export function InstructivoEmbalajeForm() {
     onError: (e: Error) => toast.error(e.message || 'Error al crear el Instructivo de Embalaje'),
   })
 
+  const updateMutation = useMutation({
+    mutationFn: () => instructivoEmbalajeService.update(instructivoId!, { notaVentaId, detalle }),
+    onSuccess: () => {
+      toast.success('Instructivo de Embalaje actualizado')
+      queryClient.invalidateQueries({ queryKey: instructivosEmbalajeKeys.all })
+      queryClient.invalidateQueries({ queryKey: instructivosEmbalajeKeys.detail(instructivoId!) })
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al actualizar el Instructivo de Embalaje'),
+  })
+
   function validar(): boolean {
     const e: Record<string, string> = {}
     if (!notaVentaId) e.notaVentaId = 'El Cierre Comercial es requerido'
@@ -207,14 +277,77 @@ export function InstructivoEmbalajeForm() {
 
   function handleSubmit() {
     if (!validar()) return
-    createMutation.mutate()
+    if (isEdit) {
+      updateMutation.mutate()
+    } else {
+      createMutation.mutate()
+    }
+  }
+
+  const soloLectura = !puedeEscribir
+  const isPending = createMutation.isPending || updateMutation.isPending
+
+  if (isEdit && isLoadingInstructivo) {
+    return <p className='text-sm text-muted-foreground'>Cargando…</p>
+  }
+
+  // Sin permiso TOTAL: se muestra un resumen a partir de los datos anidados
+  // que ya trae el propio GET, sin depender de las listas auxiliares (Cierre
+  // Comercial, Artículos, mantenedores) — un usuario con solo LECTURA en
+  // COMPRAS_INSTRUCTIVO puede no tener acceso a esos otros ítems y vería IDs
+  // en vez de nombres si reusara el formulario interactivo (IE-EDIT-QA-003).
+  if (isEdit && soloLectura && instructivo) {
+    const d = instructivo.data
+    return (
+      <div className='space-y-6'>
+        <Badge variant='secondary'>Solo lectura — sin permiso de edición</Badge>
+        <Card>
+          <CardHeader>
+            <CardTitle>Instructivo de Embalaje N° {d.numero}</CardTitle>
+          </CardHeader>
+          <CardContent className='space-y-2 text-sm'>
+            <p><span className='text-muted-foreground'>Cierre Comercial:</span> Folio {d.notaVenta.folio} — {d.notaVenta.cliente.descripcion}</p>
+            <p><span className='text-muted-foreground'>Emitido:</span> {new Date(d.creadoEn).toLocaleString('es-CL')}</p>
+            <p><span className='text-muted-foreground'>Emitido por:</span> {d.creadoPor}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Detalle — qué embalar</CardTitle>
+          </CardHeader>
+          <CardContent className='space-y-2'>
+            {d.detalle.map((linea) => (
+              <div key={linea.id} className='flex flex-wrap items-center gap-2 border-b pb-2 text-sm last:border-b-0 last:pb-0'>
+                <span className='font-medium'>{linea.especie.descripcion} / {linea.variedad.descripcion}</span>
+                <span className='text-muted-foreground'>{linea.articulo.codigo} — {linea.articulo.descripcion}</span>
+                <span className='text-muted-foreground'>· {linea.categoria.descripcion}</span>
+                <span className='flex flex-wrap items-center gap-1 text-muted-foreground'>
+                  · Calibres:
+                  {linea.calibres.map((c) => (
+                    <Badge key={c.calibre.id} variant='outline' className='text-xs'>{c.calibre.codigo}</Badge>
+                  ))}
+                </span>
+                <span className='ml-auto text-muted-foreground'>{linea.cantidadPallets} pallets · {linea.cajas} cajas</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <div className='flex justify-end'>
+          <Button variant='outline' onClick={() => router.push('/dashboard/compras/instructivo-embalaje')}>Volver</Button>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className='space-y-6'>
+      {soloLectura && <Badge variant='secondary'>Solo lectura — sin permiso de edición</Badge>}
+      <fieldset disabled={soloLectura} className='m-0 space-y-6 border-0 p-0'>
       <Card>
         <CardHeader>
-          <CardTitle>Nuevo Instructivo de Embalaje</CardTitle>
+          <CardTitle>{isEdit ? `Editar Instructivo de Embalaje N° ${instructivo?.data.numero}` : 'Nuevo Instructivo de Embalaje'}</CardTitle>
         </CardHeader>
         <CardContent className='space-y-4'>
           <div className='space-y-1.5'>
@@ -222,7 +355,7 @@ export function InstructivoEmbalajeForm() {
             <Select value={notaVentaId ? String(notaVentaId) : ''} onValueChange={(v) => setNotaVentaId(Number(v))}>
               <SelectTrigger><SelectValue placeholder='Seleccionar Cierre Comercial...' /></SelectTrigger>
               <SelectContent>
-                {(notasVentaData?.data ?? []).map((nv) => (
+                {notaVentaOptions.map((nv) => (
                   <SelectItem key={nv.id} value={String(nv.id)}>Folio {nv.folio} — {nv.cliente.descripcion}</SelectItem>
                 ))}
               </SelectContent>
@@ -450,12 +583,17 @@ export function InstructivoEmbalajeForm() {
           />
         </CardContent>
       </Card>
+      </fieldset>
 
       <div className='flex justify-end gap-2'>
-        <Button variant='outline' onClick={() => router.push('/dashboard/compras/instructivo-embalaje')} disabled={createMutation.isPending}>Cancelar</Button>
-        <Button onClick={handleSubmit} isLoading={createMutation.isPending}>
-          <Icons.check className='mr-1 h-4 w-4' /> Emitir Instructivo
+        <Button variant='outline' onClick={() => router.push('/dashboard/compras/instructivo-embalaje')} disabled={isPending}>
+          {soloLectura ? 'Volver' : 'Cancelar'}
         </Button>
+        {!soloLectura && (
+          <Button onClick={handleSubmit} isLoading={isPending}>
+            <Icons.check className='mr-1 h-4 w-4' /> {isEdit ? 'Guardar cambios' : 'Emitir Instructivo'}
+          </Button>
+        )}
       </div>
     </div>
   )

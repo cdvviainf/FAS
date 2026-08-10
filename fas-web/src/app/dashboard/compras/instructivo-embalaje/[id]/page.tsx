@@ -1,5 +1,5 @@
 import PageContainer from '@/components/layout/page-container'
-import { InstructivoDetalleView } from '@/features/compras/instructivo-embalaje/components/instructivo-detalle-view'
+import { InstructivoEmbalajeForm } from '@/features/compras/instructivo-embalaje/components/instructivo-form'
 
 export const metadata = {
   title: 'FAS — Instructivo de Embalaje',
@@ -16,10 +16,10 @@ export default async function Page(props: PageProps) {
   return (
     <PageContainer
       pageTitle='Instructivo de Embalaje'
-      pageDescription='Documento emitido — solo lectura.'
+      pageDescription='Documento que instruye qué embalar.'
     >
       <div className='max-w-4xl'>
-        <InstructivoDetalleView id={id} />
+        <InstructivoEmbalajeForm instructivoId={id} />
       </div>
     </PageContainer>
   )

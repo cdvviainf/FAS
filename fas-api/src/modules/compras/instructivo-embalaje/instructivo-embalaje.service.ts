@@ -1,6 +1,6 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './instructivo-embalaje.repository.js'
-import type { InstructivoEmbalajeCreateInput, InstructivoEmbalajeDetalleInput } from './instructivo-embalaje.types.js'
+import type { InstructivoEmbalajeCreateInput, InstructivoEmbalajeDetalleInput, InstructivoEmbalajeUpdateInput } from './instructivo-embalaje.types.js'
 
 async function validarLinea(linea: InstructivoEmbalajeDetalleInput, index: number) {
   const prefijo = `Línea ${index + 1}:`
@@ -61,4 +61,25 @@ export async function crearInstructivo(body: InstructivoEmbalajeCreateInput, cre
   }
 
   return repo.createInstructivo(body.notaVentaId, body.detalle, creadoPor)
+}
+
+// Sin estado propio (compras.md §4.1) — no hay transición que bloquee la
+// edición, a diferencia de la OC (`RECEPCIONADA`). Confirmado además que el
+// Instructivo no depende del estado de la NV (Docs/Hallazgos/
+// notas-venta-instructivo-embalaje.md, NV-IE-002/003).
+export async function actualizarInstructivo(id: number, body: InstructivoEmbalajeUpdateInput) {
+  await obtenerInstructivo(id)
+
+  if (body.notaVentaId != null) {
+    const notaVenta = await repo.getNotaVenta(body.notaVentaId)
+    if (!notaVenta) throw new ValidationError('El Cierre Comercial (Nota de Venta) seleccionado no existe')
+  }
+
+  if (body.detalle) {
+    for (const [index, linea] of body.detalle.entries()) {
+      await validarLinea(linea, index)
+    }
+  }
+
+  return repo.updateInstructivo(id, body)
 }
