@@ -55,7 +55,7 @@ export const solicitudListQuerySchema = z.object({
   q: z.string().max(200).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(500).default(20),
-  estado: z.enum(['PENDIENTE', 'NOTIFICADA', 'APROBADA', 'RECHAZADA']).optional(),
+  estado: z.enum(['PENDIENTE', 'NOTIFICADA', 'APROBADA', 'RECHAZADA', 'OBJETADA']).optional(),
   tipoInspeccion: z.enum(['COMPRA', 'PROCESO']).optional(),
   temporadaId: z.coerce.number().int().positive().optional(),
   entidadProductorId: z.coerce.number().int().positive().optional(),
@@ -66,7 +66,9 @@ export const solicitudListQuerySchema = z.object({
 
 export const solicitudCerrarSchema = z.object({
   comentarios: z.string().min(1, 'Los comentarios de cierre son requeridos').max(5000),
-  resultado: z.enum(['APROBADA', 'RECHAZADA'], { message: 'El resultado (Aprobado/Rechazado) es requerido' }),
+  // OBJETADA (2026-08-10): tercer veredicto de cierre, terminal — mismo
+  // tratamiento que RECHAZADA (bloquea OC, no se reabre automáticamente).
+  resultado: z.enum(['APROBADA', 'RECHAZADA', 'OBJETADA'], { message: 'El resultado (Aprobado/Rechazado/Objetado) es requerido' }),
 })
 
 export type SolicitudCreateBody = z.infer<typeof solicitudCreateSchema>

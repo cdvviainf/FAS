@@ -1,5 +1,5 @@
-export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA'
-export type ResultadoCierre = 'APROBADA' | 'RECHAZADA'
+export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
+export type ResultadoCierre = 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
 export type FuncionAsignado = 'ACUDIR' | 'NOTIFICAR'
 export type EtapaAdjunto = 'CREACION' | 'CIERRE'
 export type TipoInspeccion = 'COMPRA' | 'PROCESO'

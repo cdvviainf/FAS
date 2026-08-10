@@ -40,8 +40,6 @@ import type { SolicitudInspeccion, EstadoSolicitud, TipoInspeccion } from '../ty
 import { SolicitudCerrarDialog } from './solicitud-cerrar-dialog'
 import { SolicitudDetalleDialog } from './solicitud-detalle-dialog'
 
-const ITEM = 'CAL_SOLICITUDES'
-
 const fmt = new Intl.DateTimeFormat('es-CL', {
   dateStyle: 'short',
   timeStyle: 'short',
@@ -53,17 +51,35 @@ const estadoVariant: Record<EstadoSolicitud, 'secondary' | 'default' | 'outline'
   NOTIFICADA: 'default',
   APROBADA: 'outline',
   RECHAZADA: 'destructive',
+  OBJETADA: 'destructive',
 }
 
 interface SolicitudListingClientProps {
   tipoInspeccion?: TipoInspeccion
+  // Determina el set de acciones, no solo el permiso (2026-08-10, ver
+  // Docs/Hallazgos/solicitud-inspeccion.md): Compras gestiona por completo
+  // (ingresar/editar/notificar/cerrar/eliminar), Calidad solo ve y cierra.
+  contexto?: 'COMPRAS' | 'CALIDAD'
 }
 
-export function SolicitudListingClient({ tipoInspeccion }: SolicitudListingClientProps = {}) {
+export function SolicitudListingClient({ tipoInspeccion, contexto = 'CALIDAD' }: SolicitudListingClientProps = {}) {
+  const esCompras = contexto === 'COMPRAS'
+  const ITEM = esCompras ? 'COMPRAS_SOLICITUDES' : 'CAL_SOLICITUDES'
+  const basePath = esCompras ? '/dashboard/compras/solicitudes' : '/dashboard/calidad/solicitudes'
   const queryClient = useQueryClient()
   const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
-  const puedeLeer = usePuedeLeer(ITEM)
+  // Cerrar es la única acción que el backend acepta con TOTAL/LECTURA en
+  // CUALQUIERA de los dos ítems (tieneNivelTotal() en solicitudes.controller.ts
+  // — Compras y Calidad comparten el recurso), independiente del contexto de
+  // la pantalla actual (IMP-QA-R1-002). El resto de acciones sigue acotado
+  // al ítem del contexto (esCompras).
+  const puedeEscribirCompras = usePuedeEscribir('COMPRAS_SOLICITUDES')
+  const puedeEscribirCalidad = usePuedeEscribir('CAL_SOLICITUDES')
+  const puedeLeerCompras = usePuedeLeer('COMPRAS_SOLICITUDES')
+  const puedeLeerCalidad = usePuedeLeer('CAL_SOLICITUDES')
+  const tieneTotalEnCualquiera = puedeEscribirCompras || puedeEscribirCalidad
+  const tieneLecturaEnCualquiera = puedeLeerCompras || puedeLeerCalidad
   const { data: session } = authClient.useSession()
   const currentUserId = session?.user?.id
   const { temporada } = useTemporada()
@@ -72,7 +88,7 @@ export function SolicitudListingClient({ tipoInspeccion }: SolicitudListingClien
     page: parseAsInteger.withDefault(1),
     perPage: parseAsInteger.withDefault(20),
     q: parseAsString,
-    estado: parseAsStringEnum<EstadoSolicitud>(['PENDIENTE', 'NOTIFICADA', 'APROBADA', 'RECHAZADA']),
+    estado: parseAsStringEnum<EstadoSolicitud>(['PENDIENTE', 'NOTIFICADA', 'APROBADA', 'RECHAZADA', 'OBJETADA']),
   })
 
   // Dialog state
@@ -149,10 +165,10 @@ export function SolicitudListingClient({ tipoInspeccion }: SolicitudListingClien
         // Máquina de estados (QAS-SI-003): notificar solo PENDIENTE, cerrar solo NOTIFICADA
         const esPendiente = s.estado === 'PENDIENTE'
         const esNotificada = s.estado === 'NOTIFICADA'
-        const esCerrada = s.estado === 'APROBADA' || s.estado === 'RECHAZADA'
+        const esCerrada = s.estado === 'APROBADA' || s.estado === 'RECHAZADA' || s.estado === 'OBJETADA'
         // QAS-SI-007: un asignado ACUDIR con solo LECTURA también puede cerrar
         const esInspectorAcudir = s.asignados.some((a) => a.usuarioId === currentUserId && a.funcion === 'ACUDIR')
-        const puedeCerrar = esNotificada && (puedeEscribir || (esInspectorAcudir && puedeLeer))
+        const puedeCerrar = esNotificada && (tieneTotalEnCualquiera || (esInspectorAcudir && tieneLecturaEnCualquiera))
         return (
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
@@ -167,13 +183,15 @@ export function SolicitudListingClient({ tipoInspeccion }: SolicitudListingClien
                 <Icons.search className='mr-2 h-4 w-4' /> Ver detalle
               </DropdownMenuItem>
 
-              {puedeEscribir && esPendiente && (
+              {/* Ingresar/editar/notificar/eliminar/reabrir: exclusivo de
+                  Compras — Calidad quedó restringida a ver+cerrar. */}
+              {esCompras && puedeEscribir && esPendiente && (
                 <DropdownMenuItem onClick={() => notificarMutation.mutate(s.id)}>
                   <Icons.notification className='mr-2 h-4 w-4' /> Notificar
                 </DropdownMenuItem>
               )}
-              {puedeEscribir && !esCerrada && (
-                <DropdownMenuItem onClick={() => router.push(`/dashboard/calidad/solicitudes/${s.id}`)}>
+              {esCompras && puedeEscribir && !esCerrada && (
+                <DropdownMenuItem onClick={() => router.push(`${basePath}/${s.id}`)}>
                   <Icons.edit className='mr-2 h-4 w-4' /> Editar
                 </DropdownMenuItem>
               )}
@@ -182,7 +200,7 @@ export function SolicitudListingClient({ tipoInspeccion }: SolicitudListingClien
                   <Icons.check className='mr-2 h-4 w-4' /> Cerrar inspección
                 </DropdownMenuItem>
               )}
-              {puedeEscribir && !esCerrada && (
+              {esCompras && puedeEscribir && !esCerrada && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -193,7 +211,7 @@ export function SolicitudListingClient({ tipoInspeccion }: SolicitudListingClien
                   </DropdownMenuItem>
                 </>
               )}
-              {puedeEscribir && esCerrada && (
+              {esCompras && puedeEscribir && esCerrada && (
                 <DropdownMenuItem onClick={() => reabrirMutation.mutate(s.id)}>
                   <Icons.reopen className='mr-2 h-4 w-4' /> Reabrir
                 </DropdownMenuItem>
@@ -203,7 +221,7 @@ export function SolicitudListingClient({ tipoInspeccion }: SolicitudListingClien
         )
       },
     },
-  ], [puedeEscribir, puedeLeer, currentUserId, notificarMutation, reabrirMutation])
+  ], [puedeEscribir, tieneTotalEnCualquiera, tieneLecturaEnCualquiera, currentUserId, notificarMutation, reabrirMutation, esCompras, basePath, router])
 
   const pageCount = data ? Math.ceil(data.meta.total / params.perPage) : 0
   const { table } = useDataTable({
@@ -239,11 +257,12 @@ export function SolicitudListingClient({ tipoInspeccion }: SolicitudListingClien
             <SelectItem value='NOTIFICADA'>Notificada</SelectItem>
             <SelectItem value='APROBADA'>Aprobada</SelectItem>
             <SelectItem value='RECHAZADA'>Rechazada</SelectItem>
+            <SelectItem value='OBJETADA'>Objetada</SelectItem>
           </SelectContent>
         </Select>
         <div className='flex-1' />
-        {puedeEscribir && (
-          <Button onClick={() => router.push('/dashboard/calidad/solicitudes/nueva')} disabled={!temporada}>
+        {esCompras && puedeEscribir && (
+          <Button onClick={() => router.push(`${basePath}/nueva`)} disabled={!temporada}>
             <Icons.add className='mr-1 h-4 w-4' /> Nueva solicitud
           </Button>
         )}

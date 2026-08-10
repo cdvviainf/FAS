@@ -26,4 +26,8 @@ export const instructivoEmbalajeService = {
   async update(id: number, data: InstructivoEmbalajeUpdateInput): Promise<{ data: InstructivoEmbalajeDetalle }> {
     return api.patch(`compras/instructivos-embalaje/${id}`, { json: data }).json()
   },
+
+  async remove(id: number): Promise<void> {
+    await api.delete(`compras/instructivos-embalaje/${id}`)
+  },
 }

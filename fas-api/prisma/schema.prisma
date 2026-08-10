@@ -1370,6 +1370,10 @@ enum EstadoSolicitudInspeccion {
   CERRADA
   APROBADA
   RECHAZADA
+  // Nuevo veredicto de cierre (2026-08-10) — terminal, mismo tratamiento que
+  // RECHAZADA (bloquea OC, no se reabre automáticamente): Compras/Ventas
+  // objeta la inspección sin necesariamente rechazarla de plano.
+  OBJETADA
 }
 
 enum FuncionAsignadoInspeccion {
@@ -2230,8 +2234,10 @@ model InstructivoEmbalaje {
 
   detalle InstructivoEmbalajeDetalle[]
 
-  creadoEn  DateTime @default(now())
-  creadoPor String
+  creadoEn     DateTime  @default(now())
+  creadoPor    String
+  eliminadoEn  DateTime?
+  eliminadoPor String?
 
   @@index([notaVentaId])
   @@index([empresaId])

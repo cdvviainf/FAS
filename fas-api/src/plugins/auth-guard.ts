@@ -122,3 +122,28 @@ export function requireLevel(
     }
   }
 }
+
+/**
+ * Igual que requireLevel, pero satisfecho si el nivel mínimo se cumple en
+ * CUALQUIERA de los ítems de menú listados — para recursos accesibles desde
+ * más de un ítem (ej. Solicitud de Inspección: COMPRAS_SOLICITUDES o
+ * CAL_SOLICITUDES).
+ */
+export function requireAnyLevel(
+  itemMenuCodigos: string[],
+  minLevel: 'LECTURA' | 'TOTAL',
+): preHandlerHookHandler {
+  return async (request, reply) => {
+    const cumple = itemMenuCodigos.some((codigo) => {
+      const nivel = request.fasAccesos?.get(codigo) ?? 'SIN_ACCESO'
+      return minLevel === 'LECTURA' ? nivel !== 'SIN_ACCESO' : nivel === 'TOTAL'
+    })
+    if (!cumple) {
+      const mensaje = minLevel === 'TOTAL'
+        ? 'Se requiere acceso total para esta operación.'
+        : 'No tiene acceso a esta función.'
+      reply.status(403).send({ error: { code: 'FORBIDDEN', message: mensaje } })
+      return
+    }
+  }
+}

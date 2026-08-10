@@ -83,3 +83,10 @@ export async function actualizarInstructivo(id: number, body: InstructivoEmbalaj
 
   return repo.updateInstructivo(id, body)
 }
+
+// Soft delete — sin transición de estado que lo bloquee, mismo criterio que
+// la edición (ver nota arriba).
+export async function eliminarInstructivo(id: number, eliminadoPor: string) {
+  await obtenerInstructivo(id)
+  await repo.softDeleteInstructivo(id, eliminadoPor)
+}

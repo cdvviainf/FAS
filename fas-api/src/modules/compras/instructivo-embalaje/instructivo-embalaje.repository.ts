@@ -19,7 +19,7 @@ const includeDetalle = {
 }
 
 export async function listInstructivos(page: number, limit: number, notaVentaId?: number) {
-  const where = notaVentaId ? { notaVentaId } : {}
+  const where = { eliminadoEn: null, ...(notaVentaId ? { notaVentaId } : {}) }
 
   const [data, total] = await Promise.all([
     prisma.instructivoEmbalaje.findMany({
@@ -38,7 +38,11 @@ export async function listInstructivos(page: number, limit: number, notaVentaId?
 }
 
 export async function getInstructivoById(id: number) {
-  return prisma.instructivoEmbalaje.findUnique({ where: { id }, include: includeDetalle })
+  return prisma.instructivoEmbalaje.findFirst({ where: { id, eliminadoEn: null }, include: includeDetalle })
+}
+
+export async function softDeleteInstructivo(id: number, eliminadoPor: string) {
+  await prisma.instructivoEmbalaje.update({ where: { id }, data: { eliminadoEn: new Date(), eliminadoPor } })
 }
 
 const LOCK_NAMESPACE_INSTRUCTIVO_EMBALAJE = 490235

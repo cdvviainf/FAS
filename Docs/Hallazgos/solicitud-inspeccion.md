@@ -27,23 +27,30 @@ Flujo de **visita de inspección a terreno**:
 | SI-7 | Contacto en terreno (2026-07-23) | La solicitud puede referenciar **opcionalmente** un contacto de la entidad productora (`EntidadContacto`). Se valida que pertenezca a la entidad; se muestra en detalle y correos. Al cambiar de productor sin indicar contacto, se limpia. |
 | SI-8 | Adjunto de cierre | **Opcional**. Los comentarios de cierre sí son obligatorios. |
 | SI-9 | Adjuntos: ventana habilitada (corrección 2026-07-23) | **Corrige SI-4.** Adjuntar archivos solo tiene sentido una vez la solicitud está **NOTIFICADA** — antes (PENDIENTE) no aplica, y una vez **CERRADA** queda congelada. Se eliminó la posibilidad de adjuntar al crear; el botón "Agregar archivos" en el formulario solo aparece al editar una solicitud NOTIFICADA. El backend rechaza (`409`) subir/eliminar adjuntos fuera de ese estado. |
-| SI-10 | Nav Compras (2026-07-23) | El módulo Compras aún no tiene implementación (solo placeholders de navegación, sin páginas ni backend). Se agregó igualmente la entrada "Solicitud de Inspección" en el grupo de navegación Compras, apuntando a la misma pantalla `/dashboard/calidad/solicitudes` (mismo dato, acceso desde ambos lugares) — consistente con `compras.md`: la inspección de Calidad habilita la generación de la OC. |
+| SI-10 | Nav Compras (2026-07-23) | ~~El módulo Compras aún no tiene implementación... apuntando a la misma pantalla `/dashboard/calidad/solicitudes`~~ — **Supersedido (2026-08-10), ver §7**: Compras ya tiene su propia vista con gestión completa; Calidad queda como revisor (ver+cerrar). |
 
 ## 2. Contratos API (`/api/calidad/solicitudes`)
 
+> **Nivel reconciliado con §7 (2026-08-10):** "LECTURA"/"TOTAL" abajo se
+> refieren al ítem que corresponda según la fila — desde la supersesión de
+> §7, lectura acepta `COMPRAS_SOLICITUDES` **o** `CAL_SOLICITUDES` (cualquiera
+> de los dos), mientras que escritura (crear/editar/eliminar/notificar/
+> reabrir) exige específicamente `COMPRAS_SOLICITUDES:TOTAL` — `CAL_SOLICITUDES`
+> ya no habilita esas cinco acciones, solo lectura y cierre.
+
 | Método | Ruta | Nivel | Notas |
 |---|---|---|---|
-| GET | `/solicitudes` | LECTURA | Filtros: `q`, `estado`, `temporadaId`, `entidadProductorId`, `usuarioAsignadoId`, `fechaDesde/Hasta`, paginación. |
-| GET | `/solicitudes/:id` | LECTURA | Detalle con asignados y adjuntos (sin binario). |
-| POST | `/solicitudes` | TOTAL | Crea (numeración por temporada en transacción). |
-| PATCH | `/solicitudes/:id` | TOTAL | Edita (bloqueada si CERRADA). Notifica cambio si estaba NOTIFICADA. |
-| DELETE | `/solicitudes/:id` | TOTAL | Softdelete (bloqueada si CERRADA). Notifica si estaba NOTIFICADA. |
-| POST | `/solicitudes/:id/notificar` | TOTAL | Envía correos → NOTIFICADA + programa recordatorio. |
-| POST | `/solicitudes/:id/cerrar` | LECTURA* | *Además exige ser asignado ACUDIR o nivel TOTAL. Comentarios requeridos. |
-| POST | `/solicitudes/:id/reabrir` | TOTAL | CERRADA → NOTIFICADA. |
-| POST | `/solicitudes/:id/adjuntos?etapa=CREACION\|CIERRE` | LECTURA* | *Solo involucrado o TOTAL, **y solo con la solicitud en estado NOTIFICADA** (409 fuera de esa ventana). Multipart, 10 MB, MIME validado. |
-| GET | `/solicitudes/:id/adjuntos/:adjuntoId/descarga` | LECTURA | Stream del binario. |
-| DELETE | `/solicitudes/:id/adjuntos/:adjuntoId` | LECTURA* | *Solo involucrado o TOTAL. |
+| GET | `/solicitudes` | LECTURA (cualquiera) | Filtros: `q`, `estado`, `temporadaId`, `entidadProductorId`, `usuarioAsignadoId`, `fechaDesde/Hasta`, paginación. |
+| GET | `/solicitudes/:id` | LECTURA (cualquiera) | Detalle con asignados y adjuntos (sin binario). |
+| POST | `/solicitudes` | `COMPRAS_SOLICITUDES`:TOTAL | Crea (numeración por temporada en transacción). |
+| PATCH | `/solicitudes/:id` | `COMPRAS_SOLICITUDES`:TOTAL | Edita (bloqueada si cerrada). Notifica cambio si estaba NOTIFICADA. |
+| DELETE | `/solicitudes/:id` | `COMPRAS_SOLICITUDES`:TOTAL | Softdelete (bloqueada si cerrada). Notifica si estaba NOTIFICADA. |
+| POST | `/solicitudes/:id/notificar` | `COMPRAS_SOLICITUDES`:TOTAL | Envía correos → NOTIFICADA + programa recordatorio. |
+| POST | `/solicitudes/:id/cerrar` | LECTURA (cualquiera)* | *Además exige ser asignado ACUDIR o TOTAL en cualquiera de los dos ítems. Comentarios requeridos. `resultado`: `APROBADA`\|`RECHAZADA`\|`OBJETADA` (§7). |
+| POST | `/solicitudes/:id/reabrir` | `COMPRAS_SOLICITUDES`:TOTAL | Cerrada → NOTIFICADA. |
+| POST | `/solicitudes/:id/adjuntos?etapa=CREACION\|CIERRE` | LECTURA (cualquiera)* | *Solo involucrado o TOTAL en cualquiera de los dos ítems, **y solo con la solicitud en estado NOTIFICADA** (409 fuera de esa ventana). Multipart, 10 MB, MIME validado. |
+| GET | `/solicitudes/:id/adjuntos/:adjuntoId/descarga` | LECTURA (cualquiera) | Stream del binario. |
+| DELETE | `/solicitudes/:id/adjuntos/:adjuntoId` | LECTURA (cualquiera)* | *Solo involucrado o TOTAL en cualquiera de los dos ítems. |
 
 Config correo: `GET/PUT /api/config/correo` (nivel `CONFIG_GENERAL`), `POST /api/config/correo/probar`.
 
@@ -538,3 +545,58 @@ Se corrigió: `usuarioSolicitanteId` pasa a opcional en
 `body.usuarioSolicitanteId ?? userId` (el usuario autenticado) antes de
 validar y persistir — coherente con "por defecto el usuario de sesión,
 editable" ya documentado arriba.
+
+## 7. Supersesión — Compras gestiona, Calidad revisa/cierra (2026-08-10)
+
+Decisión de negocio (Christian): la Solicitud de Inspección deja de ser un
+recurso exclusivo de Calidad. Se separan las vistas por rol:
+
+- **Compras** (`/dashboard/compras/solicitudes`, ítem nuevo
+  `COMPRAS_SOLICITUDES`): gestión completa — ingresar, editar, notificar,
+  eliminar, reabrir y cerrar. El tipo de inspección (Compra o Proceso) se
+  elige al crear, igual que antes; una sola vista cubre ambos tipos (sin
+  filtro).
+- **Calidad** (`/dashboard/calidad/solicitudes`,
+  `/dashboard/calidad/inspeccion-compra`, `/dashboard/calidad/inspeccion-proceso`,
+  todas bajo el ítem existente `CAL_SOLICITUDES`): pasan uniformemente a
+  **solo ver y cerrar**, para ambos tipos de inspección. Ingresar, editar,
+  notificar, eliminar y reabrir se retiraron de estas tres vistas (frontend
+  oculta las acciones; backend las rechaza — ver §2).
+- Ambos ítems dan **lectura** del mismo recurso subyacente (no hay
+  duplicación de datos, solo de permisos/rutas) — implementado con
+  `requireAnyLevel([...], 'LECTURA')` (`plugins/auth-guard.ts`), nuevo junto
+  a `requireLevel`.
+- **Cerrar sigue siendo posible desde ambos roles** (Compras y Calidad): la
+  regla de negocio es que Calidad da el veredicto técnico, pero Compras
+  también puede cerrar directamente si corresponde (ej. reingresar un cierre
+  perdido). `tieneNivelTotal()` (`solicitudes.controller.ts`) ahora chequea
+  TOTAL en cualquiera de los dos ítems, no solo `CAL_SOLICITUDES`.
+- **Nuevo veredicto de cierre: `OBJETADA`** (`EstadoSolicitudInspeccion`,
+  `resultado` de `POST /cerrar`) — tercer estado terminal junto a
+  `APROBADA`/`RECHAZADA`, mismo tratamiento (bloquea la generación de OC
+  igual que `RECHAZADA`, ya que `ordenes-compra.md` solo acepta
+  `APROBADA`; no se reabre automáticamente, usa el mismo mecanismo de
+  `reabrir` ya existente si se necesita).
+- El nav de la sección Compras (`nav-config.ts`) apunta ahora a
+  `/dashboard/compras/solicitudes` en vez de a la pantalla de Calidad
+  (superaba a SI-10, ver §1).
+- Las páginas `/dashboard/calidad/solicitudes/nueva` y
+  `/dashboard/calidad/solicitudes/[id]` (formulario de alta/edición) se
+  eliminaron — ya no tienen ningún llamador tras el cambio; el formulario
+  (`solicitud-form.tsx`) vive ahora exclusivamente bajo
+  `/dashboard/compras/solicitudes/...`.
+- Migración: `20260816100000_instructivo_softdelete_estado_objetada` agrega
+  `OBJETADA` al enum (sin backfill de datos, no aplica la limitación de
+  Postgres de usar un valor de enum recién agregado en la misma transacción
+  porque no se escribe ninguna fila con ese valor en la propia migración).
+- Seed: nuevo `ItemMenu` `COMPRAS_SOLICITUDES` (sección Compras, ruta
+  `/dashboard/compras/solicitudes`); el perfil Administrador lo recibe en
+  `TOTAL` automáticamente (sync genérico de `seed.ts`). Perfiles existentes
+  con `CAL_SOLICITUDES:TOTAL` en producción/demo **no** heredan
+  automáticamente `COMPRAS_SOLICITUDES` — es responsabilidad del
+  administrador de perfiles asignarlo a quien corresponda gestionar Compras.
+
+**Cobertura de tests:** no se agregó cobertura nueva en este cambio (mismo
+criterio que QAS-SI-010/QA-R2-SI-001 — Codex es quien escribe/ejecuta las
+pruebas, no Claude). Riesgo residual: la suite existente no cubre el reparto
+de permisos por ítem (`requireAnyLevel`) ni el nuevo veredicto `OBJETADA`.

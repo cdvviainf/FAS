@@ -9,9 +9,9 @@ export default function Page() {
   return (
     <PageContainer
       pageTitle='Inspección de Compra'
-      pageDescription='Solicitudes de inspección de tipo Compra: asignación, notificación y cierre.'
+      pageDescription='Solicitudes de inspección de tipo Compra: revisión y cierre. El ingreso, edición y notificación se gestiona desde Compras.'
     >
-      <SolicitudListingClient tipoInspeccion='COMPRA' />
+      <SolicitudListingClient tipoInspeccion='COMPRA' contexto='CALIDAD' />
     </PageContainer>
   )
 }

@@ -42,7 +42,10 @@ const calificacionesService = createMantenedorService('calificaciones')
 
 const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024
 const ACCEPT_ADJUNTOS = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.heic'
-const ITEM = 'CAL_SOLICITUDES'
+// Ingresar/editar solicitudes es exclusivo de Compras desde 2026-08-10 (ver
+// Docs/Hallazgos/solicitud-inspeccion.md) — Calidad quedó restringida a
+// ver+cerrar y ya no usa este formulario.
+const ITEM = 'COMPRAS_SOLICITUDES'
 
 function formatoBytes(b: number): string {
   if (b < 1024) return `${b} B`
@@ -290,7 +293,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       if (isEdit && solicitud?.data.estado === 'NOTIFICADA') {
         toast.info('Se notificó automáticamente a los asignados por el cambio')
       }
-      if (!isEdit) router.push(`/dashboard/calidad/solicitudes/${res.data.id}`)
+      if (!isEdit) router.push(`/dashboard/compras/solicitudes/${res.data.id}`)
     },
     onError: (e: Error) => toast.error(e.message || 'Error al guardar la solicitud'),
   })
@@ -338,7 +341,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
 
   const adjuntosExistentes = solicitud?.data.adjuntos.filter((a) => a.etapa === 'CREACION') ?? []
   const puedeGestionarAdjuntos = isEdit && solicitud?.data.estado === 'NOTIFICADA'
-  const estaCerrada = solicitud?.data.estado === 'APROBADA' || solicitud?.data.estado === 'RECHAZADA'
+  const estaCerrada = solicitud?.data.estado === 'APROBADA' || solicitud?.data.estado === 'RECHAZADA' || solicitud?.data.estado === 'OBJETADA'
   const soloLectura = !puedeEscribir || estaCerrada
   const isPending = mutation.isPending
 
@@ -707,7 +710,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       </fieldset>
 
       <div className='flex justify-end gap-2'>
-        <Button type='button' variant='outline' onClick={() => router.push('/dashboard/calidad/solicitudes')} disabled={isPending}>
+        <Button type='button' variant='outline' onClick={() => router.push('/dashboard/compras/solicitudes')} disabled={isPending}>
           {soloLectura ? 'Volver' : 'Cancelar'}
         </Button>
         {!soloLectura && (

@@ -1,5 +1,5 @@
-export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA'
-export type ResultadoCierre = 'APROBADA' | 'RECHAZADA'
+export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
+export type ResultadoCierre = 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
 export type FuncionAsignado = 'ACUDIR' | 'NOTIFICAR'
 export type EtapaAdjunto = 'CREACION' | 'CIERRE'
 export type TipoInspeccion = 'COMPRA' | 'PROCESO'
@@ -9,11 +9,13 @@ export const ESTADO_LABELS: Record<EstadoSolicitud, string> = {
   NOTIFICADA: 'Notificada',
   APROBADA: 'Aprobada',
   RECHAZADA: 'Rechazada',
+  OBJETADA: 'Objetada',
 }
 
 export const RESULTADO_CIERRE_LABELS: Record<ResultadoCierre, string> = {
   APROBADA: 'Aprobada',
   RECHAZADA: 'Rechazada',
+  OBJETADA: 'Objetada',
 }
 
 export const TIPO_INSPECCION_LABELS: Record<TipoInspeccion, string> = {

@@ -13,6 +13,10 @@ const itemsMenu = [
   { codigo: 'CONFIG_EMPRESAS', nombre: 'Empresas', seccion: 'Configuración', ruta: '/dashboard/configuracion/empresas', esAccion: false, orden: 8 },
   { codigo: 'CONFIG_GENERAL', nombre: 'Configuración General', seccion: 'Configuración', ruta: '/dashboard/configuracion/general', esAccion: false, orden: 13 },
   // Compras
+  // Gestión completa (ingresar/editar/notificar/cerrar) de la Solicitud de
+  // Inspección — antes vivía únicamente bajo CAL_SOLICITUDES; Calidad ahora
+  // solo ve y cierra (2026-08-10, ver Docs/Hallazgos/solicitud-inspeccion.md).
+  { codigo: 'COMPRAS_SOLICITUDES', nombre: 'Solicitud de Inspección', seccion: 'Compras', ruta: '/dashboard/compras/solicitudes', esAccion: false, orden: 18 },
   { codigo: 'COMPRAS_INSTRUCTIVO', nombre: 'Instructivo de Embalaje', seccion: 'Compras', ruta: '/dashboard/compras/instructivo-embalaje', esAccion: false, orden: 19 },
   { codigo: 'COMPRAS_OC', nombre: 'Órdenes de Compra', seccion: 'Compras', ruta: '/dashboard/compras/ordenes', esAccion: false, orden: 20 },
   { codigo: 'OC_APROBACION', nombre: 'Aprobación de OC', seccion: 'Compras', ruta: null, esAccion: true, orden: 21 },
@@ -38,6 +42,9 @@ const itemsMenu = [
   // también /inspeccion-compra e /inspeccion-proceso, que comparten el mismo
   // permiso (decisión de negocio, Christian, 2026-07-30) — son la misma
   // Solicitud de Inspección, solo filtrada por tipoInspeccion.
+  // Supersesión (2026-08-10): Calidad pasa a rol de revisor — solo ver y
+  // cerrar (Aprobada/Rechazada/Objetada). Ingresar/editar/notificar/eliminar
+  // se trasladan a COMPRAS_SOLICITUDES (arriba).
   { codigo: 'CAL_SOLICITUDES', nombre: 'Solicitudes de Inspección', seccion: 'Calidad', ruta: '/dashboard/calidad', esAccion: false, orden: 69 },
   { codigo: 'CAL_CONTROL', nombre: 'Control de Calidad', seccion: 'Calidad', ruta: '/dashboard/calidad/control', esAccion: false, orden: 70 },
   { codigo: 'CAL_LOTES', nombre: 'Validación de Lotes', seccion: 'Calidad', ruta: '/dashboard/calidad/lotes', esAccion: false, orden: 71 },

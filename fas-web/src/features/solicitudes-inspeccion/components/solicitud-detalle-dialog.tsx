@@ -125,7 +125,7 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
             </div>
           </div>
 
-          {(solicitud.estado === 'APROBADA' || solicitud.estado === 'RECHAZADA') && (
+          {(solicitud.estado === 'APROBADA' || solicitud.estado === 'RECHAZADA' || solicitud.estado === 'OBJETADA') && (
             <div className='rounded-md border bg-muted/40 p-3'>
               <h4 className='mb-1 text-sm font-medium'>
                 Cierre — <Badge variant={solicitud.estado === 'APROBADA' ? 'outline' : 'destructive'}>{ESTADO_LABELS[solicitud.estado]}</Badge>

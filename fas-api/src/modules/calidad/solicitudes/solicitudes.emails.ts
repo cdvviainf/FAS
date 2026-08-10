@@ -125,8 +125,8 @@ export function correoEliminacion(s: SolicitudParaCorreo) {
   }
 }
 
-export function correoCierre(s: SolicitudParaCorreo, comentarios: string, cantidadAdjuntos: number, resultado: 'APROBADA' | 'RECHAZADA') {
-  const label = resultado === 'APROBADA' ? 'APROBADA' : 'RECHAZADA'
+export function correoCierre(s: SolicitudParaCorreo, comentarios: string, cantidadAdjuntos: number, resultado: 'APROBADA' | 'RECHAZADA' | 'OBJETADA') {
+  const label = resultado
   return {
     subject: `[FAS] Solicitud de inspección ${s.codigo} ${label}`,
     html: envolver(

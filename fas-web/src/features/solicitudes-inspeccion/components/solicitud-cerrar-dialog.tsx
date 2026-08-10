@@ -59,7 +59,12 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: solicitudesKeys.all })
-      toast.success(resultado === 'RECHAZADA' ? 'Inspección cerrada y rechazada. Se notificó a los involucrados.' : 'Inspección cerrada y aprobada. Se notificó a los involucrados.')
+      const mensajePorResultado: Record<ResultadoCierre, string> = {
+        APROBADA: 'Inspección cerrada y aprobada. Se notificó a los involucrados.',
+        RECHAZADA: 'Inspección cerrada y rechazada. Se notificó a los involucrados.',
+        OBJETADA: 'Inspección cerrada y objetada. Se notificó a los involucrados.',
+      }
+      toast.success(mensajePorResultado[resultado as ResultadoCierre])
       onOpenChange(false)
       setComentarios('')
       setResultado('')
@@ -92,7 +97,7 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
       return
     }
     if (!resultado) {
-      toast.error('Debes indicar si la inspección quedó Aprobada o Rechazada')
+      toast.error('Debes indicar el resultado de la inspección (Aprobada, Rechazada u Objetada)')
       return
     }
     cerrarMutation.mutate()

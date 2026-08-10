@@ -262,7 +262,13 @@ export async function updateSolicitud(
  */
 async function transicionAtomica(
   id: number,
-  estadoEsperado: 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA' | ('APROBADA' | 'RECHAZADA')[],
+  estadoEsperado:
+    | 'PENDIENTE'
+    | 'NOTIFICADA'
+    | 'APROBADA'
+    | 'RECHAZADA'
+    | 'OBJETADA'
+    | ('APROBADA' | 'RECHAZADA' | 'OBJETADA')[],
   data: Prisma.SolicitudInspeccionUpdateInput,
 ) {
   return prisma.$transaction(async (tx) => {
@@ -291,7 +297,7 @@ export async function marcarNotificada(id: number, userId: string) {
   })
 }
 
-export async function cerrarSolicitud(id: number, comentarios: string, resultado: 'APROBADA' | 'RECHAZADA', userId: string) {
+export async function cerrarSolicitud(id: number, comentarios: string, resultado: 'APROBADA' | 'RECHAZADA' | 'OBJETADA', userId: string) {
   return transicionAtomica(id, 'NOTIFICADA', {
     estado: resultado,
     comentariosCierre: comentarios,
@@ -304,7 +310,7 @@ export async function cerrarSolicitud(id: number, comentarios: string, resultado
 export async function reabrirSolicitud(id: number, userId: string) {
   // QAS-SI-004: al reabrir se limpian los datos de cierre para no dejar una
   // solicitud NOTIFICADA con evidencia de que sigue cerrada.
-  return transicionAtomica(id, ['APROBADA', 'RECHAZADA'], {
+  return transicionAtomica(id, ['APROBADA', 'RECHAZADA', 'OBJETADA'], {
     estado: 'NOTIFICADA',
     comentariosCierre: null,
     fechaCierre: null,

@@ -9,9 +9,9 @@ export default function Page() {
   return (
     <PageContainer
       pageTitle='Inspección de Proceso'
-      pageDescription='Solicitudes de inspección de tipo Proceso: asignación, notificación y cierre.'
+      pageDescription='Solicitudes de inspección de tipo Proceso: revisión y cierre. El ingreso, edición y notificación se gestiona desde Compras.'
     >
-      <SolicitudListingClient tipoInspeccion='PROCESO' />
+      <SolicitudListingClient tipoInspeccion='PROCESO' contexto='CALIDAD' />
     </PageContainer>
   )
 }

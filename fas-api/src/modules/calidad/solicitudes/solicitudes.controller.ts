@@ -12,10 +12,13 @@ import { ValidationError } from '../../../shared/errors.js'
 import type { EtapaAdjunto } from './solicitudes.types.js'
 import { z } from 'zod'
 
-const ITEM = 'CAL_SOLICITUDES'
+// Compras y Calidad comparten el recurso (ver solicitudes.routes.ts) — un
+// TOTAL en cualquiera de los dos ítems da la misma "carta blanca" para cerrar
+// o gestionar adjuntos de cualquier solicitud, no solo las propias.
+const ITEMS = ['COMPRAS_SOLICITUDES', 'CAL_SOLICITUDES']
 
 function tieneNivelTotal(req: FastifyRequest): boolean {
-  return (req.fasAccesos?.get(ITEM) ?? 'SIN_ACCESO') === 'TOTAL'
+  return ITEMS.some((item) => (req.fasAccesos?.get(item) ?? 'SIN_ACCESO') === 'TOTAL')
 }
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {

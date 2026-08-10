@@ -2,16 +2,16 @@ import PageContainer from '@/components/layout/page-container'
 import { SolicitudListingClient } from '@/features/solicitudes-inspeccion/components/solicitud-listing-client'
 
 export const metadata = {
-  title: 'FAS — Solicitudes de Inspección'
+  title: 'FAS — Solicitud de Inspección',
 }
 
 export default function Page() {
   return (
     <PageContainer
-      pageTitle='Solicitudes de Inspección'
-      pageDescription='Revisión y cierre de solicitudes de inspección en terreno. El ingreso, edición y notificación se gestiona desde Compras.'
+      pageTitle='Solicitud de Inspección'
+      pageDescription='Gestión de solicitudes de inspección en terreno: ingreso, asignación, notificación y cierre.'
     >
-      <SolicitudListingClient contexto='CALIDAD' />
+      <SolicitudListingClient contexto='COMPRAS' />
     </PageContainer>
   )
 }

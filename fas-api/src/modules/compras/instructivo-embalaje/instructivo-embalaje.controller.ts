@@ -31,3 +31,9 @@ export async function update(req: FastifyRequest, reply: FastifyReply) {
   const instructivo = await service.actualizarInstructivo(id, body)
   return reply.send({ data: instructivo })
 }
+
+export async function remove(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = instructivoEmbalajeParamsSchema.parse(req.params)
+  await service.eliminarInstructivo(id, req.fasUserId!)
+  return reply.status(204).send()
+}

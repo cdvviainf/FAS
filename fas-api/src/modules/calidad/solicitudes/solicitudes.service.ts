@@ -12,10 +12,10 @@ const HORAS_RECORDATORIO = 24
 // Tipo del detalle que retorna el repository (con includes)
 type SolicitudDetalle = NonNullable<Awaited<ReturnType<typeof repo.getSolicitudById>>>
 
-// APROBADA/RECHAZADA son los dos estados terminales tras el cierre — CERRADA
-// queda obsoleto (ver schema.prisma).
+// APROBADA/RECHAZADA/OBJETADA son los tres estados terminales tras el cierre
+// (OBJETADA agregada 2026-08-10) — CERRADA queda obsoleto (ver schema.prisma).
 function estaCerrada(estado: string): boolean {
-  return estado === 'APROBADA' || estado === 'RECHAZADA'
+  return estado === 'APROBADA' || estado === 'RECHAZADA' || estado === 'OBJETADA'
 }
 
 // ─── Helpers de correo ───────────────────────────────────────────────────────
