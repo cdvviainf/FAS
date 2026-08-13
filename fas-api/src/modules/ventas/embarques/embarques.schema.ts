@@ -1,8 +1,10 @@
 import { z } from 'zod'
 
+// numeroInstructivo ya no se ingresa manualmente (2026-08-13, ventas.md
+// R10 — supersesión): se calcula en el service a partir del folio de la NV
+// y el prefijo configurado para su Tipo de Embarque.
 export const embarqueCreateSchema = z.object({
   notaVentaId: z.number().int().positive('El Cierre Comercial es requerido'),
-  numeroInstructivo: z.string().min(1, 'El número de instructivo (Folio) es requerido').max(50).trim(),
 })
 
 export const embarqueParamsSchema = z.object({

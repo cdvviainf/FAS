@@ -69,8 +69,8 @@ export interface NotaVentaDetalle extends NotaVentaListItem {
   compradorContacto: { id: number; nombre: string; email: string | null; telefono: string | null; whatsapp: string | null } | null
   notifyId: number | null
   notify: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
-  clienteFinalId: number | null
-  clienteFinal: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
+  consignatarioId: number | null
+  consignatario: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
   tipoEmbarqueId: number
   tipoEmbarque: MantenedorRef
   mercadoId: number
@@ -105,7 +105,7 @@ export interface NotaVentaCreateInput {
   clienteId: number
   compradorContactoId?: number | null
   notifyId?: number | null
-  clienteFinalId?: number | null
+  consignatarioId?: number | null
   tipoEmbarqueId: number
   mercadoId: number
   paisDestinoId: number

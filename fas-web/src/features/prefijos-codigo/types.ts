@@ -40,6 +40,12 @@ export const MODELOS_CON_CODIGO_OPTIONS: { value: string; label: string }[] = [
   { value: 'templateCarga', label: 'Template de Carga' },
 ]
 
+// 'embarque' es un caso especial (2026-08-13, ventas.md R10): no tiene campo
+// `codigo` propio (usa `numeroInstructivo`, derivado del folio de la NV) y
+// el prefijo es por Tipo de Embarque, no global — por eso vive en una
+// constante separada de MODELOS_CON_CODIGO_OPTIONS en vez de agregarse ahí.
+export const MODELO_EMBARQUE_OPTION = { value: 'embarque', label: 'Embarque (número de instructivo)' }
+
 // Los mantenedores genéricos se identifican en sus rutas/páginas por su
 // `prefixRuta` (ej. "grupos-mercado"), pero el backend de Prefijos de Código
 // identifica el mantenedor por el nombre del delegado Prisma (ej.
@@ -79,14 +85,17 @@ export const RECURSO_A_MODELO: Record<string, string> = {
 export interface PrefijoCodigo {
   id: number
   modelo: string
+  tipoEmbarqueId: number | null
+  tipoEmbarque: { id: number; codigo: string; descripcion: string } | null
   prefijo: string
   digitos: number
 }
 
 export interface PrefijoCodigoCreateInput {
   modelo: string
+  tipoEmbarqueId?: number | null
   prefijo: string
   digitos: number
 }
 
-export type PrefijoCodigoUpdateInput = Partial<Omit<PrefijoCodigoCreateInput, 'modelo'>>
+export type PrefijoCodigoUpdateInput = Partial<Omit<PrefijoCodigoCreateInput, 'modelo' | 'tipoEmbarqueId'>>

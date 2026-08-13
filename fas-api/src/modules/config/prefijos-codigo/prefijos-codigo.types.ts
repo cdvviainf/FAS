@@ -16,10 +16,20 @@ export const MODELOS_CON_CODIGO = [
 
 export type ModeloConCodigo = (typeof MODELOS_CON_CODIGO)[number]
 
+// 'embarque' es un caso especial (2026-08-13, ventas.md R10): no tiene campo
+// `codigo` administrable como el resto (usa `numeroInstructivo`, derivado del
+// folio de la NV, no autoincremental) — por eso NO se agrega a
+// MODELOS_CON_CODIGO (eso rompería `calcularSiguienteCodigo`, que asume una
+// columna `codigo`). Solo se admite como valor de `modelo` en el CRUD de
+// prefijos, con `tipoEmbarqueId` obligatorio (un prefijo por Tipo de
+// Embarque, no uno global).
+export const MODELOS_CON_PREFIJO = [...MODELOS_CON_CODIGO, 'embarque'] as const
+
 export interface PrefijoCodigoCreateInput {
   modelo: string
+  tipoEmbarqueId?: number | null
   prefijo: string
   digitos: number
 }
 
-export type PrefijoCodigoUpdateInput = Partial<Omit<PrefijoCodigoCreateInput, 'modelo'>>
+export type PrefijoCodigoUpdateInput = Partial<Omit<PrefijoCodigoCreateInput, 'modelo' | 'tipoEmbarqueId'>>

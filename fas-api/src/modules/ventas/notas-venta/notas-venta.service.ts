@@ -5,11 +5,30 @@ import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetall
 
 const TIPOS_CLIENTE = new Set(['CLIENTE_NACIONAL', 'CLIENTE_EXTRANJERO'])
 
+// R4 (Docs/ventas.md): campos que se heredan y quedan bloqueados una vez
+// asociado un Embarque a la NV. Comparación por clave/label — el valor no
+// necesita cambiar realmente para listar el campo, la función de abajo ya
+// filtra por diferencia real.
+const CAMPOS_HEREDADOS_R4: { campo: keyof NotaVentaUpdateInput; label: string }[] = [
+  { campo: 'clienteId', label: 'Cliente' },
+  { campo: 'tipoEmbarqueId', label: 'Tipo de Embarque' },
+  { campo: 'mercadoId', label: 'Mercado' },
+  { campo: 'paisDestinoId', label: 'País Destino' },
+  { campo: 'puertoDestinoId', label: 'Puerto Destino' },
+  { campo: 'compradorContactoId', label: 'Comprador' },
+  { campo: 'notifyId', label: 'Notify' },
+  { campo: 'direccionId', label: 'Dirección' },
+  { campo: 'direccionDetalle', label: 'Detalle de Dirección' },
+  { campo: 'tipoFleteId', label: 'Tipo de Flete' },
+  { campo: 'clausulaVentaId', label: 'Cláusula de Venta' },
+  { campo: 'monedaId', label: 'Moneda' },
+]
+
 interface ReferenciasHeader {
   clienteId: number
   compradorContactoId?: number | null
   notifyId?: number | null
-  clienteFinalId?: number | null
+  consignatarioId?: number | null
   tipoEmbarqueId: number
   mercadoId: number
   paisDestinoId: number
@@ -26,7 +45,7 @@ interface ReferenciasHeader {
 // referencia del encabezado, y consistencia cruzada (dirección↔cliente,
 // puerto↔país/tipo de embarque).
 async function validarReferenciasHeader(r: ReferenciasHeader) {
-  const entidadIds = [r.clienteId, r.notifyId, r.clienteFinalId].filter(
+  const entidadIds = [r.clienteId, r.notifyId, r.consignatarioId].filter(
     (v): v is number => v != null,
   )
   const entidades = await repo.getEntidadTipos(entidadIds)
@@ -34,12 +53,20 @@ async function validarReferenciasHeader(r: ReferenciasHeader) {
   const faltantes = entidadIds.filter((id) => !encontrados.has(id))
   if (faltantes.length > 0) {
     throw new ValidationError(
-      `Una o más entidades (cliente/notify/cliente final) no existen o están inactivas: ${faltantes.join(', ')}`,
+      `Una o más entidades (cliente/notify/consignatario) no existen o están inactivas: ${faltantes.join(', ')}`,
     )
   }
   const cliente = encontrados.get(r.clienteId)
   if (cliente && !cliente.tipos.some((t) => TIPOS_CLIENTE.has(t))) {
     throw new ValidationError('La entidad seleccionada como cliente no tiene tipo Cliente Nacional/Extranjero')
+  }
+  // Supersesión 2026-08-13: antes "Cliente Final" sin validar tipo — ahora
+  // exige CONSIGNATARIO, mismo criterio que el cliente.
+  if (r.consignatarioId != null) {
+    const consignatario = encontrados.get(r.consignatarioId)
+    if (consignatario && !consignatario.tipos.includes('CONSIGNATARIO')) {
+      throw new ValidationError('La entidad seleccionada como consignatario no tiene tipo Consignatario')
+    }
   }
 
   const [tipoEmbarque, mercado, paisDestino, moneda] = await Promise.all([
@@ -178,13 +205,29 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
 
   // Instructivo de Embalaje (compras.md) no bloquea edición/borrado de la
   // Nota de Venta: es un documento independiente, sin relación de herencia
-  // definida (a diferencia del Instructivo de Embarque de ventas.md R3/R4,
-  // que sí bloquearía — pero ese módulo [Embarque] no está implementado).
+  // definida. El Instructivo de Embarque (ventas.md R3/R4) sí bloquea — el
+  // módulo Embarque tiene una versión mínima implementada (id, notaVentaId,
+  // numeroInstructivo) que ya sostiene "Generar Embarque"; el folio
+  // autogenerado (R10, 2026-08-13) usa el Tipo de Embarque de la NV en ese
+  // momento, así que dejar sin bloquear estos campos podía dejar el folio
+  // ya emitido con un prefijo que ya no correspondía (IMP-QA-R1-004).
+  const embarques = await repo.countEmbarques(id)
+  if (embarques > 0) {
+    const camposModificados = CAMPOS_HEREDADOS_R4.filter(
+      ({ campo }) => body[campo] !== undefined && body[campo] !== existente[campo],
+    )
+    if (camposModificados.length > 0) {
+      throw new ValidationError(
+        `No se puede modificar ${camposModificados.map((c) => c.label).join(', ')}: este Cierre Comercial ya tiene un Embarque asociado (campos heredados, ventas.md R4).`,
+      )
+    }
+  }
+
   const efectivo: ReferenciasHeader = {
     clienteId: body.clienteId ?? existente.clienteId,
     compradorContactoId: body.compradorContactoId !== undefined ? body.compradorContactoId : existente.compradorContactoId,
     notifyId: body.notifyId !== undefined ? body.notifyId : existente.notifyId,
-    clienteFinalId: body.clienteFinalId !== undefined ? body.clienteFinalId : existente.clienteFinalId,
+    consignatarioId: body.consignatarioId !== undefined ? body.consignatarioId : existente.consignatarioId,
     tipoEmbarqueId: body.tipoEmbarqueId ?? existente.tipoEmbarqueId,
     mercadoId: body.mercadoId ?? existente.mercadoId,
     paisDestinoId: body.paisDestinoId ?? existente.paisDestinoId,

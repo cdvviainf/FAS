@@ -586,8 +586,9 @@ model TipoEmbarque {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  puertos    Puerto[]
-  notasVenta NotaVenta[]
+  puertos       Puerto[]
+  notasVenta    NotaVenta[]
+  prefijosCodigo PrefijoCodigo[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -765,6 +766,15 @@ model PrefijoCodigo {
   empresaId      Int
   empresa        Empresa   @relation(fields: [empresaId], references: [id])
   modelo         String
+  // Solo aplica para modelo='embarque' (2026-08-13): el prefijo pasa a ser
+  // por Tipo de Embarque en vez de único por modelo — el número de
+  // instructivo del Embarque se genera como {prefijo}{folio de la NV}, y
+  // cada Tipo de Embarque (Marítimo, Aéreo...) necesita el suyo. Para el
+  // resto de los modelos queda null (unicidad real por partial index — ver
+  // migration.sql: (empresaId, modelo) cuando es null, (empresaId, modelo,
+  // tipoEmbarqueId) cuando no lo es — no representable en el DSL de Prisma).
+  tipoEmbarqueId Int?
+  tipoEmbarque   TipoEmbarque? @relation(fields: [empresaId, tipoEmbarqueId], references: [empresaId, id])
   prefijo        String
   digitos        Int
   creadoEn       DateTime  @default(now())
@@ -775,6 +785,7 @@ model PrefijoCodigo {
   eliminadoPor   String?
 
   @@index([empresaId])
+  @@index([tipoEmbarqueId])
   @@map("prefijos_codigo")
 }
 
@@ -1297,7 +1308,7 @@ model Entidad {
   movimientosCC                MovimientoCuentaCorriente[] @relation("CCProductor")
   notasVentaCliente            NotaVenta[]                 @relation("NotaVentaCliente")
   notasVentaNotify             NotaVenta[]                 @relation("NotaVentaNotify")
-  notasVentaClienteFinal       NotaVenta[]                 @relation("NotaVentaClienteFinal")
+  notasVentaConsignatario      NotaVenta[]                 @relation("NotaVentaConsignatario")
   ordenesCompraProductor       OrdenCompra[]               @relation("OrdenCompraProductor")
   instructivosEmbalajeProductor InstructivoEmbalaje[]      @relation("InstructivoEmbalajeProductor")
   recepcionesPlanta            Recepcion[]                 @relation("RecepcionPlanta")
@@ -2067,8 +2078,11 @@ model NotaVenta {
   compradorContacto   EntidadContacto? @relation(fields: [compradorContactoId], references: [id])
   notifyId       Int?
   notify         Entidad? @relation("NotaVentaNotify", fields: [empresaId, notifyId], references: [empresaId, id])
-  clienteFinalId Int?
-  clienteFinal   Entidad? @relation("NotaVentaClienteFinal", fields: [empresaId, clienteFinalId], references: [empresaId, id])
+  // Supersesión (2026-08-13): antes "Cliente Final" (clienteFinalId) — el
+  // rol de Entidad correcto para este campo ya existía como CONSIGNATARIO
+  // (TipoEntidad) y nunca se usaba; se renombra para que coincidan.
+  consignatarioId Int?
+  consignatario   Entidad? @relation("NotaVentaConsignatario", fields: [empresaId, consignatarioId], references: [empresaId, id])
 
   tipoEmbarqueId   Int
   tipoEmbarque     TipoEmbarque      @relation(fields: [empresaId, tipoEmbarqueId], references: [empresaId, id])

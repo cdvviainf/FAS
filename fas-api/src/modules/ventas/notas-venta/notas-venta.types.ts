@@ -3,7 +3,7 @@ export interface NotaVentaCreateInput {
   clienteId: number
   compradorContactoId?: number | null
   notifyId?: number | null
-  clienteFinalId?: number | null
+  consignatarioId?: number | null
   tipoEmbarqueId: number
   mercadoId: number
   paisDestinoId: number

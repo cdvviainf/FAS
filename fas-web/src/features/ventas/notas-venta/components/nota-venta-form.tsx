@@ -51,7 +51,7 @@ interface HeaderFields {
   clienteId: number
   compradorContactoId: number | null
   notifyId: number | null
-  clienteFinalId: number | null
+  consignatarioId: number | null
   tipoEmbarqueId: number
   mercadoId: number
   paisDestinoId: number
@@ -71,7 +71,7 @@ const HEADER_EMPTY: HeaderFields = {
   clienteId: 0,
   compradorContactoId: null,
   notifyId: null,
-  clienteFinalId: null,
+  consignatarioId: null,
   tipoEmbarqueId: 0,
   mercadoId: 0,
   paisDestinoId: 0,
@@ -157,6 +157,10 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     staleTime: 60_000,
   })
   const entidades = entidadesData?.data ?? []
+  // El backend exige tipo CONSIGNATARIO al guardar (notas-venta.service.ts)
+  // — filtrar acá evita elegir una entidad que después falla al guardar
+  // (IMP-QA-R1-005).
+  const consignatarios = entidades.filter((e) => e.tipos.includes('CONSIGNATARIO'))
 
   const { data: tiposEmbarqueData } = useQuery({ queryKey: ['tipos-embarque-options'], queryFn: () => tiposEmbarqueService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const { data: mercadosData } = useQuery({ queryKey: ['mercados-options'], queryFn: () => mercadosService.list({ limit: 200 }), staleTime: 5 * 60_000 })
@@ -206,7 +210,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
         clienteId: d.clienteId,
         compradorContactoId: d.compradorContactoId,
         notifyId: d.notifyId,
-        clienteFinalId: d.clienteFinalId,
+        consignatarioId: d.consignatarioId,
         tipoEmbarqueId: d.tipoEmbarqueId,
         mercadoId: d.mercadoId,
         paisDestinoId: d.paisDestinoId,
@@ -251,7 +255,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       clienteId: fields.clienteId,
       compradorContactoId: fields.compradorContactoId,
       notifyId: fields.notifyId,
-      clienteFinalId: fields.clienteFinalId,
+      consignatarioId: fields.consignatarioId,
       tipoEmbarqueId: fields.tipoEmbarqueId,
       mercadoId: fields.mercadoId,
       paisDestinoId: fields.paisDestinoId,
@@ -477,13 +481,13 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               />
             </div>
             <div className='space-y-1.5'>
-              <Label>Cliente Final</Label>
+              <Label>Consignatario</Label>
               <Combobox
-                value={fields.clienteFinalId ? String(fields.clienteFinalId) : 'none'}
-                onChange={(v) => setFields((f) => ({ ...f, clienteFinalId: v === 'none' ? null : Number(v) }))}
-                placeholder='Sin cliente final'
+                value={fields.consignatarioId ? String(fields.consignatarioId) : 'none'}
+                onChange={(v) => setFields((f) => ({ ...f, consignatarioId: v === 'none' ? null : Number(v) }))}
+                placeholder='Sin consignatario'
                 searchPlaceholder='Buscar entidad...'
-                options={[{ value: 'none', label: 'Sin cliente final' }, ...entidades.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
+                options={[{ value: 'none', label: 'Sin consignatario' }, ...consignatarios.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
               />
             </div>
 
@@ -854,7 +858,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                           <TableCell className='max-w-[180px] text-muted-foreground'>
                             <div className='flex flex-wrap gap-1'>
                               {d.calibres.map((c) => (
-                                <Badge key={c.calibre.id} variant='outline' className='text-xs'>{c.calibre.codigo}</Badge>
+                                <Badge key={c.calibre.id} variant='outline' className='text-xs'>{c.calibre.descripcion}</Badge>
                               ))}
                             </div>
                           </TableCell>

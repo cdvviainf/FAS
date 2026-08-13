@@ -5,7 +5,7 @@ export const notaVentaCreateSchema = z.object({
   clienteId: z.number().int().positive('El cliente es requerido'),
   compradorContactoId: z.number().int().positive().optional().nullable(),
   notifyId: z.number().int().positive().optional().nullable(),
-  clienteFinalId: z.number().int().positive().optional().nullable(),
+  consignatarioId: z.number().int().positive().optional().nullable(),
   tipoEmbarqueId: z.number().int().positive('El tipo de embarque es requerido'),
   mercadoId: z.number().int().positive('El mercado es requerido'),
   paisDestinoId: z.number().int().positive('El país destino es requerido'),

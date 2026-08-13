@@ -8,14 +8,15 @@ import { Icons } from '@/components/icons'
 import { AlertModal } from '@/components/modal/alert-modal'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { prefijosCodigoService } from '../service'
-import { MODELOS_CON_CODIGO_OPTIONS } from '../types'
+import { MODELOS_CON_CODIGO_OPTIONS, MODELO_EMBARQUE_OPTION } from '../types'
 import type { PrefijoCodigo } from '../types'
 import { PrefijoCodigoFormSheet } from './prefijo-codigo-form-sheet'
 
 const ITEM = 'CONFIG_MANTENEDORES'
+const TODAS_LAS_OPCIONES = [...MODELOS_CON_CODIGO_OPTIONS, MODELO_EMBARQUE_OPTION]
 
 function labelDeModelo(modelo: string): string {
-  return MODELOS_CON_CODIGO_OPTIONS.find((m) => m.value === modelo)?.label ?? modelo
+  return TODAS_LAS_OPCIONES.find((m) => m.value === modelo)?.label ?? modelo
 }
 
 export function PrefijoCodigoListingClient() {
@@ -51,7 +52,7 @@ export function PrefijoCodigoListingClient() {
           {data!.data.map((p) => (
             <div key={p.id} className='flex items-center justify-between rounded-md border p-3'>
               <p className='font-medium'>
-                {labelDeModelo(p.modelo)} — <span className='font-mono text-muted-foreground'>{p.prefijo}{'0'.repeat(p.digitos)}</span>
+                {labelDeModelo(p.modelo)}{p.tipoEmbarque && <> ({p.tipoEmbarque.descripcion})</>} — <span className='font-mono text-muted-foreground'>{p.prefijo}{'0'.repeat(p.digitos)}</span>
               </p>
               {puedeEscribir && (
                 <div className='flex gap-1'>

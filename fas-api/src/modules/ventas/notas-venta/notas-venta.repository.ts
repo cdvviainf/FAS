@@ -10,7 +10,7 @@ const includeDetalle = {
   cliente: { select: entidadSelect },
   compradorContacto: { select: { id: true, nombre: true, email: true, telefono: true, whatsapp: true } },
   notify: { select: entidadSelect },
-  clienteFinal: { select: entidadSelect },
+  consignatario: { select: entidadSelect },
   tipoEmbarque: { select: { id: true, codigo: true, descripcion: true } },
   mercado: { select: { id: true, codigo: true, descripcion: true } },
   paisDestino: { select: { id: true, codigo: true, descripcion: true } },

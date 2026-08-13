@@ -2,30 +2,46 @@ import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { PrefijoCodigoCreateInput, PrefijoCodigoUpdateInput } from './prefijos-codigo.types.js'
 
+const tipoEmbarqueSelect = { id: true, codigo: true, descripcion: true }
+
 export async function listPrefijosCodigo() {
   return prisma.prefijoCodigo.findMany({
     where: { eliminadoEn: null },
+    include: { tipoEmbarque: { select: tipoEmbarqueSelect } },
     orderBy: { modelo: 'asc' },
   })
 }
 
 export async function getPrefijoCodigoById(id: number) {
-  return prisma.prefijoCodigo.findFirst({ where: { id, eliminadoEn: null } })
+  return prisma.prefijoCodigo.findFirst({
+    where: { id, eliminadoEn: null },
+    include: { tipoEmbarque: { select: tipoEmbarqueSelect } },
+  })
 }
 
-export async function findPrefijoCodigoByModelo(modelo: string) {
-  return prisma.prefijoCodigo.findFirst({ where: { modelo, eliminadoEn: null } })
+// tipoEmbarqueId: solo aplica a modelo='embarque' (2026-08-13) — un prefijo
+// por Tipo de Embarque en vez de uno global por modelo. Para el resto de los
+// modelos se llama sin este argumento (queda null, coherente con la fila).
+export async function findPrefijoCodigoByModelo(modelo: string, tipoEmbarqueId?: number | null) {
+  return prisma.prefijoCodigo.findFirst({ where: { modelo, tipoEmbarqueId: tipoEmbarqueId ?? null, eliminadoEn: null } })
 }
 
 export async function createPrefijoCodigo(data: PrefijoCodigoCreateInput, creadoPor: string) {
   // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
   // valor con el resuelto en el request (o lanza EMPRESA_REQUERIDA si no hay
   // ninguno) — el `!` solo satisface el tipo generado por Prisma.
-  return prisma.prefijoCodigo.create({ data: { ...data, empresaId: getEmpresaIdActual()!, creadoPor } })
+  return prisma.prefijoCodigo.create({
+    data: { ...data, empresaId: getEmpresaIdActual()!, creadoPor },
+    include: { tipoEmbarque: { select: tipoEmbarqueSelect } },
+  })
 }
 
 export async function updatePrefijoCodigo(id: number, data: PrefijoCodigoUpdateInput, actualizadoPor: string) {
-  return prisma.prefijoCodigo.update({ where: { id }, data: { ...data, actualizadoPor } })
+  return prisma.prefijoCodigo.update({
+    where: { id },
+    data: { ...data, actualizadoPor },
+    include: { tipoEmbarque: { select: tipoEmbarqueSelect } },
+  })
 }
 
 export async function softDeletePrefijoCodigo(id: number, eliminadoPor: string) {

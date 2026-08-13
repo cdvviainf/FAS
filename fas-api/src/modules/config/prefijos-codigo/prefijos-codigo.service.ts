@@ -14,7 +14,7 @@ export async function obtenerPrefijoCodigo(id: number) {
 }
 
 export async function crearPrefijoCodigo(body: PrefijoCodigoCreateInput, userId: string) {
-  const existente = await repo.findPrefijoCodigoByModelo(body.modelo)
+  const existente = await repo.findPrefijoCodigoByModelo(body.modelo, body.tipoEmbarqueId)
   if (existente) throw new ValidationError(`Ya existe un prefijo configurado para "${body.modelo}"`)
   try {
     return await repo.createPrefijoCodigo(body, userId)
@@ -46,4 +46,18 @@ export async function siguienteCodigo(modelo: string) {
   const prefijo = await repo.findPrefijoCodigoByModelo(modelo)
   if (!prefijo) return null
   return repo.calcularSiguienteCodigo(modelo, prefijo.prefijo, prefijo.digitos)
+}
+
+// Prefijo configurado para un Tipo de Embarque — usado por embarques.service.ts
+// para generar `numeroInstructivo` a partir del folio de la NV (ventas.md R10).
+// null si no hay prefijo configurado para ese tipo.
+export async function obtenerPrefijoEmbarque(tipoEmbarqueId: number) {
+  return repo.findPrefijoCodigoByModelo('embarque', tipoEmbarqueId)
+}
+
+// {prefijo}{numero, con padding a `digitos`} — mismo formato que
+// calcularSiguienteCodigo, pero a partir de un número ya conocido (el folio
+// de la NV) en vez de calcular un correlativo nuevo.
+export function formatearConPrefijo(prefijo: string, digitos: number, numero: number): string {
+  return `${prefijo}${String(numero).padStart(digitos, '0')}`
 }
