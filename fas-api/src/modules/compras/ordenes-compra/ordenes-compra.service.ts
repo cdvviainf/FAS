@@ -54,6 +54,7 @@ async function validarReferenciasHeader(data: {
   destinoMercadoId?: number | null
   condicionPagoId?: number | null
   responsableId?: string | null
+  incotermId?: number | null
 }, vigente?: { entidadProductorId?: number; solicitudInspeccionId?: number | null }) {
   if (data.entidadProductorId != null) {
     const productor = await repo.getEntidadProductor(data.entidadProductorId)
@@ -103,6 +104,10 @@ async function validarReferenciasHeader(data: {
   if (data.responsableId != null) {
     const responsable = await repo.getUsuarioResponsable(data.responsableId)
     if (!responsable) throw new ValidationError('El responsable seleccionado no existe o no está marcado como Responsable de Venta')
+  }
+  if (data.incotermId != null) {
+    const incoterm = await repo.getParametro(data.incotermId, 'INCOTERM')
+    if (!incoterm) throw new ValidationError('El Incoterm seleccionado no existe o está bloqueado')
   }
 }
 

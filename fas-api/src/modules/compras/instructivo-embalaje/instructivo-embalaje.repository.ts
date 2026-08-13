@@ -1,31 +1,35 @@
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
-import type { InstructivoEmbalajeDetalleInput, InstructivoEmbalajeUpdateInput } from './instructivo-embalaje.types.js'
+import type { InstructivoEmbalajeCreateInput, InstructivoEmbalajeDetalleInput, InstructivoEmbalajeUpdateInput } from './instructivo-embalaje.types.js'
 
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
+const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: true }
 
 const includeDetalle = {
-  notaVenta: { select: { id: true, folio: true, cliente: { select: { id: true, descripcion: true, razonSocial: true } } } },
+  entidadProductor: { select: entidadSelect },
+  grupoMercado: { select: mantenedorSelect },
   detalle: {
     include: {
       articulo: { select: mantenedorSelect },
       especie: { select: mantenedorSelect },
       variedad: { select: mantenedorSelect },
+      variedadRotulada: { select: mantenedorSelect },
       categoria: { select: mantenedorSelect },
       calibres: { select: { calibre: { select: mantenedorSelect } } },
       tipoPallet: { select: mantenedorSelect },
+      altura: { select: mantenedorSelect },
     },
   },
 }
 
-export async function listInstructivos(page: number, limit: number, notaVentaId?: number) {
-  const where = { eliminadoEn: null, ...(notaVentaId ? { notaVentaId } : {}) }
+export async function listInstructivos(page: number, limit: number, entidadProductorId?: number) {
+  const where = { eliminadoEn: null, ...(entidadProductorId ? { entidadProductorId } : {}) }
 
   const [data, total] = await Promise.all([
     prisma.instructivoEmbalaje.findMany({
       where,
       include: {
-        notaVenta: { select: { id: true, folio: true } },
+        entidadProductor: { select: entidadSelect },
       },
       orderBy: { numero: 'desc' },
       skip: (page - 1) * limit,
@@ -47,7 +51,8 @@ export async function softDeleteInstructivo(id: number, eliminadoPor: string) {
 
 const LOCK_NAMESPACE_INSTRUCTIVO_EMBALAJE = 490235
 
-export async function createInstructivo(notaVentaId: number, detalle: InstructivoEmbalajeDetalleInput[], creadoPor: string) {
+export async function createInstructivo(body: InstructivoEmbalajeCreateInput, creadoPor: string) {
+  const { detalle, ...resto } = body
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_INSTRUCTIVO_EMBALAJE}::int, 0)`
 
@@ -61,11 +66,11 @@ export async function createInstructivo(notaVentaId: number, detalle: Instructiv
         // solo para satisfacer el tipo requerido por Prisma.
         empresaId: getEmpresaIdActual()!,
         numero,
-        notaVentaId,
+        ...resto,
         creadoPor,
         detalle: {
-          create: detalle.map(({ calibreIds, ...resto }) => ({
-            ...resto,
+          create: detalle.map(({ calibreIds, ...lineaResto }) => ({
+            ...lineaResto,
             calibres: { create: calibreIds.map((calibreId) => ({ calibreId })) },
           })),
         },
@@ -101,8 +106,15 @@ export async function updateInstructivo(id: number, data: InstructivoEmbalajeUpd
   })
 }
 
-export async function getNotaVenta(notaVentaId: number) {
-  return prisma.notaVenta.findFirst({ where: { id: notaVentaId, eliminadoEn: null }, select: { id: true } })
+export async function getEntidadProductor(id: number) {
+  return prisma.entidad.findFirst({
+    where: { id, eliminadoEn: null, activo: true },
+    select: { id: true, tipos: true },
+  })
+}
+
+export async function getGrupoMercado(id: number) {
+  return prisma.grupoMercado.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
 }
 
 export async function getArticuloTipo(articuloId: number) {
@@ -136,4 +148,8 @@ export async function getCalibresActivos(ids: number[]) {
 
 export async function getTipoPallet(id: number) {
   return prisma.tipoPallet.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getAltura(id: number) {
+  return prisma.altura.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
 }

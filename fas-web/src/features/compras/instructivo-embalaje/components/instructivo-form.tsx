@@ -4,13 +4,16 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { getISOWeek } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { AlertModal } from '@/components/modal/alert-modal'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Select,
   SelectContent,
@@ -22,7 +25,7 @@ import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { articulosService } from '@/features/materiales/articulos/service'
-import { notasVentaService } from '@/features/ventas/notas-venta/service'
+import { entidadesService } from '@/features/entidades/service'
 import { instructivoEmbalajeDetailOptions, instructivosEmbalajeKeys } from '../queries'
 import { instructivoEmbalajeService } from '../service'
 import type { InstructivoEmbalajeDetalleInput } from '../types'
@@ -34,6 +37,8 @@ const variedadesService = createMantenedorService('variedades')
 const categoriasService = createMantenedorService('categorias')
 const calibresService = createMantenedorService('calibres')
 const tiposPalletService = createMantenedorService('tipos-pallet')
+const gruposMercadoService = createMantenedorService('grupos-mercado')
+const alturasService = createMantenedorService('alturas')
 
 // Cajas por pallet aún no tiene mantenedor propio (pendiente de desarrollar).
 // Mientras tanto se asume un valor fijo, usado para precalcular "Cantidad de
@@ -41,13 +46,23 @@ const tiposPalletService = createMantenedorService('tipos-pallet')
 // nota-venta-form.tsx / orden-compra-form.tsx).
 const CAJAS_POR_PALLET_DEFAULT = 108
 
+interface MantenedorConEspecie {
+  id: number
+  codigo: string
+  descripcion: string
+  especieId?: number
+  orden?: number
+}
+
 interface NuevaLinea {
   articuloId: number
   especieId: number
   variedadId: number
+  variedadRotuladaId: number | null
   categoriaId: number
   calibreIds: number[]
   tipoPalletId: number | null
+  alturaId: number
   cantidadPallets: string
   cajasPorPallet: string
   cajas: string
@@ -57,9 +72,11 @@ const LINEA_EMPTY: NuevaLinea = {
   articuloId: 0,
   especieId: 0,
   variedadId: 0,
+  variedadRotuladaId: null,
   categoriaId: 0,
   calibreIds: [],
   tipoPalletId: null,
+  alturaId: 0,
   cantidadPallets: '',
   cajasPorPallet: String(CAJAS_POR_PALLET_DEFAULT),
   cajas: '',
@@ -75,7 +92,10 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   const queryClient = useQueryClient()
   const puedeEscribir = usePuedeEscribir(ITEM)
 
-  const [notaVentaId, setNotaVentaId] = useState(0)
+  const [entidadProductorId, setEntidadProductorId] = useState(0)
+  const [grupoMercadoId, setGrupoMercadoId] = useState(0)
+  const [fechaInicioPrograma, setFechaInicioPrograma] = useState('')
+  const [observaciones, setObservaciones] = useState('')
   const [detalle, setDetalle] = useState<InstructivoEmbalajeDetalleInput[]>([])
   const [linea, setLinea] = useState<NuevaLinea>(LINEA_EMPTY)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -90,49 +110,50 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
     enabled: isEdit,
   })
 
-  const { data: notasVentaData } = useQuery({
-    queryKey: ['notas-venta-options'],
-    queryFn: () => notasVentaService.list({ limit: 200 }),
+  const { data: productoresData } = useQuery({
+    queryKey: ['entidades-productores-options'],
+    queryFn: () => entidadesService.list({ tipo: 'PRODUCTOR', limit: 500, activo: true }),
     staleTime: 60_000,
   })
+  const { data: gruposMercadoData } = useQuery({ queryKey: ['grupos-mercado-options'], queryFn: () => gruposMercadoService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const { data: especiesData } = useQuery({ queryKey: ['especies-options'], queryFn: () => especiesService.list({ limit: 200 }), staleTime: 5 * 60_000 })
-  const { data: variedadesData } = useQuery({ queryKey: ['variedades-options', linea.especieId], queryFn: () => variedadesService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
-  const { data: categoriasData } = useQuery({ queryKey: ['categorias-options', linea.especieId], queryFn: () => categoriasService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
-  const { data: calibresData } = useQuery({ queryKey: ['calibres-options', linea.especieId], queryFn: () => calibresService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
+  // Listas SIN filtrar (todas las especies) — se usan para mostrar nombres en
+  // la tabla de líneas ya guardadas, que pueden ser de especies distintas a
+  // la que esté seleccionada ahora mismo en el formulario de línea. Reusar
+  // una lista filtrada por `linea.especieId` para eso rompía la tabla en
+  // cuanto se guardaba una línea (el formulario vuelve a especieId=0) o
+  // cuando había líneas de más de una especie (QA-R1-IE-001).
+  const { data: variedadesTodasData } = useQuery({ queryKey: ['variedades-options-todas'], queryFn: () => variedadesService.list({ limit: 500 }), staleTime: 60_000 })
+  const { data: categoriasTodasData } = useQuery({ queryKey: ['categorias-options-todas'], queryFn: () => categoriasService.list({ limit: 500 }), staleTime: 60_000 })
+  const { data: calibresTodosData } = useQuery({ queryKey: ['calibres-options-todos'], queryFn: () => calibresService.list({ limit: 500 }), staleTime: 60_000 })
+  // Listas filtradas por especie — solo para las opciones del Select mientras
+  // se edita la línea actual (el tipo genérico MantenedorSimple no declara
+  // especieId, pero el backend sí lo devuelve en la fila).
+  const variedadesTodas = (variedadesTodasData?.data ?? []) as MantenedorConEspecie[]
+  const categoriasTodas = (categoriasTodasData?.data ?? []) as MantenedorConEspecie[]
+  const calibresTodos = (calibresTodosData?.data ?? []) as MantenedorConEspecie[]
+  const variedadesLinea = variedadesTodas.filter((v) => v.especieId === linea.especieId)
+  const categoriasLinea = categoriasTodas.filter((c) => c.especieId === linea.especieId)
+  // El endpoint genérico de mantenedores ordena por `codigo` (alfabético),
+  // no por `Calibre.orden` (el campo de negocio real que define la
+  // secuencia por especie) — se reordena acá para que el atajo Desde/Hasta
+  // expanda el rango correcto y la grilla muestre los calibres en su orden
+  // real, no alfabético (QA-R2-IE-002).
+  const calibresLinea = calibresTodos
+    .filter((c) => c.especieId === linea.especieId)
+    .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
   const { data: articulosData } = useQuery({ queryKey: ['articulos-embalaje-options'], queryFn: () => articulosService.list({ limit: 500, tipo: 'EMBALAJE', activo: true }), staleTime: 60_000 })
   const { data: tiposPalletData } = useQuery({ queryKey: ['tipos-pallet-options'], queryFn: () => tiposPalletService.list({ limit: 200 }), staleTime: 5 * 60_000 })
+  const { data: alturasData } = useQuery({ queryKey: ['alturas-options'], queryFn: () => alturasService.list({ limit: 200 }), staleTime: 5 * 60_000 })
 
+  const productores = productoresData?.data ?? []
+  const gruposMercado = gruposMercadoData?.data ?? []
   const especies = especiesData?.data ?? []
-  const variedades = variedadesData?.data ?? []
-  const categorias = categoriasData?.data ?? []
-  const calibres = calibresData?.data ?? []
+  const articulos = articulosData?.data ?? []
   const tiposPallet = tiposPalletData?.data ?? []
+  const alturas = alturasData?.data ?? []
 
-  // Con permiso TOTAL en COMPRAS_INSTRUCTIVO pero sin VENTAS_NV/OPER_MATERIALES,
-  // esas dos consultas devuelven 403 y su lista queda vacía — el Select no
-  // tiene con qué mostrar el nombre del valor ya guardado y se ve en blanco,
-  // aunque el dato sigue correcto por dentro (IE-EDIT-QA-003, arbitrado
-  // BUG_REAL). Se inyecta la referencia ya conocida por el propio GET del
-  // instructivo para que su nombre siga visible; elegir una Nota de Venta o
-  // Artículo nuevo que el usuario no puede listar sigue sin ser posible, por
-  // diseño (no se puede elegir de un catálogo al que no se tiene acceso).
-  const notaVentaOptions: { id: number; folio: number; cliente: { descripcion: string } }[] = (() => {
-    const base = notasVentaData?.data ?? []
-    if (isEdit && instructivo && !base.some((nv) => nv.id === instructivo.data.notaVenta.id)) {
-      return [instructivo.data.notaVenta, ...base]
-    }
-    return base
-  })()
-
-  const articulos: { id: number; codigo: string; descripcion: string }[] = (() => {
-    const base = articulosData?.data ?? []
-    if (!isEdit || !instructivo) return base
-    const faltantes = instructivo.data.detalle
-      .map((d) => d.articulo)
-      .filter((a) => !base.some((b) => b.id === a.id))
-    const faltantesUnicos = Array.from(new Map(faltantes.map((a) => [a.id, a])).values())
-    return faltantesUnicos.length ? [...faltantesUnicos, ...base] : base
-  })()
+  const semanaIsoInicioPrograma = fechaInicioPrograma ? getISOWeek(new Date(`${fechaInicioPrograma}T00:00:00`)) : null
 
   function nombre(lista: { id: number; codigo?: string; descripcion: string }[], id: number) {
     const item = lista.find((i) => i.id === id)
@@ -143,15 +164,20 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
     if (instructivo) {
       const d = instructivo.data
       // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación desde la consulta al entrar en modo edición, no un derivado de props/estado local.
-      setNotaVentaId(d.notaVentaId)
+      setEntidadProductorId(d.entidadProductorId)
+      setGrupoMercadoId(d.grupoMercadoId)
+      setFechaInicioPrograma(d.fechaInicioPrograma.slice(0, 10))
+      setObservaciones(d.observaciones ?? '')
       setDetalle(
         d.detalle.map((linea) => ({
           articuloId: linea.articuloId,
           especieId: linea.especieId,
           variedadId: linea.variedadId,
+          variedadRotuladaId: linea.variedadRotuladaId,
           categoriaId: linea.categoriaId,
           calibreIds: linea.calibres.map((c) => c.calibre.id),
           tipoPalletId: linea.tipoPalletId,
+          alturaId: linea.alturaId,
           cantidadPallets: linea.cantidadPallets,
           cajasPorPallet: linea.cajasPorPallet,
           cajas: linea.cajas,
@@ -167,6 +193,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
     if (!linea.variedadId) e.variedadId = 'Requerida'
     if (!linea.categoriaId) e.categoriaId = 'Requerida'
     if (linea.calibreIds.length === 0) e.calibreIds = 'Selecciona al menos un calibre'
+    if (!linea.alturaId) e.alturaId = 'Requerida'
     if (!linea.cantidadPallets || Number(linea.cantidadPallets) <= 0) e.cantidadPallets = 'Debe ser mayor a 0'
     if (!linea.cajas || Number(linea.cajas) <= 0) e.cajas = 'Debe ser mayor a 0'
     setLineaErrors(e)
@@ -179,9 +206,11 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
       articuloId: linea.articuloId,
       especieId: linea.especieId,
       variedadId: linea.variedadId,
+      variedadRotuladaId: linea.variedadRotuladaId,
       categoriaId: linea.categoriaId,
       calibreIds: linea.calibreIds,
       tipoPalletId: linea.tipoPalletId,
+      alturaId: linea.alturaId,
       cantidadPallets: Number(linea.cantidadPallets),
       cajasPorPallet: Number(linea.cajasPorPallet),
       cajas: Number(linea.cajas),
@@ -204,9 +233,11 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
       articuloId: d.articuloId,
       especieId: d.especieId,
       variedadId: d.variedadId,
+      variedadRotuladaId: d.variedadRotuladaId,
       categoriaId: d.categoriaId,
       calibreIds: d.calibreIds,
       tipoPalletId: d.tipoPalletId,
+      alturaId: d.alturaId,
       cantidadPallets: String(d.cantidadPallets),
       cajasPorPallet: String(d.cajasPorPallet),
       cajas: String(d.cajas),
@@ -229,7 +260,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
 
   function agregarRangoCalibre() {
     if (!calibreDesdeId) return
-    const lista = calibres
+    const lista = calibresLinea
     const hastaId = calibreHastaId ?? calibreDesdeId
     const idxDesde = lista.findIndex((c) => c.id === calibreDesdeId)
     const idxHasta = lista.findIndex((c) => c.id === hastaId)
@@ -248,7 +279,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   }
 
   const createMutation = useMutation({
-    mutationFn: () => instructivoEmbalajeService.create({ notaVentaId, detalle }),
+    mutationFn: () => instructivoEmbalajeService.create({ entidadProductorId, grupoMercadoId, fechaInicioPrograma, observaciones: observaciones.trim() || undefined, detalle }),
     onSuccess: (res) => {
       toast.success(`Instructivo de Embalaje N° ${res.data.numero} creado`)
       queryClient.invalidateQueries({ queryKey: instructivosEmbalajeKeys.all })
@@ -258,7 +289,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   })
 
   const updateMutation = useMutation({
-    mutationFn: () => instructivoEmbalajeService.update(instructivoId!, { notaVentaId, detalle }),
+    mutationFn: () => instructivoEmbalajeService.update(instructivoId!, { entidadProductorId, grupoMercadoId, fechaInicioPrograma, observaciones: observaciones.trim() || null, detalle }),
     onSuccess: () => {
       toast.success('Instructivo de Embalaje actualizado')
       queryClient.invalidateQueries({ queryKey: instructivosEmbalajeKeys.all })
@@ -269,7 +300,9 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
 
   function validar(): boolean {
     const e: Record<string, string> = {}
-    if (!notaVentaId) e.notaVentaId = 'El Cierre Comercial es requerido'
+    if (!entidadProductorId) e.entidadProductorId = 'El productor es requerido'
+    if (!grupoMercadoId) e.grupoMercadoId = 'El grupo de mercado es requerido'
+    if (!fechaInicioPrograma) e.fechaInicioPrograma = 'La fecha de inicio de programa es requerida'
     if (detalle.length === 0) e.detalle = 'Debe agregar al menos una línea'
     setErrors(e)
     return Object.keys(e).length === 0
@@ -292,12 +325,13 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   }
 
   // Sin permiso TOTAL: se muestra un resumen a partir de los datos anidados
-  // que ya trae el propio GET, sin depender de las listas auxiliares (Cierre
-  // Comercial, Artículos, mantenedores) — un usuario con solo LECTURA en
-  // COMPRAS_INSTRUCTIVO puede no tener acceso a esos otros ítems y vería IDs
-  // en vez de nombres si reusara el formulario interactivo (IE-EDIT-QA-003).
+  // que ya trae el propio GET, sin depender de las listas auxiliares — un
+  // usuario con solo LECTURA en COMPRAS_INSTRUCTIVO puede no tener acceso a
+  // esos otros ítems y vería IDs en vez de nombres si reusara el formulario
+  // interactivo (IE-EDIT-QA-003).
   if (isEdit && soloLectura && instructivo) {
     const d = instructivo.data
+    const semanaIso = getISOWeek(new Date(`${d.fechaInicioPrograma.slice(0, 10)}T00:00:00`))
     return (
       <div className='space-y-6'>
         <Badge variant='secondary'>Solo lectura — sin permiso de edición</Badge>
@@ -306,7 +340,10 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
             <CardTitle>Instructivo de Embalaje N° {d.numero}</CardTitle>
           </CardHeader>
           <CardContent className='space-y-2 text-sm'>
-            <p><span className='text-muted-foreground'>Cierre Comercial:</span> Folio {d.notaVenta.folio} — {d.notaVenta.cliente.descripcion}</p>
+            <p><span className='text-muted-foreground'>Productor:</span> {d.entidadProductor.descripcion} — {d.entidadProductor.razonSocial}</p>
+            <p><span className='text-muted-foreground'>Grupo de Mercado:</span> {d.grupoMercado.descripcion}</p>
+            <p><span className='text-muted-foreground'>Inicio de programa:</span> {new Date(d.fechaInicioPrograma).toLocaleDateString('es-CL')} (Semana ISO {semanaIso})</p>
+            {d.observaciones && <p><span className='text-muted-foreground'>Observaciones:</span> {d.observaciones}</p>}
             <p><span className='text-muted-foreground'>Emitido:</span> {new Date(d.creadoEn).toLocaleString('es-CL')}</p>
             <p><span className='text-muted-foreground'>Emitido por:</span> {d.creadoPor}</p>
           </CardContent>
@@ -320,8 +357,10 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
             {d.detalle.map((linea) => (
               <div key={linea.id} className='flex flex-wrap items-center gap-2 border-b pb-2 text-sm last:border-b-0 last:pb-0'>
                 <span className='font-medium'>{linea.especie.descripcion} / {linea.variedad.descripcion}</span>
+                {linea.variedadRotulada && <span className='text-muted-foreground'>(rotulada: {linea.variedadRotulada.descripcion})</span>}
                 <span className='text-muted-foreground'>{linea.articulo.codigo} — {linea.articulo.descripcion}</span>
                 <span className='text-muted-foreground'>· {linea.categoria.descripcion}</span>
+                <span className='text-muted-foreground'>· Altura: {linea.altura.descripcion}</span>
                 <span className='flex flex-wrap items-center gap-1 text-muted-foreground'>
                   · Calibres:
                   {linea.calibres.map((c) => (
@@ -350,17 +389,42 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
           <CardTitle>{isEdit ? `Editar Instructivo de Embalaje N° ${instructivo?.data.numero}` : 'Nuevo Instructivo de Embalaje'}</CardTitle>
         </CardHeader>
         <CardContent className='space-y-4'>
+          <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
+            <div className='space-y-1.5'>
+              <Label>Productor <span className='text-destructive'>*</span></Label>
+              <Combobox
+                value={entidadProductorId ? String(entidadProductorId) : ''}
+                onChange={(v) => setEntidadProductorId(Number(v))}
+                placeholder='Seleccionar productor...'
+                searchPlaceholder='Buscar productor...'
+                options={productores.map((p) => ({ value: String(p.id), label: `${p.descripcion} — ${p.razonSocial}` }))}
+              />
+              {errors.entidadProductorId && <p className='text-xs text-destructive'>{errors.entidadProductorId}</p>}
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Grupo de Mercado <span className='text-destructive'>*</span></Label>
+              <Select value={grupoMercadoId ? String(grupoMercadoId) : ''} onValueChange={(v) => setGrupoMercadoId(Number(v))}>
+                <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+                <SelectContent>
+                  {gruposMercado.map((g) => (
+                    <SelectItem key={g.id} value={String(g.id)}>{g.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.grupoMercadoId && <p className='text-xs text-destructive'>{errors.grupoMercadoId}</p>}
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Inicio de Programa <span className='text-destructive'>*</span></Label>
+              <Input type='date' value={fechaInicioPrograma} onChange={(e) => setFechaInicioPrograma(e.target.value)} />
+              {semanaIsoInicioPrograma != null && (
+                <p className='text-xs text-muted-foreground'>Semana ISO {semanaIsoInicioPrograma}</p>
+              )}
+              {errors.fechaInicioPrograma && <p className='text-xs text-destructive'>{errors.fechaInicioPrograma}</p>}
+            </div>
+          </div>
           <div className='space-y-1.5'>
-            <Label>Cierre Comercial <span className='text-destructive'>*</span></Label>
-            <Select value={notaVentaId ? String(notaVentaId) : ''} onValueChange={(v) => setNotaVentaId(Number(v))}>
-              <SelectTrigger><SelectValue placeholder='Seleccionar Cierre Comercial...' /></SelectTrigger>
-              <SelectContent>
-                {notaVentaOptions.map((nv) => (
-                  <SelectItem key={nv.id} value={String(nv.id)}>Folio {nv.folio} — {nv.cliente.descripcion}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.notaVentaId && <p className='text-xs text-destructive'>{errors.notaVentaId}</p>}
+            <Label>Observaciones</Label>
+            <Textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={2} />
           </div>
         </CardContent>
       </Card>
@@ -376,7 +440,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
           <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Especie <span className='text-destructive'>*</span></Label>
-              <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreIds: [] })); resetCalibreRango() }}>
+              <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, variedadRotuladaId: null, categoriaId: 0, calibreIds: [] })); resetCalibreRango() }}>
                 <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                 <SelectContent>
                   {especies.map((e) => (
@@ -400,14 +464,14 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
             </div>
           </div>
 
-          {/* Fila 2: Variedad, Categoría */}
+          {/* Fila 2: Variedad, Variedad Rotulada, Categoría */}
           <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Variedad <span className='text-destructive'>*</span></Label>
               <Select value={linea.variedadId ? String(linea.variedadId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, variedadId: Number(v) }))} disabled={!linea.especieId}>
                 <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                 <SelectContent>
-                  {variedades.map((v) => (
+                  {variedadesLinea.map((v) => (
                     <SelectItem key={v.id} value={String(v.id)}>{v.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
@@ -415,11 +479,23 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
               {lineaErrors.variedadId && <p className='text-xs text-destructive'>{lineaErrors.variedadId}</p>}
             </div>
             <div className='space-y-1.5'>
+              <Label>Variedad Rotulada</Label>
+              <Select value={linea.variedadRotuladaId ? String(linea.variedadRotuladaId) : '__none__'} onValueChange={(v) => setLinea((l) => ({ ...l, variedadRotuladaId: v === '__none__' ? null : Number(v) }))} disabled={!linea.especieId}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='__none__'>Sin definir</SelectItem>
+                  {variedadesLinea.map((v) => (
+                    <SelectItem key={v.id} value={String(v.id)}>{v.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-1.5'>
               <Label>Categoría <span className='text-destructive'>*</span></Label>
               <Select value={linea.categoriaId ? String(linea.categoriaId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, categoriaId: Number(v) }))} disabled={!linea.especieId}>
                 <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                 <SelectContent>
-                  {categorias.map((c) => (
+                  {categoriasLinea.map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
@@ -435,7 +511,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
               <Select value={calibreDesdeId ? String(calibreDesdeId) : ''} onValueChange={(v) => setCalibreDesdeId(Number(v))} disabled={!linea.especieId}>
                 <SelectTrigger><SelectValue placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'} /></SelectTrigger>
                 <SelectContent>
-                  {calibres.map((c) => (
+                  {calibresLinea.map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
@@ -446,7 +522,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
               <Select value={calibreHastaId ? String(calibreHastaId) : ''} onValueChange={(v) => setCalibreHastaId(Number(v))} disabled={!linea.especieId}>
                 <SelectTrigger><SelectValue placeholder='Igual a inicio' /></SelectTrigger>
                 <SelectContent>
-                  {calibres.map((c) => (
+                  {calibresLinea.map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
@@ -464,8 +540,10 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
             <Label>Calibres <span className='text-destructive'>*</span></Label>
             {linea.calibreIds.length > 0 ? (
               <div className='flex flex-wrap gap-1.5'>
-                {linea.calibreIds.map((id) => {
-                  const opt = calibres.find((c) => c.id === id)
+                {[...linea.calibreIds]
+                  .sort((a, b) => (calibresLinea.find((c) => c.id === a)?.orden ?? 0) - (calibresLinea.find((c) => c.id === b)?.orden ?? 0))
+                  .map((id) => {
+                  const opt = calibresLinea.find((c) => c.id === id)
                   return (
                     <Badge key={id} variant='secondary' className='gap-1 pr-1'>
                       {opt?.descripcion ?? id}
@@ -487,7 +565,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
             <p className='text-xs text-muted-foreground'>El orden lo define el maestro de Calibres por especie.</p>
           </div>
 
-          {/* Fila 4: Tipo Pallet, Cant. Pallets, Cantidad de Cajas */}
+          {/* Fila 4: Tipo Pallet, Altura, Cant. Pallets */}
           <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Tipo Pallet</Label>
@@ -502,6 +580,18 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
               </Select>
             </div>
             <div className='space-y-1.5'>
+              <Label>Altura de Pallet <span className='text-destructive'>*</span></Label>
+              <Select value={linea.alturaId ? String(linea.alturaId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, alturaId: Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+                <SelectContent>
+                  {alturas.map((a) => (
+                    <SelectItem key={a.id} value={String(a.id)}>{a.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {lineaErrors.alturaId && <p className='text-xs text-destructive'>{lineaErrors.alturaId}</p>}
+            </div>
+            <div className='space-y-1.5'>
               <Label>Cant. Pallets <span className='text-destructive'>*</span></Label>
               <Input
                 type='number'
@@ -513,6 +603,9 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
               />
               {lineaErrors.cantidadPallets && <p className='text-xs text-destructive'>{lineaErrors.cantidadPallets}</p>}
             </div>
+          </div>
+
+          <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Cantidad de Cajas <span className='text-destructive'>*</span></Label>
               <Input type='number' value={linea.cajas} onChange={(e) => setLinea((l) => ({ ...l, cajas: e.target.value }))} />
@@ -536,10 +629,13 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Especie / Variedad</TableHead>
+                    <TableHead>Especie</TableHead>
+                    <TableHead>Variedad</TableHead>
+                    <TableHead>Variedad Rotulada</TableHead>
                     <TableHead>Artículo</TableHead>
                     <TableHead>Categoría</TableHead>
                     <TableHead>Calibre</TableHead>
+                    <TableHead>Altura</TableHead>
                     <TableHead>Cantidad</TableHead>
                     <TableHead className='w-20 text-right'>Acciones</TableHead>
                   </TableRow>
@@ -547,16 +643,21 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
                 <TableBody>
                   {detalle.map((d, i) => (
                     <TableRow key={i}>
-                      <TableCell className='font-medium whitespace-nowrap'>{nombre(especies, d.especieId)} / {nombre(variedades, d.variedadId)}</TableCell>
+                      <TableCell className='font-medium whitespace-nowrap'>{nombre(especies, d.especieId)}</TableCell>
+                      <TableCell className='whitespace-nowrap'>{nombre(variedadesTodas, d.variedadId)}</TableCell>
+                      <TableCell className='whitespace-nowrap text-muted-foreground'>{d.variedadRotuladaId ? nombre(variedadesTodas, d.variedadRotuladaId) : '—'}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(articulos, d.articuloId)}</TableCell>
-                      <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(categorias, d.categoriaId)}</TableCell>
+                      <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(categoriasTodas, d.categoriaId)}</TableCell>
                       <TableCell className='max-w-[180px] text-muted-foreground'>
                         <div className='flex flex-wrap gap-1'>
-                          {d.calibreIds.map((id) => (
-                            <Badge key={id} variant='outline' className='text-xs'>{nombre(calibres, id)}</Badge>
-                          ))}
+                          {[...d.calibreIds]
+                            .sort((a, b) => (calibresTodos.find((c) => c.id === a)?.orden ?? 0) - (calibresTodos.find((c) => c.id === b)?.orden ?? 0))
+                            .map((id) => (
+                              <Badge key={id} variant='outline' className='text-xs'>{nombre(calibresTodos, id)}</Badge>
+                            ))}
                         </div>
                       </TableCell>
+                      <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(alturas, d.alturaId)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{d.cantidadPallets} pallets · {d.cajas} cajas</TableCell>
                       <TableCell className='text-right'>
                         <div className='flex justify-end gap-1'>

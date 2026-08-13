@@ -92,6 +92,8 @@ export interface OrdenCompraDetalle extends OrdenCompraListItem {
   destinoMercado: MantenedorRef | null
   responsableId: string | null
   responsable: UsuarioRef | null
+  incotermId: number | null
+  incoterm: MantenedorRef | null
   observaciones: string | null
   lineas: OrdenCompraLineaItem[]
   cuotasPago: OrdenCompraCuotaPagoItem[]
@@ -129,6 +131,7 @@ export interface OrdenCompraCreateInput {
   monedaId: number
   destinoMercadoId?: number | null
   responsableId?: string | null
+  incotermId?: number | null
   observaciones?: string | null
 }
 

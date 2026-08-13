@@ -88,10 +88,15 @@ export const instructivoColumns: ColumnDef<InstructivoEmbalajeListItem>[] = [
     size: 90,
   },
   {
-    id: 'notaVenta',
-    header: 'Cierre Comercial',
-    cell: ({ row }) => <span className='font-mono text-sm'>Folio {row.original.notaVenta.folio}</span>,
-    size: 140,
+    id: 'entidadProductor',
+    header: 'Productor',
+    cell: ({ row }) => (
+      <div>
+        <p className='font-medium'>{row.original.entidadProductor.descripcion}</p>
+        <p className='text-xs text-muted-foreground'>{row.original.entidadProductor.razonSocial}</p>
+      </div>
+    ),
+    size: 200,
   },
   {
     id: 'creadoEn',

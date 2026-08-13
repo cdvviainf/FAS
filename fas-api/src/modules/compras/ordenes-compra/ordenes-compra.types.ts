@@ -21,6 +21,7 @@ export interface OrdenCompraCreateInput {
   monedaId: number
   destinoMercadoId?: number | null
   responsableId?: string | null
+  incotermId?: number | null
   observaciones?: string | null
 }
 

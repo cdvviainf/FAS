@@ -110,6 +110,7 @@ async function limpiarDatos() {
       "notas_venta_detalle",
       "notas_venta",
       "articulos",
+      "alturas",
       "calibres",
       "categorias",
       "variedades",
@@ -211,6 +212,7 @@ async function crearFixtures() {
   const articulo = await prisma.articulo.create({
     data: { empresaId: empresa.id, tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
+  const altura = await prisma.altura.create({ data: { empresaId: empresa.id, codigo: 'ALT-1', descripcion: 'Altura 1', creadoPor: 'test' } })
 
   // La OC exige una Inspección de Compra Aprobada del mismo productor
   // (compras.md §4.2) — se crea, notifica y cierra (APROBADA) una acá para
@@ -237,7 +239,7 @@ async function crearFixtures() {
   await notificarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'test')
   const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'APROBADA', 'test')
 
-  return { empresa, pais, cliente, productor, tipoEmbarque, mercado, moneda, especie, variedad, categoria, calibreChico, calibreGrande, articulo, solicitudInspeccionCompraAprobada }
+  return { empresa, pais, cliente, productor, tipoEmbarque, mercado, grupoMercado, moneda, especie, variedad, categoria, calibreChico, calibreGrande, articulo, altura, solicitudInspeccionCompraAprobada }
 }
 
 function nvBase(f: Awaited<ReturnType<typeof crearFixtures>>) {
@@ -329,13 +331,16 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
     const nv = await crearNotaVenta(f.empresa.id, nvBase(f), 'test')
 
     const instructivo = await crearInstructivo(f.empresa.id, {
-      notaVentaId: nv.id,
+      entidadProductorId: f.productor.id,
+      grupoMercadoId: f.grupoMercado.id,
+      fechaInicioPrograma: new Date('2026-08-01'),
       detalle: [{
         articuloId: f.articulo.id,
         especieId: f.especie.id,
         variedadId: f.variedad.id,
         categoriaId: f.categoria.id,
         calibreIds: [f.calibreChico.id, f.calibreGrande.id],
+        alturaId: f.altura.id,
         cantidadPallets: 1,
         cajasPorPallet: 1,
         cajas: 1,
@@ -348,13 +353,16 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
     const f = await crearFixtures()
     const nv = await crearNotaVenta(f.empresa.id, nvBase(f), 'test')
     await crearInstructivo(f.empresa.id, {
-      notaVentaId: nv.id,
+      entidadProductorId: f.productor.id,
+      grupoMercadoId: f.grupoMercado.id,
+      fechaInicioPrograma: new Date('2026-08-01'),
       detalle: [{
         articuloId: f.articulo.id,
         especieId: f.especie.id,
         variedadId: f.variedad.id,
         categoriaId: f.categoria.id,
         calibreIds: [f.calibreChico.id, f.calibreGrande.id],
+        alturaId: f.altura.id,
         cantidadPallets: 1,
         cajasPorPallet: 1,
         cajas: 1,

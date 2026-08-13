@@ -19,6 +19,7 @@ const includeDetalle = {
   moneda: { select: mantenedorSelect },
   formaPago: { select: mantenedorSelect },
   destinoMercado: { select: mantenedorSelect },
+  incoterm: { select: mantenedorSelect },
   responsable: { select: { id: true, nombre: true, email: true } },
   condicionPago: {
     select: { id: true, codigo: true, descripcion: true },
@@ -311,6 +312,16 @@ export async function getFormaPago(id: number) {
 
 export async function getMercado(id: number) {
   return prisma.mercado.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+// Valida que el Parametro exista, esté vigente y pertenezca al TipoParametro
+// esperado — mismo patrón que notas-venta.repository.ts (catálogo genérico
+// Parametro compartido, ej. 'INCOTERM').
+export async function getParametro(id: number, tipoParametroCodigo: string) {
+  return prisma.parametro.findFirst({
+    where: { id, eliminadoEn: null, bloqueado: false, tipoParametro: { codigo: tipoParametroCodigo } },
+    select: { id: true },
+  })
 }
 
 export async function getCondicionPago(id: number) {

@@ -49,6 +49,8 @@ const calibresService = createMantenedorService('calibres')
 const tiposPalletService = createMantenedorService('tipos-pallet')
 const formasPagoService = createMantenedorService('formas-pago')
 const mercadosService = createMantenedorService('mercados')
+const tiposParametroService = createMantenedorService('tipos-parametro')
+const parametrosService = createMantenedorService('parametros')
 
 // Cajas por pallet aún no tiene mantenedor propio (pendiente de desarrollar).
 // Mientras tanto se asume un valor fijo, usado para precalcular "Cantidad de
@@ -68,6 +70,7 @@ interface HeaderFields {
   destinoMercadoId: number | null
   condicionPagoId: number | null
   formaPagoId: number | null
+  incotermId: number | null
   monedaId: number
   observaciones: string
   estado: EstadoOrdenCompra
@@ -83,6 +86,7 @@ const HEADER_EMPTY: HeaderFields = {
   destinoMercadoId: null,
   condicionPagoId: null,
   formaPagoId: null,
+  incotermId: null,
   monedaId: 0,
   observaciones: '',
   estado: 'BORRADOR',
@@ -164,6 +168,12 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const { data: calibresData } = useQuery({ queryKey: ['calibres-options', linea.especieId], queryFn: () => calibresService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
   const { data: tiposPalletData } = useQuery({ queryKey: ['tipos-pallet-options'], queryFn: () => tiposPalletService.list({ limit: 200 }), staleTime: 5 * 60_000 })
 
+  // Incoterm: catálogo genérico Parametro (TipoParametro INCOTERM), mismo
+  // mecanismo ya usado por Cierre Comercial (nota-venta-form.tsx).
+  const { data: tiposParametroData } = useQuery({ queryKey: ['tipos-parametro-options'], queryFn: () => tiposParametroService.list({ limit: 200 }), staleTime: 5 * 60_000 })
+  const incotermTipoId = tiposParametroData?.data.find((t) => t.codigo === 'INCOTERM')?.id
+  const { data: incotermsData } = useQuery({ queryKey: ['parametros-options', incotermTipoId], queryFn: () => parametrosService.list({ limit: 200, tipoParametroId: incotermTipoId }), staleTime: 5 * 60_000, enabled: !!incotermTipoId })
+
   const productores = productoresData?.data ?? []
   const responsables = responsablesData?.data ?? []
   const especies = especiesData?.data ?? []
@@ -192,6 +202,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
         destinoMercadoId: d.destinoMercadoId,
         condicionPagoId: d.condicionPagoId,
         formaPagoId: d.formaPagoId,
+        incotermId: d.incotermId,
         monedaId: d.monedaId,
         observaciones: d.observaciones ?? '',
         estado: d.estado,
@@ -221,6 +232,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       destinoMercadoId: fields.destinoMercadoId,
       condicionPagoId: fields.condicionPagoId,
       formaPagoId: fields.formaPagoId,
+      incotermId: fields.incotermId,
       monedaId: fields.monedaId,
       observaciones: fields.observaciones.trim() || undefined,
     }
@@ -510,6 +522,18 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 </SelectContent>
               </Select>
               {errors.monedaId && <p className='text-xs text-destructive'>{errors.monedaId}</p>}
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Incoterm</Label>
+              <Select value={fields.incotermId ? String(fields.incotermId) : '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, incotermId: v === '__none__' ? null : Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='__none__'>Sin definir</SelectItem>
+                  {(incotermsData?.data ?? []).map((i) => (
+                    <SelectItem key={i.id} value={String(i.id)}>{i.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

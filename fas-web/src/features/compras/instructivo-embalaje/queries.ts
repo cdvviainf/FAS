@@ -7,7 +7,7 @@ export const instructivosEmbalajeKeys = {
   detail: (id: number) => ['instructivos-embalaje', 'detail', id] as const,
 }
 
-export function instructivosEmbalajeListOptions(filters: { page?: number; limit?: number; notaVentaId?: number } = {}) {
+export function instructivosEmbalajeListOptions(filters: { page?: number; limit?: number; entidadProductorId?: number } = {}) {
   return queryOptions({
     queryKey: instructivosEmbalajeKeys.list(filters),
     queryFn: () => instructivoEmbalajeService.list(filters),

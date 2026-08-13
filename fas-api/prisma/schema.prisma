@@ -560,6 +560,7 @@ model GrupoMercado {
   eliminadoPor          String?
 
   mercados Mercado[]
+  instructivosEmbalaje InstructivoEmbalaje[]
 
   @@index([empresaId])
   // Target de la FK compuesta de Mercado (empresaId, grupoMercadoId) — hace
@@ -701,6 +702,8 @@ model Altura {
   actualizadoPor        String?
   eliminadoEn           DateTime?
   eliminadoPor          String?
+
+  instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
 
   @@index([empresaId])
   @@map("alturas")
@@ -947,7 +950,8 @@ model Variedad {
   eliminadoPor          String?
 
   notaVentaDetalles           NotaVentaDetalle[]
-  instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
+  instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeDetalleVariedad")
+  instructivoEmbalajeDetallesRotulada InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeDetalleVariedadRotulada")
   ordenCompraLineas           OrdenCompraLinea[]
   contratoProductorLineas     ProductorContratoLinea[]
   solicitudesInspeccion       SolicitudInspeccionVariedad[]
@@ -1041,6 +1045,7 @@ model Parametro {
   notasVentaModalidad NotaVenta[] @relation("NotaVentaModalidadVenta")
   notasVentaClausula  NotaVenta[] @relation("NotaVentaClausulaVenta")
   notasVentaTipoFlete NotaVenta[] @relation("NotaVentaTipoFlete")
+  ordenesCompraIncoterm OrdenCompra[] @relation("OrdenCompraIncoterm")
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1294,6 +1299,7 @@ model Entidad {
   notasVentaNotify             NotaVenta[]                 @relation("NotaVentaNotify")
   notasVentaClienteFinal       NotaVenta[]                 @relation("NotaVentaClienteFinal")
   ordenesCompraProductor       OrdenCompra[]               @relation("OrdenCompraProductor")
+  instructivosEmbalajeProductor InstructivoEmbalaje[]      @relation("InstructivoEmbalajeProductor")
   recepcionesPlanta            Recepcion[]                 @relation("RecepcionPlanta")
   palletsProductor             Pallet[]                    @relation("PalletProductor")
 
@@ -2101,7 +2107,6 @@ model NotaVenta {
   observaciones String?
 
   detalles             NotaVentaDetalle[]
-  instructivosEmbalaje InstructivoEmbalaje[]
   ordenesCompra        OrdenCompra[]
   embarques            Embarque[]
 
@@ -2220,7 +2225,8 @@ model Embarque {
 // ─── Compras — Instructivo de Embalaje (Docs/compras.md §4.1) ───────────────
 // Documento que instruye qué embalar. Sin FK a OrdenCompra (relación
 // inexistente por diseño, ver compras.md §6.1) y sin máquina de estados —
-// es solo un documento emitido, no editable ni eliminable.
+// es solo un documento emitido, editable y eliminable (soft delete) sin
+// restricción de estado.
 
 model InstructivoEmbalaje {
   id        Int     @id @default(autoincrement())
@@ -2228,9 +2234,16 @@ model InstructivoEmbalaje {
   empresa   Empresa @relation(fields: [empresaId], references: [id])
   numero    Int     // correlativo propio, único por empresa
 
-  notaVentaId Int
-  // FK compuesta (empresaId, notaVentaId) -> NotaVenta(empresaId, id).
-  notaVenta   NotaVenta @relation(fields: [empresaId, notaVentaId], references: [empresaId, id])
+  // Supersesión (2026-08-12): reemplaza notaVentaId — el instructivo ocurre
+  // antes de que exista un Cierre Comercial asociado (compras.md §5.1/§5.2,
+  // el flujo real nunca lo ató a una NV), así que se ancla al productor en
+  // vez de a la venta.
+  entidadProductorId Int
+  entidadProductor   Entidad @relation("InstructivoEmbalajeProductor", fields: [empresaId, entidadProductorId], references: [empresaId, id])
+  grupoMercadoId     Int
+  grupoMercado       GrupoMercado @relation(fields: [empresaId, grupoMercadoId], references: [empresaId, id])
+  fechaInicioPrograma DateTime
+  observaciones       String?
 
   detalle InstructivoEmbalajeDetalle[]
 
@@ -2239,7 +2252,8 @@ model InstructivoEmbalaje {
   eliminadoEn  DateTime?
   eliminadoPor String?
 
-  @@index([notaVentaId])
+  @@index([entidadProductorId])
+  @@index([grupoMercadoId])
   @@index([empresaId])
   @@map("instructivos_embalaje")
 }
@@ -2254,11 +2268,16 @@ model InstructivoEmbalajeDetalle {
   especieId    Int
   especie      Especie   @relation(fields: [especieId], references: [id])
   variedadId   Int
-  variedad     Variedad  @relation(fields: [variedadId], references: [id])
+  variedad     Variedad  @relation("InstructivoEmbalajeDetalleVariedad", fields: [variedadId], references: [id])
+  // Segunda variedad opcional, de la misma especie (2026-08-12).
+  variedadRotuladaId Int?
+  variedadRotulada   Variedad? @relation("InstructivoEmbalajeDetalleVariedadRotulada", fields: [variedadRotuladaId], references: [id])
   categoriaId  Int
   categoria    Categoria @relation(fields: [categoriaId], references: [id])
   tipoPalletId Int?
   tipoPallet   TipoPallet? @relation(fields: [tipoPalletId], references: [id])
+  alturaId     Int
+  altura       Altura    @relation(fields: [alturaId], references: [id])
 
   cantidadPallets Int
   cajasPorPallet  Int
@@ -2269,6 +2288,8 @@ model InstructivoEmbalajeDetalle {
   calibres InstructivoEmbalajeDetalleCalibre[]
 
   @@index([instructivoId])
+  @@index([variedadRotuladaId])
+  @@index([alturaId])
   @@map("instructivo_embalaje_detalle")
 }
 
@@ -2329,6 +2350,12 @@ model OrdenCompra {
   destinoMercado   Mercado?          @relation(fields: [empresaId, destinoMercadoId], references: [empresaId, id])
   responsableId    String?
   responsable      Usuario?          @relation(fields: [responsableId], references: [id])
+  // Incoterm (2026-08-12) — reintroducido: catálogo genérico Parametro
+  // (TipoParametro codigo=INCOTERM, mismo mecanismo ya usado por
+  // NotaVenta.clausulaVentaId). Reemplaza el incotermId eliminado el
+  // 2026-08-07 por falta de catálogo — el catálogo ya existe.
+  incotermId       Int?
+  incoterm         Parametro?        @relation("OrdenCompraIncoterm", fields: [empresaId, incotermId], references: [empresaId, id])
   observaciones    String?
   estado           EstadoOrdenCompra @default(BORRADOR)
 

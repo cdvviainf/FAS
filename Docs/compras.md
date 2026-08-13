@@ -29,8 +29,8 @@ El módulo Compras cubre el ciclo completo de adquisición y recepción de fruta
 
 ## 3. Glosario y Nomenclatura
 
-- **Cierre de Negocio (= Nota de Venta):** primer documento del ciclo de ventas, numeración propia. Es el mismo documento que la Nota de Venta; "Cierre de Negocio" es el término de negocio usado por Compras/Operaciones. **Reconciliación de nomenclatura (2026-07-24, hallazgo NV-IE-006):** el modelo Prisma se llama `NotaVenta` (definido en `ventas.md` §4.1); por lo tanto el FK en `InstructivoEmbalaje` y `OrdenCompra` es `notaVentaId → NotaVenta`, no `cierreNegocioId → CierreNegocio`. "Cierre de Negocio"/`CierreNegocio` queda como alias de negocio, no como nombre de modelo/campo.
-- **Instructivo de Embalaje:** documento que instruye **qué embalar** (tipo de embalaje, variedad, calibres, cantidades), construido con maestros del sistema. No confundir con el Instructivo de Embarque.
+- **Cierre de Negocio (= Nota de Venta):** primer documento del ciclo de ventas, numeración propia. Es el mismo documento que la Nota de Venta; "Cierre de Negocio" es el término de negocio usado por Compras/Operaciones. **Reconciliación de nomenclatura (2026-07-24, hallazgo NV-IE-006):** el modelo Prisma se llama `NotaVenta` (definido en `ventas.md` §4.1); por lo tanto el FK en `OrdenCompra` es `notaVentaId → NotaVenta`, no `cierreNegocioId → CierreNegocio`. "Cierre de Negocio"/`CierreNegocio` queda como alias de negocio, no como nombre de modelo/campo. **`InstructivoEmbalaje` ya no tiene FK a `NotaVenta`** — ver supersesión 2026-08-12 en §4.1.
+- **Instructivo de Embalaje:** documento que instruye **qué embalar** (tipo de embalaje, variedad, calibres, cantidades), construido con maestros del sistema, **anclado al productor** (no a una venta — ver §4.1). No confundir con el Instructivo de Embarque.
 - **Instructivo de Embarque:** documento que instruye **cómo despachar** (fechas/horas de retiro por planta). Es la identidad del Embarque (padre) más sus hijos por planta. Definido en `ventas.md`.
 - **Orden de Compra (OC):** especificación de lo que se va a comprar, **opcionalmente** asociada a un Cierre de Negocio. Multilínea.
 - **Recepción de Stock:** carga de fruta real al inventario, con o sin OC.
@@ -47,18 +47,25 @@ Convención general del proyecto: PK `Int` autoincremental para toda entidad loc
 ### 4.1 InstructivoEmbalaje
 Instrucción de qué embalar. **Sin estado propio** — es solo un documento que se emite. **Sin FK a OC** (la relación es inexistente; ver §6.1). Su valor es estandarizar usando maestros en vez de texto genérico.
 
-> **Editable después de emitido (2026-08-15).** Al no tener estado propio ni depender del estado de la NV (`Docs/Hallazgos/notas-venta-instructivo-embalaje.md`, NV-IE-002/003), no existe ninguna transición que bloquee su edición — a diferencia de la OC (`RECEPCIONADA`, §6.2). `PATCH /api/compras/instructivos-embalaje/:id` reemplaza `notaVentaId` y/o el `detalle` completo de forma atómica (dropea y recrea las líneas, mismo patrón que el reemplazo de calibres en `OrdenCompraLinea.actualizarLinea`).
+> **Editable después de emitido (2026-08-15).** Al no tener estado propio, no existe ninguna transición que bloquee su edición — a diferencia de la OC (`RECEPCIONADA`, §6.2). Tampoco depende de otro documento que pudiera bloquearla (ya no tiene FK a NV — ver supersesión abajo). `PATCH /api/compras/instructivos-embalaje/:id` reemplaza cualquier combinación de `entidadProductorId`/`grupoMercadoId`/`fechaInicioPrograma`/`observaciones` y/o el `detalle` completo de forma atómica (dropea y recrea las líneas, mismo patrón que el reemplazo de calibres en `OrdenCompraLinea.actualizarLinea`).
 >
 > **Eliminable — soft delete (2026-08-10).** `DELETE /api/compras/instructivos-embalaje/:id` (nivel `TOTAL`) marca `eliminadoEn`/`eliminadoPor` — nunca DELETE físico (CLAUDE.md §12 regla 8). Igual que la edición, sin transición de estado que lo bloquee. El listado y el detalle filtran `eliminadoEn: null`.
 >
-> **Perfil recomendado para editar (2026-08-15, IE-EDIT-QA-003).** El formulario de edición completa sus selectores (Cierre Comercial, Artículo) consultando los endpoints de esos módulos, protegidos por sus propios ítems (`VENTAS_NV`, `OPER_MATERIALES`) — no por `COMPRAS_INSTRUCTIVO`. Un perfil con `COMPRAS_INSTRUCTIVO: TOTAL` pero sin `LECTURA` en esos dos ítems puede editar las líneas ya existentes (el valor guardado se sigue mostrando por nombre, tomado del propio GET del instructivo), pero **no puede elegir** un Cierre Comercial o Artículo nuevo que no pueda listar. Se recomienda que todo perfil con `COMPRAS_INSTRUCTIVO: TOTAL` incluya también `LECTURA` en `VENTAS_NV` y `OPER_MATERIALES`.
+> **Perfil recomendado para editar (2026-08-15, IE-EDIT-QA-003 — actualizado 2026-08-12).** El formulario de edición completa su selector de Artículo consultando el endpoint de Materiales, protegido por su propio ítem (`OPER_MATERIALES`) — no por `COMPRAS_INSTRUCTIVO`. El selector de Cierre Comercial que originaba este hallazgo **ya no existe** (supersedido por Productor, arriba); el mismo riesgo teórico ahora aplicaría al selector de Productor (`entidadesService`, ítem `CONFIG_ENTIDADES`) pero, igual que en `orden-compra-form.tsx` (que depende de `CONFIG_ENTIDADES` para su propio selector de Productor sin mitigación), no se agregó protección específica — es el mismo patrón ya aceptado en el resto del sistema. Un perfil con `COMPRAS_INSTRUCTIVO: TOTAL` pero sin `LECTURA` en `OPER_MATERIALES` puede editar las líneas ya existentes (el valor guardado se sigue mostrando por nombre, tomado del propio GET del instructivo), pero **no puede elegir** un Artículo nuevo que no pueda listar. Se recomienda que todo perfil con `COMPRAS_INSTRUCTIVO: TOTAL` incluya también `LECTURA` en `OPER_MATERIALES` y `CONFIG_ENTIDADES`.
 >
 > **Decisión de negocio — postergado (2026-08-15).** El árbitro de QA calificó esto como `BUG_REAL` bajo una lectura estricta de RP3 (`TOTAL` sobre un ítem debería bastar por sí solo, sin depender de `LECTURA` en ítems ajenos referenciados por FK). El usuario (Christian) decidió explícitamente **no** implementar ahora la corrección de raíz (exponer catálogos propios bajo `COMPRAS_INSTRUCTIVO`, o declarar y enforzar dependencias entre ítems de menú en el editor de perfiles) — es un cambio transversal a Compras/Ventas/Operaciones, fuera del alcance de esta edición del Instructivo. Se acepta la mitigación de arriba (perfil recomendado + fix de hidratación que evita la degradación visual) como suficiente para este ciclo. Mismo patrón de cierre que `CCOM-QA-001`/`NV-IE-010` (`Docs/Hallazgos/notas-venta-instructivo-embalaje.md`): gap de cobertura/diseño conocido y aceptado, no un defecto de código pendiente de arreglo.
 
+> **Supersesión — ancla a Productor, no a NV (2026-08-12).** `notaVentaId` se **elimina** del modelo. El instructivo se emite **antes** de que exista un Cierre Comercial asociado — el flujo real (§5.1/§5.2) nunca lo condicionó a una NV, solo a la fruta que va a llegar de un productor. Se reemplaza por `entidadProductorId` (FK → Entidad tipo PRODUCTOR, obligatorio, mismo patrón que la OC) + `grupoMercadoId` (FK → GrupoMercado, obligatorio) + `fechaInicioPrograma` (fecha, obligatoria — la UI muestra la semana ISO calculada como label, no se persiste) + `observaciones` (texto libre, opcional). Migración destructiva (no hay forma de derivar un productor desde la NV existente; sistema en desarrollo, sin datos transaccionales reales).
+>
+> **Detalle — variedad rotulada y altura (2026-08-12).** Cada línea gana `variedadRotuladaId` (FK → Variedad, opcional, filtrada por la misma especie de la línea — una segunda variedad) y `alturaId` (FK → Altura, obligatoria — "altura de pallet"). La grilla de detalle muestra columnas separadas: Especie, Variedad, Variedad Rotulada, Artículo, Categoría, Calibre, Altura, Cantidad (antes "Especie / Variedad" iba combinado en una celda).
+
 - `id` (PK)
 - `numero` (correlativo propio)
-- `notaVentaId` (FK → NotaVenta) — el instructivo se emite en el contexto de un cierre (ver nota de reconciliación en §3)
-- Detalle (1..N líneas): `articuloId` (FK → Artículo/Embalaje), `especieId`, `variedadId`, `categoriaId`, lista de calibres (`InstructivoEmbalajeDetalleCalibre`, multiselect — ver nota de supersesión en §4.3), `tipoPalletId` (FK → TipoPallet, nullable) **(nuevo, 2026-08-07)**, `cantidadPallets`, `cajasPorPallet`, `cajas` **(nuevo, 2026-08-07 — ver nota en §4.3, mismo criterio)**
+- `entidadProductorId` (FK → Entidad tipo PRODUCTOR, obligatorio) **(supersede a `notaVentaId`, 2026-08-12 — ver nota arriba)**
+- `grupoMercadoId` (FK → GrupoMercado, obligatorio) **(nuevo, 2026-08-12)**
+- `fechaInicioPrograma` (fecha, obligatoria) **(nuevo, 2026-08-12)**
+- `observaciones` (texto libre, opcional) **(nuevo, 2026-08-12)**
+- Detalle (1..N líneas): `articuloId` (FK → Artículo/Embalaje), `especieId`, `variedadId`, `variedadRotuladaId` (FK → Variedad, opcional, misma especie) **(nuevo, 2026-08-12)**, `categoriaId`, lista de calibres (`InstructivoEmbalajeDetalleCalibre`, multiselect — ver nota de supersesión en §4.3), `tipoPalletId` (FK → TipoPallet, nullable) **(nuevo, 2026-08-07)**, `alturaId` (FK → Altura, obligatorio) **(nuevo, 2026-08-12)**, `cantidadPallets`, `cajasPorPallet`, `cajas` **(nuevo, 2026-08-07 — ver nota en §4.3, mismo criterio)**
 - `createdAt`, `createdBy`
 
 > El detalle usa **artículos maestros** (ej. `UV0001103 — CAJA MARCA AGROSAN ETIQUETA TAIWAN PLÁSTICO`), no descripciones libres.
@@ -97,7 +104,7 @@ Especificación de la compra.
 - `formaPagoId` (FK → FormaPago, nullable) **(nuevo, 2026-07-26)** — mantenedor propio (`Docs/mantenedores-generales.md`); reemplaza el texto libre original
 - `condicionPagoId` (FK → CondicionPago, nullable) **(nuevo, 2026-07-26)** — reemplaza `condicionPagoTexto`; ver §4.2.1
 - `monedaId` (FK → Moneda) **(nuevo)**
-- ~~`incotermId`~~ **(eliminado 2026-08-07)** — decisión de negocio (Christian): superaba a `OC-002` (`Docs/Hallazgos/orden-de-compra.md`), que lo dejaba en el modelo "para cuando exista el catálogo" de Incoterm; se decidió quitarlo directamente en vez de mantenerlo sin UI.
+- `incotermId` (FK → Parametro, `TipoParametro` codigo `INCOTERM`, nullable) **(reintroducido 2026-08-12)** — supersede el `~~incotermId~~` **eliminado 2026-08-07** por falta de catálogo (`OC-002`, `Docs/Hallazgos/orden-de-compra.md`). El catálogo genérico `Parametro`/`INCOTERM` ya existía (sembrado para Cierre Comercial — `NotaVenta.clausulaVentaId`, mismo mecanismo); se reutiliza en vez de crear un mantenedor propio.
 - ~~`facturarAId`~~ **(eliminado 2026-07-26)** — decisión de negocio: la OC no factura a una entidad distinta del productor
 - `observaciones` **(nuevo)**
 - `estado` (ver §8)
@@ -177,8 +184,9 @@ Unidad mínima **indivisible** de inventario. Generado por la Recepción. Compue
 ### 4.7 Relaciones y cardinalidades
 
 - NotaVenta (= CierreNegocio) `1 — 0..N` OrdenCompra *(el FK `notaVentaId` es nullable: una OC puede existir sin Cierre)*
-- NotaVenta (= CierreNegocio) `1 — N` InstructivoEmbalaje
+- Entidad (tipo PRODUCTOR) `1 — N` InstructivoEmbalaje **(supersede a NotaVenta `1 — N` InstructivoEmbalaje, 2026-08-12 — ver §4.1)**
 - InstructivoEmbalaje `— (sin FK) —` OrdenCompra *(relación inexistente por diseño)*
+- InstructivoEmbalaje `— (sin FK) —` NotaVenta *(relación eliminada, 2026-08-12)*
 - OrdenCompra `1 — N` OrdenCompraLinea
 - OrdenCompra `1 — 0..1` Recepcion *(una recepción valida contra una OC; una OC se recepciona a lo más una vez en v0.1)*
 - Recepcion `1 — N` Pallet

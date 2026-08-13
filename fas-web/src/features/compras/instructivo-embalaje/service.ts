@@ -7,11 +7,11 @@ import type {
 } from './types'
 
 export const instructivoEmbalajeService = {
-  async list(params: { page?: number; limit?: number; notaVentaId?: number } = {}): Promise<InstructivoEmbalajeListResponse> {
+  async list(params: { page?: number; limit?: number; entidadProductorId?: number } = {}): Promise<InstructivoEmbalajeListResponse> {
     const sp: Record<string, string> = {}
     if (params.page) sp.page = String(params.page)
     if (params.limit) sp.limit = String(params.limit)
-    if (params.notaVentaId) sp.notaVentaId = String(params.notaVentaId)
+    if (params.entidadProductorId) sp.entidadProductorId = String(params.entidadProductorId)
     return api.get('compras/instructivos-embalaje', { searchParams: sp }).json()
   },
 
