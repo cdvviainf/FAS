@@ -30,6 +30,7 @@ import { authClient } from '@/lib/auth-client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
+import { toast } from 'sonner';
 import { Icons } from '../icons';
 import { OrgSwitcher } from '../org-switcher';
 
@@ -43,8 +44,16 @@ export default function AppSidebar() {
   React.useEffect(() => {}, [isOpen]);
 
   async function handleSignOut() {
-    await authClient.signOut();
-    router.push('/auth/sign-in');
+    // Sin try/catch acá, un fallo de red/CORS en signOut() (ej. NEXT_PUBLIC_APP_URL
+    // mal configurado en el build) dejaba el botón sin ningún feedback visible —
+    // ver QA-INFRA-001. Con esto al menos se ve el error en vez de "no pasar nada".
+    try {
+      await authClient.signOut();
+      router.push('/auth/sign-in');
+    } catch (err) {
+      console.error('Error al cerrar sesión:', err);
+      toast.error('No se pudo cerrar sesión. Intenta de nuevo o recarga la página.');
+    }
   }
 
   const userName = session?.user?.name ?? 'Usuario';
