@@ -31,6 +31,8 @@ const MODELOS_TENANT = new Set([
   'Calibre',
   'Parametro',
   'Calificacion',
+  // Mantenedor Etiquetas (agosto 2026):
+  'Etiqueta',
   // Fase 3, lote Entidades:
   'Entidad',
   // Fase 3, lote Calidad:
