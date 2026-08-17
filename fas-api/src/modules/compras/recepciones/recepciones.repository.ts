@@ -199,7 +199,23 @@ export async function findArticuloByTexto(texto: string) {
   })
 }
 
+// El Packing List real trae en la columna "Productor" el código CSG del
+// Predio (ej. "114802"), no el código/nombre de la Entidad productor — se
+// busca primero por ahí. Si no hay match (predio sin CSG cargado, o el
+// Excel excepcionalmente trae el código de la Entidad), se cae al match
+// directo contra la Entidad como antes.
 export async function findProductorByTexto(texto: string) {
+  const t = texto.trim()
+  const predio = await prisma.predio.findFirst({
+    where: {
+      eliminadoEn: null,
+      codigoCsg: { equals: t, ...insensible },
+      entidad: { eliminadoEn: null, activo: true, tipos: { has: 'PRODUCTOR' } },
+    },
+    include: { entidad: true },
+  })
+  if (predio) return predio.entidad
+
   return prisma.entidad.findFirst({
     where: {
       eliminadoEn: null,

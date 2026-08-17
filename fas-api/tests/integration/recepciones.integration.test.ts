@@ -69,6 +69,7 @@ async function limpiarDatos() {
       "variedades",
       "grupos_variedad",
       "especies",
+      "predios",
       "entidad_direcciones",
       "entidades",
       "paises",
@@ -95,6 +96,11 @@ async function crearFixtures() {
   const pais = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', creadoPor: 'test' } })
   const productor = await prisma.entidad.create({
     data: { empresaId: empresa.id, codigo: 'PROD-01', descripcion: 'Productor Uno', razonSocial: 'Productor Uno SpA', paisId: pais.id, tipos: ['PRODUCTOR'], creadoPor: 'test' },
+  })
+  // El Packing List real trae el código CSG del Predio en la columna
+  // "Productor", no el código de la Entidad — ver findProductorByTexto().
+  const predioProductor = await prisma.predio.create({
+    data: { empresaId: empresa.id, entidadId: productor.id, codigo: 'PRE-01', descripcion: 'Predio Uno', codigoCsg: '114802', creadoPor: 'test' },
   })
   const planta = await prisma.entidad.create({
     data: { empresaId: empresa.id, codigo: 'PLANTA-01', descripcion: 'Planta Uno', razonSocial: 'Planta Uno SpA', paisId: pais.id, tipos: ['PLANTA'], creadoPor: 'test' },
@@ -141,7 +147,7 @@ async function crearFixtures() {
   await notificarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'test')
   const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'APROBADA', 'test')
 
-  return { empresa, pais, productor, planta, direccionPlanta, especie, variedad, categoria, calibreChico, calibreGrande, articulo, solicitudInspeccionCompraAprobada }
+  return { empresa, pais, productor, predioProductor, planta, direccionPlanta, especie, variedad, categoria, calibreChico, calibreGrande, articulo, solicitudInspeccionCompraAprobada }
 }
 
 // TemplateCarga con cabecera (título de columna = nombre del campo, simple
@@ -284,6 +290,27 @@ describe('Motor de validación de Recepción contra PostgreSQL (compras.md §7)'
     expect(resultado.recepcion.estado).toBe('VALIDADA')
     const pallets = await prisma.pallet.findMany({ where: { recepcionId: recepcion.id }, include: { lineas: true } })
     expect(pallets[0].lineas[0].especieId).toBe(f.especie.id)
+  })
+
+  it('resuelve el Productor por el código CSG del Predio (no por el código de la Entidad)', async () => {
+    const f = await crearFixtures()
+    const oc = await crearOcEmitida(f, 100, 1)
+    const template = await crearTemplateCarga(f.empresa.id)
+    const recepcion = await crearRecepcion(f.empresa.id, {
+      ordenCompraId: oc.id,
+      plantaId: f.planta.id,
+      direccionPlantaId: f.direccionPlanta.id,
+      templateCargaId: template.id,
+    }, 'test')
+
+    // f.predioProductor.codigoCsg === '114802' — el Excel real trae ese
+    // código en la columna "Productor", no "PROD-01" (código de la Entidad).
+    const excel = await armarExcel([filaBase(f, { productor: '114802' })])
+    const resultado = await subirAdjunto(f.empresa.id, recepcion.id, { nombre: 'recepcion.xlsx', mime: MIME_XLSX, datos: excel }, 'test')
+
+    expect(resultado.recepcion.estado).toBe('VALIDADA')
+    const pallets = await prisma.pallet.findMany({ where: { recepcionId: recepcion.id }, include: { lineas: true } })
+    expect(pallets[0].productorId).toBe(f.productor.id)
   })
 
   it('ignora las filas de cierre (Total, Firma...) después del último pallet en vez de rechazarlas como error', async () => {
