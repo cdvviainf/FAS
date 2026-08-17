@@ -31,7 +31,9 @@ import type { RecepcionCreateInput } from '../types'
 import { ORIGEN_RECEPCION_LABELS, ESTADO_RECEPCION_LABELS } from '../types'
 
 const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024
-const ACCEPT_ADJUNTO = '.xls,.xlsx'
+// Solo .xlsx: ExcelJS (el lector del backend) no soporta el formato binario
+// BIFF de .xls legado — QA-RCV-004.
+const ACCEPT_ADJUNTO = '.xlsx'
 const ITEM = 'COMPRAS_RECEPCION'
 
 function formatoBytes(b: number): string {
@@ -327,7 +329,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
                   <Button type='button' variant='outline' size='sm' onClick={() => inputAdjuntoRef.current?.click()}>
                     <Icons.upload className='mr-1 h-4 w-4' /> Subir Excel
                   </Button>
-                  <p className='text-xs text-muted-foreground'>Solo .xls o .xlsx. Máx. 10 MB.</p>
+                  <p className='text-xs text-muted-foreground'>Solo .xlsx. Máx. 10 MB.</p>
                 </>
               )}
               {(recepcion?.data.adjuntos ?? []).length > 0 && (

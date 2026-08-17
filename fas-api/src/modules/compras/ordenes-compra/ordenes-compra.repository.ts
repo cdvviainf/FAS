@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
+import { LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO } from '../../../shared/advisory-locks.js'
 import type {
   OrdenCompraCreateInput,
   OrdenCompraUpdateInput,
@@ -75,6 +76,27 @@ const LOCK_NAMESPACE_ORDEN_COMPRA = 490236
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any
+
+// QA-RCV-007: el chequeo de "editable" (estado !== RECEPCIONADA) en el
+// service corre ANTES de esta transacción — no es atómico con la mutación.
+// Toma el mismo lock por ordenCompraId que recepciones.repository.ts usa
+// para crear pallets, y vuelve a leer el estado ya bajo ese lock: sirve
+// tanto para serializar dos ediciones concurrentes entre sí como para
+// serializar una edición contra una Recepción en curso.
+async function lockYVerificarEditable(tx: Tx, ordenCompraId: number): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO}::int, ${ordenCompraId}::int)`
+  // eliminadoEn: null — QA-RCV-008 (ronda 5): sin este filtro, una edición
+  // en curso podía completarse igual sobre una OC que otra solicitud
+  // eliminó (soft delete) mientras esperaba el lock — findUniqueOrThrow por
+  // id solo no distingue una fila borrada de una activa.
+  const actual = await tx.ordenCompra.findFirst({ where: { id: ordenCompraId, eliminadoEn: null }, select: { estado: true } })
+  if (!actual) {
+    throw new ValidationError('La Orden de Compra ya no existe')
+  }
+  if (actual.estado === 'RECEPCIONADA') {
+    throw new ValidationError('La Orden de Compra ya fue recepcionada y no puede editarse')
+  }
+}
 
 // Suma cajas totales (columna `cajas`, no `cantidadPallets × cajasPorPallet`
 // — cajasPorPallet es solo referencial, ver comentario en el schema/form) de
@@ -205,6 +227,7 @@ export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor:
 
 export async function updateOrdenCompra(id: number, data: OrdenCompraUpdateInput, actualizadoPor: string) {
   return prisma.$transaction(async (tx) => {
+    await lockYVerificarEditable(tx, id)
     if (data.condicionPagoId !== undefined) {
       // El snapshot es inmutable (mismo patrón que Cierre Comercial): solo se
       // regenera si condicionPagoId realmente cambió respecto del valor
@@ -238,6 +261,7 @@ const lineaInclude = {
 export async function addLinea(ordenCompraId: number, data: OrdenCompraLineaCreateInput) {
   const { calibreIds, ...resto } = data
   return prisma.$transaction(async (tx) => {
+    await lockYVerificarEditable(tx, ordenCompraId)
     const linea = await tx.ordenCompraLinea.create({
       data: { ...resto, ordenCompraId, calibres: { create: calibreIds.map((calibreId) => ({ calibreId })) } },
       include: lineaInclude,
@@ -251,9 +275,10 @@ export async function getLineaById(id: number) {
   return prisma.ordenCompraLinea.findUnique({ where: { id }, select: { id: true, ordenCompraId: true } })
 }
 
-export async function updateLinea(id: number, data: OrdenCompraLineaUpdateInput) {
+export async function updateLinea(ordenCompraId: number, id: number, data: OrdenCompraLineaUpdateInput) {
   const { calibreIds, ...resto } = data
   return prisma.$transaction(async (tx) => {
+    await lockYVerificarEditable(tx, ordenCompraId)
     const linea = await tx.ordenCompraLinea.update({
       where: { id },
       data: {
@@ -269,15 +294,19 @@ export async function updateLinea(id: number, data: OrdenCompraLineaUpdateInput)
 
 export async function removeLinea(id: number, ordenCompraId: number) {
   return prisma.$transaction(async (tx) => {
+    await lockYVerificarEditable(tx, ordenCompraId)
     await tx.ordenCompraLinea.delete({ where: { id } })
     await recalcularCuotasMontoUnitario(tx, ordenCompraId)
   })
 }
 
 export async function softDeleteOrdenCompra(id: number, eliminadoPor: string) {
-  return prisma.ordenCompra.update({
-    where: { id },
-    data: { eliminadoEn: new Date(), eliminadoPor },
+  return prisma.$transaction(async (tx) => {
+    await lockYVerificarEditable(tx, id)
+    return tx.ordenCompra.update({
+      where: { id },
+      data: { eliminadoEn: new Date(), eliminadoPor },
+    })
   })
 }
 

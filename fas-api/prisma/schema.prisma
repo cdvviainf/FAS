@@ -2544,8 +2544,8 @@ enum OrigenRecepcion {
 }
 
 enum EstadoRecepcion {
-  CARGADA // archivo subido, sin procesar (única alcanzable mientras no exista el motor de validación)
-  VALIDADA // cuadró contra la OC (o carga libre en consignación) y generó pallets
+  CARGADA // archivo subido sin procesar todavía; también el estado final de una carga libre en consignación que ya generó pallets (compras.md §8 — no existe transición propia para ese modo)
+  VALIDADA // cuadró contra la OC (modo compra) y generó pallets
   RECHAZADA // no cuadró contra la OC — no genera pallets
 }
 

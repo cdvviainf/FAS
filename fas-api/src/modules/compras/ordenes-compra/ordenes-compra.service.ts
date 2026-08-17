@@ -189,7 +189,7 @@ export async function actualizarLinea(ordenCompraId: number, lineaId: number, bo
   const orden = await obtenerLineaDeOrdenCompra(ordenCompraId, lineaId)
   assertEditable(orden)
   await validarLinea(body, 0)
-  return repo.updateLinea(lineaId, body)
+  return repo.updateLinea(ordenCompraId, lineaId, body)
 }
 
 export async function eliminarLinea(ordenCompraId: number, lineaId: number) {

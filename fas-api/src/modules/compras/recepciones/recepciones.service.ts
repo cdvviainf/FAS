@@ -1,10 +1,27 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './recepciones.repository.js'
+import { procesarCargaExcel } from './recepciones.motor.js'
 import type { RecepcionCreateInput, RecepcionUpdateInput } from './recepciones.types.js'
 
+// Editable/eliminable/re-procesable mientras no haya quedado firme: CARGADA
+// (recién creada) o RECHAZADA (intento anterior no cuadró, se corrige y se
+// reintenta). VALIDADA es terminal — ya generó pallets a Stock.
+const ESTADOS_MODIFICABLES = new Set(['CARGADA', 'RECHAZADA'])
+
+// QA-RCV-002: el estado por sí solo no basta — en modo consignación
+// (compras.md §8) el estado se queda en CARGADA aunque ya haya generado
+// pallets y esos pallets ya sean Stock real. "Modificable" exige además que
+// no existan pallets todavía.
+async function puedeModificarse(recepcion: { id: number; estado: string }): Promise<boolean> {
+  if (!ESTADOS_MODIFICABLES.has(recepcion.estado)) return false
+  return !(await repo.tienePallets(recepcion.id))
+}
+
+// Solo .xlsx (ExcelJS no lee el formato binario BIFF de .xls legado —
+// QA-RCV-004): antes se aceptaba el MIME de .xls pero el lector fallaba
+// igual al intentar parsearlo, con un mensaje engañoso de "archivo dañado".
 const MIMES_EXCEL_PERMITIDOS = new Set([
-  'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ])
 export const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024 // 10 MB
@@ -74,11 +91,12 @@ export async function crearRecepcion(body: RecepcionCreateInput, creadoPor: stri
 
 export async function actualizarRecepcion(id: number, body: RecepcionUpdateInput, actualizadoPor: string) {
   const existente = await obtenerRecepcion(id)
-  // Editable solo mientras no se haya procesado (compras.md §8: Cargada →
-  // Validada). El motor de validación / generación de pallets aún no está
-  // implementado, así que hoy toda Recepción vive en CARGADA — esta guarda
-  // deja la puerta lista para cuando exista esa transición.
-  if (existente.estado !== 'CARGADA') {
+  // Editable mientras no haya quedado firme (compras.md §8: Cargada ->
+  // Validada). RECHAZADA también es editable: es el estado que deja una
+  // carga que no cuadró contra la OC, y la planta necesita poder corregir
+  // cabecera/template antes de reintentar. Ver puedeModificarse() sobre por
+  // qué el estado solo no basta.
+  if (!(await puedeModificarse(existente))) {
     throw new ValidationError('La Recepción ya fue procesada y no puede editarse')
   }
   // Un PATCH parcial no puede validarse aislado: si solo viene uno de los dos
@@ -94,7 +112,7 @@ export async function actualizarRecepcion(id: number, body: RecepcionUpdateInput
 
 export async function eliminarRecepcion(id: number, eliminadoPor: string) {
   const existente = await obtenerRecepcion(id)
-  if (existente.estado !== 'CARGADA') {
+  if (!(await puedeModificarse(existente))) {
     throw new ValidationError('La Recepción ya fue procesada y no puede eliminarse')
   }
   await repo.softDeleteRecepcion(id, eliminadoPor)
@@ -102,28 +120,51 @@ export async function eliminarRecepcion(id: number, eliminadoPor: string) {
 
 // ─── Adjuntos ──────────────────────────────────────────────────────────────
 
+// Sube el Excel y en el mismo paso corre el motor de validación/carga
+// (compras.md §7): lee el archivo con el Template de Carga de la Recepción,
+// resuelve cada fila contra los maestros y, si hay OC, compara contra sus
+// líneas. Todo o nada — si algo no cuadra, no se crea ningún pallet y la
+// Recepción queda RECHAZADA con el detalle de diferencias.
 export async function subirAdjunto(
   recepcionId: number,
   archivo: { nombre: string; mime: string; datos: Buffer },
   userId: string,
 ) {
   const recepcion = await obtenerRecepcion(recepcionId)
-  if (recepcion.estado !== 'CARGADA') {
+  // puedeModificarse ya cubre "sin pallets todavía" (relevante para
+  // consignación, que se queda en CARGADA aunque ya haya generado stock).
+  if (!(await puedeModificarse(recepcion))) {
     throw new ValidationError('La Recepción ya fue procesada y no admite nuevos adjuntos')
   }
   if (!MIMES_EXCEL_PERMITIDOS.has(archivo.mime)) {
-    throw new ValidationError('Tipo de archivo no permitido. Se acepta solo Excel (.xls, .xlsx)')
+    throw new ValidationError('Tipo de archivo no permitido. Se acepta solo Excel (.xlsx)')
   }
   if (archivo.datos.length > MAX_ADJUNTO_BYTES) {
     throw new ValidationError('El archivo supera el tamaño máximo de 10 MB')
   }
 
-  return repo.createAdjunto(
+  const adjunto = await repo.createAdjunto(
     recepcionId,
     { nombre: archivo.nombre, mime: archivo.mime, tamano: archivo.datos.length },
     archivo.datos,
     userId,
   )
+
+  const templateCarga = await repo.getTemplateCargaParaLectura(recepcion.templateCargaId ?? -1)
+
+  try {
+    const resultado = await procesarCargaExcel(
+      { id: recepcion.id, ordenCompraId: recepcion.ordenCompraId, templateCargaId: recepcion.templateCargaId, templateCarga },
+      archivo.datos,
+    )
+    return { adjunto, ...resultado }
+  } catch (err) {
+    // El adjunto ya se guardó (evidencia de qué se intentó cargar); lo único
+    // que falta es dejar la Recepción en RECHAZADA para que quede claro que
+    // este intento no generó pallets y habilitar el reintento.
+    await repo.marcarRechazada(recepcionId)
+    throw err
+  }
 }
 
 export async function descargarAdjunto(recepcionId: number, adjuntoId: number) {
@@ -141,7 +182,7 @@ export async function descargarAdjunto(recepcionId: number, adjuntoId: number) {
 
 export async function eliminarAdjunto(recepcionId: number, adjuntoId: number) {
   const recepcion = await obtenerRecepcion(recepcionId)
-  if (recepcion.estado !== 'CARGADA') {
+  if (!(await puedeModificarse(recepcion))) {
     throw new ValidationError('La Recepción ya fue procesada y no admite eliminar adjuntos')
   }
   const meta = await repo.getAdjuntoMeta(recepcionId, adjuntoId)

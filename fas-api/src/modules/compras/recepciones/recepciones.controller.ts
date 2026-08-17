@@ -49,12 +49,12 @@ export async function subirAdjunto(req: FastifyRequest, reply: FastifyReply) {
   if (!archivo) throw new ValidationError('No se recibió ningún archivo')
 
   const datos = await archivo.toBuffer()
-  const adjunto = await service.subirAdjunto(
+  const resultado = await service.subirAdjunto(
     id,
     { nombre: archivo.filename, mime: archivo.mimetype, datos },
     req.fasUserId!,
   )
-  return reply.status(201).send({ data: adjunto })
+  return reply.status(201).send({ data: resultado })
 }
 
 export async function descargarAdjunto(req: FastifyRequest, reply: FastifyReply) {
