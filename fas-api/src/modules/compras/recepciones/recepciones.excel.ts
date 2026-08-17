@@ -52,7 +52,18 @@ function textoCelda(valor: ExcelJS.CellValue): string {
     if ('text' in valor) return String((valor as { text: unknown }).text ?? '')
     return ''
   }
-  return String(valor).trim()
+  //   = espacio de no separación (NBSP) — Excel exportado desde otros
+  // sistemas (ej. planillas de plantas/despachadores) suele meterlo en vez
+  // de un espacio normal; a simple vista es indistinguible de un espacio,
+  // pero rompe la comparación exacta del título de columna (Etapa 1).
+  return String(valor).replace(/ /g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+// Mismo criterio de normalización que textoCelda(), aplicado también al
+// título configurado en el Template de Carga — para que un NBSP escondido
+// en cualquiera de los dos lados no impida el match.
+function normalizarEncabezado(s: string): string {
+  return s.replace(/ /g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
 export async function cargarPrimeraHoja(buffer: Buffer): Promise<ExcelJS.Worksheet> {
@@ -82,15 +93,22 @@ export function resolverMapeoColumnas(
 
   if (template.tieneCabecera) {
     const filaCab = hoja.getRow(template.filaCabecera!)
+    const encabezadosEncontrados: string[] = []
+    filaCab.eachCell({ includeEmpty: false }, (cell) => {
+      const texto = textoCelda(cell.value)
+      if (texto) encabezadosEncontrados.push(texto)
+    })
+
     for (const c of template.campos) {
       let idx: number | null = null
       filaCab.eachCell({ includeEmpty: false }, (cell, colNumber) => {
-        if (textoCelda(cell.value).toLowerCase() === c.columna.trim().toLowerCase()) idx = colNumber
+        if (normalizarEncabezado(textoCelda(cell.value)) === normalizarEncabezado(c.columna)) idx = colNumber
       })
       if (idx == null) {
         const label = CAMPO_TEMPLATE_CARGA_LABELS[c.campo] ?? c.campo
         errores.push(
-          `No se encontró la columna "${c.columna}" (campo ${label}) en la fila de cabecera (fila ${template.filaCabecera}) del Excel`,
+          `No se encontró la columna "${c.columna}" (campo ${label}) en la fila de cabecera (fila ${template.filaCabecera}) del Excel — ` +
+            `columnas encontradas en esa fila: ${encabezadosEncontrados.map((h) => `"${h}"`).join(', ') || '(ninguna)'}`,
         )
       } else {
         indicePorCampo.set(c.campo, idx)

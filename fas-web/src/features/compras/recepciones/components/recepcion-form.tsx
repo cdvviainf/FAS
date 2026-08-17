@@ -29,7 +29,7 @@ import { templatesCargaService } from '@/features/templates-carga/service'
 import { recepcionDetailOptions, recepcionesKeys } from '../queries'
 import { recepcionesService } from '../service'
 import type { RecepcionCreateInput } from '../types'
-import { ORIGEN_RECEPCION_LABELS, ESTADO_RECEPCION_LABELS } from '../types'
+import { ORIGEN_RECEPCION_LABELS, ESTADO_RECEPCION_LABELS, esRecepcionEditable } from '../types'
 
 const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024
 // Solo .xlsx: ExcelJS (el lector del backend) no soporta el formato binario
@@ -225,7 +225,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   }
 
   const isPending = createMutation.isPending || updateMutation.isPending
-  const soloLectura = !puedeEscribir || (isEdit && recepcion?.data.estado !== 'CARGADA')
+  const soloLectura = !puedeEscribir || (isEdit && !!recepcion && !esRecepcionEditable(recepcion.data.estado))
 
   return (
     <div className='space-y-6'>

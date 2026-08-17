@@ -32,6 +32,14 @@ export const ESTADO_RECEPCION_LABELS: Record<EstadoRecepcion, string> = {
   RECHAZADA: 'Rechazada',
 }
 
+// Editable/eliminable/re-cargable — mismo criterio que ESTADOS_MODIFICABLES
+// en recepciones.service.ts (backend): CARGADA (recién creada) o RECHAZADA
+// (un intento anterior no cuadró; se corrige y se reintenta). VALIDADA es
+// terminal, ya generó pallets a Stock.
+export function esRecepcionEditable(estado: EstadoRecepcion): boolean {
+  return estado === 'CARGADA' || estado === 'RECHAZADA'
+}
+
 export interface RecepcionAdjunto {
   id: number
   nombre: string
