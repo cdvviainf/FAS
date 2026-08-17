@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { isHTTPError } from 'ky'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -35,6 +36,19 @@ const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024
 // BIFF de .xls legado — QA-RCV-004.
 const ACCEPT_ADJUNTO = '.xlsx'
 const ITEM = 'COMPRAS_RECEPCION'
+
+// El motor de Recepción (recepciones.motor.ts) junta TODOS los problemas de
+// cada etapa en `error.details.diferencias`, no solo el primero — un toast
+// (efímero, una sola línea) no alcanza para mostrarlos. `api.ts` ya deja el
+// mensaje genérico en `error.message`; acá se lee el body crudo del ky
+// HTTPError para sacar la lista completa y mostrarla como texto fijo en la
+// página.
+function diferenciasDelError(err: unknown): string[] {
+  if (!isHTTPError(err)) return []
+  const data = err.data as { error?: { details?: { diferencias?: unknown } } } | undefined
+  const diferencias = data?.error?.details?.diferencias
+  return Array.isArray(diferencias) ? diferencias.filter((d): d is string => typeof d === 'string') : []
+}
 
 function formatoBytes(b: number): string {
   if (b < 1024) return `${b} B`
@@ -75,6 +89,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
 
   const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [erroresCarga, setErroresCarga] = useState<{ mensaje: string; diferencias: string[] } | null>(null)
 
   const { data: recepcion, isLoading } = useQuery({
     ...recepcionDetailOptions(recepcionId ?? 0),
@@ -164,9 +179,16 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   const subirAdjuntoMutation = useMutation({
     mutationFn: (archivo: File) => recepcionesService.subirAdjunto(recepcionId!, archivo),
     onSuccess: () => {
+      setErroresCarga(null)
       queryClient.invalidateQueries({ queryKey: recepcionesKeys.detail(recepcionId!) })
     },
-    onError: (e: Error) => toast.error(e.message || 'Error al subir el archivo'),
+    onError: (e: Error) => {
+      toast.error(e.message || 'Error al subir el archivo')
+      const diferencias = diferenciasDelError(e)
+      if (diferencias.length > 0) {
+        setErroresCarga({ mensaje: e.message, diferencias })
+      }
+    },
   })
   const eliminarAdjuntoMutation = useMutation({
     mutationFn: (adjuntoId: number) => recepcionesService.eliminarAdjunto(recepcionId!, adjuntoId),
@@ -179,6 +201,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   function agregarArchivo(files: FileList | null) {
     if (!files || files.length === 0) return
     const f = files[0]
+    setErroresCarga(null)
     if (f.size > MAX_ADJUNTO_BYTES) {
       toast.error(`"${f.name}" supera los 10 MB`)
     } else {
@@ -331,6 +354,16 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
                   </Button>
                   <p className='text-xs text-muted-foreground'>Solo .xlsx. Máx. 10 MB.</p>
                 </>
+              )}
+              {erroresCarga && (
+                <div className='space-y-1.5 rounded-md border border-destructive/40 bg-destructive/5 p-3'>
+                  <p className='text-sm font-medium text-destructive'>{erroresCarga.mensaje}</p>
+                  <ul className='list-disc space-y-0.5 pl-4 text-xs text-destructive/90'>
+                    {erroresCarga.diferencias.map((d, i) => (
+                      <li key={i}>{d}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
               {(recepcion?.data.adjuntos ?? []).length > 0 && (
                 <div className='space-y-1 rounded-md border p-2'>
