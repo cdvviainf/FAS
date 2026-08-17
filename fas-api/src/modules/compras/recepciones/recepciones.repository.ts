@@ -146,52 +146,56 @@ export async function getTemplateCargaParaLectura(id: number) {
 
 const insensible = { mode: 'insensitive' as const }
 
+// Genera variantes singular/plural de un texto — el Excel puede traer
+// "Manzanas" cuando el maestro tiene "Manzana" (o al revés). El español
+// pluraliza agregando "s" (terminación en vocal) o "es" (terminación en
+// consonante) en la enorme mayoría de nombres de fruta/variedad/calibre que
+// aparecen acá; esto no es un singularizador general, solo cubre ese caso
+// común sin arriesgar falsos positivos (sigue siendo match exacto contra
+// cada variante, no `contains`).
+function candidatosTexto(texto: string): string[] {
+  const t = texto.trim()
+  const candidatos = new Set([t])
+  if (/es$/i.test(t)) candidatos.add(t.slice(0, -2)) // Limones -> Limon
+  if (/s$/i.test(t)) candidatos.add(t.slice(0, -1)) // Manzanas -> Manzana
+  if (!/s$/i.test(t)) {
+    candidatos.add(`${t}s`) // Manzana -> Manzanas
+    candidatos.add(`${t}es`) // Limon -> Limones
+  }
+  return [...candidatos]
+}
+
+function condicionesPorCampos(campos: readonly string[], texto: string) {
+  return candidatosTexto(texto).flatMap((c) => campos.map((campo) => ({ [campo]: { equals: c, ...insensible } })))
+}
+
 export async function findEspecieByTexto(texto: string) {
   return prisma.especie.findFirst({
-    where: {
-      eliminadoEn: null,
-      OR: [{ codigo: { equals: texto, ...insensible } }, { descripcion: { equals: texto, ...insensible } }],
-    },
+    where: { eliminadoEn: null, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
   })
 }
 
 export async function findVariedadByTexto(especieId: number, texto: string) {
   return prisma.variedad.findFirst({
-    where: {
-      especieId,
-      eliminadoEn: null,
-      OR: [{ codigo: { equals: texto, ...insensible } }, { descripcion: { equals: texto, ...insensible } }],
-    },
+    where: { especieId, eliminadoEn: null, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
   })
 }
 
 export async function findCategoriaByTexto(especieId: number, texto: string) {
   return prisma.categoria.findFirst({
-    where: {
-      especieId,
-      eliminadoEn: null,
-      OR: [{ codigo: { equals: texto, ...insensible } }, { descripcion: { equals: texto, ...insensible } }],
-    },
+    where: { especieId, eliminadoEn: null, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
   })
 }
 
 export async function findCalibreByTexto(especieId: number, texto: string) {
   return prisma.calibre.findFirst({
-    where: {
-      especieId,
-      eliminadoEn: null,
-      OR: [{ codigo: { equals: texto, ...insensible } }, { descripcion: { equals: texto, ...insensible } }],
-    },
+    where: { especieId, eliminadoEn: null, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
   })
 }
 
 export async function findArticuloByTexto(texto: string) {
   return prisma.articulo.findFirst({
-    where: {
-      tipo: 'EMBALAJE',
-      activo: true,
-      OR: [{ codigo: { equals: texto, ...insensible } }, { descripcion: { equals: texto, ...insensible } }],
-    },
+    where: { tipo: 'EMBALAJE', activo: true, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
   })
 }
 
@@ -201,11 +205,7 @@ export async function findProductorByTexto(texto: string) {
       eliminadoEn: null,
       activo: true,
       tipos: { has: 'PRODUCTOR' },
-      OR: [
-        { codigo: { equals: texto, ...insensible } },
-        { descripcion: { equals: texto, ...insensible } },
-        { razonSocial: { equals: texto, ...insensible } },
-      ],
+      OR: condicionesPorCampos(['codigo', 'descripcion', 'razonSocial'], texto),
     },
   })
 }

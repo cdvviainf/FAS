@@ -266,6 +266,26 @@ describe('Motor de validación de Recepción contra PostgreSQL (compras.md §7)'
     expect(pallets[0].lineas[0].calibreId).toBe(f.calibreChico.id)
   })
 
+  it('resuelve especie/variedad en plural contra el maestro en singular ("Uvas" -> "Uva")', async () => {
+    const f = await crearFixtures()
+    const oc = await crearOcEmitida(f, 100, 1)
+    const template = await crearTemplateCarga(f.empresa.id)
+    const recepcion = await crearRecepcion(f.empresa.id, {
+      ordenCompraId: oc.id,
+      plantaId: f.planta.id,
+      direccionPlantaId: f.direccionPlanta.id,
+      templateCargaId: template.id,
+    }, 'test')
+
+    // f.especie.descripcion === 'Uva' (singular) — el Excel trae "Uvas".
+    const excel = await armarExcel([filaBase(f, { especie: 'Uvas' })])
+    const resultado = await subirAdjunto(f.empresa.id, recepcion.id, { nombre: 'recepcion.xlsx', mime: MIME_XLSX, datos: excel }, 'test')
+
+    expect(resultado.recepcion.estado).toBe('VALIDADA')
+    const pallets = await prisma.pallet.findMany({ where: { recepcionId: recepcion.id }, include: { lineas: true } })
+    expect(pallets[0].lineas[0].especieId).toBe(f.especie.id)
+  })
+
   it('ignora las filas de cierre (Total, Firma...) después del último pallet en vez de rechazarlas como error', async () => {
     const f = await crearFixtures()
     const oc = await crearOcEmitida(f, 100, 1)
