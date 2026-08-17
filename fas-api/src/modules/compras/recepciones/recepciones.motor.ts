@@ -1,11 +1,24 @@
-// Motor de validación / carga de Recepción (compras.md §7). Orquesta:
-// leer el Excel -> resolver texto contra maestros -> (si hay OC) comparar
-// contra las líneas de la OC -> crear Pallet/PalletLinea o rechazar.
-// Todo o nada: cualquier fila sin resolver o cualquier diferencia contra la
-// OC aborta la carga completa (no se genera ningún pallet).
+// Motor de validación / carga de Recepción (compras.md §7), en 4 etapas
+// secuenciales — cada una junta TODOS sus errores antes de decidir si
+// aborta (nunca corta en el primer fallo dentro de una etapa), pero una
+// etapa con errores sí impide pasar a la siguiente (no tiene sentido buscar
+// maestros para una fila que ni siquiera trae Especie).
+//
+//   Etapa 1 — Template: el mapeo de columnas del Template de Carga
+//             realmente existe en este Excel.
+//   Etapa 2 — Filas: cada fila trae los 8 campos completos y con formato
+//             válido (sin tocar la BD todavía).
+//   Etapa 3 — Maestros: cada valor de texto resuelve a un registro real
+//             (especie/variedad/categoría/artículo/calibre/productor), más
+//             la consistencia de agrupación en pallets (compras.md §4.5).
+//             Si hay OC, además se compara contra sus líneas (§7.1/§7.2).
+//   Etapa 4 — Inserción: todo cuadró — se crean Pallet/PalletLinea y se
+//             actualizan los estados, todo en una transacción (todo o
+//             nada, §7.3). Vive en recepciones.repository.ts porque
+//             necesita correr dentro de la transacción/lock.
 import { ValidationError } from '../../../shared/errors.js'
 import * as repo from './recepciones.repository.js'
-import { leerFilasExcel, type FilaExcelCruda } from './recepciones.excel.js'
+import { cargarPrimeraHoja, resolverMapeoColumnas, leerFilasCrudas, type FilaExcelCruda } from './recepciones.excel.js'
 import { compararLineasOcConExcel } from './recepciones.comparacion.js'
 
 interface FilaResuelta {
@@ -36,9 +49,36 @@ interface RecepcionParaMotor {
   } | null
 }
 
-// ─── Resolución texto -> ID (con caché en memoria del propio archivo) ────────
+// ─── Etapa 2: filas completas y con datos válidos (sin BD) ────────────────
 
-async function resolverFilas(filasCrudas: FilaExcelCruda[]) {
+function validarFilasCompletas(filasCrudas: FilaExcelCruda[]): string[] {
+  const errores: string[] = []
+  for (const f of filasCrudas) {
+    if (!f.numeroPallet) errores.push(`Fila ${f.fila}: falta el N° de Pallet`)
+    if (!f.especie) errores.push(`Fila ${f.fila}: falta la Especie`)
+    if (!f.variedad) errores.push(`Fila ${f.fila}: falta la Variedad`)
+    if (!f.categoria) errores.push(`Fila ${f.fila}: falta la Categoría`)
+    if (!f.articulo) errores.push(`Fila ${f.fila}: falta el Artículo/Embalaje`)
+    if (!f.calibre) errores.push(`Fila ${f.fila}: falta el Calibre`)
+    if (!f.productor) errores.push(`Fila ${f.fila}: falta el Productor`)
+
+    if (!f.cajas) {
+      errores.push(`Fila ${f.fila}: faltan las Cajas`)
+    } else {
+      const cajas = Number(f.cajas.replace(',', '.'))
+      if (!Number.isFinite(cajas) || !Number.isInteger(cajas) || cajas <= 0) {
+        errores.push(`Fila ${f.fila}: Cajas "${f.cajas}" no es un número entero válido`)
+      }
+    }
+  }
+  return errores
+}
+
+// ─── Etapa 3a: resolución texto -> ID contra los maestros ─────────────────
+// Asume que la Etapa 2 ya pasó limpia: todo campo llega no-vacío y `cajas`
+// ya es un entero válido — acá solo se valida que el valor exista en BD.
+
+async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ filas: FilaResuelta[]; errores: string[] }> {
   const cacheEspecie = new Map<string, Awaited<ReturnType<typeof repo.findEspecieByTexto>>>()
   const cacheVariedad = new Map<string, Awaited<ReturnType<typeof repo.findVariedadByTexto>>>()
   const cacheCategoria = new Map<string, Awaited<ReturnType<typeof repo.findCategoriaByTexto>>>()
@@ -52,13 +92,15 @@ async function resolverFilas(filasCrudas: FilaExcelCruda[]) {
   for (const cruda of filasCrudas) {
     const erroresFila: string[] = []
 
-    if (!cruda.numeroPallet) erroresFila.push(`Fila ${cruda.fila}: falta el N° de Pallet`)
-
     const keyEspecie = cruda.especie.toLowerCase()
     if (!cacheEspecie.has(keyEspecie)) cacheEspecie.set(keyEspecie, await repo.findEspecieByTexto(cruda.especie))
     const especie = cacheEspecie.get(keyEspecie)
     if (!especie) erroresFila.push(`Fila ${cruda.fila}: Especie "${cruda.especie}" no existe en el maestro`)
 
+    // Variedad/Categoría/Calibre están scoped por especie — sin especie
+    // resuelta no hay contra qué buscarlos, así que se saltan (ya se
+    // reportó el problema de raíz arriba; no tiene sentido duplicarlo tres
+    // veces más para la misma fila).
     let variedad: Awaited<ReturnType<typeof repo.findVariedadByTexto>> = null
     let categoria: Awaited<ReturnType<typeof repo.findCategoriaByTexto>> = null
     let calibre: Awaited<ReturnType<typeof repo.findCalibreByTexto>> = null
@@ -89,18 +131,13 @@ async function resolverFilas(filasCrudas: FilaExcelCruda[]) {
     const productor = cacheProductor.get(keyProductor)
     if (!productor) erroresFila.push(`Fila ${cruda.fila}: Productor "${cruda.productor}" no existe en el maestro`)
 
-    const cajas = Number(cruda.cajas.replace(',', '.'))
-    if (!Number.isFinite(cajas) || !Number.isInteger(cajas) || cajas <= 0) {
-      erroresFila.push(`Fila ${cruda.fila}: Cajas "${cruda.cajas}" no es un número entero válido`)
-    }
-
     if (erroresFila.length > 0) {
       errores.push(...erroresFila)
       continue
     }
 
-    // A esta altura especie/variedad/categoria/calibre/articulo/productor están
-    // garantizados (si alguno faltara, erroresFila no estaría vacío arriba).
+    // Etapa 2 ya garantizó formato; acá solo falta el parseo final.
+    const cajas = Number(cruda.cajas.replace(',', '.'))
     const e = especie!, v = variedad!, c = categoria!, cal = calibre!, art = articulo!, prod = productor!
     filas.push({
       fila: cruda.fila,
@@ -122,7 +159,7 @@ async function resolverFilas(filasCrudas: FilaExcelCruda[]) {
   return { filas, errores }
 }
 
-// ─── Agrupación en pallets (compras.md §4.5: un pallet puede tener varias líneas) ─
+// ─── Etapa 3b: agrupación en pallets (compras.md §4.5: un pallet puede tener varias líneas) ─
 
 function agruparEnPallets(filas: FilaResuelta[]) {
   const porPallet = new Map<string, FilaResuelta[]>()
@@ -162,7 +199,7 @@ function agruparEnPallets(filas: FilaResuelta[]) {
   return { pallets, errores }
 }
 
-// ─── Comparación contra OC (compras.md §7.1/§7.2) ─────────────────────────────
+// ─── Etapa 3c: comparación contra OC (compras.md §7.1/§7.2) ───────────────
 
 // Chequeo optimista, sin lock — da feedback rápido al usuario en el caso
 // común. No es la autoridad final: la Orden de Compra puede seguir
@@ -181,18 +218,35 @@ export async function procesarCargaExcel(recepcion: RecepcionParaMotor, buffer: 
   if (!recepcion.templateCargaId || !recepcion.templateCarga) {
     throw new ValidationError('Esta Recepción no tiene un Template de Carga asignado — selecciona uno antes de subir el Excel')
   }
+  const template = recepcion.templateCarga
 
-  const filasCrudas = await leerFilasExcel(buffer, recepcion.templateCarga)
-  const { filas, errores: erroresResolucion } = await resolverFilas(filasCrudas)
-  if (erroresResolucion.length > 0) {
-    throw new ValidationError('No se pudo procesar el archivo: hay datos que no coinciden con los maestros', {
-      diferencias: erroresResolucion,
-    })
+  const hoja = await cargarPrimeraHoja(buffer)
+
+  // Etapa 1 — Template: columnas mapeadas que de verdad existen en el Excel.
+  const { indicePorCampo, errores: erroresMapeo } = resolverMapeoColumnas(hoja, template)
+  if (erroresMapeo.length > 0) {
+    throw new ValidationError('Etapa 1 — El Template de Carga no coincide con este Excel', { diferencias: erroresMapeo })
+  }
+
+  const filasCrudas = leerFilasCrudas(hoja, template, indicePorCampo)
+
+  // Etapa 2 — Filas: completas y con formato válido, sin tocar la BD.
+  const erroresFilas = validarFilasCompletas(filasCrudas)
+  if (erroresFilas.length > 0) {
+    throw new ValidationError('Etapa 2 — Hay filas incompletas o con datos inválidos', { diferencias: erroresFilas })
+  }
+
+  // Etapa 3 — Maestros: cada valor resuelve a un registro real, la
+  // agrupación en pallets es consistente y (si hay OC) todo cuadra contra
+  // sus líneas.
+  const { filas, errores: erroresMaestros } = await resolverContraMaestros(filasCrudas)
+  if (erroresMaestros.length > 0) {
+    throw new ValidationError('Etapa 3 — Hay datos que no existen en los maestros', { diferencias: erroresMaestros })
   }
 
   const { pallets, errores: erroresAgrupacion } = agruparEnPallets(filas)
   if (erroresAgrupacion.length > 0) {
-    throw new ValidationError('No se pudo procesar el archivo', { diferencias: erroresAgrupacion })
+    throw new ValidationError('Etapa 3 — Inconsistencias al agrupar los pallets', { diferencias: erroresAgrupacion })
   }
 
   const origen: 'COMPRA' | 'CONSIGNACION' = recepcion.ordenCompraId ? 'COMPRA' : 'CONSIGNACION'
@@ -200,14 +254,14 @@ export async function procesarCargaExcel(recepcion: RecepcionParaMotor, buffer: 
   if (recepcion.ordenCompraId) {
     const diferencias = await compararContraOc(recepcion.ordenCompraId, filas)
     if (diferencias.length > 0) {
-      throw new ValidationError('No coincide la OC con la carga', { diferencias })
+      throw new ValidationError('Etapa 3 — No coincide la OC con la carga', { diferencias })
     }
   }
 
-  // Todo cuadra (o no hay OC contra qué comparar): se cargan los pallets.
-  // `filas` viaja también para que repo.crearPalletsYValidar pueda re-hacer
-  // esta misma comparación bajo lock, contra una lectura fresca de la OC
-  // (QA-RCV-007) — este resultado optimista de arriba no es la autoridad final.
+  // Etapa 4 — Inserción: todo cuadró, se cargan los pallets. `filas` viaja
+  // también para que repo.crearPalletsYValidar pueda re-hacer la
+  // comparación contra OC bajo lock, contra una lectura fresca (QA-RCV-007)
+  // — el chequeo optimista de arriba no es la autoridad final.
   const recepcionActualizada = await repo.crearPalletsYValidar(recepcion.id, origen, recepcion.ordenCompraId, filas, pallets)
   return {
     recepcion: recepcionActualizada,

@@ -180,7 +180,7 @@ interface FilaTestExcel {
   categoria: string
   articulo: string
   calibre: string
-  cajas: number
+  cajas: number | string // string para forzar un valor no numérico en los tests de Etapa 2
   productor: string
 }
 
@@ -328,6 +328,117 @@ describe('Motor de validación de Recepción contra PostgreSQL (compras.md §7)'
     ).rejects.toMatchObject({
       statusCode: 422,
       details: { diferencias: [expect.stringContaining('Variedad "Variedad Inexistente" no existe')] },
+    })
+  })
+
+  it('Etapa 1: junta TODAS las columnas del Template que no coinciden con el Excel, no solo la primera', async () => {
+    const f = await crearFixtures()
+    const oc = await crearOcEmitida(f, 100, 1)
+    const templateMalMapeado = await prisma.templateCarga.create({
+      data: {
+        empresaId: f.empresa.id,
+        codigo: 'TPL-MAL-01',
+        tipo: 'RECEPCION',
+        descripcion: 'Template con columnas mal mapeadas',
+        tieneCabecera: true,
+        filaCabecera: 1,
+        filaPrimerRegistro: 2,
+        creadoPor: 'test',
+        campos: {
+          create: [
+            { campo: 'NUMERO_PALLET', columna: 'ColumnaQueNoExiste1' },
+            { campo: 'ESPECIE', columna: 'ColumnaQueNoExiste2' },
+            { campo: 'VARIEDAD', columna: 'Variedad' },
+            { campo: 'CATEGORIA', columna: 'Categoria' },
+            { campo: 'ARTICULO', columna: 'Articulo' },
+            { campo: 'CALIBRE', columna: 'Calibre' },
+            { campo: 'CAJAS', columna: 'Cajas' },
+            { campo: 'PRODUCTOR', columna: 'Productor' },
+          ],
+        },
+      },
+    })
+    const recepcion = await crearRecepcion(f.empresa.id, {
+      ordenCompraId: oc.id,
+      plantaId: f.planta.id,
+      direccionPlantaId: f.direccionPlanta.id,
+      templateCargaId: templateMalMapeado.id,
+    }, 'test')
+
+    const excel = await armarExcel([filaBase(f)])
+    await expect(
+      subirAdjunto(f.empresa.id, recepcion.id, { nombre: 'recepcion.xlsx', mime: MIME_XLSX, datos: excel }, 'test'),
+    ).rejects.toMatchObject({
+      statusCode: 422,
+      message: expect.stringContaining('Etapa 1'),
+      details: {
+        diferencias: expect.arrayContaining([
+          expect.stringContaining('ColumnaQueNoExiste1'),
+          expect.stringContaining('ColumnaQueNoExiste2'),
+        ]),
+      },
+    })
+  })
+
+  it('Etapa 2: junta TODOS los errores de filas incompletas/inválidas, no solo el primero', async () => {
+    const f = await crearFixtures()
+    const oc = await crearOcEmitida(f, 100, 1)
+    const template = await crearTemplateCarga(f.empresa.id)
+    const recepcion = await crearRecepcion(f.empresa.id, {
+      ordenCompraId: oc.id,
+      plantaId: f.planta.id,
+      direccionPlantaId: f.direccionPlanta.id,
+      templateCargaId: template.id,
+    }, 'test')
+
+    const excel = await armarExcel([
+      filaBase(f, { pallet: 'P-001', especie: '' }),
+      filaBase(f, { pallet: '', productor: 'PROD-01' }),
+      filaBase(f, { pallet: 'P-003', cajas: 'no-es-numero' }),
+    ])
+    await expect(
+      subirAdjunto(f.empresa.id, recepcion.id, { nombre: 'recepcion.xlsx', mime: MIME_XLSX, datos: excel }, 'test'),
+    ).rejects.toMatchObject({
+      statusCode: 422,
+      message: expect.stringContaining('Etapa 2'),
+      details: {
+        diferencias: expect.arrayContaining([
+          expect.stringContaining('falta la Especie'),
+          expect.stringContaining('falta el N° de Pallet'),
+          expect.stringContaining('no es un número entero válido'),
+        ]),
+      },
+    })
+  })
+
+  it('Etapa 3: junta TODOS los errores de maestros no encontrados en distintas filas, no solo el primero', async () => {
+    const f = await crearFixtures()
+    const oc = await crearOcEmitida(f, 100, 1)
+    const template = await crearTemplateCarga(f.empresa.id)
+    const recepcion = await crearRecepcion(f.empresa.id, {
+      ordenCompraId: oc.id,
+      plantaId: f.planta.id,
+      direccionPlantaId: f.direccionPlanta.id,
+      templateCargaId: template.id,
+    }, 'test')
+
+    const excel = await armarExcel([
+      filaBase(f, { pallet: 'P-001', variedad: 'Variedad Inexistente' }),
+      filaBase(f, { pallet: 'P-002', articulo: 'Articulo Inexistente' }),
+      filaBase(f, { pallet: 'P-003', productor: 'PROD-INEXISTENTE' }),
+    ])
+    await expect(
+      subirAdjunto(f.empresa.id, recepcion.id, { nombre: 'recepcion.xlsx', mime: MIME_XLSX, datos: excel }, 'test'),
+    ).rejects.toMatchObject({
+      statusCode: 422,
+      message: expect.stringContaining('Etapa 3'),
+      details: {
+        diferencias: expect.arrayContaining([
+          expect.stringContaining('Variedad "Variedad Inexistente" no existe'),
+          expect.stringContaining('Artículo/Embalaje "Articulo Inexistente" no existe'),
+          expect.stringContaining('Productor "PROD-INEXISTENTE" no existe'),
+        ]),
+      },
     })
   })
 

@@ -1,10 +1,15 @@
 // Lector de Excel de Recepción (compras.md §9.2 + §7). Usa el mapeo del
 // TemplateCarga (columna por campo, fila de inicio) para extraer filas
 // crudas — sin resolver todavía contra los maestros (eso lo hace el motor,
-// recepciones.motor.ts).
+// recepciones.motor.ts, en su Etapa 3).
+//
+// Etapa 1 del motor (validar que el Template esté bien mapeado contra el
+// Excel real) vive acá: resolverMapeoColumnas() nunca corta al primer
+// problema — junta TODAS las columnas que falten antes de que el motor
+// decida si aborta.
 import ExcelJS from 'exceljs'
 import { ValidationError } from '../../../shared/errors.js'
-import { CAMPOS_POR_TIPO } from '../../config/templates-carga/templates-carga.types.js'
+import { CAMPOS_POR_TIPO, CAMPO_TEMPLATE_CARGA_LABELS } from '../../config/templates-carga/templates-carga.types.js'
 
 export interface FilaExcelCruda {
   fila: number
@@ -50,7 +55,7 @@ function textoCelda(valor: ExcelJS.CellValue): string {
   return String(valor).trim()
 }
 
-export async function leerFilasExcel(buffer: Buffer, template: TemplateParaLectura): Promise<FilaExcelCruda[]> {
+export async function cargarPrimeraHoja(buffer: Buffer): Promise<ExcelJS.Worksheet> {
   const wb = new ExcelJS.Workbook()
   try {
     // El .d.ts de exceljs declara su propio Buffer que no coincide
@@ -62,9 +67,19 @@ export async function leerFilasExcel(buffer: Buffer, template: TemplateParaLectu
   }
   const hoja = wb.worksheets[0]
   if (!hoja) throw new ValidationError('El archivo Excel no tiene ninguna hoja')
+  return hoja
+}
 
-  // Resolver, para cada campo del template, el índice de columna a leer.
+// Etapa 1: que el Template de Carga mapee columnas que de verdad existen en
+// este Excel. No resuelve nada de datos todavía — solo valida el mapeo.
+// Junta TODAS las columnas que falten (no corta en la primera).
+export function resolverMapeoColumnas(
+  hoja: ExcelJS.Worksheet,
+  template: TemplateParaLectura,
+): { indicePorCampo: Map<string, number>; errores: string[] } {
   const indicePorCampo = new Map<string, number>()
+  const errores: string[] = []
+
   if (template.tieneCabecera) {
     const filaCab = hoja.getRow(template.filaCabecera!)
     for (const c of template.campos) {
@@ -73,16 +88,29 @@ export async function leerFilasExcel(buffer: Buffer, template: TemplateParaLectu
         if (textoCelda(cell.value).toLowerCase() === c.columna.trim().toLowerCase()) idx = colNumber
       })
       if (idx == null) {
-        throw new ValidationError(
-          `No se encontró la columna "${c.columna}" en la fila de cabecera (fila ${template.filaCabecera}) del Excel — revisa el Template de Carga o el archivo.`,
+        const label = CAMPO_TEMPLATE_CARGA_LABELS[c.campo] ?? c.campo
+        errores.push(
+          `No se encontró la columna "${c.columna}" (campo ${label}) en la fila de cabecera (fila ${template.filaCabecera}) del Excel`,
         )
+      } else {
+        indicePorCampo.set(c.campo, idx)
       }
-      indicePorCampo.set(c.campo, idx)
     }
   } else {
     for (const c of template.campos) indicePorCampo.set(c.campo, columnaLetraAIndice(c.columna))
   }
 
+  return { indicePorCampo, errores }
+}
+
+// Etapa 1.5 (extracción pura, no valida contenido): asume que
+// resolverMapeoColumnas() ya no tiene errores. La validación de que cada
+// fila esté completa y con datos válidos es la Etapa 2, en el motor.
+export function leerFilasCrudas(
+  hoja: ExcelJS.Worksheet,
+  template: TemplateParaLectura,
+  indicePorCampo: Map<string, number>,
+): FilaExcelCruda[] {
   const filas: FilaExcelCruda[] = []
   let fila = template.filaPrimerRegistro
   let vaciasSeguidas = 0
