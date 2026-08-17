@@ -131,7 +131,6 @@ export function leerFilasCrudas(
 ): FilaExcelCruda[] {
   const filas: FilaExcelCruda[] = []
   let fila = template.filaPrimerRegistro
-  let vaciasSeguidas = 0
   while (fila - template.filaPrimerRegistro < MAX_FILAS) {
     const row = hoja.getRow(fila)
     const valores: Record<string, string> = {}
@@ -139,26 +138,25 @@ export function leerFilasCrudas(
       const idx = indicePorCampo.get(campo)
       valores[campo] = idx ? textoCelda(row.getCell(idx).value) : ''
     }
-    const vacia = Object.values(valores).every((v) => v === '')
-    if (vacia) {
-      vaciasSeguidas++
-      // Dos filas vacías seguidas: se asume fin de los datos (una sola fila
-      // vacía suelta en medio de la planilla no corta la lectura).
-      if (vaciasSeguidas >= 2) break
-    } else {
-      vaciasSeguidas = 0
-      filas.push({
-        fila,
-        numeroPallet: valores.NUMERO_PALLET,
-        especie: valores.ESPECIE,
-        variedad: valores.VARIEDAD,
-        categoria: valores.CATEGORIA,
-        articulo: valores.ARTICULO,
-        calibre: valores.CALIBRE,
-        cajas: valores.CAJAS,
-        productor: valores.PRODUCTOR,
-      })
-    }
+    // N° de Pallet vacío = fin de la tabla de datos, no un error. Un
+    // Packing List real casi siempre trae filas de cierre después del
+    // último pallet (Total, Firma Despachador, Firma Recibe...) que sí
+    // tienen texto en alguna columna pero nunca un N° de Pallet propio —
+    // tratarlas como "fila vacía" (que exige TODAS las columnas vacías)
+    // las dejaba pasar como datos y el motor las rechazaba con errores que
+    // no tienen sentido para el usuario (ej. "Especie 'Total' no existe").
+    if (!valores.NUMERO_PALLET) break
+    filas.push({
+      fila,
+      numeroPallet: valores.NUMERO_PALLET,
+      especie: valores.ESPECIE,
+      variedad: valores.VARIEDAD,
+      categoria: valores.CATEGORIA,
+      articulo: valores.ARTICULO,
+      calibre: valores.CALIBRE,
+      cajas: valores.CAJAS,
+      productor: valores.PRODUCTOR,
+    })
     fila++
   }
 

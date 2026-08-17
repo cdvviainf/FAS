@@ -266,6 +266,31 @@ describe('Motor de validación de Recepción contra PostgreSQL (compras.md §7)'
     expect(pallets[0].lineas[0].calibreId).toBe(f.calibreChico.id)
   })
 
+  it('ignora las filas de cierre (Total, Firma...) después del último pallet en vez de rechazarlas como error', async () => {
+    const f = await crearFixtures()
+    const oc = await crearOcEmitida(f, 100, 1)
+    const template = await crearTemplateCarga(f.empresa.id)
+    const recepcion = await crearRecepcion(f.empresa.id, {
+      ordenCompraId: oc.id,
+      plantaId: f.planta.id,
+      direccionPlantaId: f.direccionPlanta.id,
+      templateCargaId: template.id,
+    }, 'test')
+
+    // Packing List real típico: después del último pallet vienen filas de
+    // cierre (Total, Firma Despachador...) con texto suelto en alguna
+    // columna pero SIN N° de Pallet propio — no deben tratarse como datos.
+    const excel = await armarExcel([
+      filaBase(f),
+      { pallet: '', especie: 'TOTAL', variedad: '', categoria: '', articulo: '', calibre: '', cajas: 100, productor: '' },
+      { pallet: '', especie: 'Firma Despachador', variedad: '', categoria: '', articulo: '', calibre: '', cajas: '', productor: '' },
+    ])
+    const resultado = await subirAdjunto(f.empresa.id, recepcion.id, { nombre: 'recepcion.xlsx', mime: MIME_XLSX, datos: excel }, 'test')
+
+    expect(resultado.recepcion.estado).toBe('VALIDADA')
+    expect(resultado.resumen).toEqual({ pallets: 1, cajas: 100 })
+  })
+
   it('modo COMPRA: rechaza todo-o-nada si las cajas no cuadran, y no genera ningún pallet', async () => {
     const f = await crearFixtures()
     const oc = await crearOcEmitida(f, 100, 1)
@@ -393,7 +418,7 @@ describe('Motor de validación de Recepción contra PostgreSQL (compras.md §7)'
 
     const excel = await armarExcel([
       filaBase(f, { pallet: 'P-001', especie: '' }),
-      filaBase(f, { pallet: '', productor: 'PROD-01' }),
+      filaBase(f, { pallet: 'P-002', productor: '' }),
       filaBase(f, { pallet: 'P-003', cajas: 'no-es-numero' }),
     ])
     await expect(
@@ -404,7 +429,7 @@ describe('Motor de validación de Recepción contra PostgreSQL (compras.md §7)'
       details: {
         diferencias: expect.arrayContaining([
           expect.stringContaining('falta la Especie'),
-          expect.stringContaining('falta el N° de Pallet'),
+          expect.stringContaining('falta el Productor'),
           expect.stringContaining('no es un número entero válido'),
         ]),
       },
