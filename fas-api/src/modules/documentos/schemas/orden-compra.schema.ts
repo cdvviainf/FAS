@@ -8,6 +8,9 @@ export const ordenCompraPdfPayloadSchema = z.object({
     razonSocial: z.string(),
     rut: z.string().nullable(),
     direccion: z.string().nullable(),
+    // data: URI (base64) — Playwright no toca la red al renderizar (Etapa 4
+    // §6), así que el logo viaja embebido, nunca como <img src="http...">.
+    logoDataUri: z.string().nullable(),
   }),
   numero: z.string(),
   fecha: z.string(), // ISO — fmt.fecha la formatea en la plantilla

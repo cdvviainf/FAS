@@ -33,6 +33,7 @@ import { Icons } from '@/components/icons'
 import { ComunaQuickCreate } from '@/features/comunas/components/comuna-quick-create'
 import { useEmpresa } from '@/contexts/empresa-context'
 import { SmtpConfigForm } from '@/features/configuracion-general/components/smtp-config-form'
+import { LogoUploadField } from './logo-upload-field'
 import { empresaDetailOptions, empresasKeys, empresasPaisesOptions, empresasComunasOptions } from '../queries'
 import { empresasService } from '../service'
 import type {
@@ -453,7 +454,7 @@ export function EmpresaForm({ empresaId }: EmpresaFormProps) {
     activo: true,
   })
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
-  const [activeTab, setActiveTab] = useState<'empresa' | 'direcciones' | 'contactos' | 'smtp'>('empresa')
+  const [activeTab, setActiveTab] = useState<'empresa' | 'direcciones' | 'contactos' | 'logo' | 'smtp'>('empresa')
 
   // ── Sub-listas (para create: local state; para edit: desde API) ──
   const [localDirecciones, setLocalDirecciones] = useState<(DireccionCreateInput & { _localId: number })[]>([])
@@ -767,6 +768,7 @@ export function EmpresaForm({ empresaId }: EmpresaFormProps) {
               <Badge variant='secondary' className='ml-1.5 h-5 px-1.5 text-xs'>{contactosToShow.length}</Badge>
             )}
           </TabsTrigger>
+          {isEdit && <TabsTrigger value='logo'>Logo</TabsTrigger>}
           {isEdit && <TabsTrigger value='smtp'>SMTP</TabsTrigger>}
         </TabsList>
 
@@ -1051,7 +1053,24 @@ export function EmpresaForm({ empresaId }: EmpresaFormProps) {
           </Card>
         </TabsContent>
 
-        {/* ── Tab 4: SMTP (solo edición) ── */}
+        {/* ── Tab 4: Logo (solo edición) ── */}
+        {isEdit && (
+          <TabsContent value='logo' className='mt-4'>
+            <Card>
+              <CardHeader>
+                <CardTitle className='text-base'>Logo</CardTitle>
+                <CardDescription>
+                  Aparece en el encabezado de los documentos PDF que emite esta empresa.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <LogoUploadField empresaId={empresaId!} logo={empresa?.logo ?? null} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {/* ── Tab 5: SMTP (solo edición) ── */}
         {isEdit && (
           <TabsContent value='smtp' className='mt-4'>
             {esEmpresaActiva ? (

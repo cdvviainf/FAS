@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError } from '../../../shared/errors.js'
 import { getOrdenCompraById } from '../../compras/ordenes-compra/ordenes-compra.repository.js'
-import { getEmpresaParaDocumento, getEntidadParaDocumento } from '../documentos.repository.js'
+import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
 import type { OrdenCompraPdfPayload } from '../schemas/orden-compra.schema.js'
 
 export const FECHA_REFERENCIA_LABEL: Record<string, string> = {
@@ -71,6 +71,7 @@ export async function resolverOrdenCompra(id: number, empresaId: number): Promis
       razonSocial: empresa?.razonSocial ?? '—',
       rut: empresa?.rut ?? null,
       direccion: empresa?.direcciones[0]?.direccion ?? null,
+      logoDataUri: logoDataUri(empresa?.logo),
     },
     numero: oc.numero,
     fecha: oc.fecha.toISOString(),

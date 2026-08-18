@@ -12,6 +12,9 @@ import {
   createContacto,
   updateContacto,
   deleteContacto,
+  subirLogo,
+  descargarLogo,
+  eliminarLogo,
 } from './empresas.controller.js'
 
 const ITEM = 'CONFIG_EMPRESAS'
@@ -76,5 +79,22 @@ export async function empresasRoutes(app: FastifyInstance) {
     '/empresas/:id/contactos/:conId',
     { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
     deleteContacto,
+  )
+
+  // ── Logo ───────────────────────────────────────────────────────────────────
+  app.get(
+    '/empresas/:id/logo',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    descargarLogo,
+  )
+  app.post(
+    '/empresas/:id/logo',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    subirLogo,
+  )
+  app.delete(
+    '/empresas/:id/logo',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    eliminarLogo,
   )
 }

@@ -47,6 +47,12 @@ export interface EmpresaListItem {
   creadoEn: string
 }
 
+export interface EmpresaLogoInfo {
+  mime: string
+  subidoEn: string
+  subidoPor: string
+}
+
 export interface EmpresaDetalle {
   id: number
   codigo: string
@@ -59,6 +65,7 @@ export interface EmpresaDetalle {
   activo: boolean
   direcciones: DireccionItem[]
   contactos: ContactoItem[]
+  logo: EmpresaLogoInfo | null
 }
 
 export interface EmpresaListResponse {

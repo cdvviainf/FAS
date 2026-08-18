@@ -70,6 +70,9 @@ export async function findEmpresaById(id: number) {
   return prisma.empresa.findFirst({
     where: { id, eliminadoEn: null },
     include: {
+      // Solo metadata del logo (nunca `datos`) — el binario se sirve aparte
+      // vía descargarLogoEmpresa, igual que RecepcionAdjunto.
+      logo: { select: { mime: true, subidoEn: true, subidoPor: true } },
       direcciones: {
         where: { eliminadoEn: null },
         select: {
@@ -392,4 +395,28 @@ export async function softDeleteContacto(id: number, eliminadoPor: string) {
     where: { id },
     data: { eliminadoEn: new Date(), eliminadoPor },
   })
+}
+
+// ─── Logo ─────────────────────────────────────────────────────────────────────
+
+// Upsert: subir un logo nuevo reemplaza al anterior (no hay historial, un
+// logo por empresa — mismo criterio que ConfiguracionCorreo por empresa).
+export async function upsertLogo(
+  empresaId: number,
+  data: { mime: string; datos: Buffer },
+  subidoPor: string,
+) {
+  return prisma.empresaLogo.upsert({
+    where: { empresaId },
+    create: { empresaId, mime: data.mime, datos: data.datos, subidoPor },
+    update: { mime: data.mime, datos: data.datos, subidoPor, subidoEn: new Date() },
+  })
+}
+
+export async function findLogoConDatos(empresaId: number) {
+  return prisma.empresaLogo.findUnique({ where: { empresaId } })
+}
+
+export async function deleteLogo(empresaId: number) {
+  await prisma.empresaLogo.deleteMany({ where: { empresaId } })
 }

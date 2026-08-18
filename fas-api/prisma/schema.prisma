@@ -233,8 +233,26 @@ model Empresa {
   pallets              Pallet[]
   templatesCarga       TemplateCarga[]
   documentosEmitidos   DocumentoEmitido[]
+  logo                 EmpresaLogo?
 
   @@map("empresas")
+}
+
+// Logo de marca para el Encabezado de los documentos PDF (Motor de
+// Documentos, Etapa 4 §12 — "pendiente manual de marca"). Tabla separada de
+// Empresa (mismo patrón que RecepcionAdjuntoContenido/DocumentoEmitido.pdf)
+// para que las queries normales de Empresa (listados, selector de header)
+// no arrastren el binario. Un logo por empresa — subir uno nuevo reemplaza
+// al anterior (no hay historial).
+model EmpresaLogo {
+  empresaId Int      @id
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  mime      String
+  datos     Bytes
+  subidoEn  DateTime @default(now())
+  subidoPor String
+
+  @@map("empresa_logos")
 }
 
 model EmpresaDireccion {

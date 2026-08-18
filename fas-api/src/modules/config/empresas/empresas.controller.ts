@@ -1,4 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
+import { ValidationError } from '../../../shared/errors.js'
 import * as service from './empresas.service.js'
 import {
   empresaCreateSchema,
@@ -87,5 +88,34 @@ export async function updateContacto(req: FastifyRequest, reply: FastifyReply) {
 export async function deleteContacto(req: FastifyRequest, reply: FastifyReply) {
   const { id, conId } = empresaContactoParamSchema.parse(req.params)
   await service.eliminarContacto(id, conId, req.fasUserId!)
+  return reply.status(204).send()
+}
+
+// ─── Logo ─────────────────────────────────────────────────────────────────────
+
+export async function subirLogo(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = empresaIdParamSchema.parse(req.params)
+
+  const archivo = await req.file()
+  if (!archivo) throw new ValidationError('No se recibió ningún archivo')
+
+  const datos = await archivo.toBuffer()
+  await service.subirLogo(id, { mime: archivo.mimetype, datos }, req.fasUserId!)
+  return reply.status(201).send({ data: { ok: true } })
+}
+
+export async function descargarLogo(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = empresaIdParamSchema.parse(req.params)
+  const logo = await service.descargarLogo(id)
+  return reply
+    .header('Content-Type', logo.mime)
+    .header('Content-Length', String(logo.datos.length))
+    .header('Cache-Control', 'private, max-age=300')
+    .send(logo.datos)
+}
+
+export async function eliminarLogo(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = empresaIdParamSchema.parse(req.params)
+  await service.eliminarLogo(id)
   return reply.status(204).send()
 }

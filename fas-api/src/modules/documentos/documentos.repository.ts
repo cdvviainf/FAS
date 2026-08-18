@@ -21,8 +21,18 @@ export async function getEmpresaParaDocumento(id: number) {
         orderBy: [{ esPorDefecto: 'desc' }, { codigo: 'asc' }],
         take: 1,
       },
+      logo: { select: { mime: true, datos: true } },
     },
   })
+}
+
+// Data URI listo para <img src> — Encabezado.tsx no formatea, solo pinta lo
+// que le llega (Etapa 4 §5: "prohibido formatear a mano dentro de una
+// plantilla"). null si la empresa no tiene logo subido (mantenedor de
+// Empresas, pestaña Logo).
+export function logoDataUri(logo: { mime: string; datos: Buffer } | null | undefined): string | null {
+  if (!logo) return null
+  return `data:${logo.mime};base64,${logo.datos.toString('base64')}`
 }
 
 export async function getEntidadParaDocumento(id: number) {

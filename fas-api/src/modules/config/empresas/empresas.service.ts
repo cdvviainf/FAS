@@ -263,3 +263,41 @@ export async function eliminarContacto(empresaId: number, conId: number, userId:
 
   await repo.softDeleteContacto(conId, userId)
 }
+
+// ─── Logo ─────────────────────────────────────────────────────────────────────
+
+// Playwright renderiza el HTML del documento sin red (Etapa 4 §6) — el logo
+// tiene que viajar embebido como data URI dentro del payload, no como URL.
+// SVG entra igual: Chromium headless lo rasteriza sin problema como <img>.
+const MIMES_LOGO_PERMITIDOS = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])
+const LOGO_TAMANO_MAX = 2 * 1024 * 1024 // 2MB — de sobra para un logo, el límite global de multipart es 10MB
+
+export async function subirLogo(
+  empresaId: number,
+  archivo: { mime: string; datos: Buffer },
+  subidoPor: string,
+) {
+  const empresa = await repo.findEmpresaById(empresaId)
+  if (!empresa) throw new NotFoundError('Empresa', String(empresaId))
+
+  if (!MIMES_LOGO_PERMITIDOS.has(archivo.mime)) {
+    throw new ValidationError(`Formato de imagen no soportado: "${archivo.mime}". Usa PNG, JPEG, WebP o SVG.`)
+  }
+  if (archivo.datos.length > LOGO_TAMANO_MAX) {
+    throw new ValidationError('El logo no puede superar los 2MB')
+  }
+
+  await repo.upsertLogo(empresaId, archivo, subidoPor)
+}
+
+export async function descargarLogo(empresaId: number) {
+  const logo = await repo.findLogoConDatos(empresaId)
+  if (!logo) throw new NotFoundError('Logo de la empresa', String(empresaId))
+  return logo
+}
+
+export async function eliminarLogo(empresaId: number) {
+  const empresa = await repo.findEmpresaById(empresaId)
+  if (!empresa) throw new NotFoundError('Empresa', String(empresaId))
+  await repo.deleteLogo(empresaId)
+}

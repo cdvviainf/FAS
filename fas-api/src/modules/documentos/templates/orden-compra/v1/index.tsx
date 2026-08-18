@@ -43,7 +43,9 @@ function textoCuota(c: OrdenCompraPdfPayload['cuotas'][number]): string {
 //   persiste un rango, persiste una lista puntual).
 // - "Plazo Pago 1/2/3" (3 casilleros fijos) reemplazado por la lista real de
 //   cuotas de OrdenCompra.cuotasPago (N cuotas, no acotado a 3).
-// - Sin logo: pendiente manual de marca de Agrosan (Etapa 4 §12).
+// - Logo: viene de Empresa.logo (mantenedor de Empresas, pestaña Logo — ver
+//   documentos.repository.ts#logoDataUri). Sin logo subido, el Encabezado
+//   simplemente no lo pinta (Etapa 4 §12, ya no pendiente).
 export function OrdenCompraV1({ d, marcaAgua, marcaAguaFecha }: { d: OrdenCompraPdfPayload; marcaAgua?: 'BORRADOR' | 'COPIA'; marcaAguaFecha?: string }) {
   return (
     <Documento
@@ -54,6 +56,7 @@ export function OrdenCompraV1({ d, marcaAgua, marcaAguaFecha }: { d: OrdenCompra
       piePagina='Frutera Agrosan · Documento generado electrónicamente'
     >
       <Encabezado
+        logoDataUri={d.empresa.logoDataUri ?? undefined}
         tituloDocumento='Orden de Compra / Purchase Order'
         numero={d.numero}
         fecha={fmt.fecha(d.fecha)}
