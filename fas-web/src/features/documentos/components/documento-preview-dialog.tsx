@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -28,12 +28,36 @@ interface DocumentoPreviewDialogProps {
   puedeEmitir?: boolean
 }
 
+// Tamaño de página A4 en px CSS a 96dpi (210mm × 297mm) — mismo formato que
+// paginaOpts en las plantillas (ver templates/*/v1/index.tsx).
+const PAGINA_ANCHO = 794
+const PAGINA_ALTO = 1123
+
 // Motor de Documentos — visor de preview (Etapa 4 §9, Sprint A: "iframe con
 // páginas A4 y sombra"). Es el MISMO HTML que Playwright fotografía para el
 // PDF (§1: "el preview es el PDF") — se pide vía ky (documentosService, ver
 // nota sobre X-Empresa-Id) y se inyecta con srcDoc, nunca con src={url}
 // directo al endpoint (mismo motivo: perdería la empresa activa).
+//
+// El iframe mantiene el tamaño A4 real (794×1123px) para que el HTML se
+// renderice igual que en el PDF, pero se escala con transform para caber en
+// el contenedor — sin esto, en modales angostos o viewports chicos la hoja
+// se corta en vez de reducirse (ver nota de ajuste en el dialog).
 export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, puedeEmitir }: DocumentoPreviewDialogProps) {
+  const contenedorRef = useRef<HTMLDivElement>(null)
+  const [escala, setEscala] = useState(1)
+
+  useEffect(() => {
+    const contenedor = contenedorRef.current
+    if (!contenedor) return
+    const observer = new ResizeObserver(([entry]) => {
+      const anchoDisponible = entry.contentRect.width
+      setEscala(Math.min(1, anchoDisponible / PAGINA_ANCHO))
+    })
+    observer.observe(contenedor)
+    return () => observer.disconnect()
+  }, [])
+
   // keepPreviousData en vez de un useState+useEffect propio: evita mostrar
   // el HTML de un documento anterior como flash en blanco al reabrir el
   // diálogo para otro id, sin el patrón "sincronizar prop a state" que
@@ -76,7 +100,7 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='flex max-h-[90vh] max-w-4xl flex-col'>
+      <DialogContent className='flex max-h-[90vh] max-w-[calc(100%-2rem)] flex-col sm:max-w-4xl'>
         <DialogHeader>
           <DialogTitle className='flex items-center gap-2'>
             {titulo}
@@ -85,15 +109,18 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
           <DialogDescription>El diseño final del PDF es exactamente este HTML.</DialogDescription>
         </DialogHeader>
 
-        <div className='flex-1 overflow-auto rounded-md bg-muted/40 p-6'>
+        <div ref={contenedorRef} className='flex-1 overflow-auto rounded-md bg-muted/40 p-6'>
           {isPending && <p className='text-sm text-muted-foreground'>Cargando vista previa…</p>}
           {isError && <p className='text-sm text-destructive'>No se pudo cargar la vista previa.</p>}
           {html && (
-            <iframe
-              title={titulo}
-              srcDoc={html}
-              className='mx-auto block h-[1100px] w-[794px] max-w-full border-0 bg-white shadow-lg'
-            />
+            <div className='mx-auto' style={{ width: PAGINA_ANCHO * escala, height: PAGINA_ALTO * escala }}>
+              <iframe
+                title={titulo}
+                srcDoc={html}
+                className='block origin-top-left border-0 bg-white shadow-lg'
+                style={{ width: PAGINA_ANCHO, height: PAGINA_ALTO, transform: `scale(${escala})` }}
+              />
+            </div>
           )}
         </div>
 
