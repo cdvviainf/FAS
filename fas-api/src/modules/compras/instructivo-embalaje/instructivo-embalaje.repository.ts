@@ -10,7 +10,9 @@ const includeDetalle = {
   grupoMercado: { select: mantenedorSelect },
   detalle: {
     include: {
-      articulo: { select: mantenedorSelect },
+      // etiqueta: agregada al detalle (2026-08-17) — el usuario necesita ver
+      // qué Etiqueta trae cada Artículo de embalaje sin ir a Materiales.
+      articulo: { select: { ...mantenedorSelect, etiqueta: { select: mantenedorSelect } } },
       especie: { select: mantenedorSelect },
       variedad: { select: mantenedorSelect },
       variedadRotulada: { select: mantenedorSelect },

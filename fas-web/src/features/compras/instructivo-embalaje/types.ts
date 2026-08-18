@@ -15,7 +15,7 @@ export interface InstructivoEmbalajeDetalleItem {
   id: number
   instructivoId: number
   articuloId: number
-  articulo: MantenedorRef
+  articulo: MantenedorRef & { etiqueta: MantenedorRef | null }
   especieId: number
   especie: MantenedorRef
   variedadId: number

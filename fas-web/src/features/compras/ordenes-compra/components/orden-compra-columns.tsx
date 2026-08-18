@@ -23,6 +23,7 @@ import { ordenesCompraKeys } from '../queries'
 import type { OrdenCompraListItem } from '../types'
 import { ESTADO_OC_LABELS } from '../types'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { formatFechaCorta } from '@/lib/format'
 
 const ITEM = 'COMPRAS_OC'
 
@@ -99,7 +100,7 @@ export const ordenCompraColumns: ColumnDef<OrdenCompraListItem>[] = [
     id: 'fecha',
     accessorKey: 'fecha',
     header: ({ column }) => <DataTableColumnHeader column={column} title='Fecha' />,
-    cell: ({ cell }) => <span className='text-sm'>{new Date(cell.getValue<string>()).toLocaleDateString('es-CL')}</span>,
+    cell: ({ cell }) => <span className='text-sm'>{formatFechaCorta(cell.getValue<string>())}</span>,
     size: 110,
   },
   {

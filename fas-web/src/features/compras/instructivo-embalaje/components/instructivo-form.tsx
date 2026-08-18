@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { formatFechaCorta } from '@/lib/format'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { articulosService } from '@/features/materiales/articulos/service'
 import { entidadesService } from '@/features/entidades/service'
@@ -155,9 +156,17 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
 
   const semanaIsoInicioPrograma = fechaInicioPrograma ? getISOWeek(new Date(`${fechaInicioPrograma}T00:00:00`)) : null
 
-  function nombre(lista: { id: number; codigo?: string; descripcion: string }[], id: number) {
+  // Sin prefijo de código a propósito (2026-08-17): mismo criterio que la
+  // tabla de líneas de Orden de Compra y Cierre Comercial, que ya muestran
+  // solo la descripción — el código queda reservado a los selectores de
+  // búsqueda (SelectItem), donde sí ayuda a distinguir opciones parecidas.
+  function nombre(lista: { id: number; descripcion: string }[], id: number) {
     const item = lista.find((i) => i.id === id)
-    return item ? (item.codigo ? `${item.codigo} — ${item.descripcion}` : item.descripcion) : String(id)
+    return item ? item.descripcion : String(id)
+  }
+
+  function etiquetaDe(articuloId: number): string {
+    return articulos.find((a) => a.id === articuloId)?.etiqueta?.descripcion ?? '—'
   }
 
   useEffect(() => {
@@ -337,12 +346,15 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
         <Badge variant='secondary'>Solo lectura — sin permiso de edición</Badge>
         <Card>
           <CardHeader>
-            <CardTitle>Instructivo de Embalaje N° {d.numero}</CardTitle>
+            <CardTitle className='flex flex-wrap items-center gap-2'>
+              Instructivo de Embalaje N° {d.numero}
+              <Badge className='text-sm font-normal'>Semana {semanaIso}</Badge>
+            </CardTitle>
           </CardHeader>
           <CardContent className='space-y-2 text-sm'>
             <p><span className='text-muted-foreground'>Productor:</span> {d.entidadProductor.descripcion} — {d.entidadProductor.razonSocial}</p>
             <p><span className='text-muted-foreground'>Grupo de Mercado:</span> {d.grupoMercado.descripcion}</p>
-            <p><span className='text-muted-foreground'>Inicio de programa:</span> {new Date(d.fechaInicioPrograma).toLocaleDateString('es-CL')} (Semana ISO {semanaIso})</p>
+            <p><span className='text-muted-foreground'>Inicio de programa:</span> {formatFechaCorta(d.fechaInicioPrograma)}</p>
             {d.observaciones && <p><span className='text-muted-foreground'>Observaciones:</span> {d.observaciones}</p>}
             <p><span className='text-muted-foreground'>Emitido:</span> {new Date(d.creadoEn).toLocaleString('es-CL')}</p>
             <p><span className='text-muted-foreground'>Emitido por:</span> {d.creadoPor}</p>
@@ -358,7 +370,8 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
               <div key={linea.id} className='flex flex-wrap items-center gap-2 border-b pb-2 text-sm last:border-b-0 last:pb-0'>
                 <span className='font-medium'>{linea.especie.descripcion} / {linea.variedad.descripcion}</span>
                 {linea.variedadRotulada && <span className='text-muted-foreground'>(rotulada: {linea.variedadRotulada.descripcion})</span>}
-                <span className='text-muted-foreground'>{linea.articulo.codigo} — {linea.articulo.descripcion}</span>
+                <span className='text-muted-foreground'>{linea.articulo.descripcion}</span>
+                <span className='text-muted-foreground'>· Etiqueta: {linea.articulo.etiqueta?.descripcion ?? '—'}</span>
                 <span className='text-muted-foreground'>· {linea.categoria.descripcion}</span>
                 <span className='text-muted-foreground'>· Altura: {linea.altura.descripcion}</span>
                 <span className='flex flex-wrap items-center gap-1 text-muted-foreground'>
@@ -386,7 +399,10 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
       <fieldset disabled={soloLectura} className='m-0 space-y-6 border-0 p-0'>
       <Card>
         <CardHeader>
-          <CardTitle>{isEdit ? `Editar Instructivo de Embalaje N° ${instructivo?.data.numero}` : 'Nuevo Instructivo de Embalaje'}</CardTitle>
+          <CardTitle className='flex flex-wrap items-center gap-2'>
+            {isEdit ? `Editar Instructivo de Embalaje N° ${instructivo?.data.numero}` : 'Nuevo Instructivo de Embalaje'}
+            {semanaIsoInicioPrograma != null && <Badge className='text-sm font-normal'>Semana {semanaIsoInicioPrograma}</Badge>}
+          </CardTitle>
         </CardHeader>
         <CardContent className='space-y-4'>
           <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
@@ -416,9 +432,6 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
             <div className='space-y-1.5'>
               <Label>Inicio de Programa <span className='text-destructive'>*</span></Label>
               <Input type='date' value={fechaInicioPrograma} onChange={(e) => setFechaInicioPrograma(e.target.value)} />
-              {semanaIsoInicioPrograma != null && (
-                <p className='text-xs text-muted-foreground'>Semana ISO {semanaIsoInicioPrograma}</p>
-              )}
               {errors.fechaInicioPrograma && <p className='text-xs text-destructive'>{errors.fechaInicioPrograma}</p>}
             </div>
           </div>
@@ -633,6 +646,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
                     <TableHead>Variedad</TableHead>
                     <TableHead>Variedad Rotulada</TableHead>
                     <TableHead>Artículo</TableHead>
+                    <TableHead>Etiqueta</TableHead>
                     <TableHead>Categoría</TableHead>
                     <TableHead>Calibre</TableHead>
                     <TableHead>Altura</TableHead>
@@ -647,6 +661,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
                       <TableCell className='whitespace-nowrap'>{nombre(variedadesTodas, d.variedadId)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{d.variedadRotuladaId ? nombre(variedadesTodas, d.variedadRotuladaId) : '—'}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(articulos, d.articuloId)}</TableCell>
+                      <TableCell className='whitespace-nowrap text-muted-foreground'>{etiquetaDe(d.articuloId)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(categoriasTodas, d.categoriaId)}</TableCell>
                       <TableCell className='max-w-[180px] text-muted-foreground'>
                         <div className='flex flex-wrap gap-1'>

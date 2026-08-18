@@ -21,6 +21,7 @@ import { notasVentaService } from '../service'
 import { notasVentaKeys } from '../queries'
 import type { NotaVentaListItem } from '../types'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { formatFechaCorta } from '@/lib/format'
 import { GenerarEmbarqueDialog } from '@/features/ventas/embarques/components/generar-embarque-dialog'
 
 const ITEM = 'VENTAS_NV'
@@ -102,7 +103,7 @@ export const notaVentaColumns: ColumnDef<NotaVentaListItem>[] = [
     id: 'fecha',
     accessorKey: 'fecha',
     header: ({ column }) => <DataTableColumnHeader column={column} title='Fecha' />,
-    cell: ({ cell }) => <span className='text-sm'>{new Date(cell.getValue<string>()).toLocaleDateString('es-CL')}</span>,
+    cell: ({ cell }) => <span className='text-sm'>{formatFechaCorta(cell.getValue<string>())}</span>,
     size: 110,
   },
   {
