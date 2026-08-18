@@ -232,6 +232,7 @@ model Empresa {
   recepciones          Recepcion[]
   pallets              Pallet[]
   templatesCarga       TemplateCarga[]
+  documentosEmitidos   DocumentoEmitido[]
 
   @@map("empresas")
 }
@@ -2719,4 +2720,37 @@ model TemplateCargaCampo {
 
   @@unique([templateCargaId, campo])
   @@map("templates_carga_campos")
+}
+
+// ─── Motor de Documentos — Etapa 4 (Docs/agrosan_etapa4_motor_documentos.md) ──
+// Un solo registro por documento EMITIDO (no por preview — el preview no
+// persiste nada, se renderiza al vuelo). `payload` es la foto congelada de
+// los datos al momento de emitir (§4 del doc: "por qué el snapshot no es
+// opcional") — la reimpresión usa ESTE payload + `plantillaVersion`, nunca
+// vuelve a consultar el estado actual del documento origen. `pdf` guarda el
+// binario ya renderizado (mismo patrón bytea que RecepcionAdjuntoContenido/
+// adjuntos de Solicitud — no se agregó MinIO/S3 para esta etapa inicial).
+model DocumentoEmitido {
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  tipo             String // código del DOCUMENT_REGISTRY, ej. 'orden-compra'
+  documentoId      Int // id del registro origen (ej. OrdenCompra.id) — sin FK propia, cada tipo referencia una tabla distinta
+  plantillaVersion String // ej. 'v1' — las versiones viejas de plantilla nunca se editan (§4)
+  folio            String // para armar el nombre de archivo / búsqueda humana
+  payload          Json // snapshot Zod-validado al momento de emitir
+  pdf              Bytes
+  hashSha256       String // idempotencia: reemite el mismo payload -> mismo hash, no duplica
+
+  creadoEn  DateTime @default(now())
+  creadoPor String
+
+  @@index([tipo, documentoId])
+  // Defensa en profundidad (DOC-QA-003, ronda 2) — el mecanismo primario de
+  // idempotencia es el advisory lock en documentos.repository.ts
+  // (LOCK_NAMESPACE_DOCUMENTOS_EMISION); esta constraint evita duplicados
+  // incluso si algún camino de código futuro se saltara el lock.
+  @@unique([empresaId, tipo, documentoId, plantillaVersion, hashSha256])
+  @@map("documentos_emitidos")
 }

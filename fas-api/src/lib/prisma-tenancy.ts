@@ -58,6 +58,8 @@ const MODELOS_TENANT = new Set([
   'Recepcion',
   'Pallet',
   'TemplateCarga',
+  // Motor de Documentos (Etapa 4):
+  'DocumentoEmitido',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

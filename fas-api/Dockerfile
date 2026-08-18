@@ -17,6 +17,19 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 RUN apk add --no-cache openssl
+# Chromium del sistema para el motor de documentos (Playwright, Etapa 4):
+# el binario que Playwright intenta descargar por su cuenta es glibc y no
+# corre en Alpine (musl) — se usa el paquete de Alpine en su lugar, apuntado
+# vía PLAYWRIGHT_EXECUTABLE_PATH (config/env.ts). --ignore-scripts más abajo
+# ya evita que el postinstall de Playwright intente esa descarga igual.
+RUN apk add --no-cache \
+      chromium \
+      nss \
+      freetype \
+      harfbuzz \
+      ca-certificates \
+      ttf-freefont
+ENV PLAYWRIGHT_EXECUTABLE_PATH=/usr/bin/chromium-browser
 COPY package*.json ./
 # --ignore-scripts evita el postinstall de @prisma/client; el cliente ya viene copiado del builder
 RUN npm ci --omit=dev --ignore-scripts

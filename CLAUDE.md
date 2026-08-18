@@ -80,7 +80,7 @@ Ambos repos son independientes. La comunicación es exclusivamente vía API REST
 | Caché / Colas | Redis + BullMQ | latest |
 | Auth | Better Auth | latest |
 | Email | Resend | latest |
-| PDF | Puppeteer | latest |
+| PDF | Playwright (Chromium headless) | latest |
 | Excel | ExcelJS | latest |
 | Tests | Vitest | latest |
 
@@ -297,8 +297,10 @@ DTE_PROVIDER=mock
 # CORS
 CORS_ORIGIN=http://localhost:3000
 
-# Puppeteer
-PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+# Motor de Documentos (PDF) — Playwright. Vacío en desarrollo (usa el
+# Chromium que instala `npx playwright install chromium`); en producción
+# (imagen Alpine) apunta al Chromium del sistema — ver fas-api/Dockerfile.
+PLAYWRIGHT_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ```
 
 ### fas-web (.env.local)
@@ -430,6 +432,8 @@ volumes:
 | 9 | Prefijo API `/api/<módulo>` (sin versión) | ✅ Confirmado |
 | 10 | Frontend route group `(app)` bajo `src/app/` | ✅ Confirmado |
 | 11 | Specs de `Docs/` = fuente autoritativa de modelos/rutas/permisos | ✅ Confirmado |
+| 12 | Motor de Documentos (PDF): Playwright **(supersede Puppeteer)**; React+TSX como lenguaje de plantillas (`react-dom/server`, SSR sin cliente); registro central (`documentos.registry.ts`) dentro de `fas-api` — sin microservicio `docs-service` aparte ni monorepo `apps/`/`packages/` (2026-08-18, adapta `Docs/agrosan_etapa4_motor_documentos.md` al stack real; ver reconciliación al inicio de ese doc) | ✅ Confirmado |
+| 13 | `documentos_emitidos.pdf` como `Bytes` en Postgres (mismo patrón que adjuntos de Recepción/Solicitud) — sin S3/MinIO en esta etapa | ✅ Confirmado |
 
 ---
 

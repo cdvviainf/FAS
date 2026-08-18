@@ -24,6 +24,8 @@ import type { OrdenCompraListItem } from '../types'
 import { ESTADO_OC_LABELS } from '../types'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { formatFechaCorta } from '@/lib/format'
+import { documentosService } from '@/features/documentos/service'
+import { DocumentoPreviewDialog } from '@/features/documentos/components/documento-preview-dialog'
 
 const ITEM = 'COMPRAS_OC'
 
@@ -35,9 +37,22 @@ const ESTADO_VARIANT: Record<string, 'secondary' | 'default' | 'outline'> = {
 
 function OrdenCompraCellAction({ orden }: { orden: OrdenCompraListItem }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [descargando, setDescargando] = useState(false)
   const queryClient = useQueryClient()
   const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
+
+  async function descargarPdf() {
+    setDescargando(true)
+    try {
+      await documentosService.abrirPdf('orden-compra', orden.id)
+    } catch {
+      toast.error('No se pudo descargar el PDF')
+    } finally {
+      setDescargando(false)
+    }
+  }
 
   const deleteMutation = useMutation({
     mutationFn: () => ordenesCompraService.remove(orden.id),
@@ -70,6 +85,14 @@ function OrdenCompraCellAction({ orden }: { orden: OrdenCompraListItem }) {
             <Icons.edit className='mr-2 h-4 w-4' />
             {puedeEscribir ? 'Editar' : 'Ver detalle'}
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setPreviewOpen(true)}>
+            <Icons.search className='mr-2 h-4 w-4' />
+            Vista previa PDF
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={descargarPdf} disabled={descargando}>
+            <Icons.download className='mr-2 h-4 w-4' />
+            Descargar PDF
+          </DropdownMenuItem>
           {puedeEscribir && (
             <>
               <DropdownMenuSeparator />
@@ -84,6 +107,14 @@ function OrdenCompraCellAction({ orden }: { orden: OrdenCompraListItem }) {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      <DocumentoPreviewDialog
+        tipo='orden-compra'
+        id={orden.id}
+        titulo={`Orden de Compra ${orden.numero}`}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        puedeEmitir={puedeEscribir}
+      />
     </>
   )
 }

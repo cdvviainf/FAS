@@ -11,6 +11,12 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().email().default('noreply@agrosan.cl'),
   DTE_PROVIDER: z.enum(['mock', 'chilesystems', 'simplefactura']).default('mock'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  // Motor de documentos (PDF, Etapa 4 — Docs/agrosan_etapa4_motor_documentos.md):
+  // en producción (imagen Alpine) apunta al Chromium del sistema instalado vía
+  // `apk add chromium` (Playwright no distribuye binario musl/ARM-friendly
+  // propio para Alpine). En desarrollo se deja vacío y Playwright usa el
+  // Chromium que instala `npx playwright install chromium`.
+  PLAYWRIGHT_EXECUTABLE_PATH: z.string().optional(),
 })
 
 const parsed = envSchema.safeParse(process.env)
