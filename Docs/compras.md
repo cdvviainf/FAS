@@ -363,6 +363,8 @@ AGL gestiona la **reserva del contenedor**: Agrosan solicita un espacio indicand
 ### 9.2 Mantenedor de formatos de carga (columnas por planta/origen)
 Patrón único reutilizado tanto para el **reporte de stock de consignación** como para el **Packing List**: un mantenedor que mapea, por planta/origen, cada dato requerido por la aplicación a su **columna del Excel** y **fila de inicio**. Si más adelante alguna planta envía PDF, se amplía con lectura IA (§10).
 
+> **Formato de archivo aceptado (decisión, 2026-08-17 — QA-RCV-001):** el lector de Recepción solo admite `.xlsx` (OOXML) — ExcelJS no soporta el formato binario legado BIFF (`.xls`). El enunciado de este párrafo y de §4.4 ("Excel u otro cargado") es genérico, pero la implementación v0.1 exige `.xlsx`; si una planta entrega `.xls`, debe convertirse a `.xlsx` antes de subirlo. Soporte nativo de `.xls` queda diferido — ver §10.
+
 ### 9.3 Packing List — reconciliación (interfaz con `ventas.md`)
 Comparación a **nivel de pallet**, en dos pasos:
 1. Los **números de pallet** del PL = los números de pallet **reservados** al embarque.
@@ -391,6 +393,7 @@ Tras capturar, FAS imputa el documento a una o varias OC por montos (CO1) y refl
 - **OC suelta → Cierre a posteriori** — el modelo ya permite una OC **sin** Cierre (FK `notaVentaId` nullable). Queda diferido el **flujo/UX** de digitar una OC suelta y **ligarla** a un Cierre después (endpoint de vinculación + regla de qué campos se bloquean al vincular). *Diferido.*
 - **Detalle de campos AGL** — qué campos exactos devuelve la consulta por número de embarque. *Pendiente.*
 - **Lectura IA / PDF** — Recepción y Packing List en formato PDF vía IA (Etapa 2). El mantenedor de columnas resuelve Excel en v0.1. *Pendiente.*
+- **Soporte `.xls` (BIFF legado)** — el lector actual solo acepta `.xlsx` (§9.2, QA-RCV-001, 2026-08-17); hay planillas reales de al menos una planta en `.xls`. Requiere una librería adicional para BIFF y normalizar su salida hacia la misma estructura de filas que `.xlsx`. *Diferido — mientras tanto, la planta debe convertir a `.xlsx` antes de subir.*
 - **Template de Carga por planta/origen** — `TemplateCarga` (§9.2) ya distingue **tipo** (`RECEPCION`, `PACKING_LIST`, whitelist ampliable sin migración), pero todavía no está asociado a una planta/origen como dice el enunciado de §9.2 ("mapea, por planta/origen..."). Hoy el picker de Recepción filtra solo por tipo, no por la planta elegida en el encabezado. Falta definir la cardinalidad (¿un template por planta+tipo, o varios seleccionables por planta?) antes de modelarlo. Hallazgo QA `QAS-TCT-001` (ronda 1, 2026-08-03) — diferido a propósito, fuera del alcance de la introducción de `tipo`. *Diferido.*
 
 **Deudas cross-módulo (a aplicar):**

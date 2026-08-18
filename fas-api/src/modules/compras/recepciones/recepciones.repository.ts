@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
@@ -18,11 +19,28 @@ const includeDetalle = {
     select: { id: true, nombre: true, mime: true, tamano: true, subidoEn: true, subidoPor: true },
     orderBy: { subidoEn: 'desc' as const },
   },
+  // QA-RCV-002 (ronda 1): el frontend necesita saber si ya hay pallets
+  // generados para bloquear edición/carga/eliminación en consignación, donde
+  // el estado por sí solo (CARGADA) no lo distingue — ver puedeModificarse()
+  // en recepciones.service.ts.
+  _count: { select: { pallets: true } },
 }
 
 // Namespace de advisory lock distinto al de OrdenCompra (490236) y NotaVenta
 // (490234) — evita colisiones de correlativo entre módulos.
 const LOCK_NAMESPACE_RECEPCION = 490237
+
+// Namespace de advisory lock distinto de LOCK_NAMESPACE_RECEPCION (490237,
+// usado para el correlativo) — este serializa el PROCESAMIENTO de una misma
+// Recepción (QA-RCV-003): sin esto, dos cargas concurrentes podían pasar
+// ambas el pre-check de `tienePallets` (hecho fuera de esta transacción, en
+// el service) antes de que cualquiera terminara de escribir, y duplicar
+// pallets. IMPQ-RCV-001 (ronda 1): el mismo lock también serializa
+// actualizar/eliminar la Recepción contra la generación de pallets — antes
+// solo lo tomaba crearPalletsYValidar, y editar/eliminar podían pasar su
+// propio pre-check (puedeModificarse, en el service) al mismo tiempo que una
+// carga de Excel concurrente generaba stock.
+const LOCK_NAMESPACE_RECEPCION_PROCESO = 490238
 
 export async function listRecepciones(page: number, limit: number, plantaId?: number, origen?: string, estado?: string) {
   const where = {
@@ -38,6 +56,9 @@ export async function listRecepciones(page: number, limit: number, plantaId?: nu
       include: {
         ordenCompra: { select: { id: true, numero: true } },
         planta: { select: entidadSelect },
+        // QA-RCV-002: mismo motivo que includeDetalle — el listado también
+        // debe poder bloquear el botón "Eliminar" por fila.
+        _count: { select: { pallets: true } },
       },
       orderBy: { id: 'desc' },
       skip: (page - 1) * limit,
@@ -81,18 +102,44 @@ export async function createRecepcion(data: RecepcionCreateInput, creadoPor: str
   })
 }
 
+// IMPQ-RCV-001 (ronda 1): el pre-check del service (puedeModificarse, hecho
+// antes de llamar a esta función) no es atómico con la escritura — una carga
+// de Excel concurrente puede generar pallets justo después de ese chequeo y
+// antes de este update. Tomar el mismo lock que crearPalletsYValidar y
+// releer estado/eliminadoEn/pallets ya bajo el lock sí lo es: si perdió la
+// carrera contra una carga que generó stock, o la Recepción ya no existe
+// (eliminada por otra operación), aborta antes de escribir.
+async function relockYReleerModificable(tx: Prisma.TransactionClient, id: number) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_RECEPCION_PROCESO}::int, ${id}::int)`
+  const fresca = await tx.recepcion.findFirst({
+    where: { id, eliminadoEn: null },
+    include: { _count: { select: { pallets: true } } },
+  })
+  if (!fresca) throw new ValidationError('La Recepción ya no existe — pudo haber sido eliminada por otra operación')
+  if (!['CARGADA', 'RECHAZADA'].includes(fresca.estado) || fresca._count.pallets > 0) {
+    throw new ValidationError('La Recepción ya fue procesada por otra operación y no puede modificarse')
+  }
+  return fresca
+}
+
 export async function updateRecepcion(id: number, data: RecepcionUpdateInput, actualizadoPor: string) {
-  return prisma.recepcion.update({
-    where: { id },
-    data: { ...data, actualizadoPor },
-    include: includeDetalle,
+  return prisma.$transaction(async (tx) => {
+    await relockYReleerModificable(tx, id)
+    return tx.recepcion.update({
+      where: { id },
+      data: { ...data, actualizadoPor },
+      include: includeDetalle,
+    })
   })
 }
 
 export async function softDeleteRecepcion(id: number, eliminadoPor: string) {
-  return prisma.recepcion.update({
-    where: { id },
-    data: { eliminadoEn: new Date(), eliminadoPor },
+  return prisma.$transaction(async (tx) => {
+    await relockYReleerModificable(tx, id)
+    return tx.recepcion.update({
+      where: { id },
+      data: { eliminadoEn: new Date(), eliminadoPor },
+    })
   })
 }
 
@@ -239,14 +286,6 @@ export async function getOrdenCompraConLineas(id: number) {
   })
 }
 
-// Namespace de advisory lock distinto de LOCK_NAMESPACE_RECEPCION (490237,
-// usado para el correlativo) — este serializa el PROCESAMIENTO de una misma
-// Recepción (QA-RCV-003): sin esto, dos cargas concurrentes podían pasar
-// ambas el pre-check de `tienePallets` (hecho fuera de esta transacción, en
-// el service) antes de que cualquiera terminara de escribir, y duplicar
-// pallets.
-const LOCK_NAMESPACE_RECEPCION_PROCESO = 490238
-
 // Crea los Pallet/PalletLinea a partir de los grupos ya resueltos — todo en
 // una transacción (todo o nada, compras.md §7.3: "Todo cuadra -> se cargan
 // los pallets a Stock"). El estado final depende del modo (§8): modo OC pasa
@@ -264,6 +303,7 @@ export async function crearPalletsYValidar(
   recepcionId: number,
   origen: 'COMPRA' | 'CONSIGNACION',
   ordenCompraId: number | null,
+  templateCargaIdUsado: number | null,
   filas: FilaParaComparar[],
   pallets: Array<{
     numeroPallet: string
@@ -281,6 +321,25 @@ export async function crearPalletsYValidar(
     const yaTienePallets = await tx.pallet.count({ where: { recepcionId } })
     if (yaTienePallets > 0) {
       throw new ValidationError('La Recepción ya fue procesada por otra carga concurrente')
+    }
+    // IMPQ-RCV-001 (ronda 1): mismo lock que ahora comparten
+    // updateRecepcion/softDeleteRecepcion (relockYReleerModificable) — si un
+    // PATCH/DELETE concurrente ganó la carrera y ya editó la cabecera o
+    // eliminó la Recepción antes de que esta carga tomara el lock, aborta en
+    // vez de generar pallets sobre datos obsoletos o una Recepción borrada.
+    const recepcionFresca = await tx.recepcion.findFirst({ where: { id: recepcionId, eliminadoEn: null } })
+    if (!recepcionFresca) throw new ValidationError('La Recepción ya no existe — pudo haber sido eliminada por otra operación')
+    if (!['CARGADA', 'RECHAZADA'].includes(recepcionFresca.estado)) {
+      throw new ValidationError('La Recepción ya no está en un estado que admita procesar una nueva carga')
+    }
+    // IMPQ-RCV-001 (ronda 2): el Excel ya se mapeó (Etapa 1, fuera del lock)
+    // con el template leído al inicio de subirAdjunto(). Si un PATCH
+    // concurrente cambió el template de la Recepción antes de este lock, esa
+    // lectura quedó obsoleta — crear pallets igual dejaría la Recepción
+    // persistida con un template distinto al que realmente se usó para leer
+    // el archivo, sin trazabilidad. Se aborta y se pide reintentar la carga.
+    if (recepcionFresca.templateCargaId !== templateCargaIdUsado) {
+      throw new ValidationError('El Template de Carga de la Recepción cambió mientras se procesaba el Excel — vuelve a intentar la carga')
     }
 
     // QA-RCV-007: mismo lock que toman las mutaciones de OC en

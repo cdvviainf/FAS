@@ -61,15 +61,32 @@ async function validarTemplateCarga(templateCargaId?: number | null) {
   }
 }
 
-export async function listarRecepciones(page: number, limit: number, plantaId?: number, origen?: string, estado?: string) {
-  const { data, total } = await repo.listRecepciones(page, limit, plantaId, origen, estado)
-  return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
+// QA-RCV-002 (ronda 1): expone al frontend, por cada Recepción, si ya generó
+// pallets y si por lo tanto sigue siendo editable — el estado por sí solo
+// (CARGADA) no alcanza en consignación, ver puedeModificarse() arriba. El
+// frontend usa estos dos campos en vez de reimplementar la regla.
+function shapeRecepcion<T extends { estado: string; _count: { pallets: number } }>(recepcion: T) {
+  const { _count, ...resto } = recepcion
+  const tienePallets = _count.pallets > 0
+  return { ...resto, tienePallets, editable: ESTADOS_MODIFICABLES.has(resto.estado) && !tienePallets }
 }
 
+export async function listarRecepciones(page: number, limit: number, plantaId?: number, origen?: string, estado?: string) {
+  const { data, total } = await repo.listRecepciones(page, limit, plantaId, origen, estado)
+  return { data: data.map(shapeRecepcion), meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
+}
+
+// Sin shapeRecepcion a propósito: los usos internos (actualizar/eliminar/
+// subir adjunto, vía puedeModificarse) solo necesitan estado/ids, no la
+// forma de salida HTTP. El controller usa obtenerRecepcionParaRespuesta().
 export async function obtenerRecepcion(id: number) {
   const recepcion = await repo.getRecepcionById(id)
   if (!recepcion) throw new NotFoundError('Recepción', String(id))
   return recepcion
+}
+
+export async function obtenerRecepcionParaRespuesta(id: number) {
+  return shapeRecepcion(await obtenerRecepcion(id))
 }
 
 export async function crearRecepcion(body: RecepcionCreateInput, creadoPor: string) {
@@ -77,7 +94,7 @@ export async function crearRecepcion(body: RecepcionCreateInput, creadoPor: stri
   await validarPlantaYDireccion(body.plantaId, body.direccionPlantaId)
   await validarTemplateCarga(body.templateCargaId)
   try {
-    return await repo.createRecepcion(body, creadoPor)
+    return shapeRecepcion(await repo.createRecepcion(body, creadoPor))
   } catch (err) {
     // El check-then-create de arriba no es atómico: si dos solicitudes
     // concurrentes pasan la validación a la vez, el índice único parcial de
@@ -107,7 +124,7 @@ export async function actualizarRecepcion(id: number, body: RecepcionUpdateInput
     body.direccionPlantaId ?? existente.direccionPlantaId,
   )
   await validarTemplateCarga(body.templateCargaId)
-  return repo.updateRecepcion(id, body, actualizadoPor)
+  return shapeRecepcion(await repo.updateRecepcion(id, body, actualizadoPor))
 }
 
 export async function eliminarRecepcion(id: number, eliminadoPor: string) {
@@ -157,7 +174,7 @@ export async function subirAdjunto(
       { id: recepcion.id, ordenCompraId: recepcion.ordenCompraId, templateCargaId: recepcion.templateCargaId, templateCarga },
       archivo.datos,
     )
-    return { adjunto, ...resultado }
+    return { adjunto, ...resultado, recepcion: shapeRecepcion(resultado.recepcion) }
   } catch (err) {
     // El adjunto ya se guardó (evidencia de qué se intentó cargar); lo único
     // que falta es dejar la Recepción en RECHAZADA para que quede claro que

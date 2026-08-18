@@ -262,7 +262,22 @@ export async function procesarCargaExcel(recepcion: RecepcionParaMotor, buffer: 
   // también para que repo.crearPalletsYValidar pueda re-hacer la
   // comparación contra OC bajo lock, contra una lectura fresca (QA-RCV-007)
   // — el chequeo optimista de arriba no es la autoridad final.
-  const recepcionActualizada = await repo.crearPalletsYValidar(recepcion.id, origen, recepcion.ordenCompraId, filas, pallets)
+  // `recepcion.templateCargaId` viaja también — IMPQ-RCV-001 (ronda 2): las
+  // Etapas 1-3 (incluido el mapeo de columnas de esta misma llamada) corren
+  // FUERA del lock, con el template leído al inicio de subirAdjunto(). Si un
+  // PATCH concurrente cambia el template de la Recepción antes de que esta
+  // carga tome el lock, el Excel ya se mapeó con el template viejo — crear
+  // pallets igual dejaría la Recepción persistida con OTRO template al que
+  // realmente se usó para leer el archivo, sin trazabilidad. Se aborta y se
+  // pide reintentar en vez de eso.
+  const recepcionActualizada = await repo.crearPalletsYValidar(
+    recepcion.id,
+    origen,
+    recepcion.ordenCompraId,
+    recepcion.templateCargaId,
+    filas,
+    pallets,
+  )
   return {
     recepcion: recepcionActualizada,
     resumen: { pallets: pallets.length, cajas: filas.reduce((a, f) => a + f.cajas, 0) },

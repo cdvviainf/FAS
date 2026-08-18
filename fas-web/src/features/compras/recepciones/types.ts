@@ -32,12 +32,17 @@ export const ESTADO_RECEPCION_LABELS: Record<EstadoRecepcion, string> = {
   RECHAZADA: 'Rechazada',
 }
 
-// Editable/eliminable/re-cargable — mismo criterio que ESTADOS_MODIFICABLES
-// en recepciones.service.ts (backend): CARGADA (recién creada) o RECHAZADA
-// (un intento anterior no cuadró; se corrige y se reintenta). VALIDADA es
-// terminal, ya generó pallets a Stock.
-export function esRecepcionEditable(estado: EstadoRecepcion): boolean {
-  return estado === 'CARGADA' || estado === 'RECHAZADA'
+// Editable/eliminable/re-cargable — replica ESTADOS_MODIFICABLES +
+// puedeModificarse() en recepciones.service.ts (backend): CARGADA (recién
+// creada) o RECHAZADA (un intento anterior no cuadró; se corrige y se
+// reintenta), pero solo si todavía no generó pallets. En consignación
+// (compras.md §8) el estado se queda en CARGADA aunque ya haya generado
+// pallets/Stock — por eso el estado por sí solo no basta (QA-RCV-002).
+// El backend ya manda `editable` calculado (recepciones.service.ts,
+// shapeRecepcion); esta función es el mismo criterio para el caso en que
+// solo se tenga estado/tienePallets a mano.
+export function esRecepcionEditable(recepcion: { estado: EstadoRecepcion; tienePallets: boolean }): boolean {
+  return (recepcion.estado === 'CARGADA' || recepcion.estado === 'RECHAZADA') && !recepcion.tienePallets
 }
 
 export interface RecepcionAdjunto {
@@ -58,6 +63,10 @@ export interface RecepcionListItem {
   planta: EntidadRef
   ordenCompra: { id: number; numero: string } | null
   creadoEn: string
+  // QA-RCV-002: el backend ya resuelve si hay pallets generados y si por lo
+  // tanto sigue siendo editable — no reimplementar el criterio en la UI.
+  tienePallets: boolean
+  editable: boolean
 }
 
 export interface RecepcionDetalle extends RecepcionListItem {

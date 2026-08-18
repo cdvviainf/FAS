@@ -21,7 +21,7 @@ import { useRouter } from 'next/navigation'
 import { recepcionesService } from '../service'
 import { recepcionesKeys } from '../queries'
 import type { RecepcionListItem } from '../types'
-import { ORIGEN_RECEPCION_LABELS, ESTADO_RECEPCION_LABELS, esRecepcionEditable } from '../types'
+import { ORIGEN_RECEPCION_LABELS, ESTADO_RECEPCION_LABELS } from '../types'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 
 const ITEM = 'COMPRAS_RECEPCION'
@@ -74,7 +74,7 @@ function RecepcionCellAction({ recepcion }: { recepcion: RecepcionListItem }) {
             <Icons.edit className='mr-2 h-4 w-4' />
             {puedeEscribir ? 'Editar' : 'Ver detalle'}
           </DropdownMenuItem>
-          {puedeEscribir && esRecepcionEditable(recepcion.estado) && (
+          {puedeEscribir && recepcion.editable && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem

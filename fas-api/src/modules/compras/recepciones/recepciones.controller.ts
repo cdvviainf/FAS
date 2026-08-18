@@ -17,7 +17,7 @@ export async function list(req: FastifyRequest, reply: FastifyReply) {
 
 export async function getById(req: FastifyRequest, reply: FastifyReply) {
   const { id } = recepcionParamsSchema.parse(req.params)
-  const recepcion = await service.obtenerRecepcion(id)
+  const recepcion = await service.obtenerRecepcionParaRespuesta(id)
   return reply.send({ data: recepcion })
 }
 

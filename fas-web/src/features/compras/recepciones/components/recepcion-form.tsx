@@ -29,7 +29,7 @@ import { templatesCargaService } from '@/features/templates-carga/service'
 import { recepcionDetailOptions, recepcionesKeys } from '../queries'
 import { recepcionesService } from '../service'
 import type { RecepcionCreateInput } from '../types'
-import { ORIGEN_RECEPCION_LABELS, ESTADO_RECEPCION_LABELS, esRecepcionEditable } from '../types'
+import { ORIGEN_RECEPCION_LABELS, ESTADO_RECEPCION_LABELS } from '../types'
 
 const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024
 // Solo .xlsx: ExcelJS (el lector del backend) no soporta el formato binario
@@ -225,7 +225,12 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   }
 
   const isPending = createMutation.isPending || updateMutation.isPending
-  const soloLectura = !puedeEscribir || (isEdit && !!recepcion && !esRecepcionEditable(recepcion.data.estado))
+  // recepcion.data.editable ya viene calculado por el backend (QA-RCV-002,
+  // recepciones.service.ts shapeRecepcion): CARGADA/RECHAZADA sin pallets
+  // generados. En consignación el estado se queda en CARGADA aunque ya haya
+  // generado pallets/Stock, así que el estado por sí solo no basta.
+  const soloLectura = !puedeEscribir || (isEdit && !!recepcion && !recepcion.data.editable)
+  const bloqueadaPorPallets = isEdit && !!recepcion && !recepcion.data.editable && recepcion.data.tienePallets
 
   return (
     <div className='space-y-6'>
@@ -240,6 +245,12 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
               </div>
             )}
           </div>
+          {bloqueadaPorPallets && (
+            <p className='text-sm text-muted-foreground'>
+              Esta Recepción ya generó pallets en Stock y no puede editarse, cargar un nuevo Excel ni eliminarse,
+              aunque el estado siga en {ESTADO_RECEPCION_LABELS.CARGADA}.
+            </p>
+          )}
         </CardHeader>
         <CardContent className='space-y-4'>
           {!isEdit && (
