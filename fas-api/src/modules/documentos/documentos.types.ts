@@ -19,8 +19,20 @@ export interface DocumentDefinition<Payload = unknown> {
   plantillaActual: string // clave dentro de `plantillas`, ej. 'v1'
   plantillas: Record<string, (props: { d: Payload; marcaAgua?: 'BORRADOR' | 'COPIA'; marcaAguaFecha?: string }) => React.ReactElement>
   pagina: OpcionesPaginaDocumento
-  // Ítem de menú cuyo nivel LECTURA habilita preview/descarga y TOTAL habilita emitir.
-  itemMenu: string
+  // Ítem de menú cuyo nivel LECTURA habilita preview/descarga y TOTAL habilita
+  // emitir. Un array es "cualquiera de estos" (any-of) — mismo criterio que
+  // requireAnyLevel (auth-guard.ts), para documentos cuyo dato de origen es
+  // visible desde más de un ítem (ej. Solicitud de Inspección: COMPRAS_SOLICITUDES
+  // o CAL_SOLICITUDES).
+  itemMenu: string | string[]
+  // Etapa 4 §8 — "control de copia": documentos como la OC o el Cierre
+  // Comercial tienen una versión BORRADOR (preview/descarga libre) y una
+  // versión oficial (Emitir, congela snapshot en documentos_emitidos;
+  // reimprimir marca COPIA). Documentos sin control de copia (Instructivo,
+  // Solicitud) no tienen ese concepto: una sola versión, sin marca de agua,
+  // y las rutas /emitir y de reimpresión quedan bloqueadas para su `tipo`
+  // (documentos.routes.ts/documentos.service.ts).
+  controlCopia: boolean
   nombreArchivo: (payload: Payload) => string
   folio: (payload: Payload) => string
 }

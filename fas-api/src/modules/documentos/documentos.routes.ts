@@ -4,9 +4,13 @@ import { getDocumentDefinition } from './documentos.registry.js'
 import { getTipoDeDocumentoEmitido } from './documentos.repository.js'
 import * as ctrl from './documentos.controller.js'
 
-function nivelCumple(req: FastifyRequest, itemMenu: string, minLevel: 'LECTURA' | 'TOTAL'): boolean {
-  const nivel = req.fasAccesos?.get(itemMenu) ?? 'SIN_ACCESO'
-  return minLevel === 'LECTURA' ? nivel !== 'SIN_ACCESO' : nivel === 'TOTAL'
+// itemMenu puede ser un array (any-of) — ver DocumentDefinition.itemMenu.
+function nivelCumple(req: FastifyRequest, itemMenu: string | string[], minLevel: 'LECTURA' | 'TOTAL'): boolean {
+  const items = Array.isArray(itemMenu) ? itemMenu : [itemMenu]
+  return items.some((codigo) => {
+    const nivel = req.fasAccesos?.get(codigo) ?? 'SIN_ACCESO'
+    return minLevel === 'LECTURA' ? nivel !== 'SIN_ACCESO' : nivel === 'TOTAL'
+  })
 }
 
 function forbidden(reply: FastifyReply, minLevel: 'LECTURA' | 'TOTAL') {
@@ -31,6 +35,23 @@ function requireNivelDocumento(minLevel: 'LECTURA' | 'TOTAL') {
   }
 }
 
+// Guard exclusivo de /emitir — documentos sin control de copia (Instructivo,
+// Solicitud) no tienen versión oficial: se responde 404 antes de llegar al
+// controller, mismo criterio que "tipo no existe" (no exponer con un 403 que
+// insinúa que la operación existe pero falta permiso). Ver
+// DocumentDefinition.controlCopia y el guard equivalente en documentos.service.ts.
+async function requireControlCopia(req: FastifyRequest, reply: FastifyReply) {
+  const { tipo } = req.params as { tipo?: string }
+  const def = tipo ? getDocumentDefinition(tipo) : undefined
+  if (!def) {
+    reply.status(404).send({ error: { code: 'NOT_FOUND', message: `Tipo de documento '${tipo}' no existe.` } })
+    return
+  }
+  if (!def.controlCopia) {
+    reply.status(404).send({ error: { code: 'NOT_FOUND', message: `El documento '${tipo}' no admite emisión oficial.` } })
+  }
+}
+
 // DOC-QA-001 (ronda 1): la reimpresión no tiene :tipo en la URL (va en la
 // fila documento_emitido) — sin este guard, `requireAuth` a secas dejaba
 // descargar cualquier documento emitido a cualquier usuario autenticado de
@@ -51,6 +72,6 @@ const requireNivelDocumentoEmitido = async (req: FastifyRequest, reply: FastifyR
 export async function documentosRoutes(app: FastifyInstance) {
   app.get('/:tipo/:id/preview', { preHandler: [requireAuth, requireNivelDocumento('LECTURA')] }, ctrl.preview)
   app.get('/:tipo/:id.pdf', { preHandler: [requireAuth, requireNivelDocumento('LECTURA')] }, ctrl.descargarPdf)
-  app.post('/:tipo/:id/emitir', { preHandler: [requireAuth, requireNivelDocumento('TOTAL')] }, ctrl.emitir)
+  app.post('/:tipo/:id/emitir', { preHandler: [requireAuth, requireControlCopia, requireNivelDocumento('TOTAL')] }, ctrl.emitir)
   app.get('/emitidos/:documentoEmitidoId.pdf', { preHandler: [requireAuth, requireNivelDocumentoEmitido] }, ctrl.descargarEmitido)
 }

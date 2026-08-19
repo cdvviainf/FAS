@@ -45,13 +45,13 @@ function armarHtml(
 // generado por esta vía queda registrado como oficial.
 export async function obtenerPreviewHtml(tipo: string, id: number, empresaId: number): Promise<string> {
   const { def, payload } = await resolverYValidar(tipo, id, empresaId)
-  return armarHtml(def, payload, def.plantillaActual, 'BORRADOR')
+  return armarHtml(def, payload, def.plantillaActual, def.controlCopia ? 'BORRADOR' : undefined)
 }
 
 // ─── PDF bajo demanda (sin emitir) ─────────────────────────────────────────
 export async function obtenerPdf(tipo: string, id: number, empresaId: number): Promise<{ buffer: Buffer; nombreArchivo: string }> {
   const { def, payload } = await resolverYValidar(tipo, id, empresaId)
-  const html = armarHtml(def, payload, def.plantillaActual, 'BORRADOR')
+  const html = armarHtml(def, payload, def.plantillaActual, def.controlCopia ? 'BORRADOR' : undefined)
   const buffer = await renderPdf(html, def.pagina)
   return { buffer, nombreArchivo: def.nombreArchivo(payload) }
 }
@@ -86,6 +86,14 @@ export async function emitirDocumento(
   creadoPor: string,
 ): Promise<{ id: number; buffer: Buffer; nombreArchivo: string }> {
   const { def, payload } = await resolverYValidar(tipo, id, empresaId)
+  // Defensa en profundidad — documentos.routes.ts ya bloquea /emitir para un
+  // `tipo` sin control de copia (404 antes de llegar acá); este segundo
+  // chequeo evita que un llamado directo al service (ej. un test futuro)
+  // deje un Instructivo o una Solicitud con documentos_emitidos, que no
+  // deberían tener ese concepto.
+  if (!def.controlCopia) {
+    throw new ValidationError('Este documento no admite emisión oficial')
+  }
   const hashSha256 = hashPayload(payload, def.plantillaActual)
 
   const previo = await repo.getDocumentoEmitidoPorHash(tipo, id, def.plantillaActual, hashSha256)

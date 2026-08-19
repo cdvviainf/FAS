@@ -15,6 +15,12 @@ Un solo motor que genera todos los PDF de la operación — desde la orden de co
 > - **Sin S3/MinIO** (§4) — `documentos_emitidos.pdf` se guarda como `Bytes` en Postgres, mismo patrón que los adjuntos de Recepción y Solicitud de Inspección que ya existen en FAS. Se reconsidera si el volumen de PDF crece mucho.
 > - **Paged.js, PDF/A, regresión visual en CI, cola BullMQ para lotes** (§6, §8) quedan diferidos a cuando exista el primer documento multipágina real (Sprint B del propio doc, liquidaciones) — el piloto de Sprint A (Orden de Compra) es de una página.
 >
+> **Adenda (2026-08-18, mismo día — ciclo "Instructivo/Solicitud/Cierre Comercial PDF", QA Codex FAS-DOC-R1-001/AMB-001/AMB-002):**
+> - Se agregan al registro (`documentos.registry.ts`) tres documentos fuera del catálogo original de §2, decisión de Christian:
+>   - **Instructivo de Embalaje** (`compras.md` §4.1) y **Solicitud de Inspección** — ambos con la misma dinámica de preview/descarga que la OC, pero **sin control de copia**: no tienen versión "oficial" distinta del borrador, no se emiten ni se reimprimen, y su preview/descarga **no llevan ninguna marca de agua** (`DocumentDefinition.controlCopia = false`, ver `documentos.types.ts`). La Solicitud de Inspección es un **snapshot del pedido de visita** (productor, fecha, alcance, asignados) — no el informe de resultados por caja de `calidad.md` §3-§4, que sigue sin construir.
+>   - **Cierre Comercial** (modelo `NotaVenta`, tipo de registro `cierre-comercial`) — mismo tratamiento que la OC, **con** control de copia completo (BORRADOR/Emitir/COPIA).
+> - El piloto de Sprint A dejó de ser "de una página": Instructivo y Cierre Comercial pueden tener tantas líneas de detalle como el usuario cargue. El preview (`DocumentoPreviewDialog`) sigue sin paginación editorial real (Paged.js, todavía diferido a Sprint B) — muestra el documento completo en una sola superficie desplazable, no hojas discretas con cortes/encabezados repetidos como hará el PDF en un documento largo. Se acotó el texto del visor para no prometer una equivalencia pixel-perfect que no existe todavía en ese escenario; la paginación real del preview queda pendiente para cuando se aborde Paged.js.
+>
 > El resto del documento (catálogo §2, anatomía de plantilla §5, sistema de diseño §6, plan de sprints §9) sigue siendo la referencia de diseño válida.
 
 | | |

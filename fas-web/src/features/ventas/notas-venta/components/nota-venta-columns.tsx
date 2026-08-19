@@ -23,6 +23,8 @@ import type { NotaVentaListItem } from '../types'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { formatFechaCorta } from '@/lib/format'
 import { GenerarEmbarqueDialog } from '@/features/ventas/embarques/components/generar-embarque-dialog'
+import { documentosService } from '@/features/documentos/service'
+import { DocumentoPreviewDialog } from '@/features/documentos/components/documento-preview-dialog'
 
 const ITEM = 'VENTAS_NV'
 const ITEM_EMBARQUES = 'VENTAS_EMBARQUES'
@@ -30,10 +32,23 @@ const ITEM_EMBARQUES = 'VENTAS_EMBARQUES'
 function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [embarqueOpen, setEmbarqueOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [descargando, setDescargando] = useState(false)
   const queryClient = useQueryClient()
   const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
   const puedeEscribirEmbarques = usePuedeEscribir(ITEM_EMBARQUES)
+
+  async function descargarPdf() {
+    setDescargando(true)
+    try {
+      await documentosService.abrirPdf('cierre-comercial', notaVenta.id)
+    } catch {
+      toast.error('No se pudo descargar el PDF')
+    } finally {
+      setDescargando(false)
+    }
+  }
 
   const deleteMutation = useMutation({
     mutationFn: () => notasVentaService.remove(notaVenta.id),
@@ -73,6 +88,14 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
               Generar Embarque
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem onClick={() => setPreviewOpen(true)}>
+            <Icons.search className='mr-2 h-4 w-4' />
+            Vista previa PDF
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={descargarPdf} disabled={descargando}>
+            <Icons.download className='mr-2 h-4 w-4' />
+            Descargar PDF
+          </DropdownMenuItem>
           {puedeEscribir && (
             <>
               <DropdownMenuSeparator />
@@ -87,6 +110,14 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      <DocumentoPreviewDialog
+        tipo='cierre-comercial'
+        id={notaVenta.id}
+        titulo={`Cierre Comercial ${notaVenta.folio}`}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        puedeEmitir={puedeEscribir}
+      />
     </>
   )
 }

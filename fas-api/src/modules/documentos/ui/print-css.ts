@@ -27,6 +27,15 @@ export function printCss(pagina: { formato: 'A4' | 'Letter'; orientacion: 'portr
       size: ${pagina.formato} ${pagina.orientacion};
       margin: ${pagina.margen};
     }
+    /* FAS-DOC-R1-001 (ronda QA 1): @page.margin solo lo aplica Playwright al
+       imprimir — en pantalla (el iframe de DocumentoPreviewDialog) el
+       contenido corría borde a borde, sin el margen real que sí tiene el
+       PDF. Se replica como padding solo para screen — el PDF sigue usando
+       exclusivamente @page (que además controla el salto de página, algo
+       que un padding en el body no puede hacer). */
+    @media screen {
+      body { padding: ${pagina.margen}; }
+    }
 
     h1, h2, h3 { margin: 0 0 4mm 0; color: ${T.tinta}; break-after: avoid; }
     p { margin: 0 0 2mm 0; orphans: 3; widows: 3; }

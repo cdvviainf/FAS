@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -39,6 +39,8 @@ import { ESTADO_LABELS } from '../types'
 import type { SolicitudInspeccion, EstadoSolicitud, TipoInspeccion } from '../types'
 import { SolicitudCerrarDialog } from './solicitud-cerrar-dialog'
 import { SolicitudDetalleDialog } from './solicitud-detalle-dialog'
+import { documentosService } from '@/features/documentos/service'
+import { DocumentoPreviewDialog } from '@/features/documentos/components/documento-preview-dialog'
 
 const fmt = new Intl.DateTimeFormat('es-CL', {
   dateStyle: 'short',
@@ -95,6 +97,19 @@ export function SolicitudListingClient({ tipoInspeccion, contexto = 'CALIDAD' }:
   const [cerrarItem, setCerrarItem] = useState<SolicitudInspeccion | undefined>()
   const [detalleItem, setDetalleItem] = useState<SolicitudInspeccion | undefined>()
   const [deleteItem, setDeleteItem] = useState<SolicitudInspeccion | undefined>()
+  const [pdfItem, setPdfItem] = useState<SolicitudInspeccion | undefined>()
+  const [descargandoId, setDescargandoId] = useState<number | null>(null)
+
+  const descargarPdf = useCallback(async (id: number) => {
+    setDescargandoId(id)
+    try {
+      await documentosService.abrirPdf('solicitud-inspeccion', id)
+    } catch {
+      toast.error('No se pudo descargar el PDF')
+    } finally {
+      setDescargandoId(null)
+    }
+  }, [])
 
   const filters = {
     page: params.page,
@@ -182,6 +197,12 @@ export function SolicitudListingClient({ tipoInspeccion, contexto = 'CALIDAD' }:
               <DropdownMenuItem onClick={() => setDetalleItem(s)}>
                 <Icons.search className='mr-2 h-4 w-4' /> Ver detalle
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPdfItem(s)}>
+                <Icons.search className='mr-2 h-4 w-4' /> Vista previa PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => descargarPdf(s.id)} disabled={descargandoId === s.id}>
+                <Icons.download className='mr-2 h-4 w-4' /> Descargar PDF
+              </DropdownMenuItem>
 
               {/* Ingresar/editar/notificar/eliminar/reabrir: exclusivo de
                   Compras — Calidad quedó restringida a ver+cerrar. */}
@@ -221,7 +242,7 @@ export function SolicitudListingClient({ tipoInspeccion, contexto = 'CALIDAD' }:
         )
       },
     },
-  ], [puedeEscribir, tieneTotalEnCualquiera, tieneLecturaEnCualquiera, currentUserId, notificarMutation, reabrirMutation, esCompras, basePath, router])
+  ], [puedeEscribir, tieneTotalEnCualquiera, tieneLecturaEnCualquiera, currentUserId, notificarMutation, reabrirMutation, esCompras, basePath, router, descargarPdf, descargandoId])
 
   const pageCount = data ? Math.ceil(data.meta.total / params.perPage) : 0
   const { table } = useDataTable({
@@ -289,6 +310,16 @@ export function SolicitudListingClient({ tipoInspeccion, contexto = 'CALIDAD' }:
           solicitud={detalleItem}
           open={!!detalleItem}
           onOpenChange={(v) => !v && setDetalleItem(undefined)}
+        />
+      )}
+      {pdfItem && (
+        <DocumentoPreviewDialog
+          tipo='solicitud-inspeccion'
+          id={pdfItem.id}
+          titulo={`Solicitud de Inspección ${pdfItem.codigo}`}
+          open={!!pdfItem}
+          onOpenChange={(v) => !v && setPdfItem(undefined)}
+          controlCopia={false}
         />
       )}
       <AlertModal

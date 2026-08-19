@@ -21,14 +21,29 @@ import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { instructivoEmbalajeService } from '../service'
 import { instructivosEmbalajeKeys } from '../queries'
 import type { InstructivoEmbalajeListItem } from '../types'
+import { documentosService } from '@/features/documentos/service'
+import { DocumentoPreviewDialog } from '@/features/documentos/components/documento-preview-dialog'
 
 const ITEM = 'COMPRAS_INSTRUCTIVO'
 
 function InstructivoCellAction({ instructivo }: { instructivo: InstructivoEmbalajeListItem }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [descargando, setDescargando] = useState(false)
   const queryClient = useQueryClient()
   const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
+
+  async function descargarPdf() {
+    setDescargando(true)
+    try {
+      await documentosService.abrirPdf('instructivo-embalaje', instructivo.id)
+    } catch {
+      toast.error('No se pudo descargar el PDF')
+    } finally {
+      setDescargando(false)
+    }
+  }
 
   const deleteMutation = useMutation({
     mutationFn: () => instructivoEmbalajeService.remove(instructivo.id),
@@ -61,6 +76,14 @@ function InstructivoCellAction({ instructivo }: { instructivo: InstructivoEmbala
             <Icons.edit className='mr-2 h-4 w-4' />
             {puedeEscribir ? 'Editar' : 'Ver detalle'}
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setPreviewOpen(true)}>
+            <Icons.search className='mr-2 h-4 w-4' />
+            Vista previa PDF
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={descargarPdf} disabled={descargando}>
+            <Icons.download className='mr-2 h-4 w-4' />
+            Descargar PDF
+          </DropdownMenuItem>
           {puedeEscribir && (
             <>
               <DropdownMenuSeparator />
@@ -75,6 +98,15 @@ function InstructivoCellAction({ instructivo }: { instructivo: InstructivoEmbala
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      <DocumentoPreviewDialog
+        tipo='instructivo-embalaje'
+        id={instructivo.id}
+        titulo={`Instructivo de Embalaje N° ${instructivo.numero}`}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        controlCopia={false}
+        orientacion='landscape'
+      />
     </>
   )
 }

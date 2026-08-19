@@ -26,12 +26,29 @@ interface DocumentoPreviewDialogProps {
   // ofrece "Emitir": el backend igual lo exige (documentos.routes.ts), pero
   // no tiene sentido mostrar un botón que va a devolver 403.
   puedeEmitir?: boolean
+  // Etapa 4 §8 — "control de copia": documentos como la OC o el Cierre
+  // Comercial tienen versión BORRADOR (marca de agua) y versión oficial
+  // (Emitir). Documentos sin control de copia (Instructivo, Solicitud) no
+  // tienen ese concepto — sin esto, `false` — nunca se ofrece Emitir (aunque
+  // `puedeEmitir` venga true) y el preview/descarga se muestran sin ninguna
+  // marca de agua ni lenguaje de "borrador" (el backend ya no la estampa,
+  // ver documentos.service.ts — este flag solo ajusta el copy de la UI).
+  controlCopia?: boolean
+  // Orientación de `pagina` en el registro del documento (documentos.registry.ts)
+  // — el frontend no puede importar el registro (repos separados, CLAUDE.md
+  // §2), así que cada caller la declara junto al `tipo` (ambos son estáticos
+  // por documento). Default portrait: todos los documentos salvo el
+  // Instructivo de Embalaje son A4 vertical (FAS-DOC-R1-001).
+  orientacion?: 'portrait' | 'landscape'
 }
 
 // Tamaño de página A4 en px CSS a 96dpi (210mm × 297mm) — mismo formato que
-// paginaOpts en las plantillas (ver templates/*/v1/index.tsx).
-const PAGINA_ANCHO = 794
-const PAGINA_ALTO = 1123
+// paginaOpts en las plantillas (ver templates/*/v1/index.tsx). En horizontal
+// se invierten (FAS-DOC-R1-001, ronda QA 1): sin esto el iframe forzaba
+// siempre el ancho vertical y el Instructivo de Embalaje (A4 horizontal) se
+// veía comprimido/cortado en vez del layout real que produce Playwright.
+const PAGINA_A4_PORTRAIT = { ancho: 794, alto: 1123 }
+const PAGINA_A4_LANDSCAPE = { ancho: 1123, alto: 794 }
 
 // Motor de Documentos — visor de preview (Etapa 4 §9, Sprint A: "iframe con
 // páginas A4 y sombra"). Es el MISMO HTML que Playwright fotografía para el
@@ -43,20 +60,21 @@ const PAGINA_ALTO = 1123
 // renderice igual que en el PDF, pero se escala con transform para caber en
 // el contenedor — sin esto, en modales angostos o viewports chicos la hoja
 // se corta en vez de reducirse (ver nota de ajuste en el dialog).
-export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, puedeEmitir }: DocumentoPreviewDialogProps) {
+export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, puedeEmitir, controlCopia = true, orientacion = 'portrait' }: DocumentoPreviewDialogProps) {
   const contenedorRef = useRef<HTMLDivElement>(null)
   const [escala, setEscala] = useState(1)
+  const { ancho: paginaAncho, alto: paginaAlto } = orientacion === 'landscape' ? PAGINA_A4_LANDSCAPE : PAGINA_A4_PORTRAIT
 
   useEffect(() => {
     const contenedor = contenedorRef.current
     if (!contenedor) return
     const observer = new ResizeObserver(([entry]) => {
       const anchoDisponible = entry.contentRect.width
-      setEscala(Math.min(1, anchoDisponible / PAGINA_ANCHO))
+      setEscala(Math.min(1, anchoDisponible / paginaAncho))
     })
     observer.observe(contenedor)
     return () => observer.disconnect()
-  }, [])
+  }, [paginaAncho])
 
   // keepPreviousData en vez de un useState+useEffect propio: evita mostrar
   // el HTML de un documento anterior como flash en blanco al reabrir el
@@ -104,21 +122,29 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
         <DialogHeader>
           <DialogTitle className='flex items-center gap-2'>
             {titulo}
-            <Badge variant='secondary'>Vista previa — borrador</Badge>
+            {controlCopia && <Badge variant='secondary'>Vista previa — borrador</Badge>}
           </DialogTitle>
-          <DialogDescription>El diseño final del PDF es exactamente este HTML.</DialogDescription>
+          {/* FAS-DOC-R1-001 (ronda QA 2, arbitrado BUG_REAL): antes decía "es
+              exactamente este HTML" — falso para un documento largo, donde el
+              PDF corta en varias hojas (@page/Chromium) y este visor todavía
+              muestra todo en una sola superficie desplazable (sin Paged.js,
+              diferido a Sprint B, ver Docs/agrosan_etapa4_motor_documentos.md). */}
+          <DialogDescription>
+            El diseño y contenido son los del PDF final. En documentos largos, el PDF puede cortar en varias hojas — esta
+            vista previa por ahora se desplaza en una sola.
+          </DialogDescription>
         </DialogHeader>
 
         <div ref={contenedorRef} className='flex-1 overflow-auto rounded-md bg-muted/40 p-6'>
           {isPending && <p className='text-sm text-muted-foreground'>Cargando vista previa…</p>}
           {isError && <p className='text-sm text-destructive'>No se pudo cargar la vista previa.</p>}
           {html && (
-            <div className='mx-auto' style={{ width: PAGINA_ANCHO * escala, height: PAGINA_ALTO * escala }}>
+            <div className='mx-auto' style={{ width: paginaAncho * escala, height: paginaAlto * escala }}>
               <iframe
                 title={titulo}
                 srcDoc={html}
                 className='block origin-top-left border-0 bg-white shadow-lg'
-                style={{ width: PAGINA_ANCHO, height: PAGINA_ALTO, transform: `scale(${escala})` }}
+                style={{ width: paginaAncho, height: paginaAlto, transform: `scale(${escala})` }}
               />
             </div>
           )}
@@ -127,9 +153,9 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
         <div className='flex justify-end gap-2'>
           <Button variant='outline' onClick={() => onOpenChange(false)}>Cerrar</Button>
           <Button variant='outline' onClick={descargar} isLoading={descargando}>
-            <Icons.download className='mr-1 h-4 w-4' /> Descargar borrador
+            <Icons.download className='mr-1 h-4 w-4' /> {controlCopia ? 'Descargar borrador' : 'Descargar PDF'}
           </Button>
-          {puedeEmitir && (
+          {controlCopia && puedeEmitir && (
             <Button onClick={emitir} isLoading={emitiendo}>
               <Icons.check className='mr-1 h-4 w-4' /> Emitir documento oficial
             </Button>
