@@ -26,8 +26,8 @@ export const cierreComercialPdfPayloadSchema = z.object({
   mercado: z.string().nullable(),
   paisDestino: z.string().nullable(),
   puertoDestino: z.string().nullable(),
-  direccion: z.string().nullable(),
-  direccionDetalle: z.string().nullable(),
+  // direccion/direccionDetalle: sacados (feedback Christian, 2026-08-19) —
+  // no están en el documento original.
   modalidadVenta: z.string().nullable(),
   clausulaVenta: z.string().nullable(),
   tipoFlete: z.string().nullable(),
@@ -57,12 +57,22 @@ export const cierreComercialPdfPayloadSchema = z.object({
     cajas: z.number().int(),
     precio: z.string(),
     total: z.string(),
-    fechaCompromiso: z.string(), // ISO
+    // Kg Neto/Bruto (feedback Christian, 2026-08-19), mismo criterio que
+    // orden-compra.schema.ts: Envase es el dato de catálogo, Neto/Bruto a
+    // secas es el total de la línea (envase × cajas).
+    kgNetoEnvase: z.string(),
+    kgBrutoEnvase: z.string(),
+    kgNeto: z.string(),
+    kgBruto: z.string(),
+    // fechaCompromiso: sacado (feedback Christian, 2026-08-19) — no está en
+    // el documento original.
   })),
   totales: z.object({
     pallets: z.number().int(),
     cajas: z.number().int(),
     totalMonto: z.string(),
+    kgNeto: z.string(),
+    kgBruto: z.string(),
   }),
 })
 

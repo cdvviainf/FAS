@@ -49,6 +49,10 @@ export const ordenCompraPdfPayloadSchema = z.object({
     cajas: z.number().int(),
     precioUsdCaja: z.string(),
     totalUsd: z.string(),
+    // Dato de catálogo (Articulo.kgNetoEnvase/kgBrutoEnvase) — distinto de
+    // kgNeto/kgBruto abajo, que es el total de la línea (envase × cajas).
+    kgNetoEnvase: z.string(),
+    kgBrutoEnvase: z.string(),
     kgNeto: z.string(),
     kgBruto: z.string(),
   })),

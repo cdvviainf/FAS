@@ -12,7 +12,10 @@ const includeDetalle = {
     include: {
       // etiqueta: agregada al detalle (2026-08-17) — el usuario necesita ver
       // qué Etiqueta trae cada Artículo de embalaje sin ir a Materiales.
-      articulo: { select: { ...mantenedorSelect, etiqueta: { select: mantenedorSelect } } },
+      // kgNetoEnvase: agregado (2026-08-19) — lo usa el PDF del Instructivo
+      // (documentos/resolvers/instructivo-embalaje.resolver.ts), mismo campo
+      // que ya expone ordenes-compra.repository.ts para su propio PDF.
+      articulo: { select: { ...mantenedorSelect, etiqueta: { select: mantenedorSelect }, kgNetoEnvase: true } },
       especie: { select: mantenedorSelect },
       variedad: { select: mantenedorSelect },
       variedadRotulada: { select: mantenedorSelect },

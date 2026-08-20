@@ -20,6 +20,7 @@ export const instructivoEmbalajePdfPayloadSchema = z.object({
   }),
   grupoMercado: z.string(),
   fechaInicioPrograma: z.string(), // ISO
+  semana: z.number().int(), // ISO — mismo cálculo que instructivo-form.tsx
   observaciones: z.string().nullable(),
   detalle: z.array(z.object({
     especie: z.string(),
@@ -29,6 +30,7 @@ export const instructivoEmbalajePdfPayloadSchema = z.object({
     articulo: z.string(),
     etiqueta: z.string().nullable(),
     calibres: z.string(), // lista de calibres puntuales unida
+    kgNetoEnvase: z.string().nullable(), // dato de catálogo, Articulo.kgNetoEnvase
     tipoPallet: z.string().nullable(),
     altura: z.string(),
     cantidadPallets: z.number().int(),

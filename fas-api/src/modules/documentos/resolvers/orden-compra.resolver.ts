@@ -34,23 +34,33 @@ export async function resolverOrdenCompra(id: number, empresaId: number): Promis
     const kgBrutoEnvase = l.articulo.kgBrutoEnvase ? new Prisma.Decimal(l.articulo.kgBrutoEnvase) : new Prisma.Decimal(0)
     return {
       l,
+      kgNetoEnvase,
+      kgBrutoEnvase,
       totalUsd: new Prisma.Decimal(l.precioUsdCaja).mul(l.cajas),
       kgNeto: kgNetoEnvase.mul(l.cajas),
       kgBruto: kgBrutoEnvase.mul(l.cajas),
     }
   })
 
-  const lineas = calculadas.map(({ l, totalUsd, kgNeto, kgBruto }) => ({
+  // Kg Neto/Bruto Envase (feedback Christian, 2026-08-19): el dato de
+  // catálogo (Articulo.kgNetoEnvase/kgBrutoEnvase), distinto del Kg Neto/
+  // Bruto ya existente (el total de la línea = envase × cajas) — se
+  // muestran ambos.
+  const lineas = calculadas.map(({ l, kgNetoEnvase, kgBrutoEnvase, totalUsd, kgNeto, kgBruto }) => ({
     especie: l.especie.descripcion,
     variedad: l.variedad.descripcion,
     articulo: l.articulo.descripcion,
     etiqueta: l.articulo.etiqueta?.descripcion ?? null,
-    calibres: l.calibres.map((c) => c.calibre.codigo).join(', '),
+    // Descripción, no código (feedback Christian, 2026-08-19) — en las 3
+    // plantillas del motor, no solo acá.
+    calibres: l.calibres.map((c) => c.calibre.descripcion).join(', '),
     categoria: l.categoria.descripcion,
     cantidadPallets: l.cantidadPallets,
     cajas: l.cajas,
     precioUsdCaja: new Prisma.Decimal(l.precioUsdCaja).toString(),
     totalUsd: totalUsd.toString(),
+    kgNetoEnvase: kgNetoEnvase.toString(),
+    kgBrutoEnvase: kgBrutoEnvase.toString(),
     kgNeto: kgNeto.toString(),
     kgBruto: kgBruto.toString(),
   }))

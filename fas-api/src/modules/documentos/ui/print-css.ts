@@ -89,18 +89,24 @@ export function printCss(pagina: { formato: 'A4' | 'Letter'; orientacion: 'portr
     .doc-campo .doc-campo-label { color: #6b6558; }
     .doc-campo .doc-campo-valor { font-weight: 500; }
 
-    table.doc-tabla { width: 100%; border-collapse: collapse; font-size: 9pt; }
+    /* Achicado 9pt/8.2pt -> 7.5pt/6.8pt (feedback Christian, 2026-08-19):
+       la OC y el Cierre Comercial suman columnas de Kg por envase y
+       terminan con 13-14 columnas — sin esto no entraban legibles en A4
+       vertical. Aplica a las 4 plantillas por igual (Solicitud/Instructivo
+       no tienen presión de columnas, pero conviene una sola tipografía de
+       tabla en todo el motor). */
+    table.doc-tabla { width: 100%; border-collapse: collapse; font-size: 7.5pt; }
     .doc-tabla thead { display: table-header-group; }
     .doc-tabla tfoot { display: table-footer-group; }
     .doc-tabla th {
       background: ${T.tinta};
       color: #fff;
       text-align: left;
-      padding: 1.8mm 2mm;
+      padding: 1.3mm 1.5mm;
       font-weight: 600;
-      font-size: 8.2pt;
+      font-size: 6.8pt;
     }
-    .doc-tabla td { padding: 1.6mm 2mm; border-bottom: 1px solid ${T.borde}; }
+    .doc-tabla td { padding: 1.2mm 1.5mm; border-bottom: 1px solid ${T.borde}; }
     .doc-tabla tbody tr:nth-child(even) { background: ${T.zebra}; }
     .doc-tabla tfoot td { font-weight: 700; border-top: 1.5px solid ${T.tinta}; border-bottom: none; }
 

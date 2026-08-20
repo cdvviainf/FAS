@@ -69,7 +69,9 @@ export async function resolverSolicitudInspeccion(id: number, empresaId: number)
     cantidadPallets: solicitud.cantidadPallets,
     calificacion: solicitud.calificacion?.descripcion ?? null,
     variedades: solicitud.variedades.map((v) => v.variedad.descripcion),
-    calibres: solicitud.calibres.map((c) => c.calibre.codigo),
+    // Descripción, no código (feedback Christian, 2026-08-19) — en las 3
+    // plantillas del motor, no solo acá.
+    calibres: solicitud.calibres.map((c) => c.calibre.descripcion),
     categorias: solicitud.categorias.map((c) => c.categoria.descripcion),
     articulos: solicitud.embalajes.map((e) => e.articulo.descripcion),
     paises: solicitud.paises.map((p) => p.pais.descripcion),

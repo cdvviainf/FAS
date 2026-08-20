@@ -8,6 +8,10 @@ import type { CierreComercialPdfPayload } from '../schemas/cierre-comercial.sche
 // Resolver del Cierre Comercial (modelo NotaVenta) — mismo criterio que
 // orden-compra.resolver.ts, del que reusa FECHA_REFERENCIA_LABEL (mismo enum
 // FechaReferenciaPago compartido entre OrdenCompraCuotaPago y NotaVentaCuotaPago).
+//
+// Feedback Christian (2026-08-19): Fecha Compromiso (por línea) y Dirección
+// de destino (cabecera) no están en el documento original y no aportaban
+// valor claro — se sacaron del payload (no solo de la plantilla).
 export async function resolverCierreComercial(id: number, empresaId: number): Promise<CierreComercialPdfPayload> {
   const nv = await getNotaVentaById(id)
   if (!nv) throw new NotFoundError('Cierre Comercial', String(id))
@@ -17,14 +21,31 @@ export async function resolverCierreComercial(id: number, empresaId: number): Pr
     getEntidadParaDocumento(nv.clienteId),
   ])
 
-  const calculadas = nv.detalles.map((l) => ({ l, total: new Prisma.Decimal(l.precio).mul(l.cajas) }))
+  // Kg Neto/Bruto (feedback Christian, 2026-08-19): Cierre Comercial no
+  // calculaba peso — mismo criterio que orden-compra.resolver.ts (envase ×
+  // cajas), el artículo ya trae kgNetoEnvase/kgBrutoEnvase seleccionados en
+  // notas-venta.repository.ts.
+  const calculadas = nv.detalles.map((l) => {
+    const kgNetoEnvase = l.articulo.kgNetoEnvase ? new Prisma.Decimal(l.articulo.kgNetoEnvase) : new Prisma.Decimal(0)
+    const kgBrutoEnvase = l.articulo.kgBrutoEnvase ? new Prisma.Decimal(l.articulo.kgBrutoEnvase) : new Prisma.Decimal(0)
+    return {
+      l,
+      kgNetoEnvase,
+      kgBrutoEnvase,
+      total: new Prisma.Decimal(l.precio).mul(l.cajas),
+      kgNeto: kgNetoEnvase.mul(l.cajas),
+      kgBruto: kgBrutoEnvase.mul(l.cajas),
+    }
+  })
 
-  const lineas = calculadas.map(({ l, total }) => ({
+  const lineas = calculadas.map(({ l, kgNetoEnvase, kgBrutoEnvase, total, kgNeto, kgBruto }) => ({
     especie: l.especie.descripcion,
     variedad: l.variedad.descripcion,
     articulo: l.articulo.descripcion,
     etiqueta: l.articulo.etiqueta?.descripcion ?? null,
-    calibres: l.calibres.map((c) => c.calibre.codigo).join(', '),
+    // Descripción, no código (feedback Christian, 2026-08-19) — en las 3
+    // plantillas del motor, no solo acá.
+    calibres: l.calibres.map((c) => c.calibre.descripcion).join(', '),
     categoria: l.categoria?.descripcion ?? null,
     tipoPallet: l.tipoPallet?.descripcion ?? null,
     cantidadPallets: l.cantidadPallets,
@@ -32,7 +53,10 @@ export async function resolverCierreComercial(id: number, empresaId: number): Pr
     cajas: l.cajas,
     precio: new Prisma.Decimal(l.precio).toString(),
     total: total.toString(),
-    fechaCompromiso: l.fechaCompromiso.toISOString(),
+    kgNetoEnvase: kgNetoEnvase.toString(),
+    kgBrutoEnvase: kgBrutoEnvase.toString(),
+    kgNeto: kgNeto.toString(),
+    kgBruto: kgBruto.toString(),
   }))
 
   const totales = calculadas.reduce(
@@ -40,8 +64,10 @@ export async function resolverCierreComercial(id: number, empresaId: number): Pr
       pallets: acc.pallets + c.l.cantidadPallets,
       cajas: acc.cajas + c.l.cajas,
       totalMonto: acc.totalMonto.add(c.total),
+      kgNeto: acc.kgNeto.add(c.kgNeto),
+      kgBruto: acc.kgBruto.add(c.kgBruto),
     }),
-    { pallets: 0, cajas: 0, totalMonto: new Prisma.Decimal(0) },
+    { pallets: 0, cajas: 0, totalMonto: new Prisma.Decimal(0), kgNeto: new Prisma.Decimal(0), kgBruto: new Prisma.Decimal(0) },
   )
 
   return {
@@ -66,8 +92,6 @@ export async function resolverCierreComercial(id: number, empresaId: number): Pr
     mercado: nv.mercado?.descripcion ?? null,
     paisDestino: nv.paisDestino?.descripcion ?? null,
     puertoDestino: nv.puertoDestino?.descripcion ?? null,
-    direccion: nv.direccion?.direccion ?? null,
-    direccionDetalle: nv.direccionDetalle,
     modalidadVenta: nv.modalidadVenta?.descripcion ?? null,
     clausulaVenta: nv.clausulaVenta?.descripcion ?? null,
     tipoFlete: nv.tipoFlete?.descripcion ?? null,
@@ -87,6 +111,8 @@ export async function resolverCierreComercial(id: number, empresaId: number): Pr
       pallets: totales.pallets,
       cajas: totales.cajas,
       totalMonto: totales.totalMonto.toString(),
+      kgNeto: totales.kgNeto.toString(),
+      kgBruto: totales.kgBruto.toString(),
     },
   }
 }

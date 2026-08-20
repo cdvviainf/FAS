@@ -21,6 +21,10 @@ const columnas: ColumnaTabla<Linea>[] = [
   { titulo: 'Cajas', render: (l) => fmt.entero(l.cajas), numerica: true },
   { titulo: 'Precio USD/Caja', render: (l) => fmt.usd(l.precioUsdCaja), numerica: true },
   { titulo: 'Total USD', render: (l) => fmt.usd(l.totalUsd), numerica: true },
+  // Kg Envase (feedback Christian, 2026-08-19): dato de catálogo, distinto
+  // del Kg Neto/Bruto de más abajo (total de la línea = envase × cajas).
+  { titulo: 'Kg Neto Envase', render: (l) => fmt.kilos(l.kgNetoEnvase), numerica: true },
+  { titulo: 'Kg Bruto Envase', render: (l) => fmt.kilos(l.kgBrutoEnvase), numerica: true },
   { titulo: 'Kg Neto', render: (l) => fmt.kilos(l.kgNeto), numerica: true },
   { titulo: 'Kg Bruto', render: (l) => fmt.kilos(l.kgBruto), numerica: true },
 ]
@@ -117,6 +121,8 @@ export function OrdenCompraV1({ d, marcaAgua, marcaAguaFecha }: { d: OrdenCompra
           fmt.entero(d.totales.cajas),
           '',
           fmt.usd(d.totales.totalUsd),
+          '', // Kg Neto Envase — dato de catálogo, no se totaliza
+          '', // Kg Bruto Envase — ídem
           fmt.kilos(d.totales.kgNeto),
           fmt.kilos(d.totales.kgBruto),
         ]}

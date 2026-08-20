@@ -18,6 +18,9 @@ const columnas: ColumnaTabla<Linea>[] = [
   { titulo: 'Calibres', render: (l) => l.calibres },
   { titulo: 'Tipo Pallet', render: (l) => l.tipoPallet ?? '—' },
   { titulo: 'Altura', render: (l) => l.altura },
+  // Kg Neto Envase (feedback Christian, 2026-08-19): dato de catálogo, sin
+  // total (a diferencia de OC/Cierre Comercial, acá no se pidió Kg Bruto).
+  { titulo: 'Kg Neto Envase', render: (l) => l.kgNetoEnvase ? fmt.kilos(l.kgNetoEnvase) : '—', numerica: true },
   { titulo: 'Pallets', render: (l) => fmt.entero(l.cantidadPallets), numerica: true },
   { titulo: 'Cajas/Pallet', render: (l) => fmt.entero(l.cajasPorPallet), numerica: true },
   { titulo: 'Cajas', render: (l) => fmt.entero(l.cajas), numerica: true },
@@ -66,7 +69,19 @@ export function InstructivoEmbalajeV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
         titulo='Programa'
         campos={[
           { label: 'Grupo de Mercado', valor: d.grupoMercado },
-          { label: 'Fecha inicio programa', valor: fmt.fecha(d.fechaInicioPrograma) },
+          {
+            label: 'Fecha inicio programa',
+            // Semana ISO (feedback Christian, 2026-08-19), mismo cálculo que
+            // el badge del formulario — debajo de la fecha, no aparte, para
+            // no sumar un GrupoCampos nuevo.
+            valor: (
+              <>
+                {fmt.fecha(d.fechaInicioPrograma)}
+                <br />
+                Semana {d.semana}
+              </>
+            ),
+          },
         ]}
       />
 
@@ -78,7 +93,7 @@ export function InstructivoEmbalajeV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
         titulo='Detalle de embalaje'
         filas={d.detalle}
         columnas={columnas}
-        totales={['', '', '', '', '', '', '', '', 'Total:', fmt.entero(d.totales.pallets), '', fmt.entero(d.totales.cajas)]}
+        totales={['', '', '', '', '', '', '', '', 'Total:', '', fmt.entero(d.totales.pallets), '', fmt.entero(d.totales.cajas)]}
       />
 
       <PieFirma firmantes={['Frutera Agrosan', 'Productor']} />

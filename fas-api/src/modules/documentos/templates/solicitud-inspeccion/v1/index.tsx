@@ -48,28 +48,32 @@ export function SolicitudInspeccionV1({ d, marcaAgua, marcaAguaFecha }: { d: Sol
         />
       </div>
 
+      {/* Reagrupación 2026-08-19 (feedback Christian): Especie/Cantidad de
+          pallets/Calificación se mueven a "Producto a Inspeccionar" (antes
+          "Alcance") y Países se mueve para acá, junto al resto de los datos
+          de la visita en sí. */}
       <GrupoCampos
         titulo='Detalle de la visita'
         campos={[
           { label: 'Tipo de inspección', valor: d.tipoInspeccion },
           { label: 'Fecha y hora', valor: fmt.fechaHora(d.fechaHoraVisita) },
-          { label: 'Especie', valor: d.especie ?? '—' },
           { label: 'Mercado', valor: d.mercado ?? '—' },
           { label: 'Cliente', valor: d.cliente ?? '—' },
           { label: 'Fecha de despacho', valor: d.fechaDespacho ? fmt.fecha(d.fechaDespacho) : '—' },
-          { label: 'Cantidad de pallets', valor: d.cantidadPallets != null ? fmt.entero(d.cantidadPallets) : '—' },
-          { label: 'Calificación', valor: d.calificacion ?? '—' },
+          { label: 'Países', valor: listaOGuion(d.paises) },
         ]}
       />
 
       <GrupoCampos
-        titulo='Alcance'
+        titulo='Producto a Inspeccionar'
         campos={[
+          { label: 'Especie', valor: d.especie ?? '—' },
+          { label: 'Cantidad de pallets', valor: d.cantidadPallets != null ? fmt.entero(d.cantidadPallets) : '—' },
+          { label: 'Calificación', valor: d.calificacion ?? '—' },
           { label: 'Variedades', valor: listaOGuion(d.variedades) },
           { label: 'Calibres', valor: listaOGuion(d.calibres) },
           { label: 'Categorías', valor: listaOGuion(d.categorias) },
           { label: 'Artículos', valor: listaOGuion(d.articulos) },
-          { label: 'Países', valor: listaOGuion(d.paises) },
         ]}
       />
 
