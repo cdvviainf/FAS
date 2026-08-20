@@ -29,6 +29,23 @@ const columnas: ColumnaTabla<Linea>[] = [
   { titulo: 'Kg Bruto', render: (l) => fmt.kilos(l.kgBruto), numerica: true },
 ]
 
+// Disclaimer legal de facturación (feedback Christian, 2026-08-19/20) —
+// texto de la OC original en papel. Solo Agrosan por ahora (empresa.codigo
+// === 'AGROSAN'): "FRUTERA AGROSAN EXPORT SPA" es una razón social de
+// facturación específica, distinta de Empresa.razonSocial ("Frutera Agrosan
+// SpA") — AGDry no tiene definido su propio texto todavía, así que su OC
+// sigue con el disclaimer genérico de una línea (ver DISCLAIMER_GENERICO).
+const DISCLAIMER_FACTURACION_AGROSAN = `Facturar a:
+FRUTERA AGROSAN EXPORT SPA
+• El precio unitario corresponde al Incoterm indicado en el detalle conforme a Incoterms 2020.
+• El proveedor será responsable por la calidad y condición de la fruta cuando cualquier deterioro o rechazo tenga su origen previo al embarque o derive de defectos de calidad o condición existentes al momento de la entrega. La aprobación del lote será hecha por el cliente final en destino y podrá acreditarse mediante informe del recibidor o surveyor independiente.
+• Los gastos directamente vinculados a la fruta objeto de esta orden incurridos por FRUTERA AGROSAN EXPORT SPA y que tengan su origen en incumplimientos, defectos o hechos imputables al proveedor, así como cualquier otro costo derivado de la operación por causas atribuibles a éste, podrán incorporarse en liquidación o compensarse contra montos adeudados.
+• El precio rige exclusivamente para la nave y fecha de embarque indicadas. Cualquier cambio de nave o postergación podrá implicar ajuste o renegociación del precio.
+• La fecha y hora de carga a cumplir será expresada en el instructivo de embarque.
+• El proveedor declara cumplir íntegramente sus obligaciones tributarias. En caso que el SII observe o rechace la devolución del crédito fiscal IVA por incumplimiento imputable al proveedor, FRUTERA AGROSAN EXPORT SPA podrá compensar el monto efectivamente rechazado, previa notificación acompañando antecedente formal del SII. El pago del IVA quedará sujeto a su efectiva recuperación.`
+
+const DISCLAIMER_GENERICO = '* El precio unitario corresponde al Incoterm indicado conforme a Incoterms 2020. La aprobación del lote será hecha por el cliente final en destino.'
+
 function textoCuota(c: OrdenCompraPdfPayload['cuotas'][number]): string {
   const valor = c.tipoValor === 'PORCENTAJE'
     ? `${c.porcentaje}%`
@@ -134,7 +151,7 @@ export function OrdenCompraV1({ d, marcaAgua, marcaAguaFecha }: { d: OrdenCompra
       />
 
       <PieFirma
-        nota='* El precio unitario corresponde al Incoterm indicado conforme a Incoterms 2020. La aprobación del lote será hecha por el cliente final en destino.'
+        nota={d.empresa.codigo === 'AGROSAN' ? DISCLAIMER_FACTURACION_AGROSAN : DISCLAIMER_GENERICO}
         firmantes={[d.responsable ?? 'Responsable']}
       />
     </Documento>

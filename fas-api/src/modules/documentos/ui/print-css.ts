@@ -66,6 +66,10 @@ export function printCss(pagina: { formato: 'A4' | 'Letter'; orientacion: 'portr
     }
     .doc-header img.doc-logo { max-height: 16mm; }
     .doc-header .doc-folio { text-align: right; font-size: 9pt; color: ${T.acento}; }
+    /* Tipo de documento grande y en negrita (feedback Christian, 2026-08-20,
+       en las 4 plantillas vía Encabezado.tsx) — antes heredaba el 9pt de
+       .doc-folio y quedaba casi ilegible comparado con el N°. */
+    .doc-header .doc-folio .doc-titulo { font-size: 16pt; font-weight: 700; margin-bottom: 1mm; }
     .doc-header .doc-folio .doc-numero { font-size: 13pt; font-weight: 700; color: ${T.tinta}; }
 
     .doc-grupo { break-inside: avoid; margin-bottom: 4mm; }

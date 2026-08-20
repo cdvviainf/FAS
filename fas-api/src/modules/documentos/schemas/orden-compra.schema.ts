@@ -5,6 +5,10 @@ import { z } from 'zod'
 // como string decimal (CLAUDE.md §7), nunca number.
 export const ordenCompraPdfPayloadSchema = z.object({
   empresa: z.object({
+    // codigo (2026-08-20): decide en la plantilla si aplica el disclaimer
+    // legal de facturación de Agrosan (ver DISCLAIMER_FACTURACION_AGROSAN,
+    // v1/index.tsx) — no está definido todavía para otras empresas del tenant.
+    codigo: z.string(),
     razonSocial: z.string(),
     rut: z.string().nullable(),
     direccion: z.string().nullable(),

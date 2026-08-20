@@ -13,6 +13,10 @@ export async function getEmpresaParaDocumento(id: number) {
   return prisma.empresa.findFirst({
     where: { id, eliminadoEn: null },
     select: {
+      // codigo: agregado (2026-08-20) — la OC lo usa para decidir si aplica
+      // el disclaimer legal de facturación de Agrosan (orden-compra/v1),
+      // que todavía no está definido para otras empresas del tenant (AGDry).
+      codigo: true,
       razonSocial: true,
       rut: true,
       direcciones: {

@@ -78,6 +78,7 @@ export async function resolverOrdenCompra(id: number, empresaId: number): Promis
 
   return {
     empresa: {
+      codigo: empresa?.codigo ?? '',
       razonSocial: empresa?.razonSocial ?? '—',
       rut: empresa?.rut ?? null,
       direccion: empresa?.direcciones[0]?.direccion ?? null,

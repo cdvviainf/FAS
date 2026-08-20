@@ -13,7 +13,9 @@ export function Encabezado({ logoDataUri, tituloDocumento, numero, fecha, subtit
     <div className='doc-header'>
       {logoDataUri ? <img className='doc-logo' src={logoDataUri} alt='Frutera Agrosan' /> : <div />}
       <div className='doc-folio'>
-        <div>{tituloDocumento}</div>
+        {/* Tipo de documento grande y en negrita (feedback Christian,
+            2026-08-20) — antes heredaba el tamaño chico de .doc-folio. */}
+        <div className='doc-titulo'>{tituloDocumento}</div>
         <div className='doc-numero'>N° {numero}</div>
         <div>{fecha}</div>
         {subtitulo && <div>{subtitulo}</div>}
