@@ -140,7 +140,6 @@ async function crearFixtures() {
     usuarioSolicitanteId: usuarioInspector.id,
     entidadProductorId: productor.id,
     direccionId: direccionProductor.id,
-    tipoInspeccion: 'COMPRA',
     fechaHora: new Date('2026-08-01T15:00:00Z').toISOString(),
     asignados: [{ usuarioId: usuarioInspector.id, funcion: 'ACUDIR' }],
   }, 'test')
@@ -228,7 +227,7 @@ describe('Motor de validación de Recepción contra PostgreSQL (compras.md §7)'
   async function crearOcEmitida(f: Awaited<ReturnType<typeof crearFixtures>>, cajas: number, cantidadPallets: number) {
     const oc = await crearOrdenCompra(f.empresa.id, {
       entidadProductorId: f.productor.id,
-      solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id,
+      solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id],
       monedaId: (await prisma.moneda.create({ data: { codigo: 'USD', descripcion: 'Dólar', creadoPor: 'test' } })).id,
     }, 'test')
     await agregarLinea(f.empresa.id, oc.id, {

@@ -11,7 +11,7 @@ export default function Page() {
       pageTitle='Inspección de Compra'
       pageDescription='Solicitudes de inspección de tipo Compra: revisión y cierre. El ingreso, edición y notificación se gestiona desde Compras.'
     >
-      <SolicitudListingClient tipoInspeccion='COMPRA' contexto='CALIDAD' />
+      <SolicitudListingClient contexto='CALIDAD' />
     </PageContainer>
   )
 }

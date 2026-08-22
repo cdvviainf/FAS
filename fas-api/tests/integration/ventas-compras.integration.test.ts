@@ -232,14 +232,34 @@ async function crearFixtures() {
     usuarioSolicitanteId: usuarioInspector.id,
     entidadProductorId: productor.id,
     direccionId: direccionProductor.id,
-    tipoInspeccion: 'COMPRA',
     fechaHora: new Date('2026-08-01T15:00:00Z').toISOString(),
     asignados: [{ usuarioId: usuarioInspector.id, funcion: 'ACUDIR' }],
   }, 'test')
   await notificarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'test')
   const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'APROBADA', 'test')
 
-  return { empresa, pais, cliente, productor, tipoEmbarque, mercado, grupoMercado, moneda, especie, variedad, categoria, calibreChico, calibreGrande, articulo, altura, solicitudInspeccionCompraAprobada }
+  return {
+    empresa, pais, cliente, productor, tipoEmbarque, mercado, grupoMercado, moneda, especie, variedad, categoria,
+    calibreChico, calibreGrande, articulo, altura, solicitudInspeccionCompraAprobada,
+    // Expuestos para crearOtraSolicitudAprobada (Etapa 2, N:M OC↔Solicitud):
+    // cada Solicitud solo puede vincularse a una OC, así que los tests que
+    // crean más de una OC dentro del mismo `f` necesitan poder generar una
+    // segunda Solicitud Aprobada reutilizando el mismo productor/temporada.
+    temporada, direccionProductor, usuarioInspector,
+  }
+}
+
+async function crearOtraSolicitudAprobada(f: Awaited<ReturnType<typeof crearFixtures>>) {
+  const solicitud = await crearSolicitudInspeccion(f.empresa.id, {
+    temporadaId: f.temporada.id,
+    usuarioSolicitanteId: f.usuarioInspector.id,
+    entidadProductorId: f.productor.id,
+    direccionId: f.direccionProductor.id,
+    fechaHora: new Date('2026-08-02T15:00:00Z').toISOString(),
+    asignados: [{ usuarioId: f.usuarioInspector.id, funcion: 'ACUDIR' }],
+  }, 'test')
+  await notificarSolicitudInspeccion(f.empresa.id, solicitud.id, 'test')
+  return cerrarSolicitudInspeccion(f.empresa.id, solicitud.id, 'APROBADA', 'test')
 }
 
 function nvBase(f: Awaited<ReturnType<typeof crearFixtures>>) {
@@ -424,14 +444,19 @@ describe('Orden de Compra contra PostgreSQL', () => {
 
   it('genera correlativo OC-{año}-{NNNN} y rechaza productor sin tipo Productor', async () => {
     const f = await crearFixtures()
-    const oc1 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
-    const oc2 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
+    // N:M (Etapa 2): cada Solicitud solo puede vincularse a una OC, así que
+    // oc2 necesita su propia Solicitud Aprobada distinta de la de oc1.
+    const solicitud2 = await crearOtraSolicitudAprobada(f)
+    const oc1 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id }, 'test')
+    const oc2 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [solicitud2.id], monedaId: f.moneda.id }, 'test')
     const anio = new Date().getFullYear()
     expect(oc1.numero).toBe(`OC-${anio}-0001`)
     expect(oc2.numero).toBe(`OC-${anio}-0002`)
 
+    // Rechazada por productor distinto — falla antes de llegar a revalidar
+    // que la Solicitud ya esté vinculada a oc1, así que puede reutilizarla.
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.cliente.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.cliente.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
   })
 
@@ -444,7 +469,7 @@ describe('Orden de Compra contra PostgreSQL', () => {
 
     const ocCreada = await crearOrdenCompra(f.empresa.id, {
       entidadProductorId: f.productor.id,
-      solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id,
+      solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id],
       monedaId: f.moneda.id,
       condicionPagoId: condicionPago.id,
     }, 'test')
@@ -454,14 +479,16 @@ describe('Orden de Compra contra PostgreSQL', () => {
     expect(oc.cuotasPago.map((c) => Number(c.porcentaje)).sort()).toEqual([20, 80])
     expect(oc.lineas).toHaveLength(1)
 
-    // Sin condición de pago no hay cuotas (no quedan pendientes de carga manual)
-    const ocSinCuotas = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
+    // Sin condición de pago no hay cuotas (no quedan pendientes de carga
+    // manual) — segunda OC, necesita su propia Solicitud (N:M, Etapa 2).
+    const solicitud2 = await crearOtraSolicitudAprobada(f)
+    const ocSinCuotas = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [solicitud2.id], monedaId: f.moneda.id }, 'test')
     expect(ocSinCuotas.cuotasPago).toHaveLength(0)
   })
 
   it('permite agregar y editar líneas de una OC en Borrador', async () => {
     const f = await crearFixtures()
-    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
+    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id }, 'test')
     expect(oc.estado).toBe('BORRADOR')
 
     const linea = await agregarLinea(f.empresa.id, oc.id, ocLinea(f))
@@ -478,30 +505,30 @@ describe('Orden de Compra contra PostgreSQL', () => {
     const usuarioSinFlag = await crearUsuarioResponsable(false, 'no-resp')
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id, notaVentaId: 999999 }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id, notaVentaId: 999999 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id, destinoMercadoId: 999999 }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id, destinoMercadoId: 999999 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id, condicionPagoId: 999999 }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id, condicionPagoId: 999999 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id, formaPagoId: 999999 }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id, formaPagoId: 999999 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     // Solo usuarios marcados como Responsable de Venta pueden asignarse
     await expect(
-      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id, responsableId: usuarioSinFlag.id }, 'test'),
+      crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id, responsableId: usuarioSinFlag.id }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     const usuarioResponsable = await crearUsuarioResponsable(true, 'si-resp')
     const oc = await crearOrdenCompra(f.empresa.id, {
       entidadProductorId: f.productor.id,
-      solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id,
+      solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id],
       monedaId: f.moneda.id,
       destinoMercadoId: f.mercado.id,
       responsableId: usuarioResponsable.id,
@@ -512,14 +539,14 @@ describe('Orden de Compra contra PostgreSQL', () => {
 
   it('permite eliminar (soft delete) una OC en Borrador/Emitida, pero bloquea edición, eliminación y edición de líneas tras Recepcionada', async () => {
     const f = await crearFixtures()
-    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
+    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id }, 'test')
 
     await eliminarOrdenCompra(f.empresa.id, oc.id, 'test')
     await expect(obtenerOrdenCompra(f.empresa.id, oc.id)).rejects.toMatchObject({ statusCode: 404 })
 
     // Simula el estado que en el futuro solo asignará el flujo de Recepción
     // (compras.md §4.4/§8) — no seteable manualmente vía la API (OC-001).
-    const oc2 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id, monedaId: f.moneda.id }, 'test')
+    const oc2 = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id }, 'test')
     const linea2 = await agregarLinea(f.empresa.id, oc2.id, ocLinea(f))
     await prisma.ordenCompra.update({ where: { id: oc2.id }, data: { estado: 'RECEPCIONADA' } })
 

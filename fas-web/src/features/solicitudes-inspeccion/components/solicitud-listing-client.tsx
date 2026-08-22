@@ -36,7 +36,7 @@ import { useTemporada } from '@/contexts/temporada-context'
 import { solicitudesListOptions, solicitudesKeys } from '../queries'
 import { solicitudesService } from '../service'
 import { ESTADO_LABELS } from '../types'
-import type { SolicitudInspeccion, EstadoSolicitud, TipoInspeccion } from '../types'
+import type { SolicitudInspeccion, EstadoSolicitud } from '../types'
 import { SolicitudCerrarDialog } from './solicitud-cerrar-dialog'
 import { SolicitudDetalleDialog } from './solicitud-detalle-dialog'
 import { documentosService } from '@/features/documentos/service'
@@ -57,14 +57,13 @@ const estadoVariant: Record<EstadoSolicitud, 'secondary' | 'default' | 'outline'
 }
 
 interface SolicitudListingClientProps {
-  tipoInspeccion?: TipoInspeccion
   // Determina el set de acciones, no solo el permiso (2026-08-10, ver
   // Docs/Hallazgos/solicitud-inspeccion.md): Compras gestiona por completo
   // (ingresar/editar/notificar/cerrar/eliminar), Calidad solo ve y cierra.
   contexto?: 'COMPRAS' | 'CALIDAD'
 }
 
-export function SolicitudListingClient({ tipoInspeccion, contexto = 'CALIDAD' }: SolicitudListingClientProps = {}) {
+export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListingClientProps = {}) {
   const esCompras = contexto === 'COMPRAS'
   const ITEM = esCompras ? 'COMPRAS_SOLICITUDES' : 'CAL_SOLICITUDES'
   const basePath = esCompras ? '/dashboard/compras/solicitudes' : '/dashboard/calidad/solicitudes'
@@ -114,7 +113,6 @@ export function SolicitudListingClient({ tipoInspeccion, contexto = 'CALIDAD' }:
   const filters = {
     page: params.page,
     limit: params.perPage,
-    ...(tipoInspeccion ? { tipoInspeccion } : {}),
     ...(params.q ? { q: params.q } : {}),
     ...(params.estado ? { estado: params.estado } : {}),
     ...(temporada ? { temporadaId: temporada.id } : {}),

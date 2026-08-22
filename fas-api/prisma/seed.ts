@@ -177,22 +177,35 @@ async function main() {
 
   console.log('Seeding TipoParametro/Parametro (Ventas — Cierre Comercial)...')
 
+  // TipoParametro/Parametro son tablas por-empresa desde multi-empresa (Fase 3):
+  // este seed los crea en la empresa base AGROSAN.
+  const agrosanParaParametros = await prisma.empresa.findFirst({ where: { codigo: 'AGROSAN' } })
+  if (!agrosanParaParametros) throw new Error('No se encontró la empresa base AGROSAN para sembrar parámetros.')
+
   let parametrosCreados = 0
   for (const tipo of tiposParametroVentas) {
-    let tipoParametro = await prisma.tipoParametro.findFirst({ where: { codigo: tipo.codigo, eliminadoEn: null } })
+    let tipoParametro = await prisma.tipoParametro.findFirst({
+      where: { empresaId: agrosanParaParametros.id, codigo: tipo.codigo, eliminadoEn: null },
+    })
     if (!tipoParametro) {
       tipoParametro = await prisma.tipoParametro.create({
-        data: { codigo: tipo.codigo, descripcion: tipo.descripcion, creadoPor: SISTEMA_USER },
+        data: {
+          empresaId: agrosanParaParametros.id,
+          codigo: tipo.codigo,
+          descripcion: tipo.descripcion,
+          creadoPor: SISTEMA_USER,
+        },
       })
     }
 
     for (const valor of tipo.valores) {
       const existente = await prisma.parametro.findFirst({
-        where: { codigo: valor.codigo, tipoParametroId: tipoParametro.id, eliminadoEn: null },
+        where: { empresaId: agrosanParaParametros.id, codigo: valor.codigo, tipoParametroId: tipoParametro.id, eliminadoEn: null },
       })
       if (!existente) {
         await prisma.parametro.create({
           data: {
+            empresaId: agrosanParaParametros.id,
             codigo: valor.codigo,
             descripcion: valor.descripcion,
             tipoParametroId: tipoParametro.id,
@@ -212,9 +225,11 @@ async function main() {
   ]
   let unidadesCreadas = 0
   for (const u of unidadesBase) {
-    const existente = await prisma.unidadMedida.findFirst({ where: { codigo: u.codigo, eliminadoEn: null } })
+    const existente = await prisma.unidadMedida.findFirst({
+      where: { empresaId: agrosanParaParametros.id, codigo: u.codigo, eliminadoEn: null },
+    })
     if (!existente) {
-      await prisma.unidadMedida.create({ data: { ...u, creadoPor: SISTEMA_USER } })
+      await prisma.unidadMedida.create({ data: { ...u, empresaId: agrosanParaParametros.id, creadoPor: SISTEMA_USER } })
       unidadesCreadas++
     }
   }

@@ -39,7 +39,7 @@ export function InstructivoListingClient() {
   })
 
   if (isPending) {
-    return <DataTableSkeleton columnCount={4} rowCount={10} />
+    return <DataTableSkeleton columnCount={5} rowCount={10} />
   }
 
   return (

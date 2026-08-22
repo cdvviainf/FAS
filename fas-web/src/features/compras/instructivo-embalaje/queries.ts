@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { instructivoEmbalajeService } from './service'
+import type { InstructivoEmbalajeListFilters } from './types'
 
 export const instructivosEmbalajeKeys = {
   all: ['instructivos-embalaje'] as const,
@@ -7,7 +8,7 @@ export const instructivosEmbalajeKeys = {
   detail: (id: number) => ['instructivos-embalaje', 'detail', id] as const,
 }
 
-export function instructivosEmbalajeListOptions(filters: { page?: number; limit?: number; entidadProductorId?: number } = {}) {
+export function instructivosEmbalajeListOptions(filters: InstructivoEmbalajeListFilters = {}) {
   return queryOptions({
     queryKey: instructivosEmbalajeKeys.list(filters),
     queryFn: () => instructivoEmbalajeService.list(filters),

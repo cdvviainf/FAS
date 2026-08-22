@@ -1,5 +1,16 @@
 import { z } from 'zod'
 
+// N:M (2026-08-22, Etapa 2 — compras.md §4.2): representa un conjunto, no una
+// lista con repeticiones — sin este refine, un duplicado (ej. [10, 10]) pasa
+// Zod y choca contra el @@unique de la tabla puente como error interno sin
+// traducir (FAS-OCSI-003, QA ronda 1).
+const solicitudInspeccionIdsSchema = z
+  .array(z.number().int().positive())
+  .min(1, 'La inspección de compra es requerida')
+  .refine((ids) => new Set(ids).size === ids.length, {
+    message: 'No se puede repetir la misma inspección de compra',
+  })
+
 const lineaSchema = z.object({
   especieId: z.number().int().positive('La especie es requerida'),
   variedadId: z.number().int().positive('La variedad es requerida'),
@@ -16,7 +27,10 @@ const lineaSchema = z.object({
 export const ordenCompraCreateSchema = z.object({
   entidadProductorId: z.number().int().positive('El productor es requerido'),
   notaVentaId: z.number().int().positive().optional().nullable(),
-  solicitudInspeccionId: z.number().int().positive('La inspección de compra es requerida'),
+  // N:M (2026-08-22, Etapa 2 — compras.md §4.2): una OC puede tener varias
+  // Solicitudes de Inspección; al menos 1 requerida a nivel de aplicación
+  // (no de schema, mismo criterio que el campo singular anterior).
+  solicitudInspeccionIds: solicitudInspeccionIdsSchema,
   fecha: z.coerce.date().optional(),
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
@@ -32,7 +46,9 @@ export const ordenCompraCreateSchema = z.object({
 export const ordenCompraUpdateSchema = z.object({
   entidadProductorId: z.number().int().positive().optional(),
   notaVentaId: z.number().int().positive().optional().nullable(),
-  solicitudInspeccionId: z.number().int().positive().optional(),
+  // Si viene, reemplaza el conjunto completo (mismo patrón que calibreIds en
+  // OrdenCompraLinea) — no se puede enviar vacío, mismo criterio que crear.
+  solicitudInspeccionIds: solicitudInspeccionIdsSchema.optional(),
   fecha: z.coerce.date().optional(),
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),

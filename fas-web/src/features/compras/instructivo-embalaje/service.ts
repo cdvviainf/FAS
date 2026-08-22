@@ -1,17 +1,19 @@
 import { api } from '@/lib/api'
 import type {
   InstructivoEmbalajeListResponse,
+  InstructivoEmbalajeListFilters,
   InstructivoEmbalajeDetalle,
   InstructivoEmbalajeCreateInput,
   InstructivoEmbalajeUpdateInput,
 } from './types'
 
 export const instructivoEmbalajeService = {
-  async list(params: { page?: number; limit?: number; entidadProductorId?: number } = {}): Promise<InstructivoEmbalajeListResponse> {
+  async list(params: InstructivoEmbalajeListFilters = {}): Promise<InstructivoEmbalajeListResponse> {
     const sp: Record<string, string> = {}
     if (params.page) sp.page = String(params.page)
     if (params.limit) sp.limit = String(params.limit)
     if (params.entidadProductorId) sp.entidadProductorId = String(params.entidadProductorId)
+    if (params.estadoInspeccion) sp.estadoInspeccion = params.estadoInspeccion
     return api.get('compras/instructivos-embalaje', { searchParams: sp }).json()
   },
 
@@ -29,5 +31,31 @@ export const instructivoEmbalajeService = {
 
   async remove(id: number): Promise<void> {
     await api.delete(`compras/instructivos-embalaje/${id}`)
+  },
+
+  // ─── Inspección de Proceso (Calidad) ────────────────────────────────────
+
+  async notificarInspeccion(id: number): Promise<{ data: InstructivoEmbalajeDetalle }> {
+    return api.patch(`compras/instructivos-embalaje/${id}/inspeccion/notificar`).json()
+  },
+
+  async aprobarInspeccion(id: number, comentario: string): Promise<{ data: InstructivoEmbalajeDetalle }> {
+    return api.patch(`compras/instructivos-embalaje/${id}/inspeccion/aprobar`, { json: { comentario } }).json()
+  },
+
+  async rechazarInspeccion(id: number, comentario: string): Promise<{ data: InstructivoEmbalajeDetalle }> {
+    return api.patch(`compras/instructivos-embalaje/${id}/inspeccion/rechazar`, { json: { comentario } }).json()
+  },
+
+  async cerrarInspeccion(id: number): Promise<{ data: InstructivoEmbalajeDetalle }> {
+    return api.patch(`compras/instructivos-embalaje/${id}/inspeccion/cerrar`).json()
+  },
+
+  async agregarFolios(id: number, folios: string[]): Promise<{ data: InstructivoEmbalajeDetalle }> {
+    return api.post(`compras/instructivos-embalaje/${id}/folios`, { json: { folios } }).json()
+  },
+
+  async quitarFolio(id: number, folioId: number): Promise<{ data: InstructivoEmbalajeDetalle }> {
+    return api.delete(`compras/instructivos-embalaje/${id}/folios/${folioId}`).json()
   },
 }

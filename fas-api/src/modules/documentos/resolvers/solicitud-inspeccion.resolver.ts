@@ -4,7 +4,7 @@ import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '.
 import type { SolicitudInspeccionPdfPayload } from '../schemas/solicitud-inspeccion.schema.js'
 
 // Labels — mismo texto que fas-web/src/features/solicitudes-inspeccion/types.ts
-// (ESTADO_LABELS/TIPO_INSPECCION_LABELS/FUNCION_LABELS/RESULTADO_CIERRE_LABELS).
+// (ESTADO_LABELS/FUNCION_LABELS/RESULTADO_CIERRE_LABELS).
 // Duplicado a propósito: el frontend no es importable desde fas-api (repos
 // separados, CLAUDE.md §2) y el payload debe viajar con el label ya resuelto
 // (Etapa 4 §5: "prohibido formatear a mano dentro de una plantilla").
@@ -15,10 +15,6 @@ const ESTADO_LABELS: Record<string, string> = {
   RECHAZADA: 'Rechazada',
   OBJETADA: 'Objetada',
   CERRADA: 'Cerrada', // valor legado del enum, ver schema.prisma
-}
-const TIPO_INSPECCION_LABELS: Record<string, string> = {
-  COMPRA: 'Inspección de Compra',
-  PROCESO: 'Inspección de Proceso',
 }
 const FUNCION_LABELS: Record<string, string> = {
   ACUDIR: 'Acudir',
@@ -54,7 +50,6 @@ export async function resolverSolicitudInspeccion(id: number, empresaId: number)
     codigo: solicitud.codigo,
     fecha: solicitud.creadoEn.toISOString(),
     estado: ESTADO_LABELS[solicitud.estado] ?? solicitud.estado,
-    tipoInspeccion: TIPO_INSPECCION_LABELS[solicitud.tipoInspeccion] ?? solicitud.tipoInspeccion,
     fechaHoraVisita: solicitud.fechaHora.toISOString(),
     productor: {
       razonSocial: productor?.razonSocial ?? solicitud.entidadProductor.razonSocial,

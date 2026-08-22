@@ -16,7 +16,11 @@ const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 const includeDetalle = {
   entidadProductor: { select: entidadSelect },
   notaVenta: { select: { id: true, folio: true } },
-  solicitudInspeccion: { select: { id: true, codigo: true, estado: true } },
+  // N:M (2026-08-22, Etapa 2) — reemplaza el solicitudInspeccion singular.
+  solicitudes: {
+    select: { id: true, solicitudInspeccion: { select: { id: true, codigo: true, estado: true } } },
+    orderBy: { id: 'asc' as const },
+  },
   moneda: { select: mantenedorSelect },
   formaPago: { select: mantenedorSelect },
   destinoMercado: { select: mantenedorSelect },
@@ -199,6 +203,7 @@ async function recalcularCuotasMontoUnitario(tx: Tx, ordenCompraId: number) {
 export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor: string) {
   const anio = (data.fecha ?? new Date()).getFullYear()
   const prefijo = `OC-${anio}-`
+  const { solicitudInspeccionIds, ...resto } = data
 
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_ORDEN_COMPRA}::int, ${anio}::int)`
@@ -215,10 +220,16 @@ export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor:
         // este valor con la empresa activa del contexto — se declara aquí
         // solo para satisfacer el tipo requerido por Prisma.
         empresaId: getEmpresaIdActual()!,
-        ...data,
+        ...resto,
         numero,
         creadoPor,
         cuotasPago: { create: cuotasPago },
+        // N:M (2026-08-22, Etapa 2) — el @@unique(empresaId, solicitudInspeccionId)
+        // de la tabla puente es la última defensa contra doble vínculo; el
+        // service ya valida antes con un mensaje amigable.
+        solicitudes: {
+          create: solicitudInspeccionIds.map((solicitudInspeccionId) => ({ solicitudInspeccionId, creadoPor })),
+        },
       },
       include: includeDetalle,
     })
@@ -226,6 +237,7 @@ export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor:
 }
 
 export async function updateOrdenCompra(id: number, data: OrdenCompraUpdateInput, actualizadoPor: string) {
+  const { solicitudInspeccionIds, ...resto } = data
   return prisma.$transaction(async (tx) => {
     await lockYVerificarEditable(tx, id)
     if (data.condicionPagoId !== undefined) {
@@ -243,7 +255,21 @@ export async function updateOrdenCompra(id: number, data: OrdenCompraUpdateInput
     }
     return tx.ordenCompra.update({
       where: { id },
-      data: { ...data, actualizadoPor },
+      data: {
+        ...resto,
+        actualizadoPor,
+        // N:M (2026-08-22, Etapa 2): si viene, reemplaza el conjunto completo
+        // (mismo patrón que calibres en updateLinea) — si no viene, se
+        // conservan los vínculos existentes.
+        ...(solicitudInspeccionIds
+          ? {
+              solicitudes: {
+                deleteMany: {},
+                create: solicitudInspeccionIds.map((solicitudInspeccionId) => ({ solicitudInspeccionId, creadoPor: actualizadoPor })),
+              },
+            }
+          : {}),
+      },
       include: includeDetalle,
     })
   })
@@ -303,6 +329,11 @@ export async function removeLinea(id: number, ordenCompraId: number) {
 export async function softDeleteOrdenCompra(id: number, eliminadoPor: string) {
   return prisma.$transaction(async (tx) => {
     await lockYVerificarEditable(tx, id)
+    // Libera las Solicitudes de Inspección vinculadas (2026-08-22, decisión
+    // de negocio, Christian): una OC eliminada no debe bloquear su Solicitud
+    // para siempre — se borran las filas de la tabla puente (no la propia
+    // Solicitud ni la OC, que sigue existiendo vía soft delete).
+    await tx.ordenCompraSolicitudInspeccion.deleteMany({ where: { ordenCompraId: id } })
     return tx.ordenCompra.update({
       where: { id },
       data: { eliminadoEn: new Date(), eliminadoPor },
@@ -321,13 +352,26 @@ export async function getNotaVenta(id: number) {
   return prisma.notaVenta.findFirst({ where: { id, eliminadoEn: null }, select: { id: true } })
 }
 
-// La OC exige una Inspección de Compra Aprobada del mismo productor
-// (compras.md §4.2) — se valida completa (tipo, estado y productor) desde el
-// service; este helper solo trae los datos necesarios para esa validación.
-export async function getSolicitudInspeccion(id: number) {
-  return prisma.solicitudInspeccion.findFirst({
-    where: { id, eliminadoEn: null },
-    select: { id: true, tipoInspeccion: true, estado: true, entidadProductorId: true },
+// La OC exige al menos una Inspección de Compra Aprobada del mismo productor
+// entre TODAS las vinculadas (compras.md §4.2, N:M 2026-08-22) — se valida
+// completo desde el service; este helper solo trae los datos necesarios.
+export async function getSolicitudesInspeccion(ids: number[]) {
+  return prisma.solicitudInspeccion.findMany({
+    where: { id: { in: ids }, eliminadoEn: null },
+    select: { id: true, estado: true, entidadProductorId: true },
+  })
+}
+
+// Solicitudes de la lista que ya están vinculadas a OTRA Orden de Compra
+// (excluyendo la propia, en una edición) — dato para un mensaje de error
+// amigable antes de chocar con el @@unique de la tabla puente.
+export async function getSolicitudesYaVinculadas(ids: number[], excluirOrdenCompraId?: number) {
+  return prisma.ordenCompraSolicitudInspeccion.findMany({
+    where: {
+      solicitudInspeccionId: { in: ids },
+      ...(excluirOrdenCompraId != null ? { ordenCompraId: { not: excluirOrdenCompraId } } : {}),
+    },
+    select: { solicitudInspeccionId: true, ordenCompraId: true },
   })
 }
 

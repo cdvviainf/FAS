@@ -17,7 +17,6 @@ export const solicitudesService = {
     if (filters.page) sp.page = String(filters.page)
     if (filters.limit) sp.limit = String(filters.limit)
     if (filters.estado) sp.estado = filters.estado
-    if (filters.tipoInspeccion) sp.tipoInspeccion = filters.tipoInspeccion
     if (filters.temporadaId) sp.temporadaId = String(filters.temporadaId)
     if (filters.entidadProductorId) sp.entidadProductorId = String(filters.entidadProductorId)
     if (filters.usuarioAsignadoId) sp.usuarioAsignadoId = filters.usuarioAsignadoId

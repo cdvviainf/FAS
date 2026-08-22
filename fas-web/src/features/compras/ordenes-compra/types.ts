@@ -79,11 +79,16 @@ export interface OrdenCompraListItem {
   notaVenta: { id: number; folio: number } | null
 }
 
+export interface OrdenCompraSolicitudVinculo {
+  id: number
+  solicitudInspeccion: { id: number; codigo: string; estado: string }
+}
+
 export interface OrdenCompraDetalle extends OrdenCompraListItem {
   monedaId: number
   notaVentaId: number | null
-  solicitudInspeccionId: number | null
-  solicitudInspeccion: { id: number; codigo: string; estado: string } | null
+  // N:M (2026-08-22, Etapa 2) — reemplaza solicitudInspeccionId/solicitudInspeccion singular.
+  solicitudes: OrdenCompraSolicitudVinculo[]
   formaPagoId: number | null
   formaPago: MantenedorRef | null
   condicionPagoId: number | null
@@ -122,9 +127,10 @@ export interface OrdenCompraLineaInput {
 export interface OrdenCompraCreateInput {
   entidadProductorId: number
   notaVentaId?: number | null
-  // Requerido al crear (validate() en el form lo exige); opcional en el
-  // update para no forzar el backfill de OCs previas a este campo.
-  solicitudInspeccionId?: number
+  // N:M (2026-08-22, Etapa 2): ≥1 requerido al crear (validate() en el form
+  // lo exige); opcional en el update — si no viene, se conservan los
+  // vínculos existentes.
+  solicitudInspeccionIds?: number[]
   fecha?: string
   formaPagoId?: number | null
   condicionPagoId?: number | null

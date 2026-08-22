@@ -29,6 +29,7 @@ import { articulosService } from '@/features/materiales/articulos/service'
 import { entidadesService } from '@/features/entidades/service'
 import { instructivoEmbalajeDetailOptions, instructivosEmbalajeKeys } from '../queries'
 import { instructivoEmbalajeService } from '../service'
+import { ESTADO_INSPECCION_LABELS, ESTADOS_INSPECCION_CON_VEREDICTO } from '../types'
 import type { InstructivoEmbalajeDetalleInput } from '../types'
 
 const ITEM = 'COMPRAS_INSTRUCTIVO'
@@ -326,24 +327,35 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
     }
   }
 
-  const soloLectura = !puedeEscribir
+  // Congelado: una vez que la inspección de proceso tiene veredicto, el
+  // backend rechaza PATCH/DELETE (409) — se pasa a solo lectura en vez de
+  // dejar que el usuario edite y choque con el error (compras.md §4.1).
+  const estaCongelado = isEdit && !!instructivo && ESTADOS_INSPECCION_CON_VEREDICTO.includes(instructivo.data.estadoInspeccion)
+  const soloLectura = !puedeEscribir || estaCongelado
   const isPending = createMutation.isPending || updateMutation.isPending
 
   if (isEdit && isLoadingInstructivo) {
     return <p className='text-sm text-muted-foreground'>Cargando…</p>
   }
 
-  // Sin permiso TOTAL: se muestra un resumen a partir de los datos anidados
-  // que ya trae el propio GET, sin depender de las listas auxiliares — un
-  // usuario con solo LECTURA en COMPRAS_INSTRUCTIVO puede no tener acceso a
-  // esos otros ítems y vería IDs en vez de nombres si reusara el formulario
-  // interactivo (IE-EDIT-QA-003).
+  // Sin permiso TOTAL, o con veredicto ya emitido: se muestra un resumen a
+  // partir de los datos anidados que ya trae el propio GET, sin depender de
+  // las listas auxiliares — un usuario con solo LECTURA en
+  // COMPRAS_INSTRUCTIVO puede no tener acceso a esos otros ítems y vería IDs
+  // en vez de nombres si reusara el formulario interactivo (IE-EDIT-QA-003).
   if (isEdit && soloLectura && instructivo) {
     const d = instructivo.data
     const semanaIso = getISOWeek(new Date(`${d.fechaInicioPrograma.slice(0, 10)}T00:00:00`))
     return (
       <div className='space-y-6'>
-        <Badge variant='secondary'>Solo lectura — sin permiso de edición</Badge>
+        <div className='flex flex-wrap items-center gap-2'>
+          <Badge variant='secondary'>
+            {estaCongelado ? 'Inspección de proceso con veredicto — no editable' : 'Solo lectura — sin permiso de edición'}
+          </Badge>
+          <Badge variant={d.estadoInspeccion === 'RECHAZADA' ? 'destructive' : 'outline'}>
+            Inspección: {ESTADO_INSPECCION_LABELS[d.estadoInspeccion]}
+          </Badge>
+        </div>
         <Card>
           <CardHeader>
             <CardTitle className='flex flex-wrap items-center gap-2'>
@@ -358,6 +370,12 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
             {d.observaciones && <p><span className='text-muted-foreground'>Observaciones:</span> {d.observaciones}</p>}
             <p><span className='text-muted-foreground'>Emitido:</span> {new Date(d.creadoEn).toLocaleString('es-CL')}</p>
             <p><span className='text-muted-foreground'>Emitido por:</span> {d.creadoPor}</p>
+            {d.comentarioInspeccion && (
+              <p><span className='text-muted-foreground'>Comentario de Calidad:</span> {d.comentarioInspeccion}</p>
+            )}
+            {d.folios.length > 0 && (
+              <p><span className='text-muted-foreground'>Folios aprobados:</span> {d.folios.length}</p>
+            )}
           </CardContent>
         </Card>
 

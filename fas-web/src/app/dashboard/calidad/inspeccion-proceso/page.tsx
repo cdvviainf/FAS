@@ -1,5 +1,5 @@
 import PageContainer from '@/components/layout/page-container'
-import { SolicitudListingClient } from '@/features/solicitudes-inspeccion/components/solicitud-listing-client'
+import { InspeccionProcesoListingClient } from '@/features/compras/instructivo-embalaje/components/inspeccion-proceso-listing-client'
 
 export const metadata = {
   title: 'FAS — Inspección de Proceso'
@@ -9,9 +9,9 @@ export default function Page() {
   return (
     <PageContainer
       pageTitle='Inspección de Proceso'
-      pageDescription='Solicitudes de inspección de tipo Proceso: revisión y cierre. El ingreso, edición y notificación se gestiona desde Compras.'
+      pageDescription='Instructivos de Embalaje: revisión, veredicto y folios. El ingreso y edición se gestiona desde Compras.'
     >
-      <SolicitudListingClient tipoInspeccion='PROCESO' contexto='CALIDAD' />
+      <InspeccionProcesoListingClient />
     </PageContainer>
   )
 }

@@ -4,6 +4,33 @@ export interface MantenedorRef {
   descripcion: string
 }
 
+// Inspección de Proceso (2026-08-21) — el Instructivo ES la inspección que
+// gestiona Calidad (ver compras.md §4.1 / calidad.md). Ciclo: PENDIENTE →
+// NOTIFICADA → APROBADA → CERRADA, con RECHAZADA terminal.
+export type EstadoInspeccionProceso = 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA' | 'CERRADA'
+
+export const ESTADO_INSPECCION_LABELS: Record<EstadoInspeccionProceso, string> = {
+  PENDIENTE: 'Pendiente',
+  NOTIFICADA: 'Notificada',
+  APROBADA: 'Aprobada',
+  RECHAZADA: 'Rechazada',
+  CERRADA: 'Cerrada',
+}
+
+// Estados con veredicto emitido: el Instructivo queda congelado (no editable
+// ni eliminable desde Compras) — mismo criterio que el backend.
+export const ESTADOS_INSPECCION_CON_VEREDICTO: EstadoInspeccionProceso[] = ['APROBADA', 'RECHAZADA', 'CERRADA']
+
+export type EstadoFolioInspeccion = 'APROBADO' | 'RECEPCIONADO'
+
+export interface InstructivoEmbalajeFolio {
+  id: number
+  folio: string
+  estado: EstadoFolioInspeccion
+  palletId: number | null
+  creadoEn: string
+}
+
 export interface EntidadRef {
   id: number
   codigo: string
@@ -40,6 +67,10 @@ export interface InstructivoEmbalajeListItem {
   entidadProductorId: number
   entidadProductor: EntidadRef
   creadoEn: string
+  estadoInspeccion: EstadoInspeccionProceso
+  // Solo viene en el listado (conteo liviano); el detalle trae `folios`
+  // completo más abajo en vez de este conteo.
+  _count?: { folios: number }
 }
 
 export interface InstructivoEmbalajeDetalle extends InstructivoEmbalajeListItem {
@@ -49,6 +80,11 @@ export interface InstructivoEmbalajeDetalle extends InstructivoEmbalajeListItem 
   observaciones: string | null
   detalle: InstructivoEmbalajeDetalleItem[]
   creadoPor: string
+  comentarioInspeccion: string | null
+  inspeccionadoEn: string | null
+  inspeccionadoPor: string | null
+  notificadaEn: string | null
+  folios: InstructivoEmbalajeFolio[]
 }
 
 export interface InstructivoEmbalajeListResponse {
@@ -78,10 +114,21 @@ export interface InstructivoEmbalajeCreateInput {
   detalle: InstructivoEmbalajeDetalleInput[]
 }
 
+export interface InstructivoEmbalajeListFilters {
+  page?: number
+  limit?: number
+  entidadProductorId?: number
+  estadoInspeccion?: EstadoInspeccionProceso
+}
+
 export interface InstructivoEmbalajeUpdateInput {
   entidadProductorId?: number
   grupoMercadoId?: number
   fechaInicioPrograma?: string
   observaciones?: string | null
   detalle?: InstructivoEmbalajeDetalleInput[]
+}
+
+export interface FoliosCreateInput {
+  folios: string[]
 }

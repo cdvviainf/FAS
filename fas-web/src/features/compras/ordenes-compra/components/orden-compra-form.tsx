@@ -22,12 +22,14 @@ import {
 import { Icons } from '@/components/icons'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
+import { SelectMultiple } from '@/components/shared/select-multiple'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { entidadesService } from '@/features/entidades/service'
 import { articulosService } from '@/features/materiales/articulos/service'
 import { notasVentaService } from '@/features/ventas/notas-venta/service'
 import { solicitudesService } from '@/features/solicitudes-inspeccion/service'
+import { ESTADO_LABELS } from '@/features/solicitudes-inspeccion/types'
 import { usuariosService } from '@/features/usuarios/service'
 import { condicionesPagoService } from '@/features/condiciones-pago/service'
 import { FECHA_REFERENCIA_LABELS } from '@/features/condiciones-pago/types'
@@ -64,7 +66,7 @@ interface HeaderFields {
   origen: Origen
   entidadProductorId: number
   notaVentaId: number | null
-  solicitudInspeccionId: number
+  solicitudInspeccionIds: number[]
   fecha: string
   responsableId: string | null
   destinoMercadoId: number | null
@@ -80,7 +82,7 @@ const HEADER_EMPTY: HeaderFields = {
   origen: 'MANUAL',
   entidadProductorId: 0,
   notaVentaId: null,
-  solicitudInspeccionId: 0,
+  solicitudInspeccionIds: [],
   fecha: new Date().toISOString().slice(0, 10),
   responsableId: null,
   destinoMercadoId: null,
@@ -147,10 +149,12 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     queryFn: () => usuariosService.list({ limit: 500, esResponsableVenta: true }),
     staleTime: 60_000,
   })
-  // Solo inspecciones de Compra ya Aprobadas — la OC exige una (compras.md §4.2).
+  // N:M (2026-08-22, Etapa 2, FAS-OCSI-002): se listan TODAS las solicitudes
+  // (no solo Aprobadas) — el backend solo exige que al menos una del
+  // conjunto esté Aprobada, las demás pueden estar en cualquier estado.
   const { data: solicitudesInspeccionData } = useQuery({
-    queryKey: ['solicitudes-inspeccion-compra-aprobadas-options'],
-    queryFn: () => solicitudesService.list({ tipoInspeccion: 'COMPRA', estado: 'APROBADA', limit: 500 }),
+    queryKey: ['solicitudes-inspeccion-compra-options'],
+    queryFn: () => solicitudesService.list({ limit: 500 }),
     staleTime: 60_000,
   })
   const { data: mercadosData } = useQuery({ queryKey: ['mercados-options'], queryFn: () => mercadosService.list({ limit: 500 }), staleTime: 5 * 60_000 })
@@ -196,7 +200,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
         origen: d.notaVentaId ? 'CIERRE' : 'MANUAL',
         entidadProductorId: d.entidadProductorId,
         notaVentaId: d.notaVentaId,
-        solicitudInspeccionId: d.solicitudInspeccionId ?? 0,
+        solicitudInspeccionIds: d.solicitudes.map((s) => s.solicitudInspeccion.id),
         fecha: d.fecha.slice(0, 10),
         responsableId: d.responsableId,
         destinoMercadoId: d.destinoMercadoId,
@@ -215,9 +219,11 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     if (!fields.entidadProductorId) e.entidadProductorId = 'El productor es requerido'
     if (!fields.monedaId) e.monedaId = 'La moneda es requerida'
     if (fields.origen === 'CIERRE' && !fields.notaVentaId) e.notaVentaId = 'Selecciona el Cierre Comercial'
-    // Requerida solo al crear: las OC de desarrollo previas a este campo
-    // pueden seguir editándose sin forzar el backfill.
-    if (!isEdit && !fields.solicitudInspeccionId) e.solicitudInspeccionId = 'La inspección de compra es requerida'
+    // Siempre requerida, también al editar (FAS-OCSI-006, QA ronda 4): si se
+    // permitiera vaciar solo en create, buildPayload() convierte el arreglo
+    // vacío en `undefined` y el backend interpreta "campo ausente" como "no
+    // tocar" — el PATCH "éxito" no cambiaría nada y el usuario no se entera.
+    if (fields.solicitudInspeccionIds.length === 0) e.solicitudInspeccionIds = 'La inspección de compra es requerida'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -226,7 +232,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     return {
       entidadProductorId: fields.entidadProductorId,
       notaVentaId: fields.origen === 'CIERRE' ? fields.notaVentaId : null,
-      solicitudInspeccionId: fields.solicitudInspeccionId || undefined,
+      solicitudInspeccionIds: fields.solicitudInspeccionIds.length > 0 ? fields.solicitudInspeccionIds : undefined,
       fecha: fields.fecha,
       responsableId: fields.responsableId,
       destinoMercadoId: fields.destinoMercadoId,
@@ -429,7 +435,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
               <Label>Productor <span className='text-destructive'>*</span></Label>
               <Combobox
                 value={fields.entidadProductorId ? String(fields.entidadProductorId) : ''}
-                onChange={(v) => setFields((f) => ({ ...f, entidadProductorId: Number(v), solicitudInspeccionId: 0 }))}
+                onChange={(v) => setFields((f) => ({ ...f, entidadProductorId: Number(v), solicitudInspeccionIds: [] }))}
                 placeholder='Seleccionar productor...'
                 searchPlaceholder='Buscar productor...'
                 options={productores.map((p) => ({ value: String(p.id), label: `${p.descripcion} — ${p.razonSocial}` }))}
@@ -462,24 +468,20 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
             </div>
           </div>
 
-          {/* Fila 2b: Inspección de Compra */}
+          {/* Fila 2b: Inspección de Compra — N:M (Etapa 2): una OC puede tener
+              varias; todas del mismo productor y al menos una Aprobada. */}
           <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Inspección de Compra <span className='text-destructive'>*</span></Label>
-              <Select
-                value={fields.solicitudInspeccionId ? String(fields.solicitudInspeccionId) : ''}
-                onValueChange={(v) => setFields((f) => ({ ...f, solicitudInspeccionId: Number(v) }))}
+              <SelectMultiple
+                options={solicitudesInspeccion.map((s) => ({ id: s.id, label: `${s.codigo} — ${ESTADO_LABELS[s.estado]}` }))}
+                selectedIds={fields.solicitudInspeccionIds}
+                onChange={(ids) => setFields((f) => ({ ...f, solicitudInspeccionIds: ids }))}
+                placeholder={fields.entidadProductorId ? 'Agregar inspección...' : 'Elige un productor primero'}
                 disabled={!fields.entidadProductorId}
-              >
-                <SelectTrigger><SelectValue placeholder={fields.entidadProductorId ? 'Seleccionar...' : 'Elige un productor primero'} /></SelectTrigger>
-                <SelectContent>
-                  {solicitudesInspeccion.map((s) => (
-                    <SelectItem key={s.id} value={String(s.id)}>{s.codigo}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className='text-xs text-muted-foreground'>Solo se listan inspecciones de Compra ya Aprobadas del productor seleccionado.</p>
-              {errors.solicitudInspeccionId && <p className='text-xs text-destructive'>{errors.solicitudInspeccionId}</p>}
+              />
+              <p className='text-xs text-muted-foreground'>Se listan las inspecciones de Compra del productor seleccionado — al menos una debe estar Aprobada.</p>
+              {errors.solicitudInspeccionIds && <p className='text-xs text-destructive'>{errors.solicitudInspeccionIds}</p>}
             </div>
           </div>
 

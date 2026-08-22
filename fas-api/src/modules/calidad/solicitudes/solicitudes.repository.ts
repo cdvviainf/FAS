@@ -86,7 +86,6 @@ function buildWhere(filters: SolicitudListFilters): Prisma.SolicitudInspeccionWh
   return {
     eliminadoEn: null,
     ...(filters.estado ? { estado: filters.estado } : {}),
-    ...(filters.tipoInspeccion ? { tipoInspeccion: filters.tipoInspeccion } : {}),
     ...(filters.temporadaId ? { temporadaId: filters.temporadaId } : {}),
     ...(filters.entidadProductorId ? { entidadProductorId: filters.entidadProductorId } : {}),
     ...(filters.usuarioAsignadoId
@@ -142,7 +141,6 @@ export interface SolicitudCoreData {
   contactoId?: number | null
   especieId?: number | null
   fechaHora: Date
-  tipoInspeccion: 'COMPRA' | 'PROCESO'
   mercadoId?: number | null
   clienteId?: number | null
   fechaDespacho?: Date | null

@@ -28,8 +28,8 @@ import { useTemporada } from '@/contexts/temporada-context'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { solicitudDetailOptions, solicitudesKeys } from '../queries'
 import { solicitudesService } from '../service'
-import { FUNCION_LABELS, TIPO_INSPECCION_LABELS } from '../types'
-import type { AsignadoInput, FuncionAsignado, SolicitudCreateInput, TipoInspeccion } from '../types'
+import { FUNCION_LABELS } from '../types'
+import type { AsignadoInput, FuncionAsignado, SolicitudCreateInput } from '../types'
 import { SelectMultiple } from '@/components/shared/select-multiple'
 
 const especiesService = createMantenedorService('especies')
@@ -76,7 +76,6 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const [productorId, setProductorId] = useState<number | null>(null)
   const [direccionId, setDireccionId] = useState<number | null>(null)
   const [contactoId, setContactoId] = useState<number | null>(null)
-  const [tipoInspeccion, setTipoInspeccion] = useState<TipoInspeccion | null>(null)
   const [fechaHora, setFechaHora] = useState(() => toLocalInput(new Date().toISOString()))
   const [mercadoId, setMercadoId] = useState<number | null>(null)
   const [paisIds, setPaisIds] = useState<number[]>([])
@@ -188,7 +187,6 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       setProductorId(d.entidadProductorId)
       setDireccionId(d.direccionId)
       setContactoId(d.contactoId)
-      setTipoInspeccion(d.tipoInspeccion)
       setFechaHora(toLocalInput(d.fechaHora))
       setMercadoId(d.mercadoId)
       setPaisIds(d.paises.map((p) => p.pais.id))
@@ -248,7 +246,6 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     if (!usuarioSolicitanteId) e.usuarioSolicitanteId = 'El solicitante es requerido'
     if (!productorId) e.productor = 'El productor es requerido'
     if (!direccionId) e.direccion = 'La dirección es requerida'
-    if (!tipoInspeccion) e.tipoInspeccion = 'El tipo de inspección es requerido'
     if (!fechaHora) e.fechaHora = 'La fecha y hora son requeridas'
     if (asignados.length === 0) e.asignados = 'Debe asignar al menos un usuario'
     else if (!asignados.some((a) => a.funcion === 'ACUDIR')) e.asignados = 'Al menos un asignado debe tener función Acudir'
@@ -263,7 +260,6 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       entidadProductorId: productorId!,
       direccionId: direccionId!,
       contactoId,
-      tipoInspeccion: tipoInspeccion!,
       fechaHora: new Date(fechaHora).toISOString(),
       mercadoId,
       paisIds,
@@ -415,8 +411,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
             </div>
           </div>
 
-          {/* Fila 2: Contacto, Motivo, Fecha y hora de visita */}
-          <div className='grid gap-4 sm:grid-cols-3'>
+          {/* Fila 2: Contacto, Fecha y hora de visita */}
+          <div className='grid gap-4 sm:grid-cols-2'>
             <div className='space-y-1.5'>
               <Label>Contacto</Label>
               <Select value={contactoId ? String(contactoId) : 'none'} onValueChange={(v) => setContactoId(v === 'none' ? null : Number(v))} disabled={!productorId}>
@@ -428,18 +424,6 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Tipo de Inspección <span className='text-destructive'>*</span></Label>
-              <Select value={tipoInspeccion ?? ''} onValueChange={(v) => setTipoInspeccion(v as TipoInspeccion)}>
-                <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(TIPO_INSPECCION_LABELS) as TipoInspeccion[]).map((t) => (
-                    <SelectItem key={t} value={t}>{TIPO_INSPECCION_LABELS[t]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.tipoInspeccion && <p className='text-xs text-destructive'>{errors.tipoInspeccion}</p>}
             </div>
             <div className='space-y-1.5'>
               <Label>Fecha y hora de visita <span className='text-destructive'>*</span></Label>

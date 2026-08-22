@@ -144,7 +144,6 @@ function payloadBase(f: Awaited<ReturnType<typeof crearFixtures>>) {
     usuarioSolicitanteId: f.usuario.id,
     entidadProductorId: f.productor.id,
     direccionId: f.direccion.id,
-    tipoInspeccion: 'COMPRA' as const,
     fechaHora: new Date('2026-08-01T15:00:00Z').toISOString(),
     asignados: [{ usuarioId: f.usuario.id, funcion: 'ACUDIR' as const }],
   }

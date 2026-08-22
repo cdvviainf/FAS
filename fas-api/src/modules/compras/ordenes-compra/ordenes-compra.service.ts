@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './ordenes-compra.repository.js'
 import type {
@@ -48,14 +49,14 @@ async function validarLinea(linea: OrdenCompraLineaInput, index: number) {
 async function validarReferenciasHeader(data: {
   entidadProductorId?: number
   notaVentaId?: number | null
-  solicitudInspeccionId?: number
+  solicitudInspeccionIds?: number[]
   monedaId?: number
   formaPagoId?: number | null
   destinoMercadoId?: number | null
   condicionPagoId?: number | null
   responsableId?: string | null
   incotermId?: number | null
-}, vigente?: { entidadProductorId?: number; solicitudInspeccionId?: number | null }) {
+}, vigente?: { entidadProductorId?: number; solicitudInspeccionIds?: number[]; ordenCompraId?: number }) {
   if (data.entidadProductorId != null) {
     const productor = await repo.getEntidadProductor(data.entidadProductorId)
     if (!productor) throw new ValidationError('El productor seleccionado no existe o está inactivo')
@@ -72,21 +73,32 @@ async function validarReferenciasHeader(data: {
     if (!notaVenta) throw new ValidationError('El Cierre Comercial (Nota de Venta) seleccionado no existe')
   }
   // Efectivos: si el PATCH no reenvía el campo, se usa el valor ya guardado
-  // en la OC — así un cambio de productor sin reenviar la inspección (o
-  // viceversa) sigue revalidando que ambos correspondan entre sí (QA-R1-OC-001).
+  // en la OC — así un cambio de productor sin reenviar las inspecciones (o
+  // viceversa) sigue revalidando que correspondan entre sí (QA-R1-OC-001).
   const productorIdEfectivo = data.entidadProductorId ?? vigente?.entidadProductorId
-  const solicitudInspeccionIdEfectivo = data.solicitudInspeccionId ?? vigente?.solicitudInspeccionId
-  if (solicitudInspeccionIdEfectivo != null) {
-    const solicitud = await repo.getSolicitudInspeccion(solicitudInspeccionIdEfectivo)
-    if (!solicitud) throw new ValidationError('La inspección de compra seleccionada no existe')
-    if (solicitud.tipoInspeccion !== 'COMPRA') {
-      throw new ValidationError('La inspección seleccionada debe ser de tipo Compra')
+  const solicitudInspeccionIdsEfectivos = data.solicitudInspeccionIds ?? vigente?.solicitudInspeccionIds
+  if (solicitudInspeccionIdsEfectivos != null && solicitudInspeccionIdsEfectivos.length > 0) {
+    const solicitudes = await repo.getSolicitudesInspeccion(solicitudInspeccionIdsEfectivos)
+    const encontradosIds = new Set(solicitudes.map((s) => s.id))
+    if (solicitudInspeccionIdsEfectivos.some((id) => !encontradosIds.has(id))) {
+      throw new ValidationError('Una o más inspecciones de compra seleccionadas no existen')
     }
-    if (solicitud.estado !== 'APROBADA') {
-      throw new ValidationError('La inspección de compra seleccionada debe estar Aprobada')
+    if (productorIdEfectivo != null && solicitudes.some((s) => s.entidadProductorId !== productorIdEfectivo)) {
+      throw new ValidationError('Una o más inspecciones de compra seleccionadas no corresponden al productor de esta Orden de Compra')
     }
-    if (productorIdEfectivo != null && solicitud.entidadProductorId !== productorIdEfectivo) {
-      throw new ValidationError('La inspección de compra seleccionada no corresponde al productor de esta Orden de Compra')
+    // N:M (2026-08-22, Etapa 2): ya no exige que TODAS estén Aprobadas —
+    // basta con que al menos una lo esté para habilitar la OC.
+    if (!solicitudes.some((s) => s.estado === 'APROBADA')) {
+      throw new ValidationError('Al menos una de las inspecciones de compra seleccionadas debe estar Aprobada')
+    }
+    // "Ya vinculada a otra OC" solo se revalida cuando el propio caller
+    // reenvía el arreglo — si llegó solo por el fallback `vigente`, ya está
+    // vinculada a ESTA misma OC y no corresponde chocar contra sí misma.
+    if (data.solicitudInspeccionIds != null) {
+      const yaVinculadas = await repo.getSolicitudesYaVinculadas(data.solicitudInspeccionIds, vigente?.ordenCompraId)
+      if (yaVinculadas.length > 0) {
+        throw new ValidationError('Una o más inspecciones de compra seleccionadas ya están vinculadas a otra Orden de Compra')
+      }
     }
   }
   if (data.formaPagoId != null) {
@@ -123,16 +135,32 @@ export async function obtenerOrdenCompra(id: number) {
 }
 
 export async function crearOrdenCompra(body: OrdenCompraCreateInput, creadoPor: string) {
-  // La columna es nullable (para no romper OCs de desarrollo previas a este
-  // campo — ver compras.md §4.2), así que la obligatoriedad al crear vive
-  // acá, no en el schema Zod ni en una constraint de BD: cualquier caller
-  // directo del service (incluidos los tests) debe cumplirla igual que el
-  // HTTP (QA-R1-TEST-001).
-  if (!body.solicitudInspeccionId) {
+  // La columna se eliminó (tabla puente N:M, Etapa 2), así que la
+  // obligatoriedad de al menos 1 solicitud al crear vive acá, no solo en el
+  // schema Zod: cualquier caller directo del service (incluidos los tests)
+  // debe cumplirla igual que el HTTP (QA-R1-TEST-001).
+  if (!body.solicitudInspeccionIds || body.solicitudInspeccionIds.length === 0) {
     throw new ValidationError('La inspección de compra es requerida')
   }
   await validarReferenciasHeader(body)
-  return repo.createOrdenCompra(body, creadoPor)
+  try {
+    return await repo.createOrdenCompra(body, creadoPor)
+  } catch (e) {
+    throw traducirColisionSolicitud(e)
+  }
+}
+
+// Carrera concurrente (FAS-OCSI-004, QA ronda 2): dos creaciones/ediciones
+// simultáneas pueden pasar ambas el pre-check de "ya vinculada" en
+// validarReferenciasHeader antes de que cualquiera confirme — el índice
+// único de la tabla puente es la última defensa; esto solo traduce ese
+// empate de reloj a un 422 de negocio (mismo patrón que agregarFolios,
+// Etapa 1A).
+function traducirColisionSolicitud(e: unknown): unknown {
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+    return new ValidationError('Una o más inspecciones de compra seleccionadas ya están vinculadas a otra Orden de Compra (carga simultánea)')
+  }
+  return e
 }
 
 export async function actualizarOrdenCompra(id: number, body: OrdenCompraUpdateInput, actualizadoPor: string) {
@@ -145,9 +173,14 @@ export async function actualizarOrdenCompra(id: number, body: OrdenCompraUpdateI
   }
   await validarReferenciasHeader(body, {
     entidadProductorId: existente.entidadProductorId,
-    solicitudInspeccionId: existente.solicitudInspeccionId,
+    solicitudInspeccionIds: existente.solicitudes.map((s) => s.solicitudInspeccion.id),
+    ordenCompraId: id,
   })
-  return repo.updateOrdenCompra(id, body, actualizadoPor)
+  try {
+    return await repo.updateOrdenCompra(id, body, actualizadoPor)
+  } catch (e) {
+    throw traducirColisionSolicitud(e)
+  }
 }
 
 export async function eliminarOrdenCompra(id: number, eliminadoPor: string) {

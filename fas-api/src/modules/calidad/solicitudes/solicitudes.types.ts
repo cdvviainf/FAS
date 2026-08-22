@@ -2,7 +2,6 @@ export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZA
 export type ResultadoCierre = 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
 export type FuncionAsignado = 'ACUDIR' | 'NOTIFICAR'
 export type EtapaAdjunto = 'CREACION' | 'CIERRE'
-export type TipoInspeccion = 'COMPRA' | 'PROCESO'
 
 export interface AsignadoInput {
   usuarioId: string
@@ -16,7 +15,6 @@ export interface SolicitudCreateInput {
   contactoId?: number | null
   especieId?: number | null
   fechaHora: string // ISO 8601
-  tipoInspeccion: TipoInspeccion
   mercadoId?: number | null
   paisIds?: number[]
   clienteId?: number | null
@@ -38,7 +36,6 @@ export interface SolicitudUpdateInput {
   contactoId?: number | null
   especieId?: number | null
   fechaHora?: string
-  tipoInspeccion?: TipoInspeccion
   mercadoId?: number | null
   paisIds?: number[]
   clienteId?: number | null
@@ -58,7 +55,6 @@ export interface SolicitudListFilters {
   page?: number
   limit?: number
   estado?: EstadoSolicitud
-  tipoInspeccion?: TipoInspeccion
   temporadaId?: number
   entidadProductorId?: number
   usuarioAsignadoId?: string
