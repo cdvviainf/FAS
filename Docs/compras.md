@@ -410,36 +410,52 @@ Tras capturar, FAS imputa el documento a una o varias OC por montos (CO1) y refl
 
 ---
 
-## 11. Reporte de Stock en Pantalla (nuevo, 2026-08-24)
+## 11. Reporte de Stock en Pantalla
 
-Pantalla de consulta **solo lectura** del stock de fruta ya recepcionada. Vive en el ítem de menú `OPER_STOCK` (sección **Operaciones**, no Compras), pero se documenta acá porque lee directamente `Pallet`/`PalletLinea` (§4.5/§4.6) sin agregar modelos nuevos.
+Pantalla de consulta **solo lectura** del stock de fruta ya recepcionada. Vive en el ítem de menú `REPORTES_STOCK_FRUTA` (sección **Reportes**), pero se documenta acá porque lee directamente `Pallet`/`PalletLinea` (§4.5/§4.6) sin agregar modelos nuevos.
 
-- **Backend:** `fas-api`, prefijo `/api/operaciones/stock` (fuera de `/api/compras` — sección de menú distinta).
-- **Frontend:** `fas-web`, `/dashboard/operaciones/stock`.
-- **Permiso:** ítem `OPER_STOCK`, nivel `LECTURA` (no tiene nivel de escritura — es solo consulta).
+> **⚠️ Supersesión (2026-08-24).** Reemplaza la versión anterior de esta sección (ítem `OPER_STOCK` en sección Operaciones, endpoint de resumen agrupado + endpoint de detalle con filtros server-side). Tras revisar un mockup interactivo con el usuario, la pantalla se rediseñó como tarjetas por especie + filtros multiselect en cascada + grilla expandible — eso exige tener el dataset completo disponible en el cliente para acotar los filtros al instante, así que el contrato de API se simplificó a un único endpoint sin filtros. El ítem de menú se reubicó de Operaciones a Reportes en el mismo cambio (decisión de negocio, Christian).
 
-### 11.1 Resumen agrupado
+- **Backend:** `fas-api`, `/api/operaciones/stock` (el prefijo de API sigue bajo `operaciones` — independiente de la sección de menú del frontend, mismo patrón que `OPER_MATERIALES` vive en `/api/materiales`).
+- **Frontend:** `fas-web`, `/dashboard/reportes/stock-fruta`.
+- **Permiso:** ítem `REPORTES_STOCK_FRUTA`, nivel `LECTURA` (solo consulta, sin nivel de escritura).
 
-`GET /api/operaciones/stock`
+### 11.1 Endpoint único — dataset completo, sin filtros server-side
 
-Query params, todos opcionales: `productorId`, `especieId`, `variedadId`, `categoriaId`, `calibreId`, `origen` (`COMPRA`|`CONSIGNACION`|`PROCESO`), `fechaDesde`, `fechaHasta` (rango sobre `Pallet.creadoEn`).
+`GET /api/operaciones/stock` — sin query params. Devuelve `{ data: StockDetalleRow[] }`, una fila por `PalletLinea` vigente de la empresa, con:
 
-Respuesta `{ data: [...] }` — una fila por combinación **especie/variedad/categoría/calibre** presente en `PalletLinea` que calce con los filtros, con:
-- `cajas` — suma de `PalletLinea.cajas` de esa combinación.
-- `pallets` — cantidad de Pallets **distintos** que aportan a esa combinación (no de líneas: un Pallet mixto con dos líneas de la misma combinación cuenta una sola vez).
+- `especie`/`variedad`/`categoria`/`calibre` (id + `{id, codigo, descripcion}`)
+- `productor` (`{id, codigo, descripcion}`)
+- `origen` (`COMPRA`|`CONSIGNACION`|`PROCESO`)
+- `estado` — `Recepcion.estado` del Pallet padre (`CARGADA`|`VALIDADA`; `RECHAZADA` nunca llega acá porque esa Recepción no genera Pallets)
+- `fechaRecepcion` — `Pallet.creadoEn`
+- `numeroPallet`, `palletId`, `palletLineaId`
+- `cajas`
+- `kg` — `cajas × Articulo.kgNetoEnvase` de la línea (peso **neto** de fruta, sin el embalaje; decisión de negocio, Christian, 2026-08-24) — `0` si el artículo no tiene `kgNetoEnvase` configurado
 
-Sin paginación — el número de combinaciones especie/variedad/categoría/calibre es acotado. Si el volumen de stock crece al punto de requerirlo, se agrega después.
+Filtrado, agrupación (especie/variedad/calibre/categoría), tarjetas por especie y drill-down a pallet se resuelven **en el cliente** sobre este dataset completo.
 
-### 11.2 Detalle por pallet (drill-down)
+### 11.2 Tarjetas por especie y antigüedad
 
-`GET /api/operaciones/stock/detalle`
+Por especie: cajas totales, kilos totales, y apertura por **antigüedad** en 3 tramos — reemplaza la apertura por `estado` que tenía la versión anterior de esta pantalla (Validada/Cargada sigue existiendo, pero ahora solo como filtro y como columna del detalle, ver §11.3/§11.4). Antigüedad = `hoy − fechaRecepcion` (fecha de recepción del Pallet, **no** de cosecha), calculada en el cliente contra la fecha del navegador en cada carga (no se persiste ni es un filtro):
 
-Mismos filtros que §11.1, pero `especieId`/`variedadId`/`categoriaId`/`calibreId` son **obligatorios** (identifican qué fila del resumen se expande). Devuelve `{ data: [...] }`, una fila por `PalletLinea` que calza, con `numeroPallet`, `productor`, `origen`, `creadoEn` (fecha de recepción) y `cajas` de esa línea puntual.
+- 0–7 días
+- 8–15 días
+- +15 días
 
-### 11.3 Notas de implementación
+### 11.3 Grilla de detalle
+
+Fila cabecera agrupada por **Especie / Variedad / Calibre / Categoría** (cajas + kilos de la combinación), expandible a las líneas de Pallet individuales que la componen: **Folio** (`numeroPallet`) / Productor / Antigüedad (días) / Estado / Cajas / Kilos. Sin porcentajes.
+
+### 11.4 Filtros
+
+Multiselect, en este orden fijo: **Especie, Variedad, Calibre, Categoría, Estado, Productor**. En cascada: las opciones de cada filtro se calculan sobre el dataset ya acotado por los demás filtros activos (excluyéndose a sí mismo) — una opción sin cajas bajo la selección actual se deshabilita en vez de ocultarse, para que se entienda por qué no está disponible. No hay filtro de origen ni de rango de fecha (decisión de negocio, Christian, 2026-08-24 — el origen sigue viajando en cada fila por si se necesita más adelante, solo no se expone como filtro ni columna).
+
+### 11.5 Notas de implementación
 
 - **No descuenta reservas/despacho.** Hoy `Pallet` no tiene `embarqueId` real (§4.5 lo describe como diferido), así que el reporte muestra **todo** el stock recepcionado, sin distinguir lo ya reservado a un Embarque. Cuando `Pallet.embarqueId` se implemente, este reporte deberá excluir o marcar los pallets ya reservados/despachados para seguir representando "disponible" y no solo "recepcionado". *Pendiente, depende de Embarque↔Pallet.*
-- `PalletLinea` no es modelo tenant (tabla hija sin `empresaId` propio, mismo patrón que `OrdenCompraLinea`/`NotaVentaDetalle`) — la agregación se resuelve leyendo desde `Pallet` (que sí es tenant) y agrupando en memoria, no con `groupBy` directo sobre `PalletLinea`.
+- **Sin paginación ni límite.** El endpoint trae todo el stock vigente de la empresa en una sola respuesta (necesario para que los filtros en cascada no dependan de ida y vuelta al servidor) — asumible mientras el volumen sea el de una bodega en operación normal. Como además no hay forma de excluir lo ya embarcado (punto anterior), el dataset **crece sin límite temporada tras temporada** hasta que exista `Pallet.embarqueId`. Revisar si hace falta acotar por fecha o por embarque antes de que el payload se vuelva un problema real de performance. *Riesgo aceptado por ahora (decisión de negocio, Christian).*
+- `PalletLinea` no es modelo tenant (tabla hija sin `empresaId` propio, mismo patrón que `OrdenCompraLinea`/`NotaVentaDetalle`) — el listado se resuelve leyendo desde `Pallet` (que sí es tenant, así que el Prisma Client Extension aplica el filtro de empresa automáticamente) e incluyendo sus líneas, no con una consulta directa sobre `PalletLinea`.
 
 ---
 

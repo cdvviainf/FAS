@@ -32,7 +32,6 @@ const itemsMenu = [
   { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', seccion: 'Ventas', ruta: '/dashboard/ventas/cobranza', esAccion: false, orden: 42 },
   // Operaciones
   { codigo: 'OPER_MATERIALES', nombre: 'Materiales', seccion: 'Operaciones', ruta: '/dashboard/configuracion/articulos', esAccion: false, orden: 50 },
-  { codigo: 'OPER_STOCK', nombre: 'Stock Fruta', seccion: 'Operaciones', ruta: '/dashboard/operaciones/stock', esAccion: false, orden: 51 },
   // Finanzas
   { codigo: 'FIN_COSTOS', nombre: 'Gestión de Costos', seccion: 'Finanzas', ruta: '/dashboard/finanzas/costos', esAccion: false, orden: 60 },
   { codigo: 'FIN_PAGOS', nombre: 'Gestión de Pagos', seccion: 'Finanzas', ruta: '/dashboard/finanzas/pagos', esAccion: false, orden: 61 },
@@ -56,6 +55,10 @@ const itemsMenu = [
   { codigo: 'LIQ_COSTOS', nombre: 'Matriz de Costos', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/costos', esAccion: false, orden: 81 },
   { codigo: 'LIQ_PRECIOS', nombre: 'Determinación de Precios', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/precios', esAccion: false, orden: 82 },
   { codigo: 'LIQ_PRODUCTOR', nombre: 'Liquidación Productor', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/productor', esAccion: false, orden: 83 },
+  // Reportes (nuevo, 2026-08-24) — reemplaza a OPER_STOCK (ver limpieza más
+  // abajo, antes del upsert): mismo reporte, reubicado de Operaciones a su
+  // propia sección "Reportes".
+  { codigo: 'REPORTES_STOCK_FRUTA', nombre: 'Stock de Fruta', seccion: 'Reportes', ruta: '/dashboard/reportes/stock-fruta', esAccion: false, orden: 90 },
 ]
 
 const SISTEMA_USER = 'system'
@@ -159,6 +162,28 @@ async function main() {
   }
 
   console.log(`ItemMenu: ${itemsMenu.length} ítems creados/actualizados.`)
+
+  // Migración de ítem renombrado (2026-08-24): OPER_STOCK -> REPORTES_STOCK_FRUTA
+  // (mismo reporte, reubicado de Operaciones a Reportes). El upsert por
+  // `codigo` de arriba no toca códigos que ya no están en `itemsMenu`, así que
+  // acá se migra cualquier PerfilAcceso existente hacia el ítem nuevo (mismo
+  // nivel) antes de borrar el ítem viejo — sin esto, un perfil no-ADMIN que ya
+  // tuviera acceso a OPER_STOCK lo perdería silenciosamente (QAS-STK-001).
+  const operStockObsoleto = await prisma.itemMenu.findUnique({ where: { codigo: 'OPER_STOCK' } })
+  if (operStockObsoleto) {
+    const itemNuevo = await prisma.itemMenu.findUniqueOrThrow({ where: { codigo: 'REPORTES_STOCK_FRUTA' } })
+    const accesosExistentes = await prisma.perfilAcceso.findMany({ where: { itemMenuId: operStockObsoleto.id } })
+    for (const acceso of accesosExistentes) {
+      await prisma.perfilAcceso.upsert({
+        where: { perfilId_itemMenuId: { perfilId: acceso.perfilId, itemMenuId: itemNuevo.id } },
+        create: { perfilId: acceso.perfilId, itemMenuId: itemNuevo.id, nivel: acceso.nivel },
+        update: { nivel: acceso.nivel },
+      })
+    }
+    await prisma.perfilAcceso.deleteMany({ where: { itemMenuId: operStockObsoleto.id } })
+    await prisma.itemMenu.delete({ where: { id: operStockObsoleto.id } })
+    console.log(`OPER_STOCK migrado a REPORTES_STOCK_FRUTA: ${accesosExistentes.length} acceso(s) trasladados.`)
+  }
 
   // Sincronizar accesos TOTAL para el perfil ADMIN a todos los ítems de menú.
   // Garantiza que cualquier ítem nuevo agregado al seed quede accesible para ADMIN.
