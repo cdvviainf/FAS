@@ -46,7 +46,7 @@ export async function listRecepciones(page: number, limit: number, plantaId?: nu
   const where = {
     eliminadoEn: null,
     ...(plantaId ? { plantaId } : {}),
-    ...(origen ? { origen: origen as 'COMPRA' | 'CONSIGNACION' } : {}),
+    ...(origen ? { origen: origen as 'COMPRA' | 'CONSIGNACION' | 'PROCESO' } : {}),
     ...(estado ? { estado: estado as 'CARGADA' | 'VALIDADA' | 'RECHAZADA' } : {}),
   }
 
@@ -77,7 +77,7 @@ export async function getRecepcionById(id: number) {
 export async function createRecepcion(data: RecepcionCreateInput, creadoPor: string) {
   const anio = new Date().getFullYear()
   const prefijo = `RC-${anio}-`
-  const { ordenCompraId, ...resto } = data
+  const { ordenCompraId, esProceso, ...resto } = data
 
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_RECEPCION}::int, ${anio}::int)`
@@ -93,7 +93,10 @@ export async function createRecepcion(data: RecepcionCreateInput, creadoPor: str
         empresaId: getEmpresaIdActual()!,
         ...resto,
         ordenCompraId: ordenCompraId ?? null,
-        origen: ordenCompraId ? 'COMPRA' : 'CONSIGNACION',
+        // Etapa 3: sin OC, esProceso distingue CONSIGNACION de PROCESO — con
+        // OC siempre es COMPRA sin importar esProceso (ya rechazado antes en
+        // el service/schema si vinieran ambos).
+        origen: ordenCompraId ? 'COMPRA' : esProceso ? 'PROCESO' : 'CONSIGNACION',
         numero,
         creadoPor,
       },
@@ -286,6 +289,18 @@ export async function getOrdenCompraConLineas(id: number) {
   })
 }
 
+// Folios (números de pallet aprobados por Calidad) que coinciden con los N°
+// de Pallet de la carga — Etapa 3, para el motor de comparación en modo
+// PROCESO (compras.md §7, equivalente a getOrdenCompraConLineas en modo OC).
+// Sistémico por empresa (no se acota a un Instructivo — decisión de negocio,
+// 2026-08-23): la carga puede mezclar folios de varios Instructivos.
+export async function getFoliosPorNumero(numeros: string[]) {
+  return prisma.instructivoEmbalajeFolio.findMany({
+    where: { folio: { in: numeros } },
+    select: { id: true, folio: true, estado: true },
+  })
+}
+
 // Crea los Pallet/PalletLinea a partir de los grupos ya resueltos — todo en
 // una transacción (todo o nada, compras.md §7.3: "Todo cuadra -> se cargan
 // los pallets a Stock"). El estado final depende del modo (§8): modo OC pasa
@@ -299,9 +314,38 @@ export async function getOrdenCompraConLineas(id: number) {
 // la comparación optimista del motor (recepciones.motor.ts) corre antes de
 // esta transacción, así que por sí sola no protege contra una edición
 // concurrente de la OC entre ese chequeo y la creación de pallets.
+// Folios que respaldan los N° de Pallet de la carga (Etapa 3) — mismo rol
+// que compararLineasOcConExcel para el modo OC: junta TODAS las diferencias
+// antes de decidir si aborta. Es el pre-check bajo lock (defensa "amigable");
+// la defensa real contra una carrera con otra Recepción PROCESO concurrente
+// es el reclamo atómico (updateMany condicionado) más abajo, después de
+// crear los pallets — este pre-check por sí solo no basta porque el lock de
+// arriba es por recepcionId, no por folio.
+async function compararFoliosParaPallets(
+  tx: Prisma.TransactionClient,
+  pallets: Array<{ numeroPallet: string }>,
+): Promise<string[]> {
+  const numeros = pallets.map((p) => p.numeroPallet)
+  const folios = await tx.instructivoEmbalajeFolio.findMany({
+    where: { folio: { in: numeros } },
+    select: { folio: true, estado: true },
+  })
+  const foliosPorNumero = new Map(folios.map((f) => [f.folio, f.estado]))
+  const errores: string[] = []
+  for (const p of pallets) {
+    const estado = foliosPorNumero.get(p.numeroPallet)
+    if (!estado) {
+      errores.push(`N° de Pallet "${p.numeroPallet}": no corresponde a ningún folio Aprobado por Calidad`)
+    } else if (estado !== 'APROBADO') {
+      errores.push(`N° de Pallet "${p.numeroPallet}": el folio ya no está Aprobado (estado actual: ${estado})`)
+    }
+  }
+  return errores
+}
+
 export async function crearPalletsYValidar(
   recepcionId: number,
-  origen: 'COMPRA' | 'CONSIGNACION',
+  origen: 'COMPRA' | 'CONSIGNACION' | 'PROCESO',
   ordenCompraId: number | null,
   templateCargaIdUsado: number | null,
   filas: FilaParaComparar[],
@@ -311,7 +355,10 @@ export async function crearPalletsYValidar(
     lineas: Array<{ especieId: number; variedadId: number; categoriaId: number; articuloId: number; calibreId: number; cajas: number }>
   }>,
 ) {
-  const estadoFinal = origen === 'COMPRA' ? ('VALIDADA' as const) : ('CARGADA' as const)
+  // Etapa 3: PROCESO también valida (contra folios), así que queda VALIDADA
+  // igual que COMPRA — solo CONSIGNACION (sin ningún chequeo) se queda en
+  // CARGADA (compras.md §8).
+  const estadoFinal = origen === 'COMPRA' || origen === 'PROCESO' ? ('VALIDADA' as const) : ('CARGADA' as const)
   return prisma.$transaction(async (tx) => {
     // Lock + re-chequeo DENTRO de la transacción (QA-RCV-003): el pre-check
     // del service (estado/tienePallets) no es atómico con esta escritura —
@@ -367,8 +414,19 @@ export async function crearPalletsYValidar(
       }
     }
 
+    // Etapa 3 (2026-08-23): re-chequeo bajo lock, mismo motivo que el bloque
+    // OC de arriba — el chequeo optimista del motor corrió antes de esta
+    // transacción y puede haber quedado obsoleto (otra Recepción PROCESO
+    // pudo haber reclamado el mismo folio mientras tanto).
+    if (origen === 'PROCESO') {
+      const diferencias = await compararFoliosParaPallets(tx, pallets)
+      if (diferencias.length > 0) {
+        throw new ValidationError('No coinciden los folios con la carga', { diferencias })
+      }
+    }
+
     for (const p of pallets) {
-      await tx.pallet.create({
+      const pallet = await tx.pallet.create({
         data: {
           // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
           // este valor con la empresa activa del contexto — se declara aquí
@@ -382,6 +440,20 @@ export async function crearPalletsYValidar(
           lineas: { create: p.lineas },
         },
       })
+
+      // Reclamo atómico del folio (Etapa 3, FAS-INSP-1A-002 mismo patrón):
+      // updateMany condicionado a estado=APROBADO es la defensa real contra
+      // dos Recepciones PROCESO concurrentes reclamando el mismo folio — el
+      // pre-check de arriba solo da un mensaje amigable en el caso común.
+      if (origen === 'PROCESO') {
+        const claim = await tx.instructivoEmbalajeFolio.updateMany({
+          where: { folio: p.numeroPallet, estado: 'APROBADO' },
+          data: { estado: 'RECEPCIONADO', palletId: pallet.id },
+        })
+        if (claim.count === 0) {
+          throw new ValidationError(`El N° de Pallet "${p.numeroPallet}" fue reclamado por otra Recepción concurrente`)
+        }
+      }
     }
 
     const recepcionActualizada = await tx.recepcion.update({

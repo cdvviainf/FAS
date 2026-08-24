@@ -56,10 +56,14 @@ function formatoBytes(b: number): string {
   return `${(b / (1024 * 1024)).toFixed(1)} MB`
 }
 
-type TieneOc = 'SI' | 'NO'
+// Etapa 3 (2026-08-23): reemplaza el binario tieneOc por 3 modos — sin OC,
+// CONSIGNACION y PROCESO no son distinguibles solo con un booleano (ambos
+// dejan ordenCompraId en null; PROCESO valida contra folios de Calidad en
+// vez de contra líneas de OC).
+type ModoRecepcion = 'OC' | 'CONSIGNACION' | 'PROCESO'
 
 interface HeaderFields {
-  tieneOc: TieneOc
+  modo: ModoRecepcion
   ordenCompraId: number | null
   plantaId: number
   direccionPlantaId: number
@@ -68,7 +72,7 @@ interface HeaderFields {
 }
 
 const HEADER_EMPTY: HeaderFields = {
-  tieneOc: 'NO',
+  modo: 'CONSIGNACION',
   ordenCompraId: null,
   plantaId: 0,
   direccionPlantaId: 0,
@@ -105,7 +109,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
     queryKey: ['ordenes-compra-emitidas-options'],
     queryFn: () => ordenesCompraService.list({ estado: 'EMITIDA', limit: 200 }),
     staleTime: 60_000,
-    enabled: fields.tieneOc === 'SI',
+    enabled: fields.modo === 'OC',
   })
   const { data: templatesCargaData } = useQuery({
     queryKey: ['templates-carga-options', 'RECEPCION'],
@@ -127,7 +131,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
       const d = recepcion.data
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFields({
-        tieneOc: d.ordenCompraId ? 'SI' : 'NO',
+        modo: d.ordenCompraId ? 'OC' : d.origen === 'PROCESO' ? 'PROCESO' : 'CONSIGNACION',
         ordenCompraId: d.ordenCompraId,
         plantaId: d.plantaId,
         direccionPlantaId: d.direccionPlantaId,
@@ -139,7 +143,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
 
   function validate(): boolean {
     const e: Record<string, string> = {}
-    if (fields.tieneOc === 'SI' && !fields.ordenCompraId) e.ordenCompraId = 'Selecciona la Orden de Compra'
+    if (fields.modo === 'OC' && !fields.ordenCompraId) e.ordenCompraId = 'Selecciona la Orden de Compra'
     if (!fields.plantaId) e.plantaId = 'La planta es requerida'
     if (!fields.direccionPlantaId) e.direccionPlantaId = 'La dirección de la planta es requerida'
     setErrors(e)
@@ -148,7 +152,8 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
 
   function buildPayload(): RecepcionCreateInput {
     return {
-      ordenCompraId: fields.tieneOc === 'SI' ? fields.ordenCompraId : null,
+      ordenCompraId: fields.modo === 'OC' ? fields.ordenCompraId : null,
+      esProceso: fields.modo === 'PROCESO',
       plantaId: fields.plantaId,
       direccionPlantaId: fields.direccionPlantaId,
       templateCargaId: fields.templateCargaId,
@@ -255,25 +260,34 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
         <CardContent className='space-y-4'>
           {!isEdit && (
             <div className='space-y-1.5'>
-              <Label>¿Con Orden de Compra?</Label>
+              <Label>Modo de Recepción</Label>
               <RadioGroup
                 className='grid-flow-col justify-start gap-4'
-                value={fields.tieneOc}
-                onValueChange={(v) => setFields((f) => ({ ...f, tieneOc: v as TieneOc, ordenCompraId: null }))}
+                value={fields.modo}
+                onValueChange={(v) => setFields((f) => ({ ...f, modo: v as ModoRecepcion, ordenCompraId: null }))}
               >
                 <div className='flex items-center gap-1.5'>
-                  <RadioGroupItem value='SI' id='tieneOc-si' />
-                  <Label htmlFor='tieneOc-si' className='font-normal'>Sí — Compra</Label>
+                  <RadioGroupItem value='OC' id='modo-oc' />
+                  <Label htmlFor='modo-oc' className='font-normal'>Con Orden de Compra</Label>
                 </div>
                 <div className='flex items-center gap-1.5'>
-                  <RadioGroupItem value='NO' id='tieneOc-no' />
-                  <Label htmlFor='tieneOc-no' className='font-normal'>No — Consignación</Label>
+                  <RadioGroupItem value='CONSIGNACION' id='modo-consignacion' />
+                  <Label htmlFor='modo-consignacion' className='font-normal'>Consignación</Label>
+                </div>
+                <div className='flex items-center gap-1.5'>
+                  <RadioGroupItem value='PROCESO' id='modo-proceso' />
+                  <Label htmlFor='modo-proceso' className='font-normal'>Proceso</Label>
                 </div>
               </RadioGroup>
+              {fields.modo === 'PROCESO' && (
+                <p className='text-xs text-muted-foreground'>
+                  Cada N° de Pallet del Excel debe corresponder a un folio Aprobado por Calidad en algún Instructivo de Embalaje.
+                </p>
+              )}
             </div>
           )}
 
-          {fields.tieneOc === 'SI' && (
+          {fields.modo === 'OC' && (
             <div className='space-y-1.5'>
               <Label>Orden de Compra <span className='text-destructive'>*</span></Label>
               <Combobox

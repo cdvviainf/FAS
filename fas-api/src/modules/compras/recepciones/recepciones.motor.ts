@@ -39,6 +39,7 @@ interface FilaResuelta {
 
 interface RecepcionParaMotor {
   id: number
+  origen: 'COMPRA' | 'CONSIGNACION' | 'PROCESO'
   ordenCompraId: number | null
   templateCargaId: number | null
   templateCarga: {
@@ -212,6 +213,26 @@ async function compararContraOc(ordenCompraId: number, filas: FilaResuelta[]): P
   return compararLineasOcConExcel(oc.lineas, filas)
 }
 
+// ─── Etapa 3c-b: comparación contra folios (Etapa 3, fruta de proceso) ────
+// Chequeo optimista, sin lock — igual que compararContraOc: da feedback
+// rápido, pero no es la autoridad final. repo.crearPalletsYValidar vuelve a
+// comparar bajo lock (y reclama cada folio atómicamente) antes de confirmar.
+async function compararContraFolios(filas: FilaResuelta[]): Promise<string[]> {
+  const numeros = [...new Set(filas.map((f) => f.numeroPallet))]
+  const folios = await repo.getFoliosPorNumero(numeros)
+  const foliosPorNumero = new Map(folios.map((f) => [f.folio, f.estado]))
+  const errores: string[] = []
+  for (const numero of numeros) {
+    const estado = foliosPorNumero.get(numero)
+    if (!estado) {
+      errores.push(`N° de Pallet "${numero}": no corresponde a ningún folio Aprobado por Calidad`)
+    } else if (estado !== 'APROBADO') {
+      errores.push(`N° de Pallet "${numero}": el folio ya no está Aprobado (estado actual: ${estado})`)
+    }
+  }
+  return errores
+}
+
 // ─── Entrada principal ─────────────────────────────────────────────────────
 
 export async function procesarCargaExcel(recepcion: RecepcionParaMotor, buffer: Buffer) {
@@ -249,12 +270,23 @@ export async function procesarCargaExcel(recepcion: RecepcionParaMotor, buffer: 
     throw new ValidationError('Etapa 3 — Inconsistencias al agrupar los pallets', { diferencias: erroresAgrupacion })
   }
 
-  const origen: 'COMPRA' | 'CONSIGNACION' = recepcion.ordenCompraId ? 'COMPRA' : 'CONSIGNACION'
+  // El origen se lee del valor ya persistido en la Recepción (fijado al
+  // crearla, ver recepciones.repository.ts createRecepcion) — no se
+  // re-deriva acá, porque sin OC ni CONSIGNACION ni PROCESO son
+  // distinguibles solo por ordenCompraId (Etapa 3, 2026-08-23).
+  const origen = recepcion.origen
 
-  if (recepcion.ordenCompraId) {
+  if (origen === 'COMPRA' && recepcion.ordenCompraId) {
     const diferencias = await compararContraOc(recepcion.ordenCompraId, filas)
     if (diferencias.length > 0) {
       throw new ValidationError('Etapa 3 — No coincide la OC con la carga', { diferencias })
+    }
+  }
+
+  if (origen === 'PROCESO') {
+    const diferencias = await compararContraFolios(filas)
+    if (diferencias.length > 0) {
+      throw new ValidationError('Etapa 3 — No coinciden los folios con la carga', { diferencias })
     }
   }
 

@@ -18,12 +18,13 @@ export interface MantenedorRef {
   descripcion: string
 }
 
-export type OrigenRecepcion = 'COMPRA' | 'CONSIGNACION'
+export type OrigenRecepcion = 'COMPRA' | 'CONSIGNACION' | 'PROCESO'
 export type EstadoRecepcion = 'CARGADA' | 'VALIDADA' | 'RECHAZADA'
 
 export const ORIGEN_RECEPCION_LABELS: Record<OrigenRecepcion, string> = {
   COMPRA: 'Compra',
   CONSIGNACION: 'Consignación',
+  PROCESO: 'Proceso',
 }
 
 export const ESTADO_RECEPCION_LABELS: Record<EstadoRecepcion, string> = {
@@ -87,10 +88,11 @@ export interface RecepcionListResponse {
 
 export interface RecepcionCreateInput {
   ordenCompraId?: number | null
+  esProceso?: boolean
   plantaId: number
   direccionPlantaId: number
   templateCargaId?: number | null
   observaciones?: string | null
 }
 
-export type RecepcionUpdateInput = Partial<Omit<RecepcionCreateInput, 'ordenCompraId'>>
+export type RecepcionUpdateInput = Partial<Omit<RecepcionCreateInput, 'ordenCompraId' | 'esProceso'>>

@@ -90,6 +90,12 @@ export async function obtenerRecepcionParaRespuesta(id: number) {
 }
 
 export async function crearRecepcion(body: RecepcionCreateInput, creadoPor: string) {
+  // Mismo refine que recepcionCreateSchema (Zod), repetido acá porque
+  // cualquier caller directo del service (tests incluidos) puede saltárselo
+  // — mismo criterio que QA-R1-TEST-001 en ordenes-compra.service.ts.
+  if (body.ordenCompraId != null && body.esProceso) {
+    throw new ValidationError('Una Recepción con Orden de Compra no puede marcarse como Proceso')
+  }
   await validarOrdenCompra(body.ordenCompraId)
   await validarPlantaYDireccion(body.plantaId, body.direccionPlantaId)
   await validarTemplateCarga(body.templateCargaId)
@@ -171,7 +177,7 @@ export async function subirAdjunto(
 
   try {
     const resultado = await procesarCargaExcel(
-      { id: recepcion.id, ordenCompraId: recepcion.ordenCompraId, templateCargaId: recepcion.templateCargaId, templateCarga },
+      { id: recepcion.id, origen: recepcion.origen, ordenCompraId: recepcion.ordenCompraId, templateCargaId: recepcion.templateCargaId, templateCarga },
       archivo.datos,
     )
     return { adjunto, ...resultado, recepcion: shapeRecepcion(resultado.recepcion) }

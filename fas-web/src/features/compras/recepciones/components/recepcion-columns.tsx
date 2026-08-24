@@ -26,9 +26,10 @@ import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 
 const ITEM = 'COMPRAS_RECEPCION'
 
-const ORIGEN_VARIANT: Record<string, 'default' | 'secondary'> = {
+const ORIGEN_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
   COMPRA: 'default',
   CONSIGNACION: 'secondary',
+  PROCESO: 'outline',
 }
 
 const ESTADO_VARIANT: Record<string, 'secondary' | 'default' | 'destructive'> = {

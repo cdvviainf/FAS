@@ -152,25 +152,27 @@ La OC es **multilínea**. Cada línea es una combinación completa de caracterí
 > se preservan (decisión aceptada, sistema en desarrollo).
 
 ### 4.4 Recepcion
-Módulo único, dos modos según presencia de OC. Una Recepción se valida contra **una** OC o contra **ninguna** (nunca varias).
+Módulo único, tres modos según origen. Una Recepción se valida contra **una** OC, contra **folios de Calidad**, o contra **nada** (nunca varias fuentes a la vez).
 
 - `id` (PK)
-- `ordenCompraId` (FK → OrdenCompra, **nullable**) — presente = modo compra; null = modo consignación
-- `origen` (modo derivado: `COMPRA` si hay OC, `CONSIGNACION` si null)
+- `ordenCompraId` (FK → OrdenCompra, **nullable**) — presente = modo compra; null = modo consignación o proceso
+- `origen` (`OrigenRecepcion { COMPRA CONSIGNACION PROCESO }`) — fijado **al crear** y persistido (no derivado en cada lectura): `COMPRA` si hay OC; si no hay OC, `PROCESO` o `CONSIGNACION` según lo que elija el usuario (input `esProceso`, mutuamente excluyente con `ordenCompraId`)
 - `plantaOrigenId` / mantenedor de formato aplicado (ver §9.2)
 - `documentoOrigenUrl` (Excel u otro cargado)
 - `estado` (ver §8)
 - `createdAt`, `createdBy`
 
-> El flag **con/sin OC no es solo un modo de validación**: determina el destino de liquidación de la fruta (ver §6.3). Como la Recepción es homogénea (1 OC o ninguna), el flag se propaga a todos sus pallets.
+> El flag **con/sin OC no es solo un modo de validación**: determina el destino de liquidación de la fruta (ver §6.3). Como la Recepción es homogénea (1 OC, folios de Proceso, o ninguno), el flag se propaga a todos sus pallets.
+>
+> **⚠️ Supersesión (2026-08-23, Etapa 3) — modo Proceso.** Cierra el loop de la Inspección de Proceso (ver `InstructivoEmbalajeFolio`, calidad.md / §4.1): en una Recepción `PROCESO`, cada N° de Pallet del Excel debe corresponder a un folio con `estado = APROBADO`, **de cualquier Instructivo de la empresa** (decisión de negocio, Christian — la carga puede mezclar folios de varios Instructivos, no se elige uno específico al crear la Recepción). Motor de validación equivalente al modo OC (§7): compara todos los N° de Pallet contra folios Aprobados **antes** de insertar (todo o nada); al insertar cada Pallet, su folio pasa a `RECEPCIONADO` y guarda `palletId` — atómico y condicionado a `estado = APROBADO` (mismo patrón que el reclamo de folios de Etapa 1A) para que dos Recepciones concurrentes no reclamen el mismo folio dos veces. Como sí valida (a diferencia de Consignación), el estado final es `VALIDADA`, igual que modo Compra.
 
 ### 4.5 Pallet
 Unidad mínima **indivisible** de inventario. Generado por la Recepción. Compuesto por múltiples líneas (separando productor, embalaje, calibre, categoría, etc.).
 
 - `id` (PK)
 - `recepcionId` (FK → Recepcion)
-- `numeroPallet` (identificador del pallet según origen; usado en la reconciliación con Packing List)
-- `origen` (`COMPRA` | `CONSIGNACION`, heredado de la Recepción)
+- `numeroPallet` (identificador del pallet según origen; usado en la reconciliación con Packing List — en modo Proceso, es el mismo N° que el folio de Calidad que lo respalda)
+- `origen` (`COMPRA` | `CONSIGNACION` | `PROCESO`, heredado de la Recepción)
 - `embarqueId` (FK → Embarque, **nullable**) — se puebla al reservar el pallet a un embarque (Ventas); un pallet pertenece a **un solo** Embarque a la vez
 - `productorId` (FK → Productor)
 - `createdAt`

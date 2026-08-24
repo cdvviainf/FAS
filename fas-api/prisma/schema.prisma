@@ -2636,6 +2636,11 @@ model OrdenCompraLineaCalibre {
 enum OrigenRecepcion {
   COMPRA
   CONSIGNACION
+  // Fruta de proceso (2026-08-23, Etapa 3): sin OC, como CONSIGNACION, pero
+  // cada N° de Pallet del Excel debe corresponder a un
+  // InstructivoEmbalajeFolio APROBADO — que al insertarse pasa a
+  // RECEPCIONADO con su palletId (compras.md §7, calidad.md).
+  PROCESO
 }
 
 enum EstadoRecepcion {
