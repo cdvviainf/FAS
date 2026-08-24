@@ -12,6 +12,7 @@ import { materialesRoutes } from './modules/materiales/materiales.routes.js'
 import { productoresRoutes } from './modules/productores/productores.routes.js'
 import { ventasRoutes } from './modules/ventas/ventas.routes.js'
 import { comprasRoutes } from './modules/compras/compras.routes.js'
+import { operacionesRoutes } from './modules/operaciones/operaciones.routes.js'
 import { documentosRoutes } from './modules/documentos/documentos.routes.js'
 import { closeBrowser } from './shared/pdf/browser.js'
 
@@ -123,6 +124,7 @@ export async function buildApp(options: { logger?: boolean } = {}) {
   await app.register(productoresRoutes, { prefix: '/api/productores' })
   await app.register(ventasRoutes, { prefix: '/api/ventas' })
   await app.register(comprasRoutes, { prefix: '/api/compras' })
+  await app.register(operacionesRoutes, { prefix: '/api/operaciones' })
   await app.register(documentosRoutes, { prefix: '/api/documentos' })
 
   // Motor de Documentos (Etapa 4): cierre ordenado del Chromium compartido

@@ -410,6 +410,39 @@ Tras capturar, FAS imputa el documento a una o varias OC por montos (CO1) y refl
 
 ---
 
+## 11. Reporte de Stock en Pantalla (nuevo, 2026-08-24)
+
+Pantalla de consulta **solo lectura** del stock de fruta ya recepcionada. Vive en el ítem de menú `OPER_STOCK` (sección **Operaciones**, no Compras), pero se documenta acá porque lee directamente `Pallet`/`PalletLinea` (§4.5/§4.6) sin agregar modelos nuevos.
+
+- **Backend:** `fas-api`, prefijo `/api/operaciones/stock` (fuera de `/api/compras` — sección de menú distinta).
+- **Frontend:** `fas-web`, `/dashboard/operaciones/stock`.
+- **Permiso:** ítem `OPER_STOCK`, nivel `LECTURA` (no tiene nivel de escritura — es solo consulta).
+
+### 11.1 Resumen agrupado
+
+`GET /api/operaciones/stock`
+
+Query params, todos opcionales: `productorId`, `especieId`, `variedadId`, `categoriaId`, `calibreId`, `origen` (`COMPRA`|`CONSIGNACION`|`PROCESO`), `fechaDesde`, `fechaHasta` (rango sobre `Pallet.creadoEn`).
+
+Respuesta `{ data: [...] }` — una fila por combinación **especie/variedad/categoría/calibre** presente en `PalletLinea` que calce con los filtros, con:
+- `cajas` — suma de `PalletLinea.cajas` de esa combinación.
+- `pallets` — cantidad de Pallets **distintos** que aportan a esa combinación (no de líneas: un Pallet mixto con dos líneas de la misma combinación cuenta una sola vez).
+
+Sin paginación — el número de combinaciones especie/variedad/categoría/calibre es acotado. Si el volumen de stock crece al punto de requerirlo, se agrega después.
+
+### 11.2 Detalle por pallet (drill-down)
+
+`GET /api/operaciones/stock/detalle`
+
+Mismos filtros que §11.1, pero `especieId`/`variedadId`/`categoriaId`/`calibreId` son **obligatorios** (identifican qué fila del resumen se expande). Devuelve `{ data: [...] }`, una fila por `PalletLinea` que calza, con `numeroPallet`, `productor`, `origen`, `creadoEn` (fecha de recepción) y `cajas` de esa línea puntual.
+
+### 11.3 Notas de implementación
+
+- **No descuenta reservas/despacho.** Hoy `Pallet` no tiene `embarqueId` real (§4.5 lo describe como diferido), así que el reporte muestra **todo** el stock recepcionado, sin distinguir lo ya reservado a un Embarque. Cuando `Pallet.embarqueId` se implemente, este reporte deberá excluir o marcar los pallets ya reservados/despachados para seguir representando "disponible" y no solo "recepcionado". *Pendiente, depende de Embarque↔Pallet.*
+- `PalletLinea` no es modelo tenant (tabla hija sin `empresaId` propio, mismo patrón que `OrdenCompraLinea`/`NotaVentaDetalle`) — la agregación se resuelve leyendo desde `Pallet` (que sí es tenant) y agrupando en memoria, no con `groupBy` directo sobre `PalletLinea`.
+
+---
+
 ### Anexo — Parche a aplicar en `ventas.md` (modelo Embarque / Instructivo de Embarque)
 
 Reemplaza el modelo anterior ("Nota de Venta → múltiples Instructivos, uno por contenedor"):
