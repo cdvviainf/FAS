@@ -272,13 +272,50 @@ async function obtenerDetalleDeNotaVenta(notaVentaId: number, detalleId: number)
   }
 }
 
+function calibresIguales(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false
+  const setA = new Set(a)
+  return b.every((id) => setA.has(id))
+}
+
+// Una vez que una línea del Cierre tiene cajas comprometidas por alguna
+// OrdenCompraLinea vigente (2026-08-23), especie/variedad/categoría/
+// artículo/tipoPallet/calibres quedan bloqueados — esas OC ya copiaron esos
+// valores server-side (ordenes-compra.service.ts resolverLineaDesdeCierre) y
+// cambiarlos acá los dejaría desincronizados. `cajas` sigue editable, pero
+// nunca por debajo de lo ya comprometido.
 export async function actualizarDetalle(notaVentaId: number, detalleId: number, body: NotaVentaDetalleUpdateInput) {
   await obtenerDetalleDeNotaVenta(notaVentaId, detalleId)
+  const comprometido = await repo.getCajasComprometidas(detalleId)
+  if (comprometido > 0) {
+    const actual = await repo.getDetalleParaComparar(detalleId)
+    if (!actual) throw new NotFoundError('Línea de detalle', String(detalleId))
+    const calibresActuales = actual.calibres.map((c) => c.calibreId)
+    const cambiaIdentidad =
+      body.especieId !== actual.especieId ||
+      body.variedadId !== actual.variedadId ||
+      (body.categoriaId ?? null) !== actual.categoriaId ||
+      body.articuloId !== actual.articuloId ||
+      (body.tipoPalletId ?? null) !== actual.tipoPalletId ||
+      !calibresIguales(body.calibreIds, calibresActuales)
+    if (cambiaIdentidad) {
+      throw new ValidationError(
+        'No se puede modificar especie, variedad, categoría, artículo, tipo de pallet o calibres: esta línea ya tiene cajas comprometidas por una Orden de Compra',
+      )
+    }
+    if (body.cajas < comprometido) {
+      throw new ValidationError(`No se pueden reducir las cajas por debajo de lo ya comprometido por Orden de Compra (${comprometido})`)
+    }
+  }
   await validarDetalle(body)
   return repo.updateDetalle(detalleId, body)
 }
 
 export async function eliminarDetalle(notaVentaId: number, detalleId: number) {
   await obtenerDetalleDeNotaVenta(notaVentaId, detalleId)
+  const comprometido = await repo.getCajasComprometidas(detalleId)
+  if (comprometido > 0) {
+    throw new ValidationError('No se puede eliminar una línea del Cierre Comercial que ya tiene cajas comprometidas por una Orden de Compra')
+  }
   await repo.removeDetalle(detalleId, notaVentaId)
 }

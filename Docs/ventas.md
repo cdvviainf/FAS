@@ -153,8 +153,33 @@ model NotaVentaDetalle {
 
   calibres NotaVentaDetalleCalibre[]                 // multiselect (ver supersesión 2026-07-30, R12)
 
+  ordenCompraLineas OrdenCompraLinea[]                // líneas de OC tomadas de esta línea (ver supersesión 2026-08-23, abajo)
+
   @@index([notaVentaId])
 }
+```
+
+> **⚠️ Supersesión (2026-08-23) — línea de OC tomada del Cierre Comercial.**
+> `compras.md` §4.3 agrega `OrdenCompraLinea.notaVentaDetalleId` (FK
+> opcional): al armar una OC contra un Cierre, el usuario puede tomar
+> (completa o parcial, en cajas) una línea del Cierre en vez de recapturarla
+> a mano. Esto agrega, del lado de `NotaVentaDetalle`:
+>
+> - **`GET /api/ventas/notas-venta` (listado) gana `estadoOc`**
+>   (`PENDIENTE`/`COMPLETA`) por Cierre: `COMPLETA` si la suma de `cajas`
+>   comprometidas por `OrdenCompraLinea` vigentes iguala o supera la suma de
+>   `cajas` de todas sus líneas; `PENDIENTE` en cualquier otro caso
+>   (incluido un Cierre sin líneas todavía).
+> - **Eliminar una línea** (`DELETE .../detalles/:id`) se rechaza (422) si
+>   tiene cajas comprometidas por alguna `OrdenCompraLinea` vigente.
+> - **Editar una línea** (`PATCH .../detalles/:id`) con cajas comprometidas
+>   > 0: `especieId`/`variedadId`/`categoriaId`/`articuloId`/`tipoPalletId`/
+>   `calibreIds` quedan **bloqueados** (deben llegar idénticos a lo
+>   persistido, se rechaza si difieren) — esas OC ya copiaron esos valores
+>   server-side y cambiarlos las desincronizaría. `cajas` sigue editable,
+>   pero nunca por debajo de lo ya comprometido.
+
+```prisma
 
 model NotaVentaDetalleCalibre {
   id                 Int              @id @default(autoincrement())

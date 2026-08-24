@@ -7,6 +7,7 @@ import {
   ordenCompraLineaCreateSchema,
   ordenCompraLineaUpdateSchema,
   ordenCompraLineaParamsSchema,
+  disponibilidadCierreParamsSchema,
 } from './ordenes-compra.schema.js'
 import * as service from './ordenes-compra.service.js'
 
@@ -59,4 +60,10 @@ export async function removeLinea(req: FastifyRequest, reply: FastifyReply) {
   const { id, lineaId } = ordenCompraLineaParamsSchema.parse(req.params)
   await service.eliminarLinea(id, lineaId)
   return reply.status(204).send()
+}
+
+export async function disponibilidadCierre(req: FastifyRequest, reply: FastifyReply) {
+  const { notaVentaId } = disponibilidadCierreParamsSchema.parse(req.params)
+  const data = await service.obtenerDisponibilidadCierre(notaVentaId)
+  return reply.send({ data })
 }

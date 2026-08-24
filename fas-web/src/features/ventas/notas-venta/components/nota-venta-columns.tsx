@@ -2,6 +2,7 @@
 
 import type { ColumnDef } from '@tanstack/react-table'
 import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-header'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -19,7 +20,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { notasVentaService } from '../service'
 import { notasVentaKeys } from '../queries'
-import type { NotaVentaListItem } from '../types'
+import { ESTADO_OC_CIERRE_LABELS } from '../types'
+import type { NotaVentaListItem, NotaVentaListItemConEstadoOc } from '../types'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { formatFechaCorta } from '@/lib/format'
 import { GenerarEmbarqueDialog } from '@/features/ventas/embarques/components/generar-embarque-dialog'
@@ -122,7 +124,7 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
   )
 }
 
-export const notaVentaColumns: ColumnDef<NotaVentaListItem>[] = [
+export const notaVentaColumns: ColumnDef<NotaVentaListItemConEstadoOc>[] = [
   {
     id: 'folio',
     accessorKey: 'folio',
@@ -158,6 +160,17 @@ export const notaVentaColumns: ColumnDef<NotaVentaListItem>[] = [
     header: 'Moneda',
     cell: ({ row }) => <span className='text-sm'>{row.original.moneda.codigo}</span>,
     size: 90,
+  },
+  {
+    id: 'estadoOc',
+    accessorKey: 'estadoOc',
+    header: 'Estado OC',
+    cell: ({ row }) => (
+      <Badge variant={row.original.estadoOc === 'COMPLETA' ? 'outline' : 'secondary'}>
+        {ESTADO_OC_CIERRE_LABELS[row.original.estadoOc]}
+      </Badge>
+    ),
+    size: 100,
   },
   {
     id: 'actions',

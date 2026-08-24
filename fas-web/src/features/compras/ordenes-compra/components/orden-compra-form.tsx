@@ -37,9 +37,10 @@ import { ordenCompraDetailOptions, ordenesCompraKeys } from '../queries'
 import { ordenesCompraService } from '../service'
 import type {
   OrdenCompraCreateInput,
-  OrdenCompraLineaInput,
+  OrdenCompraLineaCreateInput,
   OrdenCompraLineaItem,
   EstadoOrdenCompra,
+  NotaVentaDetalleDisponibilidad,
 } from '../types'
 import { ESTADO_OC_LABELS } from '../types'
 
@@ -94,7 +95,7 @@ const HEADER_EMPTY: HeaderFields = {
   estado: 'BORRADOR',
 }
 
-const LINEA_EMPTY: OrdenCompraLineaInput = {
+const LINEA_EMPTY: OrdenCompraLineaCreateInput = {
   especieId: 0,
   variedadId: 0,
   categoriaId: 0,
@@ -105,6 +106,7 @@ const LINEA_EMPTY: OrdenCompraLineaInput = {
   cajasPorPallet: CAJAS_POR_PALLET_DEFAULT,
   cajas: 0,
   precioUsdCaja: 0,
+  notaVentaDetalleId: null,
 }
 
 interface OrdenCompraFormProps {
@@ -121,12 +123,15 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
 
   const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [linea, setLinea] = useState<OrdenCompraLineaInput>(LINEA_EMPTY)
+  const [linea, setLinea] = useState<OrdenCompraLineaCreateInput>(LINEA_EMPTY)
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
   const [editingLineaId, setEditingLineaId] = useState<number | null>(null)
   const [deleteLineaId, setDeleteLineaId] = useState<number | null>(null)
   const [calibreDesdeId, setCalibreDesdeId] = useState<number | null>(null)
   const [calibreHastaId, setCalibreHastaId] = useState<number | null>(null)
+  // Grilla de líneas del Cierre Comercial: pallets a tomar por línea, antes
+  // de "usar" (precargar el form de línea de abajo) — 2026-08-23.
+  const [palletsPorLineaCierre, setPalletsPorLineaCierre] = useState<Record<number, string>>({})
 
   const { data: ordenCompra, isLoading } = useQuery({
     ...ordenCompraDetailOptions(ordenCompraId ?? 0),
@@ -143,6 +148,15 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     queryFn: () => notasVentaService.list({ limit: 200 }),
     staleTime: 60_000,
     enabled: fields.origen === 'CIERRE',
+  })
+  // Grilla de líneas del Cierre Comercial (2026-08-23) — solo tiene sentido
+  // una vez creada la OC (isEdit, las líneas necesitan ordenCompraId) y con
+  // un Cierre elegido.
+  const { data: disponibilidadCierreData } = useQuery({
+    queryKey: ['disponibilidad-cierre', fields.notaVentaId],
+    queryFn: () => ordenesCompraService.getDisponibilidadCierre(fields.notaVentaId!),
+    staleTime: 15_000,
+    enabled: isEdit && fields.origen === 'CIERRE' && !!fields.notaVentaId,
   })
   const { data: responsablesData } = useQuery({
     queryKey: ['usuarios-responsables-venta-options'],
@@ -192,6 +206,12 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   // seleccionada) — solo lectura, no se cargan manualmente.
   const condicionPagoSeleccionada = (condicionesPagoData?.data ?? []).find((c) => c.id === fields.condicionPagoId)
   const cuotasPreview = isEdit ? ordenCompra?.data.cuotasPago ?? [] : condicionPagoSeleccionada?.cuotas ?? []
+
+  // FAS-OCNV-001 (QA ronda 1): bloquea el Origen/Cierre Comercial del
+  // encabezado mientras la OC tenga líneas tomadas de un Cierre — cambiarlo
+  // las dejaría huérfanas. El backend re-valida esto de forma autoritativa
+  // (ordenes-compra.repository.ts updateOrdenCompra); esto es solo UX.
+  const tieneLineasDeCierre = (ordenCompra?.data.lineas ?? []).some((l) => l.notaVentaDetalleId != null)
 
   useEffect(() => {
     if (ordenCompra) {
@@ -264,20 +284,35 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar la Orden de Compra'),
   })
 
+  // FAS-OCNV-005 (QA ronda 3): agregar/editar/eliminar una línea cambia el
+  // disponible de la línea del Cierre que haya quedado comprometida — la
+  // grilla de disponibilidad se sirve de una query aparte
+  // (['disponibilidad-cierre', notaVentaId]) que no queda invalidada solo con
+  // invalidar el detalle de la OC. El backend igual revalida el disponible de
+  // forma atómica en cada mutación (no es un riesgo de integridad), esto es
+  // solo para que la UI no muestre un disponible obsoleto.
+  function invalidarDisponibilidadCierre() {
+    if (fields.notaVentaId != null) {
+      queryClient.invalidateQueries({ queryKey: ['disponibilidad-cierre', fields.notaVentaId] })
+    }
+    setPalletsPorLineaCierre({})
+  }
+
   const addLineaMutation = useMutation({
-    mutationFn: (data: OrdenCompraLineaInput) => ordenesCompraService.addLinea(ordenCompraId!, data),
+    mutationFn: (data: OrdenCompraLineaCreateInput) => ordenesCompraService.addLinea(ordenCompraId!, data),
     onSuccess: () => {
       toast.success('Línea agregada')
       setLinea(LINEA_EMPTY)
       setLineaErrors({})
       resetCalibreRango()
       queryClient.invalidateQueries({ queryKey: ordenesCompraKeys.detail(ordenCompraId!) })
+      invalidarDisponibilidadCierre()
     },
     onError: (e: Error) => toast.error(e.message || 'Error al agregar la línea'),
   })
 
   const updateLineaMutation = useMutation({
-    mutationFn: (data: OrdenCompraLineaInput) => ordenesCompraService.updateLinea(ordenCompraId!, editingLineaId!, data),
+    mutationFn: (data: OrdenCompraLineaCreateInput) => ordenesCompraService.updateLinea(ordenCompraId!, editingLineaId!, data),
     onSuccess: () => {
       toast.success('Línea actualizada')
       setLinea(LINEA_EMPTY)
@@ -285,6 +320,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       setEditingLineaId(null)
       resetCalibreRango()
       queryClient.invalidateQueries({ queryKey: ordenesCompraKeys.detail(ordenCompraId!) })
+      invalidarDisponibilidadCierre()
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar la línea'),
   })
@@ -295,6 +331,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       toast.success('Línea eliminada')
       setDeleteLineaId(null)
       queryClient.invalidateQueries({ queryKey: ordenesCompraKeys.detail(ordenCompraId!) })
+      invalidarDisponibilidadCierre()
     },
     onError: (e: Error) => toast.error(e.message || 'Error al eliminar la línea'),
   })
@@ -342,6 +379,33 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       cajasPorPallet: l.cajasPorPallet,
       cajas: l.cajas,
       precioUsdCaja: Number(l.precioUsdCaja),
+      notaVentaDetalleId: l.notaVentaDetalleId,
+    })
+    setLineaErrors({})
+    resetCalibreRango()
+  }
+
+  // Precarga el form de línea (de abajo) desde una línea del Cierre
+  // Comercial — especie/variedad/categoría/artículo/tipoPallet/calibres
+  // quedan bloqueados (se re-validan server-side de todos modos); el precio
+  // sigue en blanco, es 100% manual (2026-08-23). `cajas` se recibe explícito
+  // (no se recalcula como pallets × cajasPorPallet) para soportar el último
+  // pallet parcial (FAS-OCNV-003, QA ronda 2/arbitraje) — sigue editable
+  // después en "Cantidad de Cajas", como cualquier línea.
+  function usarLineaCierre(detalle: NotaVentaDetalleDisponibilidad, pallets: number, cajas: number) {
+    setEditingLineaId(null)
+    setLinea({
+      especieId: detalle.especieId,
+      variedadId: detalle.variedadId,
+      categoriaId: detalle.categoriaId ?? 0,
+      articuloId: detalle.articuloId,
+      calibreIds: detalle.calibres.map((c) => c.calibre.id),
+      tipoPalletId: detalle.tipoPalletId,
+      cantidadPallets: pallets,
+      cajasPorPallet: detalle.cajasPorPallet,
+      cajas,
+      precioUsdCaja: 0,
+      notaVentaDetalleId: detalle.id,
     })
     setLineaErrors({})
     resetCalibreRango()
@@ -381,6 +445,11 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const soloLectura = !puedeEscribir || yaRecepcionada
   const articuloSeleccionado = articulos.find((a) => a.id === linea.articuloId) as { etiqueta?: { descripcion: string } | null; kgNetoEnvase?: string | null; kgBrutoEnvase?: string | null } | undefined
   const lineaMutationPending = addLineaMutation.isPending || updateLineaMutation.isPending
+  // Línea tomada de una línea del Cierre Comercial (2026-08-23): especie/
+  // variedad/categoría/artículo/tipoPallet quedan bloqueados en el form —
+  // el backend los re-copia de todos modos, esto solo evita que el usuario
+  // los toque y se lleve una sorpresa al guardar.
+  const lineaBloqueadaPorCierre = !!linea.notaVentaDetalleId
 
   return (
     <div className='space-y-6'>
@@ -399,18 +468,31 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
           <div className={`grid gap-4 sm:grid-cols-2 ${fields.origen === 'CIERRE' ? 'md:grid-cols-3' : ''}`}>
             <div className='space-y-1.5'>
               <Label>Origen</Label>
-              <Select value={fields.origen} onValueChange={(v) => setFields((f) => ({ ...f, origen: v as Origen, notaVentaId: v === 'MANUAL' ? null : f.notaVentaId }))}>
+              <Select
+                value={fields.origen}
+                disabled={tieneLineasDeCierre}
+                onValueChange={(v) => setFields((f) => ({ ...f, origen: v as Origen, notaVentaId: v === 'MANUAL' ? null : f.notaVentaId }))}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value='CIERRE'>Cierre Comercial</SelectItem>
                   <SelectItem value='MANUAL'>Manual</SelectItem>
                 </SelectContent>
               </Select>
+              {tieneLineasDeCierre && (
+                <p className='text-xs text-muted-foreground'>
+                  No se puede cambiar: tiene líneas tomadas de este Cierre Comercial (elimínelas primero).
+                </p>
+              )}
             </div>
             {fields.origen === 'CIERRE' && (
               <div className='space-y-1.5'>
                 <Label>Cierre Comercial</Label>
-                <Select value={fields.notaVentaId ? String(fields.notaVentaId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, notaVentaId: Number(v) }))}>
+                <Select
+                  value={fields.notaVentaId ? String(fields.notaVentaId) : ''}
+                  disabled={tieneLineasDeCierre}
+                  onValueChange={(v) => setFields((f) => ({ ...f, notaVentaId: Number(v) }))}
+                >
                   <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                   <SelectContent>
                     {(notasVentaData?.data ?? []).map((nv) => (
@@ -589,12 +671,103 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
             <CardTitle>Detalle de fruta</CardTitle>
           </CardHeader>
           <CardContent className='space-y-4'>
+            {fields.origen === 'CIERRE' && fields.notaVentaId && (
+              <div className='space-y-2'>
+                <Label>Líneas del Cierre Comercial</Label>
+                <p className='text-xs text-muted-foreground'>
+                  Selecciona cuántos pallets tomar de cada línea (completa o parcial) — precarga el formulario de
+                  abajo con especie/variedad/categoría/artículo/calibres bloqueados; solo falta el precio.
+                </p>
+                <div className='overflow-x-auto rounded-md border'>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Especie / Variedad</TableHead>
+                        <TableHead>Embalaje</TableHead>
+                        <TableHead>Categoría</TableHead>
+                        <TableHead>Calibres</TableHead>
+                        <TableHead>Disponible</TableHead>
+                        <TableHead className='w-40'>Pallets a tomar</TableHead>
+                        <TableHead className='w-24 text-right'>Acción</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(disponibilidadCierreData?.data ?? []).map((d) => {
+                        const palletsDisponibles = d.cajasPorPallet > 0 ? Math.floor(d.cajasDisponibles / d.cajasPorPallet) : 0
+                        // Disponible menor a 1 pallet completo (FAS-OCNV-003,
+                        // QA ronda 2/arbitraje): compras.md §4.3 permite un
+                        // último pallet parcial — no se puede dejar ese resto
+                        // inalcanzable solo porque no llena un pallet.
+                        const soloRemanente = palletsDisponibles === 0 && d.cajasDisponibles > 0
+                        const palletsStr = palletsPorLineaCierre[d.id] ?? ''
+                        const pallets = Number(palletsStr) || 0
+                        const puedeUsar = d.categoriaId != null && (soloRemanente || (pallets > 0 && pallets <= palletsDisponibles))
+                        return (
+                          <TableRow key={d.id}>
+                            <TableCell className='font-medium whitespace-nowrap'>{d.especie.descripcion} / {d.variedad.descripcion}</TableCell>
+                            <TableCell className='whitespace-nowrap text-muted-foreground'>{d.articulo.descripcion}</TableCell>
+                            <TableCell className='whitespace-nowrap text-muted-foreground'>{d.categoria?.descripcion ?? '—'}</TableCell>
+                            <TableCell className='max-w-[180px] text-muted-foreground'>
+                              {d.calibres.map((c) => c.calibre.codigo).join(', ')}
+                            </TableCell>
+                            <TableCell className='whitespace-nowrap text-muted-foreground'>
+                              {palletsDisponibles} pallets ({d.cajasDisponibles} cajas)
+                            </TableCell>
+                            <TableCell>
+                              {soloRemanente ? (
+                                <span className='text-xs text-muted-foreground'>Resto: {d.cajasDisponibles} cajas (&lt; 1 pallet)</span>
+                              ) : (
+                                <Input
+                                  type='number'
+                                  min={0}
+                                  max={palletsDisponibles}
+                                  value={palletsStr}
+                                  onChange={(e) => setPalletsPorLineaCierre((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                                  disabled={palletsDisponibles === 0 || d.categoriaId == null}
+                                />
+                              )}
+                            </TableCell>
+                            <TableCell className='text-right'>
+                              <Button
+                                type='button'
+                                variant='secondary'
+                                size='sm'
+                                disabled={!puedeUsar}
+                                onClick={() =>
+                                  usarLineaCierre(d, soloRemanente ? 1 : pallets, soloRemanente ? d.cajasDisponibles : pallets * d.cajasPorPallet)
+                                }
+                              >
+                                Usar
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                      {(disponibilidadCierreData?.data ?? []).length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={7} className='text-center text-muted-foreground'>
+                            Este Cierre Comercial no tiene líneas de detalle.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
             <div className='space-y-3'>
+              {lineaBloqueadaPorCierre && (
+                <Badge variant='outline'>Línea del Cierre Comercial — especie/variedad/categoría/artículo/calibres bloqueados</Badge>
+              )}
               {/* Fila 1: Especie, Embalaje (2 columnas) */}
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
                 <div className='space-y-1.5'>
                   <Label>Especie <span className='text-destructive'>*</span></Label>
-                  <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreIds: [] })); resetCalibreRango() }}>
+                  <Select
+                    value={linea.especieId ? String(linea.especieId) : ''}
+                    onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreIds: [] })); resetCalibreRango() }}
+                    disabled={lineaBloqueadaPorCierre}
+                  >
                     <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                     <SelectContent>
                       {especies.map((e) => (
@@ -606,7 +779,11 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 </div>
                 <div className='space-y-1.5 md:col-span-2'>
                   <Label>Embalaje <span className='text-destructive'>*</span></Label>
-                  <Select value={linea.articuloId ? String(linea.articuloId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}>
+                  <Select
+                    value={linea.articuloId ? String(linea.articuloId) : ''}
+                    onValueChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}
+                    disabled={lineaBloqueadaPorCierre}
+                  >
                     <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                     <SelectContent>
                       {articulos.map((a) => (
@@ -622,7 +799,11 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
                 <div className='space-y-1.5'>
                   <Label>Variedad <span className='text-destructive'>*</span></Label>
-                  <Select value={linea.variedadId ? String(linea.variedadId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, variedadId: Number(v) }))} disabled={!linea.especieId}>
+                  <Select
+                    value={linea.variedadId ? String(linea.variedadId) : ''}
+                    onValueChange={(v) => setLinea((l) => ({ ...l, variedadId: Number(v) }))}
+                    disabled={!linea.especieId || lineaBloqueadaPorCierre}
+                  >
                     <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                     <SelectContent>
                       {(variedadesData?.data ?? []).map((v) => (
@@ -634,7 +815,11 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 </div>
                 <div className='space-y-1.5'>
                   <Label>Categoría <span className='text-destructive'>*</span></Label>
-                  <Select value={linea.categoriaId ? String(linea.categoriaId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, categoriaId: Number(v) }))} disabled={!linea.especieId}>
+                  <Select
+                    value={linea.categoriaId ? String(linea.categoriaId) : ''}
+                    onValueChange={(v) => setLinea((l) => ({ ...l, categoriaId: Number(v) }))}
+                    disabled={!linea.especieId || lineaBloqueadaPorCierre}
+                  >
                     <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                     <SelectContent>
                       {(categoriasData?.data ?? []).map((c) => (
@@ -646,11 +831,14 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 </div>
               </div>
 
-              {/* Fila 3: Calibre Inicio, Calibre Fin, Agregar */}
+              {/* Fila 3: Calibre Inicio, Calibre Fin, Agregar — deshabilitado
+                  si la línea viene del Cierre: los calibres ya se precargan
+                  completos y solo se pueden QUITAR (mantiene el subconjunto
+                  exigido por el backend), no agregar otros fuera de la lista. */}
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
                 <div className='min-w-0 space-y-1.5'>
                   <Label>Calibre Inicio</Label>
-                  <Select value={calibreDesdeId ? String(calibreDesdeId) : ''} onValueChange={(v) => setCalibreDesdeId(Number(v))} disabled={!linea.especieId}>
+                  <Select value={calibreDesdeId ? String(calibreDesdeId) : ''} onValueChange={(v) => setCalibreDesdeId(Number(v))} disabled={!linea.especieId || lineaBloqueadaPorCierre}>
                     <SelectTrigger><SelectValue placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'} /></SelectTrigger>
                     <SelectContent>
                       {(calibresData?.data ?? []).map((c) => (
@@ -661,7 +849,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 </div>
                 <div className='min-w-0 space-y-1.5'>
                   <Label>Calibre Fin</Label>
-                  <Select value={calibreHastaId ? String(calibreHastaId) : ''} onValueChange={(v) => setCalibreHastaId(Number(v))} disabled={!linea.especieId}>
+                  <Select value={calibreHastaId ? String(calibreHastaId) : ''} onValueChange={(v) => setCalibreHastaId(Number(v))} disabled={!linea.especieId || lineaBloqueadaPorCierre}>
                     <SelectTrigger><SelectValue placeholder='Igual a inicio' /></SelectTrigger>
                     <SelectContent>
                       {(calibresData?.data ?? []).map((c) => (
@@ -672,7 +860,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 </div>
                 <div className='space-y-1.5'>
                   <Label className='invisible'>Agregar</Label>
-                  <Button type='button' variant='secondary' className='w-full' onClick={agregarRangoCalibre} disabled={!linea.especieId || !calibreDesdeId}>
+                  <Button type='button' variant='secondary' className='w-full' onClick={agregarRangoCalibre} disabled={!linea.especieId || !calibreDesdeId || lineaBloqueadaPorCierre}>
                     <Icons.add className='mr-1 h-4 w-4' /> Agregar
                   </Button>
                 </div>
@@ -708,7 +896,11 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
                 <div className='space-y-1.5'>
                   <Label>Tipo Pallet</Label>
-                  <Select value={linea.tipoPalletId ? String(linea.tipoPalletId) : '__none__'} onValueChange={(v) => setLinea((l) => ({ ...l, tipoPalletId: v === '__none__' ? null : Number(v) }))}>
+                  <Select
+                    value={linea.tipoPalletId ? String(linea.tipoPalletId) : '__none__'}
+                    onValueChange={(v) => setLinea((l) => ({ ...l, tipoPalletId: v === '__none__' ? null : Number(v) }))}
+                    disabled={lineaBloqueadaPorCierre}
+                  >
                     <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value='__none__'>Sin definir</SelectItem>
@@ -726,7 +918,10 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                     onChange={(e) => {
                       const v = e.target.value
                       const pallets = Number(v)
-                      setLinea((l) => ({ ...l, cantidadPallets: pallets, cajas: v ? pallets * CAJAS_POR_PALLET_DEFAULT : l.cajas }))
+                      // Usa el cajasPorPallet ya guardado en la línea (el de
+                      // la línea del Cierre si viene de ahí, el default si
+                      // es manual) — no el default a secas.
+                      setLinea((l) => ({ ...l, cantidadPallets: pallets, cajas: v ? pallets * l.cajasPorPallet : l.cajas }))
                     }}
                   />
                   {lineaErrors.cantidadPallets && <p className='text-xs text-destructive'>{lineaErrors.cantidadPallets}</p>}

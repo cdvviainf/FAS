@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
-import { LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO } from '../../../shared/advisory-locks.js'
+import { LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO, LOCK_NAMESPACE_NOTA_VENTA_DETALLE } from '../../../shared/advisory-locks.js'
 import type {
   OrdenCompraCreateInput,
   OrdenCompraUpdateInput,
@@ -240,6 +240,21 @@ export async function updateOrdenCompra(id: number, data: OrdenCompraUpdateInput
   const { solicitudInspeccionIds, ...resto } = data
   return prisma.$transaction(async (tx) => {
     await lockYVerificarEditable(tx, id)
+    // FAS-OCNV-001 (QA ronda 1): autoridad real bajo el mismo lock por
+    // ordenCompraId que addLinea/updateLinea (LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO)
+    // — serializa este chequeo contra una línea de Cierre agregándose en
+    // paralelo. El service ya hizo un pre-check amigable no bloqueado.
+    if (data.notaVentaId !== undefined) {
+      const actual = await tx.ordenCompra.findUniqueOrThrow({ where: { id }, select: { notaVentaId: true } })
+      if (data.notaVentaId !== actual.notaVentaId) {
+        const lineasDeCierre = await tx.ordenCompraLinea.count({ where: { ordenCompraId: id, notaVentaDetalleId: { not: null } } })
+        if (lineasDeCierre > 0) {
+          throw new ValidationError(
+            'No se puede cambiar el Cierre Comercial de la Orden de Compra: tiene líneas tomadas de un Cierre Comercial — elimínelas primero',
+          )
+        }
+      }
+    }
     if (data.condicionPagoId !== undefined) {
       // El snapshot es inmutable (mismo patrón que Cierre Comercial): solo se
       // regenera si condicionPagoId realmente cambió respecto del valor
@@ -284,12 +299,84 @@ const lineaInclude = {
   tipoPallet: { select: mantenedorSelect },
 }
 
+// Resolución + validación autoritativa de una línea tomada del Cierre
+// Comercial (FAS-OCNV-001/FAS-OCNV-004, QA ronda 2/arbitraje) — TODO lo que
+// antes resolvía el service con una lectura no bloqueada (pertenencia al
+// Cierre de la OC, categoría definida, calibres subconjunto, disponible) se
+// vuelve a resolver acá, DESPUÉS de tomar el lock de la OC
+// (lockYVerificarEditable, ya hecho por el caller) y el de
+// LOCK_NAMESPACE_NOTA_VENTA_DETALLE (acá) — así una línea no puede insertarse
+// contra un Cierre que la OC dejó de tener, ni con atributos
+// (especie/variedad/categoría/artículo/tipoPallet) que Ventas alcanzó a
+// cambiar en el hueco entre el pre-check amigable del service y este punto.
+// El pre-check del service (resolverLineaDesdeCierre) queda solo como mensaje
+// de UX rápido — la verdad para insertar/actualizar sale exclusivamente de
+// acá. `excluirLineaId` se usa en updateLinea para no contarse a sí misma en
+// la suma de comprometido.
+async function resolverLineaCierreBajoLock(
+  tx: Prisma.TransactionClient,
+  notaVentaIdOrden: number | null,
+  notaVentaDetalleId: number,
+  calibreIdsSolicitados: number[],
+  cajasSolicitadas: number,
+  excluirLineaId?: number,
+) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_NOTA_VENTA_DETALLE}::int, ${notaVentaDetalleId}::int)`
+  const detalle = await tx.notaVentaDetalle.findUnique({ where: { id: notaVentaDetalleId }, select: notaVentaDetalleSelect })
+  if (!detalle) throw new ValidationError('La línea de Cierre Comercial seleccionada ya no existe')
+  if (notaVentaIdOrden == null || detalle.notaVentaId !== notaVentaIdOrden) {
+    throw new ValidationError('La línea de Cierre Comercial seleccionada ya no pertenece al Cierre Comercial de esta Orden de Compra')
+  }
+  if (detalle.categoriaId == null) {
+    throw new ValidationError('La línea del Cierre Comercial no tiene categoría definida — no se puede usar para una Orden de Compra')
+  }
+  const calibresPermitidos = new Set(detalle.calibres.map((c) => c.calibreId))
+  if (calibreIdsSolicitados.some((id) => !calibresPermitidos.has(id))) {
+    throw new ValidationError('Uno o más calibres no están permitidos por la línea del Cierre Comercial')
+  }
+  const comprometidoAgg = await tx.ordenCompraLinea.aggregate({
+    where: {
+      notaVentaDetalleId,
+      ordenCompra: { eliminadoEn: null },
+      ...(excluirLineaId != null ? { id: { not: excluirLineaId } } : {}),
+    },
+    _sum: { cajas: true },
+  })
+  const disponible = detalle.cajas - (comprometidoAgg._sum.cajas ?? 0)
+  if (cajasSolicitadas > disponible) {
+    throw new ValidationError(
+      `La línea de Cierre Comercial solo tiene ${disponible} caja(s) disponible(s) — otra Orden de Compra tomó cajas mientras tanto`,
+    )
+  }
+  return {
+    especieId: detalle.especieId,
+    variedadId: detalle.variedadId,
+    categoriaId: detalle.categoriaId,
+    articuloId: detalle.articuloId,
+    tipoPalletId: detalle.tipoPalletId,
+  }
+}
+
 export async function addLinea(ordenCompraId: number, data: OrdenCompraLineaCreateInput) {
-  const { calibreIds, ...resto } = data
+  const { calibreIds, notaVentaDetalleId, ...resto } = data
   return prisma.$transaction(async (tx) => {
     await lockYVerificarEditable(tx, ordenCompraId)
+    // camposCierre pisa cualquier especie/variedad/categoría/artículo/
+    // tipoPallet que el caller haya resuelto antes del lock — la fuente de
+    // verdad es exclusivamente la lectura fresca de acá (FAS-OCNV-001/004).
+    let camposCierre: Partial<typeof resto> = {}
+    if (notaVentaDetalleId != null) {
+      const orden = await tx.ordenCompra.findUniqueOrThrow({ where: { id: ordenCompraId }, select: { notaVentaId: true } })
+      camposCierre = await resolverLineaCierreBajoLock(tx, orden.notaVentaId, notaVentaDetalleId, calibreIds, resto.cajas)
+    }
     const linea = await tx.ordenCompraLinea.create({
-      data: { ...resto, ordenCompraId, calibres: { create: calibreIds.map((calibreId) => ({ calibreId })) } },
+      data: {
+        ...resto,
+        ...camposCierre,
+        ordenCompraId,
+        notaVentaDetalleId: notaVentaDetalleId ?? null,
+        calibres: { create: calibreIds.map((calibreId) => ({ calibreId })) },
+      },
       include: lineaInclude,
     })
     await recalcularCuotasMontoUnitario(tx, ordenCompraId)
@@ -298,17 +385,30 @@ export async function addLinea(ordenCompraId: number, data: OrdenCompraLineaCrea
 }
 
 export async function getLineaById(id: number) {
-  return prisma.ordenCompraLinea.findUnique({ where: { id }, select: { id: true, ordenCompraId: true } })
+  return prisma.ordenCompraLinea.findUnique({
+    where: { id },
+    select: { id: true, ordenCompraId: true, notaVentaDetalleId: true },
+  })
 }
 
 export async function updateLinea(ordenCompraId: number, id: number, data: OrdenCompraLineaUpdateInput) {
   const { calibreIds, ...resto } = data
   return prisma.$transaction(async (tx) => {
     await lockYVerificarEditable(tx, ordenCompraId)
+    // notaVentaDetalleId no viene en el UpdateInput (inmutable post-creación,
+    // ver ordenes-compra.types.ts) — se lee la línea vigente para saber si
+    // corresponde revalidar el disponible.
+    const lineaActual = await tx.ordenCompraLinea.findUnique({ where: { id }, select: { notaVentaDetalleId: true } })
+    let camposCierre: Partial<typeof resto> = {}
+    if (lineaActual?.notaVentaDetalleId != null) {
+      const orden = await tx.ordenCompra.findUniqueOrThrow({ where: { id: ordenCompraId }, select: { notaVentaId: true } })
+      camposCierre = await resolverLineaCierreBajoLock(tx, orden.notaVentaId, lineaActual.notaVentaDetalleId, calibreIds, resto.cajas, id)
+    }
     const linea = await tx.ordenCompraLinea.update({
       where: { id },
       data: {
         ...resto,
+        ...camposCierre,
         calibres: { deleteMany: {}, create: calibreIds.map((calibreId) => ({ calibreId })) },
       },
       include: lineaInclude,
@@ -350,6 +450,72 @@ export async function getEntidadProductor(id: number) {
 
 export async function getNotaVenta(id: number) {
   return prisma.notaVenta.findFirst({ where: { id, eliminadoEn: null }, select: { id: true } })
+}
+
+// ─── Línea de Cierre Comercial → Línea de OC (2026-08-23) ─────────────────
+
+const notaVentaDetalleSelect = {
+  id: true,
+  notaVentaId: true,
+  especieId: true,
+  variedadId: true,
+  categoriaId: true,
+  articuloId: true,
+  tipoPalletId: true,
+  cajas: true,
+  calibres: { select: { calibreId: true } },
+}
+
+export async function getNotaVentaDetalle(id: number) {
+  return prisma.notaVentaDetalle.findUnique({ where: { id }, select: notaVentaDetalleSelect })
+}
+
+// Cajas ya comprometidas por OrdenCompraLinea vigentes (de OC no eliminadas)
+// contra una línea del Cierre — lectura no bloqueada, para el pre-check
+// "amigable" del service. La autoridad real bajo lock está en
+// verificarDisponibleBajoLock (arriba, dentro de addLinea/updateLinea).
+export async function getCajasComprometidas(notaVentaDetalleId: number, excluirLineaId?: number) {
+  const result = await prisma.ordenCompraLinea.aggregate({
+    where: {
+      notaVentaDetalleId,
+      ordenCompra: { eliminadoEn: null },
+      ...(excluirLineaId != null ? { id: { not: excluirLineaId } } : {}),
+    },
+    _sum: { cajas: true },
+  })
+  return result._sum.cajas ?? 0
+}
+
+// Líneas del Cierre con su disponible calculado — alimenta la grilla del
+// formulario de OC al elegir un Cierre Comercial. Se resuelve en 2 pasadas
+// (traer líneas, agregar comprometido por línea) porque Prisma no soporta
+// un groupBy anidado en una sola query contra una relación N:1 indirecta.
+export async function getNotaVentaDetalleConDisponibilidad(notaVentaId: number) {
+  const lineas = await prisma.notaVentaDetalle.findMany({
+    where: { notaVentaId },
+    include: {
+      especie: { select: mantenedorSelect },
+      variedad: { select: mantenedorSelect },
+      categoria: { select: mantenedorSelect },
+      articulo: { select: { id: true, codigo: true, descripcion: true } },
+      tipoPallet: { select: mantenedorSelect },
+      calibres: { select: { calibre: { select: mantenedorSelect } } },
+    },
+    orderBy: { id: 'asc' },
+  })
+  if (lineas.length === 0) return []
+
+  const comprometidos = await prisma.ordenCompraLinea.groupBy({
+    by: ['notaVentaDetalleId'],
+    where: { notaVentaDetalleId: { in: lineas.map((l) => l.id) }, ordenCompra: { eliminadoEn: null } },
+    _sum: { cajas: true },
+  })
+  const comprometidoPorLinea = new Map(comprometidos.map((c) => [c.notaVentaDetalleId, c._sum.cajas ?? 0]))
+
+  return lineas.map((l) => {
+    const cajasComprometidas = comprometidoPorLinea.get(l.id) ?? 0
+    return { ...l, cajasComprometidas, cajasDisponibles: l.cajas - cajasComprometidas }
+  })
 }
 
 // La OC exige al menos una Inspección de Compra Aprobada del mismo productor

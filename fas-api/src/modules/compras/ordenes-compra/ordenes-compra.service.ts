@@ -46,6 +46,55 @@ async function validarLinea(linea: OrdenCompraLineaInput, index: number) {
   }
 }
 
+// Pre-check amigable (2026-08-23) — lectura NO bloqueada, solo para devolver
+// un mensaje de error rápido antes de entrar a la transacción. Valida: que la
+// línea pertenezca al mismo Cierre de la OC, que tenga categoría definida
+// (OrdenCompraLinea la exige; NotaVentaDetalle no), que los calibres pedidos
+// sean subconjunto de los de la línea, y que las cajas pedidas no superen el
+// disponible. NO es la fuente de verdad: especie/variedad/categoría/
+// artículo/tipoPallet que devuelve acá pueden quedar obsoletos si Ventas edita
+// la línea del Cierre en el hueco antes de que la transacción tome el lock —
+// la autoridad real (que ignora este resultado y vuelve a resolver todo desde
+// cero bajo lock) vive en ordenes-compra.repository.ts
+// (resolverLineaCierreBajoLock, FAS-OCNV-001/FAS-OCNV-004, QA ronda 2/arbitraje).
+async function resolverLineaDesdeCierre(
+  notaVentaIdOrden: number | null | undefined,
+  notaVentaDetalleId: number,
+  linea: OrdenCompraLineaInput,
+  index: number,
+  excluirLineaId?: number,
+): Promise<OrdenCompraLineaInput> {
+  const prefijo = `Línea ${index + 1}:`
+  if (notaVentaIdOrden == null) {
+    throw new ValidationError(`${prefijo} la Orden de Compra no tiene un Cierre Comercial asociado`)
+  }
+  const detalle = await repo.getNotaVentaDetalle(notaVentaDetalleId)
+  if (!detalle) throw new ValidationError(`${prefijo} la línea de Cierre Comercial seleccionada no existe`)
+  if (detalle.notaVentaId !== notaVentaIdOrden) {
+    throw new ValidationError(`${prefijo} la línea seleccionada no pertenece al Cierre Comercial de esta Orden de Compra`)
+  }
+  if (detalle.categoriaId == null) {
+    throw new ValidationError(`${prefijo} la línea del Cierre Comercial no tiene categoría definida — no se puede usar para una Orden de Compra`)
+  }
+  const calibresPermitidos = new Set(detalle.calibres.map((c) => c.calibreId))
+  if (linea.calibreIds.some((id) => !calibresPermitidos.has(id))) {
+    throw new ValidationError(`${prefijo} uno o más calibres no están permitidos por la línea del Cierre Comercial`)
+  }
+  const comprometido = await repo.getCajasComprometidas(notaVentaDetalleId, excluirLineaId)
+  const disponible = detalle.cajas - comprometido
+  if (linea.cajas > disponible) {
+    throw new ValidationError(`${prefijo} la línea de Cierre Comercial solo tiene ${disponible} caja(s) disponible(s) (solicitadas: ${linea.cajas})`)
+  }
+  return {
+    ...linea,
+    especieId: detalle.especieId,
+    variedadId: detalle.variedadId,
+    categoriaId: detalle.categoriaId,
+    articuloId: detalle.articuloId,
+    tipoPalletId: detalle.tipoPalletId,
+  }
+}
+
 async function validarReferenciasHeader(data: {
   entidadProductorId?: number
   notaVentaId?: number | null
@@ -171,6 +220,19 @@ export async function actualizarOrdenCompra(id: number, body: OrdenCompraUpdateI
   if (existente.estado === 'RECEPCIONADA') {
     throw new ValidationError('La Orden de Compra ya fue recepcionada y no puede editarse')
   }
+  // FAS-OCNV-001 (QA ronda 1): no se puede cambiar ni quitar el Cierre
+  // Comercial de la OC mientras tenga líneas tomadas de él — quedarían
+  // huérfanas (notaVentaDetalleId apuntando a un Cierre que la OC ya no dice
+  // tener). Pre-check amigable, no bloqueado — la autoridad real vuelve a
+  // chequear esto bajo el mismo lock que addLinea/updateLinea (ver
+  // ordenes-compra.repository.ts updateOrdenCompra).
+  if (body.notaVentaId !== undefined && body.notaVentaId !== existente.notaVentaId) {
+    if (existente.lineas.some((l) => l.notaVentaDetalleId != null)) {
+      throw new ValidationError(
+        'No se puede cambiar el Cierre Comercial de la Orden de Compra: tiene líneas tomadas de un Cierre Comercial — elimínelas primero',
+      )
+    }
+  }
   await validarReferenciasHeader(body, {
     entidadProductorId: existente.entidadProductorId,
     solicitudInspeccionIds: existente.solicitudes.map((s) => s.solicitudInspeccion.id),
@@ -200,8 +262,11 @@ function assertEditable(orden: { estado: string }) {
 export async function agregarLinea(ordenCompraId: number, body: OrdenCompraLineaCreateInput) {
   const orden = await obtenerOrdenCompra(ordenCompraId)
   assertEditable(orden)
-  await validarLinea(body, 0)
-  return repo.addLinea(ordenCompraId, body)
+  const lineaResuelta = body.notaVentaDetalleId != null
+    ? await resolverLineaDesdeCierre(orden.notaVentaId, body.notaVentaDetalleId, body, 0)
+    : body
+  await validarLinea(lineaResuelta, 0)
+  return repo.addLinea(ordenCompraId, { ...lineaResuelta, notaVentaDetalleId: body.notaVentaDetalleId ?? null })
 }
 
 // La OrdenCompraLinea no es un modelo tenant (tabla hija, decisión #5 de
@@ -215,18 +280,32 @@ async function obtenerLineaDeOrdenCompra(ordenCompraId: number, lineaId: number)
   if (!linea || linea.ordenCompraId !== ordenCompraId) {
     throw new NotFoundError('Línea de Orden de Compra', String(lineaId))
   }
-  return orden
+  return { orden, linea }
 }
 
 export async function actualizarLinea(ordenCompraId: number, lineaId: number, body: OrdenCompraLineaUpdateInput) {
-  const orden = await obtenerLineaDeOrdenCompra(ordenCompraId, lineaId)
+  const { orden, linea } = await obtenerLineaDeOrdenCompra(ordenCompraId, lineaId)
   assertEditable(orden)
-  await validarLinea(body, 0)
-  return repo.updateLinea(ordenCompraId, lineaId, body)
+  // notaVentaDetalleId es inmutable post-creación (no viene en el
+  // UpdateInput) — si la línea ya tenía origen en el Cierre, se sigue
+  // revalidando/re-bloqueando contra esa misma línea en cada edición.
+  const lineaResuelta = linea.notaVentaDetalleId != null
+    ? await resolverLineaDesdeCierre(orden.notaVentaId, linea.notaVentaDetalleId, body, 0, lineaId)
+    : body
+  await validarLinea(lineaResuelta, 0)
+  return repo.updateLinea(ordenCompraId, lineaId, lineaResuelta)
 }
 
 export async function eliminarLinea(ordenCompraId: number, lineaId: number) {
-  const orden = await obtenerLineaDeOrdenCompra(ordenCompraId, lineaId)
+  const { orden } = await obtenerLineaDeOrdenCompra(ordenCompraId, lineaId)
   assertEditable(orden)
   await repo.removeLinea(lineaId, ordenCompraId)
+}
+
+// Alimenta la grilla del formulario de OC al elegir un Cierre Comercial
+// (2026-08-23) — líneas del Cierre con su disponible ya calculado.
+export async function obtenerDisponibilidadCierre(notaVentaId: number) {
+  const notaVenta = await repo.getNotaVenta(notaVentaId)
+  if (!notaVenta) throw new NotFoundError('Cierre Comercial', String(notaVentaId))
+  return repo.getNotaVentaDetalleConDisponibilidad(notaVentaId)
 }

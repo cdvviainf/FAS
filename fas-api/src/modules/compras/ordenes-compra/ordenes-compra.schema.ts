@@ -63,7 +63,11 @@ export const ordenCompraUpdateSchema = z.object({
   estado: z.enum(['BORRADOR', 'EMITIDA']).optional(),
 })
 
-export const ordenCompraLineaCreateSchema = lineaSchema
+// notaVentaDetalleId solo al crear (2026-08-23) — no se reasigna en un
+// PATCH; para cambiar el origen se elimina y se vuelve a agregar la línea.
+export const ordenCompraLineaCreateSchema = lineaSchema.extend({
+  notaVentaDetalleId: z.number().int().positive().optional().nullable(),
+})
 export const ordenCompraLineaUpdateSchema = lineaSchema
 
 export const ordenCompraParamsSchema = z.object({
@@ -73,6 +77,10 @@ export const ordenCompraParamsSchema = z.object({
 export const ordenCompraLineaParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
   lineaId: z.coerce.number().int().positive(),
+})
+
+export const disponibilidadCierreParamsSchema = z.object({
+  notaVentaId: z.coerce.number().int().positive(),
 })
 
 export const ordenCompraListQuerySchema = z.object({

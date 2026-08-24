@@ -42,6 +42,30 @@ export interface OrdenCompraLineaItem {
   cajasPorPallet: number
   cajas: number
   precioUsdCaja: string
+  // Línea tomada de una línea del Cierre Comercial (2026-08-23) — ver
+  // NotaVentaDetalleDisponibilidad más abajo.
+  notaVentaDetalleId: number | null
+}
+
+// Línea del Cierre Comercial con su disponible ya calculado — alimenta la
+// grilla de selección al armar una OC contra un Cierre (2026-08-23).
+export interface NotaVentaDetalleDisponibilidad {
+  id: number
+  especieId: number
+  especie: MantenedorRef
+  variedadId: number
+  variedad: MantenedorRef
+  categoriaId: number | null
+  categoria: MantenedorRef | null
+  articuloId: number
+  articulo: MantenedorRef
+  tipoPalletId: number | null
+  tipoPallet: MantenedorRef | null
+  cajasPorPallet: number
+  cajas: number
+  calibres: { calibre: MantenedorRef }[]
+  cajasComprometidas: number
+  cajasDisponibles: number
 }
 
 export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS'
@@ -124,6 +148,12 @@ export interface OrdenCompraLineaInput {
   precioUsdCaja: number
 }
 
+export interface OrdenCompraLineaCreateInput extends OrdenCompraLineaInput {
+  // Línea tomada de una línea del Cierre Comercial (2026-08-23) — solo al
+  // crear, no se reasigna en un PATCH.
+  notaVentaDetalleId?: number | null
+}
+
 export interface OrdenCompraCreateInput {
   entidadProductorId: number
   notaVentaId?: number | null
@@ -144,5 +174,3 @@ export interface OrdenCompraCreateInput {
 export type OrdenCompraUpdateInput = Partial<OrdenCompraCreateInput> & {
   estado?: EstadoOrdenCompra
 }
-
-export type OrdenCompraLineaCreateInput = OrdenCompraLineaInput

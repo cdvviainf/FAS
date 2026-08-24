@@ -6,7 +6,8 @@
 // más). Elegir números que no choquen con los ya definidos localmente:
 // 490234 (NotaVenta correlativo), 490236 (OrdenCompra correlativo), 490237
 // (Recepcion correlativo), 490238 (Recepcion proceso), 490239 (OrdenCompra
-// proceso), 490240 (Documentos emitidos).
+// proceso), 490240 (Documentos emitidos), 490241 (NotaVentaDetalle cajas
+// comprometidas).
 
 // Serializa el motor de validación de Recepción (recepciones.repository.ts)
 // contra cualquier mutación de la Orden de Compra que esté usando para
@@ -22,3 +23,10 @@ export const LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO = 490239
 // documento (Orden de Compra, Instructivo, etc.), así que dos documentos de
 // tipos distintos con el mismo id numérico no deben compartir lock.
 export const LOCK_NAMESPACE_DOCUMENTOS_EMISION = 490240
+
+// Serializa el chequeo "cajas disponibles" de una línea del Cierre Comercial
+// (ordenes-compra.repository.ts addLinea/updateLinea) contra otra OC
+// concurrente tomando cajas de la MISMA línea — sin esto, dos OC podrían
+// pasar ambas el chequeo de disponible antes de que cualquiera confirme y
+// juntas superar el total de la línea. Clave: notaVentaDetalleId.
+export const LOCK_NAMESPACE_NOTA_VENTA_DETALLE = 490241

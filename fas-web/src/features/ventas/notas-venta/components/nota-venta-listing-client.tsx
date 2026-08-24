@@ -39,7 +39,7 @@ export function NotaVentaListingClient() {
   })
 
   if (isPending) {
-    return <DataTableSkeleton columnCount={6} rowCount={10} />
+    return <DataTableSkeleton columnCount={7} rowCount={10} />
   }
 
   return (

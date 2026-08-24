@@ -54,6 +54,13 @@ export interface NotaVentaDetalleItem {
   calibres: { calibre: MantenedorRef }[]
 }
 
+export type EstadoOcCierre = 'PENDIENTE' | 'COMPLETA'
+
+export const ESTADO_OC_CIERRE_LABELS: Record<EstadoOcCierre, string> = {
+  PENDIENTE: 'Pendiente',
+  COMPLETA: 'Completa',
+}
+
 export interface NotaVentaListItem {
   id: number
   folio: number
@@ -62,6 +69,15 @@ export interface NotaVentaListItem {
   cliente: { id: number; codigo: string; descripcion: string; razonSocial: string }
   mercado: MantenedorRef
   moneda: MantenedorRef
+}
+
+// Solo el listado trae este campo calculado (2026-08-23) — el GET de un
+// Cierre individual no lo agrega, por eso vive aparte de NotaVentaListItem
+// en vez de heredarlo NotaVentaDetalle. PENDIENTE si queda alguna caja sin
+// comprometer por una OC vigente (o el Cierre no tiene líneas todavía);
+// COMPLETA si toda la fruta ya está cubierta. Ver compras.md §4.3.
+export interface NotaVentaListItemConEstadoOc extends NotaVentaListItem {
+  estadoOc: EstadoOcCierre
 }
 
 export interface NotaVentaDetalle extends NotaVentaListItem {
@@ -96,7 +112,7 @@ export interface NotaVentaDetalle extends NotaVentaListItem {
 }
 
 export interface NotaVentaListResponse {
-  data: NotaVentaListItem[]
+  data: NotaVentaListItemConEstadoOc[]
   meta: { total: number; page: number; limit: number; totalPages: number }
 }
 

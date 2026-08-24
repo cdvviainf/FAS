@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
+import { LOCK_NAMESPACE_NOTA_VENTA_DETALLE } from '../../../shared/advisory-locks.js'
 import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleUpdateInput, NotaVentaUpdateInput } from './notas-venta.types.js'
 
 const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: true }
@@ -39,6 +40,40 @@ const includeDetalle = {
   },
 }
 
+// Estado OC de cada Cierre listado (2026-08-23): PENDIENTE si queda alguna
+// caja sin comprometer (o el Cierre no tiene líneas todavía) por alguna OC
+// vigente; COMPLETA si toda la fruta del Cierre ya está cubierta. Se resuelve
+// en 2 pasadas (traer detalles de los Cierres de esta página, agregar
+// comprometido por detalle) — mismo motivo que
+// ordenes-compra.repository.ts getNotaVentaDetalleConDisponibilidad: Prisma
+// no soporta un groupBy anidado contra una relación N:1 indirecta.
+async function resolverEstadoOc(notaVentaIds: number[]): Promise<Map<number, 'PENDIENTE' | 'COMPLETA'>> {
+  const estadoPorNota = new Map<number, 'PENDIENTE' | 'COMPLETA'>()
+  if (notaVentaIds.length === 0) return estadoPorNota
+
+  const detalles = await prisma.notaVentaDetalle.findMany({
+    where: { notaVentaId: { in: notaVentaIds } },
+    select: { id: true, notaVentaId: true, cajas: true },
+  })
+  const detalleIds = detalles.map((d) => d.id)
+  const comprometidos = detalleIds.length > 0
+    ? await prisma.ordenCompraLinea.groupBy({
+        by: ['notaVentaDetalleId'],
+        where: { notaVentaDetalleId: { in: detalleIds }, ordenCompra: { eliminadoEn: null } },
+        _sum: { cajas: true },
+      })
+    : []
+  const comprometidoPorDetalle = new Map(comprometidos.map((c) => [c.notaVentaDetalleId, c._sum.cajas ?? 0]))
+
+  for (const notaVentaId of notaVentaIds) {
+    const lineasDeEsteNota = detalles.filter((d) => d.notaVentaId === notaVentaId)
+    const totalCajas = lineasDeEsteNota.reduce((acc, d) => acc + d.cajas, 0)
+    const comprometidoCajas = lineasDeEsteNota.reduce((acc, d) => acc + (comprometidoPorDetalle.get(d.id) ?? 0), 0)
+    estadoPorNota.set(notaVentaId, totalCajas > 0 && comprometidoCajas >= totalCajas ? 'COMPLETA' : 'PENDIENTE')
+  }
+  return estadoPorNota
+}
+
 export async function listNotasVenta(page: number, limit: number, clienteId?: number) {
   const where = {
     eliminadoEn: null,
@@ -60,7 +95,30 @@ export async function listNotasVenta(page: number, limit: number, clienteId?: nu
     prisma.notaVenta.count({ where }),
   ])
 
-  return { data, total }
+  const estadoOcPorNota = await resolverEstadoOc(data.map((d) => d.id))
+  const dataConEstadoOc = data.map((d) => ({ ...d, estadoOc: estadoOcPorNota.get(d.id) ?? 'PENDIENTE' }))
+
+  return { data: dataConEstadoOc, total }
+}
+
+// Cajas ya comprometidas por OrdenCompraLinea vigentes (de OC no eliminadas)
+// contra una línea del Cierre — usado por las guardas de eliminar/editar una
+// línea (2026-08-23, ver notas-venta.service.ts).
+export async function getCajasComprometidas(notaVentaDetalleId: number) {
+  const result = await prisma.ordenCompraLinea.aggregate({
+    where: { notaVentaDetalleId, ordenCompra: { eliminadoEn: null } },
+    _sum: { cajas: true },
+  })
+  return result._sum.cajas ?? 0
+}
+
+// Línea completa (con calibres) para comparar contra un PATCH cuando ya
+// tiene cajas comprometidas — ver actualizarDetalle en notas-venta.service.ts.
+export async function getDetalleParaComparar(id: number) {
+  return prisma.notaVentaDetalle.findUnique({
+    where: { id },
+    include: { calibres: { select: { calibreId: true } } },
+  })
 }
 
 export async function getNotaVentaById(id: number) {
@@ -246,9 +304,55 @@ export async function getDetalleById(id: number) {
   return prisma.notaVentaDetalle.findUnique({ where: { id }, select: { id: true, notaVentaId: true } })
 }
 
+function calibresIguales(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false
+  const setA = new Set(a)
+  return b.every((id) => setA.has(id))
+}
+
+// Re-chequeo atómico del comprometido (FAS-OCNV-002, QA ronda 1) — toma el
+// MISMO LOCK_NAMESPACE_NOTA_VENTA_DETALLE que
+// ordenes-compra.repository.ts::verificarDisponibleBajoLock usa para
+// comprometer cajas, serializando esta edición/eliminación contra una OC
+// tomando cajas de esta misma línea justo en el mismo instante. El service ya
+// hizo un pre-check con estos mismos datos, pero sin lock (no bloqueado,
+// mensaje amigable) — esto es la autoridad real, justo antes de escribir.
+async function getComprometidoBajoLock(tx: Tx, detalleId: number): Promise<number> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_NOTA_VENTA_DETALLE}::int, ${detalleId}::int)`
+  const result = await tx.ordenCompraLinea.aggregate({
+    where: { notaVentaDetalleId: detalleId, ordenCompra: { eliminadoEn: null } },
+    _sum: { cajas: true },
+  })
+  return result._sum.cajas ?? 0
+}
+
 export async function updateDetalle(id: number, data: NotaVentaDetalleUpdateInput) {
   const { calibreIds, ...resto } = data
   return prisma.$transaction(async (tx) => {
+    const comprometido = await getComprometidoBajoLock(tx, id)
+    if (comprometido > 0) {
+      const actual = await tx.notaVentaDetalle.findUnique({
+        where: { id },
+        include: { calibres: { select: { calibreId: true } } },
+      })
+      if (!actual) throw new ValidationError('La línea de detalle ya no existe')
+      const calibresActuales = actual.calibres.map((c: { calibreId: number }) => c.calibreId)
+      const cambiaIdentidad =
+        resto.especieId !== actual.especieId ||
+        resto.variedadId !== actual.variedadId ||
+        (resto.categoriaId ?? null) !== actual.categoriaId ||
+        resto.articuloId !== actual.articuloId ||
+        (resto.tipoPalletId ?? null) !== actual.tipoPalletId ||
+        !calibresIguales(calibreIds, calibresActuales)
+      if (cambiaIdentidad) {
+        throw new ValidationError(
+          'No se puede modificar especie, variedad, categoría, artículo, tipo de pallet o calibres: esta línea ya tiene cajas comprometidas por una Orden de Compra',
+        )
+      }
+      if (resto.cajas < comprometido) {
+        throw new ValidationError(`No se pueden reducir las cajas por debajo de lo ya comprometido por Orden de Compra (${comprometido})`)
+      }
+    }
     const detalle = await tx.notaVentaDetalle.update({
       where: { id },
       data: {
@@ -264,6 +368,10 @@ export async function updateDetalle(id: number, data: NotaVentaDetalleUpdateInpu
 
 export async function removeDetalle(id: number, notaVentaId: number) {
   return prisma.$transaction(async (tx) => {
+    const comprometido = await getComprometidoBajoLock(tx, id)
+    if (comprometido > 0) {
+      throw new ValidationError('No se puede eliminar una línea del Cierre Comercial que ya tiene cajas comprometidas por una Orden de Compra')
+    }
     await tx.notaVentaDetalle.delete({ where: { id } })
     await recalcularCuotasMontoUnitario(tx, notaVentaId)
   })

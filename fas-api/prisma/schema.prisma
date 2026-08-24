@@ -2201,6 +2201,10 @@ model NotaVentaDetalle {
   // Multiselect de calibres aceptados (antes: rango calibreInicioId/calibreFinId).
   calibres NotaVentaDetalleCalibre[]
 
+  // Líneas de Orden de Compra tomadas (completas o parciales) desde esta
+  // línea del Cierre — 2026-08-23, ver OrdenCompraLinea.notaVentaDetalleId.
+  ordenCompraLineas OrdenCompraLinea[]
+
   @@index([notaVentaId])
   @@map("notas_venta_detalle")
 }
@@ -2616,7 +2620,23 @@ model OrdenCompraLinea {
   // supersesión 2026-08-15, mismo patrón que NotaVentaDetalleCalibre).
   calibres OrdenCompraLineaCalibre[]
 
+  // Origen opcional: línea tomada (completa o parcial) de una línea del
+  // Cierre Comercial de la propia OC (2026-08-23). Bloquea
+  // especie/variedad/categoría/artículo/tipoPallet (se copian server-side
+  // desde la línea del Cierre, nunca desde el cliente) y exige que los
+  // calibres sean subconjunto de los de esa línea; `cajas` queda limitado al
+  // disponible (cajas de la línea del Cierre menos lo ya comprometido por
+  // otras OrdenCompraLinea vigentes con el mismo origen). Sin unicidad: una
+  // línea del Cierre puede repartirse entre varias OrdenCompraLinea, incluso
+  // de la misma OC (decisión de negocio, Christian). onDelete Restrict:
+  // eliminar la línea del Cierre se bloquea a nivel de aplicación
+  // (notas-venta.service.ts) mientras tenga cajas comprometidas — esta FK es
+  // la defensa de última instancia.
+  notaVentaDetalleId Int?
+  notaVentaDetalle   NotaVentaDetalle? @relation(fields: [notaVentaDetalleId], references: [id], onDelete: Restrict)
+
   @@index([ordenCompraId])
+  @@index([notaVentaDetalleId])
   @@map("orden_compra_linea")
 }
 

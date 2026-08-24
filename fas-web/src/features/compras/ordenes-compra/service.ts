@@ -7,6 +7,7 @@ import type {
   OrdenCompraLineaCreateInput,
   OrdenCompraLineaItem,
   EstadoOrdenCompra,
+  NotaVentaDetalleDisponibilidad,
 } from './types'
 
 export const ordenesCompraService = {
@@ -45,5 +46,9 @@ export const ordenesCompraService = {
 
   async removeLinea(id: number, lineaId: number): Promise<void> {
     await api.delete(`compras/ordenes-compra/${id}/lineas/${lineaId}`)
+  },
+
+  async getDisponibilidadCierre(notaVentaId: number): Promise<{ data: NotaVentaDetalleDisponibilidad[] }> {
+    return api.get(`compras/ordenes-compra/notas-venta/${notaVentaId}/disponibilidad`).json()
   },
 }

@@ -6,6 +6,9 @@ import {
   agregarDetalle as agregarDetalleSvc,
   actualizarNotaVenta as actualizarNotaVentaSvc,
   eliminarNotaVenta as eliminarNotaVentaSvc,
+  actualizarDetalle as actualizarDetalleSvc,
+  eliminarDetalle as eliminarDetalleSvc,
+  listarNotasVenta as listarNotasVentaSvc,
 } from '../../src/modules/ventas/notas-venta/notas-venta.service.js'
 import { crearInstructivo as crearInstructivoSvc } from '../../src/modules/compras/instructivo-embalaje/instructivo-embalaje.service.js'
 import {
@@ -15,6 +18,7 @@ import {
   obtenerOrdenCompra as obtenerOrdenCompraSvc,
   agregarLinea as agregarLineaSvc,
   actualizarLinea as actualizarLineaSvc,
+  obtenerDisponibilidadCierre as obtenerDisponibilidadCierreSvc,
 } from '../../src/modules/compras/ordenes-compra/ordenes-compra.service.js'
 import {
   crearSolicitud as crearSolicitudSvc,
@@ -54,6 +58,15 @@ async function agregarDetalle(empresaId: number, notaVentaId: number, body: Nota
 async function crearInstructivo(empresaId: number, body: InstructivoEmbalajeCreateInput, userId: string) {
   return empresaContext.run({ empresaId }, () => crearInstructivoSvc(body, userId))
 }
+async function actualizarDetalleNV(empresaId: number, notaVentaId: number, detalleId: number, body: NotaVentaDetalleCreateInput) {
+  return empresaContext.run({ empresaId }, () => actualizarDetalleSvc(notaVentaId, detalleId, body))
+}
+async function eliminarDetalleNV(empresaId: number, notaVentaId: number, detalleId: number) {
+  return empresaContext.run({ empresaId }, () => eliminarDetalleSvc(notaVentaId, detalleId))
+}
+async function listarNotasVenta(empresaId: number) {
+  return empresaContext.run({ empresaId }, () => listarNotasVentaSvc(1, 20))
+}
 
 // OrdenCompra es por-empresa desde Fase 3 (lote Compras) — createOrdenCompra
 // usa prisma.$transaction() internamente, mismo caso que NotaVenta arriba:
@@ -77,6 +90,9 @@ async function agregarLinea(empresaId: number, ordenCompraId: number, body: Orde
 }
 async function actualizarLinea(empresaId: number, ordenCompraId: number, lineaId: number, body: OrdenCompraLineaUpdateInput) {
   return empresaContext.run({ empresaId }, () => actualizarLineaSvc(ordenCompraId, lineaId, body))
+}
+async function obtenerDisponibilidadCierre(empresaId: number, notaVentaId: number) {
+  return empresaContext.run({ empresaId }, () => obtenerDisponibilidadCierreSvc(notaVentaId))
 }
 
 // SolicitudInspeccion: la OC exige una Aprobada de tipo Compra (compras.md
@@ -556,5 +572,287 @@ describe('Orden de Compra contra PostgreSQL', () => {
     await expect(eliminarOrdenCompra(f.empresa.id, oc2.id, 'test')).rejects.toMatchObject({ statusCode: 422 })
     await expect(agregarLinea(f.empresa.id, oc2.id, ocLinea(f))).rejects.toMatchObject({ statusCode: 422 })
     await expect(actualizarLinea(f.empresa.id, oc2.id, linea2.id, ocLinea(f))).rejects.toMatchObject({ statusCode: 422 })
+  })
+})
+
+describe('Orden de Compra ↔ Cierre Comercial: línea tomada de una línea del Cierre (2026-08-23)', () => {
+  beforeEach(limpiarDatos)
+  beforeEach(entrarContextoEmpresa)
+  afterAll(async () => {
+    await limpiarDatos()
+    await prisma.$disconnect()
+  })
+
+  function ocLinea(f: Awaited<ReturnType<typeof crearFixtures>>) {
+    return {
+      especieId: f.especie.id,
+      variedadId: f.variedad.id,
+      categoriaId: f.categoria.id,
+      articuloId: f.articulo.id,
+      calibreIds: [f.calibreChico.id, f.calibreGrande.id],
+      cantidadPallets: 40,
+      cajasPorPallet: 114,
+      cajas: 40 * 114,
+      precioUsdCaja: 8.5,
+    }
+  }
+
+  // Cierre con una única línea de detalle (4 pallets x 114 = 456 cajas, ambos
+  // calibres de fixtures) — base para los tests de esta sección.
+  async function crearCierreConDetalle(f: Awaited<ReturnType<typeof crearFixtures>>, overrides: Partial<NotaVentaDetalleCreateInput> = {}) {
+    const nv = await crearNotaVenta(f.empresa.id, nvBase(f), 'test')
+    const detalle = await agregarDetalle(f.empresa.id, nv.id, {
+      fechaCompromiso: new Date(),
+      especieId: f.especie.id,
+      variedadId: f.variedad.id,
+      articuloId: f.articulo.id,
+      categoriaId: f.categoria.id,
+      cantidadPallets: 4,
+      cajasPorPallet: 114,
+      cajas: 456,
+      precio: 12,
+      calibreIds: [f.calibreChico.id, f.calibreGrande.id],
+      ...overrides,
+    })
+    return { nv, detalle }
+  }
+
+  it('toma una línea completa del Cierre: copia especie/variedad/categoría/artículo server-side e ignora lo que mande el cliente', async () => {
+    const f = await crearFixtures()
+    const { nv, detalle } = await crearCierreConDetalle(f)
+    const oc = await crearOrdenCompra(f.empresa.id, {
+      entidadProductorId: f.productor.id,
+      notaVentaId: nv.id,
+      solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id],
+      monedaId: f.moneda.id,
+    }, 'test')
+
+    // especieId/variedadId/categoriaId/articuloId son basura deliberada (ids
+    // inexistentes) — la fuente de verdad es la línea del Cierre, no lo que
+    // mande el cliente (FAS-OCNV-001/004); si el server los usara en vez de
+    // sobreescribirlos, validarLinea los rechazaría igual por no existir.
+    const linea = await agregarLinea(f.empresa.id, oc.id, {
+      ...ocLinea(f),
+      especieId: 999999,
+      variedadId: 999999,
+      categoriaId: 999999,
+      articuloId: 999999,
+      calibreIds: [f.calibreChico.id],
+      cantidadPallets: 4,
+      cajas: detalle.cajas,
+      notaVentaDetalleId: detalle.id,
+    })
+
+    expect(linea.especieId).toBe(f.especie.id)
+    expect(linea.variedadId).toBe(f.variedad.id)
+    expect(linea.categoriaId).toBe(f.categoria.id)
+    expect(linea.articuloId).toBe(f.articulo.id)
+    expect(linea.notaVentaDetalleId).toBe(detalle.id)
+    expect(linea.calibres.map((c) => c.calibre.id)).toEqual([f.calibreChico.id])
+  })
+
+  it('reparte una línea del Cierre entre dos OC sin superar el disponible, y refleja estadoOc/disponibilidad', async () => {
+    const f = await crearFixtures()
+    const { nv, detalle } = await crearCierreConDetalle(f) // 456 cajas
+
+    const oc1 = await crearOrdenCompra(f.empresa.id, {
+      entidadProductorId: f.productor.id,
+      notaVentaId: nv.id,
+      solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id],
+      monedaId: f.moneda.id,
+    }, 'test')
+    const linea1 = await agregarLinea(f.empresa.id, oc1.id, {
+      ...ocLinea(f), cantidadPallets: 2, cajas: 228, notaVentaDetalleId: detalle.id,
+    })
+    expect(linea1.cajas).toBe(228)
+
+    const listado1 = await listarNotasVenta(f.empresa.id)
+    expect(listado1.data.find((n) => n.id === nv.id)?.estadoOc).toBe('PENDIENTE')
+    const disponibilidad1 = await obtenerDisponibilidadCierre(f.empresa.id, nv.id)
+    expect(disponibilidad1.find((d) => d.id === detalle.id)?.cajasDisponibles).toBe(228)
+
+    const solicitud2 = await crearOtraSolicitudAprobada(f)
+    const oc2 = await crearOrdenCompra(f.empresa.id, {
+      entidadProductorId: f.productor.id,
+      notaVentaId: nv.id,
+      solicitudInspeccionIds: [solicitud2.id],
+      monedaId: f.moneda.id,
+    }, 'test')
+    const linea2 = await agregarLinea(f.empresa.id, oc2.id, {
+      ...ocLinea(f), cantidadPallets: 2, cajas: 228, notaVentaDetalleId: detalle.id,
+    })
+    expect(linea2.cajas).toBe(228)
+
+    const listado2 = await listarNotasVenta(f.empresa.id)
+    expect(listado2.data.find((n) => n.id === nv.id)?.estadoOc).toBe('COMPLETA')
+    const disponibilidad2 = await obtenerDisponibilidadCierre(f.empresa.id, nv.id)
+    expect(disponibilidad2.find((d) => d.id === detalle.id)?.cajasDisponibles).toBe(0)
+
+    // Sin disponible: una tercera OC no puede tomar ni una caja más de esta línea.
+    const solicitud3 = await crearOtraSolicitudAprobada(f)
+    const oc3 = await crearOrdenCompra(f.empresa.id, {
+      entidadProductorId: f.productor.id,
+      notaVentaId: nv.id,
+      solicitudInspeccionIds: [solicitud3.id],
+      monedaId: f.moneda.id,
+    }, 'test')
+    await expect(
+      agregarLinea(f.empresa.id, oc3.id, { ...ocLinea(f), cantidadPallets: 1, cajas: 1, notaVentaDetalleId: detalle.id }),
+    ).rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('libera el disponible de la línea del Cierre al eliminar (soft delete) la OC que la comprometía', async () => {
+    const f = await crearFixtures()
+    const { nv, detalle } = await crearCierreConDetalle(f) // 456 cajas
+    const oc1 = await crearOrdenCompra(f.empresa.id, {
+      entidadProductorId: f.productor.id,
+      notaVentaId: nv.id,
+      solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id],
+      monedaId: f.moneda.id,
+    }, 'test')
+    await agregarLinea(f.empresa.id, oc1.id, { ...ocLinea(f), cantidadPallets: 2, cajas: 228, notaVentaDetalleId: detalle.id })
+
+    const antes = await obtenerDisponibilidadCierre(f.empresa.id, nv.id)
+    expect(antes.find((d) => d.id === detalle.id)?.cajasDisponibles).toBe(228)
+
+    await eliminarOrdenCompra(f.empresa.id, oc1.id, 'test')
+
+    // La OC eliminada ya no cuenta como comprometido (ordenCompra.eliminadoEn
+    // filtrado en getCajasComprometidas/groupBy) — el disponible vuelve a 456.
+    const despues = await obtenerDisponibilidadCierre(f.empresa.id, nv.id)
+    expect(despues.find((d) => d.id === detalle.id)?.cajasDisponibles).toBe(456)
+    const listado = await listarNotasVenta(f.empresa.id)
+    expect(listado.data.find((n) => n.id === nv.id)?.estadoOc).toBe('PENDIENTE')
+
+    // Y ese cupo liberado es realmente usable por otra OC, no solo un número.
+    const solicitud2 = await crearOtraSolicitudAprobada(f)
+    const oc2 = await crearOrdenCompra(f.empresa.id, {
+      entidadProductorId: f.productor.id,
+      notaVentaId: nv.id,
+      solicitudInspeccionIds: [solicitud2.id],
+      monedaId: f.moneda.id,
+    }, 'test')
+    const linea2 = await agregarLinea(f.empresa.id, oc2.id, {
+      ...ocLinea(f), cantidadPallets: 4, cajas: 456, notaVentaDetalleId: detalle.id,
+    })
+    expect(linea2.cajas).toBe(456)
+  })
+
+  it('rechaza calibres que no están en la lista de la línea del Cierre', async () => {
+    const f = await crearFixtures()
+    const { nv, detalle } = await crearCierreConDetalle(f, { calibreIds: [f.calibreChico.id] })
+    const oc = await crearOrdenCompra(f.empresa.id, {
+      entidadProductorId: f.productor.id,
+      notaVentaId: nv.id,
+      solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id],
+      monedaId: f.moneda.id,
+    }, 'test')
+
+    await expect(
+      agregarLinea(f.empresa.id, oc.id, { ...ocLinea(f), calibreIds: [f.calibreGrande.id], cajas: 456, notaVentaDetalleId: detalle.id }),
+    ).rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('rechaza una línea de Cierre que no pertenece al Cierre Comercial de la OC', async () => {
+    const f = await crearFixtures()
+    const { nv: nvPropio } = await crearCierreConDetalle(f)
+    const { detalle: detalleAjeno } = await crearCierreConDetalle(f)
+    const oc = await crearOrdenCompra(f.empresa.id, {
+      entidadProductorId: f.productor.id,
+      notaVentaId: nvPropio.id,
+      solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id],
+      monedaId: f.moneda.id,
+    }, 'test')
+
+    await expect(
+      agregarLinea(f.empresa.id, oc.id, { ...ocLinea(f), cajas: 100, notaVentaDetalleId: detalleAjeno.id }),
+    ).rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('rechaza tomar una línea del Cierre sin categoría definida', async () => {
+    const f = await crearFixtures()
+    const nv = await crearNotaVenta(f.empresa.id, nvBase(f), 'test')
+    const detalleSinCategoria = await agregarDetalle(f.empresa.id, nv.id, {
+      fechaCompromiso: new Date(),
+      especieId: f.especie.id,
+      variedadId: f.variedad.id,
+      articuloId: f.articulo.id,
+      cantidadPallets: 4,
+      cajasPorPallet: 114,
+      cajas: 456,
+      precio: 12,
+      calibreIds: [f.calibreChico.id, f.calibreGrande.id],
+    })
+    expect(detalleSinCategoria.categoriaId).toBeNull()
+
+    const oc = await crearOrdenCompra(f.empresa.id, {
+      entidadProductorId: f.productor.id,
+      notaVentaId: nv.id,
+      solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id],
+      monedaId: f.moneda.id,
+    }, 'test')
+
+    await expect(
+      agregarLinea(f.empresa.id, oc.id, { ...ocLinea(f), cajas: 456, notaVentaDetalleId: detalleSinCategoria.id }),
+    ).rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('bloquea eliminar y editar identidad de una línea del Cierre con cajas comprometidas; permite subir cajas pero no bajarlas del comprometido', async () => {
+    const f = await crearFixtures()
+    const { nv, detalle } = await crearCierreConDetalle(f)
+    const oc = await crearOrdenCompra(f.empresa.id, {
+      entidadProductorId: f.productor.id,
+      notaVentaId: nv.id,
+      solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id],
+      monedaId: f.moneda.id,
+    }, 'test')
+    await agregarLinea(f.empresa.id, oc.id, { ...ocLinea(f), cantidadPallets: 2, cajas: 228, notaVentaDetalleId: detalle.id })
+
+    await expect(eliminarDetalleNV(f.empresa.id, nv.id, detalle.id)).rejects.toMatchObject({ statusCode: 422 })
+
+    const detalleBase: NotaVentaDetalleCreateInput = {
+      fechaCompromiso: new Date(),
+      especieId: f.especie.id,
+      variedadId: f.variedad.id,
+      articuloId: f.articulo.id,
+      categoriaId: f.categoria.id,
+      cantidadPallets: 4,
+      cajasPorPallet: 114,
+      cajas: 456,
+      precio: 12,
+      calibreIds: [f.calibreChico.id, f.calibreGrande.id],
+    }
+
+    const otraEspecie = await prisma.especie.create({ data: { empresaId: f.empresa.id, codigo: 'CZ2', descripcion: 'Cereza', creadoPor: 'test' } })
+    await expect(
+      actualizarDetalleNV(f.empresa.id, nv.id, detalle.id, { ...detalleBase, especieId: otraEspecie.id }),
+    ).rejects.toMatchObject({ statusCode: 422 })
+
+    await expect(
+      actualizarDetalleNV(f.empresa.id, nv.id, detalle.id, { ...detalleBase, cajas: 100 }),
+    ).rejects.toMatchObject({ statusCode: 422 })
+
+    const actualizado = await actualizarDetalleNV(f.empresa.id, nv.id, detalle.id, { ...detalleBase, cajas: 500 })
+    expect(actualizado.cajas).toBe(500)
+  })
+
+  it('bloquea cambiar o quitar el Cierre Comercial de una OC que ya tiene líneas tomadas de él', async () => {
+    const f = await crearFixtures()
+    const { nv, detalle } = await crearCierreConDetalle(f)
+    const { nv: otroNv } = await crearCierreConDetalle(f)
+    const oc = await crearOrdenCompra(f.empresa.id, {
+      entidadProductorId: f.productor.id,
+      notaVentaId: nv.id,
+      solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id],
+      monedaId: f.moneda.id,
+    }, 'test')
+    await agregarLinea(f.empresa.id, oc.id, { ...ocLinea(f), cantidadPallets: 1, cajas: 114, notaVentaDetalleId: detalle.id })
+
+    await expect(
+      actualizarOrdenCompra(f.empresa.id, oc.id, { notaVentaId: otroNv.id }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
+    await expect(
+      actualizarOrdenCompra(f.empresa.id, oc.id, { notaVentaId: null }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
   })
 })
