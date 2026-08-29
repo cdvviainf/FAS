@@ -7,7 +7,7 @@
 // 490234 (NotaVenta correlativo), 490236 (OrdenCompra correlativo), 490237
 // (Recepcion correlativo), 490238 (Recepcion proceso), 490239 (OrdenCompra
 // proceso), 490240 (Documentos emitidos), 490241 (NotaVentaDetalle cajas
-// comprometidas).
+// comprometidas), 490242 (Movimiento proceso).
 
 // Serializa el motor de validación de Recepción (recepciones.repository.ts)
 // contra cualquier mutación de la Orden de Compra que esté usando para
@@ -30,3 +30,11 @@ export const LOCK_NAMESPACE_DOCUMENTOS_EMISION = 490240
 // pasar ambas el chequeo de disponible antes de que cualquiera confirme y
 // juntas superar el total de la línea. Clave: notaVentaDetalleId.
 export const LOCK_NAMESPACE_NOTA_VENTA_DETALLE = 490241
+
+// Serializa el CRUD de líneas, la edición de cabecera y la confirmación de un
+// Movimiento (materiales/movimientos.repository.ts) entre sí — sin esto, un
+// "confirmar" concurrente con una edición de línea podría aplicar el motor de
+// PMP/saldo sobre un detalle a medio escribir, o dos confirmaciones
+// simultáneas del mismo movimiento podrían aplicar el efecto dos veces.
+// Clave: movimientoId.
+export const LOCK_NAMESPACE_MOVIMIENTO_PROCESO = 490242

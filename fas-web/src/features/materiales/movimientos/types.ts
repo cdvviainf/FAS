@@ -1,3 +1,12 @@
+import type { TipoEntidad } from '@/features/entidades/types'
+
+export type EstadoMovimiento = 'BORRADOR' | 'CONFIRMADO'
+
+export const ESTADO_MOVIMIENTO_LABELS: Record<EstadoMovimiento, string> = {
+  BORRADOR: 'Borrador',
+  CONFIRMADO: 'Confirmado',
+}
+
 export interface MovimientoDetalleItem {
   id: number
   articuloId: number
@@ -8,8 +17,12 @@ export interface MovimientoDetalleItem {
 
 export interface Movimiento {
   id: number
+  estado: EstadoMovimiento
   tipoMovimientoId: number
-  tipoMovimiento: { id: number; codigo: string; descripcion: string; clase: string; emiteDTE: boolean }
+  tipoMovimiento: {
+    id: number; codigo: string; descripcion: string; clase: string
+    emiteDTE: boolean; requierePrecio: boolean; entidadRelacionada: TipoEntidad | null
+  }
   entidadId: number | null
   entidad: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
   fechaRegistro: string
@@ -32,16 +45,17 @@ export interface Movimiento {
   creadoEn: string
 }
 
-export interface MovimientoDetalleInput {
-  articuloId: number
-  cantidad: number
-  precioUnitario?: number | null
-}
-
+// Cabecera únicamente — el tipo de movimiento queda fijo tras crear (ver
+// movimientos.types.ts en fas-api); si se eligió mal, se elimina el borrador
+// y se crea uno nuevo.
 export interface MovimientoCreateInput {
   tipoMovimientoId: number
-  entidadId?: number | null
   fechaMovimiento: string
+}
+
+export interface MovimientoUpdateInput {
+  entidadId?: number | null
+  fechaMovimiento?: string
   bodegaOrigenId?: number | null
   bodegaDestinoId?: number | null
   guiaReferencia?: string | null
@@ -52,7 +66,12 @@ export interface MovimientoCreateInput {
   placaRemolque?: string | null
   horaSalida?: string | null
   horaEstimadaLlegada?: string | null
-  detalle: MovimientoDetalleInput[]
+}
+
+export interface MovimientoDetalleInput {
+  articuloId: number
+  cantidad: number
+  precioUnitario?: number | null
 }
 
 export interface MovimientoListResponse {
@@ -62,6 +81,7 @@ export interface MovimientoListResponse {
 
 export interface MovimientoListFilters {
   tipoMovimientoId?: number
+  estado?: EstadoMovimiento
   fechaDesde?: string
   fechaHasta?: string
   bodegaId?: number

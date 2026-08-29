@@ -1,7 +1,7 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './movimientos.repository.js'
 import { StockInsuficienteError } from './movimientos.repository.js'
-import type { MovimientoCreateInput, MovimientoListFilters } from './movimientos.types.js'
+import type { MovimientoCreateInput, MovimientoDetalleInput, MovimientoListFilters, MovimientoUpdateInput } from './movimientos.types.js'
 
 export async function listarMovimientos(filters: MovimientoListFilters) {
   const { data, total } = await repo.listMovimientos(filters)
@@ -15,66 +15,190 @@ export async function obtenerMovimiento(id: number) {
   return movimiento
 }
 
+function assertBorrador(movimiento: { estado: string }) {
+  if (movimiento.estado !== 'BORRADOR') {
+    throw new ValidationError('El movimiento ya fue confirmado y no puede editarse')
+  }
+}
+
 export async function crearMovimiento(body: MovimientoCreateInput, userId: string) {
-  // R14: el tipo de movimiento debe aplicar al módulo Materiales
+  // R14: el tipo de movimiento debe aplicar al módulo Materiales. El resto de
+  // las validaciones (bodegas, entidad, precio, DTE) se difieren a confirmar
+  // — la cabecera nace como borrador editable, sin datos todavía.
   const tipoMovimiento = await repo.getTipoMovimientoActivo(body.tipoMovimientoId)
   if (!tipoMovimiento) throw new ValidationError('El tipo de movimiento no existe o está inactivo')
   if (!tipoMovimiento.modulos.includes('MATERIALES')) {
     throw new ValidationError('Este tipo de movimiento no aplica al módulo Materiales (R14)')
   }
+  return repo.createMovimientoBorrador(body, userId)
+}
 
-  // R11: clase y bodegas requeridas
-  const clase = tipoMovimiento.clase
-  if (clase === 'ENTRADA' && !body.bodegaDestinoId) {
-    throw new ValidationError('Un movimiento de Entrada requiere bodega de destino (R11)')
-  }
-  if (clase === 'SALIDA' && !body.bodegaOrigenId) {
-    throw new ValidationError('Un movimiento de Salida requiere bodega de origen (R11)')
-  }
-  if (clase === 'TRASLADO' && (!body.bodegaOrigenId || !body.bodegaDestinoId)) {
-    throw new ValidationError('Un movimiento de Traslado requiere bodega de origen y destino (R11)')
-  }
+export async function actualizarMovimiento(id: number, body: MovimientoUpdateInput) {
+  const movimiento = await obtenerMovimiento(id)
+  assertBorrador(movimiento)
 
-  // R9: precio requerido por línea si el tipo lo exige
-  if (tipoMovimiento.requierePrecio) {
-    const sinPrecio = body.detalle.filter((d) => d.precioUnitario == null)
-    if (sinPrecio.length > 0) {
-      throw new ValidationError('Este tipo de movimiento exige precio unitario en todas las líneas (R9)')
-    }
-  }
-
-  // R10: datos de transporte si emite DTE
-  if (tipoMovimiento.emiteDTE) {
-    const faltantes: string[] = []
-    if (!body.transporteEntidadId) faltantes.push('empresa de transporte')
-    if (!body.choferRut) faltantes.push('RUT del chofer')
-    if (!body.choferNombre) faltantes.push('nombre del chofer')
-    if (!body.placaCamion) faltantes.push('placa del camión')
-    if (!body.horaSalida) faltantes.push('hora de salida')
-    if (faltantes.length > 0) {
-      throw new ValidationError(`Este tipo de movimiento emite DTE y requiere: ${faltantes.join(', ')} (R10)`)
-    }
-    const transportista = await repo.getEntidadActiva(body.transporteEntidadId!)
+  if (body.transporteEntidadId != null) {
+    const transportista = await repo.getEntidadActiva(body.transporteEntidadId)
     if (!transportista) throw new ValidationError('La empresa de transporte no existe o está inactiva')
     if (!transportista.tipos.includes('EMPRESA_TRANSPORTE')) {
       throw new ValidationError('La entidad de transporte debe tener el tipo Empresa de Transporte')
     }
   }
-
-  // R12: entidad relacionada exigida por el tipo de movimiento
-  if (tipoMovimiento.entidadRelacionada) {
-    if (!body.entidadId) {
-      throw new ValidationError(`Este tipo de movimiento exige una entidad de tipo ${tipoMovimiento.entidadRelacionada} (R12)`)
-    }
+  if (body.entidadId != null) {
     const entidad = await repo.getEntidadActiva(body.entidadId)
     if (!entidad) throw new ValidationError('La entidad seleccionada no existe o está inactiva')
+    if (movimiento.tipoMovimiento.entidadRelacionada && !entidad.tipos.includes(movimiento.tipoMovimiento.entidadRelacionada)) {
+      throw new ValidationError(`La entidad seleccionada no tiene el tipo ${movimiento.tipoMovimiento.entidadRelacionada} requerido (R12)`)
+    }
+  }
+
+  // MOV-002 (QA ronda 1): pre-check amigable — la autoridad real vuelve a
+  // chequear esto en confirmarMovimiento contra lo persistido.
+  const bodegaOrigenEfectiva = body.bodegaOrigenId !== undefined ? body.bodegaOrigenId : movimiento.bodegaOrigenId
+  const bodegaDestinoEfectiva = body.bodegaDestinoId !== undefined ? body.bodegaDestinoId : movimiento.bodegaDestinoId
+  if (
+    movimiento.tipoMovimiento.clase === 'TRASLADO'
+    && bodegaOrigenEfectiva != null
+    && bodegaOrigenEfectiva === bodegaDestinoEfectiva
+  ) {
+    throw new ValidationError('Un movimiento de Traslado no puede tener la misma bodega de origen y destino (R11)')
+  }
+
+  return repo.updateMovimientoHeader(id, body)
+}
+
+export async function eliminarMovimiento(id: number, userId: string) {
+  const movimiento = await obtenerMovimiento(id)
+  assertBorrador(movimiento)
+  await repo.softDeleteMovimiento(id, userId)
+}
+
+async function validarArticuloDeLinea(articuloId: number) {
+  const articulos = await repo.getArticulosPorIds([articuloId])
+  if (articulos.length === 0) throw new ValidationError('El artículo seleccionado no existe')
+  if (!articulos[0].activo) throw new ValidationError('El artículo seleccionado está inactivo')
+}
+
+export async function agregarLinea(movimientoId: number, body: MovimientoDetalleInput) {
+  const movimiento = await obtenerMovimiento(movimientoId)
+  assertBorrador(movimiento)
+  if (movimiento.tipoMovimiento.requierePrecio && body.precioUnitario == null) {
+    throw new ValidationError('Este tipo de movimiento exige precio unitario en todas las líneas (R9)')
+  }
+  await validarArticuloDeLinea(body.articuloId)
+  return repo.addLineaDetalle(movimientoId, body)
+}
+
+// MovimientoDetalle no es un modelo tenant (tabla hija) — se valida el padre
+// primero vía obtenerMovimiento (sí es tenant-scoped) antes de tocar la línea
+// directamente, mismo motivo que obtenerLineaDeOrdenCompra en
+// ordenes-compra.service.ts.
+async function obtenerLineaDeMovimiento(movimientoId: number, detalleId: number) {
+  const movimiento = await obtenerMovimiento(movimientoId)
+  const linea = await repo.getLineaDetalleById(detalleId)
+  if (!linea || linea.movimientoId !== movimientoId) {
+    throw new NotFoundError('Línea de Movimiento', String(detalleId))
+  }
+  return { movimiento, linea }
+}
+
+export async function actualizarLinea(movimientoId: number, detalleId: number, body: MovimientoDetalleInput) {
+  const { movimiento } = await obtenerLineaDeMovimiento(movimientoId, detalleId)
+  assertBorrador(movimiento)
+  if (movimiento.tipoMovimiento.requierePrecio && body.precioUnitario == null) {
+    throw new ValidationError('Este tipo de movimiento exige precio unitario en todas las líneas (R9)')
+  }
+  await validarArticuloDeLinea(body.articuloId)
+  return repo.updateLineaDetalle(movimientoId, detalleId, body)
+}
+
+export async function eliminarLinea(movimientoId: number, detalleId: number) {
+  const { movimiento } = await obtenerLineaDeMovimiento(movimientoId, detalleId)
+  assertBorrador(movimiento)
+  await repo.removeLineaDetalle(movimientoId, detalleId)
+}
+
+// Pre-check amigable, NO autoritativo (MOV-003, QA ronda 2): esta lectura
+// ocurre antes de adquirir cualquier lock, así que otro request podría mutar
+// la cabecera/líneas (o desactivar la entidad/transportista) entre este
+// chequeo y la confirmación real. La autoridad vive en
+// validarParaConfirmar (movimientos.repository.ts), que repite exactamente
+// estas mismas reglas después de adquirir LOCK_NAMESPACE_MOVIMIENTO_PROCESO
+// y releer todo desde la base — esto solo evita abrir una transacción para
+// un error obvio (mejor UX / mensaje más rápido).
+export async function confirmarMovimiento(id: number, userId: string) {
+  const movimiento = await obtenerMovimiento(id)
+  assertBorrador(movimiento)
+
+  const tipoMovimiento = movimiento.tipoMovimiento
+  if (!tipoMovimiento.activo) {
+    throw new ValidationError('El tipo de movimiento fue desactivado — no se puede confirmar')
+  }
+  if (!tipoMovimiento.modulos.includes('MATERIALES')) {
+    throw new ValidationError('Este tipo de movimiento no aplica al módulo Materiales (R14)')
+  }
+
+  const clase = tipoMovimiento.clase
+  if (clase === 'ENTRADA' && !movimiento.bodegaDestinoId) {
+    throw new ValidationError('Un movimiento de Entrada requiere bodega de destino (R11)')
+  }
+  if (clase === 'SALIDA' && !movimiento.bodegaOrigenId) {
+    throw new ValidationError('Un movimiento de Salida requiere bodega de origen (R11)')
+  }
+  if (clase === 'TRASLADO' && (!movimiento.bodegaOrigenId || !movimiento.bodegaDestinoId)) {
+    throw new ValidationError('Un movimiento de Traslado requiere bodega de origen y destino (R11)')
+  }
+  // MOV-002 (QA ronda 1): un traslado origen=destino hace que la segunda
+  // escritura del motor (destino) sobreescriba la primera (origen) sobre la
+  // misma fila de SaldoArticulo, sumando la cantidad en vez de dejarla igual.
+  if (clase === 'TRASLADO' && movimiento.bodegaOrigenId === movimiento.bodegaDestinoId) {
+    throw new ValidationError('Un movimiento de Traslado no puede tener la misma bodega de origen y destino (R11)')
+  }
+
+  if (movimiento.detalle.length === 0) {
+    throw new ValidationError('El movimiento debe tener al menos una línea antes de confirmar')
+  }
+  if (tipoMovimiento.requierePrecio) {
+    const sinPrecio = movimiento.detalle.filter((d) => d.precioUnitario == null)
+    if (sinPrecio.length > 0) {
+      throw new ValidationError('Este tipo de movimiento exige precio unitario en todas las líneas (R9)')
+    }
+  }
+
+  if (tipoMovimiento.emiteDTE) {
+    const faltantes: string[] = []
+    if (!movimiento.transporteEntidadId) faltantes.push('empresa de transporte')
+    if (!movimiento.choferRut) faltantes.push('RUT del chofer')
+    if (!movimiento.choferNombre) faltantes.push('nombre del chofer')
+    if (!movimiento.placaCamion) faltantes.push('placa del camión')
+    if (!movimiento.horaSalida) faltantes.push('hora de salida')
+    if (faltantes.length > 0) {
+      throw new ValidationError(`Este tipo de movimiento emite DTE y requiere: ${faltantes.join(', ')} (R10)`)
+    }
+    // MOV-003 (QA ronda 1): la cabecera solo se valida al editarla (PATCH) —
+    // sin esto, un transportista desactivado/eliminado/reclasificado después
+    // de guardar la cabecera igual permitía confirmar.
+    const transportista = await repo.getEntidadActiva(movimiento.transporteEntidadId!)
+    if (!transportista) throw new ValidationError('La empresa de transporte no existe o está inactiva (R10)')
+    if (!transportista.tipos.includes('EMPRESA_TRANSPORTE')) {
+      throw new ValidationError('La entidad de transporte debe tener el tipo Empresa de Transporte (R10)')
+    }
+  }
+
+  if (tipoMovimiento.entidadRelacionada) {
+    if (!movimiento.entidadId) {
+      throw new ValidationError(`Este tipo de movimiento exige una entidad de tipo ${tipoMovimiento.entidadRelacionada} (R12)`)
+    }
+    // MOV-003 (QA ronda 1): mismo motivo que el transportista arriba — revalida
+    // el estado actual de la entidad, no solo que el campo esté presente.
+    const entidad = await repo.getEntidadActiva(movimiento.entidadId)
+    if (!entidad) throw new ValidationError('La entidad seleccionada no existe o está inactiva (R12)')
     if (!entidad.tipos.includes(tipoMovimiento.entidadRelacionada)) {
       throw new ValidationError(`La entidad seleccionada no tiene el tipo ${tipoMovimiento.entidadRelacionada} requerido (R12)`)
     }
   }
 
-  // Artículos: existen y están activos
-  const articuloIds = [...new Set(body.detalle.map((d) => d.articuloId))]
+  const articuloIds = [...new Set(movimiento.detalle.map((d) => d.articuloId))]
   const articulos = await repo.getArticulosPorIds(articuloIds)
   if (articulos.length !== articuloIds.length) {
     throw new ValidationError('Uno o más artículos del movimiento no existen')
@@ -83,10 +207,9 @@ export async function crearMovimiento(body: MovimientoCreateInput, userId: strin
   if (inactivos.length > 0) {
     throw new ValidationError(`Artículos inactivos en el movimiento: ${inactivos.map((a) => a.id).join(', ')}`)
   }
-  const articulosPorId = new Map(articulos.map((a) => [a.id, { controlaStock: a.controlaStock }]))
 
   try {
-    return await repo.createMovimientoTransaccional(body, clase, articulosPorId, userId)
+    return await repo.confirmarMovimientoTransaccional(id)
   } catch (err) {
     if (err instanceof StockInsuficienteError) {
       throw new ValidationError(err.message)
@@ -112,7 +235,6 @@ export async function consultarStockReceta(embalajes: EmbalajeCantidad[], bodega
   const embalajeIds = embalajes.map((e) => e.articuloId)
   const recetas = await repo.getRecetasConDetalle(embalajeIds)
 
-  // Expandir demanda por componente (D5): Σ cantidadAConsumir × (cantidadProducir / receta.cantidadAProducir)
   const demandaPorComponente = new Map<number, {
     articuloId: number
     codigo: string

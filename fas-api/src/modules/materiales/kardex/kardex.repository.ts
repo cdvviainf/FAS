@@ -12,16 +12,19 @@ export async function getBodegaById(id: number) {
 
 // Todas las líneas de Movimiento del artículo, sin límite de fecha: el saldo
 // inicial de un rango se calcula reproduciendo desde el origen (los
-// movimientos son inmutables — R1 de materiales.md — así que no hay que
-// preocuparse por ediciones retroactivas). Orden fechaMovimiento/id: refleja
-// la fecha efectiva de negocio: si se ingresan movimientos con fecha
-// retroactiva fuera de su orden real de creación, el saldo corrido mostrado
-// puede diferir transitoriamente del que quedó aplicado en SaldoArticulo
-// (que se actualiza en orden de creación) — comportamiento aceptado, no se
-// recalcula históricamente.
+// movimientos CONFIRMADO son inmutables — R1 de materiales.md — así que no
+// hay que preocuparse por ediciones retroactivas). Solo movimientos
+// CONFIRMADO y no eliminados: un BORRADOR todavía no aplicó su efecto en
+// SaldoArticulo (motor de PMP en confirmarMovimientoTransaccional), así que
+// tampoco debe aparecer en el saldo corrido del Kardex. Orden
+// fechaMovimiento/id: refleja la fecha efectiva de negocio: si se ingresan
+// movimientos con fecha retroactiva fuera de su orden real de creación, el
+// saldo corrido mostrado puede diferir transitoriamente del que quedó
+// aplicado en SaldoArticulo (que se actualiza en orden de confirmación) —
+// comportamiento aceptado, no se recalcula históricamente.
 export async function listDetalleDelArticulo(articuloId: number) {
   return prisma.movimientoDetalle.findMany({
-    where: { articuloId },
+    where: { articuloId, movimiento: { estado: 'CONFIRMADO', eliminadoEn: null } },
     include: {
       movimiento: {
         select: {

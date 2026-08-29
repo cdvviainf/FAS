@@ -8,8 +8,12 @@ const movimientoDetalleSchema = z.object({
 
 export const movimientoCreateSchema = z.object({
   tipoMovimientoId: z.number().int().positive('El tipo de movimiento es requerido'),
-  entidadId: z.number().int().positive().optional().nullable(),
   fechaMovimiento: z.string().datetime({ offset: true }).or(z.string().date()),
+})
+
+export const movimientoUpdateSchema = z.object({
+  entidadId: z.number().int().positive().optional().nullable(),
+  fechaMovimiento: z.string().datetime({ offset: true }).or(z.string().date()).optional(),
   bodegaOrigenId: z.number().int().positive().optional().nullable(),
   bodegaDestinoId: z.number().int().positive().optional().nullable(),
   guiaReferencia: z.string().max(100).trim().optional().nullable(),
@@ -20,15 +24,23 @@ export const movimientoCreateSchema = z.object({
   placaRemolque: z.string().max(20).trim().optional().nullable(),
   horaSalida: z.string().datetime({ offset: true }).optional().nullable(),
   horaEstimadaLlegada: z.string().datetime({ offset: true }).optional().nullable(),
-  detalle: z.array(movimientoDetalleSchema).min(1, 'El movimiento debe tener al menos una línea'),
 })
+
+export const movimientoDetalleCreateSchema = movimientoDetalleSchema
+export const movimientoDetalleUpdateSchema = movimientoDetalleSchema
 
 export const movimientoParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
 })
 
+export const movimientoDetalleParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  detalleId: z.coerce.number().int().positive(),
+})
+
 export const movimientoListQuerySchema = z.object({
   tipoMovimientoId: z.coerce.number().int().positive().optional(),
+  estado: z.enum(['BORRADOR', 'CONFIRMADO']).optional(),
   fechaDesde: z.string().date().optional(),
   fechaHasta: z.string().date().optional(),
   bodegaId: z.coerce.number().int().positive().optional(),
@@ -37,3 +49,5 @@ export const movimientoListQuerySchema = z.object({
 })
 
 export type MovimientoCreateBody = z.infer<typeof movimientoCreateSchema>
+export type MovimientoUpdateBody = z.infer<typeof movimientoUpdateSchema>
+export type MovimientoDetalleBody = z.infer<typeof movimientoDetalleCreateSchema>

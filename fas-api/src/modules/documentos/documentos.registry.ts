@@ -10,6 +10,10 @@ import { SolicitudInspeccionV1 } from './templates/solicitud-inspeccion/v1/index
 import { resolverCierreComercial } from './resolvers/cierre-comercial.resolver.js'
 import { cierreComercialPdfPayloadSchema } from './schemas/cierre-comercial.schema.js'
 import { CierreComercialV1 } from './templates/cierre-comercial/v1/index.js'
+import { resolverMovimiento, resolverMovimientoGuiaDespacho } from './resolvers/movimiento.resolver.js'
+import { movimientoPdfPayloadSchema } from './schemas/movimiento.schema.js'
+import { MovimientoV1 } from './templates/movimiento/v1/index.js'
+import { MovimientoGuiaDespachoV1 } from './templates/movimiento-guia-despacho/v1/index.js'
 import type { DocumentRegistry } from './documentos.types.js'
 
 // Registro central — Etapa 4 §4: "un solo lugar donde se declara todo".
@@ -68,6 +72,32 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     controlCopia: true,
     nombreArchivo: (p) => `CierreComercial_${p.folio}.pdf`,
     folio: (p) => p.folio,
+  },
+  'movimiento': {
+    titulo: 'Movimiento de Materiales',
+    resolver: resolverMovimiento,
+    schema: movimientoPdfPayloadSchema,
+    plantillaActual: 'v1',
+    plantillas: { v1: MovimientoV1 },
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    itemMenu: 'OPER_MATERIALES',
+    controlCopia: true,
+    nombreArchivo: (p) => `${p.numero}.pdf`,
+    folio: (p) => p.numero,
+  },
+  // Interna, no válida como DTE (Docs/agrosan_etapa4_motor_documentos.md §7)
+  // — el gate de negocio (emiteDTE + CONFIRMADO) vive en el resolver.
+  'movimiento-guia-despacho': {
+    titulo: 'Guía de Despacho (interna)',
+    resolver: resolverMovimientoGuiaDespacho,
+    schema: movimientoPdfPayloadSchema,
+    plantillaActual: 'v1',
+    plantillas: { v1: MovimientoGuiaDespachoV1 },
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    itemMenu: 'OPER_MATERIALES',
+    controlCopia: true,
+    nombreArchivo: (p) => `GuiaDespacho_${p.numero}.pdf`,
+    folio: (p) => p.numero,
   },
 }
 

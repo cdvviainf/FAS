@@ -36,13 +36,13 @@ Permitir a Bernardo: (a) mantener el catálogo de artículos con su costeo y sto
 
 1. **Maestro de artículos** — CRUD con tipo, costeo, stock crítico y documentos adjuntos.
 2. **Maestro de recetas** — recetas por embalaje con detalle de componentes consumidos.
-3. **Movimientos** — mantenedor de tipos de movimiento + formulario de registro de entradas/salidas/traslados.
+3. **Movimientos** — mantenedor de tipos de movimiento + pantalla completa de Movimiento (cabecera `BORRADOR` con líneas editables/agregables/eliminables + acción explícita "Confirmar", ver R1 reescrita 2026-08-29).
 4. **Consulta de stock por receta** — analizador con estados OK / Stock Crítico / Sin Stock / Trasladar.
 
 **NO construye (fuera de alcance):**
-- Emisión real del DTE (se capturan datos y flag; la emisión va por el adaptador genérico de DTE — proyecto/servicio aparte).
+- Emisión real de la Guía de Despacho como DTE ante el SII (timbre PDF417, folio CAF) — se genera un PDF interno equivalente vía el Motor de Documentos (`documentos.md`/Etapa 4), marcado explícitamente como no válido tributariamente; la emisión real va por un proveedor DTE — proyecto/servicio aparte, no iniciado (`Docs/agrosan_etapa4_motor_documentos.md` §7).
 - Lectura por IA de guías/facturas (Etapa 2).
-- Edición o borrado de movimientos (ver R1).
+- Edición o borrado de un movimiento ya `CONFIRMADO` (ver R1) — mientras está `BORRADOR` sí se edita/borra libremente.
 - Generación automática de OC por reorden.
 
 ---
@@ -229,12 +229,25 @@ model Movimiento {
   horaSalida          DateTime?
   horaEstimadaLlegada DateTime?
 
+  // BORRADOR: cabecera + líneas editables, sin efecto en SaldoArticulo.
+  // CONFIRMADO: el motor de PMP/saldo ya se aplicó — inmutable (R1, reescrita 2026-08-29).
+  estado              EstadoMovimiento    @default(BORRADOR)
+
   detalle             MovimientoDetalle[]
   usuarioId           String
   creadoEn            DateTime            @default(now())
 
+  eliminadoEn         DateTime?           // soft delete — solo aplica a un BORRADOR
+  eliminadoPor        String?
+
   @@index([tipoMovimientoId])
   @@index([fechaMovimiento])
+  @@index([estado])
+}
+
+enum EstadoMovimiento {
+  BORRADOR
+  CONFIRMADO
 }
 
 model MovimientoDetalle {
@@ -310,7 +323,7 @@ model ProformaMaterialDetalle {
 
 ## 5. Reglas de negocio / invariantes
 
-- **R1 — Movimientos inmutables.** No se editan ni borran; se corrige con un movimiento inverso.
+- **R1 — Estado del movimiento (reescrita 2026-08-29, supersede la versión anterior).** Un `Movimiento` nace `BORRADOR`: cabecera y líneas (`MovimientoDetalle`) se editan, agregan y eliminan libremente, **sin efecto en `SaldoArticulo` todavía**. `tipoMovimientoId` queda fijo desde la creación (define bodegas/entidad/DTE de todo el movimiento) — si se eligió mal, se borra el borrador y se crea uno nuevo. La acción explícita `POST /movimientos/:id/confirmar` revalida todas las reglas (R2/R9/R10/R11/R12/R14) contra el estado persistido y recién ahí aplica el motor de PMP/saldo (antes disparado al crear) dentro de una transacción, dejando el movimiento `CONFIRMADO`. Un `CONFIRMADO` es inmutable — no se edita ni se borra, se corrige con un movimiento inverso.
 - **R2 — Saldo no negativo.** `SALIDA`/`TRASLADO` no pueden dejar el saldo de la bodega de origen bajo cero → 422.
 - **R3 — Costeo y stock.** `ESTANDAR` ⇒ `valorEstandar` requerido y `controlaStock = false`. `PROMEDIO_PONDERADO` ⇒ `controlaStock = true`.
 - **R4 — Servicio sin stock.** `SERVICIO` debe ser `ESTANDAR`; no controla stock.
@@ -319,7 +332,7 @@ model ProformaMaterialDetalle {
 - **R7 — Saldo derivado y transaccional.** `SaldoArticulo` se actualiza solo como efecto de movimientos, dentro de una transacción Prisma. Nunca edición directa.
 - **R8 — Sin control de stock.** Artículos con `controlaStock = false` no generan saldos ni se validan por stock.
 - **R9 — Requiere precio.** Si `tipoMovimiento.requierePrecio`, cada línea exige `precioUnitario`.
-- **R10 — Emite DTE.** Si `tipoMovimiento.emiteDTE`, el movimiento exige los datos de transporte (empresa, chofer RUT/nombre, placas, horas).
+- **R10 — Emite DTE.** Si `tipoMovimiento.emiteDTE`, el movimiento exige empresa de transporte, RUT y nombre del chofer, **placa del camión** y **hora de salida**. Placa del remolque y hora estimada de llegada quedan opcionales (no todo transporte tiene remolque o ETA conocida) — decisión de implementación M5, `Docs/Hallazgos/materiales.md`. *(Redacción aclarada 2026-08-29, QA ronda 1 MOV-004: la versión anterior, "placas, horas" en plural, sugería ambigüamente que ambas placas/horas eran obligatorias.)*
 - **R11 — Clase y bodegas.** `ENTRADA` exige `bodegaDestino`; `SALIDA` exige `bodegaOrigen`; `TRASLADO` exige ambas y genera el doble efecto (−origen, +destino) en una transacción.
 - **R12 — Entidad relacionada.** Si `tipoMovimiento.entidadRelacionada` no es null, el movimiento exige una `Entidad` cuyos `tipos` incluyan esa función → 422 si falta o no corresponde.
 - **R13 — Recetas.** Cabecera solo para artículos `EMBALAJE`; detalle solo de `MATERIAL_EMBALAJE` o `SERVICIO`.
@@ -396,12 +409,20 @@ La proforma solo se edita en `BORRADOR`. Una vez `FACTURADA`, se corrige anuland
 | POST | `/tipos-movimiento` | `{ codigo, descripcion, modulos[], clase, requierePrecio, entidadRelacionada, emiteDTE }` |
 | PATCH | `/tipos-movimiento/:id` | |
 
-**Movimientos**
+**Movimientos** (R1 reescrita 2026-08-29 — cabecera primero, líneas después, confirmar al final; mismo patrón que `compras.md` Orden de Compra)
 | Método | Ruta | Notas |
 |---|---|---|
-| GET | `/movimientos` | filtros tipo, fecha, bodega, paginado |
+| GET | `/movimientos` | filtros tipo, **estado**, fecha, bodega, paginado |
 | GET | `/movimientos/:id` | cabecera + detalle |
-| POST | `/movimientos` | header + detalle, transacción, actualiza saldos. Valida R2/R5/R9/R10/R11/R12/R14 |
+| POST | `/movimientos` | solo cabecera (`tipoMovimientoId`, `fechaMovimiento`) — nace `BORRADOR`, sin líneas. Valida R14 |
+| PATCH | `/movimientos/:id` | edita cabecera (entidad, bodegas, guía, datos de transporte) — solo mientras `BORRADOR` |
+| DELETE | `/movimientos/:id` | soft delete — solo mientras `BORRADOR` |
+| POST | `/movimientos/:id/detalle` | agrega línea — solo mientras `BORRADOR`, sin efecto en saldo todavía |
+| PATCH | `/movimientos/:id/detalle/:detalleId` | edita línea — solo mientras `BORRADOR` |
+| DELETE | `/movimientos/:id/detalle/:detalleId` | elimina línea — solo mientras `BORRADOR` |
+| POST | `/movimientos/:id/confirmar` | revalida R2/R9/R10/R11/R12/R14/R5/R6 contra lo persistido, aplica el motor de PMP/saldo en una transacción y pasa a `CONFIRMADO` (inmutable) |
+
+> PDF y Guía de Despacho de un Movimiento van por el Motor de Documentos genérico (Etapa 4), no por `/api/materiales`: `GET /api/documentos/movimiento/:id.pdf` (comprobante, siempre disponible) y `POST /api/documentos/movimiento-guia-despacho/:id/emitir` (interna, no válida como DTE — solo si `tipoMovimiento.emiteDTE` y el movimiento está `CONFIRMADO`).
 
 **Saldos / Consulta**
 | Método | Ruta | Notas |
@@ -429,7 +450,7 @@ La proforma solo se edita en `BORRADOR`. Una vez `FACTURADA`, se corrige anuland
 | `/articulos/[id]` | Detalle | Datos, saldos por bodega, recetas (si es embalaje), documentos. |
 | `/articulos/[id]/recetas` | Recetas del embalaje | Cabecera (código, descripción, cantidad a producir) + grilla de detalle (componente, cantidad a consumir decimal). |
 | `/tipos-movimiento` | Mantenedor de tipos | Código, descripción, módulos (multiselect), clase, requiere precio, entidad relacionada, emite DTE. |
-| `/movimientos` | **Materiales y envases** | Form: tipo de movimiento, entidad, fecha registro, fecha movimiento, bodega origen, bodega destino, guía/referencia + grilla de artículos (cantidad y precio si aplica). **Bloque DTE** condicional (visible si el tipo `emiteDTE`): empresa de transporte, RUT y nombre chofer, placa camión y remolque, hora salida y hora estimada de llegada. |
+| `/movimientos/nuevo`, `/movimientos/:id` | **Materiales y envases** | Pantalla completa (reescrita 2026-08-29, mismo patrón que la Orden de Compra): `/nuevo` solo pide tipo de movimiento + fecha y crea la cabecera `BORRADOR`; `/:id` habilita cabecera editable (entidad, bodega origen/destino, guía/referencia, **bloque DTE** condicional si `emiteDTE`: transportista, RUT y nombre chofer, placas, hora salida/llegada) + tabla de líneas con agregar/editar/eliminar (mutaciones inmediatas contra el backend, sin efecto en saldo). Acciones: "Guardar cabecera", "Eliminar borrador", "Confirmar movimiento" (aplica el motor de PMP y bloquea edición), y en el menú de la fila del listado: "Descargar PDF" y "Emitir Guía de Despacho" (esta última solo si `emiteDTE` y `CONFIRMADO`). |
 | `/consulta-stock-receta` | Analizador de stock | Multiselect de embalajes + cantidad c/u, multiselect de bodegas. Resultado: por componente, stock en **cada** bodega + badge de estado: `OK` (verde), `Stock Crítico` (amarillo), `Sin Stock` (rojo), `Trasladar` (amarillo). |
 
 UI con shadcn/ui. Los campos condicionales (valor estándar, bloque DTE) se muestran/ocultan según selección.

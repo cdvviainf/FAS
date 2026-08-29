@@ -1648,6 +1648,15 @@ enum ClaseMovimiento {
   TRASLADO
 }
 
+// BORRADOR: cabecera + líneas editables, sin efecto en SaldoArticulo todavía.
+// CONFIRMADO: el motor de PMP/saldo ya se aplicó — inmutable (R1 de
+// materiales.md, supersedida 2026-08-29: antes todo Movimiento nacía
+// CONFIRMADO de una vez; ahora existe un borrador previo editable).
+enum EstadoMovimiento {
+  BORRADOR
+  CONFIRMADO
+}
+
 model Articulo {
   id                    Int          @id @default(autoincrement())
   empresaId             Int
@@ -1830,13 +1839,19 @@ model Movimiento {
   horaSalida          DateTime?
   horaEstimadaLlegada DateTime?
 
+  estado EstadoMovimiento @default(BORRADOR)
+
   detalle   MovimientoDetalle[]
   usuarioId String
   creadoEn  DateTime            @default(now())
 
+  eliminadoEn  DateTime?
+  eliminadoPor String?
+
   @@index([tipoMovimientoId])
   @@index([fechaMovimiento])
   @@index([empresaId])
+  @@index([estado])
   @@map("movimientos")
 }
 

@@ -95,6 +95,10 @@ async function crearMovimiento(params: {
       bodegaOrigenId: params.bodegaOrigenId ?? null,
       bodegaDestinoId: params.bodegaDestinoId ?? null,
       usuarioId: 'test-user',
+      // El Kardex solo reconstruye saldo sobre movimientos CONFIRMADO (ver
+      // kardex.repository.ts) — estos fixtures simulan movimientos históricos
+      // ya confirmados, no el nuevo flujo de borrador.
+      estado: 'CONFIRMADO',
       detalle: {
         create: [{ articuloId: params.articuloId, cantidad: params.cantidad, precioUnitario: params.precioUnitario ?? null }],
       },
