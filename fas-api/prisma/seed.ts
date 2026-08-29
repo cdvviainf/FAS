@@ -59,6 +59,7 @@ const itemsMenu = [
   // abajo, antes del upsert): mismo reporte, reubicado de Operaciones a su
   // propia sección "Reportes".
   { codigo: 'REPORTES_STOCK_FRUTA', nombre: 'Stock de Fruta', seccion: 'Reportes', ruta: '/dashboard/reportes/stock-fruta', esAccion: false, orden: 90 },
+  { codigo: 'REPORTES_KARDEX_MATERIALES', nombre: 'Kardex de Materiales', seccion: 'Reportes', ruta: '/dashboard/reportes/kardex-materiales', esAccion: false, orden: 91 },
 ]
 
 const SISTEMA_USER = 'system'
