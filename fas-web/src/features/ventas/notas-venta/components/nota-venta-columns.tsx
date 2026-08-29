@@ -87,7 +87,7 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
           {puedeEscribirEmbarques && (
             <DropdownMenuItem onClick={() => setEmbarqueOpen(true)}>
               <Icons.post className='mr-2 h-4 w-4' />
-              Generar Embarque
+              Solicitar espacio
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onClick={() => setPreviewOpen(true)}>

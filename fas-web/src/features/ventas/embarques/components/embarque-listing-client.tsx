@@ -38,7 +38,7 @@ export function EmbarqueListingClient() {
   return (
     <div className='flex flex-1 flex-col space-y-3'>
       <p className='text-sm text-muted-foreground'>
-        Los Embarques se generan desde el menú de acciones de un Cierre Comercial (&quot;Generar Embarque&quot;).
+        Los Embarques se generan desde el menú de acciones de un Cierre Comercial (&quot;Solicitar espacio&quot;).
       </p>
       <DataTable table={table}>
         <DataTableToolbar table={table} />

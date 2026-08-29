@@ -41,7 +41,7 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='sm:max-w-sm'>
         <DialogHeader>
-          <DialogTitle>Generar Embarque</DialogTitle>
+          <DialogTitle>Solicitar espacio</DialogTitle>
           <DialogDescription>
             El número de instructivo (Folio) se asigna automáticamente a partir del folio de este Cierre Comercial y
             el prefijo configurado para su Tipo de Embarque.
@@ -54,7 +54,7 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
           </Button>
           <Button onClick={() => mutation.mutate()} isLoading={mutation.isPending}>
             <Icons.check className='mr-1 h-4 w-4' />
-            Generar Embarque
+            Solicitar espacio
           </Button>
         </DialogFooter>
       </DialogContent>
