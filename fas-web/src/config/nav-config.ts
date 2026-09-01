@@ -157,10 +157,10 @@ export const navGroups: NavGroup[] = [
   {
     label: 'Reportes',
     items: [
-      { title: 'Stock Fruta',       url: '/dashboard/reportes/stock-fruta',      icon: 'bodega',     isActive: false, items: [] },
-      { title: 'Stock Materiales',  url: '/dashboard/reportes/stock-materiales', icon: 'materiales', isActive: false, items: [] },
-      { title: 'Stock por Receta',  url: '/dashboard/reportes/stock-receta',     icon: 'recetas',    isActive: false, items: [] },
-      { title: 'Gestión de Riesgo', url: '/dashboard/reportes/gestion-riesgo',   icon: 'warning',    isActive: false, items: [] }
+      { title: 'Stock Fruta',          url: '/dashboard/reportes/stock-fruta',       icon: 'bodega',     isActive: false, items: [] },
+      { title: 'Kardex de Materiales', url: '/dashboard/reportes/kardex-materiales', icon: 'materiales', isActive: false, items: [] },
+      { title: 'Stock por Receta',     url: '/dashboard/reportes/stock-materiales',  icon: 'recetas',    isActive: false, items: [] },
+      { title: 'Gestión de Riesgo',    url: '/dashboard/reportes/gestion-riesgo',    icon: 'warning',    isActive: false, items: [] }
     ]
   },
 

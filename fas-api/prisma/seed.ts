@@ -60,6 +60,13 @@ const itemsMenu = [
   // propia sección "Reportes".
   { codigo: 'REPORTES_STOCK_FRUTA', nombre: 'Stock de Fruta', seccion: 'Reportes', ruta: '/dashboard/reportes/stock-fruta', esAccion: false, orden: 90 },
   { codigo: 'REPORTES_KARDEX_MATERIALES', nombre: 'Kardex de Materiales', seccion: 'Reportes', ruta: '/dashboard/reportes/kardex-materiales', esAccion: false, orden: 91 },
+  // Completa el catálogo de Reportes (2026-09-01): estos dos ítems ya tenían
+  // pantalla funcional y entrada en nav-config.ts, pero nunca tuvieron fila en
+  // ItemMenu — por eso eran visibles para todos los perfiles sin poder
+  // restringirse (fallback "sin match en catálogo = visible", ver
+  // menu-acceso-context.tsx) y no aparecían en el admin de Perfiles.
+  { codigo: 'REPORTES_STOCK_RECETA', nombre: 'Stock por Receta', seccion: 'Reportes', ruta: '/dashboard/reportes/stock-materiales', esAccion: false, orden: 92 },
+  { codigo: 'REPORTES_GESTION_RIESGO', nombre: 'Gestión de Riesgo', seccion: 'Reportes', ruta: '/dashboard/reportes/gestion-riesgo', esAccion: false, orden: 93 },
 ]
 
 const SISTEMA_USER = 'system'
