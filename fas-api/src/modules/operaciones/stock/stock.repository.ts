@@ -19,7 +19,9 @@ export async function listPalletsConLineas() {
           especie: { select: mantenedorSelect },
           variedad: { select: mantenedorSelect },
           categoria: { select: mantenedorSelect },
-          calibre: { select: mantenedorSelect },
+          // orden: para graficar la distribución de calibres respetando el
+          // orden del maestro (por especie), no el orden alfabético.
+          calibre: { select: { ...mantenedorSelect, orden: true } },
           articulo: { select: { kgNetoEnvase: true } },
         },
       },

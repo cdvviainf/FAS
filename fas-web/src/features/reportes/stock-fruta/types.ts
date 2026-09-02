@@ -4,6 +4,12 @@ export interface MantenedorRef {
   descripcion: string
 }
 
+// orden: secuencia del calibre dentro de su especie — usado para graficar la
+// distribución de calibres en el orden real del maestro, no alfabético.
+export interface CalibreRef extends MantenedorRef {
+  orden: number
+}
+
 export type OrigenStock = 'COMPRA' | 'CONSIGNACION' | 'PROCESO'
 export type EstadoStock = 'CARGADA' | 'VALIDADA'
 
@@ -26,7 +32,7 @@ export interface StockDetalleRow {
   categoriaId: number
   categoria: MantenedorRef
   calibreId: number
-  calibre: MantenedorRef
+  calibre: CalibreRef
   productorId: number
   productor: MantenedorRef
   origen: OrigenStock

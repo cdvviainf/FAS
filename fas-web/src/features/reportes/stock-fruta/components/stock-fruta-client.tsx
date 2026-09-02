@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Bar, BarChart, XAxis } from 'recharts'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -9,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Icons } from '@/components/icons'
 import { MultiCombobox } from '@/components/shared/multi-combobox'
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { stockFrutaService } from '../service'
 import { ESTADO_STOCK_LABELS, ANTIGUEDAD_LABELS, diasAntiguedad, bucketAntiguedad } from '../types'
 import type { StockDetalleRow, AntiguedadBucket } from '../types'
@@ -58,6 +60,12 @@ const AGING_BADGE_VARIANT: Record<AntiguedadBucket, string> = {
 }
 const AGING_BAR_COLOR: Record<AntiguedadBucket, string> = { fresh: 'bg-emerald-500', mid: 'bg-amber-500', old: 'bg-red-500' }
 
+// Serie única (cajas por calibre) — un solo hue, sin leyenda (dataviz: job =
+// magnitud por categoría, no identidad entre series).
+const CALIBRE_CHART_CONFIG = {
+  cajas: { label: 'Cajas', color: 'var(--chart-1)' },
+} satisfies ChartConfig
+
 function groupKey(row: StockDetalleRow): string {
   return `${row.especieId}-${row.variedadId}-${row.calibreId}-${row.categoriaId}`
 }
@@ -88,19 +96,29 @@ export function StockFrutaClient() {
     const groups = new Map<number, {
       especieId: number; nombre: string; cajas: number; kg: number
       fresh: number; mid: number; old: number; pallets: Set<number>
+      calibres: Map<number, { orden: number; label: string; cajas: number }>
     }>()
     filteredRows.forEach((row) => {
       let g = groups.get(row.especieId)
       if (!g) {
-        g = { especieId: row.especieId, nombre: row.especie.descripcion, cajas: 0, kg: 0, fresh: 0, mid: 0, old: 0, pallets: new Set() }
+        g = { especieId: row.especieId, nombre: row.especie.descripcion, cajas: 0, kg: 0, fresh: 0, mid: 0, old: 0, pallets: new Set(), calibres: new Map() }
         groups.set(row.especieId, g)
       }
       g.cajas += row.cajas
       g.kg += row.kg
       g[bucketAntiguedad(diasAntiguedad(row.fechaRecepcion))] += row.cajas
       g.pallets.add(row.palletId)
+      const c = g.calibres.get(row.calibreId) ?? { orden: row.calibre.orden, label: row.calibre.descripcion, cajas: 0 }
+      c.cajas += row.cajas
+      g.calibres.set(row.calibreId, c)
     })
-    return [...groups.values()].sort((a, b) => b.cajas - a.cajas)
+    return [...groups.values()]
+      .sort((a, b) => b.cajas - a.cajas)
+      .map((g) => ({
+        ...g,
+        // Eje X en el orden real del maestro de Calibres (por especie), no alfabético.
+        calibresChart: [...g.calibres.values()].sort((a, b) => a.orden - b.orden),
+      }))
   }, [filteredRows])
 
   const totalCajas = filteredRows.reduce((acc, r) => acc + r.cajas, 0)
@@ -187,6 +205,24 @@ export function StockFrutaClient() {
                       <span>{ANTIGUEDAD_LABELS.old}: {g.old.toLocaleString('es-CL')}</span>
                     </div>
                   </div>
+                  {g.calibresChart.length > 0 && (
+                    <div className='mt-3'>
+                      <p className='text-muted-foreground mb-1 text-[10px] tracking-wide uppercase'>Distribución por calibre</p>
+                      <ChartContainer config={CALIBRE_CHART_CONFIG} className='aspect-auto h-16 w-full'>
+                        <BarChart data={g.calibresChart} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+                          <XAxis
+                            dataKey='label'
+                            tickLine={false}
+                            axisLine={false}
+                            interval={0}
+                            tick={{ fontSize: 9 }}
+                          />
+                          <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                          <Bar dataKey='cajas' fill='var(--color-cajas)' radius={2} />
+                        </BarChart>
+                      </ChartContainer>
+                    </div>
+                  )}
                 </button>
               )
             })}
@@ -195,8 +231,8 @@ export function StockFrutaClient() {
       </section>
 
       {/* Filtros */}
-      <Card>
-        <CardContent className='flex flex-wrap items-end gap-3 pt-6'>
+      <Card className='py-3'>
+        <CardContent className='flex flex-wrap items-end gap-3'>
           {FACETS.map((facet) => {
             // El catálogo de opciones sale de TODO el dataset (rows), no solo
             // de `scoped` — si no, una opción sin cajas bajo los demás
@@ -217,18 +253,19 @@ export function StockFrutaClient() {
               .map(([value, label]) => ({ value, label, count: counts.get(value) ?? 0 }))
               .sort((a, b) => a.label.localeCompare(b.label))
             return (
-              <div key={facet.key} className='min-w-[160px] flex-1 space-y-1.5'>
+              <div key={facet.key} className='min-w-[160px] flex-1 space-y-1'>
                 <Label className='text-[10.5px] tracking-wide uppercase'>{facet.label}</Label>
                 <MultiCombobox
                   options={options}
                   selected={filters[facet.key]}
                   onChange={(values) => setFilters((f) => ({ ...f, [facet.key]: values }))}
                   countSuffix='caj.'
+                  className='h-8'
                 />
               </div>
             )
           })}
-          <Button type='button' variant='ghost' onClick={() => setFilters(FILTROS_VACIOS)}>
+          <Button type='button' variant='ghost' size='sm' onClick={() => setFilters(FILTROS_VACIOS)}>
             <Icons.close className='mr-2 h-4 w-4' /> Limpiar filtros
           </Button>
         </CardContent>

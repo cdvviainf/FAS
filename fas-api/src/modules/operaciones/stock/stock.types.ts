@@ -7,6 +7,12 @@ interface Mantenedor {
   descripcion: string
 }
 
+// orden: secuencia del calibre dentro de su especie (mantenedores-generales.md)
+// — usado para graficar la distribución de calibres en el orden real, no alfabético.
+interface CalibreConOrden extends Mantenedor {
+  orden: number
+}
+
 // Una fila por PalletLinea — el reporte en pantalla (fas-web) resuelve
 // filtros, agrupación por especie/variedad/calibre/categoría y antigüedad
 // (hoy - fechaRecepcion) en el cliente, sobre el dataset completo devuelto
@@ -22,7 +28,7 @@ export interface StockDetalleRow {
   categoriaId: number
   categoria: Mantenedor
   calibreId: number
-  calibre: Mantenedor
+  calibre: CalibreConOrden
   productorId: number
   productor: Mantenedor
   origen: OrigenStock
