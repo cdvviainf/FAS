@@ -34,16 +34,26 @@ const includeDetalle = {
   },
 }
 
+// Instructivos seleccionables como fuente de folios en Recepción de Proceso
+// (2026-09-01) — Aprobada (ventana en que Calidad carga folios) o Cerrada
+// (folios ya cargados, aún recepcionables).
+const ESTADOS_SELECCIONABLES: Array<'APROBADA' | 'CERRADA'> = ['APROBADA', 'CERRADA']
+
 export async function listInstructivos(
   page: number,
   limit: number,
   entidadProductorId?: number,
   estadoInspeccion?: 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA' | 'CERRADA',
+  seleccionable?: boolean,
 ) {
   const where = {
     eliminadoEn: null,
     ...(entidadProductorId ? { entidadProductorId } : {}),
-    ...(estadoInspeccion ? { estadoInspeccion } : {}),
+    ...(estadoInspeccion
+      ? { estadoInspeccion }
+      : seleccionable
+        ? { estadoInspeccion: { in: ESTADOS_SELECCIONABLES } }
+        : {}),
   }
 
   const [data, total] = await Promise.all([

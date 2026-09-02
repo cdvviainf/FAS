@@ -38,6 +38,23 @@ async function validarPlantaYDireccion(plantaId?: number, direccionPlantaId?: nu
   if (!direccion) throw new ValidationError('La dirección seleccionada no pertenece a la planta')
 }
 
+// Instructivos seleccionables: Aprobada (ventana en que Calidad carga folios)
+// o Cerrada (folios ya cargados que aún no se recepcionaron) — 2026-09-01,
+// mismo criterio que instructivo-embalaje.repository.ts getFoliosParaValidar.
+const ESTADOS_INSTRUCTIVO_SELECCIONABLE = new Set(['APROBADA', 'CERRADA'])
+
+async function validarInstructivos(instructivoIds?: number[]) {
+  if (!instructivoIds || instructivoIds.length === 0) return
+  const unicos = Array.from(new Set(instructivoIds))
+  const encontrados = await repo.getInstructivosParaSeleccion(unicos)
+  if (encontrados.length !== unicos.length) {
+    throw new ValidationError('Uno o más Instructivos de Embalaje seleccionados no existen')
+  }
+  if (encontrados.some((i) => !ESTADOS_INSTRUCTIVO_SELECCIONABLE.has(i.estadoInspeccion))) {
+    throw new ValidationError('Solo se pueden seleccionar Instructivos de Embalaje en estado Aprobada o Cerrada')
+  }
+}
+
 async function validarOrdenCompra(ordenCompraId?: number | null) {
   if (ordenCompraId == null) return
   const oc = await repo.getOrdenCompra(ordenCompraId)
@@ -90,13 +107,21 @@ export async function obtenerRecepcionParaRespuesta(id: number) {
 }
 
 export async function crearRecepcion(body: RecepcionCreateInput, creadoPor: string) {
-  // Mismo refine que recepcionCreateSchema (Zod), repetido acá porque
-  // cualquier caller directo del service (tests incluidos) puede saltárselo
-  // — mismo criterio que QA-R1-TEST-001 en ordenes-compra.service.ts.
+  // Mismos refines que recepcionCreateSchema (Zod), repetidos acá porque
+  // cualquier caller directo del service (tests incluidos) puede saltárselos
+  // — mismo criterio que QA-R1-TEST-001 en ordenes-compra.service.ts
+  // (IMP-QA-R3-009: antes solo se replicaba el primero de los tres).
   if (body.ordenCompraId != null && body.esProceso) {
     throw new ValidationError('Una Recepción con Orden de Compra no puede marcarse como Proceso')
   }
+  if (body.esProceso && (!body.instructivoIds || body.instructivoIds.length === 0)) {
+    throw new ValidationError('Debes seleccionar al menos un Instructivo de Embalaje para una Recepción de Proceso')
+  }
+  if (!body.esProceso && body.instructivoIds && body.instructivoIds.length > 0) {
+    throw new ValidationError('Solo una Recepción de Proceso puede tener Instructivos de Embalaje asociados')
+  }
   await validarOrdenCompra(body.ordenCompraId)
+  await validarInstructivos(body.instructivoIds)
   await validarPlantaYDireccion(body.plantaId, body.direccionPlantaId)
   await validarTemplateCarga(body.templateCargaId)
   try {
@@ -177,7 +202,14 @@ export async function subirAdjunto(
 
   try {
     const resultado = await procesarCargaExcel(
-      { id: recepcion.id, origen: recepcion.origen, ordenCompraId: recepcion.ordenCompraId, templateCargaId: recepcion.templateCargaId, templateCarga },
+      {
+        id: recepcion.id,
+        origen: recepcion.origen,
+        ordenCompraId: recepcion.ordenCompraId,
+        instructivoIds: recepcion.instructivos.map((i) => i.instructivo.id),
+        templateCargaId: recepcion.templateCargaId,
+        templateCarga,
+      },
       archivo.datos,
     )
     return { adjunto, ...resultado, recepcion: shapeRecepcion(resultado.recepcion) }

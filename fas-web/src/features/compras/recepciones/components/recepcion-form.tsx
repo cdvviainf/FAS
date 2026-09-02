@@ -21,11 +21,14 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Icons } from '@/components/icons'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
+import { SelectMultiple } from '@/components/shared/select-multiple'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { entidadesService } from '@/features/entidades/service'
 import { entidadDetailOptions } from '@/features/entidades/queries'
 import { ordenesCompraService } from '@/features/compras/ordenes-compra/service'
 import { templatesCargaService } from '@/features/templates-carga/service'
+import { instructivoEmbalajeService } from '@/features/compras/instructivo-embalaje/service'
+import { ESTADO_INSPECCION_LABELS } from '@/features/compras/instructivo-embalaje/types'
 import { recepcionDetailOptions, recepcionesKeys } from '../queries'
 import { recepcionesService } from '../service'
 import type { RecepcionCreateInput } from '../types'
@@ -65,6 +68,7 @@ type ModoRecepcion = 'OC' | 'CONSIGNACION' | 'PROCESO'
 interface HeaderFields {
   modo: ModoRecepcion
   ordenCompraId: number | null
+  instructivoIds: number[]
   plantaId: number
   direccionPlantaId: number
   templateCargaId: number | null
@@ -74,6 +78,7 @@ interface HeaderFields {
 const HEADER_EMPTY: HeaderFields = {
   modo: 'CONSIGNACION',
   ordenCompraId: null,
+  instructivoIds: [],
   plantaId: 0,
   direccionPlantaId: 0,
   templateCargaId: null,
@@ -116,6 +121,23 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
     queryFn: () => templatesCargaService.list({ tipo: 'RECEPCION' }),
     staleTime: 60_000,
   })
+  const { data: instructivosData } = useQuery({
+    queryKey: ['instructivos-embalaje-seleccionables-options'],
+    // El backend pagina de a 100 (límite del contrato) — se recorren todas
+    // las páginas acá porque el picker necesita el catálogo completo de una
+    // vez (IMP-QA-R1-008, ronda 2: no hay búsqueda remota en SelectMultiple).
+    queryFn: async () => {
+      const primera = await instructivoEmbalajeService.list({ seleccionable: true, limit: 100, page: 1 })
+      const restantes = await Promise.all(
+        Array.from({ length: primera.meta.totalPages - 1 }, (_, i) =>
+          instructivoEmbalajeService.list({ seleccionable: true, limit: 100, page: i + 2 }),
+        ),
+      )
+      return { ...primera, data: [...primera.data, ...restantes.flatMap((r) => r.data)] }
+    },
+    staleTime: 60_000,
+    enabled: fields.modo === 'PROCESO',
+  })
   const { data: plantaDetalle } = useQuery({
     ...entidadDetailOptions(fields.plantaId || 0),
     enabled: !!fields.plantaId,
@@ -124,6 +146,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   const plantas = plantasData?.data ?? []
   const ordenesCompra = ordenesCompraData?.data ?? []
   const templatesCarga = templatesCargaData?.data ?? []
+  const instructivos = instructivosData?.data ?? []
   const direccionesPlanta = plantaDetalle?.direcciones ?? []
 
   useEffect(() => {
@@ -133,6 +156,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
       setFields({
         modo: d.ordenCompraId ? 'OC' : d.origen === 'PROCESO' ? 'PROCESO' : 'CONSIGNACION',
         ordenCompraId: d.ordenCompraId,
+        instructivoIds: d.instructivos.map((i) => i.instructivo.id),
         plantaId: d.plantaId,
         direccionPlantaId: d.direccionPlantaId,
         templateCargaId: d.templateCargaId,
@@ -144,6 +168,9 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   function validate(): boolean {
     const e: Record<string, string> = {}
     if (fields.modo === 'OC' && !fields.ordenCompraId) e.ordenCompraId = 'Selecciona la Orden de Compra'
+    if (fields.modo === 'PROCESO' && fields.instructivoIds.length === 0) {
+      e.instructivoIds = 'Selecciona al menos un Instructivo de Embalaje'
+    }
     if (!fields.plantaId) e.plantaId = 'La planta es requerida'
     if (!fields.direccionPlantaId) e.direccionPlantaId = 'La dirección de la planta es requerida'
     setErrors(e)
@@ -154,6 +181,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
     return {
       ordenCompraId: fields.modo === 'OC' ? fields.ordenCompraId : null,
       esProceso: fields.modo === 'PROCESO',
+      instructivoIds: fields.modo === 'PROCESO' ? fields.instructivoIds : undefined,
       plantaId: fields.plantaId,
       direccionPlantaId: fields.direccionPlantaId,
       templateCargaId: fields.templateCargaId,
@@ -264,7 +292,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
               <RadioGroup
                 className='grid-flow-col justify-start gap-4'
                 value={fields.modo}
-                onValueChange={(v) => setFields((f) => ({ ...f, modo: v as ModoRecepcion, ordenCompraId: null }))}
+                onValueChange={(v) => setFields((f) => ({ ...f, modo: v as ModoRecepcion, ordenCompraId: null, instructivoIds: [] }))}
               >
                 <div className='flex items-center gap-1.5'>
                   <RadioGroupItem value='OC' id='modo-oc' />
@@ -279,11 +307,26 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
                   <Label htmlFor='modo-proceso' className='font-normal'>Proceso</Label>
                 </div>
               </RadioGroup>
-              {fields.modo === 'PROCESO' && (
-                <p className='text-xs text-muted-foreground'>
-                  Cada N° de Pallet del Excel debe corresponder a un folio Aprobado por Calidad en algún Instructivo de Embalaje.
-                </p>
-              )}
+            </div>
+          )}
+
+          {fields.modo === 'PROCESO' && (
+            <div className='space-y-1.5'>
+              <Label>Instructivo(s) de Embalaje <span className='text-destructive'>*</span></Label>
+              <SelectMultiple
+                options={instructivos.map((i) => ({
+                  id: i.id,
+                  label: `N° ${i.numero} — ${i.entidadProductor.descripcion} (${ESTADO_INSPECCION_LABELS[i.estadoInspeccion]})`,
+                }))}
+                selectedIds={fields.instructivoIds}
+                onChange={(ids) => setFields((f) => ({ ...f, instructivoIds: ids }))}
+                placeholder='Agregar instructivo...'
+                disabled={soloLectura || isEdit}
+              />
+              <p className='text-xs text-muted-foreground'>
+                Cada N° de Pallet del Excel debe corresponder a un folio Aprobado por Calidad en alguno de los Instructivos seleccionados, con características compatibles con alguna de sus líneas.
+              </p>
+              {errors.instructivoIds && <p className='text-xs text-destructive'>{errors.instructivoIds}</p>}
             </div>
           )}
 

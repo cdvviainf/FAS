@@ -3,7 +3,13 @@ import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO } from '../../../shared/advisory-locks.js'
-import { compararLineasOcConExcel, type FilaParaComparar } from './recepciones.comparacion.js'
+import {
+  compararLineasOcConExcel,
+  compararFoliosConExcel,
+  type FilaParaComparar,
+  type FilaFolioParaComparar,
+  type FolioParaComparar,
+} from './recepciones.comparacion.js'
 import type { RecepcionCreateInput, RecepcionUpdateInput } from './recepciones.types.js'
 
 const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: true }
@@ -12,6 +18,10 @@ const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 
 const includeDetalle = {
   ordenCompra: { select: { id: true, numero: true, estado: true } },
+  // Instructivos de Embalaje seleccionados (modo PROCESO, 2026-09-01).
+  instructivos: {
+    select: { instructivo: { select: { id: true, numero: true, estadoInspeccion: true } } },
+  },
   planta: { select: entidadSelect },
   direccionPlanta: { select: direccionSelect },
   templateCarga: { select: mantenedorSelect },
@@ -77,7 +87,8 @@ export async function getRecepcionById(id: number) {
 export async function createRecepcion(data: RecepcionCreateInput, creadoPor: string) {
   const anio = new Date().getFullYear()
   const prefijo = `RC-${anio}-`
-  const { ordenCompraId, esProceso, ...resto } = data
+  const { ordenCompraId, esProceso, instructivoIds, ...resto } = data
+  const instructivosUnicos = Array.from(new Set(instructivoIds ?? []))
 
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_RECEPCION}::int, ${anio}::int)`
@@ -99,6 +110,9 @@ export async function createRecepcion(data: RecepcionCreateInput, creadoPor: str
         origen: ordenCompraId ? 'COMPRA' : esProceso ? 'PROCESO' : 'CONSIGNACION',
         numero,
         creadoPor,
+        instructivos: {
+          create: instructivosUnicos.map((instructivoId) => ({ instructivoId, creadoPor })),
+        },
       },
       include: includeDetalle,
     })
@@ -160,6 +174,16 @@ export async function getOrdenCompra(id: number) {
   return prisma.ordenCompra.findFirst({
     where: { id, eliminadoEn: null },
     select: { id: true, estado: true },
+  })
+}
+
+// Instructivos de Embalaje elegidos como fuente de folios (modo PROCESO,
+// 2026-09-01) — valida existencia y que estén en un estado seleccionable
+// (Aprobada o Cerrada, ver instructivo-embalaje).
+export async function getInstructivosParaSeleccion(ids: number[]) {
+  return prisma.instructivoEmbalaje.findMany({
+    where: { id: { in: ids }, eliminadoEn: null },
+    select: { id: true, estadoInspeccion: true },
   })
 }
 
@@ -289,16 +313,37 @@ export async function getOrdenCompraConLineas(id: number) {
   })
 }
 
-// Folios (números de pallet aprobados por Calidad) que coinciden con los N°
-// de Pallet de la carga — Etapa 3, para el motor de comparación en modo
-// PROCESO (compras.md §7, equivalente a getOrdenCompraConLineas en modo OC).
-// Sistémico por empresa (no se acota a un Instructivo — decisión de negocio,
-// 2026-08-23): la carga puede mezclar folios de varios Instructivos.
+// Folios que existen en CUALQUIER instructivo de la empresa, sin acotar por
+// instructivoId — usado solo para dar un mensaje más claro cuando un folio
+// existe pero no pertenece a ninguno de los Instructivos seleccionados en
+// esta Recepción (ver getFoliosParaValidar, que sí es la autoridad real).
 export async function getFoliosPorNumero(numeros: string[]) {
   return prisma.instructivoEmbalajeFolio.findMany({
     where: { folio: { in: numeros } },
     select: { id: true, folio: true, estado: true },
   })
+}
+
+const detalleParaComparar = {
+  especieId: true,
+  variedadId: true,
+  categoriaId: true,
+  articuloId: true,
+  calibres: { select: { calibreId: true } },
+} as const
+
+// Folios (números de pallet aprobados por Calidad) que coinciden con los N°
+// de Pallet de la carga, ACOTADOS a los Instructivos seleccionados en la
+// Recepción — Etapa 3/2026-09-01, para el motor de comparación en modo
+// PROCESO (compras.md §7, equivalente a getOrdenCompraConLineas en modo OC).
+// Incluye las líneas del Instructivo dueño de cada folio, para validar que
+// las características de la fruta coincidan con alguna de ellas.
+export async function getFoliosParaValidar(numeros: string[], instructivoIds: number[]): Promise<FolioParaComparar[]> {
+  const folios = await prisma.instructivoEmbalajeFolio.findMany({
+    where: { folio: { in: numeros }, instructivoId: { in: instructivoIds } },
+    select: { folio: true, estado: true, instructivo: { select: { detalle: { select: detalleParaComparar } } } },
+  })
+  return folios.map((f) => ({ folio: f.folio, estado: f.estado, lineas: f.instructivo.detalle }))
 }
 
 // Crea los Pallet/PalletLinea a partir de los grupos ya resueltos — todo en
@@ -314,8 +359,9 @@ export async function getFoliosPorNumero(numeros: string[]) {
 // la comparación optimista del motor (recepciones.motor.ts) corre antes de
 // esta transacción, así que por sí sola no protege contra una edición
 // concurrente de la OC entre ese chequeo y la creación de pallets.
-// Folios que respaldan los N° de Pallet de la carga (Etapa 3) — mismo rol
-// que compararLineasOcConExcel para el modo OC: junta TODAS las diferencias
+// Folios que respaldan los N° de Pallet de la carga (Etapa 3/2026-09-01),
+// acotados a los Instructivos seleccionados en la Recepción — mismo rol que
+// compararLineasOcConExcel para el modo OC: junta TODAS las diferencias
 // antes de decidir si aborta. Es el pre-check bajo lock (defensa "amigable");
 // la defensa real contra una carrera con otra Recepción PROCESO concurrente
 // es el reclamo atómico (updateMany condicionado) más abajo, después de
@@ -323,30 +369,44 @@ export async function getFoliosPorNumero(numeros: string[]) {
 // arriba es por recepcionId, no por folio.
 async function compararFoliosParaPallets(
   tx: Prisma.TransactionClient,
-  pallets: Array<{ numeroPallet: string }>,
+  pallets: Array<{
+    numeroPallet: string
+    lineas: Array<{ especieId: number; variedadId: number; categoriaId: number; articuloId: number; calibreId: number }>
+  }>,
+  instructivoIds: number[],
 ): Promise<string[]> {
   const numeros = pallets.map((p) => p.numeroPallet)
-  const folios = await tx.instructivoEmbalajeFolio.findMany({
-    where: { folio: { in: numeros } },
-    select: { folio: true, estado: true },
-  })
-  const foliosPorNumero = new Map(folios.map((f) => [f.folio, f.estado]))
-  const errores: string[] = []
-  for (const p of pallets) {
-    const estado = foliosPorNumero.get(p.numeroPallet)
-    if (!estado) {
-      errores.push(`N° de Pallet "${p.numeroPallet}": no corresponde a ningún folio Aprobado por Calidad`)
-    } else if (estado !== 'APROBADO') {
-      errores.push(`N° de Pallet "${p.numeroPallet}": el folio ya no está Aprobado (estado actual: ${estado})`)
-    }
-  }
-  return errores
+  const [foliosEnAlcance, foliosGlobal] = await Promise.all([
+    tx.instructivoEmbalajeFolio.findMany({
+      where: { folio: { in: numeros }, instructivoId: { in: instructivoIds } },
+      select: { folio: true, estado: true, instructivo: { select: { detalle: { select: detalleParaComparar } } } },
+    }),
+    tx.instructivoEmbalajeFolio.findMany({ where: { folio: { in: numeros } }, select: { folio: true } }),
+  ])
+  const foliosParaComparar: FolioParaComparar[] = foliosEnAlcance.map((f) => ({
+    folio: f.folio,
+    estado: f.estado,
+    lineas: f.instructivo.detalle,
+  }))
+  const existeGlobalmente = new Set(foliosGlobal.map((f) => f.folio))
+  const filasParaComparar: FilaFolioParaComparar[] = pallets.flatMap((p) =>
+    p.lineas.map((l) => ({
+      numeroPallet: p.numeroPallet,
+      especieId: l.especieId,
+      variedadId: l.variedadId,
+      categoriaId: l.categoriaId,
+      articuloId: l.articuloId,
+      calibreId: l.calibreId,
+    })),
+  )
+  return compararFoliosConExcel(foliosParaComparar, existeGlobalmente, filasParaComparar)
 }
 
 export async function crearPalletsYValidar(
   recepcionId: number,
   origen: 'COMPRA' | 'CONSIGNACION' | 'PROCESO',
   ordenCompraId: number | null,
+  instructivoIds: number[],
   templateCargaIdUsado: number | null,
   filas: FilaParaComparar[],
   pallets: Array<{
@@ -419,7 +479,7 @@ export async function crearPalletsYValidar(
     // transacción y puede haber quedado obsoleto (otra Recepción PROCESO
     // pudo haber reclamado el mismo folio mientras tanto).
     if (origen === 'PROCESO') {
-      const diferencias = await compararFoliosParaPallets(tx, pallets)
+      const diferencias = await compararFoliosParaPallets(tx, pallets, instructivoIds)
       if (diferencias.length > 0) {
         throw new ValidationError('No coinciden los folios con la carga', { diferencias })
       }
@@ -447,7 +507,7 @@ export async function crearPalletsYValidar(
       // pre-check de arriba solo da un mensaje amigable en el caso común.
       if (origen === 'PROCESO') {
         const claim = await tx.instructivoEmbalajeFolio.updateMany({
-          where: { folio: p.numeroPallet, estado: 'APROBADO' },
+          where: { folio: p.numeroPallet, estado: 'APROBADO', instructivoId: { in: instructivoIds } },
           data: { estado: 'RECEPCIONADO', palletId: pallet.id },
         })
         if (claim.count === 0) {

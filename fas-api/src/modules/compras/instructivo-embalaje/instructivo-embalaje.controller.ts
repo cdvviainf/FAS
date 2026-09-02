@@ -12,8 +12,8 @@ import {
 import * as service from './instructivo-embalaje.service.js'
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
-  const { page, limit, entidadProductorId, estadoInspeccion } = instructivoEmbalajeListQuerySchema.parse(req.query)
-  const result = await service.listarInstructivos(page, limit, entidadProductorId, estadoInspeccion)
+  const { page, limit, entidadProductorId, estadoInspeccion, seleccionable } = instructivoEmbalajeListQuerySchema.parse(req.query)
+  const result = await service.listarInstructivos(page, limit, entidadProductorId, estadoInspeccion, seleccionable)
   return reply.send(result)
 }
 

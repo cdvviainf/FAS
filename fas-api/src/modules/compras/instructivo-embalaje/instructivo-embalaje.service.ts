@@ -72,8 +72,9 @@ export async function listarInstructivos(
   limit: number,
   entidadProductorId?: number,
   estadoInspeccion?: 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA' | 'CERRADA',
+  seleccionable?: boolean,
 ) {
-  const { data, total } = await repo.listInstructivos(page, limit, entidadProductorId, estadoInspeccion)
+  const { data, total } = await repo.listInstructivos(page, limit, entidadProductorId, estadoInspeccion, seleccionable)
   return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 

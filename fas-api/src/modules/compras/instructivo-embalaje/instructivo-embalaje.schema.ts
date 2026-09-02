@@ -53,6 +53,10 @@ export const instructivoEmbalajeListQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
   entidadProductorId: z.coerce.number().int().positive().optional(),
   estadoInspeccion: z.enum(['PENDIENTE', 'NOTIFICADA', 'APROBADA', 'RECHAZADA', 'CERRADA']).optional(),
+  // Instructivos válidos como fuente de folios para una Recepción de Proceso
+  // (2026-09-01): Aprobada (ventana en que Calidad carga folios) o Cerrada
+  // (folios ya cargados, aún recepcionables). Ignorado si viene estadoInspeccion.
+  seleccionable: z.coerce.boolean().optional(),
 })
 
 // ─── Inspección de Proceso (2026-08-21) — el Instructivo es la inspección ───

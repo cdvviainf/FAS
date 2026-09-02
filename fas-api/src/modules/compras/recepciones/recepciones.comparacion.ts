@@ -85,3 +85,80 @@ export function compararLineasOcConExcel(lineas: LineaOcParaComparar[], filas: F
 
   return errores
 }
+
+// ─── Comparación pura Excel↔Folios de Instructivo (2026-09-01) ────────────
+// Reemplaza la validación por pool global de folios de la empresa
+// (decisión 2026-08-23): ahora el folio debe pertenecer a alguno de los
+// Instructivos seleccionados en la Recepción, y las características de la
+// fruta deben coincidir con alguna línea de ESE instructivo (no exhaustivo
+// línea a línea — basta con que exista un match).
+
+export interface FilaFolioParaComparar {
+  numeroPallet: string
+  especieId: number
+  variedadId: number
+  categoriaId: number
+  articuloId: number
+  calibreId: number
+}
+
+export interface LineaInstructivoParaComparar {
+  especieId: number
+  variedadId: number
+  categoriaId: number
+  articuloId: number
+  calibres: Array<{ calibreId: number }>
+}
+
+export interface FolioParaComparar {
+  folio: string
+  estado: string
+  lineas: LineaInstructivoParaComparar[]
+}
+
+export function compararFoliosConExcel(
+  foliosEnAlcance: FolioParaComparar[],
+  existeGlobalmente: Set<string>,
+  filas: FilaFolioParaComparar[],
+): string[] {
+  const porNumero = new Map(foliosEnAlcance.map((f) => [f.folio, f]))
+  const filasPorPallet = new Map<string, FilaFolioParaComparar[]>()
+  for (const f of filas) {
+    const arr = filasPorPallet.get(f.numeroPallet) ?? []
+    arr.push(f)
+    filasPorPallet.set(f.numeroPallet, arr)
+  }
+
+  const errores: string[] = []
+  for (const [numero, filasDelPallet] of filasPorPallet) {
+    const folio = porNumero.get(numero)
+    if (!folio) {
+      errores.push(
+        existeGlobalmente.has(numero)
+          ? `N° de Pallet "${numero}": el folio existe pero no pertenece a ninguno de los Instructivos seleccionados`
+          : `N° de Pallet "${numero}": no corresponde a ningún folio Aprobado por Calidad`,
+      )
+      continue
+    }
+    if (folio.estado !== 'APROBADO') {
+      errores.push(`N° de Pallet "${numero}": el folio ya no está Aprobado (estado actual: ${folio.estado})`)
+      continue
+    }
+    const calzaAlguna = filasDelPallet.every((fila) =>
+      folio.lineas.some(
+        (l) =>
+          l.especieId === fila.especieId &&
+          l.variedadId === fila.variedadId &&
+          l.categoriaId === fila.categoriaId &&
+          l.articuloId === fila.articuloId &&
+          l.calibres.some((c) => c.calibreId === fila.calibreId),
+      ),
+    )
+    if (!calzaAlguna) {
+      errores.push(
+        `N° de Pallet "${numero}": sus características (especie/variedad/categoría/artículo/calibre) no coinciden con ninguna línea del Instructivo de Embalaje al que pertenece el folio`,
+      )
+    }
+  }
+  return errores
+}

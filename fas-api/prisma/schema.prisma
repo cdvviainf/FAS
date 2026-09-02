@@ -2316,8 +2316,12 @@ model InstructivoEmbalaje {
   inspeccionadoEn      DateTime? // fecha del veredicto (aprobar/rechazar)
   inspeccionadoPor     String? // Usuario que emitió el veredicto
 
-  detalle InstructivoEmbalajeDetalle[]
-  folios  InstructivoEmbalajeFolio[]
+  detalle     InstructivoEmbalajeDetalle[]
+  folios      InstructivoEmbalajeFolio[]
+  // Recepciones de Proceso que seleccionaron este instructivo como fuente de
+  // folios (2026-09-01 — reemplaza la validación por pool global de la
+  // empresa, ver RecepcionInstructivoEmbalaje).
+  recepciones RecepcionInstructivoEmbalaje[]
 
   creadoEn     DateTime  @default(now())
   creadoPor    String
@@ -2423,11 +2427,11 @@ model OrdenCompra {
   empresa   Empresa @relation(fields: [empresaId], references: [id])
   numero    String // OC-{AAAA}-{NNNN}, correlativo por año, único por empresa
 
-  entidadProductorId    Int // Entidad tipo PRODUCTOR
+  entidadProductorId Int // Entidad tipo PRODUCTOR
   // FK compuesta (empresaId, entidadProductorId) -> Entidad(empresaId, id).
-  entidadProductor      Entidad              @relation("OrdenCompraProductor", fields: [empresaId, entidadProductorId], references: [empresaId, id])
-  notaVentaId           Int? // origen Cierre Comercial; null = Manual
-  notaVenta             NotaVenta?           @relation(fields: [empresaId, notaVentaId], references: [empresaId, id])
+  entidadProductor   Entidad                          @relation("OrdenCompraProductor", fields: [empresaId, entidadProductorId], references: [empresaId, id])
+  notaVentaId        Int? // origen Cierre Comercial; null = Manual
+  notaVenta          NotaVenta?                       @relation(fields: [empresaId, notaVentaId], references: [empresaId, id])
   // Inspecciones de Compra que habilitan la OC (2026-08-14, reinstala la
   // trazabilidad Compras↔Calidad diferida en el spec original — ver
   // compras.md §4.2). Requeridas solo a nivel de aplicación (no de columna,
@@ -2437,7 +2441,7 @@ model OrdenCompra {
   // (2026-08-21, Etapa 2 — supersede el solicitudInspeccionId singular:
   // una Solicitud solo puede estar en una OC, pero una OC puede tener
   // varias Solicitudes).
-  solicitudes OrdenCompraSolicitudInspeccion[]
+  solicitudes        OrdenCompraSolicitudInspeccion[]
 
   fecha DateTime @default(now())
 
@@ -2718,8 +2722,11 @@ model Recepcion {
   estado        EstadoRecepcion @default(CARGADA)
   observaciones String?
 
-  adjuntos RecepcionAdjunto[]
-  pallets  Pallet[]
+  adjuntos     RecepcionAdjunto[]
+  pallets      Pallet[]
+  // Instructivos de Embalaje seleccionados como fuente de folios (modo
+  // PROCESO, 2026-09-01) — se fija solo al crear, igual que ordenCompraId.
+  instructivos RecepcionInstructivoEmbalaje[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -2758,6 +2765,32 @@ model RecepcionAdjuntoContenido {
   datos     Bytes
 
   @@map("recepcion_adjuntos_contenido")
+}
+
+// Instructivo(s) de Embalaje seleccionados en una Recepción de Proceso
+// (2026-09-01, supersede la decisión 2026-08-23 de validar contra el pool
+// global de folios APROBADO de la empresa): ahora el usuario elige uno o más
+// Instructivos (abiertos o cerrados) y solo se aceptan folios que pertenezcan
+// a alguno de ellos, cuyas características además deben calzar con alguna
+// línea de ese instructivo. Mismo patrón que OrdenCompraSolicitudInspeccion.
+model RecepcionInstructivoEmbalaje {
+  id        Int @id @default(autoincrement())
+  empresaId Int
+
+  recepcionId Int
+  recepcion   Recepcion @relation(fields: [empresaId, recepcionId], references: [empresaId, id], onDelete: Cascade)
+
+  instructivoId Int
+  instructivo   InstructivoEmbalaje @relation(fields: [empresaId, instructivoId], references: [empresaId, id])
+
+  creadoEn  DateTime @default(now())
+  creadoPor String
+
+  @@unique([empresaId, recepcionId, instructivoId])
+  @@index([empresaId])
+  @@index([recepcionId])
+  @@index([instructivoId])
+  @@map("recepcion_instructivos_embalaje")
 }
 
 model Pallet {

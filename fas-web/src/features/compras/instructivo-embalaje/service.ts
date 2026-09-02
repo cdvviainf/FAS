@@ -14,6 +14,7 @@ export const instructivoEmbalajeService = {
     if (params.limit) sp.limit = String(params.limit)
     if (params.entidadProductorId) sp.entidadProductorId = String(params.entidadProductorId)
     if (params.estadoInspeccion) sp.estadoInspeccion = params.estadoInspeccion
+    if (params.seleccionable) sp.seleccionable = 'true'
     return api.get('compras/instructivos-embalaje', { searchParams: sp }).json()
   },
 

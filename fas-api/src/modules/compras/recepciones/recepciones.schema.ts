@@ -7,6 +7,10 @@ export const recepcionCreateSchema = z
     // PROCESO (true) — Etapa 3, compras.md §7. Con OC el origen siempre es
     // COMPRA, sin importar este campo.
     esProceso: z.boolean().optional(),
+    // Instructivos de Embalaje que respaldan los folios de esta Recepción
+    // (2026-09-01, supersede el pool global de folios de la empresa) — solo
+    // tiene sentido en modo PROCESO.
+    instructivoIds: z.array(z.number().int().positive()).optional(),
     plantaId: z.number().int().positive('La planta es requerida'),
     direccionPlantaId: z.number().int().positive('La dirección de la planta es requerida'),
     templateCargaId: z.number().int().positive().optional().nullable(),
@@ -15,6 +19,14 @@ export const recepcionCreateSchema = z
   .refine((data) => !(data.ordenCompraId != null && data.esProceso), {
     message: 'Una Recepción con Orden de Compra no puede marcarse como Proceso',
     path: ['esProceso'],
+  })
+  .refine((data) => !data.esProceso || (data.instructivoIds && data.instructivoIds.length > 0), {
+    message: 'Debes seleccionar al menos un Instructivo de Embalaje para una Recepción de Proceso',
+    path: ['instructivoIds'],
+  })
+  .refine((data) => data.esProceso || !data.instructivoIds || data.instructivoIds.length === 0, {
+    message: 'Solo una Recepción de Proceso puede tener Instructivos de Embalaje asociados',
+    path: ['instructivoIds'],
   })
 
 export const recepcionUpdateSchema = z.object({

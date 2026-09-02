@@ -119,6 +119,9 @@ export interface InstructivoEmbalajeListFilters {
   limit?: number
   entidadProductorId?: number
   estadoInspeccion?: EstadoInspeccionProceso
+  // Instructivos válidos como fuente de folios en Recepción de Proceso
+  // (2026-09-01): Aprobada o Cerrada. Ignorado si viene estadoInspeccion.
+  seleccionable?: boolean
 }
 
 export interface InstructivoEmbalajeUpdateInput {
