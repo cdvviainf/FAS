@@ -128,13 +128,6 @@ export const navGroups: NavGroup[] = [
         icon: 'calidad',
         isActive: false,
         items: []
-      },
-      {
-        title: 'Inspección Proceso',
-        url: '/dashboard/calidad/inspeccion-proceso',
-        icon: 'calidad',
-        isActive: false,
-        items: []
       }
     ]
   },

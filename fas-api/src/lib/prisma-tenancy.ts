@@ -52,8 +52,6 @@ const MODELOS_TENANT = new Set([
   'NotaVenta',
   'Embarque',
   'InstructivoEmbalaje',
-  // Inspección de Proceso — folios aprobados (2026-08-21):
-  'InstructivoEmbalajeFolio',
   // Fase 3, lote Compras (7/7, último):
   'OrdenCompra',
   'CondicionPago',

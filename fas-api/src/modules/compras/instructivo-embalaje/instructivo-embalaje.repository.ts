@@ -25,35 +25,12 @@ const includeDetalle = {
       altura: { select: mantenedorSelect },
     },
   },
-  // Inspección de Proceso (2026-08-21): folios aprobados, ordenados por
-  // creación para que la UI de Calidad los muestre en el orden en que se
-  // cargaron.
-  folios: {
-    select: { id: true, folio: true, estado: true, palletId: true, creadoEn: true },
-    orderBy: { id: 'asc' as const },
-  },
 }
 
-// Instructivos seleccionables como fuente de folios en Recepción de Proceso
-// (2026-09-01) — Aprobada (ventana en que Calidad carga folios) o Cerrada
-// (folios ya cargados, aún recepcionables).
-const ESTADOS_SELECCIONABLES: Array<'APROBADA' | 'CERRADA'> = ['APROBADA', 'CERRADA']
-
-export async function listInstructivos(
-  page: number,
-  limit: number,
-  entidadProductorId?: number,
-  estadoInspeccion?: 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA' | 'CERRADA',
-  seleccionable?: boolean,
-) {
+export async function listInstructivos(page: number, limit: number, entidadProductorId?: number) {
   const where = {
     eliminadoEn: null,
     ...(entidadProductorId ? { entidadProductorId } : {}),
-    ...(estadoInspeccion
-      ? { estadoInspeccion }
-      : seleccionable
-        ? { estadoInspeccion: { in: ESTADOS_SELECCIONABLES } }
-        : {}),
   }
 
   const [data, total] = await Promise.all([
@@ -62,7 +39,6 @@ export async function listInstructivos(
       include: {
         entidadProductor: { select: entidadSelect },
         grupoMercado: { select: mantenedorSelect },
-        _count: { select: { folios: true } },
       },
       orderBy: { numero: 'desc' },
       skip: (page - 1) * limit,
@@ -78,142 +54,11 @@ export async function getInstructivoById(id: number) {
   return prisma.instructivoEmbalaje.findFirst({ where: { id, eliminadoEn: null }, include: includeDetalle })
 }
 
-// Transición de estado atómica y condicionada al estado actual
-// (FAS-INSP-1A-002, QA ronda 1): el WHERE incluye los estados permitidos, así
-// que dos transiciones concurrentes (p.ej. aprobar y rechazar a la vez) no
-// pueden leer el mismo estado inicial y pisarse — Postgres serializa la fila
-// en la propia sentencia UPDATE. `count === 0` significa "no existe" o
-// "estado inválido"; el service decide cuál con una consulta de seguimiento.
-// No cubre CERRADA — cerrar exige folios cargados, ver cerrarInspeccionSiCorresponde.
-export async function updateEstadoInspeccionCondicional(
-  id: number,
-  estadosPermitidos: Array<'PENDIENTE' | 'NOTIFICADA'>,
-  data: {
-    estadoInspeccion: 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA'
-    notificadaEn?: Date
-    comentarioInspeccion?: string | null
-    inspeccionadoEn?: Date
-    inspeccionadoPor?: string
-  },
-) {
+// Soft delete — sin condición de estado (2026-09-02: el Instructivo ya no
+// tiene veredicto de Calidad que lo congele, ver compras.md §4.1).
+export async function softDeleteInstructivo(id: number, eliminadoPor: string) {
   const result = await prisma.instructivoEmbalaje.updateMany({
-    where: { id, eliminadoEn: null, estadoInspeccion: { in: estadosPermitidos } },
-    data,
-  })
-  return result.count
-}
-
-type CerrarInspeccionResultado =
-  | { estado: 'OK'; instructivo: NonNullable<Awaited<ReturnType<typeof getInstructivoById>>> }
-  | { estado: 'NO_ENCONTRADO' }
-  | { estado: 'ESTADO_INVALIDO' }
-  | { estado: 'SIN_FOLIOS' }
-
-// Cierre atómico condicionado a APROBADA + al menos 1 folio cargado
-// (FAS-INSP-1A-002 + decisión de negocio 2026-08-21): el reclamo de estado y
-// el conteo de folios corren en la misma transacción que la transición a
-// CERRADA — el UPDATE de reclamo mantiene la fila bloqueada hasta el commit,
-// así ninguna carga/eliminación de folios concurrente puede colarse entre el
-// conteo y el cierre (y viceversa: addFoliosSiAprobada/deleteFolioSiAprobada
-// usan el mismo reclamo, así que esperan a que esta transacción termine y
-// luego ven CERRADA).
-export async function cerrarInspeccionSiCorresponde(id: number): Promise<CerrarInspeccionResultado> {
-  return prisma.$transaction(async (tx) => {
-    const claim = await tx.instructivoEmbalaje.updateMany({
-      where: { id, eliminadoEn: null, estadoInspeccion: 'APROBADA' },
-      data: { estadoInspeccion: 'APROBADA' },
-    })
-    if (claim.count === 0) {
-      const existe = await tx.instructivoEmbalaje.findFirst({ where: { id, eliminadoEn: null }, select: { id: true } })
-      return { estado: existe ? 'ESTADO_INVALIDO' : 'NO_ENCONTRADO' }
-    }
-
-    const folios = await tx.instructivoEmbalajeFolio.count({ where: { instructivoId: id } })
-    if (folios === 0) return { estado: 'SIN_FOLIOS' }
-
-    const instructivo = await tx.instructivoEmbalaje.update({
-      where: { id },
-      data: { estadoInspeccion: 'CERRADA' },
-      include: includeDetalle,
-    })
-    return { estado: 'OK', instructivo }
-  })
-}
-
-// ─── Folios (números de pallet aprobados) ───────────────────────────────────
-
-// Folios de esta empresa que colisionan con los propuestos (unicidad
-// sistémica por empresa — la extensión de tenancy inyecta el empresaId).
-export async function getFoliosColisionados(folios: string[]) {
-  return prisma.instructivoEmbalajeFolio.findMany({
-    where: { folio: { in: folios } },
-    select: { folio: true },
-  })
-}
-
-// Carga de folios atómica y condicionada a APROBADA (FAS-INSP-1A-002): el
-// "reclamo" (updateMany con WHERE de estado) y el createMany de folios
-// corren en la misma transacción, así un `cerrar` concurrente no puede
-// colarse entre el check de estado y la escritura de folios. `null` si el
-// reclamo no afectó fila (no existe, eliminado, o estado != APROBADA).
-export async function addFoliosSiAprobada(instructivoId: number, folios: string[], creadoPor: string) {
-  const empresaId = getEmpresaIdActual()!
-  return prisma.$transaction(async (tx) => {
-    const claim = await tx.instructivoEmbalaje.updateMany({
-      where: { id: instructivoId, eliminadoEn: null, estadoInspeccion: 'APROBADA' },
-      data: { estadoInspeccion: 'APROBADA' },
-    })
-    if (claim.count === 0) return null
-
-    await tx.instructivoEmbalajeFolio.createMany({
-      // empresaId se declara explícito (igual que createInstructivo); la
-      // extensión de tenancy (prisma-tenancy.ts) igual lo fuerza a la empresa
-      // activa del contexto.
-      data: folios.map((folio) => ({ empresaId, instructivoId, folio, creadoPor })),
-    })
-    return tx.instructivoEmbalaje.findFirst({ where: { id: instructivoId }, include: includeDetalle })
-  })
-}
-
-type QuitarFolioResultado =
-  | { ok: true }
-  | { ok: false; motivo: 'ESTADO' | 'NO_ENCONTRADO' | 'RECEPCIONADO' }
-
-// Eliminación de folio atómica y condicionada a APROBADA (FAS-INSP-1A-002):
-// mismo patrón de reclamo + operación en una sola transacción que
-// addFoliosSiAprobada, para que un `cerrar` concurrente no se cuele entre el
-// check de estado y el delete del folio.
-export async function deleteFolioSiAprobada(instructivoId: number, folioId: number): Promise<QuitarFolioResultado> {
-  return prisma.$transaction(async (tx) => {
-    const claim = await tx.instructivoEmbalaje.updateMany({
-      where: { id: instructivoId, eliminadoEn: null, estadoInspeccion: 'APROBADA' },
-      data: { estadoInspeccion: 'APROBADA' },
-    })
-    if (claim.count === 0) return { ok: false, motivo: 'ESTADO' }
-
-    const folio = await tx.instructivoEmbalajeFolio.findFirst({
-      where: { id: folioId },
-      select: { id: true, instructivoId: true, estado: true },
-    })
-    if (!folio || folio.instructivoId !== instructivoId) return { ok: false, motivo: 'NO_ENCONTRADO' }
-    if (folio.estado === 'RECEPCIONADO') return { ok: false, motivo: 'RECEPCIONADO' }
-
-    await tx.instructivoEmbalajeFolio.delete({ where: { id: folioId } })
-    return { ok: true }
-  })
-}
-
-// Soft delete atómico y condicionado a "sin veredicto" (FAS-INSP-1A-002):
-// mismo criterio de congelamiento que updateInstructivoSiEditable. Retorna la
-// cantidad de filas afectadas (0 = no existe, ya eliminado, o ya tiene
-// veredicto).
-export async function softDeleteInstructivoSiEditable(id: number, eliminadoPor: string) {
-  const result = await prisma.instructivoEmbalaje.updateMany({
-    where: {
-      id,
-      eliminadoEn: null,
-      estadoInspeccion: { notIn: ['APROBADA', 'RECHAZADA', 'CERRADA'] },
-    },
+    where: { id, eliminadoEn: null },
     data: { eliminadoEn: new Date(), eliminadoPor },
   })
   return result.count
@@ -250,27 +95,16 @@ export async function createInstructivo(body: InstructivoEmbalajeCreateInput, cr
   })
 }
 
-// Reemplazo atómico y condicionado a "sin veredicto" (FAS-INSP-1A-002): la
-// fila se bloquea con el propio UPDATE de "reclamo" (SET eliminadoEn = NULL,
-// no-op semántico — siempre ya es NULL por el WHERE) antes de aplicar el
-// resto de los cambios, así una edición concurrente con un veredicto no
-// puede colarse entre el check de estado y la escritura. Si viene `detalle`,
-// se dropea toda la línea previa y se recrea completa (mismo patrón que
-// `calibres: { deleteMany, create }` en ordenes-compra.repository.ts
-// updateLinea) — el Instructivo se crea/edita como documento completo, no
-// por línea individual (a diferencia de la OC). `null` si el reclamo no
-// afectó fila (no existe, eliminado, o ya tiene veredicto).
-export async function updateInstructivoSiEditable(id: number, data: InstructivoEmbalajeUpdateInput) {
+// Reemplazo atómico — sin condición de estado (2026-09-02, ver
+// softDeleteInstructivo arriba). Si viene `detalle`, se dropea toda la línea
+// previa y se recrea completa (mismo patrón que `calibres: { deleteMany,
+// create }` en ordenes-compra.repository.ts updateLinea) — el Instructivo se
+// crea/edita como documento completo, no por línea individual (a diferencia
+// de la OC).
+export async function updateInstructivo(id: number, data: InstructivoEmbalajeUpdateInput) {
   const { detalle, ...resto } = data
   return prisma.$transaction(async (tx) => {
-    const claim = await tx.instructivoEmbalaje.updateMany({
-      where: {
-        id,
-        eliminadoEn: null,
-        estadoInspeccion: { notIn: ['APROBADA', 'RECHAZADA', 'CERRADA'] },
-      },
-      data: { eliminadoEn: null },
-    })
+    const claim = await tx.instructivoEmbalaje.updateMany({ where: { id, eliminadoEn: null }, data: {} })
     if (claim.count === 0) return null
 
     return tx.instructivoEmbalaje.update({

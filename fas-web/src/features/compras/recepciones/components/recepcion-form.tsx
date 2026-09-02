@@ -22,13 +22,13 @@ import { Icons } from '@/components/icons'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
 import { SelectMultiple } from '@/components/shared/select-multiple'
+import { Modal } from '@/components/ui/modal'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { entidadesService } from '@/features/entidades/service'
 import { entidadDetailOptions } from '@/features/entidades/queries'
 import { ordenesCompraService } from '@/features/compras/ordenes-compra/service'
 import { templatesCargaService } from '@/features/templates-carga/service'
 import { instructivoEmbalajeService } from '@/features/compras/instructivo-embalaje/service'
-import { ESTADO_INSPECCION_LABELS } from '@/features/compras/instructivo-embalaje/types'
 import { recepcionDetailOptions, recepcionesKeys } from '../queries'
 import { recepcionesService } from '../service'
 import type { RecepcionCreateInput } from '../types'
@@ -51,6 +51,20 @@ function diferenciasDelError(err: unknown): string[] {
   const data = err.data as { error?: { details?: { diferencias?: unknown } } } | undefined
   const diferencias = data?.error?.details?.diferencias
   return Array.isArray(diferencias) ? diferencias.filter((d): d is string => typeof d === 'string') : []
+}
+
+// Modo PROCESO (2026-09-02): las diferencias contra el/los Instructivo(s) de
+// Embalaje son una ADVERTENCIA aceptable/rechazable (todo o nada), no un
+// error duro — el backend las distingue trayendo `advertencias` + `adjuntoId`
+// en el detalle en vez de `diferencias` (ver diferenciasDelError arriba).
+function advertenciasDelError(err: unknown): { items: string[]; adjuntoId: number } | null {
+  if (!isHTTPError(err)) return null
+  const data = err.data as { error?: { details?: { advertencias?: unknown; adjuntoId?: unknown } } } | undefined
+  const advertencias = data?.error?.details?.advertencias
+  const adjuntoId = data?.error?.details?.adjuntoId
+  if (!Array.isArray(advertencias) || typeof adjuntoId !== 'number') return null
+  const items = advertencias.filter((d): d is string => typeof d === 'string')
+  return items.length > 0 ? { items, adjuntoId } : null
 }
 
 function formatoBytes(b: number): string {
@@ -99,6 +113,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [erroresCarga, setErroresCarga] = useState<{ mensaje: string; diferencias: string[] } | null>(null)
+  const [advertencias, setAdvertencias] = useState<{ items: string[]; adjuntoId: number } | null>(null)
 
   const { data: recepcion, isLoading } = useQuery({
     ...recepcionDetailOptions(recepcionId ?? 0),
@@ -122,15 +137,17 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
     staleTime: 60_000,
   })
   const { data: instructivosData } = useQuery({
-    queryKey: ['instructivos-embalaje-seleccionables-options'],
+    queryKey: ['instructivos-embalaje-options'],
     // El backend pagina de a 100 (límite del contrato) — se recorren todas
     // las páginas acá porque el picker necesita el catálogo completo de una
     // vez (IMP-QA-R1-008, ronda 2: no hay búsqueda remota en SelectMultiple).
+    // Sin filtro de estado (2026-09-02): el Instructivo ya no tiene veredicto,
+    // así que todos los no eliminados son seleccionables.
     queryFn: async () => {
-      const primera = await instructivoEmbalajeService.list({ seleccionable: true, limit: 100, page: 1 })
+      const primera = await instructivoEmbalajeService.list({ limit: 100, page: 1 })
       const restantes = await Promise.all(
         Array.from({ length: primera.meta.totalPages - 1 }, (_, i) =>
-          instructivoEmbalajeService.list({ seleccionable: true, limit: 100, page: i + 2 }),
+          instructivoEmbalajeService.list({ limit: 100, page: i + 2 }),
         ),
       )
       return { ...primera, data: [...primera.data, ...restantes.flatMap((r) => r.data)] }
@@ -213,9 +230,18 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
     mutationFn: (archivo: File) => recepcionesService.subirAdjunto(recepcionId!, archivo),
     onSuccess: () => {
       setErroresCarga(null)
+      setAdvertencias(null)
       queryClient.invalidateQueries({ queryKey: recepcionesKeys.detail(recepcionId!) })
     },
     onError: (e: Error) => {
+      // Modo PROCESO: las diferencias contra el Instructivo son una
+      // advertencia aceptable/rechazable — se muestra un diálogo de
+      // confirmación en vez del bloque de error genérico.
+      const adv = advertenciasDelError(e)
+      if (adv) {
+        setAdvertencias(adv)
+        return
+      }
       toast.error(e.message || 'Error al subir el archivo')
       const diferencias = diferenciasDelError(e)
       if (diferencias.length > 0) {
@@ -229,6 +255,18 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
       queryClient.invalidateQueries({ queryKey: recepcionesKeys.detail(recepcionId!) })
     },
     onError: (e: Error) => toast.error(e.message || 'Error al eliminar el archivo'),
+  })
+  const confirmarAdvertenciasMutation = useMutation({
+    mutationFn: (adjuntoId: number) => recepcionesService.confirmarAdvertencias(recepcionId!, adjuntoId),
+    onSuccess: () => {
+      toast.success('Carga confirmada con advertencias')
+      setAdvertencias(null)
+      queryClient.invalidateQueries({ queryKey: recepcionesKeys.detail(recepcionId!) })
+    },
+    onError: (e: Error) => {
+      toast.error(e.message || 'Error al confirmar la carga')
+      setAdvertencias(null)
+    },
   })
 
   function agregarArchivo(files: FileList | null) {
@@ -275,6 +313,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
               <div className='flex gap-2'>
                 <Badge variant='outline'>{ORIGEN_RECEPCION_LABELS[recepcion.data.origen]}</Badge>
                 <Badge>{ESTADO_RECEPCION_LABELS[recepcion.data.estado]}</Badge>
+                {recepcion.data.advertenciasAceptadas && <Badge variant='secondary'>Cargada con advertencias</Badge>}
               </div>
             )}
           </div>
@@ -283,6 +322,21 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
               Esta Recepción ya generó pallets en Stock y no puede editarse, cargar un nuevo Excel ni eliminarse,
               aunque el estado siga en {ESTADO_RECEPCION_LABELS.CARGADA}.
             </p>
+          )}
+          {recepcion?.data.advertenciasAceptadas && (
+            <div className='space-y-1 rounded-md border border-amber-600/30 bg-amber-600/5 p-3 text-sm'>
+              <p className='font-medium'>
+                Cargada aceptando diferencias contra el/los Instructivo(s) — {recepcion.data.advertenciasAceptadasPor}
+                {recepcion.data.advertenciasAceptadasEn
+                  ? ` el ${new Date(recepcion.data.advertenciasAceptadasEn).toLocaleString('es-CL')}`
+                  : ''}
+              </p>
+              <ul className='list-disc space-y-0.5 pl-4 text-xs text-muted-foreground'>
+                {(recepcion.data.advertenciasDetalle ?? []).map((d, i) => (
+                  <li key={i}>{d}</li>
+                ))}
+              </ul>
+            </div>
           )}
         </CardHeader>
         <CardContent className='space-y-4'>
@@ -316,7 +370,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
               <SelectMultiple
                 options={instructivos.map((i) => ({
                   id: i.id,
-                  label: `N° ${i.numero} — ${i.entidadProductor.descripcion} (${ESTADO_INSPECCION_LABELS[i.estadoInspeccion]})`,
+                  label: `N° ${i.numero} — ${i.entidadProductor.descripcion}`,
                 }))}
                 selectedIds={fields.instructivoIds}
                 onChange={(ids) => setFields((f) => ({ ...f, instructivoIds: ids }))}
@@ -324,7 +378,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
                 disabled={soloLectura || isEdit}
               />
               <p className='text-xs text-muted-foreground'>
-                Cada N° de Pallet del Excel debe corresponder a un folio Aprobado por Calidad en alguno de los Instructivos seleccionados, con características compatibles con alguna de sus líneas.
+                Se validará que la fruta del Excel coincida con las características de alguna línea de los Instructivos seleccionados. Si hay diferencias, se te pedirá confirmar si deseas cargar de todas formas.
               </p>
               {errors.instructivoIds && <p className='text-xs text-destructive'>{errors.instructivoIds}</p>}
             </div>
@@ -475,6 +529,28 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
           </Button>
         </div>
       )}
+
+      <Modal
+        title='La carga no coincide con el Instructivo de Embalaje'
+        description='Las siguientes filas no calzan con las características de los Instructivos seleccionados. Puedes corregir el Excel y volver a subirlo, o cargar de todas formas — se guardará como advertencia aceptada.'
+        isOpen={!!advertencias}
+        onClose={() => setAdvertencias(null)}
+      >
+        <ul className='max-h-64 list-disc space-y-1 overflow-y-auto pl-4 text-sm'>
+          {advertencias?.items.map((a, i) => <li key={i}>{a}</li>)}
+        </ul>
+        <div className='mt-6 flex justify-end gap-2'>
+          <Button variant='outline' onClick={() => setAdvertencias(null)} disabled={confirmarAdvertenciasMutation.isPending}>
+            Corregir Excel
+          </Button>
+          <Button
+            onClick={() => advertencias && confirmarAdvertenciasMutation.mutate(advertencias.adjuntoId)}
+            isLoading={confirmarAdvertenciasMutation.isPending}
+          >
+            Cargar de todas formas
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }

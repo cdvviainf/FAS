@@ -72,3 +72,12 @@ export async function eliminarAdjunto(req: FastifyRequest, reply: FastifyReply) 
   await service.eliminarAdjunto(id, adjuntoId)
   return reply.status(204).send()
 }
+
+// Confirma la carga de un adjunto ya guardado aceptando las advertencias de
+// características contra el Instructivo de Embalaje (modo PROCESO,
+// 2026-09-02) — sin body, sin volver a subir el archivo.
+export async function confirmarAdvertencias(req: FastifyRequest, reply: FastifyReply) {
+  const { id, adjuntoId } = recepcionAdjuntoParamsSchema.parse(req.params)
+  const resultado = await service.confirmarAdvertencias(id, adjuntoId, req.fasUserId!)
+  return reply.send({ data: resultado })
+}

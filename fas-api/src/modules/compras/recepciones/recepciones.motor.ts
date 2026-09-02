@@ -19,7 +19,7 @@
 import { ValidationError } from '../../../shared/errors.js'
 import * as repo from './recepciones.repository.js'
 import { cargarPrimeraHoja, resolverMapeoColumnas, leerFilasCrudas, type FilaExcelCruda } from './recepciones.excel.js'
-import { compararLineasOcConExcel, compararFoliosConExcel, type FilaFolioParaComparar } from './recepciones.comparacion.js'
+import { compararLineasOcConExcel, compararInstructivoConExcel, type FilaInstructivoParaComparar } from './recepciones.comparacion.js'
 
 interface FilaResuelta {
   fila: number
@@ -215,21 +215,16 @@ async function compararContraOc(ordenCompraId: number, filas: FilaResuelta[]): P
   return compararLineasOcConExcel(oc.lineas, filas)
 }
 
-// ─── Etapa 3c-b: comparación contra folios (Etapa 3, fruta de proceso) ────
+// ─── Etapa 3c-b: comparación contra el Instructivo (fruta de proceso) ─────
 // Chequeo optimista, sin lock — igual que compararContraOc: da feedback
 // rápido, pero no es la autoridad final. repo.crearPalletsYValidar vuelve a
-// comparar bajo lock (y reclama cada folio atómicamente) antes de confirmar.
-// Acotado a los Instructivos seleccionados en la Recepción (2026-09-01,
-// supersede el pool global de folios de la empresa) y valida además que las
-// características de la fruta calcen con alguna línea del Instructivo dueño.
-async function compararContraFolios(filas: FilaResuelta[], instructivoIds: number[]): Promise<string[]> {
-  const numeros = [...new Set(filas.map((f) => f.numeroPallet))]
-  const [foliosEnAlcance, foliosGlobal] = await Promise.all([
-    repo.getFoliosParaValidar(numeros, instructivoIds),
-    repo.getFoliosPorNumero(numeros),
-  ])
-  const existeGlobalmente = new Set(foliosGlobal.map((f) => f.folio))
-  const filasParaComparar: FilaFolioParaComparar[] = filas.map((f) => ({
+// comparar bajo lock antes de confirmar. Devuelve ADVERTENCIAS, no errores
+// (2026-09-02: Calidad ya no valida el Instructivo — ver
+// procesarCargaExcel, que decide si abortar según si el usuario ya las
+// aceptó).
+async function compararContraInstructivo(filas: FilaResuelta[], instructivoIds: number[]): Promise<string[]> {
+  const detalle = await repo.getDetalleInstructivos(instructivoIds)
+  const filasParaComparar: FilaInstructivoParaComparar[] = filas.map((f) => ({
     numeroPallet: f.numeroPallet,
     especieId: f.especieId,
     variedadId: f.variedadId,
@@ -237,12 +232,16 @@ async function compararContraFolios(filas: FilaResuelta[], instructivoIds: numbe
     articuloId: f.articuloId,
     calibreId: f.calibreId,
   }))
-  return compararFoliosConExcel(foliosEnAlcance, existeGlobalmente, filasParaComparar)
+  return compararInstructivoConExcel(detalle, filasParaComparar)
 }
 
 // ─── Entrada principal ─────────────────────────────────────────────────────
 
-export async function procesarCargaExcel(recepcion: RecepcionParaMotor, buffer: Buffer) {
+export async function procesarCargaExcel(
+  recepcion: RecepcionParaMotor,
+  buffer: Buffer,
+  opciones: { aceptarAdvertencias: boolean; userId: string },
+) {
   if (!recepcion.templateCargaId || !recepcion.templateCarga) {
     throw new ValidationError('Esta Recepción no tiene un Template de Carga asignado — selecciona uno antes de subir el Excel')
   }
@@ -290,10 +289,10 @@ export async function procesarCargaExcel(recepcion: RecepcionParaMotor, buffer: 
     }
   }
 
-  if (origen === 'PROCESO') {
-    const diferencias = await compararContraFolios(filas, recepcion.instructivoIds)
-    if (diferencias.length > 0) {
-      throw new ValidationError('Etapa 3 — No coinciden los folios con la carga', { diferencias })
+  if (origen === 'PROCESO' && !opciones.aceptarAdvertencias) {
+    const advertencias = await compararContraInstructivo(filas, recepcion.instructivoIds)
+    if (advertencias.length > 0) {
+      throw new ValidationError('La carga no coincide con los Instructivos de Embalaje seleccionados', { advertencias })
     }
   }
 
@@ -317,6 +316,7 @@ export async function procesarCargaExcel(recepcion: RecepcionParaMotor, buffer: 
     recepcion.templateCargaId,
     filas,
     pallets,
+    opciones,
   )
   return {
     recepcion: recepcionActualizada,

@@ -38,20 +38,14 @@ async function validarPlantaYDireccion(plantaId?: number, direccionPlantaId?: nu
   if (!direccion) throw new ValidationError('La dirección seleccionada no pertenece a la planta')
 }
 
-// Instructivos seleccionables: Aprobada (ventana en que Calidad carga folios)
-// o Cerrada (folios ya cargados que aún no se recepcionaron) — 2026-09-01,
-// mismo criterio que instructivo-embalaje.repository.ts getFoliosParaValidar.
-const ESTADOS_INSTRUCTIVO_SELECCIONABLE = new Set(['APROBADA', 'CERRADA'])
-
+// Sin condición de estado (2026-09-02: el Instructivo ya no tiene veredicto
+// de Calidad, ver instructivo-embalaje) — solo se valida existencia.
 async function validarInstructivos(instructivoIds?: number[]) {
   if (!instructivoIds || instructivoIds.length === 0) return
   const unicos = Array.from(new Set(instructivoIds))
   const encontrados = await repo.getInstructivosParaSeleccion(unicos)
   if (encontrados.length !== unicos.length) {
     throw new ValidationError('Uno o más Instructivos de Embalaje seleccionados no existen')
-  }
-  if (encontrados.some((i) => !ESTADOS_INSTRUCTIVO_SELECCIONABLE.has(i.estadoInspeccion))) {
-    throw new ValidationError('Solo se pueden seleccionar Instructivos de Embalaje en estado Aprobada o Cerrada')
   }
 }
 
@@ -211,12 +205,58 @@ export async function subirAdjunto(
         templateCarga,
       },
       archivo.datos,
+      { aceptarAdvertencias: false, userId },
     )
     return { adjunto, ...resultado, recepcion: shapeRecepcion(resultado.recepcion) }
   } catch (err) {
     // El adjunto ya se guardó (evidencia de qué se intentó cargar); lo único
     // que falta es dejar la Recepción en RECHAZADA para que quede claro que
     // este intento no generó pallets y habilitar el reintento.
+    await repo.marcarRechazada(recepcionId)
+    // Si el único problema fueron advertencias (modo PROCESO, 2026-09-02),
+    // el frontend necesita el adjuntoId para poder confirmar sin volver a
+    // subir el archivo (ver confirmarAdvertencias) — se agrega al detalle
+    // del mismo error en vez de uno nuevo, para no perder el resto del
+    // detalle (ver ValidationError.details, solo lectura).
+    if (err instanceof ValidationError && err.details && typeof err.details === 'object' && 'advertencias' in err.details) {
+      throw new ValidationError(err.message, { ...err.details, adjuntoId: adjunto.id })
+    }
+    throw err
+  }
+}
+
+// Reprocesa un adjunto ya guardado (modo PROCESO) aceptando las advertencias
+// de características contra el/los Instructivo(s) de Embalaje — el usuario
+// ya las vio y decidió cargar igual (todo o nada, compras.md §4.4). No
+// requiere volver a subir el archivo: se relee el mismo contenido guardado
+// en subirAdjunto().
+export async function confirmarAdvertencias(recepcionId: number, adjuntoId: number, userId: string) {
+  const recepcion = await obtenerRecepcion(recepcionId)
+  if (!(await puedeModificarse(recepcion))) {
+    throw new ValidationError('La Recepción ya fue procesada y no admite confirmar advertencias')
+  }
+  const meta = await repo.getAdjuntoMeta(recepcionId, adjuntoId)
+  if (!meta) throw new NotFoundError('Adjunto', String(adjuntoId))
+  const contenido = await repo.getAdjuntoContenido(adjuntoId)
+  if (!contenido) throw new NotFoundError('Adjunto', String(adjuntoId))
+
+  const templateCarga = await repo.getTemplateCargaParaLectura(recepcion.templateCargaId ?? -1)
+
+  try {
+    const resultado = await procesarCargaExcel(
+      {
+        id: recepcion.id,
+        origen: recepcion.origen,
+        ordenCompraId: recepcion.ordenCompraId,
+        instructivoIds: recepcion.instructivos.map((i) => i.instructivo.id),
+        templateCargaId: recepcion.templateCargaId,
+        templateCarga,
+      },
+      contenido.datos,
+      { aceptarAdvertencias: true, userId },
+    )
+    return { ...resultado, recepcion: shapeRecepcion(resultado.recepcion) }
+  } catch (err) {
     await repo.marcarRechazada(recepcionId)
     throw err
   }

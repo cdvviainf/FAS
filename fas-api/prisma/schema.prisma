@@ -2277,30 +2277,10 @@ model Embarque {
 
 // ─── Compras — Instructivo de Embalaje (Docs/compras.md §4.1) ───────────────
 // Documento que instruye qué embalar. Sin FK a OrdenCompra (relación
-// inexistente por diseño, ver compras.md §6.1). Editable/eliminable (soft
-// delete) solo mientras su Inspección de Proceso no tenga veredicto — ver
-// InspeccionProcesoEstado abajo (supersede el "sin máquina de estados"
-// original, 2026-08-21).
-
-// Ciclo de vida de la Inspección de Proceso (2026-08-21): el Instructivo de
-// Embalaje ES la inspección de proceso para Calidad. Flujo:
-// PENDIENTE → NOTIFICADA → APROBADA → CERRADA, con RECHAZADA terminal.
-// Los folios (números de pallet) solo se cargan en APROBADA (calidad.md §4).
-enum InspeccionProcesoEstado {
-  PENDIENTE
-  NOTIFICADA
-  APROBADA
-  RECHAZADA
-  CERRADA
-}
-
-// Estado de cada folio aprobado. Al recepcionarlo (Recepción de Proceso,
-// Etapa 3) pasa a RECEPCIONADO y queda bloqueado para borrado.
-enum EstadoFolioInspeccion {
-  APROBADO
-  RECEPCIONADO
-}
-
+// inexistente por diseño, ver compras.md §6.1). Sin máquina de estados
+// (supersesión 2026-09-02: Calidad deja de emitir veredicto sobre el
+// Instructivo — ver Docs/calidad.md — así que vuelve a ser editable/
+// eliminable libremente, como el diseño original antes de 2026-08-21).
 model InstructivoEmbalaje {
   id        Int     @id @default(autoincrement())
   empresaId Int
@@ -2318,19 +2298,10 @@ model InstructivoEmbalaje {
   fechaInicioPrograma DateTime
   observaciones       String?
 
-  // Inspección de Proceso (2026-08-21) — el instructivo es también la
-  // inspección de proceso que gestiona Calidad (CAL_SOLICITUDES).
-  estadoInspeccion     InspeccionProcesoEstado @default(PENDIENTE)
-  notificadaEn         DateTime?
-  comentarioInspeccion String?
-  inspeccionadoEn      DateTime? // fecha del veredicto (aprobar/rechazar)
-  inspeccionadoPor     String? // Usuario que emitió el veredicto
-
   detalle     InstructivoEmbalajeDetalle[]
-  folios      InstructivoEmbalajeFolio[]
-  // Recepciones de Proceso que seleccionaron este instructivo como fuente de
-  // folios (2026-09-01 — reemplaza la validación por pool global de la
-  // empresa, ver RecepcionInstructivoEmbalaje).
+  // Recepciones de Proceso que seleccionaron este instructivo (2026-09-01) —
+  // la validación de características contra el detalle es una advertencia
+  // aceptable/rechazable, no un bloqueo (2026-09-02, ver Recepcion abajo).
   recepciones RecepcionInstructivoEmbalaje[]
 
   creadoEn     DateTime  @default(now())
@@ -2343,31 +2314,6 @@ model InstructivoEmbalaje {
   @@index([grupoMercadoId])
   @@index([empresaId])
   @@map("instructivos_embalaje")
-}
-
-// Folios (= números de pallet) aprobados por Calidad para una Inspección de
-// Proceso. Únicos por empresa en TODO el sistema (SQ2, 2026-08-21) — impide
-// aprobar el mismo pallet en dos instructivos. La Recepción de Proceso (Etapa
-// 3) los marca RECEPCIONADO y enlaza el Pallet resultante (palletId).
-model InstructivoEmbalajeFolio {
-  id            Int                   @id @default(autoincrement())
-  empresaId     Int
-  instructivoId Int
-  // FK compuesta (empresaId, instructivoId) -> InstructivoEmbalaje(empresaId, id):
-  // garantiza a nivel de BD que el folio viva en la misma empresa que su
-  // instructivo (mismo patrón tenant que el resto del schema).
-  instructivo   InstructivoEmbalaje   @relation(fields: [empresaId, instructivoId], references: [empresaId, id], onDelete: Cascade)
-  folio         String
-  estado        EstadoFolioInspeccion @default(APROBADO)
-  palletId      Int? // se completa en Recepción de Proceso (Etapa 3)
-  creadoEn      DateTime              @default(now())
-  creadoPor     String
-
-  @@unique([empresaId, folio]) // folio único por empresa (aprobación)
-  @@unique([empresaId, id])
-  @@index([empresaId])
-  @@index([instructivoId])
-  @@map("instructivo_embalaje_folios")
 }
 
 model InstructivoEmbalajeDetalle {
@@ -2685,10 +2631,13 @@ model OrdenCompraLineaCalibre {
 enum OrigenRecepcion {
   COMPRA
   CONSIGNACION
-  // Fruta de proceso (2026-08-23, Etapa 3): sin OC, como CONSIGNACION, pero
-  // cada N° de Pallet del Excel debe corresponder a un
-  // InstructivoEmbalajeFolio APROBADO — que al insertarse pasa a
-  // RECEPCIONADO con su palletId (compras.md §7, calidad.md).
+  // Fruta de proceso: sin OC, como CONSIGNACION, pero se seleccionan uno o
+  // más Instructivos de Embalaje (RecepcionInstructivoEmbalaje) y cada fila
+  // del Excel se compara contra su detalle (especie/variedad/categoría/
+  // artículo/calibre). Supersesión (2026-09-02): esa comparación es una
+  // ADVERTENCIA aceptable/rechazable por el usuario (todo o nada), no un
+  // bloqueo — Calidad ya no emite veredicto ni aprueba folios (compras.md
+  // §4.4, calidad.md).
   PROCESO
 }
 
@@ -2732,10 +2681,19 @@ model Recepcion {
   estado        EstadoRecepcion @default(CARGADA)
   observaciones String?
 
+  // Auditoría de advertencias aceptadas (modo PROCESO, 2026-09-02): si la
+  // carga tuvo filas que no calzaban con el detalle de los Instructivos
+  // seleccionados y el usuario decidió cargar igual (todo o nada), queda
+  // registrado acá — quién, cuándo, y el detalle de qué no calzaba.
+  advertenciasAceptadas    Boolean   @default(false)
+  advertenciasDetalle      Json?
+  advertenciasAceptadasEn  DateTime?
+  advertenciasAceptadasPor String?
+
   adjuntos     RecepcionAdjunto[]
   pallets      Pallet[]
-  // Instructivos de Embalaje seleccionados como fuente de folios (modo
-  // PROCESO, 2026-09-01) — se fija solo al crear, igual que ordenCompraId.
+  // Instructivos de Embalaje seleccionados (modo PROCESO, 2026-09-01) — se
+  // fija solo al crear, igual que ordenCompraId.
   instructivos RecepcionInstructivoEmbalaje[]
 
   creadoEn       DateTime  @default(now())
@@ -2778,11 +2736,12 @@ model RecepcionAdjuntoContenido {
 }
 
 // Instructivo(s) de Embalaje seleccionados en una Recepción de Proceso
-// (2026-09-01, supersede la decisión 2026-08-23 de validar contra el pool
-// global de folios APROBADO de la empresa): ahora el usuario elige uno o más
-// Instructivos (abiertos o cerrados) y solo se aceptan folios que pertenezcan
-// a alguno de ellos, cuyas características además deben calzar con alguna
-// línea de ese instructivo. Mismo patrón que OrdenCompraSolicitudInspeccion.
+// (2026-09-01): el usuario elige uno o más Instructivos, y cada fila del
+// Excel se compara contra el detalle combinado de todos ellos. Sin folio
+// (2026-09-02, ver Docs/calidad.md): no hay lista de aprobados que
+// respalde el N° de Pallet — la comparación de características es una
+// advertencia aceptable/rechazable, no una condición de existencia. Mismo
+// patrón que OrdenCompraSolicitudInspeccion.
 model RecepcionInstructivoEmbalaje {
   id        Int @id @default(autoincrement())
   empresaId Int

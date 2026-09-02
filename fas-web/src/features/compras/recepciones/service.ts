@@ -46,6 +46,13 @@ export const recepcionesService = {
     await api.delete(`compras/recepciones/${id}/adjuntos/${adjuntoId}`)
   },
 
+  // Confirma la carga de un adjunto ya guardado aceptando las advertencias
+  // de características contra el Instructivo de Embalaje (modo PROCESO,
+  // 2026-09-02) — sin volver a subir el archivo.
+  async confirmarAdvertencias(id: number, adjuntoId: number): Promise<{ data: RecepcionDetalle }> {
+    return api.post(`compras/recepciones/${id}/adjuntos/${adjuntoId}/confirmar`).json()
+  },
+
   urlDescargaAdjunto(id: number, adjuntoId: number): string {
     return `/api/compras/recepciones/${id}/adjuntos/${adjuntoId}/descarga`
   },

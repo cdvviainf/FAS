@@ -70,10 +70,10 @@ export interface RecepcionListItem {
   editable: boolean
 }
 
-// Instructivos de Embalaje seleccionados como fuente de folios (modo
-// PROCESO, 2026-09-01) — fijados al crear, no editables después.
+// Instructivos de Embalaje seleccionados (modo PROCESO, 2026-09-01) —
+// fijados al crear, no editables después.
 export interface RecepcionInstructivoRef {
-  instructivo: { id: number; numero: number; estadoInspeccion: string }
+  instructivo: { id: number; numero: number }
 }
 
 export interface RecepcionDetalle extends RecepcionListItem {
@@ -86,6 +86,13 @@ export interface RecepcionDetalle extends RecepcionListItem {
   observaciones: string | null
   adjuntos: RecepcionAdjunto[]
   creadoPor: string
+  // Auditoría de advertencias aceptadas (modo PROCESO, 2026-09-02): la carga
+  // tuvo filas que no calzaban con el detalle de los Instructivos
+  // seleccionados y el usuario decidió cargar igual (todo o nada).
+  advertenciasAceptadas: boolean
+  advertenciasDetalle: string[] | null
+  advertenciasAceptadasEn: string | null
+  advertenciasAceptadasPor: string | null
 }
 
 export interface RecepcionListResponse {
@@ -96,8 +103,8 @@ export interface RecepcionListResponse {
 export interface RecepcionCreateInput {
   ordenCompraId?: number | null
   esProceso?: boolean
-  // Instructivos de Embalaje seleccionados como fuente de folios — solo
-  // aplica en modo PROCESO, obligatorio (mín. 1) en ese caso.
+  // Instructivos de Embalaje seleccionados — solo aplica en modo PROCESO,
+  // obligatorio (mín. 1) en ese caso.
   instructivoIds?: number[]
   plantaId: number
   direccionPlantaId: number

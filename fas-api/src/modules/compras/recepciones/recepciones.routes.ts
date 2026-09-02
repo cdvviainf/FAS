@@ -22,4 +22,9 @@ export async function recepcionesRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
     ctrl.eliminarAdjunto,
   )
+  app.post(
+    '/recepciones/:id/adjuntos/:adjuntoId/confirmar',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.confirmarAdvertencias,
+  )
 }

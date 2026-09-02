@@ -38,9 +38,9 @@ const itemsMenu = [
   { codigo: 'FIN_FACTURACION', nombre: 'Facturación', seccion: 'Finanzas', ruta: '/dashboard/finanzas/facturacion', esAccion: false, orden: 62 },
   // Calidad
   // ruta = prefijo común '/dashboard/calidad' (no solo '/solicitudes'): cubre
-  // también /inspeccion-compra e /inspeccion-proceso, que comparten el mismo
-  // permiso (decisión de negocio, Christian, 2026-07-30) — son la misma
-  // Solicitud de Inspección, solo filtrada por tipoInspeccion.
+  // también /inspeccion-compra (decisión de negocio, Christian, 2026-07-30).
+  // /inspeccion-proceso ya no existe (2026-09-02): el Instructivo de
+  // Embalaje dejó de tener inspección de Calidad, ver calidad.md.
   // Supersesión (2026-08-10): Calidad pasa a rol de revisor — solo ver y
   // cerrar (Aprobada/Rechazada/Objetada). Ingresar/editar/notificar/eliminar
   // se trasladan a COMPRAS_SOLICITUDES (arriba).

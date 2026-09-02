@@ -7,7 +7,6 @@ import { toast } from 'sonner'
 import type { ColumnDef } from '@tanstack/react-table'
 import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-header'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,20 +20,11 @@ import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { instructivoEmbalajeService } from '../service'
 import { instructivosEmbalajeKeys } from '../queries'
-import { ESTADO_INSPECCION_LABELS, ESTADOS_INSPECCION_CON_VEREDICTO } from '../types'
-import type { EstadoInspeccionProceso, InstructivoEmbalajeListItem } from '../types'
+import type { InstructivoEmbalajeListItem } from '../types'
 import { documentosService } from '@/features/documentos/service'
 import { DocumentoPreviewDialog } from '@/features/documentos/components/documento-preview-dialog'
 
 const ITEM = 'COMPRAS_INSTRUCTIVO'
-
-const estadoVariant: Record<EstadoInspeccionProceso, 'secondary' | 'default' | 'outline' | 'destructive'> = {
-  PENDIENTE: 'secondary',
-  NOTIFICADA: 'default',
-  APROBADA: 'outline',
-  RECHAZADA: 'destructive',
-  CERRADA: 'outline',
-}
 
 function InstructivoCellAction({ instructivo }: { instructivo: InstructivoEmbalajeListItem }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -42,12 +32,7 @@ function InstructivoCellAction({ instructivo }: { instructivo: InstructivoEmbala
   const [descargando, setDescargando] = useState(false)
   const queryClient = useQueryClient()
   const router = useRouter()
-  const puedeEscribir = usePuedeEscribir(ITEM)
-  // Congelado: una vez que la inspección de proceso tiene veredicto, el
-  // backend rechaza PATCH/DELETE (409) — se ocultan esas acciones en vez de
-  // dejar que el usuario las intente y choque con el error (compras.md §4.1).
-  const estaCongelado = ESTADOS_INSPECCION_CON_VEREDICTO.includes(instructivo.estadoInspeccion)
-  const puedeEditar = puedeEscribir && !estaCongelado
+  const puedeEditar = usePuedeEscribir(ITEM)
 
   async function descargarPdf() {
     setDescargando(true)
@@ -150,16 +135,6 @@ export const instructivoColumns: ColumnDef<InstructivoEmbalajeListItem>[] = [
     accessorKey: 'creadoEn',
     header: ({ column }) => <DataTableColumnHeader column={column} title='Emitido' />,
     cell: ({ cell }) => <span className='text-sm'>{new Date(cell.getValue<string>()).toLocaleString('es-CL')}</span>,
-  },
-  {
-    id: 'estadoInspeccion',
-    accessorKey: 'estadoInspeccion',
-    header: 'Inspección de Proceso',
-    cell: ({ row }) => (
-      <Badge variant={estadoVariant[row.original.estadoInspeccion]}>
-        {ESTADO_INSPECCION_LABELS[row.original.estadoInspeccion]}
-      </Badge>
-    ),
   },
   {
     id: 'actions',

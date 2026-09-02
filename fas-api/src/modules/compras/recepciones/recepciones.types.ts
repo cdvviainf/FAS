@@ -1,8 +1,8 @@
 export interface RecepcionCreateInput {
   ordenCompraId?: number | null
   esProceso?: boolean
-  // Instructivos de Embalaje seleccionados como fuente de folios — solo
-  // aplica en modo PROCESO (2026-09-01, ver recepciones.schema.ts).
+  // Instructivos de Embalaje seleccionados — solo aplica en modo PROCESO
+  // (2026-09-01, ver recepciones.schema.ts).
   instructivoIds?: number[]
   plantaId: number
   direccionPlantaId: number

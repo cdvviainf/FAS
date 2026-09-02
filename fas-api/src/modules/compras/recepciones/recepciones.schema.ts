@@ -7,9 +7,10 @@ export const recepcionCreateSchema = z
     // PROCESO (true) — Etapa 3, compras.md §7. Con OC el origen siempre es
     // COMPRA, sin importar este campo.
     esProceso: z.boolean().optional(),
-    // Instructivos de Embalaje que respaldan los folios de esta Recepción
-    // (2026-09-01, supersede el pool global de folios de la empresa) — solo
-    // tiene sentido en modo PROCESO.
+    // Instructivos de Embalaje seleccionados para esta Recepción (2026-09-01)
+    // — solo tiene sentido en modo PROCESO. La comparación de características
+    // contra su detalle es una advertencia aceptable/rechazable, no un
+    // bloqueo (2026-09-02, ver recepciones.motor.ts).
     instructivoIds: z.array(z.number().int().positive()).optional(),
     plantaId: z.number().int().positive('La planta es requerida'),
     direccionPlantaId: z.number().int().positive('La dirección de la planta es requerida'),
