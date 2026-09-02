@@ -79,8 +79,11 @@ export async function getNotaVentaConDetalle(id: number) {
 export async function getPalletsDisponibles(
   detalleNV: NonNullable<Awaited<ReturnType<typeof getNotaVentaConDetalle>>>['detalles'],
 ) {
+  // completo: true (2026-09-02, compras.md §4.8) — solo pallets completos
+  // son elegibles para un Embarque; los incompletos siguen siendo stock
+  // disponible pero no despachable.
   const pallets = await prisma.pallet.findMany({
-    where: { embarqueId: null },
+    where: { embarqueId: null, completo: true },
     include: palletInclude,
     orderBy: { creadoEn: 'asc' },
   })
@@ -96,12 +99,16 @@ export async function getPalletsDisponibles(
 // `$transaction` revierte todo el lote, no solo informa el fallo.
 export async function reservarPalletsEnEmbarque(palletIds: number[], embarqueId: number) {
   await prisma.$transaction(async (tx) => {
+    // completo: true — defensa en profundidad (2026-09-02, compras.md §4.8):
+    // getPalletsDisponibles ya filtra los incompletos, pero esto evita que
+    // un pallet marcado incompleto justo entre el listado y la reserva (o
+    // llamado directo a la API) se cuele.
     const claim = await tx.pallet.updateMany({
-      where: { id: { in: palletIds }, embarqueId: null },
+      where: { id: { in: palletIds }, embarqueId: null, completo: true },
       data: { embarqueId },
     })
     if (claim.count !== palletIds.length) {
-      throw new ValidationError('Uno o más pallets ya no están disponibles — puede que otro Embarque los haya reservado')
+      throw new ValidationError('Uno o más pallets ya no están disponibles — puede que otro Embarque los haya reservado o que no estén marcados como Completos')
     }
   })
 }

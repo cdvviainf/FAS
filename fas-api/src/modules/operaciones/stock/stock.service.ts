@@ -1,5 +1,6 @@
+import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './stock.repository.js'
-import type { StockDetalleRow } from './stock.types.js'
+import type { StockDetalleRow, PalletUpdateInput } from './stock.types.js'
 
 export async function obtenerStock(): Promise<StockDetalleRow[]> {
   const pallets = await repo.listPalletsConLineas()
@@ -31,8 +32,31 @@ export async function obtenerStock(): Promise<StockDetalleRow[]> {
         // pierde precisión y acumula diferencia en los totales agregados —
         // el redondeo es responsabilidad de la presentación (fas-web).
         kg: linea.cajas * kgNeto,
+        notaCalidadId: pallet.notaCalidadId,
+        notaCalidad: pallet.notaCalidad,
+        notaCondicionId: pallet.notaCondicionId,
+        notaCondicion: pallet.notaCondicion,
+        completo: pallet.completo,
       })
     }
   }
   return rows
+}
+
+async function validarReferencias(data: PalletUpdateInput) {
+  if (data.notaCalidadId != null) {
+    const nota = await repo.getNotaCalidadById(data.notaCalidadId)
+    if (!nota) throw new ValidationError('La Nota de Calidad seleccionada no existe o fue eliminada')
+  }
+  if (data.notaCondicionId != null) {
+    const nota = await repo.getNotaCondicionById(data.notaCondicionId)
+    if (!nota) throw new ValidationError('La Nota de Condición seleccionada no existe o fue eliminada')
+  }
+}
+
+export async function actualizarPallet(id: number, data: PalletUpdateInput) {
+  const pallet = await repo.getPalletParaEdicion(id)
+  if (!pallet) throw new NotFoundError('Pallet', String(id))
+  await validarReferencias(data)
+  return repo.updatePalletNotas(id, data)
 }

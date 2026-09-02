@@ -40,4 +40,18 @@ export interface StockDetalleRow {
   // cajas × Articulo.kgNetoEnvase de la línea (peso neto de fruta, sin el
   // embalaje) — 0 si el artículo no tiene kgNetoEnvase configurado.
   kg: number
+  // Nota de Calidad/Condición y Completo/Incompleto (compras.md §4.8,
+  // 2026-09-02) — a nivel de Pallet, no de línea (se repiten idénticas en
+  // todas las líneas de un mismo pallet).
+  notaCalidadId: number | null
+  notaCalidad: Mantenedor | null
+  notaCondicionId: number | null
+  notaCondicion: Mantenedor | null
+  completo: boolean
+}
+
+export interface PalletUpdateInput {
+  notaCalidadId?: number | null
+  notaCondicionId?: number | null
+  completo?: boolean
 }

@@ -48,6 +48,9 @@ const MODELOS_TENANT = new Set([
   'ProductorContrato',
   'MovimientoCuentaCorriente',
   'ConceptoLiquidacion',
+  // Notas de Calidad/Condición del Pallet (2026-09-02):
+  'NotaCalidad',
+  'NotaCondicion',
   // Fase 3, lote Ventas:
   'NotaVenta',
   'Embarque',

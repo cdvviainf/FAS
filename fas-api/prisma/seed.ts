@@ -32,6 +32,10 @@ const itemsMenu = [
   { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', seccion: 'Ventas', ruta: '/dashboard/ventas/cobranza', esAccion: false, orden: 42 },
   // Operaciones
   { codigo: 'OPER_MATERIALES', nombre: 'Materiales', seccion: 'Operaciones', ruta: '/dashboard/configuracion/articulos', esAccion: false, orden: 50 },
+  // Gestión de Pallets (2026-09-02, compras.md §4.8): edita Nota de
+  // Calidad/Condición y Completo/Incompleto de un Pallet ya recepcionado —
+  // separado del reporte de solo lectura REPORTES_STOCK_FRUTA.
+  { codigo: 'OPERACIONES_GESTION_PALLETS', nombre: 'Gestión de Pallets', seccion: 'Operaciones', ruta: '/dashboard/operaciones/pallets', esAccion: false, orden: 51 },
   // Finanzas
   { codigo: 'FIN_COSTOS', nombre: 'Gestión de Costos', seccion: 'Finanzas', ruta: '/dashboard/finanzas/costos', esAccion: false, orden: 60 },
   { codigo: 'FIN_PAGOS', nombre: 'Gestión de Pagos', seccion: 'Finanzas', ruta: '/dashboard/finanzas/pagos', esAccion: false, orden: 61 },
@@ -267,6 +271,63 @@ async function main() {
     }
   }
   console.log(`UnidadMedida: ${unidadesCreadas} unidades nuevas creadas.`)
+
+  // Notas de Calidad/Condición del Pallet (2026-09-02, compras.md §4.8):
+  // catálogo inicial de ejemplo (A-D / 1-4), habilitado desde ya para todas
+  // las especies existentes en AGROSAN — decisión del usuario, para poder
+  // probar/ajustar de inmediato en vez de partir con el catálogo vacío.
+  console.log('Seeding NotaCalidad (A-D) / NotaCondicion (1-4)...')
+  const especiesAgrosan = await prisma.especie.findMany({
+    where: { empresaId: agrosanParaParametros.id, eliminadoEn: null },
+    select: { id: true },
+  })
+  const notasCalidadBase = [
+    { codigo: 'A', descripcion: 'A' },
+    { codigo: 'B', descripcion: 'B' },
+    { codigo: 'C', descripcion: 'C' },
+    { codigo: 'D', descripcion: 'D' },
+  ]
+  const notasCondicionBase = [
+    { codigo: '1', descripcion: '1' },
+    { codigo: '2', descripcion: '2' },
+    { codigo: '3', descripcion: '3' },
+    { codigo: '4', descripcion: '4' },
+  ]
+  let notasCalidadCreadas = 0
+  for (const n of notasCalidadBase) {
+    const existente = await prisma.notaCalidad.findFirst({
+      where: { empresaId: agrosanParaParametros.id, codigo: n.codigo, eliminadoEn: null },
+    })
+    if (!existente) {
+      await prisma.notaCalidad.create({
+        data: {
+          empresaId: agrosanParaParametros.id,
+          ...n,
+          creadoPor: SISTEMA_USER,
+          especies: { create: especiesAgrosan.map((e) => ({ especieId: e.id })) },
+        },
+      })
+      notasCalidadCreadas++
+    }
+  }
+  let notasCondicionCreadas = 0
+  for (const n of notasCondicionBase) {
+    const existente = await prisma.notaCondicion.findFirst({
+      where: { empresaId: agrosanParaParametros.id, codigo: n.codigo, eliminadoEn: null },
+    })
+    if (!existente) {
+      await prisma.notaCondicion.create({
+        data: {
+          empresaId: agrosanParaParametros.id,
+          ...n,
+          creadoPor: SISTEMA_USER,
+          especies: { create: especiesAgrosan.map((e) => ({ especieId: e.id })) },
+        },
+      })
+      notasCondicionCreadas++
+    }
+  }
+  console.log(`NotaCalidad: ${notasCalidadCreadas} nuevas. NotaCondicion: ${notasCondicionCreadas} nuevas.`)
 
   // Entidad placeholder para Cierre Comercial sin cliente definido todavía
   // (decisión de negocio, Christian, 2026-07-30) — preseleccionada al crear

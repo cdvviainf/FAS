@@ -11,6 +11,8 @@ import { conceptosLiquidacionRoutes } from './conceptos-liquidacion/conceptos-li
 import { condicionesPagoRoutes } from './condiciones-pago/condiciones-pago.routes.js'
 import { prefijosCodigoRoutes } from './prefijos-codigo/prefijos-codigo.routes.js'
 import { templatesCargaRoutes } from './templates-carga/templates-carga.routes.js'
+import { notasCalidadRoutes } from './notas-calidad/notas-calidad.routes.js'
+import { notasCondicionRoutes } from './notas-condicion/notas-condicion.routes.js'
 
 const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'pais', prefixRuta: 'paises', label: 'País', tienePaisOrigen: true, schemaKey: 'pais' },
@@ -59,6 +61,8 @@ export async function configRoutes(app: FastifyInstance) {
   await app.register(condicionesPagoRoutes)
   await app.register(prefijosCodigoRoutes)
   await app.register(templatesCargaRoutes)
+  await app.register(notasCalidadRoutes)
+  await app.register(notasCondicionRoutes)
 
   // Menú accesible del usuario autenticado
   app.get('/me/menu', { preHandler: [requireAuth] }, getMiMenu)

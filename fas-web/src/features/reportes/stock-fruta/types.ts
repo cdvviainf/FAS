@@ -40,6 +40,14 @@ export interface StockDetalleRow {
   fechaRecepcion: string
   cajas: number
   kg: number
+  // Nota de Calidad/Condición y Completo/Incompleto (2026-09-02) — a nivel de
+  // Pallet, no de línea (se repiten idénticas en todas las líneas de un
+  // mismo pallet).
+  notaCalidadId: number | null
+  notaCalidad: MantenedorRef | null
+  notaCondicionId: number | null
+  notaCondicion: MantenedorRef | null
+  completo: boolean
 }
 
 export type AntiguedadBucket = 'fresh' | 'mid' | 'old'

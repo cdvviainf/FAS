@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import type { PalletUpdateInput } from './stock.types.js'
 
 const entidadSelect = { id: true, codigo: true, descripcion: true }
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
@@ -18,6 +19,8 @@ export async function listPalletsConLineas() {
     include: {
       productor: { select: entidadSelect },
       recepcion: { select: { estado: true } },
+      notaCalidad: { select: mantenedorSelect },
+      notaCondicion: { select: mantenedorSelect },
       lineas: {
         include: {
           especie: { select: mantenedorSelect },
@@ -32,4 +35,33 @@ export async function listPalletsConLineas() {
     },
     orderBy: { creadoEn: 'desc' },
   })
+}
+
+// Gestión de Pallets (2026-09-02, compras.md §4.8): solo valida existencia
+// — la restricción del selector de Nota Calidad/Condición por especie es
+// client-side (decisión del usuario, sin validación dura en backend).
+export async function getPalletParaEdicion(id: number) {
+  return prisma.pallet.findFirst({
+    where: { id },
+    select: { id: true },
+  })
+}
+
+export async function updatePalletNotas(id: number, data: PalletUpdateInput) {
+  return prisma.pallet.update({
+    where: { id },
+    data,
+    include: {
+      notaCalidad: { select: mantenedorSelect },
+      notaCondicion: { select: mantenedorSelect },
+    },
+  })
+}
+
+export async function getNotaCalidadById(id: number) {
+  return prisma.notaCalidad.findFirst({ where: { id, eliminadoEn: null } })
+}
+
+export async function getNotaCondicionById(id: number) {
+  return prisma.notaCondicion.findFirst({ where: { id, eliminadoEn: null } })
 }

@@ -1,23 +1,28 @@
 'use client'
 
 import { Fragment, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Bar, BarChart, XAxis } from 'recharts'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Icons } from '@/components/icons'
 import { MultiCombobox } from '@/components/shared/multi-combobox'
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
-import { stockFrutaService } from '../service'
-import { ESTADO_STOCK_LABELS, ANTIGUEDAD_LABELS, diasAntiguedad, bucketAntiguedad } from '../types'
-import type { StockDetalleRow, AntiguedadBucket } from '../types'
+import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { notasCalidadService } from '@/features/notas-calidad/service'
+import { notasCondicionService } from '@/features/notas-condicion/service'
+import { gestionPalletsService } from '../service'
+import { ESTADO_STOCK_LABELS, diasAntiguedad, bucketAntiguedad } from '@/features/reportes/stock-fruta/types'
+import type { AntiguedadBucket } from '@/features/reportes/stock-fruta/types'
+import type { StockDetalleRow } from '../types'
 
-// Sentinel para "sin nota asignada" — un pallet sin Nota Calidad/Condición
-// todavía sigue siendo un valor filtrable, no un registro a excluir.
+const ITEM = 'OPERACIONES_GESTION_PALLETS'
 const SIN_NOTA = '__SIN_NOTA__'
+const NINGUNA = '__NINGUNA__'
 
 interface Filters {
   especieIds: string[]
@@ -36,7 +41,6 @@ const FILTROS_VACIOS: Filters = {
   notaCalidadIds: [], notaCondicionIds: [], completos: [],
 }
 
-// Orden fijado por el usuario: Especie, Variedad, Calibre, Categoría, Estado, Productor.
 const FACETS: {
   key: keyof Filters
   label: string
@@ -69,29 +73,59 @@ const AGING_BADGE_VARIANT: Record<AntiguedadBucket, string> = {
   mid: 'border-amber-600/30 bg-amber-600/10 text-amber-700 dark:text-amber-400',
   old: 'border-red-600/30 bg-red-600/10 text-red-700 dark:text-red-400',
 }
-const AGING_BAR_COLOR: Record<AntiguedadBucket, string> = { fresh: 'bg-emerald-500', mid: 'bg-amber-500', old: 'bg-red-500' }
-
-// Serie única (cajas por calibre) — un solo hue, sin leyenda (dataviz: job =
-// magnitud por categoría, no identidad entre series).
-const CALIBRE_CHART_CONFIG = {
-  cajas: { label: 'Cajas', color: 'var(--chart-1)' },
-} satisfies ChartConfig
 
 function groupKey(row: StockDetalleRow): string {
   return `${row.especieId}-${row.variedadId}-${row.calibreId}-${row.categoriaId}`
 }
 
-export function StockFrutaClient() {
+export function GestionPalletsClient() {
+  const puedeEscribir = usePuedeEscribir(ITEM)
+  const queryClient = useQueryClient()
   const [filters, setFilters] = useState<Filters>(FILTROS_VACIOS)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   const { data, isLoading } = useQuery({
-    queryKey: ['stock-fruta'],
-    queryFn: () => stockFrutaService.list(),
+    queryKey: ['gestion-pallets'],
+    queryFn: () => gestionPalletsService.list(),
     staleTime: 30_000,
   })
   const rows = useMemo(() => data?.data ?? [], [data])
-  const filteredRows = useMemo(() => rows.filter((r) => matches(r, filters)), [rows, filters]);
+  const filteredRows = useMemo(() => rows.filter((r) => matches(r, filters)), [rows, filters])
+
+  // Especie "del pallet" para restringir el selector de Nota Calidad/Condición
+  // (compras.md §4.8: se asume 1 especie por pallet, y si llegara a mezclar,
+  // se usa la especie de su primera línea) — derivada del dataset completo
+  // (no de `filteredRows`, para no depender de qué filtros están activos), no
+  // de la especie de la fila que se está pintando en cada momento.
+  const especieDelPallet = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const row of rows) {
+      if (!map.has(row.palletId)) map.set(row.palletId, row.especieId)
+    }
+    return map
+  }, [rows])
+
+  const { data: notasCalidad } = useQuery({
+    queryKey: ['notas-calidad'],
+    queryFn: () => notasCalidadService.list(),
+    staleTime: 60_000,
+  })
+  const { data: notasCondicion } = useQuery({
+    queryKey: ['notas-condicion'],
+    queryFn: () => notasCondicionService.list(),
+    staleTime: 60_000,
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ palletId, data: body }: { palletId: number; data: { notaCalidadId?: number | null; notaCondicionId?: number | null; completo?: boolean } }) =>
+      gestionPalletsService.update(palletId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gestion-pallets'] })
+      queryClient.invalidateQueries({ queryKey: ['stock-fruta'] })
+      toast.success('Pallet actualizado')
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al actualizar el pallet'),
+  })
 
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {
@@ -102,40 +136,30 @@ export function StockFrutaClient() {
     })
   }
 
-  // ---- Tarjetas por especie (cajas, kilos, apertura por antigüedad) ----
-  const especieCards = useMemo(() => {
-    const groups = new Map<number, {
-      especieId: number; nombre: string; cajas: number; kg: number
-      fresh: number; mid: number; old: number; pallets: Set<number>
-      calibres: Map<number, { orden: number; label: string; cajas: number }>
-    }>()
-    filteredRows.forEach((row) => {
-      let g = groups.get(row.especieId)
-      if (!g) {
-        g = { especieId: row.especieId, nombre: row.especie.descripcion, cajas: 0, kg: 0, fresh: 0, mid: 0, old: 0, pallets: new Set(), calibres: new Map() }
-        groups.set(row.especieId, g)
-      }
-      g.cajas += row.cajas
-      g.kg += row.kg
-      g[bucketAntiguedad(diasAntiguedad(row.fechaRecepcion))] += row.cajas
-      g.pallets.add(row.palletId)
-      const c = g.calibres.get(row.calibreId) ?? { orden: row.calibre.orden, label: row.calibre.descripcion, cajas: 0 }
-      c.cajas += row.cajas
-      g.calibres.set(row.calibreId, c)
-    })
-    return [...groups.values()]
-      .sort((a, b) => b.cajas - a.cajas)
-      .map((g) => ({
-        ...g,
-        // Eje X en el orden real del maestro de Calibres (por especie), no alfabético.
-        calibresChart: [...g.calibres.values()].sort((a, b) => a.orden - b.orden),
-      }))
-  }, [filteredRows])
+  // Excluye notas bloqueadas de las opciones de una NUEVA asignación (no
+  // aparecen en el selector para elegir), pero si el valor ya asignado a
+  // este pallet es justo una nota que se bloqueó después, se reincorpora
+  // para que el Select pueda seguir mostrando su etiqueta como valor
+  // histórico — nunca se fuerza a "—" solo porque la nota se bloqueó.
+  function notasCalidadValidas(especieId: number, valorActual: number | null) {
+    const validas = (notasCalidad?.data ?? []).filter((n) => n.especies.some((e) => e.especieId === especieId))
+    const disponibles = validas.filter((n) => !n.bloqueado)
+    if (valorActual != null && !disponibles.some((n) => n.id === valorActual)) {
+      const actual = (notasCalidad?.data ?? []).find((n) => n.id === valorActual)
+      if (actual) return [...disponibles, actual]
+    }
+    return disponibles
+  }
+  function notasCondicionValidas(especieId: number, valorActual: number | null) {
+    const validas = (notasCondicion?.data ?? []).filter((n) => n.especies.some((e) => e.especieId === especieId))
+    const disponibles = validas.filter((n) => !n.bloqueado)
+    if (valorActual != null && !disponibles.some((n) => n.id === valorActual)) {
+      const actual = (notasCondicion?.data ?? []).find((n) => n.id === valorActual)
+      if (actual) return [...disponibles, actual]
+    }
+    return disponibles
+  }
 
-  const totalCajas = filteredRows.reduce((acc, r) => acc + r.cajas, 0)
-  const totalKg = filteredRows.reduce((acc, r) => acc + r.kg, 0)
-
-  // ---- Grilla: grupo Especie/Variedad/Calibre/Categoría -> detalle por pallet ----
   const grupos = useMemo(() => {
     const map = new Map<string, {
       key: string; especie: string; variedad: string; calibre: string; categoria: string
@@ -158,97 +182,24 @@ export function StockFrutaClient() {
   }, [filteredRows])
 
   if (isLoading) {
-    return <p className='text-muted-foreground py-10 text-center text-sm'>Cargando stock...</p>
+    return <p className='text-muted-foreground py-10 text-center text-sm'>Cargando pallets...</p>
   }
+
+  // Nota Calidad/Condición/Completo son atributos del Pallet completo, no de
+  // cada línea — un mismo pallet puede aparecer en varias filas (distintas
+  // líneas, incluso en grupos distintos). Este Set se reconstruye en cada
+  // render y se muta mientras se arma el JSX de abajo: solo la PRIMERA fila
+  // en la que aparece un `palletId` recibe los controles editables; el resto
+  // muestra el valor ya guardado como texto, para no repetir el mismo campo
+  // editable varias veces (QAS-PCN-002).
+  const renderedPalletIds = new Set<number>()
 
   return (
     <div className='space-y-6'>
-      {/* Tarjetas por especie */}
-      <section className='space-y-3'>
-        <div className='flex items-baseline justify-between'>
-          <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>Stock por especie</h2>
-          <p className='text-muted-foreground text-xs tabular-nums'>
-            {especieCards.length} especie{especieCards.length === 1 ? '' : 's'} · {totalCajas.toLocaleString('es-CL')} cajas · {Math.round(totalKg).toLocaleString('es-CL')} kg
-          </p>
-        </div>
-        {especieCards.length === 0 ? (
-          <p className='text-muted-foreground rounded-md border border-dashed p-8 text-center text-sm'>Sin stock para estos filtros.</p>
-        ) : (
-          <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-            {especieCards.map((g) => {
-              const pct = (n: number) => (g.cajas ? (n / g.cajas) * 100 : 0)
-              return (
-                <button
-                  key={g.especieId}
-                  type='button'
-                  onClick={() =>
-                    setFilters((f) => {
-                      const id = String(g.especieId)
-                      const has = f.especieIds.includes(id)
-                      return { ...f, especieIds: has ? f.especieIds.filter((v) => v !== id) : [...f.especieIds, id] }
-                    })
-                  }
-                  className={`rounded-lg border p-4 text-left transition-colors hover:border-primary/50 ${filters.especieIds.includes(String(g.especieId)) ? 'border-primary ring-1 ring-primary' : ''}`}
-                >
-                  <div className='flex items-start justify-between gap-2'>
-                    <h3 className='font-serif text-base font-semibold'>{g.nombre}</h3>
-                    <span className='text-muted-foreground text-[11px] whitespace-nowrap tabular-nums'>{g.pallets.size} pallets</span>
-                  </div>
-                  <div className='mt-2 flex gap-5'>
-                    <div>
-                      <div className='text-2xl font-bold tabular-nums'>{g.cajas.toLocaleString('es-CL')}</div>
-                      <div className='text-muted-foreground text-[10px] tracking-wide uppercase'>Cajas</div>
-                    </div>
-                    <div>
-                      <div className='text-2xl font-bold tabular-nums'>{Math.round(g.kg).toLocaleString('es-CL')}</div>
-                      <div className='text-muted-foreground text-[10px] tracking-wide uppercase'>Kilos</div>
-                    </div>
-                  </div>
-                  <div className='mt-3'>
-                    <div className='flex h-1.5 overflow-hidden rounded-full bg-muted'>
-                      <div className={AGING_BAR_COLOR.fresh} style={{ width: `${pct(g.fresh)}%` }} />
-                      <div className={AGING_BAR_COLOR.mid} style={{ width: `${pct(g.mid)}%` }} />
-                      <div className={AGING_BAR_COLOR.old} style={{ width: `${pct(g.old)}%` }} />
-                    </div>
-                    <div className='text-muted-foreground mt-1.5 flex flex-wrap gap-x-2.5 gap-y-0.5 text-[10.5px]'>
-                      <span>{ANTIGUEDAD_LABELS.fresh}: {g.fresh.toLocaleString('es-CL')}</span>
-                      <span>{ANTIGUEDAD_LABELS.mid}: {g.mid.toLocaleString('es-CL')}</span>
-                      <span>{ANTIGUEDAD_LABELS.old}: {g.old.toLocaleString('es-CL')}</span>
-                    </div>
-                  </div>
-                  {g.calibresChart.length > 0 && (
-                    <div className='mt-3'>
-                      <p className='text-muted-foreground mb-1 text-[10px] tracking-wide uppercase'>Distribución por calibre</p>
-                      <ChartContainer config={CALIBRE_CHART_CONFIG} className='aspect-auto h-16 w-full'>
-                        <BarChart data={g.calibresChart} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
-                          <XAxis
-                            dataKey='label'
-                            tickLine={false}
-                            axisLine={false}
-                            interval={0}
-                            tick={{ fontSize: 9 }}
-                          />
-                          <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
-                          <Bar dataKey='cajas' fill='var(--color-cajas)' radius={2} />
-                        </BarChart>
-                      </ChartContainer>
-                    </div>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </section>
-
       {/* Filtros */}
       <Card className='py-3'>
         <CardContent className='flex flex-wrap items-end gap-3'>
           {FACETS.map((facet) => {
-            // El catálogo de opciones sale de TODO el dataset (rows), no solo
-            // de `scoped` — si no, una opción sin cajas bajo los demás
-            // filtros activos desaparecería en vez de quedar deshabilitada
-            // (QAS-STK-005, QA ronda 2). Los contadores sí salen de `scoped`.
             const scoped = rows.filter((r) => matches(r, filters, facet.key))
             const counts = new Map<string, number>()
             scoped.forEach((row) => {
@@ -286,7 +237,7 @@ export function StockFrutaClient() {
       <section className='space-y-3'>
         <div className='flex items-baseline justify-between'>
           <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-            Detalle por especie, variedad, calibre y categoría
+            Pallets — Especie, Variedad, Calibre y Categoría
           </h2>
           <div className='flex gap-2 text-xs'>
             <button type='button' className='text-primary hover:underline' onClick={() => setExpandedGroups(new Set(grupos.map((g) => g.key)))}>
@@ -317,7 +268,7 @@ export function StockFrutaClient() {
             <TableBody>
               {grupos.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className='text-muted-foreground text-center'>Sin combinaciones para estos filtros.</TableCell>
+                  <TableCell colSpan={10} className='text-muted-foreground text-center'>Sin pallets para estos filtros.</TableCell>
                 </TableRow>
               )}
               {grupos.map((g) => {
@@ -356,6 +307,14 @@ export function StockFrutaClient() {
                           .map((row) => {
                             const dias = diasAntiguedad(row.fechaRecepcion)
                             const bucket = bucketAntiguedad(dias)
+                            const disabled = !puedeEscribir || updateMutation.isPending
+                            // Solo la primera fila donde aparece este pallet
+                            // (en toda la tabla, no solo en este grupo) edita
+                            // sus 3 campos — el resto los muestra de solo
+                            // lectura, para no repetir el mismo control del
+                            // Pallet varias veces (QAS-PCN-002).
+                            const esPrimeraFilaDelPallet = !renderedPalletIds.has(row.palletId)
+                            renderedPalletIds.add(row.palletId)
                             return (
                               <TableRow key={row.palletLineaId}>
                                 <TableCell></TableCell>
@@ -369,11 +328,64 @@ export function StockFrutaClient() {
                                 </TableCell>
                                 <TableCell className='text-muted-foreground text-right tabular-nums'>{row.cajas.toLocaleString('es-CL')}</TableCell>
                                 <TableCell className='text-muted-foreground text-right tabular-nums'>{Math.round(row.kg).toLocaleString('es-CL')}</TableCell>
-                                <TableCell className='text-muted-foreground'>{row.notaCalidad?.descripcion ?? '—'}</TableCell>
-                                <TableCell className='text-muted-foreground'>{row.notaCondicion?.descripcion ?? '—'}</TableCell>
-                                <TableCell>
-                                  <Badge variant={row.completo ? 'default' : 'secondary'}>{row.completo ? 'Sí' : 'No'}</Badge>
-                                </TableCell>
+                                {esPrimeraFilaDelPallet ? (
+                                  <>
+                                    <TableCell>
+                                      <Select
+                                        value={row.notaCalidadId != null ? String(row.notaCalidadId) : NINGUNA}
+                                        disabled={disabled}
+                                        onValueChange={(v) => updateMutation.mutate({
+                                          palletId: row.palletId,
+                                          data: { notaCalidadId: v === NINGUNA ? null : Number(v) },
+                                        })}
+                                      >
+                                        <SelectTrigger className='h-8 w-28'><SelectValue placeholder='—' /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value={NINGUNA}>—</SelectItem>
+                                          {notasCalidadValidas(especieDelPallet.get(row.palletId) ?? row.especieId, row.notaCalidadId).map((n) => (
+                                            <SelectItem key={n.id} value={String(n.id)}>{n.descripcion}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Select
+                                        value={row.notaCondicionId != null ? String(row.notaCondicionId) : NINGUNA}
+                                        disabled={disabled}
+                                        onValueChange={(v) => updateMutation.mutate({
+                                          palletId: row.palletId,
+                                          data: { notaCondicionId: v === NINGUNA ? null : Number(v) },
+                                        })}
+                                      >
+                                        <SelectTrigger className='h-8 w-28'><SelectValue placeholder='—' /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value={NINGUNA}>—</SelectItem>
+                                          {notasCondicionValidas(especieDelPallet.get(row.palletId) ?? row.especieId, row.notaCondicionId).map((n) => (
+                                            <SelectItem key={n.id} value={String(n.id)}>{n.descripcion}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Switch
+                                        checked={row.completo}
+                                        disabled={disabled}
+                                        onCheckedChange={(checked) => updateMutation.mutate({
+                                          palletId: row.palletId,
+                                          data: { completo: checked },
+                                        })}
+                                      />
+                                    </TableCell>
+                                  </>
+                                ) : (
+                                  <>
+                                    <TableCell className='text-muted-foreground'>{row.notaCalidad?.descripcion ?? '—'}</TableCell>
+                                    <TableCell className='text-muted-foreground'>{row.notaCondicion?.descripcion ?? '—'}</TableCell>
+                                    <TableCell>
+                                      <Badge variant={row.completo ? 'default' : 'secondary'}>{row.completo ? 'Sí' : 'No'}</Badge>
+                                    </TableCell>
+                                  </>
+                                )}
                               </TableRow>
                             )
                           })}

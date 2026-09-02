@@ -178,6 +178,7 @@ Unidad mínima **indivisible** de inventario. Generado por la Recepción. Compue
 - `origen` (`COMPRA` | `CONSIGNACION` | `PROCESO`, heredado de la Recepción)
 - `embarqueId` (FK → Embarque, **nullable**) — se puebla al reservar el pallet a un embarque (Ventas); un pallet pertenece a **un solo** Embarque a la vez
 - `productorId` (FK → Productor)
+- `notaCalidadId` (FK → NotaCalidad, **nullable**), `notaCondicionId` (FK → NotaCondicion, **nullable**), `completo` (Boolean, default `false`) **(nuevo, 2026-09-02 — ver §4.8)**
 - `createdAt`
 
 ### 4.6 PalletLinea
@@ -197,9 +198,27 @@ Unidad mínima **indivisible** de inventario. Generado por la Recepción. Compue
 - Recepcion `1 — N` Pallet
 - Pallet `1 — N` PalletLinea
 - Pallet `N — 0..1` Embarque *(reserva; nullable hasta reservar, desvinculable hasta confirmar despacho)*
+- Pallet `N — 0..1` NotaCalidad, Pallet `N — 0..1` NotaCondicion **(nuevo, 2026-09-02 — ver §4.8)**
 
 
-### 4.8 DocumentoCompra (facturas y notas de crédito de proveedor)
+### 4.8 Notas de Calidad/Condición y Completo/Incompleto del Pallet (2026-09-02)
+
+El Instructivo de Embalaje dejó de tener veredicto de Calidad (`calidad.md`, supersesión 2026-09-02) — como reemplazo informativo a nivel de Stock, el Pallet gana dos catálogos configurables y un flag de completitud, capturados en la Recepción de fruta:
+
+- **`NotaCalidad`** y **`NotaCondicion`**: mantenedores "+ base" (`codigo`, `descripcion`, `descripcionExtranjera?`, `bloqueado`) — ej. Nota Calidad `A/B/C/D`, Nota Condición `1/2/3/4`. Cada uno tiene una tabla puente (`NotaCalidadEspecie`/`NotaCondicionEspecie`, `@@unique([notaId, especieId])`) que define para qué Especies es válida esa nota — mismo patrón catálogo-maestro + validez-por-especie que `ConceptoLiquidacion`/`ConceptoLiquidacionEspecie` (`productores.md`). Gestionados en Configuración → Calidad (`CONFIG_MANTENEDORES`).
+- **`Pallet.notaCalidadId` / `Pallet.notaCondicionId`**: ambos opcionales, a nivel de **Pallet completo** (no de línea) — decisión de negocio: un pallet siempre tiene una única especie en la práctica (todas sus líneas comparten especie), así que el selector se restringe por la especie de la primera línea. Sin validación dura en backend contra la tabla de validez — solo restringe las opciones del selector en el frontend. FK **compuesta** `(empresaId, nota...Id) -> NotaCalidad/NotaCondicion(empresaId, id)` — mismo patrón que `recepcionId`/`embarqueId`/`productorId` en el propio Pallet (aislamiento multiempresa a nivel de BD, no solo de aplicación).
+- **`Pallet.completo`** (Boolean, default `false`): indica si el pallet está completo o incompleto. Puramente informativo salvo por una regla dura: **solo pallets `completo = true` son elegibles para reservarse a un Embarque** (`ventas.md` — Embarque, paso "Seleccionar Pallets"); los incompletos siguen siendo stock disponible (visibles y filtrables en el reporte de Stock), simplemente no despachables.
+
+**Captura — Excel de Recepción (ambos orígenes, COMPRA y PROCESO).** El Template de Carga gana 3 columnas nuevas, opcionales de mapear (`CAMPOS_OPCIONALES_POR_TIPO`, no rompe Templates ya existentes que no las contemplan): `NOTA_CALIDAD`, `NOTA_CONDICION`, `COMPLETO`. Reglas del motor (`recepciones.motor.ts`):
+- Celda vacía es válida (queda `null`/sin definir) — no es un dato obligatorio por fila.
+- Si trae texto, se resuelve contra el catálogo respectivo por `codigo`/`descripcion` (mismo matching que especie/variedad/etc.) — texto que no matchea ningún registro es error de Etapa 3.
+- `COMPLETO` acepta `SI/SÍ/COMPLETO/TRUE/1` → `true`, `NO/INCOMPLETO/FALSE/0` → `false` (case-insensitive, sin usar `z.coerce.boolean()` — bug sistémico ya detectado en Materiales/Productores), vacío → `null`. Cualquier otro texto es error.
+- **Consistencia por N° de Pallet**: como estos 3 campos son a nivel de Pallet, si dos filas Excel del mismo N° de Pallet traen valores **no vacíos y distintos** para Nota Calidad, Nota Condición o Completo, la carga se **rechaza con error duro** (no advertencia) — decisión de negocio. Una celda vacía nunca cuenta como "distinta" de un valor presente en otra fila del mismo pallet.
+- Si todas las filas del pallet traen la celda vacía: `notaCalidadId`/`notaCondicionId` quedan `null`, `completo` queda `false` (default conservador — no despachable hasta confirmarlo explícitamente).
+
+**Edición posterior — Gestión de Pallets.** Nueva pantalla `OPERACIONES_GESTION_PALLETS` (sección Operaciones, niveles LECTURA/TOTAL), simétrica al reporte de Stock de Fruta (§11) en filtros y grilla de detalle, pero con estos 3 campos editables (selector + selector + switch) vía `PATCH /api/operaciones/stock/pallets/:id`. Existe porque el Excel puede traer estos campos vacíos y alguien necesita poder completarlos/corregirlos después sin volver a cargar el archivo.
+
+### 4.9 DocumentoCompra (facturas y notas de crédito de proveedor)
 
 Documentos tributarios de compra **capturados desde una base de datos / API externa** (no se emiten en FAS). La captura trae tanto **facturas** como **notas de crédito**; la NC llega **ya aplicada y conciliada** a su factura de origen.
 
@@ -449,11 +468,11 @@ Por especie: cajas totales, kilos totales, y apertura por **antigüedad** en 3 t
 
 ### 11.3 Grilla de detalle
 
-Fila cabecera agrupada por **Especie / Variedad / Calibre / Categoría** (cajas + kilos de la combinación), expandible a las líneas de Pallet individuales que la componen: **Folio** (`numeroPallet`) / Productor / Antigüedad (días) / Estado / Cajas / Kilos. Sin porcentajes.
+Fila cabecera agrupada por **Especie / Variedad / Calibre / Categoría** (cajas + kilos de la combinación), expandible a las líneas de Pallet individuales que la componen: **Folio** (`numeroPallet`) / Productor / Antigüedad (días) / Estado / Cajas / Kilos / **Nota Calidad / Nota Condición / Completo** (nuevo, 2026-09-02, §4.8 — a nivel de Pallet, se repiten idénticas en todas las líneas de un mismo pallet; solo lectura acá, editables en Operaciones → Gestión de Pallets). Sin porcentajes.
 
 ### 11.4 Filtros
 
-Multiselect, en este orden fijo: **Especie, Variedad, Calibre, Categoría, Estado, Productor**. En cascada: las opciones de cada filtro se calculan sobre el dataset ya acotado por los demás filtros activos (excluyéndose a sí mismo) — una opción sin cajas bajo la selección actual se deshabilita en vez de ocultarse, para que se entienda por qué no está disponible. No hay filtro de origen ni de rango de fecha (decisión de negocio, Christian, 2026-08-24 — el origen sigue viajando en cada fila por si se necesita más adelante, solo no se expone como filtro ni columna).
+Multiselect, en este orden fijo: **Especie, Variedad, Calibre, Categoría, Estado, Productor, Nota Calidad, Nota Condición, Completo** (los 3 últimos, nuevo 2026-09-02). En cascada: las opciones de cada filtro se calculan sobre el dataset ya acotado por los demás filtros activos (excluyéndose a sí mismo) — una opción sin cajas bajo la selección actual se deshabilita en vez de ocultarse, para que se entienda por qué no está disponible. No hay filtro de origen ni de rango de fecha (decisión de negocio, Christian, 2026-08-24 — el origen sigue viajando en cada fila por si se necesita más adelante, solo no se expone como filtro ni columna).
 
 ### 11.5 Notas de implementación
 

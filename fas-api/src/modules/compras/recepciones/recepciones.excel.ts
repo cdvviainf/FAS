@@ -21,6 +21,11 @@ export interface FilaExcelCruda {
   calibre: string
   cajas: string
   productor: string
+  // Opcionales (compras.md §4.8, 2026-09-02) — el Template puede no
+  // mapearlas y, si las mapea, la celda puede venir vacía.
+  notaCalidad: string
+  notaCondicion: string
+  completo: string
 }
 
 interface TemplateParaLectura {
@@ -156,6 +161,9 @@ export function leerFilasCrudas(
       calibre: valores.CALIBRE,
       cajas: valores.CAJAS,
       productor: valores.PRODUCTOR,
+      notaCalidad: valores.NOTA_CALIDAD,
+      notaCondicion: valores.NOTA_CONDICION,
+      completo: valores.COMPLETO,
     })
     fila++
   }

@@ -23,7 +23,29 @@ export const TIPO_TEMPLATE_CARGA_LABELS: Record<TipoTemplateCarga, string> = {
 // validarCoherenciaTemplate en el service) hasta que se le agreguen campos
 // en una iteración futura.
 export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
-  RECEPCION: ['NUMERO_PALLET', 'ESPECIE', 'VARIEDAD', 'CATEGORIA', 'ARTICULO', 'CALIBRE', 'CAJAS', 'PRODUCTOR'],
+  RECEPCION: [
+    'NUMERO_PALLET',
+    'ESPECIE',
+    'VARIEDAD',
+    'CATEGORIA',
+    'ARTICULO',
+    'CALIBRE',
+    'CAJAS',
+    'PRODUCTOR',
+    'NOTA_CALIDAD',
+    'NOTA_CONDICION',
+    'COMPLETO',
+  ],
+  PACKING_LIST: [],
+}
+
+// Campos del tipo que NO son obligatorios de mapear al crear/editar un
+// Template (2026-09-02, compras.md §4.8): Nota Calidad/Condición/Completo
+// son opcionales tanto a nivel de columna (el Template puede no traerlas)
+// como de valor (la celda puede venir vacía) — no romper templates ya
+// existentes que no las contemplaban.
+export const CAMPOS_OPCIONALES_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
+  RECEPCION: ['NOTA_CALIDAD', 'NOTA_CONDICION', 'COMPLETO'],
   PACKING_LIST: [],
 }
 
@@ -36,6 +58,9 @@ export const CAMPO_TEMPLATE_CARGA_LABELS: Record<string, string> = {
   CALIBRE: 'Calibre',
   CAJAS: 'Cajas',
   PRODUCTOR: 'Productor',
+  NOTA_CALIDAD: 'Nota de Calidad',
+  NOTA_CONDICION: 'Nota de Condición',
+  COMPLETO: 'Completo/Incompleto',
 }
 
 export interface TemplateCargaCampoInput {

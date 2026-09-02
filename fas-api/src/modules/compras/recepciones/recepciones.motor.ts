@@ -35,6 +35,13 @@ interface FilaResuelta {
   productorId: number
   comboLabel: string // "especie / variedad / categoría / artículo", para mensajes
   comboKey: string // especieId-variedadId-categoriaId-articuloId, para agrupar
+  // Nota de Calidad/Condición y Completo/Incompleto (compras.md §4.8,
+  // 2026-09-02) — opcionales por fila: `null` = la celda vino vacía (sin
+  // opinión), no un valor en conflicto. Se validan/agregan al nivel de
+  // Pallet en agruparEnPallets().
+  notaCalidadId: number | null
+  notaCondicionId: number | null
+  completo: boolean | null
 }
 
 interface RecepcionParaMotor {
@@ -81,6 +88,18 @@ function validarFilasCompletas(filasCrudas: FilaExcelCruda[]): string[] {
 // Asume que la Etapa 2 ya pasó limpia: todo campo llega no-vacío y `cajas`
 // ya es un entero válido — acá solo se valida que el valor exista en BD.
 
+// Solo dos estados válidos por fila; `null` es "la celda vino vacía", nunca
+// el resultado de un texto no reconocido — eso es INVALIDO (error de Etapa
+// 3, igual que un texto que no matchea ningún maestro).
+const COMPLETO_INVALIDO = Symbol('COMPLETO_INVALIDO')
+function parseCompletoTexto(texto: string): boolean | null | typeof COMPLETO_INVALIDO {
+  const t = texto.trim().toUpperCase()
+  if (t === '') return null
+  if (['SI', 'SÍ', 'COMPLETO', 'TRUE', '1'].includes(t)) return true
+  if (['NO', 'INCOMPLETO', 'FALSE', '0'].includes(t)) return false
+  return COMPLETO_INVALIDO
+}
+
 async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ filas: FilaResuelta[]; errores: string[] }> {
   const cacheEspecie = new Map<string, Awaited<ReturnType<typeof repo.findEspecieByTexto>>>()
   const cacheVariedad = new Map<string, Awaited<ReturnType<typeof repo.findVariedadByTexto>>>()
@@ -88,6 +107,8 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
   const cacheCalibre = new Map<string, Awaited<ReturnType<typeof repo.findCalibreByTexto>>>()
   const cacheArticulo = new Map<string, Awaited<ReturnType<typeof repo.findArticuloByTexto>>>()
   const cacheProductor = new Map<string, Awaited<ReturnType<typeof repo.findProductorByTexto>>>()
+  const cacheNotaCalidad = new Map<string, Awaited<ReturnType<typeof repo.findNotaCalidadByTexto>>>()
+  const cacheNotaCondicion = new Map<string, Awaited<ReturnType<typeof repo.findNotaCondicionByTexto>>>()
 
   const errores: string[] = []
   const filas: FilaResuelta[] = []
@@ -134,6 +155,34 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
     const productor = cacheProductor.get(keyProductor)
     if (!productor) erroresFila.push(`Fila ${cruda.fila}: Productor "${cruda.productor}" no existe en el maestro`)
 
+    // Opcionales (compras.md §4.8): solo se resuelven/validan si la celda
+    // trae texto — vacío es válido y queda en `null`.
+    let notaCalidadId: number | null = null
+    if (cruda.notaCalidad) {
+      const keyNotaCalidad = cruda.notaCalidad.toLowerCase()
+      if (!cacheNotaCalidad.has(keyNotaCalidad)) cacheNotaCalidad.set(keyNotaCalidad, await repo.findNotaCalidadByTexto(cruda.notaCalidad))
+      const notaCalidad = cacheNotaCalidad.get(keyNotaCalidad)
+      if (!notaCalidad) erroresFila.push(`Fila ${cruda.fila}: Nota de Calidad "${cruda.notaCalidad}" no existe en el maestro`)
+      else notaCalidadId = notaCalidad.id
+    }
+
+    let notaCondicionId: number | null = null
+    if (cruda.notaCondicion) {
+      const keyNotaCondicion = cruda.notaCondicion.toLowerCase()
+      if (!cacheNotaCondicion.has(keyNotaCondicion)) cacheNotaCondicion.set(keyNotaCondicion, await repo.findNotaCondicionByTexto(cruda.notaCondicion))
+      const notaCondicion = cacheNotaCondicion.get(keyNotaCondicion)
+      if (!notaCondicion) erroresFila.push(`Fila ${cruda.fila}: Nota de Condición "${cruda.notaCondicion}" no existe en el maestro`)
+      else notaCondicionId = notaCondicion.id
+    }
+
+    const completoParseado = parseCompletoTexto(cruda.completo)
+    let completo: boolean | null = null
+    if (completoParseado === COMPLETO_INVALIDO) {
+      erroresFila.push(`Fila ${cruda.fila}: valor de Completo/Incompleto "${cruda.completo}" no es reconocido (usa SI/NO)`)
+    } else {
+      completo = completoParseado
+    }
+
     if (erroresFila.length > 0) {
       errores.push(...erroresFila)
       continue
@@ -156,6 +205,9 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
       productorId: prod.id,
       comboLabel: `${e.descripcion} / ${v.descripcion} / ${c.descripcion} / ${art.descripcion}`,
       comboKey: `${e.id}-${v.id}-${c.id}-${art.id}`,
+      notaCalidadId,
+      notaCondicionId,
+      completo,
     })
   }
 
@@ -176,6 +228,9 @@ function agruparEnPallets(filas: FilaResuelta[]) {
   const pallets: Array<{
     numeroPallet: string
     productorId: number
+    notaCalidadId: number | null
+    notaCondicionId: number | null
+    completo: boolean
     lineas: Array<{ especieId: number; variedadId: number; categoriaId: number; articuloId: number; calibreId: number; cajas: number }>
   }> = []
 
@@ -185,9 +240,34 @@ function agruparEnPallets(filas: FilaResuelta[]) {
       errores.push(`Pallet "${numeroPallet}": trae más de un Productor distinto entre sus filas — un pallet debe tener un único productor`)
       continue
     }
+
+    // Nota Calidad/Condición/Completo se guardan a nivel de Pallet completo
+    // (compras.md §4.8) — si dos filas del mismo pallet traen valores no
+    // vacíos distintos, es una inconsistencia de datos y se rechaza la
+    // carga completa (decisión del usuario, 2026-09-02). Una celda vacía
+    // (`null`) nunca cuenta como "distinta" de un valor presente.
+    const notasCalidad = new Set(lineasDelPallet.map((l) => l.notaCalidadId).filter((v): v is number => v !== null))
+    if (notasCalidad.size > 1) {
+      errores.push(`Pallet "${numeroPallet}": trae más de una Nota de Calidad distinta entre sus filas`)
+      continue
+    }
+    const notasCondicion = new Set(lineasDelPallet.map((l) => l.notaCondicionId).filter((v): v is number => v !== null))
+    if (notasCondicion.size > 1) {
+      errores.push(`Pallet "${numeroPallet}": trae más de una Nota de Condición distinta entre sus filas`)
+      continue
+    }
+    const completos = new Set(lineasDelPallet.map((l) => l.completo).filter((v): v is boolean => v !== null))
+    if (completos.size > 1) {
+      errores.push(`Pallet "${numeroPallet}": trae valores distintos de Completo/Incompleto entre sus filas`)
+      continue
+    }
+
     pallets.push({
       numeroPallet,
       productorId: lineasDelPallet[0].productorId,
+      notaCalidadId: notasCalidad.values().next().value ?? null,
+      notaCondicionId: notasCondicion.values().next().value ?? null,
+      completo: completos.values().next().value ?? false,
       lineas: lineasDelPallet.map((l) => ({
         especieId: l.especieId,
         variedadId: l.variedadId,

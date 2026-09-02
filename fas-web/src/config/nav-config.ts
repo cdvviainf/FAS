@@ -81,7 +81,8 @@ export const navGroups: NavGroup[] = [
           { title: 'Órdenes de Compra', url: '/dashboard/operaciones/ordenes-compra', icon: 'post'           },
           { title: 'Movimientos',        url: '/dashboard/operaciones/movimientos',    icon: 'tiposMovimiento' }
         ]
-      }
+      },
+      { title: 'Gestión de Pallets', url: '/dashboard/operaciones/pallets', icon: 'bodega', isActive: false, items: [] }
     ]
   },
 
@@ -237,7 +238,9 @@ export const navGroups: NavGroup[] = [
           { title: 'Grupos de Defecto',      url: '/dashboard/configuracion/grupos-defecto',           icon: 'page'  },
           { title: 'Defectos',               url: '/dashboard/configuracion/defectos',                 icon: 'page'  },
           { title: 'Características Madurez',url: '/dashboard/configuracion/caracteristicas-madurez',  icon: 'forms' },
-          { title: 'Calificaciones',         url: '/dashboard/configuracion/calificaciones',           icon: 'page'  }
+          { title: 'Calificaciones',         url: '/dashboard/configuracion/calificaciones',           icon: 'page'  },
+          { title: 'Notas de Calidad',       url: '/dashboard/configuracion/notas-calidad',            icon: 'page'  },
+          { title: 'Notas de Condición',     url: '/dashboard/configuracion/notas-condicion',          icon: 'page'  }
         ]
       },
 

@@ -224,6 +224,8 @@ model Empresa {
   contratosProductor     ProductorContrato[]
   movimientosCC          MovimientoCuentaCorriente[]
   conceptosLiquidacion   ConceptoLiquidacion[]
+  notasCalidad           NotaCalidad[]
+  notasCondicion         NotaCondicion[]
   notasVenta             NotaVenta[]
   embarques              Embarque[]
   instructivosEmbalaje   InstructivoEmbalaje[]
@@ -925,6 +927,8 @@ model Especie {
   ordenCompraLineas           OrdenCompraLinea[]
   contratosProductor          ProductorContrato[]
   palletLineas                PalletLinea[]
+  notasCalidad                NotaCalidadEspecie[]
+  notasCondicion              NotaCondicionEspecie[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -2082,6 +2086,81 @@ model ConceptoLiquidacionEspecie {
   @@map("conceptos_liquidacion_especie")
 }
 
+// ─── Notas de Calidad / Condición del Pallet (2026-09-02) ────────────────────
+// Catálogos "+ base" con validez configurable por especie (mismo patrón que
+// ConceptoLiquidacion↔ConceptoLiquidacionEspecie). Se asignan al Pallet
+// completo (no por línea) — ver Pallet.notaCalidadId/notaCondicionId.
+
+model NotaCalidad {
+  id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  especies NotaCalidadEspecie[]
+  pallets  Pallet[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  @@map("notas_calidad")
+}
+
+model NotaCalidadEspecie {
+  id            Int         @id @default(autoincrement())
+  notaCalidadId Int
+  notaCalidad   NotaCalidad @relation(fields: [notaCalidadId], references: [id], onDelete: Cascade)
+  especieId     Int
+  especie       Especie     @relation(fields: [especieId], references: [id])
+
+  @@unique([notaCalidadId, especieId])
+  @@index([notaCalidadId])
+  @@map("notas_calidad_especie")
+}
+
+model NotaCondicion {
+  id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  especies NotaCondicionEspecie[]
+  pallets  Pallet[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  @@map("notas_condicion")
+}
+
+model NotaCondicionEspecie {
+  id              Int           @id @default(autoincrement())
+  notaCondicionId Int
+  notaCondicion   NotaCondicion @relation(fields: [notaCondicionId], references: [id], onDelete: Cascade)
+  especieId       Int
+  especie         Especie       @relation(fields: [especieId], references: [id])
+
+  @@unique([notaCondicionId, especieId])
+  @@index([notaCondicionId])
+  @@map("notas_condicion_especie")
+}
+
 // ─── Ventas — Nota de Venta (Docs/ventas.md §4.1) ────────────────────────────
 // Alcance mínimo viable: solo el encabezado + detalle de fruta comprometida.
 // Embarque/Instructivo de Embarque y Solicitud de Reserva (§4.2/§4.3) quedan
@@ -2784,12 +2863,27 @@ model Pallet {
 
   lineas PalletLinea[]
 
+  // Nota de Calidad / Condición y completitud (2026-09-02, compras.md §4.8):
+  // se asignan al pallet completo (no por línea), opcionales, capturadas por
+  // Excel de Recepción o editables después desde Operaciones > Gestión de
+  // Pallets. Solo pallets `completo = true` son elegibles para Embarque.
+  // FK compuestas (empresaId, nota...Id) -> NotaCalidad/NotaCondicion
+  // (empresaId, id) — mismo patrón que recepcionId/embarqueId/productorId
+  // arriba (QAS-PCN-003, ronda 2: aislamiento multiempresa a nivel de BD).
+  notaCalidadId   Int?
+  notaCalidad     NotaCalidad?   @relation(fields: [empresaId, notaCalidadId], references: [empresaId, id])
+  notaCondicionId Int?
+  notaCondicion   NotaCondicion? @relation(fields: [empresaId, notaCondicionId], references: [empresaId, id])
+  completo        Boolean        @default(false)
+
   creadoEn DateTime @default(now())
 
   @@index([recepcionId])
   @@index([productorId])
   @@index([embarqueId])
   @@index([empresaId])
+  @@index([notaCalidadId])
+  @@index([notaCondicionId])
   @@map("pallets")
 }
 

@@ -273,6 +273,23 @@ export async function findArticuloByTexto(texto: string) {
   })
 }
 
+// Nota de Calidad / Condición (compras.md §4.8, 2026-09-02) — opcionales,
+// solo se resuelven si la celda trae texto (ver recepciones.motor.ts).
+// `bloqueado: false` — una nota bloqueada no es asignable a una carga nueva
+// (QAS-PCN-001); si el Excel referencia su código, se trata igual que un
+// código inexistente.
+export async function findNotaCalidadByTexto(texto: string) {
+  return prisma.notaCalidad.findFirst({
+    where: { eliminadoEn: null, bloqueado: false, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
+  })
+}
+
+export async function findNotaCondicionByTexto(texto: string) {
+  return prisma.notaCondicion.findFirst({
+    where: { eliminadoEn: null, bloqueado: false, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
+  })
+}
+
 // El Packing List real trae en la columna "Productor" el código CSG del
 // Predio (ej. "114802"), no el código/nombre de la Entidad productor — se
 // busca primero por ahí. Si no hay match (predio sin CSG cargado, o el
@@ -364,6 +381,9 @@ export async function crearPalletsYValidar(
   pallets: Array<{
     numeroPallet: string
     productorId: number
+    notaCalidadId: number | null
+    notaCondicionId: number | null
+    completo: boolean
     lineas: Array<{ especieId: number; variedadId: number; categoriaId: number; articuloId: number; calibreId: number; cajas: number }>
   }>,
   opciones: { aceptarAdvertencias: boolean; userId: string },
@@ -467,6 +487,9 @@ export async function crearPalletsYValidar(
           numeroPallet: p.numeroPallet,
           origen,
           productorId: p.productorId,
+          notaCalidadId: p.notaCalidadId,
+          notaCondicionId: p.notaCondicionId,
+          completo: p.completo,
           lineas: { create: p.lineas },
         },
       })

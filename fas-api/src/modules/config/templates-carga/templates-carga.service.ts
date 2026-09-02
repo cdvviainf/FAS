@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './templates-carga.repository.js'
-import { CAMPOS_POR_TIPO, TIPO_TEMPLATE_CARGA_LABELS } from './templates-carga.types.js'
+import { CAMPOS_POR_TIPO, CAMPOS_OPCIONALES_POR_TIPO, TIPO_TEMPLATE_CARGA_LABELS } from './templates-carga.types.js'
 import type { TemplateCargaCreateInput, TemplateCargaUpdateInput, TemplateCargaCampoInput, TipoTemplateCarga } from './templates-carga.types.js'
 
 interface TemplateCoherencia {
@@ -59,7 +59,8 @@ function validarCoherenciaTemplate(d: TemplateCoherencia) {
     }
     columnasVistas.set(columnaNormalizada, c.campo)
   }
-  const faltantes = camposDelTipo.filter((campo) => !camposVistos.has(campo))
+  const camposOpcionales = CAMPOS_OPCIONALES_POR_TIPO[d.tipo]
+  const faltantes = camposDelTipo.filter((campo) => !camposVistos.has(campo) && !camposOpcionales.includes(campo))
   if (faltantes.length > 0) {
     throw new ValidationError(`Deben mapearse todos los campos. Faltan: ${faltantes.join(', ')}`)
   }
