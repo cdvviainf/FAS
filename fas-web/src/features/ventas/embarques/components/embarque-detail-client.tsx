@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { embarqueDetailOptions } from '../queries'
+import { SeleccionarPalletsTab } from './seleccionar-pallets-tab'
+import { DespacharTab } from './despachar-tab'
 
 function TabPlaceholder({ titulo }: { titulo: string }) {
   return (
@@ -42,13 +44,13 @@ export function EmbarqueDetailClient({ embarqueId }: { embarqueId: number }) {
           <TabPlaceholder titulo='Solicitar Espacio' />
         </TabsContent>
         <TabsContent value='pallets'>
-          <TabPlaceholder titulo='Seleccionar Pallets' />
+          <SeleccionarPalletsTab embarque={embarque} />
         </TabsContent>
         <TabsContent value='instructivos'>
           <TabPlaceholder titulo='Generar Instructivos' />
         </TabsContent>
         <TabsContent value='despacho'>
-          <TabPlaceholder titulo='Despachar' />
+          <DespacharTab embarque={embarque} />
         </TabsContent>
       </Tabs>
     </div>

@@ -2253,6 +2253,15 @@ model Embarque {
   // manual, único por empresa). Identidad del instructivo padre.
   numeroInstructivo String
 
+  // Reserva de pallets (2026-09-02, cierra compras.md §4.5/§4.7 y ventas.md
+  // R9/R11, antes diferidos): un pallet se reserva a este Embarque vía
+  // Pallet.embarqueId. despachadoEn marca el único gatillo de bloqueo que
+  // exige compras.md §6.4 — una vez seteado, ya no se pueden desvincular
+  // pallets (agregar sigue permitido, decisión de negocio, Christian).
+  despachadoEn  DateTime?
+  despachadoPor String?
+  pallets       Pallet[]
+
   creadoEn       DateTime  @default(now())
   creadoPor      String
   actualizadoEn  DateTime? @updatedAt
@@ -2260,6 +2269,7 @@ model Embarque {
   eliminadoEn    DateTime?
   eliminadoPor   String?
 
+  @@unique([empresaId, id])
   @@index([notaVentaId])
   @@index([empresaId])
   @@map("embarques")
@@ -2803,7 +2813,11 @@ model Pallet {
 
   numeroPallet String // identificador de origen — usado para reconciliar con Packing List (ventas.md)
   origen       OrigenRecepcion // heredado de Recepcion.origen
-  // embarqueId se agrega cuando exista el modelo Embarque (ventas.md, aún diferido)
+
+  // Reserva a un Embarque (2026-09-02, compras.md §4.5/§4.7): nullable hasta
+  // reservarlo; desvinculable mientras el Embarque no tenga despachadoEn.
+  embarqueId Int?
+  embarque   Embarque? @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
 
   productorId Int // Entidad tipo PRODUCTOR
   // FK compuesta (empresaId, productorId) -> Entidad(empresaId, id).
@@ -2815,6 +2829,7 @@ model Pallet {
 
   @@index([recepcionId])
   @@index([productorId])
+  @@index([embarqueId])
   @@index([empresaId])
   @@map("pallets")
 }

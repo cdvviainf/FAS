@@ -413,7 +413,9 @@ Tras capturar, FAS imputa el documento a una o varias OC por montos (CO1) y refl
 
 ## 11. Reporte de Stock en Pantalla
 
-Pantalla de consulta **solo lectura** del stock de fruta ya recepcionada. Vive en el ítem de menú `REPORTES_STOCK_FRUTA` (sección **Reportes**), pero se documenta acá porque lee directamente `Pallet`/`PalletLinea` (§4.5/§4.6) sin agregar modelos nuevos.
+Pantalla de consulta **solo lectura** del stock de fruta ya recepcionada **y aún disponible** (sin reservar a un Embarque). Vive en el ítem de menú `REPORTES_STOCK_FRUTA` (sección **Reportes**), pero se documenta acá porque lee directamente `Pallet`/`PalletLinea` (§4.5/§4.6) sin agregar modelos nuevos.
+
+> **Supersesión (2026-09-02, EP-QA-005).** Desde que `Pallet.embarqueId` existe (§4.5/§4.7 — reserva a Embarque), el reporte excluye los pallets ya reservados (`embarqueId IS NOT NULL`): dejaron de ser stock disponible. Antes de esta fecha el reporte mostraba todo lo recepcionado sin distinguir reserva, porque `embarqueId` no existía todavía.
 
 > **⚠️ Supersesión (2026-08-24).** Reemplaza la versión anterior de esta sección (ítem `OPER_STOCK` en sección Operaciones, endpoint de resumen agrupado + endpoint de detalle con filtros server-side). Tras revisar un mockup interactivo con el usuario, la pantalla se rediseñó como tarjetas por especie + filtros multiselect en cascada + grilla expandible — eso exige tener el dataset completo disponible en el cliente para acotar los filtros al instante, así que el contrato de API se simplificó a un único endpoint sin filtros. El ítem de menú se reubicó de Operaciones a Reportes en el mismo cambio (decisión de negocio, Christian).
 

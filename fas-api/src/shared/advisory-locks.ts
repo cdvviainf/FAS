@@ -7,7 +7,7 @@
 // 490234 (NotaVenta correlativo), 490236 (OrdenCompra correlativo), 490237
 // (Recepcion correlativo), 490238 (Recepcion proceso), 490239 (OrdenCompra
 // proceso), 490240 (Documentos emitidos), 490241 (NotaVentaDetalle cajas
-// comprometidas), 490242 (Movimiento proceso).
+// comprometidas), 490242 (Movimiento proceso), 490243 (Embarque despacho).
 
 // Serializa el motor de validación de Recepción (recepciones.repository.ts)
 // contra cualquier mutación de la Orden de Compra que esté usando para
@@ -38,3 +38,11 @@ export const LOCK_NAMESPACE_NOTA_VENTA_DETALLE = 490241
 // simultáneas del mismo movimiento podrían aplicar el efecto dos veces.
 // Clave: movimientoId.
 export const LOCK_NAMESPACE_MOVIMIENTO_PROCESO = 490242
+
+// Serializa desvincular un pallet contra confirmar despacho (embarques.
+// repository.ts) — EP-QA-002, QA ronda 2: un filtro de relación
+// (`embarque: { despachadoEn: null }`) en el UPDATE de Pallet no bloquea la
+// fila de Embarque, así que una confirmación de despacho concurrente podía
+// colarse en la ventana antes de que el UPDATE del pallet commiteara. Ambas
+// operaciones toman este lock por embarqueId antes de leer/escribir.
+export const LOCK_NAMESPACE_EMBARQUE_DESPACHO = 490243

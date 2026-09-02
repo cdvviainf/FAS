@@ -17,4 +17,15 @@ export const embarqueListQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(500).default(20),
 })
 
+// Selección de Pallets (ventas.md R8/R9) — reserva en bloque.
+export const reservarPalletsSchema = z.object({
+  palletIds: z.array(z.number().int().positive()).min(1, 'Debes seleccionar al menos un pallet'),
+})
+
+export const embarquePalletParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  palletId: z.coerce.number().int().positive(),
+})
+
 export type EmbarqueCreateBody = z.infer<typeof embarqueCreateSchema>
+export type ReservarPalletsBody = z.infer<typeof reservarPalletsSchema>
