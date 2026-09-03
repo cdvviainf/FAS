@@ -321,6 +321,104 @@ model ProformaMaterialDetalle {
 
 ---
 
+### 4.9 OrdenCompraMaterial (Orden de Compra de Materiales) **(nuevo, 2026-09-03)**
+
+Compromiso comercial de compra de materiales/insumos a un **proveedor**, previo al ingreso físico a stock. Mismo patrón que `OrdenCompra` de fruta (`compras.md` §4.2) — cabecera con condición de pago (cuotas snapshot) + líneas con cantidades y valores — pero simplificado: sin especie/variedad/categoría/calibre/pallet (eso es exclusivo de fruta), sin Solicitud de Inspección, sin Cierre Comercial.
+
+> **Reconciliación con Materiales.** Hoy Materiales solo permite ingresar stock vía `Movimiento` directo (ENTRADA con `entidadRelacionada = PROVEEDOR` y `precioUnitario`, R9/R12) — sin ningún compromiso previo que autorizar. `OrdenCompraMaterial` agrega esa capa: primero se negocia/emite la OC (proveedor, artículos, cantidades, precios, condición de pago), y **después** el ingreso físico se registra con un `Movimiento` de clase `ENTRADA` que **referencia** la OC — mismo rol que cumple `Recepcion` para la OC de fruta, sin necesidad de un modelo `Recepcion`/`Pallet` propio (Materiales no tiene la noción de pallet indivisible).
+
+```prisma
+enum EstadoOrdenCompraMaterial {
+  BORRADOR
+  EMITIDA
+  RECEPCIONADA
+}
+
+model OrdenCompraMaterial {
+  id        Int    @id @default(autoincrement())
+  numero    String // OCM-{AAAA}-{NNNN}, correlativo por año (mismo mecanismo que OrdenCompra — lock advisory propio, ver R23)
+
+  entidadProveedorId Int      // FK -> Entidad tipo PROVEEDOR (R19)
+  entidad            Entidad  @relation("OrdenCompraMaterialProveedor", fields: [entidadProveedorId], references: [id])
+
+  fecha DateTime @default(now())
+
+  formaPagoId     Int?
+  formaPago       FormaPago?     @relation(fields: [formaPagoId], references: [id])
+  condicionPagoId Int?           // CondicionPago tipo=COMPRA (mismo mantenedor que OrdenCompra de fruta — R21)
+  condicionPago   CondicionPago? @relation(fields: [condicionPagoId], references: [id])
+  monedaId        Int
+  moneda          Moneda         @relation(fields: [monedaId], references: [id])
+
+  observaciones String?
+  estado        EstadoOrdenCompraMaterial @default(BORRADOR)
+
+  lineas     OrdenCompraMaterialLinea[]
+  cuotasPago OrdenCompraMaterialCuotaPago[]
+  // Igual que OrdenCompra↔Recepcion (compras.md §4.7): array porque Prisma
+  // exige @unique en la FK para 1:1, pero la unicidad real ("a lo más un
+  // Movimiento CONFIRMADO por OC") es un índice parcial WHERE eliminadoEn IS
+  // NULL sobre Movimiento.ordenCompraMaterialId (no representable en el DSL
+  // de Prisma — mismo patrón ya usado en el schema, ver migración).
+  movimientos Movimiento[]
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@index([entidadProveedorId])
+  @@index([condicionPagoId])
+  @@map("ordenes_compra_material")
+}
+
+model OrdenCompraMaterialLinea {
+  id                     Int                  @id @default(autoincrement())
+  ordenCompraMaterialId  Int
+  ordenCompraMaterial    OrdenCompraMaterial  @relation(fields: [ordenCompraMaterialId], references: [id], onDelete: Cascade)
+
+  articuloId     Int
+  articulo       Articulo @relation(fields: [articuloId], references: [id])
+  cantidad       Decimal  @db.Decimal(14, 3)   // mismo tipo/precisión que MovimientoDetalle.cantidad
+  precioUnitario Decimal  @db.Decimal(14, 4)   // mismo tipo/precisión que MovimientoDetalle.precioUnitario
+  monto          Decimal  @db.Decimal(14, 2)   // cantidad × precioUnitario, calculado server-side al guardar
+
+  @@index([ordenCompraMaterialId])
+  @@index([articuloId])
+  @@map("orden_compra_material_linea")
+}
+
+// Snapshot inmutable de las cuotas al fijar condicionPagoId — mismo patrón
+// que OrdenCompraCuotaPago (compras.md §4.2.2), sin la variante MONTO_UNITARIO
+// (R21: no aplica a Materiales).
+model OrdenCompraMaterialCuotaPago {
+  id                    Int                 @id @default(autoincrement())
+  ordenCompraMaterialId Int
+  ordenCompraMaterial   OrdenCompraMaterial @relation(fields: [ordenCompraMaterialId], references: [id], onDelete: Cascade)
+
+  fechaReferencia FechaReferenciaPago @default(FACTURA) // enum ya definido en compras.md §4.2.1
+  plazoDias       Int
+  porcentaje      Decimal             @db.Decimal(5, 2)
+  descripcion     String?
+
+  @@index([ordenCompraMaterialId])
+  @@map("orden_compra_material_cuota_pago")
+}
+```
+
+> Back-relations a agregar: `Entidad` → `ordenesCompraMaterialProveedor`; `FormaPago` → `ordenesCompraMaterial`; `CondicionPago` → `ordenesCompraMaterial`; `Moneda` → `ordenesCompraMaterial`; `Articulo` → `lineasOrdenCompraMaterial`.
+
+**`Movimiento` gana un campo nuevo** (materiales.md §4, `model Movimiento`):
+```prisma
+  ordenCompraMaterialId Int?
+  ordenCompraMaterial   OrdenCompraMaterial? @relation(fields: [ordenCompraMaterialId], references: [id])
+```
+Solo aplicable a movimientos `clase = ENTRADA`. Ver R22.
+
+---
+
 ## 5. Reglas de negocio / invariantes
 
 - **R1 — Estado del movimiento (reescrita 2026-08-29, supersede la versión anterior).** Un `Movimiento` nace `BORRADOR`: cabecera y líneas (`MovimientoDetalle`) se editan, agregan y eliminan libremente, **sin efecto en `SaldoArticulo` todavía**. `tipoMovimientoId` queda fijo desde la creación (define bodegas/entidad/DTE de todo el movimiento) — si se eligió mal, se borra el borrador y se crea uno nuevo. La acción explícita `POST /movimientos/:id/confirmar` revalida todas las reglas (R2/R9/R10/R11/R12/R14) contra el estado persistido y recién ahí aplica el motor de PMP/saldo (antes disparado al crear) dentro de una transacción, dejando el movimiento `CONFIRMADO`. Un `CONFIRMADO` es inmutable — no se edita ni se borra, se corrige con un movimiento inverso.
@@ -376,6 +474,34 @@ En estado `BORRADOR` / `ENVIADA_VALIDACION` la proforma **no** afecta el stock.
 ### R18 — Edición
 
 La proforma solo se edita en `BORRADOR`. Una vez `FACTURADA`, se corrige anulando la factura y su movimiento con un movimiento inverso (R1).
+
+---
+
+### R19 — Entidad Proveedor (OrdenCompraMaterial)
+
+`entidadProveedorId` debe ser una `Entidad` con `PROVEEDOR` en `tipos` (`entidades.md` R8) → 422 si no corresponde o está inactiva.
+
+### R20 — Estado y edición (OrdenCompraMaterial)
+
+Nace `BORRADOR`: cabecera y líneas editables/eliminables libremente. La acción explícita pasa la OC a `EMITIDA` — **bloquea edición de cabecera y líneas** (a diferencia de la OC de fruta, que sigue editable hasta la Recepción — aquí se decidió bloquear antes, en `EMITIDA`, por ser el punto en que el compromiso se formaliza con el proveedor; decisión de negocio, 2026-09-03). Para corregir una OC `EMITIDA` sin Movimiento asociado: se anula (soft delete, `eliminadoEn`) y se crea una nueva — no hay estado `ANULADA` propio en v1. **Eliminar** (`DELETE /ordenes-compra/:id`) es más permisivo que editar: acepta `BORRADOR` **o** `EMITIDA` siempre que no tenga un Movimiento activo (`BORRADOR` o `CONFIRMADO`, no eliminado) vinculado → 422 si tiene uno. `RECEPCIONADA` nunca se puede eliminar.
+
+### R21 — Condición de pago sin cuota por unidad
+
+`OrdenCompraMaterial` reutiliza el mismo mantenedor `CondicionPago` (tipo `COMPRA`) que la OC de fruta, pero **solo acepta condiciones cuyas cuotas sean 100% `PORCENTAJE`** — la variante `MONTO_UNITARIO` (cargo por caja/kilo, `compras.md` §4.2.1) es específica del flujo de fruta y no generaliza a artículos con unidades de medida arbitrarias. Si `condicionPagoId` apunta a una `CondicionPago` con alguna cuota `MONTO_UNITARIO` → 422 al asignarla. Las cuotas se copian (snapshot) a `OrdenCompraMaterialCuotaPago` en el instante en que se fija `condicionPagoId`, igual que en la OC de fruta — cambios posteriores al maestro no afectan OCs ya creadas.
+
+### R22 — Vínculo con Movimiento (ingreso a stock)
+
+Un `Movimiento` clase `ENTRADA` puede referenciar una `OrdenCompraMaterial` vía `ordenCompraMaterialId` — solo si la OC está `EMITIDA` (no `BORRADOR` ni `RECEPCIONADA`) → 422 si no. Al **confirmar** ese Movimiento (`POST /movimientos/:id/confirmar`, R1):
+- Cada línea del Movimiento (`articuloId`, `cantidad`) debe corresponder a una línea de la OC con el **mismo `articuloId`**, y `cantidad` no puede superar la `cantidad` de esa línea de OC → 422 si no calza (mismo espíritu que el motor de validación de Recepción en `compras.md` §7, sin el paso de advertencias — acá es bloqueo duro).
+- `entidadId` del Movimiento, si viene informado, debe coincidir con `entidadProveedorId` de la OC → 422 si no. Si no viene informado, se **copia server-side** desde la OC al confirmar.
+- Solo puede existir **un** Movimiento (`CONFIRMADO` o `BORRADOR` activo) por OC a la vez — índice parcial `WHERE eliminado_en IS NULL` sobre `Movimiento.ordenCompraMaterialId` (mismo patrón que `Recepcion.ordenCompraId`, `compras.md` §4.7) → 422 con mensaje explícito si ya existe uno, incluida la carrera concurrente (`P2002` traducido).
+- **Sin recepción parcial (aclarado, ronda QA 1 — OCM-QA-003):** el Movimiento debe cubrir **todos** los artículos de la OC — se agrupan ambos conjuntos por `articuloId` (sumando cantidades si un artículo se repite en varias líneas) y se exige que cada `articuloId` de la OC esté presente en el Movimiento → 422 si falta alguno. La cantidad por artículo puede ser **menor o igual** a la de la OC (no tiene que ser exacta), pero ningún artículo puede omitirse por completo.
+- Al confirmarse el Movimiento, la `OrdenCompraMaterial` pasa a `RECEPCIONADA` **en la misma transacción** — recepción parcial real (dejar la OC en un estado intermedio con saldo pendiente) queda para una iteración futura si el negocio lo requiere.
+- Eliminar (soft delete) un Movimiento `BORRADOR` vinculado libera la OC para un nuevo intento (mismo patrón que `OrdenCompraSolicitudInspeccion`, `compras.md` §4.2).
+
+### R23 — Numeración
+
+`numero` se genera automáticamente al crear: `OCM-{AAAA}-{NNNN}`, correlativo por año (mismo mecanismo de `pg_advisory_xact_lock` que `OrdenCompra` de fruta — `compras.md` §4.2 — con un namespace de lock propio para no serializarse contra la numeración de OC de fruta).
 
 ---
 
@@ -442,6 +568,23 @@ La proforma solo se edita en `BORRADOR`. Una vez `FACTURADA`, se corrige anuland
 
 ---
 
+**Órdenes de Compra de Materiales** (ítem de menú propio `MATERIALES_OC`, mismo patrón que `COMPRAS_OC`)
+| Método | Ruta | Notas |
+|---|---|---|
+| GET | `/ordenes-compra` | filtros `entidadProveedorId?`, `estado?`, paginado |
+| GET | `/ordenes-compra/:id` | cabecera + líneas + cuotas |
+| POST | `/ordenes-compra` | solo cabecera — nace `BORRADOR`, sin líneas (R19) |
+| PATCH | `/ordenes-compra/:id` | edita cabecera — solo mientras `BORRADOR` (R20). Al fijar/cambiar `condicionPagoId` recalcula el snapshot de cuotas (R21) |
+| DELETE | `/ordenes-compra/:id` | soft delete — solo mientras `BORRADOR` o `EMITIDA` sin Movimiento activo |
+| POST | `/ordenes-compra/:id/lineas` | agrega línea (`articuloId`, `cantidad`, `precioUnitario`) — solo `BORRADOR` |
+| PATCH | `/ordenes-compra/:id/lineas/:lineaId` | edita línea — solo `BORRADOR` |
+| DELETE | `/ordenes-compra/:id/lineas/:lineaId` | elimina línea — solo `BORRADOR` |
+| POST | `/ordenes-compra/:id/emitir` | `BORRADOR → EMITIDA` (R20); exige ≥1 línea |
+
+> El ingreso a stock **no** es un endpoint de este submódulo: se hace con `POST /movimientos` + `/detalle` + `/confirmar` (arriba) pasando `ordenCompraMaterialId` en la cabecera del Movimiento (R22).
+
+---
+
 ## 7. Frontend (Next.js 15, `fas-web/app/(app)/materiales/`)
 
 | Ruta | Pantalla | Contenido |
@@ -452,6 +595,7 @@ La proforma solo se edita en `BORRADOR`. Una vez `FACTURADA`, se corrige anuland
 | `/tipos-movimiento` | Mantenedor de tipos | Código, descripción, módulos (multiselect), clase, requiere precio, entidad relacionada, emite DTE. |
 | `/movimientos/nuevo`, `/movimientos/:id` | **Materiales y envases** | Pantalla completa (reescrita 2026-08-29, mismo patrón que la Orden de Compra): `/nuevo` solo pide tipo de movimiento + fecha y crea la cabecera `BORRADOR`; `/:id` habilita cabecera editable (entidad, bodega origen/destino, guía/referencia, **bloque DTE** condicional si `emiteDTE`: transportista, RUT y nombre chofer, placas, hora salida/llegada) + tabla de líneas con agregar/editar/eliminar (mutaciones inmediatas contra el backend, sin efecto en saldo). Acciones: "Guardar cabecera", "Eliminar borrador", "Confirmar movimiento" (aplica el motor de PMP y bloquea edición), y en el menú de la fila del listado: "Descargar PDF" y "Emitir Guía de Despacho" (esta última solo si `emiteDTE` y `CONFIRMADO`). |
 | `/consulta-stock-receta` | Analizador de stock | Multiselect de embalajes + cantidad c/u, multiselect de bodegas. Resultado: por componente, stock en **cada** bodega + badge de estado: `OK` (verde), `Stock Crítico` (amarillo), `Sin Stock` (rojo), `Trasladar` (amarillo). |
+| `/ordenes-compra/nuevo`, `/ordenes-compra/:id` | Orden de Compra de Materiales | Mismo patrón que la OC de fruta y que `/movimientos/:id`: `/nuevo` crea la cabecera `BORRADOR` (proveedor, forma/condición de pago, moneda); `/:id` habilita cabecera + tabla de líneas (artículo, cantidad, precio unitario, monto calculado) con agregar/editar/eliminar mientras `BORRADOR`. Acciones: "Guardar cabecera", "Eliminar borrador", "Emitir OC" (bloquea edición, R20). Desde una OC `EMITIDA`, botón "Registrar ingreso" que abre `/movimientos/nuevo?ordenCompraMaterialId=:id` precargando entidad y líneas sugeridas desde la OC. |
 
 UI con shadcn/ui. Los campos condicionales (valor estándar, bloque DTE) se muestran/ocultan según selección.
 
@@ -478,6 +622,17 @@ UI con shadcn/ui. Los campos condicionales (valor estándar, bloque DTE) se mues
 - **CA17 (R15-desglose):** La respuesta lista el stock de C en TODAS las bodegas, aunque el filtro sea [B1].
 - **CA18 (R15-NA):** Componente `SERVICIO` → estado `NA` (no se evalúa stock).
 - **CA19 (R7):** Si falla la actualización de saldo, el movimiento hace rollback completo.
+- **CA20 (R19):** `entidadProveedorId` sin `PROVEEDOR` en `tipos` → 422 al crear/editar la OC.
+- **CA21 (R20):** OC `EMITIDA`; `PATCH` de cabecera o línea → 422 ("ya fue emitida y no puede editarse").
+- **CA22 (R21):** `CondicionPago` con una cuota `MONTO_UNITARIO`; se intenta asignar a una OC de Materiales → 422.
+- **CA23 (R21):** `CondicionPago` con cuotas 100% `PORCENTAJE` (30/70); se asigna a la OC → se crean 2 `OrdenCompraMaterialCuotaPago` snapshot.
+- **CA24 (R22-articulo):** Movimiento con `ordenCompraMaterialId` y una línea de artículo que no está en la OC → 422 al confirmar.
+- **CA25 (R22-cantidad):** Línea de OC con `cantidad=10`; Movimiento confirma línea del mismo artículo con `cantidad=15` → 422.
+- **CA26 (R22-cierre):** Movimiento válido confirmado contra una OC `EMITIDA` → Movimiento `CONFIRMADO` + OC pasa a `RECEPCIONADA`, ambos en la misma transacción.
+- **CA27 (R22-único):** Ya existe un Movimiento `CONFIRMADO` vinculado a la OC; se intenta vincular un segundo Movimiento a la misma OC → 422.
+- **CA28 (R22-borrador):** OC `EMITIDA` sin Movimiento; se crea un Movimiento `BORRADOR` con `ordenCompraMaterialId`; se elimina (soft delete) ese Movimiento antes de confirmar → la OC vuelve a estar disponible para un nuevo Movimiento.
+- **CA29 (R22-completo, OCM-QA-003):** OC con líneas de artículos A y B; Movimiento confirma solo el artículo A → 422 ("no hay recepción parcial"), la OC permanece `EMITIDA`.
+- **CA30 (R20-eliminación, OCM-QA-002):** OC `EMITIDA` sin Movimiento → `DELETE` la elimina (soft delete). OC `EMITIDA` con un Movimiento `BORRADOR` o `CONFIRMADO` activo vinculado → `DELETE` → 422.
 
 ---
 
@@ -492,6 +647,7 @@ UI con shadcn/ui. Los campos condicionales (valor estándar, bloque DTE) se mues
 7. `/saldos` y `POST /consulta-stock-receta` (lógica R15).
 8. Tests CA1–CA19.
 9. Frontend: artículos → recetas → tipos de movimiento → movimientos (form + bloque DTE) → consulta de stock.
+10. Orden de Compra de Materiales: schema Prisma (`OrdenCompraMaterial`+`Linea`+`CuotaPago`, campo `ordenCompraMaterialId` en `Movimiento`) + migración; repo/service/routes con R19–R23; enganchar la validación/cierre (R22) dentro de `confirmarMovimientoTransaccional` existente; ítem de menú `MATERIALES_OC` en el seed; tests CA20–CA30; frontend `/ordenes-compra`.
 
 ---
 
@@ -503,3 +659,4 @@ UI con shadcn/ui. Los campos condicionales (valor estándar, bloque DTE) se mues
 - [ ] Tests CA1–CA19 en verde.
 - [ ] Pantallas de §7 navegables, con campos condicionales (valor estándar, bloque DTE) y badges de estado en la consulta.
 - [ ] Schema incorporado al `CLAUDE.md` global.
+- [ ] Orden de Compra de Materiales: invariantes R19–R23 garantizadas por el service, tests CA20–CA30 en verde, pantalla `/ordenes-compra` navegable.

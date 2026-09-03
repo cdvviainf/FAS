@@ -14,6 +14,9 @@ import { resolverMovimiento, resolverMovimientoGuiaDespacho } from './resolvers/
 import { movimientoPdfPayloadSchema } from './schemas/movimiento.schema.js'
 import { MovimientoV1 } from './templates/movimiento/v1/index.js'
 import { MovimientoGuiaDespachoV1 } from './templates/movimiento-guia-despacho/v1/index.js'
+import { resolverOrdenCompraMaterial } from './resolvers/orden-compra-material.resolver.js'
+import { ordenCompraMaterialPdfPayloadSchema } from './schemas/orden-compra-material.schema.js'
+import { OrdenCompraMaterialV1 } from './templates/orden-compra-material/v1/index.js'
 import type { DocumentRegistry } from './documentos.types.js'
 
 // Registro central — Etapa 4 §4: "un solo lugar donde se declara todo".
@@ -97,6 +100,18 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     itemMenu: 'OPER_MATERIALES',
     controlCopia: true,
     nombreArchivo: (p) => `GuiaDespacho_${p.numero}.pdf`,
+    folio: (p) => p.numero,
+  },
+  'orden-compra-material': {
+    titulo: 'Orden de Compra de Materiales',
+    resolver: resolverOrdenCompraMaterial,
+    schema: ordenCompraMaterialPdfPayloadSchema,
+    plantillaActual: 'v1',
+    plantillas: { v1: OrdenCompraMaterialV1 },
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    itemMenu: 'MATERIALES_OC',
+    controlCopia: true,
+    nombreArchivo: (p) => `OCM_${p.numero}.pdf`,
     folio: (p) => p.numero,
   },
 }

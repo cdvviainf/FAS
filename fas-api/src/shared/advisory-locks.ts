@@ -7,7 +7,8 @@
 // 490234 (NotaVenta correlativo), 490236 (OrdenCompra correlativo), 490237
 // (Recepcion correlativo), 490238 (Recepcion proceso), 490239 (OrdenCompra
 // proceso), 490240 (Documentos emitidos), 490241 (NotaVentaDetalle cajas
-// comprometidas), 490242 (Movimiento proceso), 490243 (Embarque despacho).
+// comprometidas), 490242 (Movimiento proceso), 490243 (Embarque despacho),
+// 490244 (OrdenCompraMaterial proceso).
 
 // Serializa el motor de validación de Recepción (recepciones.repository.ts)
 // contra cualquier mutación de la Orden de Compra que esté usando para
@@ -46,3 +47,10 @@ export const LOCK_NAMESPACE_MOVIMIENTO_PROCESO = 490242
 // colarse en la ventana antes de que el UPDATE del pallet commiteara. Ambas
 // operaciones toman este lock por embarqueId antes de leer/escribir.
 export const LOCK_NAMESPACE_EMBARQUE_DESPACHO = 490243
+
+// Serializa el CRUD de cabecera/líneas de una OrdenCompraMaterial
+// (materiales/ordenes-compra.repository.ts) contra la confirmación de un
+// Movimiento que la referencia (materiales/movimientos.repository.ts R22) —
+// mismo rol que LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO para la OC de fruta.
+// Clave: ordenCompraMaterialId.
+export const LOCK_NAMESPACE_ORDEN_COMPRA_MATERIAL_PROCESO = 490244

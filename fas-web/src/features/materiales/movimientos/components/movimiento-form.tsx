@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -25,6 +26,7 @@ import { entidadesService } from '@/features/entidades/service'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { articulosService } from '../../articulos/service'
 import { tiposMovimientoService } from '../../tipos-movimiento/service'
+import { ordenesCompraMaterialService } from '../../ordenes-compra/service'
 import { movimientosService } from '../service'
 import { movimientosKeys, movimientoDetailOptions } from '../queries'
 import { ESTADO_MOVIMIENTO_LABELS } from '../types'
@@ -78,6 +80,7 @@ interface MovimientoFormProps {
 export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
   const isEdit = !!movimientoId
   const router = useRouter()
+  const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const puedeEscribir = usePuedeEscribir(ITEM)
 
@@ -93,12 +96,41 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
   const { data: movimientoRes, isLoading } = useQuery({ ...movimientoDetailOptions(movimientoId ?? 0), enabled: isEdit })
   const movimiento = movimientoRes?.data
 
+  // Prellenado desde el botón "Registrar ingreso" de una Orden de Compra de
+  // Materiales EMITIDA (materiales.md R22, /ordenes-compra/:id) — solo tiene
+  // sentido antes de crear el borrador; una vez creado, el vínculo ya quedó
+  // guardado en el Movimiento (ver createMutation.onSuccess más abajo).
+  const ordenCompraMaterialIdParamRaw = searchParams.get('ordenCompraMaterialId')
+  const ordenCompraMaterialIdParam = !isEdit && ordenCompraMaterialIdParamRaw ? Number(ordenCompraMaterialIdParamRaw) : null
+  const { data: ocMaterialPrefill } = useQuery({
+    queryKey: ['orden-compra-material-prefill', ordenCompraMaterialIdParam],
+    queryFn: () => ordenesCompraMaterialService.getById(ordenCompraMaterialIdParam!),
+    enabled: !!ordenCompraMaterialIdParam,
+    staleTime: 60_000,
+  })
+
+  // Si viene desde "Registrar ingreso" de una OC de Materiales, solo tiene
+  // sentido un tipo ENTRADA (materiales.md R22 — el vínculo se rechaza para
+  // cualquier otra clase) — se filtra acá en vez de dejar que el usuario
+  // elija cualquiera y descubra el rechazo recién al fallar el PATCH.
   const { data: tiposMovimiento } = useQuery({
-    queryKey: ['tipos-movimiento-options'],
-    queryFn: () => tiposMovimientoService.list({ modulo: 'MATERIALES', activo: true, limit: 500 }),
+    queryKey: ['tipos-movimiento-options', ordenCompraMaterialIdParam != null ? 'ENTRADA' : 'ALL'],
+    queryFn: () => tiposMovimientoService.list({
+      modulo: 'MATERIALES', activo: true, limit: 500,
+      ...(ordenCompraMaterialIdParam != null ? { clase: 'ENTRADA' as const } : {}),
+    }),
     staleTime: 60_000,
   })
   const tipoMovimiento = isEdit ? movimiento?.tipoMovimiento : tiposMovimiento?.data.find((t) => t.id === tipoMovimientoId)
+
+  // Único tipo ENTRADA disponible al venir desde una OC: se preselecciona
+  // solo (mismo criterio que dejar elegir cuando hay más de uno).
+  useEffect(() => {
+    if (ordenCompraMaterialIdParam == null || tipoMovimientoId != null) return
+    const opciones = tiposMovimiento?.data ?? []
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- preselecciona el único tipo ENTRADA disponible al venir desde "Registrar ingreso" de una OC
+    if (opciones.length === 1) setTipoMovimientoId(opciones[0].id)
+  }, [ordenCompraMaterialIdParam, tipoMovimientoId, tiposMovimiento])
 
   const { data: entidades } = useQuery({
     queryKey: ['entidades-options-movimiento'],
@@ -150,8 +182,41 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
 
   const createMutation = useMutation({
     mutationFn: () => movimientosService.create({ tipoMovimientoId: tipoMovimientoId!, fechaMovimiento: toIsoLocal(true, fechaCrear) }),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       toast.success('Borrador de movimiento creado')
+      // Vincula de inmediato con la OC de Materiales que originó este
+      // ingreso (R22) y precarga la entidad proveedora — la cabecera recién
+      // creada no tiene más datos que tipoMovimientoId/fechaMovimiento, así
+      // que un PATCH aparte es la única forma de dejarlo guardado sin que el
+      // usuario tenga que escribir el ID a mano.
+      if (ordenCompraMaterialIdParam) {
+        try {
+          await movimientosService.update(res.data.id, {
+            ordenCompraMaterialId: ordenCompraMaterialIdParam,
+            entidadId: ocMaterialPrefill?.data.entidadProveedorId ?? null,
+          })
+          // Precarga una línea de Movimiento por cada línea de la OC (mismo
+          // artículo/cantidad/precio) — el usuario las ajusta si el ingreso
+          // real difiere (materiales.md R22 exige que todas estén presentes
+          // al confirmar, con cantidad igual o menor).
+          for (const linea of ocMaterialPrefill?.data.lineas ?? []) {
+            await movimientosService.addLinea(res.data.id, {
+              articuloId: linea.articuloId,
+              cantidad: Number(linea.cantidad),
+              precioUnitario: Number(linea.precioUnitario),
+            })
+          }
+        } catch (e) {
+          // Sin vínculo/líneas completos no queda un Movimiento útil para
+          // este flujo — se compensa eliminando el borrador recién creado
+          // (soft delete, todavía BORRADOR) en vez de redirigir a un registro
+          // a medias que el usuario tendría que descubrir y corregir a mano.
+          await movimientosService.remove(res.data.id).catch(() => {})
+          queryClient.invalidateQueries({ queryKey: movimientosKeys.all })
+          toast.error(e instanceof Error ? e.message : 'No se pudo registrar el ingreso contra la Orden de Compra de Materiales — inténtalo de nuevo')
+          return
+        }
+      }
       queryClient.invalidateQueries({ queryKey: movimientosKeys.all })
       router.push(`/dashboard/operaciones/movimientos/${res.data.id}`)
     },
@@ -258,6 +323,12 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
           <CardTitle>Nuevo movimiento</CardTitle>
         </CardHeader>
         <CardContent className='space-y-4'>
+          {ordenCompraMaterialIdParam && (
+            <Badge variant='outline'>
+              Se vinculará a la Orden de Compra de Materiales {ocMaterialPrefill?.data.numero ?? `#${ordenCompraMaterialIdParam}`}
+              {ocMaterialPrefill?.data.entidadProveedor ? ` — ${ocMaterialPrefill.data.entidadProveedor.descripcion}` : ''}
+            </Badge>
+          )}
           <div className='space-y-1.5'>
             <Label>Tipo de movimiento <span className='text-destructive'>*</span></Label>
             <Select value={tipoMovimientoId ? String(tipoMovimientoId) : ''} onValueChange={(v) => setTipoMovimientoId(parseInt(v))}>
@@ -274,9 +345,16 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
             <Label>Fecha de movimiento <span className='text-destructive'>*</span></Label>
             <Input type='date' value={fechaCrear} onChange={(e) => setFechaCrear(e.target.value)} />
           </div>
-          <Button onClick={() => createMutation.mutate()} isLoading={createMutation.isPending} disabled={!tipoMovimientoId}>
+          <Button
+            onClick={() => createMutation.mutate()}
+            isLoading={createMutation.isPending}
+            disabled={!tipoMovimientoId || !puedeEscribir || (ordenCompraMaterialIdParam != null && !ocMaterialPrefill)}
+          >
             <Icons.check className='mr-1 h-4 w-4' /> Crear borrador
           </Button>
+          {!puedeEscribir && (
+            <p className='text-destructive text-xs'>No tienes permiso para crear movimientos de Materiales.</p>
+          )}
         </CardContent>
       </Card>
     )
@@ -297,6 +375,13 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
         </Badge>
         {soloLectura && movimiento.estado === 'CONFIRMADO' && (
           <span className='text-muted-foreground text-xs'>Confirmado — ya aplicó su efecto en el saldo, no se puede editar.</span>
+        )}
+        {movimiento.ordenCompraMaterialId && (
+          <Button asChild type='button' variant='link' size='sm' className='h-auto p-0 text-xs'>
+            <Link href={`/dashboard/operaciones/materiales/ordenes-compra/${movimiento.ordenCompraMaterialId}`}>
+              Ver Orden de Compra de Materiales vinculada
+            </Link>
+          </Button>
         )}
       </div>
 

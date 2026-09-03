@@ -32,6 +32,9 @@ const itemsMenu = [
   { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', seccion: 'Ventas', ruta: '/dashboard/ventas/cobranza', esAccion: false, orden: 42 },
   // Operaciones
   { codigo: 'OPER_MATERIALES', nombre: 'Materiales', seccion: 'Operaciones', ruta: '/dashboard/configuracion/articulos', esAccion: false, orden: 50 },
+  // Orden de Compra de Materiales (2026-09-03, materiales.md §4.9) — ítem
+  // propio, separado de OPER_MATERIALES, mismo patrón que COMPRAS_OC.
+  { codigo: 'MATERIALES_OC', nombre: 'Órdenes de Compra de Materiales', seccion: 'Operaciones', ruta: '/dashboard/operaciones/materiales/ordenes-compra', esAccion: false, orden: 52 },
   // Gestión de Pallets (2026-09-02, compras.md §4.8): edita Nota de
   // Calidad/Condición y Completo/Incompleto de un Pallet ya recepcionado —
   // separado del reporte de solo lectura REPORTES_STOCK_FRUTA.

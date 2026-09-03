@@ -15,6 +15,9 @@ export const fmt = {
   // (CLAUDE.md §7 "Siempre usar Decimal — nunca number de JavaScript").
   usd: (v: number | string) => `US$ ${numero(v, 2)}`,
   clp: (v: number | string) => `$ ${numero(v, 0)}`,
+  // Monto con código de moneda dinámico (a diferencia de usd/clp, fijos) —
+  // para documentos cuya moneda depende de la fila (ej. OrdenCompraMaterial).
+  moneda: (v: number | string, codigo: string) => `${codigo} ${numero(v, 2)}`,
   kilos: (v: number | string) => `${numero(v, 2)} kg`,
   fecha: (iso: string) => {
     // Mismo criterio que formatFechaCorta en fas-web (fas-web/src/lib/format.ts):

@@ -78,7 +78,7 @@ export const navGroups: NavGroup[] = [
         icon: 'materiales',
         isActive: false,
         items: [
-          { title: 'Órdenes de Compra', url: '/dashboard/operaciones/ordenes-compra', icon: 'post'           },
+          { title: 'Órdenes de Compra', url: '/dashboard/operaciones/materiales/ordenes-compra', icon: 'post'           },
           { title: 'Movimientos',        url: '/dashboard/operaciones/movimientos',    icon: 'tiposMovimiento' }
         ]
       },

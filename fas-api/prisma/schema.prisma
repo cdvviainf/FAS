@@ -235,6 +235,7 @@ model Empresa {
   templatesCarga         TemplateCarga[]
   documentosEmitidos     DocumentoEmitido[]
   logo                   EmpresaLogo?
+  OrdenCompraMaterial    OrdenCompraMaterial[]
 
   @@map("empresas")
 }
@@ -630,7 +631,8 @@ model FormaPago {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  ordenesCompra OrdenCompra[]
+  ordenesCompra         OrdenCompra[]
+  ordenesCompraMaterial OrdenCompraMaterial[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1170,6 +1172,7 @@ model Moneda {
   condicionPagoCuotas   CondicionPagoCuota[]
   ordenCompraCuotasPago OrdenCompraCuotaPago[]
   notaVentaCuotasPago   NotaVentaCuotaPago[]
+  ordenesCompraMaterial OrdenCompraMaterial[]
 
   @@map("monedas")
 }
@@ -1297,44 +1300,45 @@ enum TipoEntidad {
 }
 
 model Entidad {
-  id                            Int                         @id @default(autoincrement())
-  empresaId                     Int
-  empresa                       Empresa                     @relation(fields: [empresaId], references: [id])
-  codigo                        String
-  descripcion                   String
-  descripcionExtranjera         String?
-  razonSocial                   String
-  giro                          String?
-  identificador                 String?
-  paisId                        Int
-  pais                          Pais                        @relation("EntidadPais", fields: [paisId], references: [id])
-  email                         String?
-  telefono                      String?
-  codigoExterno                 String?
-  activo                        Boolean                     @default(true)
-  tipos                         TipoEntidad[]
-  creadoEn                      DateTime                    @default(now())
-  creadoPor                     String
-  actualizadoEn                 DateTime?                   @updatedAt
-  actualizadoPor                String?
-  eliminadoEn                   DateTime?
-  eliminadoPor                  String?
-  direcciones                   EntidadDireccion[]
-  contactos                     EntidadContacto[]
-  solicitudesInspeccion         SolicitudInspeccion[]       @relation("SolicitudInspeccionProductor")
-  solicitudesInspeccionCliente  SolicitudInspeccion[]       @relation("SolicitudInspeccionCliente")
-  movimientos                   Movimiento[]                @relation("MovEntidad")
-  movimientosTransporte         Movimiento[]                @relation("MovTransporte")
-  predios                       Predio[]                    @relation("PrediosProductor")
-  contratos                     ProductorContrato[]         @relation("ContratosProductor")
-  movimientosCC                 MovimientoCuentaCorriente[] @relation("CCProductor")
-  notasVentaCliente             NotaVenta[]                 @relation("NotaVentaCliente")
-  notasVentaNotify              NotaVenta[]                 @relation("NotaVentaNotify")
-  notasVentaConsignatario       NotaVenta[]                 @relation("NotaVentaConsignatario")
-  ordenesCompraProductor        OrdenCompra[]               @relation("OrdenCompraProductor")
-  instructivosEmbalajeProductor InstructivoEmbalaje[]       @relation("InstructivoEmbalajeProductor")
-  recepcionesPlanta             Recepcion[]                 @relation("RecepcionPlanta")
-  palletsProductor              Pallet[]                    @relation("PalletProductor")
+  id                             Int                         @id @default(autoincrement())
+  empresaId                      Int
+  empresa                        Empresa                     @relation(fields: [empresaId], references: [id])
+  codigo                         String
+  descripcion                    String
+  descripcionExtranjera          String?
+  razonSocial                    String
+  giro                           String?
+  identificador                  String?
+  paisId                         Int
+  pais                           Pais                        @relation("EntidadPais", fields: [paisId], references: [id])
+  email                          String?
+  telefono                       String?
+  codigoExterno                  String?
+  activo                         Boolean                     @default(true)
+  tipos                          TipoEntidad[]
+  creadoEn                       DateTime                    @default(now())
+  creadoPor                      String
+  actualizadoEn                  DateTime?                   @updatedAt
+  actualizadoPor                 String?
+  eliminadoEn                    DateTime?
+  eliminadoPor                   String?
+  direcciones                    EntidadDireccion[]
+  contactos                      EntidadContacto[]
+  solicitudesInspeccion          SolicitudInspeccion[]       @relation("SolicitudInspeccionProductor")
+  solicitudesInspeccionCliente   SolicitudInspeccion[]       @relation("SolicitudInspeccionCliente")
+  movimientos                    Movimiento[]                @relation("MovEntidad")
+  movimientosTransporte          Movimiento[]                @relation("MovTransporte")
+  predios                        Predio[]                    @relation("PrediosProductor")
+  contratos                      ProductorContrato[]         @relation("ContratosProductor")
+  movimientosCC                  MovimientoCuentaCorriente[] @relation("CCProductor")
+  notasVentaCliente              NotaVenta[]                 @relation("NotaVentaCliente")
+  notasVentaNotify               NotaVenta[]                 @relation("NotaVentaNotify")
+  notasVentaConsignatario        NotaVenta[]                 @relation("NotaVentaConsignatario")
+  ordenesCompraProductor         OrdenCompra[]               @relation("OrdenCompraProductor")
+  ordenesCompraMaterialProveedor OrdenCompraMaterial[]       @relation("OrdenCompraMaterialProveedor")
+  instructivosEmbalajeProductor  InstructivoEmbalaje[]       @relation("InstructivoEmbalajeProductor")
+  recepcionesPlanta              Recepcion[]                 @relation("RecepcionPlanta")
+  palletsProductor               Pallet[]                    @relation("PalletProductor")
 
   @@unique([empresaId, id])
   @@index([eliminadoEn])
@@ -1549,7 +1553,6 @@ model SolicitudInspeccionEmbalaje {
   @@map("solicitud_inspeccion_embalajes")
 }
 
-
 model SolicitudInspeccionAsignado {
   id          Int                       @id @default(autoincrement())
   solicitudId Int
@@ -1680,6 +1683,7 @@ model Articulo {
   notaVentaDetalles           NotaVentaDetalle[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
   ordenCompraLineas           OrdenCompraLinea[]
+  ordenCompraMaterialLineas   OrdenCompraMaterialLinea[]
   contratoProductorLineas     ProductorContratoLinea[]
   solicitudesInspeccion       SolicitudInspeccionEmbalaje[]
   palletLineas                PalletLinea[]
@@ -1828,6 +1832,11 @@ model Movimiento {
 
   estado EstadoMovimiento @default(BORRADOR)
 
+  // Solo aplicable a movimientos clase ENTRADA — vincula el ingreso a stock
+  // con la Orden de Compra de Materiales que lo autoriza (materiales.md R22).
+  ordenCompraMaterialId Int?
+  ordenCompraMaterial   OrdenCompraMaterial? @relation(fields: [empresaId, ordenCompraMaterialId], references: [empresaId, id])
+
   detalle   MovimientoDetalle[]
   usuarioId String
   creadoEn  DateTime            @default(now())
@@ -1839,6 +1848,7 @@ model Movimiento {
   @@index([fechaMovimiento])
   @@index([empresaId])
   @@index([estado])
+  @@index([ordenCompraMaterialId])
   @@map("movimientos")
 }
 
@@ -1854,6 +1864,92 @@ model MovimientoDetalle {
   @@index([movimientoId])
   @@index([articuloId])
   @@map("movimiento_detalles")
+}
+
+// ─── Orden de Compra de Materiales (materiales.md §4.9, 2026-09-03) ─────────
+// Compromiso comercial con un Proveedor, previo al ingreso físico a stock
+// (que se registra con un Movimiento ENTRADA referenciando esta OC — R22).
+
+enum EstadoOrdenCompraMaterial {
+  BORRADOR
+  EMITIDA
+  RECEPCIONADA
+}
+
+model OrdenCompraMaterial {
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  numero    String // OCM-{AAAA}-{NNNN}, correlativo por año
+
+  entidadProveedorId Int // Entidad tipo PROVEEDOR (R19)
+  // FK compuesta (empresaId, entidadProveedorId) -> Entidad(empresaId, id).
+  entidadProveedor   Entidad @relation("OrdenCompraMaterialProveedor", fields: [empresaId, entidadProveedorId], references: [empresaId, id])
+
+  fecha DateTime @default(now())
+
+  formaPagoId     Int?
+  formaPago       FormaPago?                @relation(fields: [empresaId, formaPagoId], references: [empresaId, id])
+  condicionPagoId Int? // CondicionPago tipo=COMPRA, solo cuotas PORCENTAJE (R21)
+  condicionPago   CondicionPago?            @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
+  monedaId        Int
+  moneda          Moneda                    @relation(fields: [monedaId], references: [id])
+  observaciones   String?
+  estado          EstadoOrdenCompraMaterial @default(BORRADOR)
+
+  lineas      OrdenCompraMaterialLinea[]
+  cuotasPago  OrdenCompraMaterialCuotaPago[]
+  // Igual que OrdenCompra↔Recepcion (compras.md §4.7): array porque Prisma
+  // exige @unique en la FK para 1:1; la unicidad real ("a lo más un
+  // Movimiento CONFIRMADO o BORRADOR activo por OC") es un índice parcial
+  // WHERE eliminado_en IS NULL sobre Movimiento.ordenCompraMaterialId — ver
+  // migración (R22).
+  movimientos Movimiento[]
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@unique([empresaId, id])
+  @@index([entidadProveedorId])
+  @@index([condicionPagoId])
+  @@index([empresaId])
+  @@map("ordenes_compra_material")
+}
+
+model OrdenCompraMaterialLinea {
+  id                    Int                 @id @default(autoincrement())
+  ordenCompraMaterialId Int
+  ordenCompraMaterial   OrdenCompraMaterial @relation(fields: [ordenCompraMaterialId], references: [id], onDelete: Cascade)
+
+  articuloId     Int
+  articulo       Articulo @relation(fields: [articuloId], references: [id])
+  cantidad       Decimal  @db.Decimal(14, 3)
+  precioUnitario Decimal  @db.Decimal(14, 4)
+  monto          Decimal  @db.Decimal(14, 2)
+
+  @@index([ordenCompraMaterialId])
+  @@index([articuloId])
+  @@map("orden_compra_material_linea")
+}
+
+// Snapshot inmutable de las cuotas al fijar condicionPagoId (R21) — mismo
+// patrón que OrdenCompraCuotaPago, sin la variante MONTO_UNITARIO.
+model OrdenCompraMaterialCuotaPago {
+  id                    Int                 @id @default(autoincrement())
+  ordenCompraMaterialId Int
+  ordenCompraMaterial   OrdenCompraMaterial @relation(fields: [ordenCompraMaterialId], references: [id], onDelete: Cascade)
+
+  fechaReferencia FechaReferenciaPago @default(FACTURA)
+  plazoDias       Int
+  porcentaje      Decimal             @db.Decimal(5, 2)
+  descripcion     String?
+
+  @@index([ordenCompraMaterialId])
+  @@map("orden_compra_material_cuota_pago")
 }
 
 // ─── Productores — Predios, Contrato, Cuenta Corriente, Conceptos de Liquidación ─
@@ -2558,10 +2654,11 @@ model CondicionPago {
   tipo        TipoCondicionPago
   bloqueado   Boolean           @default(false)
 
-  cuotas             CondicionPagoCuota[]
-  ordenesCompra      OrdenCompra[]
-  notasVenta         NotaVenta[]
-  contratosProductor ProductorContrato[]
+  cuotas                CondicionPagoCuota[]
+  ordenesCompra         OrdenCompra[]
+  notasVenta            NotaVenta[]
+  contratosProductor    ProductorContrato[]
+  ordenesCompraMaterial OrdenCompraMaterial[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String

@@ -1,8 +1,9 @@
 import { prisma } from '../../../lib/prisma.js'
-import type { Prisma, PrismaClient } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import type { PrismaClient } from '@prisma/client'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
-import { LOCK_NAMESPACE_MOVIMIENTO_PROCESO } from '../../../shared/advisory-locks.js'
+import { LOCK_NAMESPACE_MOVIMIENTO_PROCESO, LOCK_NAMESPACE_ORDEN_COMPRA_MATERIAL_PROCESO } from '../../../shared/advisory-locks.js'
 import type { MovimientoCreateInput, MovimientoDetalleInput, MovimientoListFilters, MovimientoUpdateInput } from './movimientos.types.js'
 
 const includeDetalle = {
@@ -75,6 +76,16 @@ export async function getArticulosPorIds(ids: number[]) {
 
 export async function getEntidadActiva(id: number) {
   return prisma.entidad.findFirst({ where: { id, eliminadoEn: null, activo: true } })
+}
+
+// materiales.md R22 — pre-check amigable (no bloqueado) desde el service;
+// la autoridad real vuelve a leer esto bajo lock en
+// validarYCerrarOrdenCompraMaterial (dentro de confirmarMovimientoTransaccional).
+export async function getOrdenCompraMaterialActiva(id: number) {
+  return prisma.ordenCompraMaterial.findFirst({
+    where: { id, eliminadoEn: null },
+    select: { id: true, estado: true, entidadProveedorId: true },
+  })
 }
 
 // ─── Cabecera: crear / editar / eliminar (borrador) ──────────────────────────
@@ -304,13 +315,82 @@ async function validarParaConfirmar(tx: Tx, movimiento: {
   return new Map(articulos.map((a) => [a.id, { controlaStock: a.controlaStock }]))
 }
 
+// materiales.md R22 — se ejecuta DENTRO de la transacción de confirmar, bajo
+// un lock propio por ordenCompraMaterialId (serializa contra el CRUD de la
+// OC en materiales/ordenes-compra.repository.ts, que toma el mismo
+// namespace). Revalida todo contra el estado recién leído — nada de esto se
+// confía desde el pre-check del service. Devuelve el entidadId a persistir
+// en el movimiento (copiado de la OC si no venía informado) y una función
+// para cerrar la OC una vez que el resto de la confirmación tuvo éxito.
+async function validarYCerrarOrdenCompraMaterial(
+  tx: Tx,
+  movimiento: { entidadId: number | null; detalle: { articuloId: number; cantidad: Prisma.Decimal }[] },
+  ordenCompraMaterialId: number,
+): Promise<{ entidadIdEfectivo: number | null; cerrar: () => Promise<void> }> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_ORDEN_COMPRA_MATERIAL_PROCESO}::int, ${ordenCompraMaterialId}::int)`
+
+  const oc = await tx.ordenCompraMaterial.findFirst({
+    where: { id: ordenCompraMaterialId, eliminadoEn: null },
+    include: { lineas: { select: { articuloId: true, cantidad: true } } },
+  })
+  if (!oc) throw new ValidationError('La Orden de Compra de Materiales vinculada ya no existe (R22)')
+  if (oc.estado !== 'EMITIDA') {
+    throw new ValidationError('La Orden de Compra de Materiales vinculada ya no está EMITIDA (R22)')
+  }
+  if (movimiento.entidadId != null && movimiento.entidadId !== oc.entidadProveedorId) {
+    throw new ValidationError('El proveedor del movimiento no coincide con el de la Orden de Compra de Materiales (R22)')
+  }
+
+  const cantidadPorArticuloMovimiento = new Map<number, Prisma.Decimal>()
+  for (const linea of movimiento.detalle) {
+    const previo = cantidadPorArticuloMovimiento.get(linea.articuloId) ?? new Prisma.Decimal(0)
+    cantidadPorArticuloMovimiento.set(linea.articuloId, previo.plus(linea.cantidad))
+  }
+  const cantidadPorArticuloOc = new Map<number, Prisma.Decimal>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const linea of oc.lineas as any[]) {
+    const previo = cantidadPorArticuloOc.get(linea.articuloId) ?? new Prisma.Decimal(0)
+    cantidadPorArticuloOc.set(linea.articuloId, previo.plus(linea.cantidad))
+  }
+  for (const [articuloId, cantidad] of cantidadPorArticuloMovimiento) {
+    const cantidadOc = cantidadPorArticuloOc.get(articuloId)
+    if (!cantidadOc) {
+      throw new ValidationError(`El artículo ${articuloId} del movimiento no está en la Orden de Compra de Materiales (R22)`)
+    }
+    if (cantidad.gt(cantidadOc)) {
+      throw new ValidationError(
+        `La cantidad del artículo ${articuloId} (${cantidad.toString()}) supera la cantidad de la Orden de Compra de Materiales (${cantidadOc.toString()}) (R22)`,
+      )
+    }
+  }
+  // OCM-QA-003 (ronda 1): sin recepción parcial (materiales.md R22) — el
+  // Movimiento debe cubrir TODOS los artículos de la OC (cada cantidad puede
+  // ser menor o igual, pero ninguna línea puede faltar por completo), o la OC
+  // quedaría RECEPCIONADA con artículos nunca recibidos.
+  for (const articuloId of cantidadPorArticuloOc.keys()) {
+    if (!cantidadPorArticuloMovimiento.has(articuloId)) {
+      throw new ValidationError(
+        `El movimiento no cubre el artículo ${articuloId} de la Orden de Compra de Materiales — no hay recepción parcial (R22)`,
+      )
+    }
+  }
+
+  return {
+    entidadIdEfectivo: movimiento.entidadId ?? oc.entidadProveedorId,
+    cerrar: async () => {
+      await tx.ordenCompraMaterial.update({ where: { id: ordenCompraMaterialId }, data: { estado: 'RECEPCIONADA' } })
+    },
+  }
+}
+
 /**
  * Relee el movimiento (cabecera + detalle) bajo un advisory lock, revalida
  * TODO (R2/R9/R10/R11/R12/R14 — MOV-003, QA ronda 2) contra ese estado recién
  * leído, aplica el efecto de PMP/saldo línea por línea y deja el movimiento
  * `CONFIRMADO`. Si algún SALIDA/TRASLADO deja saldo negativo (R2) o cualquier
  * validación falla, la transacción completa hace rollback y el movimiento
- * permanece `BORRADOR` (CA19).
+ * permanece `BORRADOR` (CA19). Si el movimiento referencia una Orden de
+ * Compra de Materiales, además revalida y cierra esa OC (R22).
  */
 export async function confirmarMovimientoTransaccional(movimientoId: number) {
   return prisma.$transaction(async (tx) => {
@@ -325,6 +405,13 @@ export async function confirmarMovimientoTransaccional(movimientoId: number) {
 
     const tipoMovimiento = await tx.tipoMovimiento.findUniqueOrThrow({ where: { id: movimiento.tipoMovimientoId } })
     const clase = tipoMovimiento.clase
+
+    let cerrarOrdenCompraMaterial: (() => Promise<void>) | null = null
+    if (movimiento.ordenCompraMaterialId != null) {
+      const resultado = await validarYCerrarOrdenCompraMaterial(tx, movimiento, movimiento.ordenCompraMaterialId)
+      movimiento.entidadId = resultado.entidadIdEfectivo
+      cerrarOrdenCompraMaterial = resultado.cerrar
+    }
 
     const articulosPorId = await validarParaConfirmar(tx, movimiento, tipoMovimiento)
 
@@ -385,9 +472,11 @@ export async function confirmarMovimientoTransaccional(movimientoId: number) {
       }
     }
 
+    if (cerrarOrdenCompraMaterial) await cerrarOrdenCompraMaterial()
+
     return tx.movimiento.update({
       where: { id: movimientoId },
-      data: { estado: 'CONFIRMADO' },
+      data: { estado: 'CONFIRMADO', entidadId: movimiento.entidadId },
       include: includeDetalle,
     })
   })

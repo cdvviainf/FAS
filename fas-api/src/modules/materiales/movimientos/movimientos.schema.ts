@@ -13,6 +13,7 @@ export const movimientoCreateSchema = z.object({
 
 export const movimientoUpdateSchema = z.object({
   entidadId: z.number().int().positive().optional().nullable(),
+  ordenCompraMaterialId: z.number().int().positive().optional().nullable(),
   fechaMovimiento: z.string().datetime({ offset: true }).or(z.string().date()).optional(),
   bodegaOrigenId: z.number().int().positive().optional().nullable(),
   bodegaDestinoId: z.number().int().positive().optional().nullable(),

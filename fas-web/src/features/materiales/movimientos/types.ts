@@ -25,6 +25,9 @@ export interface Movimiento {
   }
   entidadId: number | null
   entidad: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
+  // Vincula el ingreso a stock con la Orden de Compra de Materiales que lo
+  // autoriza (materiales.md R22) — solo aplica a movimientos clase ENTRADA.
+  ordenCompraMaterialId: number | null
   fechaRegistro: string
   fechaMovimiento: string
   bodegaOrigenId: number | null
@@ -55,6 +58,9 @@ export interface MovimientoCreateInput {
 
 export interface MovimientoUpdateInput {
   entidadId?: number | null
+  // Solo aplicable a movimientos clase ENTRADA — vincula el ingreso a stock
+  // con la Orden de Compra de Materiales que lo autoriza (materiales.md R22).
+  ordenCompraMaterialId?: number | null
   fechaMovimiento?: string
   bodegaOrigenId?: number | null
   bodegaDestinoId?: number | null

@@ -51,6 +51,19 @@ export async function actualizarMovimiento(id: number, body: MovimientoUpdateInp
       throw new ValidationError(`La entidad seleccionada no tiene el tipo ${movimiento.tipoMovimiento.entidadRelacionada} requerido (R12)`)
     }
   }
+  // Pre-check amigable (materiales.md R22) — la autoridad real vuelve a
+  // revalidar esto bajo lock dentro de confirmarMovimientoTransaccional; acá
+  // solo evita abrir la transacción de confirmar con un error obvio.
+  if (body.ordenCompraMaterialId != null) {
+    if (movimiento.tipoMovimiento.clase !== 'ENTRADA') {
+      throw new ValidationError('Solo un movimiento de clase Entrada puede vincularse a una Orden de Compra de Materiales (R22)')
+    }
+    const oc = await repo.getOrdenCompraMaterialActiva(body.ordenCompraMaterialId)
+    if (!oc) throw new ValidationError('La Orden de Compra de Materiales seleccionada no existe')
+    if (oc.estado !== 'EMITIDA') {
+      throw new ValidationError('Solo se puede vincular una Orden de Compra de Materiales EMITIDA (R22)')
+    }
+  }
 
   // MOV-002 (QA ronda 1): pre-check amigable — la autoridad real vuelve a
   // chequear esto en confirmarMovimiento contra lo persistido.
@@ -64,7 +77,23 @@ export async function actualizarMovimiento(id: number, body: MovimientoUpdateInp
     throw new ValidationError('Un movimiento de Traslado no puede tener la misma bodega de origen y destino (R11)')
   }
 
-  return repo.updateMovimientoHeader(id, body)
+  try {
+    return await repo.updateMovimientoHeader(id, body)
+  } catch (e) {
+    throw traducirColisionOrdenCompraMaterial(e)
+  }
+}
+
+// Carrera concurrente (materiales.md R22, mismo patrón que
+// traducirColisionSolicitud en compras/ordenes-compra.service.ts): el índice
+// parcial `movimientos_ordenCompraMaterialId_activa_key` es la última
+// defensa si dos vinculaciones a la misma OC pasan ambas el pre-check antes
+// de que cualquiera confirme.
+function traducirColisionOrdenCompraMaterial(e: unknown): unknown {
+  if (e && typeof e === 'object' && 'code' in e && (e as { code?: string }).code === 'P2002') {
+    return new ValidationError('Ya existe un Movimiento activo vinculado a esa Orden de Compra de Materiales (carga simultánea)')
+  }
+  return e
 }
 
 export async function eliminarMovimiento(id: number, userId: string) {
@@ -186,15 +215,22 @@ export async function confirmarMovimiento(id: number, userId: string) {
   }
 
   if (tipoMovimiento.entidadRelacionada) {
-    if (!movimiento.entidadId) {
+    // materiales.md R22: si el movimiento está vinculado a una Orden de
+    // Compra de Materiales y no trae entidadId, la autoridad real
+    // (repo.confirmarMovimientoTransaccional) lo copia desde la OC antes de
+    // llegar acá — este pre-check amigable no puede anticiparlo sin repetir
+    // esa misma lectura, así que solo exige el campo cuando NO hay OC vinculada.
+    if (!movimiento.entidadId && movimiento.ordenCompraMaterialId == null) {
       throw new ValidationError(`Este tipo de movimiento exige una entidad de tipo ${tipoMovimiento.entidadRelacionada} (R12)`)
     }
-    // MOV-003 (QA ronda 1): mismo motivo que el transportista arriba — revalida
-    // el estado actual de la entidad, no solo que el campo esté presente.
-    const entidad = await repo.getEntidadActiva(movimiento.entidadId)
-    if (!entidad) throw new ValidationError('La entidad seleccionada no existe o está inactiva (R12)')
-    if (!entidad.tipos.includes(tipoMovimiento.entidadRelacionada)) {
-      throw new ValidationError(`La entidad seleccionada no tiene el tipo ${tipoMovimiento.entidadRelacionada} requerido (R12)`)
+    if (movimiento.entidadId) {
+      // MOV-003 (QA ronda 1): mismo motivo que el transportista arriba — revalida
+      // el estado actual de la entidad, no solo que el campo esté presente.
+      const entidad = await repo.getEntidadActiva(movimiento.entidadId)
+      if (!entidad) throw new ValidationError('La entidad seleccionada no existe o está inactiva (R12)')
+      if (!entidad.tipos.includes(tipoMovimiento.entidadRelacionada)) {
+        throw new ValidationError(`La entidad seleccionada no tiene el tipo ${tipoMovimiento.entidadRelacionada} requerido (R12)`)
+      }
     }
   }
 
