@@ -484,27 +484,57 @@
   .av-pct { flex:0 0 42px; text-align:right; font-size:12px; color:var(--muted); }
   .av-state { flex:0 0 110px; font-size:11px; }
 
-  /* Gantt */
-  .gantt-wrap { margin-top:2rem; border:1px solid var(--border); border-radius:12px; overflow:auto; }
-  .gantt { min-width:760px; }
-  .g-head, .g-row { display:grid; }
-  .g-head { position:sticky; top:0; background:var(--light); border-bottom:1px solid var(--border); z-index:2; }
-  .g-cellh { font-size:10px; color:var(--muted); padding:6px 4px; text-align:center; border-left:1px solid var(--border); }
-  .g-cellh.lbl { text-align:left; padding-left:12px; border-left:none; font-weight:500; letter-spacing:.05em; text-transform:uppercase; }
-  .g-row { border-bottom:1px solid var(--border); align-items:center; }
-  .g-row:last-child { border-bottom:none; }
-  .g-row:hover { background:var(--light); }
-  .g-lbl { font-size:12px; padding:8px 12px; }
-  .g-track { position:relative; height:34px; }
-  .g-grid { position:absolute; inset:0; }
-  .g-gline { position:absolute; top:0; bottom:0; border-left:1px solid rgba(13,34,69,0.06); }
-  .g-bar { position:absolute; top:8px; height:18px; border-radius:5px; display:flex; align-items:center; overflow:hidden; box-shadow:0 1px 3px rgba(13,34,69,.15); }
-  .g-bar-fill { height:100%; background:rgba(255,255,255,0.35); }
-  .g-bar span { position:absolute; left:7px; font-size:10px; color:white; font-weight:600; white-space:nowrap; }
-  .g-e1 { background:var(--blue2); } .g-e2 { background:#7C3AED; } .g-e3 { background:var(--green2); }
-  .gantt-legend { display:flex; gap:16px; margin-top:12px; font-size:12px; color:var(--muted); align-items:center; }
-  .gantt-legend span { display:inline-flex; align-items:center; gap:6px; }
-  .gantt-legend i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  /* Gantt v2 — tabla + línea de tiempo, columnas fijas por sticky */
+  .gt-summary-wrap { margin-top:1rem; }
+  .gt-summary { display:grid; grid-template-columns:repeat(7, 1fr); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:12px; overflow:hidden; overflow-x:auto; }
+  .gt-summary.gt-summary-meses { grid-template-columns:repeat(auto-fit, minmax(90px,1fr)); margin-top:6px; }
+  .gt-summary-item { display:flex; flex-direction:column; gap:4px; background:white; padding:10px 12px; min-width:0; }
+  .gt-summary-label { font-size:9.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .gt-summary-label sup { font-size:9px; margin-left:1px; }
+  .gt-summary-value { font-family:'DM Sans', sans-serif; font-size:14px; font-weight:600; color:var(--navy); line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .gt-summary-value.gt-summary-empty { color:var(--muted); font-weight:400; }
+  .gt-summary-notes { font-size:11px; color:var(--muted); margin-top:6px; line-height:1.5; }
+  .gt-toolbar { display:flex; align-items:center; gap:10px; margin-top:1.5rem; margin-bottom:.75rem; }
+  .gt-toolbar button { font:inherit; font-size:12px; padding:5px 11px; border-radius:7px; border:1px solid var(--border); background:white; color:var(--navy); cursor:pointer; }
+  .gt-toolbar button:hover { background:var(--light); }
+  .gt-wrap { border:1px solid var(--border); border-radius:12px; overflow:auto; max-height:640px; position:relative; background:white; }
+  .gt-table { display:grid; width:max-content; }
+  .gt-row { display:grid; grid-template-columns: var(--gt-cols); align-items:stretch; }
+  .gt-row.gt-head-row-1 { position:sticky; top:0; z-index:5; }
+  .gt-row.gt-head-row-2 { position:sticky; top:30px; z-index:5; }
+  .gt-cell { font-size:11.5px; padding:0 10px; display:flex; align-items:center; border-bottom:1px solid var(--border); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; height:32px; background:white; }
+  .gt-head-row .gt-cell { height:30px; background:var(--light); font-size:9.5px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.02em; border-bottom:1px solid var(--border); }
+  .gt-head-row-1 .gt-cell { border-left:1px solid var(--border); justify-content:center; }
+  .gt-head-row-2 .gt-cell.gt-daycell { justify-content:center; padding:0; border-left:1px solid rgba(13,34,69,0.06); }
+  .gt-sticky { position:sticky; z-index:2; }
+  .gt-head-row .gt-sticky { z-index:6; }
+  .gt-cell.gt-num { justify-content:flex-end; font-variant-numeric:tabular-nums; color:var(--muted); }
+  .gt-cell.gt-pct { justify-content:flex-end; font-variant-numeric:tabular-nums; font-weight:600; }
+  .gt-row.gt-parent .gt-cell { background:#FBF9F5; }
+  .gt-row.gt-parent .gt-cell.gt-tarea { color:var(--navy); }
+  .gt-row.gt-branch .gt-cell { font-weight:600; }
+  .gt-row.gt-etapa-row { border-top:2px solid var(--border); }
+  .gt-row.gt-etapa-row .gt-cell { background:#EFEAE0; font-size:12.5px; text-transform:uppercase; letter-spacing:.03em; }
+  .gt-row.gt-child:hover .gt-cell, .gt-row.gt-parent:hover .gt-cell { background:#EFEAE0; }
+  .gt-row.gt-hidden { display:none; }
+  .gt-toggle { width:14px; height:14px; display:inline-flex; align-items:center; justify-content:center; margin-right:6px; cursor:pointer; color:var(--muted); font-size:9px; flex:0 0 auto; user-select:none; }
+  .gt-toggle.gt-leaf { visibility:hidden; }
+  .gt-indent { display:inline-flex; align-items:center; overflow:hidden; text-overflow:ellipsis; }
+  .gt-dot { width:5px; height:5px; border-radius:50%; margin-right:7px; flex:0 0 auto; }
+  .gt-timeline { position:relative; padding:0; }
+  .gt-timeline-bg { position:absolute; inset:0; background-image: repeating-linear-gradient(to right, rgba(13,34,69,0.06) 0, rgba(13,34,69,0.06) 1px, transparent 1px, transparent var(--gt-colw)); }
+  .gt-bartrack { position:absolute; inset:0; }
+  .gt-bar { position:absolute; top:7px; height:18px; border-radius:5px; box-shadow:0 1px 3px rgba(13,34,69,.15); overflow:hidden; }
+  .gt-bar-done { position:absolute; inset:0; background:rgba(255,255,255,.85); }
+  .gt-bar.gt-e1 { background:var(--blue2); } .gt-bar.gt-e2 { background:#7C3AED; } .gt-bar.gt-e3 { background:var(--green2); }
+  .gt-bar.gt-parentbar { background:var(--navy); top:9px; height:14px; }
+  .gt-bar.gt-parentbar .gt-bar-done { background:rgba(255,255,255,.5); }
+  .gt-conn { position:absolute; inset:0; pointer-events:none; overflow:visible; }
+  .gt-conn path { fill:none; stroke:#B9C2CF; stroke-width:1.5; }
+  .gt-legend { display:flex; gap:16px; margin-top:12px; font-size:12px; color:var(--muted); align-items:center; flex-wrap:wrap; }
+  .gt-legend span { display:inline-flex; align-items:center; gap:6px; }
+  .gt-legend i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .gt-note { font-size:11.5px; color:var(--muted); margin-top:8px; line-height:1.5; }
 
   #mockups { background:var(--light); }
   .mk-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
@@ -549,11 +579,11 @@
           <div class="hero-stat-lbl">Etapas</div>
         </div>
         <div class="reveal reveal-4">
-          <div class="hero-stat-val">13</div>
+          <div class="hero-stat-val">16</div>
           <div class="hero-stat-lbl">Módulos</div>
         </div>
         <div class="reveal reveal-4">
-          <div class="hero-stat-val">41</div>
+          <div class="hero-stat-val">12</div>
           <div class="hero-stat-lbl">Semanas</div>
         </div>
       </div>
@@ -997,7 +1027,12 @@
     <h2 class="section-title">Avances y carta Gantt</h2>
     <div class="upd-note" id="upd-note">Cargando datos…</div>
     <div id="avances-list"></div>
-    <h3 style="margin:2.5rem 0 .5rem;font-family:'Fraunces',serif;font-weight:500;">Carta Gantt (semanal)</h3>
+    <h3 style="margin:2.5rem 0 .5rem;font-family:'Fraunces',serif;font-weight:500;">Carta Gantt</h3>
+    <div id="gantt-summary"></div>
+    <div class="gt-toolbar">
+      <button type="button" id="gt-expand-all">Expandir todo</button>
+      <button type="button" id="gt-collapse-all">Contraer todo</button>
+    </div>
     <div id="gantt-host"></div>
   </div>
 </section>
@@ -1061,13 +1096,13 @@
 const MODULOS = [
 
   { n:"Mantenedores Generales", sec:"General", et:1, ok:true,
-    obj:"Los 24 catálogos transversales que alimentan a todo el sistema, sobre una base común con auditoría y borrado lógico.",
+    obj:"Los catálogos verdaderamente transversales (usados por 2+ módulos operativos), sobre una base común con auditoría y borrado lógico. Reconciliado 2026-08-13: los maestros que en realidad son propios de un solo módulo se movieron a ese módulo (ver Compras, Ventas, Materiales, Productores).",
     si:["Geografía: Zona, Región, Provincia, Comuna, País, Puerto",
-        "Comercial: Grupo mercado, Mercado, Moneda, Temporada, Tipo de embarque, Tipo de cuenta corriente",
-        "Operación: Bodega, Unidad de medida, Tipo de pallet, Altura, Tipo de producción",
-        "Fruta: Especie, Grupo variedad, Variedad, Categoría, Calibre",
-        "Parámetros: Tipo de parámetro y Parámetros (condición de venta, tipo de flete, etc.)"],
-    no:["Mantenedor de Entidades (módulo aparte)"],
+        "Comercial base: Moneda, Temporada, Grupo Mercado / Mercado",
+        "Fruta: Especie, Grupo Variedad, Variedad, Categoría, Calibre (con orden por especie)",
+        "Motor de Parámetros genérico: Tipo de Parámetro y Parámetro (usado por Ventas para Incoterm/Modalidad de Venta/Tipo de Flete y por Compras para Incoterm)",
+        "Operación compartida: Bodega, Tipo de Pallet"],
+    no:["Mantenedor de Entidades (módulo aparte)","Etiqueta y Unidad de Medida — ahora viven en Gestión de Materiales","Altura y Template de Carga — ahora viven en Compras","Tipo de Producción y Tipo de Cuenta Corriente — ahora viven en Gestión de Productores","Tipo de Embarque — ahora vive en Ventas"],
     reglas:["Código único entre no eliminados","Softdelete universal","Una sola moneda base; temporadas sin solape"], ca:"CA1–CA11" },
 
   { n:"Usuarios y Perfiles", sec:"General", et:1, ok:true,
@@ -1082,114 +1117,135 @@ const MODULOS = [
     no:["Lógica específica de cada función (vive en su módulo)","Clientes: crédito, score de riesgo, formas de pago y contactos por país (módulo aparte)"],
     reglas:["Al menos un tipo por entidad","RUT validado con dígito verificador","Máximo una dirección por defecto"], ca:"CA1–CA9" },
 
-  { n:"Calidad — Control en origen", sec:"Calidad", et:1, ok:true,
-    obj:"Control de calidad de fruta en origen, configurado por especie, en web y dispositivo móvil.",
+  { n:"Empresas (Multi-empresa / Multi-tenant)", sec:"General", et:1, ok:false, estadoTxt:"Fase 3 completa · Fase 4 pendiente",
+    obj:"El sistema opera para dos empresas del cliente (Frutera Agrosan y AGDry) con datos completamente separados. Aislamiento a nivel de servidor (empresaId en las tablas raíz), enforced por una extensión de Prisma — no un simple selector de UI.",
+    si:["Maestro Empresa + Dirección + Contacto + membresía Usuario↔Empresa (Fase 0)",
+        "Contexto de empresa por request (AsyncLocalStorage) + selector en el header + reset de Temporada al cambiar (Fase 1)",
+        "Prisma Client Extension: inyecta empresaId en toda operación sobre modelos tenant, incluida la protección de escrituras anidadas (Fase 2a)",
+        "Refactor País↔Mercado, porque Mercado pasa a ser por empresa (Fase 2b)",
+        "Backfill de empresaId en los ~38 modelos raíz del sistema, en 7 lotes por módulo (Fase 3, completa)",
+        "Mantenedor de administración de Empresas + formulario de Usuario ampliado (Fase 4, pendiente)"],
+    no:["Perfiles/permisos por empresa — son globales por usuario (mismo perfil en todas sus empresas)","Selector de empresa oculto con una sola empresa — se muestra siempre, igual que Temporada"],
+    reglas:["Row-level tenancy: empresaId en tablas raíz; las tablas hijas heredan del padre por FK","El empresaId nunca es un campo visible en un formulario: siempre se toma del contexto activo","Geografía y Moneda quedan globales (compartidas); el resto de maestros, por empresa"], ca:"—" },
+
+  { n:"Calidad — Solicitud de Inspección", sec:"Calidad", et:1, ok:true, estadoTxt:"v1 vigente",
+    obj:"Primer modelo funcional de Calidad: solicitud de visita a terreno para inspeccionar fruta, con adjuntos, notificación por correo y cierre con veredicto. Reemplaza, por ahora, al modelo completo de norma por especie (ver tarjeta siguiente).",
+    si:["Solicitud (folio por temporada, productor, dirección con geo, motivo, fecha/hora) con adjuntos guardados en BD",
+        "Campos del Documento N°107: mercado/países, variedad/calibre/categoría/embalaje solicitado, calificación, cantidad de pallets",
+        "Clasificación Inspección de Compra / Inspección de Proceso, gestionada desde Compras (Compras administra ambos tipos; Calidad solo ve y cierra)",
+        "Cierre con veredicto (Aprobada / Rechazada / Objetada) que habilita o bloquea la Orden de Compra del mismo productor",
+        "Cola de correos (notificar, modificar, eliminar, cerrar, reabrir, recordatorio 24h antes) vía SMTP configurable"],
+    no:["Inspección por caja con defectos/madurez por especie y fotos (norma completa, postergada)","App móvil offline (Etapa 2)"],
+    reglas:["Solo Aprobada habilita la Orden de Compra; Rechazada y Objetada la bloquean","La solicitud exige la misma entidad productora que la OC que la referencia"], ca:"—" },
+
+  { n:"Calidad — Control de Calidad en Origen (norma completa)", sec:"Calidad", et:1, ok:false, estadoTxt:"Postergado",
+    obj:"Modelo completo de control de calidad en origen: norma de defectos y madurez configurada por especie, con inspección por caja en terreno. Quedó postergado a favor de la Solicitud de Inspección v1 (más simple, ya en uso).",
     si:["Mantenedores de norma por especie: tipos/grupos/defectos y características de madurez",
-        "Módulo de ingreso de control de calidad: inspección por caja (predio, embalaje, categoría, calibre, frutos), defectos, madurez y fotos",
-        "Informe de calidad: resultado (Aprobado / Objetado / Rechazado) e informe PDF por correo",
-        "Digitación web de los parámetros tomados en terreno para generar el informe al productor"],
-    no:["Solicitud de inspección (se emite desde Compras — Ciclo de compras)","App móvil offline para ingreso en terreno (Etapa 2)","Validación de lotes recepcionados (otra etapa de Calidad)"],
+        "Inspección por caja (predio, embalaje, categoría, calibre, cantidad de frutos), defectos encontrados y valores de madurez",
+        "Fotos asociadas a la inspección",
+        "Resultado manual del inspector (Aprobado / Objetado / Rechazado) e informe PDF enviado por correo"],
+    no:["Solicitud de inspección (ya cubierta por la v1 vigente)","App móvil offline (tarjeta aparte, Etapa 2)","Validación de lotes recepcionados / reclamos (Calidad — Análisis de reclamos)"],
     reglas:["Defectos y madurez segmentados por especie","Captura por caja; cantidad definida en terreno","Resultado manual del inspector"], ca:"CA1–CA11" },
 
-  { n:"Calidad — Análisis de reclamos", sec:"Calidad", et:"1/3", ok:true,
-    obj:"Análisis técnico de los reclamos del cliente en destino, asociados al embarque (Instructivo): evaluación y veredicto.",
-    si:["Mantenedores: características de reclamo por especie y criterios de cumplimiento",
-        "Módulo de ingreso de reclamo: documentación del cliente, resumen, datos por especie y checklist de cumplimiento",
-        "Veredicto de procedencia (procedente / improcedente / parcial)",
-        "Checklist de cumplimiento y veredicto de procedencia"],
-    no:["Ingreso del reclamo y valorización comercial / provisión (viven en Ventas — Ciclo de ventas)","Módulo Embarque (pendiente)","Impacto en liquidaciones (Etapa 3)","Emisión de la Nota de Crédito (vive en Cobranza)"],
-    reglas:["Ingreso y evaluación por Calidad; la valorización la realiza Comercial","CERRADO bloquea edición; permisos separados"], ca:"CA1–CA10" },
+  { n:"Calidad — App móvil offline (PWA)", sec:"Calidad", et:2, ok:false, estadoTxt:"Etapa 2",
+    obj:"Registro de inspecciones de calidad en terreno, sin señal, como PWA instalable sobre el mismo fas-web.",
+    si:["Descarga de la norma de la especie a IndexedDB al tomar una solicitud","Registro de cajas, defectos, madurez y fotos sin conexión","Cola de sincronización al recuperar señal, con validación server-side al recibir"],
+    no:["Configuración de la norma (solo WEB)","Cualquier pantalla administrativa"],
+    reglas:["Conflictos: última escritura del inspector dueño de la solicitud"], ca:"—" },
 
-  { n:"Compras — Ciclo de compras", sec:"Compras", et:1, ok:true, estadoTxt:"Modelo cerrado · v0.1",
-    obj:"Ciclo de compra de fruta: del instructivo de embalaje a la recepción de stock, por compra directa (con OC) o consignación (sin OC).",
-    si:["Solicitud de inspección a Calidad",
-        "Instructivo de Embalaje (qué embalar, construido con maestros)",
-        "Orden de Compra multilínea (variedad, categoría, embalaje, rango de calibre, precio), opcionalmente asociada a un Cierre",
+  { n:"Calidad — Análisis de reclamos", sec:"Calidad", et:"1/3", ok:true,
+    obj:"Reclamo del cliente en destino tras exportar: Comercial deriva, Calidad ingresa y evalúa (documentación, datos del cliente, checklist), Comercial valoriza. Incluye la Provisión asociada.",
+    si:["Mantenedores: características de reclamo por especie y criterios de cumplimiento (checklist)",
+        "Reclamo: documentación del cliente (cualquier tipo de archivo), resumen, datos por especie y checklist de cumplimiento",
+        "Valorización por Comercial (valor reclamado y valor autorizado ≤ reclamado), con permiso separado del ingreso",
+        "Veredicto de procedencia (procedente / improcedente / parcial) obligatorio antes de cerrar",
+        "Provisión: reserva de monto (por caja, por kilo o monto fijo) asociada al reclamo, con reversa e historial — nunca se elimina"],
+    no:["Módulo Embarque (se referencia por código Instructivo hasta que exista, luego FK)","Impacto en liquidaciones (Etapa 3)","Emisión de la Nota de Crédito (vive en Cobranza; este módulo solo expone la provisión vigente para que Cobranza alerte)"],
+    reglas:["Flujo INGRESADO → VALORIZADO → CERRADO; CERRADO bloquea edición (reapertura con permiso propio)","Ingreso, valorización y cierre/reapertura son permisos separados","La provisión reduce el saldo pendiente visible en cartera; nunca se elimina, se reversa"], ca:"CA1–CA10" },
+
+  { n:"Compras — Ciclo de compras", sec:"Compras", et:1, ok:true, estadoTxt:"Modelo cerrado · en desarrollo",
+    obj:"Ciclo de compra de fruta: del instructivo de embalaje a la recepción de stock, por compra directa (con OC) o consignación (sin OC), más la captura y cuadre de documentos de compra.",
+    si:["Instructivo de Embalaje anclado al productor (qué embalar, construido con maestros), editable y eliminable",
+        "Solicitud de Inspección de Compra, gestionada íntegramente desde Compras",
+        "Orden de Compra multilínea (variedad, categoría, embalaje, lista de calibres, precio, condición de pago, incoterm), opcionalmente asociada a un Cierre",
         "Recepción de Stock: módulo único con modo con OC (validación) y sin OC (consignación)",
         "Motor de validación OC↔carga por totales de línea (todo o nada) con reporte de diferencias",
-        "Generación de Stock / Pallets (unidad mínima indivisible)"],
-    no:["Informe de calidad (Calidad — Control en origen)","Captura de facturas y notas de crédito (Gestión de Productores)","Reserva de pallets, Embarque e Instructivo de Embarque (Ventas)","Integración AGL (solo lectura; detalle pendiente)","Lectura IA de PDF (Etapa 2)","Liquidación a Productor (Etapa 3)"],
-    reglas:["Validación por totales de línea de OC; calibre por rango; todo o nada","Fruta con OC → Costos; consignación → Liquidación a Productor","Pallet indivisible y exclusivo de un embarque, desvinculable hasta confirmar despacho","Instructivo de Embalaje y OC sin FK directa (trazabilidad vía informe de calidad)"], ca:"Validación §7" },
+        "Generación de Stock / Pallets (unidad mínima indivisible)",
+        "Captura de facturas y notas de crédito de compra desde fuente externa, cuadradas contra las OC por montos"],
+    no:["Inspección de calidad en sí (Calidad)","Pago de los documentos de compra y cuenta corriente del productor (Gestión de Productores)","Reserva de pallets, Embarque e Instructivo de Embarque (Ventas)","Integración AGL (solo lectura; detalle de campos pendiente)","Lectura IA de PDF (Etapa 2)","Liquidación a Productor (Etapa 3)"],
+    reglas:["Validación por totales de línea de OC; calibre por lista puntual (no rango); todo o nada","Fruta con OC → Costos; consignación → Liquidación a Productor","Pallet indivisible y exclusivo de un embarque, desvinculable hasta confirmar despacho","Instructivo de Embalaje y OC sin FK directa entre sí; la trazabilidad corre por la Solicitud de Inspección aprobada"], ca:"Validación §7" },
 
   { n:"Ventas — Ciclo de ventas", sec:"Ventas", et:1, ok:false, estadoTxt:"En definición",
-    obj:"Ciclo comercial de exportación: desde el Cierre de Negocios hasta el Instructivo de Embarque, entidad ancla del negocio. Incluye el ingreso y la valorización (provisión) de los reclamos.",
-    si:["Cierre de Negocios: encabezado + detalle de fruta comprometida",
+    obj:"Ciclo comercial de exportación: desde el Cierre Comercial (Nota de Venta) hasta el Instructivo de Embarque, entidad ancla del negocio.",
+    si:["Cierre Comercial: encabezado + detalle de fruta comprometida (calibres multiselect, condición de pago con cuotas snapshot)",
         "Solicitud de Reserva de Espacios al Gestor Logístico y captura de su respuesta",
-        "Instructivo / Orden de Embarque: encabezado + contenedor + asignación de fruta, validada contra el Cierre de Negocios",
-        "Embarque con Nº de Instructivo (padre, campo Folio) e instructivos hijos por punto de retiro",
-        "Reserva de pallets, carga del packing list y actualización de Stock",
-        "Ingreso de reclamos del cliente en destino",
-        "Valorización comercial del reclamo (Provisión/Nota de Crédito): por caja, por kilo o monto fijo, con reversa e historial"],
-    no:["Análisis técnico del reclamo (Calidad)","Despacho / descuento de Stock (Operaciones)","Proforma y Factura DTE (Cobranza)","Determinación de precios definitiva (Etapa 3)","Programa Comercial (en duda, parking lot)"],
-    reglas:["Nº de Instructivo = campo Folio (manual, único); hijos autogenerados {folio}-{n}","Fruta del embarque ⊆ fruta del Cierre de Negocios","Herencia Cierre→Embarque: los campos repetidos se heredan y bloquean","Cierre de Negocios borrable solo si no tiene Instructivo asociado","Valor autorizado ≤ valor reclamado","Provisión VIGENTE reduce el saldo pendiente visible en cartera; nunca se elimina, se reversa"], ca:"R1–R11 · PR1–PR7" },
+        "Embarque = contenedor físico, identificado por Folio calculado automáticamente ({prefijo del Tipo de Embarque}+folio de la NV)",
+        "Instructivos Hijos (≥1 por Embarque, uno por punto de retiro/planta), con código autogenerado {folio}-{n}",
+        "Asignación de fruta al contenedor, validada contra lo comprometido en el Cierre Comercial",
+        "Integración de solo lectura con AGL para los datos de la reserva del contenedor",
+        "Reclamos: ingreso comercial y Provisión (evaluación técnica detallada en Calidad — Análisis de reclamos)"],
+    no:["Evaluación técnica de reclamos por especie/checklist (Calidad — Análisis de reclamos)","Despacho / descuento de Stock (interfaz con Compras vía reserva de pallets)","Proforma y Factura DTE (Cobranza)","Determinación de precios definitiva (Etapa 3)","Programa Comercial (en duda, parking lot)"],
+    reglas:["Folio = número de instructivo, calculado automáticamente y único; hijos autogenerados {folio}-{n}","Fruta del embarque ⊆ fruta del Cierre Comercial","Herencia Cierre→Embarque: los campos repetidos se heredan y bloquean","Cierre Comercial borrable solo si no tiene Embarque asociado"], ca:"R1–R12" },
 
-  { n:"Cobranza — Facturación y Pagos", sec:"Cobranza", et:1, ok:true,
+  { n:"Cobranza — Facturación y Pagos", sec:"Cobranza", et:1, ok:true, estadoTxt:"Exportación + Ventas Nacionales",
     obj:"Por cada embarque: Proforma en PDF, Factura de Exportación (DTE 110) vía adaptador, cuotas con vencimientos dinámicos, NC/ND (112/111) prorrateadas y pagos multi-moneda con saldo a favor. Incluye la emisión de ventas nacionales (DTE 33/34).",
     si:["Proforma (PDF, no tributaria) y Factura DTE 110 por embarque, con montos coincidentes",
         "Forma de Pago con 1 a 3 cuotas, cada una con % y fecha de referencia (Factura / Embarque / Envío de documentos / Arribo / BL / Proforma)",
         "Cuotas generadas al emitir el DTE, con vencimiento recalculable si cambian las fechas del embarque",
         "NC (112) y ND (111) sobre el DTE, prorrateadas entre cuotas con saldo pendiente",
         "Registro de pagos multi-moneda aplicados a uno o varios documentos, en cascada a la cuota más antigua, con saldo a favor del remanente",
-        "Ingreso manual de la liquidación del cliente",
-        "Proforma, facturas y notas de crédito de ventas nacionales (DTE 33/34), vía el mismo adaptador"],
-    no:["Motor de Score de Riesgo (vive en Gestión de Riesgo)","Ventana de gestión y envío de correos (módulo aparte)","Entidad Provisión (se crea y gestiona en Reclamos)","Generación de las proformas de servicios y de materiales (Productores / Materiales)"],
-    reglas:["1 Embarque → 1 Proforma, 1 Factura DTE, N NC/ND","Suma de cuotas de una Forma de Pago = 100%","NC/ND se prorratean; los pagos cascadan a la cuota más antigua","Todo documento y pago se mantiene en su propia moneda, sin conversión","Ventas nacionales: en borrador no hay efectos; al emitir se descuenta stock o se mueve la cuenta corriente","Solo se factura a entidades marcadas como Cliente nacional"], ca:"CA1–CA9 · VN1–VN6" },
+        "Ventas Nacionales: confirmador de proformas (servicios a productores, venta de materiales) + emisor de factura DTE 33/34 desde 0"],
+    no:["Motor de Score de Riesgo (tarjeta aparte)","Ventana de gestión y envío de correos (módulo aparte)","Entidad Provisión (se crea y gestiona en Calidad — Análisis de reclamos)","Generación de las proformas de servicios y de materiales (Gestión de Productores / Gestión de Materiales)"],
+    reglas:["1 Embarque → 1 Proforma, 1 Factura DTE, N NC/ND","Suma de cuotas de una Forma de Pago = 100%","NC/ND se prorratean; los pagos cascadan a la cuota más antigua","Todo documento y pago se mantiene en su propia moneda, sin conversión","Ventas nacionales: en borrador no hay efectos; al emitir se descuenta stock o se mueve la cuenta corriente","Solo se factura a entidades marcadas como Cliente nacional"], ca:"CB1–CB17 · VN1–VN6" },
 
   { n:"Cobranza — Gestión", sec:"Cobranza", et:1, ok:true,
-    obj:"Gestión Cobranza: cartera de vencimientos, plantillas de correo con campos dinámicos y despacho por cliente con historial.",
+    obj:"Ventana operativa de cobranza: cartera de vencimientos, plantillas de correo con campos dinámicos y despacho por cliente con historial.",
     si:["Listado de cuotas pendientes/vencidas: filtros por cliente, tipo de embarque, país destino, rango de vencimiento y estado",
         "Selección múltiple y envío agrupado por cliente, un correo por cliente",
         "Autoselección de destinatarios según país de destino del embarque",
         "Mantenedor de plantillas con campos dinámicos y plantilla predeterminada por cliente",
         "Mantenedor de configuración SMTP",
-        "Historial de envíos por embarque/factura y por cliente"],
-    no:["Motor de Score (vive en Gestión de Riesgo)","Emisión de documentos tributarios y registro de pagos/liquidación (Cobranza — Facturación y Pagos)","Envíos automáticos/programados (solo despacho manual bajo demanda)"],
-    reglas:["Un correo agrupa todos los vencimientos seleccionados de un mismo cliente","Si hay más de un país de destino en el envío, se despacha una copia a cada casilla asociada","El contenido final enviado queda como snapshot inmutable en el historial","El password SMTP nunca se expone por API"], ca:"CA1–CA5" },
+        "Historial de envíos por embarque/factura y por cliente, más notas de gestión libres"],
+    no:["Motor de Score (tarjeta aparte)","Emisión de documentos tributarios y registro de pagos (Cobranza — Facturación y Pagos)","Envíos automáticos/programados (solo despacho manual bajo demanda)"],
+    reglas:["Un correo agrupa todos los vencimientos seleccionados de un mismo cliente","Si hay más de un país de destino en el envío, se despacha una copia a cada casilla asociada","El contenido final enviado queda como snapshot inmutable en el historial","El password SMTP nunca se expone por API"], ca:"GC-T1–GC-T5" },
 
-  { n:"Gestión de materiales", sec:"Materiales", et:1, ok:true,
+  { n:"Gestión de Riesgo", sec:"Riesgo", et:1, ok:false, estadoTxt:"Spec listo · 1 punto pendiente",
+    obj:"Motor de Score de Riesgo que califica a cada cliente de 1.0 a 7.0 combinando conducta de pago y riesgo claim, y determina el bloqueo automático para nuevos Cierres Comerciales.",
+    si:["Motor de cálculo: 4 parámetros de Conducta de Pago (morosidad ponderada, deuda vencida corto/largo plazo, impacto financiero, deuda total)",
+        "Motor de cálculo: 3 parámetros de Riesgo Claim (valor reclamado, tasa de reclamos, días de cierre) sobre la temporada actual",
+        "Nota final 1.0–7.0, clasificación (Bajo/Medio/Alto/Muy alto) y bloqueo automático por mora ponderada",
+        "Autorización de excepción de crédito puntual, válida para un solo Cierre Comercial",
+        "Mantenedores de escalas, ponderadores, tasa mensual y umbrales, todos con vigencia histórica",
+        "Endpoint de estado de crédito que Ventas consulta antes de crear un Cierre Comercial"],
+    no:["Línea de crédito y estado activo/inactivo del cliente (viven en Entidades)","Creación del Cierre Comercial en sí","Emisión de documentos y cuotas (Cobranza — Facturación y Pagos)"],
+    reglas:["Bloqueado = clasificación Muy Alto Y mora ponderada > umbral (default 30 días)","Riesgo Claim nunca mejora la nota final, solo puede empeorarla","Frecuencia de recálculo del score: pendiente de definición de negocio (bloqueante para cerrar el spec)"], ca:"SC-T1–SC-T6" },
+
+  { n:"Gestión de Materiales", sec:"Materiales", et:1, ok:true,
     obj:"Gestión de los materiales de embalaje: catálogo, recetas, movimientos de stock y consulta por receta.",
-    si:["Maestro de artículos: materiales de embalaje, envases y servicios (costeo PMP/Estándar, stock crítico)",
+    si:["Maestro de artículos: embalaje, envase, material de embalaje y servicio (costeo PMP/Estándar, stock crítico, documentos adjuntos)",
         "Maestro de recetas por embalaje (componentes y consumos)",
-        "Módulo de movimientos con mantenedor de tipos (entradas, salidas, traslados; precio y DTE/transporte)",
-        "Consulta de stock por receta (estados OK / Crítico / Sin stock / Trasladar)",
-        "Órdenes de compra de materiales a proveedores",
-        "Generación de guías de despacho",
+        "Mantenedor de tipos de movimiento + registro de movimientos (entradas, salidas, traslados; precio y datos de transporte para DTE/guía de despacho)",
+        "Consulta de stock por receta (estados OK / Crítico / Sin stock / Trasladar), desglosada por bodega",
         "Proforma de venta de materiales a clientes nacionales, validada y facturada en Cobranza"],
-    no:["Emisión real de DTE (adaptador externo)","Validación y emisión de la factura de venta (Cobranza — Ventas Nacionales)"],
-    reglas:["Movimientos inmutables","Saldo no negativo","PMP en entradas; consumo por lote","La emisión de la factura descuenta stock automáticamente (falla si no hay saldo)","Se vende a entidades marcadas como Cliente nacional"], ca:"CA1–CA19 · R16–R18" },
+    no:["Emisión real del DTE (adaptador externo)","Validación y emisión de la factura de venta (Cobranza — Ventas Nacionales)","Lectura IA de guías/facturas (Etapa 2)"],
+    reglas:["Movimientos inmutables, se corrigen con movimiento inverso","Saldo de bodega no puede quedar negativo","PMP en entradas; salida se valoriza al PMP vigente","La emisión de la factura de materiales descuenta stock automáticamente (falla si no hay saldo)","Se vende solo a entidades marcadas como Cliente nacional"], ca:"CA1–CA19 · R15–R18" },
 
   { n:"Gestión de Productores", sec:"Productores", et:"1/3", ok:true,
-    obj:"Gestión del productor (sobre Entidad): ficha, predios, contrato, cuenta corriente, captura de documentos de compra, control de pagos y facturación de servicios.",
-    si:["Mantenedor de productores: ficha, predios (CSG/SDP/GGN, geo) y contrato (PDF + condiciones controladas)",
-        "Módulo de cuenta corriente: imputación de debes y haberes con saldo",
-        "Captura de facturas y notas de crédito de compra desde la fuente externa, cuadradas contra las OC por montos",
-        "Control de pagos (solicitud y confirmación): búsqueda y filtro de cuotas pendientes",
-        "Facturación de servicios al productor (proforma), validada y facturada en Cobranza"],
-    no:["Orden de compra de fruta (módulo Compras)","Emisión de la factura de venta nacional (Cobranza)","Cálculo final de liquidación (módulo Liquidación de productores)"],
-    reglas:["Predio pertenece a un productor","Cuenta corriente inmutable; saldo = haber − debe","Exige representante legal con RUT","Una factura puede abarcar varias OC; se cuadra por montos","Factura capturada → HABER; NC → DEBE; pago confirmado → DEBE","Se paga la factura menos la NC aplicada","Se factura O se descuenta de la liquidación — nunca ambas","Para facturarle, el productor debe estar marcado también como Cliente nacional"], ca:"CA1–CA10 · R10–R16 · CO1–CO6" },
+    obj:"Gestión del productor (sobre Entidad): ficha, predios, contrato, cuenta corriente, solicitud de pago sobre documentos de compra capturados y facturación de servicios.",
+    si:["Ficha (Entidad PRODUCTOR + representante legal con RUT) y Predios",
+        "Contrato por especie/temporada, con líneas de compromiso de volumen y documentos adjuntos múltiples",
+        "Cuenta corriente: movimientos inmutables (debe/haber) con informe de saldo",
+        "Conceptos de Liquidación: matriz de valores por especie (cobro/abono, por kilo/caja/%venta/monto total)",
+        "Solicitud de Pago: filtra cuotas pendientes de los documentos de compra (capturados en Compras) y, al confirmar, mueve la cuenta corriente",
+        "Proforma de servicios al productor (líneas = Conceptos de Liquidación), validada y facturada en Cobranza"],
+    no:["Orden de Compra de fruta y captura de documentos de compra (módulo Compras)","Emisión de la factura de venta nacional (Cobranza)","Cálculo final de la liquidación (Liquidación de Productores, Etapa 3)"],
+    reglas:["Predio pertenece a un productor con representante legal válido","Cuenta corriente inmutable; saldo = haber − debe","Factura de compra capturada → HABER; NC → DEBE; pago confirmado → DEBE","Un cobro al productor va por factura o por descuento en la liquidación — nunca por ambas","Para facturarle, el productor debe estar marcado también como Cliente nacional"], ca:"CA1–CA10 · R10–R16" },
 
   { n:"Liquidación de productores", sec:"Productores", et:"1/3", ok:false, estadoTxt:"Config lista · proceso Etapa 3",
-    obj:"Configuración y aplicación de los cobros y abonos que componen la liquidación al productor.",
-    si:["Mantenedor de conceptos de cobro / abono (positivos y negativos)",
-        "Formas de aplicación: por caja, por kilo, porcentual (% de la venta) y monto total",
-        "Listas de valores por concepto",
-        "Asociación de valores por productor",
-        "Ingreso de los datos de cobro de cada liquidación"],
-    no:["Cálculo final y cierre de la liquidación (Etapa 3)"],
-    reglas:["COBRO resta y ABONO suma a la liquidación","Valores parametrizables por forma de aplicación","Asociables por productor"], ca:"Por definir" },
-
-  { n:"Gestión de Riesgo", sec:"Gestión de Riesgo", et:1, ok:false, estadoTxt:"Spec listo · 1 punto pendiente",
-    obj:"Extensión del maestro de Cliente (sobre Entidades) con línea de crédito, formas de pago habilitadas y contactos de correo por país, más el motor de Score de Riesgo que determina el bloqueo automático para los Cierres de Negocios.",
-    si:["Campos de Cliente: línea de crédito, estado activo/inactivo, formas de pago habilitadas, plantilla de cobranza predeterminada",
-        "Contactos de correo por país de destino (uno o más por país; solo los países que el cliente realmente opera, no el listado completo del sistema)",
-        "Motor de Score: 4 parámetros de Conducta de Pago (morosidad ponderada, deuda vencida corto/largo plazo, impacto financiero, deuda total)",
-        "Motor de Score: 3 parámetros de Riesgo Claim (valor reclamado, tasa de reclamos, días de cierre) sobre la temporada actual",
-        "Nota final 1.0–7.0, clasificación (Bajo/Medio/Alto/Muy alto) y bloqueo automático por mora ponderada",
-        "Autorización de excepción de crédito puntual, válida para un solo Cierre de Negocios",
-        "Mantenedores de escalas, ponderadores y tasa mensual, todos con vigencia histórica",
-        "Historial de evaluación del riesgo"],
-    no:["Maestro genérico de Entidades: tipos, direcciones, representante legal (módulo aparte)","Creación del Cierre de Negocios (consume el estado de crédito vía API)","Emisión de documentos y cuotas (vive en Cobranza — Facturación y Pagos)"],
-    reglas:["El estado Inactivo (comercial) es independiente del bloqueo automático por score","Escala 1.0–7.0: Bajo/Medio/Alto/Muy alto; Bloqueado = Muy alto Y mora ponderada > umbral (default 30 días)","Riesgo Claim nunca mejora la nota final, solo puede empeorarla","Frecuencia de recálculo del score: pendiente de definición de negocio"], ca:"CA1–CA6" },
+    obj:"Cálculo final de la liquidación al productor, aplicando los Conceptos de Liquidación configurados sobre el volumen real comprado.",
+    si:["Motor de cálculo sobre Conceptos de Liquidación (ya configurados en Gestión de Productores)","Volumen real desde Compras/Recepción","% de cumplimiento del contrato"],
+    no:["Configuración de conceptos y sus valores (ya cubierta en Gestión de Productores)"],
+    reglas:["COBRO resta y ABONO suma a la liquidación","Depende de que Compras tenga el volumen real recepcionado"], ca:"Por definir" },
 ];
 
 function renderModulos(){
@@ -1225,10 +1281,79 @@ function stateColor(e){ e=(e||'').toLowerCase();
   if(e.includes('curso')||e.includes('proceso')) return 'var(--orange)';
   return 'var(--muted)'; }
 
+// data.json es 100% editable a mano: gantt.tareas[] es la fuente de verdad
+// (nombre, inicioFecha, terminoFecha, horasEstimadas, horasUtilizadas, progreso
+// por cada tarea/mantenedor). Esta función recalcula, en el navegador y cada vez
+// que se carga la página, el resumen por módulo (avances[]) a partir de sus
+// tareas — así cualquier edición directa en gantt.tareas se refleja sola, sin
+// tener que correr ningún script generador. avances[] solo necesita metadata
+// fija por módulo: id, modulo, seccion, etapa, grupo?, estado? (si no se
+// especifica, se deriva del progreso), nota?.
+function recalcularRollups(d){
+  const tareas = (d.gantt && d.gantt.tareas) || [];
+  const porModulo = new Map();
+  for(const t of tareas){
+    const arr = porModulo.get(t.moduloId) || [];
+    arr.push(t);
+    porModulo.set(t.moduloId, arr);
+  }
+  for(const m of (d.avances||[])){
+    const hijos = porModulo.get(m.id) || [];
+    const horasEstimadas = hijos.reduce((a,x)=>a+(x.horasEstimadas||0), 0);
+    const horasUtilizadas = Math.round(hijos.reduce((a,x)=>a+(x.horasUtilizadas||0), 0)*10)/10;
+    const progreso = horasEstimadas
+      ? Math.round((hijos.reduce((a,x)=>a+(x.horasEstimadas||0)*(x.progreso||0), 0)/horasEstimadas)*10)/10
+      : 0;
+    m.horasEstimadas = horasEstimadas;
+    m.horasUtilizadas = horasUtilizadas;
+    m.progreso = progreso;
+    if(hijos.length){
+      m.inicioFecha = hijos.reduce((a,x)=> x.inicioFecha<a ? x.inicioFecha : a, hijos[0].inicioFecha);
+      m.terminoFecha = hijos.reduce((a,x)=> x.terminoFecha>a ? x.terminoFecha : a, hijos[0].terminoFecha);
+    }
+    // Si "estado" ya trae un texto propio (distinto de los 3 valores que esta
+    // función deriva sola), se respeta tal cual — ej. "Postergado · Etapa 3",
+    // "Config lista · proceso Etapa 3". Si no, se deriva del progreso.
+    const AUTO = ['Listo','En curso','Pendiente'];
+    if(!m.estado || AUTO.includes(m.estado)){
+      m.estado = progreso>=100?'Listo':(progreso>0?'En curso':'Pendiente');
+    }
+  }
+  return d;
+}
+
 function renderAvances(d){
   document.getElementById('upd-note').textContent = 'Última actualización del registro: ' + (d.actualizado||'—');
   const host = document.getElementById('avances-list');
-  host.innerHTML = (d.avances||[]).map(a=>`
+
+  // Colapsa corridas consecutivas del mismo "grupo" (ej. Mantenedores Transversales,
+  // Calidad) en una sola fila con su avance ponderado — igual que en la carta Gantt.
+  // Los módulos sin grupo se muestran tal cual, uno por fila.
+  const items = [];
+  const lista = d.avances || [];
+  let i = 0;
+  while (i < lista.length) {
+    const a = lista[i];
+    if (a.grupo) {
+      const gname = a.grupo;
+      const grp = [];
+      while (i < lista.length && lista[i].grupo === gname) { grp.push(lista[i]); i++; }
+      const horasEstimadas = grp.reduce((s,m)=>s+(m.horasEstimadas||0), 0);
+      const progreso = horasEstimadas
+        ? Math.round((grp.reduce((s,m)=>s+(m.horasEstimadas||0)*(m.progreso||0), 0)/horasEstimadas)*10)/10
+        : 0;
+      const estados = grp.map(m=>m.estado||'');
+      const estado = estados.every(e=>e==='Listo') ? 'Listo'
+        : estados.every(e=>e==='Pendiente'||!e) ? 'Pendiente'
+        : 'En curso';
+      items.push({ modulo: gname, progreso, estado });
+    } else {
+      items.push({ modulo: a.modulo, progreso: a.progreso, estado: a.estado });
+      i++;
+    }
+  }
+
+  host.innerHTML = items.map(a=>`
     <div class="av-row">
       <div class="av-name">${a.modulo}</div>
       <div class="av-track"><div class="av-fill" style="width:${a.progreso||0}%"></div></div>
@@ -1237,42 +1362,301 @@ function renderAvances(d){
     </div>`).join('');
 }
 
-function renderGantt(d){
-  const g = d.gantt||{}; const N = g.semanas||16; const tareas = g.tareas||[];
-  const anchor = g.inicioSemana ? new Date(g.inicioSemana+'T00:00:00') : null;
-  const colW = 46, lblW = 200;
-  const weekLabel = (w)=>{ if(!anchor) return 'S'+w;
-    const dt = new Date(anchor); dt.setDate(dt.getDate()+(w-1)*7);
-    return ('0'+dt.getDate()).slice(-2)+'/'+('0'+(dt.getMonth()+1)).slice(-2); };
-  const cols = `${lblW}px repeat(${N}, ${colW}px)`;
-  let head = `<div class="g-cellh lbl">Tarea</div>`;
-  for(let w=1; w<=N; w++) head += `<div class="g-cellh">S${w}<br>${weekLabel(w)}</div>`;
-  let rows = '';
-  for(const t of tareas){
-    const ini = Math.max(1, t.inicioSemana||1), dur = Math.max(1, t.duracionSemanas||1);
-    const cls = t.etapa==2?'g-e2':(t.etapa==3?'g-e3':'g-e1');
-    let grid = '';
-    for(let w=1; w<=N; w++) grid += `<div class="g-gline" style="left:${(w-1)*colW}px"></div>`;
-    const left=(ini-1)*colW, width=dur*colW-4;
-    const bar = `<div class="g-bar ${cls}" style="left:${left}px;width:${width}px"
-                   title="${t.nombre} · S${ini}–S${ini+dur-1} · ${t.progreso||0}%">
-                   <div class="g-bar-fill" style="width:${100-(t.progreso||0)}%;margin-left:auto"></div>
-                   <span>${t.progreso||0}%</span></div>`;
-    rows += `<div class="g-row" style="grid-template-columns:${lblW}px 1fr">
-        <div class="g-lbl">${t.nombre}</div>
-        <div class="g-track"><div class="g-grid" style="width:${N*colW}px">${grid}</div>${bar}</div>
-      </div>`;
+function renderGanttSummary(d){
+  const host = document.getElementById('gantt-summary');
+  if(!host) return;
+  const tareas = (d.gantt && d.gantt.tareas) || [];
+  if(!tareas.length){ host.innerHTML=''; return; }
+
+  const fmtLong = (s)=>{ const [y,m,dd]=s.split('-'); return `${dd}-${m}-${y}`; };
+
+  const inicio = tareas.reduce((a,t)=> t.inicioFecha<a ? t.inicioFecha : a, tareas[0].inicioFecha);
+  const finEtapa = (et)=>{
+    const ts = tareas.filter(t=>t.etapa===et);
+    if(!ts.length) return null;
+    return ts.reduce((a,t)=> t.terminoFecha>a ? t.terminoFecha : a, ts[0].terminoFecha);
+  };
+  const fin1 = finEtapa(1), fin2 = finEtapa(2), fin3 = finEtapa(3);
+
+  // Horas Estimadas = solo Etapa 1 (Etapa 2 y 3 quedan "Pendiente", sin evaluar todavía)
+  const horasEstimadas = tareas.filter(t=>t.etapa===1).reduce((a,t)=>a+(t.horasEstimadas||0), 0);
+  const horasUtilizadas = tareas.filter(t=>t.progreso===100).reduce((a,t)=>a+(t.horasEstimadas||0), 0);
+  const horasExtras = Math.round(tareas.reduce((a,t)=>a+(t.horasUtilizadas||0), 0)*10)/10;
+
+  const fmtH = (h)=> (Math.round(h*10)/10).toString().replace(/\.0$/,'') + 'h';
+  const item = (label, value, pendiente)=> pendiente
+    ? `<div class="gt-summary-item"><div class="gt-summary-label">${label}</div><div class="gt-summary-value gt-summary-empty">Pendiente</div></div>`
+    : (value==null
+      ? `<div class="gt-summary-item"><div class="gt-summary-label">${label}</div><div class="gt-summary-value gt-summary-empty">— sin tareas</div></div>`
+      : `<div class="gt-summary-item"><div class="gt-summary-label">${label}</div><div class="gt-summary-value">${value}</div></div>`);
+
+  // Horas Utilizadas por mes (mes de terminoFecha de las tareas 100% completadas)
+  // + horasUtilizadas (horas extras por cambio de alcance) de esa misma tarea.
+  const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const porMes = new Map();
+  for(const t of tareas.filter(t=>t.progreso===100)){
+    const [y,m] = t.terminoFecha.split('-');
+    const key = y+'-'+m;
+    porMes.set(key, (porMes.get(key)||0) + (t.horasEstimadas||0) + (t.horasUtilizadas||0));
   }
+  // Rango de meses = todo el tramo de Etapa 1 (inicio del proyecto -> fin de Etapa 1),
+  // no solo los meses con tareas ya completadas, para que muestre "0h" en los meses futuros.
+  let mesesCards = '';
+  const tareasE1 = tareas.filter(t=>t.etapa===1);
+  if(tareasE1.length){
+    const desde = inicio, hasta = fin1 || desde;
+    const [y0,m0] = desde.split('-').map(Number), [y1,m1] = hasta.split('-').map(Number);
+    let y=y0, m=m0;
+    while(y<y1 || (y===y1 && m<=m1)){
+      const key = String(y)+'-'+String(m).padStart(2,'0');
+      mesesCards += item('Horas '+MESES[m-1], fmtH(porMes.get(key)||0));
+      m++; if(m>12){ m=1; y++; }
+    }
+  }
+
+  host.innerHTML = `<div class="gt-summary-wrap">
+    <div class="gt-summary">
+      ${item('Fecha Inicio', fmtLong(inicio))}
+      ${item('Fecha Fin Etapa 1', fin1 ? fmtLong(fin1) : null)}
+      ${item('Fecha Fin Etapa 2', null, true)}
+      ${item('Fecha Fin Etapa 3', null, true)}
+      ${item('Horas Estimadas', fmtH(horasEstimadas))}
+      ${item('Horas Utilizadas<sup>(1)</sup>', fmtH(horasUtilizadas))}
+      ${item('Horas Extras<sup>(2)</sup>', fmtH(horasExtras))}
+    </div>
+    <div class="gt-summary gt-summary-meses">${mesesCards}</div>
+    <div class="gt-summary-notes">Nota: (1) Horas de tareas completadas.<br>(2) Horas adicionales por cambio de alcance.</div>
+  </div>`;
+}
+
+function renderGantt(d){
+  const g = d.gantt||{}; const tareas = g.tareas||[]; const modulos = d.avances||[];
+  if(!tareas.length || !modulos.length){ document.getElementById('gantt-host').innerHTML=''; return; }
+
+  // Columnas fijas (sticky) a la izquierda + N columnas de semana a la derecha
+  const COLS = [
+    { key:'id',      label:'ID',           w:28  },
+    { key:'tarea',   label:'Tarea',        w:260 },
+    { key:'inicio',  label:'Inicio',       w:54  },
+    { key:'termino', label:'Término',      w:58  },
+    { key:'progreso',label:'Progreso',     w:68  },
+    { key:'hEst',    label:'Horas Est.',   w:64  },
+    { key:'hUt',     label:'Horas Ext.',   w:64  },
+  ];
+  const stickyOffsets = []; let acc = 0;
+  for(const c of COLS){ stickyOffsets.push(acc); acc += c.w; }
+  const stickyTotal = acc;
+  const ROW_H = 32, COLW = 34;
+
+  // ---- Rango de fechas del proyecto y grilla semanal ----
+  const parseD = (s)=> new Date(s+'T00:00:00Z');
+  const projStart = parseD(g.inicioFecha || tareas[0].inicioFecha);
+  const projEnd    = parseD(g.terminoFecha || tareas[tareas.length-1].terminoFecha);
+  // alinear inicio de grilla al lunes de esa semana
+  const dow = (projStart.getUTCDay()+6)%7; // 0=lunes
+  const gridStart = new Date(projStart); gridStart.setUTCDate(gridStart.getUTCDate()-dow);
+  const totalDays = Math.max(7, Math.round((projEnd-gridStart)/86400000)+1);
+  const weeks = Math.ceil(totalDays/7);
+  const dayOffset = (dateStr)=> Math.round((parseD(dateStr)-gridStart)/86400000);
+  const xPx = (dateStr)=> (dayOffset(dateStr)/7)*COLW;
+  const barGeom = (t)=>{
+    const left = xPx(t.inicioFecha);
+    const right = xPx(t.terminoFecha) + COLW/7; // incluye el día de término completo
+    return { left, width: Math.max(3, right-left-2) };
+  };
+  const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const monthFmt = (dt)=> MESES[dt.getUTCMonth()] + ' ' + dt.getUTCFullYear();
+  const isoWeek = (dt)=>{
+    const d = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
+    const dayNum = (d.getUTCDay() + 6) % 7; // lunes=0
+    d.setUTCDate(d.getUTCDate() - dayNum + 3); // jueves de esta semana
+    const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+    const firstDayNum = (firstThursday.getUTCDay() + 6) % 7;
+    firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNum + 3);
+    return 1 + Math.round((d - firstThursday) / (7*86400000));
+  };
+
+  // ---- Árbol módulo -> tareas ----
+  const hijosPorModulo = new Map();
+  for(const t of tareas){ const arr = hijosPorModulo.get(t.moduloId)||[]; arr.push(t); hijosPorModulo.set(t.moduloId, arr); }
+
+  const etapaCls = (et)=> et==2?'gt-e2':(et==3?'gt-e3':'gt-e1');
+  const fmtH = (h)=> (Math.round(h*10)/10).toString().replace(/\.0$/,'') + 'h';
+  const fmtDate = (s)=> { const dt=parseD(s); return ('0'+dt.getUTCDate()).slice(-2)+'-'+('0'+(dt.getUTCMonth()+1)).slice(-2); };
+
+  const cellSticky = (i, extra, html)=> `<div class="gt-cell gt-sticky ${extra||''}" style="left:${stickyOffsets[i]}px;width:${COLS[i].w}px">${html}</div>`;
+
+  // ---- Header (2 filas: mes agrupado + semana) ----
+  const gridColsCss = `${COLS.map(c=>c.w+'px').join(' ')} repeat(${weeks},${COLW}px)`;
+
+  // Fila 1: banda de meses (agrupa columnas de semana consecutivas del mismo mes)
+  let headRow1 = `<div class="gt-row gt-head-row gt-head-row-1" style="--gt-cols:${gridColsCss}">`;
+  headRow1 += `<div class="gt-cell gt-sticky" style="left:0;width:${stickyTotal}px;grid-column:1 / span ${COLS.length}"></div>`;
+  {
+    let w = 0;
+    while(w < weeks){
+      const dt = new Date(gridStart); dt.setUTCDate(dt.getUTCDate()+w*7);
+      const month = dt.getUTCMonth(), year = dt.getUTCFullYear();
+      let span = 0;
+      while(w+span < weeks){
+        const dt2 = new Date(gridStart); dt2.setUTCDate(dt2.getUTCDate()+(w+span)*7);
+        if(dt2.getUTCMonth()!==month || dt2.getUTCFullYear()!==year) break;
+        span++;
+      }
+      headRow1 += `<div class="gt-cell" style="width:${span*COLW}px;grid-column: span ${span}">${monthFmt(dt)}</div>`;
+      w += span;
+    }
+  }
+  headRow1 += `</div>`;
+
+  // Fila 2: columnas fijas (ID/Tarea/…) + día de inicio de cada semana
+  let headRow2 = `<div class="gt-row gt-head-row gt-head-row-2" style="--gt-cols:${gridColsCss}">`;
+  COLS.forEach((c,i)=> headRow2 += cellSticky(i,'',c.label));
+  for(let w=0; w<weeks; w++){
+    const dt = new Date(gridStart); dt.setUTCDate(dt.getUTCDate()+w*7);
+    headRow2 += `<div class="gt-cell gt-daycell" style="width:${COLW}px">S${isoWeek(dt)}</div>`;
+  }
+  headRow2 += `</div>`;
+  const headRow = headRow1 + headRow2;
+
+  const gridColsAttr = `--gt-cols:${COLS.map(c=>c.w+'px').join(' ')} repeat(${weeks},${COLW}px)`;
+  const parentRows = []; // {rowId, hasChildren}
+  let bodyRows = '', dispId = 0;
+
+  function rowHtml(rowId, parentRowId, level, kind, hasChildren, nombre, inicioFecha, terminoFecha, progreso, hEst, hUt, barCls, tituloExtra, extraCls, blank){
+    dispId++;
+    const indent = level*16;
+    const toggle = hasChildren ? `<span class="gt-toggle" data-toggle="${rowId}">▾</span>` : `<span class="gt-toggle gt-leaf">·</span>`;
+    let html = `<div class="gt-row ${hasChildren?'gt-parent':'gt-child'} ${hasChildren?'gt-branch':''} ${kind==='etapa'?'gt-etapa-row':''} ${extraCls||''}" data-row-id="${rowId}" ${parentRowId?`data-parent-row="${parentRowId}"`:''} style="${gridColsAttr}">`;
+    html += cellSticky(0,'gt-num', dispId);
+    html += cellSticky(1,'gt-tarea', `<span class="gt-indent" style="padding-left:${indent}px" title="${nombre}">${toggle}${nombre}</span>`);
+    if(blank){
+      html += cellSticky(2,'gt-num', '—');
+      html += cellSticky(3,'gt-num', '—');
+      html += cellSticky(4,'gt-pct', '—');
+      html += cellSticky(5,'gt-num', '—');
+      html += cellSticky(6,'gt-num', '—');
+      html += `<div class="gt-cell gt-timeline" style="width:${weeks*COLW}px;grid-column: ${COLS.length+1} / span ${weeks};--gt-colw:${COLW}px">
+          <div class="gt-timeline-bg"></div>
+        </div></div>`;
+    } else {
+      const gm = barGeom({ inicioFecha, terminoFecha });
+      html += cellSticky(2,'gt-num', fmtDate(inicioFecha));
+      html += cellSticky(3,'gt-num', fmtDate(terminoFecha));
+      html += cellSticky(4,'gt-pct', (progreso||0)+'%');
+      html += cellSticky(5,'gt-num', fmtH(hEst));
+      html += cellSticky(6,'gt-num', fmtH(hUt));
+      html += `<div class="gt-cell gt-timeline" style="width:${weeks*COLW}px;grid-column: ${COLS.length+1} / span ${weeks};--gt-colw:${COLW}px">
+          <div class="gt-timeline-bg"></div>
+          <div class="gt-bartrack">
+            <div class="gt-bar ${barCls}" style="left:${gm.left}px;width:${gm.width}px" title="${tituloExtra} · ${fmtDate(inicioFecha)}–${fmtDate(terminoFecha)} · ${progreso||0}%">
+              <div class="gt-bar-done" style="width:${100-(progreso||0)}%;margin-left:auto"></div>
+            </div>
+          </div>
+        </div></div>`;
+    }
+    if(hasChildren) parentRows.push(rowId);
+    return html;
+  }
+
+  // Grupos que se muestran a solo 2 niveles (grupo -> módulo), sin desplegar las tareas internas de cada módulo.
+  const GRUPOS_2_NIVELES = new Set(['Mantenedores Transversales', 'Calidad']);
+
+  function renderModulo(m, level, parentRowId, showChildren, opts, blank){
+    opts = opts || {};
+    const rowId = 'm'+m.id;
+    const hijos = showChildren===false ? [] : (hijosPorModulo.get(m.id) || []);
+    const nombreMostrado = opts.stripPrefix ? m.modulo.replace(opts.stripPrefix, '') : m.modulo;
+    // Si no se muestran hijos (grupos a 2 niveles como Mantenedores Transversales/Calidad),
+    // esta fila se comporta como una tarea hoja: se colorea por etapa, no como agregador.
+    const barCls = hijos.length>0 ? 'gt-parentbar' : etapaCls(m.etapa);
+    bodyRows += rowHtml(rowId, parentRowId, level, 'modulo', hijos.length>0, nombreMostrado, m.inicioFecha, m.terminoFecha, m.progreso, m.horasEstimadas, m.horasUtilizadas, barCls, m.modulo, '', blank);
+    hijos.forEach(t=>{
+      bodyRows += rowHtml('t'+t.id, rowId, level+1, 'tarea', false, t.nombre, t.inicioFecha, t.terminoFecha, t.progreso, t.horasEstimadas, t.horasUtilizadas, etapaCls(t.etapa), `${m.modulo} — ${t.nombre}`, '', blank);
+    });
+  }
+
+  // ---- Agrupación de un subconjunto de módulos (detecta corridas consecutivas del mismo "grupo") ----
+  function renderNivelModulos(modulosSubset, baseLevel, parentRowId, blank){
+    const items = [];
+    let i=0;
+    while(i<modulosSubset.length){
+      const m = modulosSubset[i];
+      if(m.grupo){ const gname=m.grupo; const grp=[]; while(i<modulosSubset.length && modulosSubset[i].grupo===gname){ grp.push(modulosSubset[i]); i++; } items.push({type:'grupo', nombre:gname, modulos:grp}); }
+      else { items.push({type:'modulo', m}); i++; }
+    }
+    for(const it of items){
+      if(it.type==='grupo'){
+        const gId = 'g:'+it.nombre+':'+(parentRowId||'top');
+        const horasEstimadas = it.modulos.reduce((a,m)=>a+m.horasEstimadas,0);
+        const horasUtilizadas = Math.round(it.modulos.reduce((a,m)=>a+m.horasUtilizadas,0)*10)/10;
+        const progreso = horasEstimadas ? Math.round((it.modulos.reduce((a,m)=>a+m.horasEstimadas*m.progreso,0)/horasEstimadas)*10)/10 : 0;
+        const inicioFecha = it.modulos[0].inicioFecha, terminoFecha = it.modulos[it.modulos.length-1].terminoFecha;
+        bodyRows += rowHtml(gId, parentRowId, baseLevel, 'grupo', true, it.nombre, inicioFecha, terminoFecha, progreso, horasEstimadas, horasUtilizadas, 'gt-parentbar', it.nombre, '', blank);
+        const showChildren = !GRUPOS_2_NIVELES.has(it.nombre);
+        const opts = it.nombre==='Calidad' ? { stripPrefix: /^Calidad\s*—\s*/ } : {};
+        it.modulos.forEach(m=> renderModulo(m, baseLevel+1, gId, showChildren, opts, blank));
+      } else {
+        renderModulo(it.m, baseLevel, parentRowId, true, {}, blank);
+      }
+    }
+  }
+
+  // ---- Nivel superior: agrupar por Etapa ----
+  const ETAPA_NOMBRE = {1:'Etapa 1', 2:'Etapa 2', 3:'Etapa 3'};
+  for(const etapaNum of [1,2,3]){
+    const modulosEtapa = modulos.filter(m=>m.etapa===etapaNum);
+    if(!modulosEtapa.length) continue;
+    const blankEtapa = etapaNum!==1;
+    const eId = 'e:'+etapaNum;
+    const horasEstimadas = modulosEtapa.reduce((a,m)=>a+m.horasEstimadas,0);
+    const horasUtilizadas = Math.round(modulosEtapa.reduce((a,m)=>a+m.horasUtilizadas,0)*10)/10;
+    const progreso = horasEstimadas ? Math.round((modulosEtapa.reduce((a,m)=>a+m.horasEstimadas*m.progreso,0)/horasEstimadas)*10)/10 : 0;
+    const inicioFecha = modulosEtapa[0].inicioFecha, terminoFecha = modulosEtapa[modulosEtapa.length-1].terminoFecha;
+    bodyRows += rowHtml(eId, null, 0, 'etapa', true, ETAPA_NOMBRE[etapaNum], inicioFecha, terminoFecha, progreso, horasEstimadas, horasUtilizadas, 'gt-parentbar', ETAPA_NOMBRE[etapaNum], '', blankEtapa);
+    renderNivelModulos(modulosEtapa, 1, eId, blankEtapa);
+  }
+
   document.getElementById('gantt-host').innerHTML =
-    `<div class="gantt-wrap"><div class="gantt">
-       <div class="g-head" style="grid-template-columns:${cols}">${head}</div>
-       ${rows}
-     </div></div>
-     <div class="gantt-legend">
-       <span><i style="background:var(--blue2)"></i>Etapa 1</span>
-       <span><i style="background:#7C3AED"></i>Etapa 2</span>
-       <span><i style="background:var(--green2)"></i>Etapa 3</span>
-     </div>`;
+    `<div class="gt-wrap" id="gt-wrap">
+       <div class="gt-table">${headRow}${bodyRows}</div>
+     </div>
+     <p class="gt-note">"Horas Ext." = horas estimadas × % de avance (estimado, no es un registro real de horas trabajadas). Agenda en días hábiles (Lun–Vie), secuencial y sin paralelismo entre módulos. Columna de calendario: número de semana ISO 8601.</p>`;
+
+  // ---- Expandir/contraer (cascada por ancestros) ----
+  const wrap = document.getElementById('gantt-host');
+  const parentOf = {};
+  wrap.querySelectorAll('[data-row-id]').forEach(row=>{
+    const id = row.getAttribute('data-row-id'), p = row.getAttribute('data-parent-row');
+    if(p) parentOf[id] = p;
+  });
+  const expanded = new Set(parentRows); // todo expandido por defecto
+  function isVisible(rowId){
+    const p = parentOf[rowId];
+    if(!p) return true;
+    return expanded.has(p) && isVisible(p);
+  }
+  function updateVisibility(){
+    wrap.querySelectorAll('[data-row-id]').forEach(row=>{
+      const id = row.getAttribute('data-row-id');
+      row.classList.toggle('gt-hidden', !isVisible(id));
+    });
+    wrap.querySelectorAll('[data-toggle]').forEach(t=>{
+      const id = t.getAttribute('data-toggle');
+      t.textContent = expanded.has(id) ? '▾' : '▸';
+    });
+  }
+  wrap.querySelectorAll('[data-toggle]').forEach(t=>{
+    t.addEventListener('click', ()=>{
+      const id = t.getAttribute('data-toggle');
+      if(expanded.has(id)) expanded.delete(id); else expanded.add(id);
+      updateVisibility();
+    });
+  });
+  const expandAllBtn = document.getElementById('gt-expand-all');
+  const collapseAllBtn = document.getElementById('gt-collapse-all');
+  if(expandAllBtn) expandAllBtn.onclick = ()=>{ parentRows.forEach(id=>expanded.add(id)); updateVisibility(); };
+  if(collapseAllBtn) collapseAllBtn.onclick = ()=>{ expanded.clear(); updateVisibility(); };
 }
 
 function renderMockups(d){
@@ -1296,7 +1680,7 @@ function dataError(msg){
 document.addEventListener('DOMContentLoaded', ()=>{
   renderModulos();
   fetch('data.json').then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-    .then(d=>{ renderAvances(d); renderGantt(d); renderMockups(d); })
+    .then(d=>{ recalcularRollups(d); renderAvances(d); renderGanttSummary(d); renderGantt(d); renderMockups(d); })
     .catch(e=>dataError(e.message));
 });
 </script>

@@ -1,311 +1,1514 @@
 {
-  "actualizado": "2026-07-09",
+  "actualizado": "2026-08-13",
   "proyecto": {
     "nombre": "FAS — Frutera Agrosan Sistema",
-    "version": "0.7"
+    "version": "0.9"
   },
+  "reglaEstimacion": {
+    "horasPorDia": 5,
+    "diasPorSemana": 5,
+    "horasPorSemana": 25,
+    "nota": "Horas de desarrollo efectivo (excluye reuniones/overhead). 1 día hábil = 5h. Cada tarea agenda días hábiles (Lun-Vie); las fechas son editables directamente en gantt.tareas[] (sin recalculo en cadena). Reconstrucción en curso: solo los módulos con horas ya confirmadas por el cliente tienen Horas Estimadas > 0; Gestión de Riesgo y Finanzas quedan en 0 hasta confirmarse. \"Horas Utilizadas\" (resumen superior) = horas de tareas con progreso 100%. \"Horas Extras\" = suma de horasUtilizadas por tarea (sin registro real todavía, en 0)."
+  },
+  "horasTotalesProyecto": 520,
   "avances": [
     {
+      "id": 1,
       "modulo": "Entorno general",
+      "seccion": "—",
+      "etapa": 1,
       "progreso": 100,
-      "estado": "Listo"
+      "estado": "Listo",
+      "horasEstimadas": 18,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-07-13",
+      "terminoFecha": "2026-07-15",
+      "subEtapas": [
+        {
+          "nombre": "Scaffold fas-api + fas-web + Docker Compose + CI básico",
+          "horasEstimadas": 18,
+          "progreso": 100
+        }
+      ]
     },
     {
+      "id": 3,
       "modulo": "Mantenedores Generales",
+      "grupo": "Mantenedores Transversales",
+      "seccion": "Configuración",
+      "etapa": 1,
       "progreso": 100,
-      "estado": "Spec listo"
+      "estado": "Listo",
+      "horasEstimadas": 12,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-07-16",
+      "terminoFecha": "2026-07-17",
+      "nota": "Reducido a los maestros verdaderamente transversales (usados por 2+ módulos). Los maestros propios de un solo módulo se movieron a ese módulo, agrupados en su línea \"Mantenedores\".",
+      "subEtapas": [
+        {
+          "nombre": "Mantenedores (geografía, comercial base, fruta, parámetros, operación compartida)",
+          "horasEstimadas": 12,
+          "progreso": 100
+        }
+      ]
     },
     {
+      "id": 5,
       "modulo": "Usuarios y Perfiles",
+      "grupo": "Mantenedores Transversales",
+      "seccion": "Configuración",
+      "etapa": 1,
       "progreso": 100,
-      "estado": "Spec listo"
+      "estado": "Listo",
+      "horasEstimadas": 6,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-07-20",
+      "terminoFecha": "2026-07-20",
+      "subEtapas": [
+        {
+          "nombre": "Usuarios y Perfiles (ItemMenu, matriz de accesos, usuarios sobre Better Auth, guard de autorización)",
+          "horasEstimadas": 6,
+          "progreso": 100
+        }
+      ]
     },
     {
+      "id": 7,
       "modulo": "Entidades",
+      "grupo": "Mantenedores Transversales",
+      "seccion": "Configuración",
+      "etapa": 1,
       "progreso": 100,
-      "estado": "Spec listo"
+      "estado": "Listo",
+      "horasEstimadas": 12,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-07-21",
+      "terminoFecha": "2026-07-22",
+      "subEtapas": [
+        {
+          "nombre": "Entidades (maestro + direcciones + contactos)",
+          "horasEstimadas": 12,
+          "progreso": 100
+        }
+      ]
     },
     {
-      "modulo": "Calidad — Control en origen",
+      "id": 9,
+      "modulo": "Empresas (Multi-empresa / Multi-tenant)",
+      "grupo": "Mantenedores Transversales",
+      "seccion": "Configuración",
+      "etapa": 1,
+      "progreso": 90.3,
+      "estado": "En curso",
+      "horasEstimadas": 18,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-07-23",
+      "terminoFecha": "2026-07-27",
+      "nota": "No existía como línea propia en el registro anterior pese a ser un desarrollo real y grande (10 commits, 31-jul a 03-ago).",
+      "subEtapas": [
+        {
+          "nombre": "Multi-empresa (modelo, contexto ALS, tenancy Prisma, backfill de los 7 módulos raíz — falta Fase 4 UI admin)",
+          "horasEstimadas": 18,
+          "progreso": 90.3
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "modulo": "Compras — Ciclo de Compras",
+      "seccion": "Compras",
+      "etapa": 1,
+      "progreso": 75.3,
+      "estado": "En curso",
+      "horasEstimadas": 54,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-07-28",
+      "terminoFecha": "2026-08-07",
+      "subEtapas": [
+        {
+          "nombre": "Mantenedores (Condición de Pago con cuotas —compartida con Productores—, Forma de Pago, Altura, Template de Carga)",
+          "horasEstimadas": 6,
+          "progreso": 98
+        },
+        {
+          "nombre": "Solicitud de Inspección (gestión desde Compras)",
+          "horasEstimadas": 12,
+          "progreso": 100
+        },
+        {
+          "nombre": "Instructivo de Embalaje",
+          "horasEstimadas": 12,
+          "progreso": 100
+        },
+        {
+          "nombre": "Orden de Compra",
+          "horasEstimadas": 12,
+          "progreso": 90
+        },
+        {
+          "nombre": "Recepción de Stock (con/sin OC, motor de validación OC↔Carga, Pallets, Packing List)",
+          "horasEstimadas": 12,
+          "progreso": 0
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "modulo": "Ventas — Ciclo de Ventas",
+      "seccion": "Ventas",
+      "etapa": 1,
+      "progreso": 33.2,
+      "estado": "En curso",
+      "horasEstimadas": 42,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-08-10",
+      "terminoFecha": "2026-08-18",
+      "subEtapas": [
+        {
+          "nombre": "Mantenedores (Tipo de Embarque —ya construido—, Vía de Embarque, Ruta, Tipo BL, Tipo Contenedor, Tipo Tratamiento, Tipo Atmósfera, Tipo Inspección, Destino Final)",
+          "horasEstimadas": 6,
+          "progreso": 25
+        },
+        {
+          "nombre": "Nota de Venta / Cierre Comercial",
+          "horasEstimadas": 12,
+          "progreso": 95
+        },
+        {
+          "nombre": "Embarque (contenedor, asignación de fruta, instructivos hijos, solicitud de reserva, AGL)",
+          "horasEstimadas": 12,
+          "progreso": 8.6
+        },
+        {
+          "nombre": "Reclamos (ingreso, Provisión)",
+          "horasEstimadas": 12,
+          "progreso": 0
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "modulo": "Gestión de Materiales",
+      "seccion": "Operaciones",
+      "etapa": 1,
       "progreso": 0,
-      "estado": "Spec listo"
+      "estado": "Pendiente",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-09-04",
+      "terminoFecha": "2026-09-09",
+      "subEtapas": [
+        {
+          "nombre": "Movimientos (entradas/salidas/traslados, PMP, bloque DTE)",
+          "horasEstimadas": 0,
+          "progreso": 100
+        },
+        {
+          "nombre": "Consulta de stock por receta",
+          "horasEstimadas": 0,
+          "progreso": 100
+        },
+        {
+          "nombre": "Proforma de Venta de Materiales",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ],
+      "maestros": [
+        {
+          "nombre": "Mantenedores (Unidad de Medida, Etiqueta, Tipos de Movimiento, Artículos y Recetas)",
+          "horasEstimadas": 0,
+          "progreso": 100
+        }
+      ]
     },
     {
-      "modulo": "Calidad — Análisis de reclamos",
+      "id": 88,
+      "modulo": "Gestión de Materiales — Orden de Compra",
+      "seccion": "Operaciones",
+      "etapa": 1,
       "progreso": 0,
-      "estado": "Spec listo · ingreso y valorización en Ventas"
+      "estado": "Pendiente",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-09-03",
+      "terminoFecha": "2026-09-07",
+      "subEtapas": [
+        {
+          "nombre": "Orden de Compra de Materiales (a proveedor)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ]
     },
     {
-      "modulo": "Calidad — App móvil offline",
+      "id": 22,
+      "modulo": "Calidad — Mantenedores",
+      "grupo": "Calidad",
+      "seccion": "Calidad",
+      "etapa": 1,
       "progreso": 0,
-      "estado": "Pendiente · Etapa 2"
+      "estado": "Pendiente",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-08-19",
+      "terminoFecha": "2026-08-19",
+      "nota": "Une los mantenedores de toda la sección Calidad (norma de calidad, calificación y reclamos) en una sola línea.",
+      "subEtapas": [
+        {
+          "nombre": "Mantenedores (Calificación, Tipo/Grupo/Defecto, Característica de Madurez, Característica de Reclamo, Criterio de Cumplimiento)",
+          "horasEstimadas": 0,
+          "progreso": 12
+        }
+      ]
     },
     {
-      "modulo": "Compras — Ciclo de compras",
-      "progreso": 80,
-      "estado": "Spec listo · modelo cerrado"
-    },
-    {
-      "modulo": "Ventas — Ciclo de ventas",
-      "progreso": 40,
-      "estado": "Spec listo · modelo cerrado"    },
-    {
-      "modulo": "Cobranza — Facturación y Pagos",
+      "id": 24,
+      "modulo": "Calidad — Solicitud de Inspección (v1 vigente)",
+      "grupo": "Calidad",
+      "seccion": "Calidad",
+      "etapa": 1,
       "progreso": 0,
-      "estado": "Spec listo · incluye ventas nacionales"
+      "estado": "Pendiente",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-08-20",
+      "terminoFecha": "2026-08-20",
+      "nota": "Reemplaza el modelo original de \"Control en origen\" (norma por especie + inspección por caja), diferido — ver \"Inspección de Calidad\".",
+      "subEtapas": [
+        {
+          "nombre": "Solicitud de Inspección (visita a terreno, adjuntos, correo, campos Documento 107, tipo Compra/Proceso, veredictos)",
+          "horasEstimadas": 0,
+          "progreso": 100
+        }
+      ]
     },
     {
-      "modulo": "Cobranza — Gestión",
+      "id": 26,
+      "modulo": "Calidad — Inspección de Calidad",
+      "grupo": "Calidad",
+      "seccion": "Calidad",
+      "etapa": 2,
       "progreso": 0,
-      "estado": "Spec listo"
+      "estado": "Postergado · Etapa 3",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-08-21",
+      "terminoFecha": "2026-08-24",
+      "subEtapas": [
+        {
+          "nombre": "Inspección de Calidad (por caja: defectos, madurez, fotos, resultado, informe PDF)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        },
+        {
+          "nombre": "App Móvil Offline (PWA, service worker, IndexedDB, cola de sincronización)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ]
     },
     {
-      "modulo": "Gestión de materiales",
+      "id": 86,
+      "modulo": "Calidad — Entrega y validación",
+      "grupo": "Calidad",
+      "seccion": "Calidad",
+      "etapa": 2,
       "progreso": 0,
-      "estado": "Spec listo"
+      "estado": "Postergado · Etapa 3",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-09-07",
+      "terminoFecha": "2026-09-07",
+      "subEtapas": [
+        {
+          "nombre": "Entrega y validación",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ]
     },
     {
+      "id": 29,
+      "modulo": "Calidad — Análisis de Reclamos",
+      "grupo": "Calidad",
+      "seccion": "Calidad",
+      "etapa": 1,
+      "progreso": 0,
+      "estado": "Pendiente",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-08-25",
+      "terminoFecha": "2026-08-25",
+      "subEtapas": [
+        {
+          "nombre": "Reclamos (ingreso, valorización, cierre/reapertura, provisión)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ]
+    },
+    {
+      "id": 87,
+      "modulo": "Calidad — Entrega y validación",
+      "grupo": "Calidad",
+      "seccion": "Calidad",
+      "etapa": 1,
+      "progreso": 0,
+      "estado": "Pendiente",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-09-08",
+      "terminoFecha": "2026-09-08",
+      "subEtapas": [
+        {
+          "nombre": "Entrega y validación",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "modulo": "Cobranza — Facturación, Pagos y Gestión (Exportación + Ventas Nacionales)",
+      "seccion": "Ventas",
+      "etapa": 1,
+      "progreso": 0,
+      "estado": "Pendiente",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-08-26",
+      "terminoFecha": "2026-08-28",
+      "subEtapas": [
+        {
+          "nombre": "Mantenedores (Forma de Pago con cuotas)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        },
+        {
+          "nombre": "Facturación de Exportación (Proforma, Factura DTE 110, Cuotas, NC/ND, Pagos, Saldo a Favor)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        },
+        {
+          "nombre": "Ventas Nacionales (confirmador de proformas + emisor DTE 33/34)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        },
+        {
+          "nombre": "Ventana de Gestión de Cobranza (listado, envío agrupado, historial)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ]
+    },
+    {
+      "id": 46,
       "modulo": "Gestión de Productores",
+      "seccion": "Productores",
+      "etapa": 1,
       "progreso": 0,
-      "estado": "Spec listo"
+      "estado": "Pendiente",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-09-10",
+      "terminoFecha": "2026-09-16",
+      "subEtapas": [
+        {
+          "nombre": "Ficha de Productor (Predios, Contrato, Cuenta Corriente)",
+          "horasEstimadas": 0,
+          "progreso": 100
+        },
+        {
+          "nombre": "Documentos de Compra (captura externa facturas/NC + cuadre OC)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        },
+        {
+          "nombre": "Solicitud de Pago",
+          "horasEstimadas": 0,
+          "progreso": 0
+        },
+        {
+          "nombre": "Proforma de Servicios a Productores",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ],
+      "maestros": [
+        {
+          "nombre": "Mantenedores (Tipo de Producción, Tipo de Cuenta Corriente)",
+          "horasEstimadas": 0,
+          "progreso": 100
+        }
+      ]
     },
     {
-      "modulo": "Liquidación de productores",
+      "id": 56,
+      "modulo": "Liquidación de Clientes",
+      "seccion": "Liquidaciones",
+      "etapa": 2,
       "progreso": 0,
-      "estado": "Config lista · proceso Etapa 3"
+      "estado": "Pendiente · spec no escrito aún",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-09-22",
+      "terminoFecha": "2026-09-24",
+      "nota": "Mencionadas en el mapa de menú (00-entorno-general.md §8: \"Liq. clientes · Matriz de costos · Determinación de precios · Liq. productor\") junto a Liquidación de Productores, pero sin spec propio en Docs/ todavía.",
+      "subEtapas": [
+        {
+          "nombre": "Liquidación de Clientes — A definir (sin spec)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        },
+        {
+          "nombre": "Matriz de Costos — A definir (sin spec)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        },
+        {
+          "nombre": "Determinación de Precios — A definir (sin spec)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ]
     },
     {
+      "id": 52,
+      "modulo": "Liquidación de Productores",
+      "seccion": "Liquidaciones",
+      "etapa": 2,
+      "progreso": 0,
+      "estado": "Config lista · proceso Etapa 3",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-09-17",
+      "terminoFecha": "2026-09-21",
+      "subEtapas": [
+        {
+          "nombre": "Motor de Cálculo (aplica Conceptos de Liquidación sobre volumen real y % cumplimiento)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        },
+        {
+          "nombre": "Generación de Liquidación (documento/reporte final al productor)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ],
+      "maestros": [
+        {
+          "nombre": "Mantenedores (Conceptos de Liquidación — movido desde Gestión de Productores)",
+          "horasEstimadas": 0,
+          "progreso": 100
+        }
+      ]
+    },
+    {
+      "id": 38,
       "modulo": "Gestión de Riesgo",
+      "seccion": "Riesgo",
+      "etapa": 1,
       "progreso": 0,
-      "estado": "Spec listo · 1 punto pendiente"
+      "estado": "Spec listo · 1 punto de negocio pendiente (frecuencia de recálculo)",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-09-02",
+      "terminoFecha": "2026-09-03",
+      "subEtapas": [
+        {
+          "nombre": "Mantenedores (escalas, ponderaciones, tasa mensual, umbrales)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        },
+        {
+          "nombre": "Motor de Score (cálculo, endpoint de estado de crédito, excepción, ficha de cliente)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ]
     },
     {
+      "id": 100,
+      "modulo": "Entrega y Revisión de Etapa 1",
+      "seccion": "Cierre de Etapa",
+      "etapa": 1,
+      "progreso": 0,
+      "estado": "Pendiente",
+      "horasEstimadas": 20,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-09-29",
+      "terminoFecha": "2026-10-02",
+      "subEtapas": [
+        {
+          "nombre": "Entrega y Revisión de Etapa 1",
+          "horasEstimadas": 20,
+          "progreso": 0
+        }
+      ]
+    },
+    {
+      "id": 60,
       "modulo": "Finanzas — Margen operacional y flujo de caja",
+      "seccion": "Finanzas",
+      "etapa": 2,
       "progreso": 0,
-      "estado": "Pendiente"
+      "estado": "Pendiente · spec no escrito aún",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-09-25",
+      "terminoFecha": "2026-09-25",
+      "subEtapas": [
+        {
+          "nombre": "A definir — sin spec en Docs/ todavía (estimación gruesa, sujeta a spec)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ]
     },
     {
-      "modulo": "Operaciones / Stock",
+      "id": 101,
+      "modulo": "Entrega y Revisión de Etapa 2",
+      "seccion": "Cierre de Etapa",
+      "etapa": 2,
       "progreso": 0,
-      "estado": "Pendiente"
+      "estado": "Pendiente",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-09-30",
+      "terminoFecha": "2026-09-30",
+      "subEtapas": [
+        {
+          "nombre": "Entrega y Revisión de Etapa 2",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ]
     },
     {
-      "modulo": "Integración AGL",
-      "progreso": 0,
-      "estado": "Pendiente · solo lectura"
-    },
-    {
+      "id": 62,
       "modulo": "Automatización IA",
+      "seccion": "—",
+      "etapa": 3,
       "progreso": 0,
-      "estado": "Pendiente · Etapa 2"
+      "estado": "Pendiente · Etapa 2, spec no escrito aún",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-09-28",
+      "terminoFecha": "2026-09-28",
+      "subEtapas": [
+        {
+          "nombre": "A definir — lectura IA de PDF/Excel (Packing List, facturas), agentes (estimación gruesa)",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "modulo": "Entrega y Revisión de Etapa 3",
+      "seccion": "Cierre de Etapa",
+      "etapa": 3,
+      "progreso": 0,
+      "estado": "Pendiente",
+      "horasEstimadas": 0,
+      "horasUtilizadas": 0,
+      "inicioFecha": "2026-10-02",
+      "terminoFecha": "2026-10-02",
+      "subEtapas": [
+        {
+          "nombre": "Entrega y Revisión de Etapa 3",
+          "horasEstimadas": 0,
+          "progreso": 0
+        }
+      ]
     }
   ],
   "gantt": {
-    "inicioSemana": "2026-07-13",
-    "semanas": 41,
-    "_ayuda": "inicioSemana = lunes de la semana 1. Cada tarea: inicioSemana (1..N), duracionSemanas, progreso 0-100, etapa 1/2/3.",
+    "inicioFecha": "2026-07-13",
+    "terminoFecha": "2026-09-28",
+    "_ayuda": "Cada tarea es una línea de menú/pantalla o \"Mantenedores\" de un módulo, agendada en días hábiles secuenciales. progreso 0-100, etapa 1/2/3. id/moduloId permiten reconstruir el árbol módulo → tareas.",
     "tareas": [
       {
-        "nombre": "Scaffold (fas-api + fas-web)",
+        "id": 2,
+        "nombre": "Scaffold fas-api + fas-web + Docker Compose + CI básico",
+        "modulo": "Entorno general",
+        "moduloId": 1,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 1,
-        "duracionSemanas": 1,
+        "inicioFecha": "2026-07-13",
+        "terminoFecha": "2026-07-15",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
         "progreso": 100
       },
       {
-        "nombre": "Entidades",
+        "id": 4,
+        "nombre": "Mantenedores (geografía, comercial base, fruta, parámetros, operación compartida)",
+        "modulo": "Mantenedores Generales",
+        "moduloId": 3,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 2,
-        "duracionSemanas": 1,
+        "inicioFecha": "2026-07-20",
+        "terminoFecha": "2026-07-21",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
         "progreso": 100
       },
       {
-        "nombre": "Mantenedores Generales",
+        "id": 6,
+        "nombre": "Usuarios y Perfiles (ItemMenu, matriz de accesos, usuarios sobre Better Auth, guard de autorización)",
+        "modulo": "Usuarios y Perfiles",
+        "moduloId": 5,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 2,
-        "duracionSemanas": 1,
+        "inicioFecha": "2026-07-20",
+        "terminoFecha": "2026-07-20",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
         "progreso": 100
       },
       {
-        "nombre": "Usuarios y Perfiles",
+        "id": 8,
+        "nombre": "Entidades (maestro + direcciones + contactos)",
+        "modulo": "Entidades",
+        "moduloId": 7,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 2,
-        "duracionSemanas": 1,
+        "inicioFecha": "2026-07-20",
+        "terminoFecha": "2026-07-20",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
         "progreso": 100
       },
       {
-        "nombre": "Compras — Ciclo de compras",
+        "id": 10,
+        "nombre": "Multi-empresa (modelo, contexto ALS, tenancy Prisma, backfill de los 7 módulos raíz — falta Fase 4 UI admin)",
+        "modulo": "Empresas (Multi-empresa / Multi-tenant)",
+        "moduloId": 9,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 3,
-        "duracionSemanas": 2,
-        "progreso": 80
+        "inicioFecha": "2026-07-27",
+        "terminoFecha": "2026-07-29",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 100
       },
       {
-        "nombre": "Ventas — Ciclo de ventas",
+        "id": 12,
+        "nombre": "Mantenedores (Condición de Pago con cuotas —compartida con Productores—, Forma de Pago, Altura, Template de Carga)",
+        "modulo": "Compras — Ciclo de Compras",
+        "moduloId": 11,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 5,
-        "duracionSemanas": 3,
-        "progreso": 40
+        "inicioFecha": "2026-07-27",
+        "terminoFecha": "2026-07-28",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 100
       },
       {
-        "nombre": "Integración AGL (embarque)",
+        "id": 13,
+        "nombre": "Solicitud de Inspección (gestión desde Compras)",
+        "modulo": "Compras — Ciclo de Compras",
+        "moduloId": 11,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 8,
-        "duracionSemanas": 1,
+        "inicioFecha": "2026-08-03",
+        "terminoFecha": "2026-08-04",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 5,
+        "progreso": 100
+      },
+      {
+        "id": 14,
+        "nombre": "Instructivo de Embalaje",
+        "modulo": "Compras — Ciclo de Compras",
+        "moduloId": 11,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-05",
+        "terminoFecha": "2026-08-06",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
+        "id": 15,
+        "nombre": "Orden de Compra",
+        "modulo": "Compras — Ciclo de Compras",
+        "moduloId": 11,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-07",
+        "terminoFecha": "2026-08-10",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 5,
+        "progreso": 100
+      },
+      {
+        "id": 16,
+        "nombre": "Recepción de Stock (con/sin OC, motor de validación OC↔Carga, Pallets, Packing List)",
+        "modulo": "Compras — Ciclo de Compras",
+        "moduloId": 11,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-06",
+        "terminoFecha": "2026-09-07",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 10,
+        "progreso": 100
+      },
+      {
+        "id": 82,
+        "nombre": "Reporte Stock de Fruta",
+        "modulo": "Compras — Ciclo de Compras",
+        "moduloId": 11,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-10",
+        "terminoFecha": "2026-08-10",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
+        "id": 65,
+        "nombre": "Entrega y validación",
+        "modulo": "Compras — Ciclo de Compras",
+        "moduloId": 11,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-11",
+        "terminoFecha": "2026-08-11",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
         "progreso": 0
       },
       {
-        "nombre": "Operaciones / Stock (recepción, PL)",
+        "id": 18,
+        "nombre": "Mantenedores (Tipo de Embarque —ya construido—, Vía de Embarque, Ruta, Tipo BL, Tipo Contenedor, Tipo Tratamiento, Tipo Atmósfera, Tipo Inspección, Destino Final)",
+        "modulo": "Ventas — Ciclo de Ventas",
+        "moduloId": 17,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 8,
-        "duracionSemanas": 2,
-        "progreso": 20
+        "inicioFecha": "2026-08-03",
+        "terminoFecha": "2026-08-04",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 75
       },
       {
-        "nombre": "Ingreso y valorización de reclamos (Ventas)",
+        "id": 19,
+        "nombre": "Nota de Venta / Cierre Comercial",
+        "modulo": "Ventas — Ciclo de Ventas",
+        "moduloId": 17,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 10,
-        "duracionSemanas": 1,
+        "inicioFecha": "2026-08-12",
+        "terminoFecha": "2026-08-14",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
+        "id": 20,
+        "nombre": "Embarque (contenedor, asignación de fruta, instructivos hijos, solicitud de reserva, AGL)",
+        "modulo": "Ventas — Ciclo de Ventas",
+        "moduloId": 17,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-14",
+        "terminoFecha": "2026-08-18",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 15
+      },
+      {
+        "id": 21,
+        "nombre": "Reclamos (ingreso, Provisión)",
+        "modulo": "Ventas — Ciclo de Ventas",
+        "moduloId": 17,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-18",
+        "terminoFecha": "2026-08-20",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
         "progreso": 0
       },
       {
-        "nombre": "Cobranza — Facturación y Pagos",
+        "id": 66,
+        "nombre": "Entrega y validación",
+        "modulo": "Ventas — Ciclo de Ventas",
+        "moduloId": 17,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 11,
-        "duracionSemanas": 2,
+        "inicioFecha": "2026-08-21",
+        "terminoFecha": "2026-08-21",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
         "progreso": 0
       },
       {
-        "nombre": "Ingreso de liquidación del cliente",
+        "id": 45,
+        "nombre": "Mantenedores (Unidad de Medida, Etiqueta, Tipos de Movimiento, Artículos y Recetas)",
+        "modulo": "Gestión de Materiales",
+        "moduloId": 41,
+        "tipo": "maestro",
         "etapa": 1,
-        "inicioSemana": 13,
-        "duracionSemanas": 1,
+        "inicioFecha": "2026-07-27",
+        "terminoFecha": "2026-07-28",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
+        "id": 42,
+        "nombre": "Movimientos (entradas/salidas/traslados, PMP, bloque DTE)",
+        "modulo": "Gestión de Materiales",
+        "moduloId": 41,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-24",
+        "terminoFecha": "2026-08-26",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
+        "id": 43,
+        "nombre": "Consulta de stock por receta",
+        "modulo": "Gestión de Materiales",
+        "moduloId": 41,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-25",
+        "terminoFecha": "2026-08-26",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
+        "id": 44,
+        "nombre": "Proforma de Venta de Materiales",
+        "modulo": "Gestión de Materiales",
+        "moduloId": 41,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-26",
+        "terminoFecha": "2026-08-28",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
         "progreso": 0
       },
       {
-        "nombre": "Ventas nacionales · emisor desde 0 (DTE 33/34)",
+        "id": 83,
+        "nombre": "Reporte Kardex de Materiales",
+        "modulo": "Gestión de Materiales",
+        "moduloId": 41,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 14,
-        "duracionSemanas": 1,
+        "inicioFecha": "2026-08-29",
+        "terminoFecha": "2026-08-29",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
+        "id": 84,
+        "nombre": "Reporte Stock por Receta",
+        "modulo": "Gestión de Materiales",
+        "moduloId": 41,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-30",
+        "terminoFecha": "2026-08-30",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
+        "id": 67,
+        "nombre": "Entrega y validación",
+        "modulo": "Gestión de Materiales",
+        "moduloId": 41,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-31",
+        "terminoFecha": "2026-08-31",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
         "progreso": 0
       },
       {
-        "nombre": "Cobranza — Gestión",
+        "id": 89,
+        "nombre": "Orden de Compra de Materiales (a proveedor)",
+        "modulo": "Gestión de Materiales — Orden de Compra",
+        "moduloId": 88,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 15,
-        "duracionSemanas": 1,
+        "inicioFecha": "2026-09-03",
+        "terminoFecha": "2026-09-07",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
         "progreso": 0
       },
       {
-        "nombre": "Gestión de materiales",
+        "id": 23,
+        "nombre": "Mantenedores (Calificación, Tipo/Grupo/Defecto, Característica de Madurez, Característica de Reclamo, Criterio de Cumplimiento)",
+        "modulo": "Calidad — Mantenedores",
+        "moduloId": 22,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 16,
-        "duracionSemanas": 1,
-        "progreso": 0
+        "inicioFecha": "2026-08-03",
+        "terminoFecha": "2026-08-04",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 30
       },
       {
-        "nombre": "Guías de despacho (DTE 52)",
+        "id": 25,
+        "nombre": "Solicitud de Inspección (visita a terreno, adjuntos, correo, campos Documento 107, tipo Compra/Proceso, veredictos)",
+        "modulo": "Calidad — Solicitud de Inspección (v1 vigente)",
+        "moduloId": 24,
+        "tipo": "subEtapa",
         "etapa": 1,
-        "inicioSemana": 17,
-        "duracionSemanas": 1,
-        "progreso": 0
+        "inicioFecha": "2026-08-05",
+        "terminoFecha": "2026-08-31",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 5,
+        "progreso": 100
       },
       {
-        "nombre": "Órdenes de compra de materiales",
-        "etapa": 1,
-        "inicioSemana": 17,
-        "duracionSemanas": 1,
-        "progreso": 0
-      },
-      {
-        "nombre": "Proforma de venta de materiales",
-        "etapa": 1,
-        "inicioSemana": 18,
-        "duracionSemanas": 1,
-        "progreso": 0
-      },
-      {
-        "nombre": "Gestión de Productores",
-        "etapa": 1,
-        "inicioSemana": 19,
-        "duracionSemanas": 1,
-        "progreso": 0
-      },
-      {
-        "nombre": "Captura de facturas y NC (Gestión de Productores)",
-        "etapa": 1,
-        "inicioSemana": 20,
-        "duracionSemanas": 1,
-        "progreso": 0
-      },
-      {
-        "nombre": "Control de pagos a productores",
-        "etapa": 1,
-        "inicioSemana": 21,
-        "duracionSemanas": 1,
-        "progreso": 0
-      },
-      {
-        "nombre": "Proforma de servicios a productores",
-        "etapa": 1,
-        "inicioSemana": 21,
-        "duracionSemanas": 1,
-        "progreso": 0
-      },
-      {
-        "nombre": "Ventas nacionales · confirmador de proformas",
-        "etapa": 1,
-        "inicioSemana": 22,
-        "duracionSemanas": 1,
-        "progreso": 0
-      },
-      {
-        "nombre": "Calidad — Control en origen",
-        "etapa": 1,
-        "inicioSemana": 23,
-        "duracionSemanas": 4,
-        "progreso": 0
-      },
-      {
-        "nombre": "Calidad — Análisis de reclamos",
-        "etapa": 1,
-        "inicioSemana": 27,
-        "duracionSemanas": 2,
-        "progreso": 0
-      },
-      {
-        "nombre": "Gestión de Riesgo",
-        "etapa": 1,
-        "inicioSemana": 29,
-        "duracionSemanas": 2,
-        "progreso": 0
-      },
-      {
-        "nombre": "Finanzas — Margen operacional y flujo de caja",
-        "etapa": 1,
-        "inicioSemana": 31,
-        "duracionSemanas": 2,
-        "progreso": 0
-      },
-      {
-        "nombre": "Automatización IA (PL, facturas, liquidaciones)",
+        "id": 27,
+        "nombre": "Inspección de Calidad (por caja: defectos, madurez, fotos, resultado, informe PDF)",
+        "modulo": "Calidad — Inspección de Calidad",
+        "moduloId": 26,
+        "tipo": "subEtapa",
         "etapa": 2,
-        "inicioSemana": 35,
-        "duracionSemanas": 3,
+        "inicioFecha": "2026-09-01",
+        "terminoFecha": "2026-09-03",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
         "progreso": 0
       },
       {
-        "nombre": "Calidad — App móvil offline",
+        "id": 28,
+        "nombre": "App Móvil Offline (PWA, service worker, IndexedDB, cola de sincronización)",
+        "modulo": "Calidad — Inspección de Calidad",
+        "moduloId": 26,
+        "tipo": "subEtapa",
         "etapa": 2,
-        "inicioSemana": 35,
-        "duracionSemanas": 3,
+        "inicioFecha": "2026-09-02",
+        "terminoFecha": "2026-09-04",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
         "progreso": 0
       },
       {
-        "nombre": "Liquidación de productores",
+        "id": 70,
+        "nombre": "Entrega y validación",
+        "modulo": "Calidad — Entrega y validación",
+        "moduloId": 86,
+        "tipo": "subEtapa",
+        "etapa": 2,
+        "inicioFecha": "2026-09-07",
+        "terminoFecha": "2026-09-07",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 30,
+        "nombre": "Reclamos (ingreso, valorización, cierre/reapertura, provisión)",
+        "modulo": "Calidad — Análisis de Reclamos",
+        "moduloId": 29,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-03",
+        "terminoFecha": "2026-09-07",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 71,
+        "nombre": "Entrega y validación",
+        "modulo": "Calidad — Entrega y validación",
+        "moduloId": 87,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-08",
+        "terminoFecha": "2026-09-08",
+        "duracionDias": 1,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 32,
+        "nombre": "Mantenedores (Forma de Pago con cuotas)",
+        "modulo": "Cobranza — Facturación, Pagos y Gestión (Exportación + Ventas Nacionales)",
+        "moduloId": 31,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-25",
+        "terminoFecha": "2026-08-26",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 33,
+        "nombre": "Facturación de Exportación (Proforma, Factura DTE 110, Cuotas, NC/ND, Pagos, Saldo a Favor)",
+        "modulo": "Cobranza — Facturación, Pagos y Gestión (Exportación + Ventas Nacionales)",
+        "moduloId": 31,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-27",
+        "terminoFecha": "2026-08-31",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 34,
+        "nombre": "Ventas Nacionales (confirmador de proformas + emisor DTE 33/34)",
+        "modulo": "Cobranza — Facturación, Pagos y Gestión (Exportación + Ventas Nacionales)",
+        "moduloId": 31,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-08-28",
+        "terminoFecha": "2026-09-01",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 37,
+        "nombre": "Ventana de Gestión de Cobranza (listado, envío agrupado, historial)",
+        "modulo": "Cobranza — Facturación, Pagos y Gestión (Exportación + Ventas Nacionales)",
+        "moduloId": 31,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-01",
+        "terminoFecha": "2026-09-04",
+        "duracionDias": 4,
+        "horasEstimadas": 20,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 72,
+        "nombre": "Entrega y validación",
+        "modulo": "Cobranza — Facturación, Pagos y Gestión (Exportación + Ventas Nacionales)",
+        "moduloId": 31,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-07",
+        "terminoFecha": "2026-09-07",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 39,
+        "nombre": "Mantenedores (escalas, ponderaciones, tasa mensual, umbrales)",
+        "modulo": "Gestión de Riesgo",
+        "moduloId": 38,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-22",
+        "terminoFecha": "2026-09-23",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 40,
+        "nombre": "Motor de Score (cálculo, endpoint de estado de crédito, excepción, ficha de cliente)",
+        "modulo": "Gestión de Riesgo",
+        "moduloId": 38,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-24",
+        "terminoFecha": "2026-09-28",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 85,
+        "nombre": "Reporte Gestión de Riesgo",
+        "modulo": "Gestión de Riesgo",
+        "moduloId": 38,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-28",
+        "terminoFecha": "2026-09-28",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
+        "id": 76,
+        "nombre": "Entrega y validación",
+        "modulo": "Gestión de Riesgo",
+        "moduloId": 38,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-29",
+        "terminoFecha": "2026-09-29",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 51,
+        "nombre": "Mantenedores (Tipo de Producción, Tipo de Cuenta Corriente)",
+        "modulo": "Gestión de Productores",
+        "moduloId": 46,
+        "tipo": "maestro",
+        "etapa": 1,
+        "inicioFecha": "2026-07-27",
+        "terminoFecha": "2026-07-28",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
+        "id": 47,
+        "nombre": "Ficha de Productor (Predios, Contrato, Cuenta Corriente)",
+        "modulo": "Gestión de Productores",
+        "moduloId": 46,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-07-27",
+        "terminoFecha": "2026-07-27",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
+        "id": 48,
+        "nombre": "Documentos de Compra (captura externa facturas/NC + cuadre OC)",
+        "modulo": "Gestión de Productores",
+        "moduloId": 46,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-11",
+        "terminoFecha": "2026-09-15",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 49,
+        "nombre": "Solicitud de Pago",
+        "modulo": "Gestión de Productores",
+        "moduloId": 46,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-14",
+        "terminoFecha": "2026-09-15",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 50,
+        "nombre": "Proforma de Servicios a Productores",
+        "modulo": "Gestión de Productores",
+        "moduloId": 46,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-15",
+        "terminoFecha": "2026-09-17",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 73,
+        "nombre": "Entrega y validación",
+        "modulo": "Gestión de Productores",
+        "moduloId": 46,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-21",
+        "terminoFecha": "2026-09-21",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 55,
+        "nombre": "Mantenedores (Conceptos de Liquidación — movido desde Gestión de Productores)",
+        "modulo": "Liquidación de Productores",
+        "moduloId": 52,
+        "tipo": "maestro",
+        "etapa": 2,
+        "inicioFecha": "2026-07-27",
+        "terminoFecha": "2026-07-28",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
+        "id": 53,
+        "nombre": "Motor de Cálculo (aplica Conceptos de Liquidación sobre volumen real y % cumplimiento)",
+        "modulo": "Liquidación de Productores",
+        "moduloId": 52,
+        "tipo": "subEtapa",
+        "etapa": 2,
+        "inicioFecha": "2026-09-17",
+        "terminoFecha": "2026-09-22",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 54,
+        "nombre": "Generación de Liquidación (documento/reporte final al productor)",
+        "modulo": "Liquidación de Productores",
+        "moduloId": 52,
+        "tipo": "subEtapa",
+        "etapa": 2,
+        "inicioFecha": "2026-09-21",
+        "terminoFecha": "2026-09-23",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 75,
+        "nombre": "Entrega y validación",
+        "modulo": "Liquidación de Productores",
+        "moduloId": 52,
+        "tipo": "subEtapa",
+        "etapa": 2,
+        "inicioFecha": "2026-09-24",
+        "terminoFecha": "2026-09-24",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 64,
+        "nombre": "Mantenedores (A definir — sin spec)",
+        "modulo": "Liquidación de Clientes",
+        "moduloId": 56,
+        "tipo": "subEtapa",
+        "etapa": 2,
+        "inicioFecha": "2026-09-21",
+        "terminoFecha": "2026-09-22",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 57,
+        "nombre": "Liquidación de Clientes — A definir (sin spec)",
+        "modulo": "Liquidación de Clientes",
+        "moduloId": 56,
+        "tipo": "subEtapa",
+        "etapa": 2,
+        "inicioFecha": "2026-09-23",
+        "terminoFecha": "2026-09-28",
+        "duracionDias": 4,
+        "horasEstimadas": 20,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 58,
+        "nombre": "Matriz de Costos — A definir (sin spec)",
+        "modulo": "Liquidación de Clientes",
+        "moduloId": 56,
+        "tipo": "subEtapa",
+        "etapa": 2,
+        "inicioFecha": "2026-09-24",
+        "terminoFecha": "2026-09-25",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 59,
+        "nombre": "Determinación de Precios — A definir (sin spec)",
+        "modulo": "Liquidación de Clientes",
+        "moduloId": 56,
+        "tipo": "subEtapa",
+        "etapa": 2,
+        "inicioFecha": "2026-09-25",
+        "terminoFecha": "2026-09-29",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 74,
+        "nombre": "Entrega y validación",
+        "modulo": "Liquidación de Clientes",
+        "moduloId": 56,
+        "tipo": "subEtapa",
+        "etapa": 2,
+        "inicioFecha": "2026-09-30",
+        "terminoFecha": "2026-09-30",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 61,
+        "nombre": "A definir — sin spec en Docs/ todavía (estimación gruesa, sujeta a spec)",
+        "modulo": "Finanzas — Margen operacional y flujo de caja",
+        "moduloId": 60,
+        "tipo": "subEtapa",
+        "etapa": 2,
+        "inicioFecha": "2026-09-28",
+        "terminoFecha": "2026-09-28",
+        "duracionDias": 1,
+        "horasEstimadas": 0,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 77,
+        "nombre": "Entrega y validación",
+        "modulo": "Finanzas — Margen operacional y flujo de caja",
+        "moduloId": 60,
+        "tipo": "subEtapa",
+        "etapa": 2,
+        "inicioFecha": "2026-09-29",
+        "terminoFecha": "2026-09-29",
+        "duracionDias": 1,
+        "horasEstimadas": 0,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 63,
+        "nombre": "A definir — lectura IA de PDF/Excel (Packing List, facturas), agentes (estimación gruesa)",
+        "modulo": "Automatización IA",
+        "moduloId": 62,
+        "tipo": "subEtapa",
         "etapa": 3,
-        "inicioSemana": 39,
-        "duracionSemanas": 3,
+        "inicioFecha": "2026-09-29",
+        "terminoFecha": "2026-10-01",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 78,
+        "nombre": "Entrega y validación",
+        "modulo": "Automatización IA",
+        "moduloId": 62,
+        "tipo": "subEtapa",
+        "etapa": 3,
+        "inicioFecha": "2026-10-02",
+        "terminoFecha": "2026-10-02",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 79,
+        "nombre": "Entrega y Revisión de Etapa 1",
+        "modulo": "Entrega y Revisión de Etapa 1",
+        "moduloId": 100,
+        "tipo": "cierre",
+        "etapa": 1,
+        "inicioFecha": "2026-09-30",
+        "terminoFecha": "2026-10-05",
+        "duracionDias": 4,
+        "horasEstimadas": 20,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 80,
+        "nombre": "Entrega y Revisión de Etapa 2",
+        "modulo": "Entrega y Revisión de Etapa 2",
+        "moduloId": 101,
+        "tipo": "cierre",
+        "etapa": 2,
+        "inicioFecha": "2026-10-01",
+        "terminoFecha": "2026-10-01",
+        "duracionDias": 0,
+        "horasEstimadas": 0,
+        "horasUtilizadas": 0,
+        "progreso": 0
+      },
+      {
+        "id": 81,
+        "nombre": "Entrega y Revisión de Etapa 3",
+        "modulo": "Entrega y Revisión de Etapa 3",
+        "moduloId": 102,
+        "tipo": "cierre",
+        "etapa": 3,
+        "inicioFecha": "2026-10-05",
+        "terminoFecha": "2026-10-05",
+        "duracionDias": 0,
+        "horasEstimadas": 0,
+        "horasUtilizadas": 0,
         "progreso": 0
       }
     ]
