@@ -13,7 +13,26 @@ export const TIPO_TEMPLATE_CARGA_LABELS: Record<TipoTemplateCarga, string> = {
 // PACKING_LIST queda [] a propósito: el spec todavía no define sus columnas
 // (ver comentario en el backend) — un tipo sin campos no se puede crear.
 export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
-  RECEPCION: ['NUMERO_PALLET', 'ESPECIE', 'VARIEDAD', 'CATEGORIA', 'ARTICULO', 'CALIBRE', 'CAJAS', 'PRODUCTOR'],
+  RECEPCION: [
+    'NUMERO_PALLET',
+    'ESPECIE',
+    'VARIEDAD',
+    'CATEGORIA',
+    'ARTICULO',
+    'CALIBRE',
+    'CAJAS',
+    'PRODUCTOR',
+    'NOTA_CALIDAD',
+    'NOTA_CONDICION',
+    'COMPLETO',
+  ],
+  PACKING_LIST: [],
+}
+
+// Campos del tipo que NO son obligatorios de mapear (2026-09-02, compras.md
+// §4.8) — espejo de CAMPOS_OPCIONALES_POR_TIPO en el backend.
+export const CAMPOS_OPCIONALES_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
+  RECEPCION: ['NOTA_CALIDAD', 'NOTA_CONDICION', 'COMPLETO'],
   PACKING_LIST: [],
 }
 
@@ -26,6 +45,9 @@ export const CAMPO_TEMPLATE_CARGA_LABELS: Record<string, string> = {
   CALIBRE: 'Calibre',
   CAJAS: 'Cajas',
   PRODUCTOR: 'Productor',
+  NOTA_CALIDAD: 'Nota de Calidad',
+  NOTA_CONDICION: 'Nota de Condición',
+  COMPLETO: 'Completo/Incompleto',
 }
 
 export interface TemplateCargaCampo {

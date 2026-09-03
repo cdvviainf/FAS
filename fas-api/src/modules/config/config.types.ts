@@ -29,8 +29,6 @@ export type MantenedorModelo =
   // Lote 4
   | 'temporada'
   | 'bodega'
-  // Lote 6 — Calidad
-  | 'calificacion'
 
 export interface MantenedorListFilters {
   q?: string

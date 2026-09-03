@@ -34,8 +34,6 @@ const modelMap: Record<MantenedorModelo, string> = {
   // Lote 4
   temporada: 'temporada',
   bodega: 'bodega',
-  // Lote 6 — Calidad
-  calificacion: 'calificacion',
 }
 
 // Qué campos include para modelos con FK (para exponer datos relacionados)

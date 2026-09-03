@@ -212,7 +212,6 @@ model Empresa {
   categorias             Categoria[]
   calibres               Calibre[]
   parametros             Parametro[]
-  calificaciones         Calificacion[]
   entidades              Entidad[]
   solicitudesInspeccion  SolicitudInspeccion[]
   articulos              Articulo[]
@@ -1448,8 +1447,13 @@ model SolicitudInspeccion {
   cliente               Entidad?                  @relation("SolicitudInspeccionCliente", fields: [empresaId, clienteId], references: [empresaId, id])
   fechaDespacho         DateTime?                 @db.Date
   cantidadPallets       Int?
-  calificacionId        Int?
-  calificacion          Calificacion?             @relation(fields: [empresaId, calificacionId], references: [empresaId, id])
+  // Nota de Calidad / Condición (2026-09-02, calidad.md — supersede
+  // Calificacion): mismos mantenedores que Pallet (compras.md §4.8),
+  // restringidos por `especieId` de esta Solicitud cuando está definido.
+  notaCalidadId         Int?
+  notaCalidad           NotaCalidad?              @relation(fields: [empresaId, notaCalidadId], references: [empresaId, id])
+  notaCondicionId       Int?
+  notaCondicion         NotaCondicion?            @relation(fields: [empresaId, notaCondicionId], references: [empresaId, id])
   observaciones         String?
   // Solicitante de negocio (2026-08-14): distinto de `creadoPor` (auditoría
   // pura, "quién hizo el request"). Por defecto es el usuario de sesión al
@@ -1545,27 +1549,6 @@ model SolicitudInspeccionEmbalaje {
   @@map("solicitud_inspeccion_embalajes")
 }
 
-model Calificacion {
-  id                    Int       @id @default(autoincrement())
-  empresaId             Int
-  empresa               Empresa   @relation(fields: [empresaId], references: [id])
-  codigo                String
-  descripcion           String
-  descripcionExtranjera String?
-  bloqueado             Boolean   @default(false)
-  creadoEn              DateTime  @default(now())
-  creadoPor             String
-  actualizadoEn         DateTime? @updatedAt
-  actualizadoPor        String?
-  eliminadoEn           DateTime?
-  eliminadoPor          String?
-
-  solicitudesInspeccion SolicitudInspeccion[]
-
-  @@unique([empresaId, id])
-  @@index([empresaId])
-  @@map("calificaciones")
-}
 
 model SolicitudInspeccionAsignado {
   id          Int                       @id @default(autoincrement())
@@ -2106,8 +2089,9 @@ model NotaCalidad {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  especies NotaCalidadEspecie[]
-  pallets  Pallet[]
+  especies              NotaCalidadEspecie[]
+  pallets               Pallet[]
+  solicitudesInspeccion SolicitudInspeccion[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -2141,8 +2125,9 @@ model NotaCondicion {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  especies NotaCondicionEspecie[]
-  pallets  Pallet[]
+  especies              NotaCondicionEspecie[]
+  pallets               Pallet[]
+  solicitudesInspeccion SolicitudInspeccion[]
 
   @@unique([empresaId, id])
   @@index([empresaId])

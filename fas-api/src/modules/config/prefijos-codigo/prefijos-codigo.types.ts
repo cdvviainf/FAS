@@ -8,7 +8,7 @@ export const MODELOS_CON_CODIGO = [
   'tipoPallet', 'etiqueta', 'altura', 'tipoProduccion', 'tipoDefecto', 'tipoParametro',
   'region', 'provincia', 'comuna', 'especie', 'grupoVariedad', 'variedad',
   'categoria', 'calibre', 'parametro', 'mercado', 'puerto', 'moneda',
-  'temporada', 'bodega', 'conceptoCtaCte', 'calificacion',
+  'temporada', 'bodega', 'conceptoCtaCte',
   // Módulos dedicados
   'entidad', 'articulo', 'condicionPago', 'receta', 'tipoMovimiento',
   'conceptoLiquidacion', 'perfil', 'templateCarga',

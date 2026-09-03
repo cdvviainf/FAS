@@ -29,7 +29,6 @@ export const MODELOS_CON_CODIGO_OPTIONS: { value: string; label: string }[] = [
   { value: 'temporada', label: 'Temporada' },
   { value: 'bodega', label: 'Bodega' },
   { value: 'conceptoCtaCte', label: 'Concepto Cta. Cte.' },
-  { value: 'calificacion', label: 'Calificación' },
   { value: 'entidad', label: 'Entidad' },
   { value: 'articulo', label: 'Artículo' },
   { value: 'condicionPago', label: 'Condición de Pago' },
@@ -79,7 +78,6 @@ export const RECURSO_A_MODELO: Record<string, string> = {
   'conceptos-cta-cte': 'conceptoCtaCte',
   temporadas: 'temporada',
   bodegas: 'bodega',
-  calificaciones: 'calificacion',
 }
 
 export interface PrefijoCodigo {

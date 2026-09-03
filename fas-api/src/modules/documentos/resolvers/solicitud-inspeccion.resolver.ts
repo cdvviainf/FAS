@@ -62,7 +62,8 @@ export async function resolverSolicitudInspeccion(id: number, empresaId: number)
     especie: solicitud.especie?.descripcion ?? null,
     fechaDespacho: solicitud.fechaDespacho ? solicitud.fechaDespacho.toISOString() : null,
     cantidadPallets: solicitud.cantidadPallets,
-    calificacion: solicitud.calificacion?.descripcion ?? null,
+    notaCalidad: solicitud.notaCalidad?.descripcion ?? null,
+    notaCondicion: solicitud.notaCondicion?.descripcion ?? null,
     variedades: solicitud.variedades.map((v) => v.variedad.descripcion),
     // Descripción, no código (feedback Christian, 2026-08-19) — en las 3
     // plantillas del motor, no solo acá.

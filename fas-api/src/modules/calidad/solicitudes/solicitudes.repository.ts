@@ -30,7 +30,8 @@ const includeDetalle = {
   especie: { select: { id: true, codigo: true, descripcion: true } },
   mercado: { select: { id: true, codigo: true, descripcion: true } },
   cliente: { select: { id: true, codigo: true, descripcion: true, razonSocial: true } },
-  calificacion: { select: { id: true, codigo: true, descripcion: true } },
+  notaCalidad: { select: { id: true, codigo: true, descripcion: true } },
+  notaCondicion: { select: { id: true, codigo: true, descripcion: true } },
   paises: { select: { pais: { select: { id: true, codigo: true, descripcion: true } } } },
   variedades: { select: { variedad: { select: { id: true, codigo: true, descripcion: true } } } },
   calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
@@ -145,7 +146,8 @@ export interface SolicitudCoreData {
   clienteId?: number | null
   fechaDespacho?: Date | null
   cantidadPallets?: number | null
-  calificacionId?: number | null
+  notaCalidadId?: number | null
+  notaCondicionId?: number | null
   observaciones?: string | null
 }
 
@@ -427,8 +429,12 @@ export async function getClienteExtranjero(id: number) {
   })
 }
 
-export async function getCalificacionActiva(id: number) {
-  return prisma.calificacion.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+export async function getNotaCalidadActiva(id: number) {
+  return prisma.notaCalidad.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getNotaCondicionActiva(id: number) {
+  return prisma.notaCondicion.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
 }
 
 export async function getPaisesActivos(ids: number[]) {

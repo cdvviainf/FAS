@@ -203,6 +203,8 @@ Unidad mínima **indivisible** de inventario. Generado por la Recepción. Compue
 
 ### 4.8 Notas de Calidad/Condición y Completo/Incompleto del Pallet (2026-09-02)
 
+> **Reutilizado por `SolicitudInspeccion` (2026-09-02, `calidad.md`).** `NotaCalidad`/`NotaCondicion` no son exclusivos del Pallet — retiraron y reemplazaron al mantenedor `Calificacion` en Solicitud de Inspección (`notaCalidadId?`/`notaCondicionId?`, restringidos por la `especieId` de la solicitud). Ver la supersesión correspondiente en `calidad.md` para el detalle de ese lado.
+
 El Instructivo de Embalaje dejó de tener veredicto de Calidad (`calidad.md`, supersesión 2026-09-02) — como reemplazo informativo a nivel de Stock, el Pallet gana dos catálogos configurables y un flag de completitud, capturados en la Recepción de fruta:
 
 - **`NotaCalidad`** y **`NotaCondicion`**: mantenedores "+ base" (`codigo`, `descripcion`, `descripcionExtranjera?`, `bloqueado`) — ej. Nota Calidad `A/B/C/D`, Nota Condición `1/2/3/4`. Cada uno tiene una tabla puente (`NotaCalidadEspecie`/`NotaCondicionEspecie`, `@@unique([notaId, especieId])`) que define para qué Especies es válida esa nota — mismo patrón catálogo-maestro + validez-por-especie que `ConceptoLiquidacion`/`ConceptoLiquidacionEspecie` (`productores.md`). Gestionados en Configuración → Calidad (`CONFIG_MANTENEDORES`).

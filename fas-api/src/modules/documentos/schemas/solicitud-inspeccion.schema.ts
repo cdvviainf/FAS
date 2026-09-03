@@ -27,7 +27,8 @@ export const solicitudInspeccionPdfPayloadSchema = z.object({
   especie: z.string().nullable(),
   fechaDespacho: z.string().nullable(), // ISO
   cantidadPallets: z.number().int().nullable(),
-  calificacion: z.string().nullable(),
+  notaCalidad: z.string().nullable(),
+  notaCondicion: z.string().nullable(),
   variedades: z.array(z.string()),
   calibres: z.array(z.string()),
   categorias: z.array(z.string()),

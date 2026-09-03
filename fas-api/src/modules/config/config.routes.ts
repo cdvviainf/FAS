@@ -46,8 +46,6 @@ const MANTENEDORES: MantenedorConfig[] = [
   // Lote 4
   { modelo: 'temporada', prefixRuta: 'temporadas', label: 'Temporada', schemaKey: 'temporada' },
   { modelo: 'bodega', prefixRuta: 'bodegas', label: 'Bodega', schemaKey: 'bodega' },
-  // Lote 6 — Calidad
-  { modelo: 'calificacion', prefixRuta: 'calificaciones', label: 'Calificación' },
 ]
 
 export async function configRoutes(app: FastifyInstance) {

@@ -84,9 +84,6 @@ const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceD
   categoria: [
     { delegateName: 'solicitudInspeccionCategoria', parentField: 'categoriaId', label: 'solicitudes de inspección', viaSolicitud: true },
   ],
-  calificacion: [
-    { delegateName: 'solicitudInspeccion', parentField: 'calificacionId', label: 'solicitudes de inspección' },
-  ],
   etiqueta: [
     { delegateName: 'articulo', parentField: 'etiquetaId', label: 'artículos', usesSoftDelete: false },
   ],

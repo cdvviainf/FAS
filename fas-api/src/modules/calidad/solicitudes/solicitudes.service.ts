@@ -68,7 +68,8 @@ async function validarReferencias(data: {
   especieId?: number | null
   mercadoId?: number | null
   clienteId?: number | null
-  calificacionId?: number | null
+  notaCalidadId?: number | null
+  notaCondicionId?: number | null
   paisIds?: number[]
   variedadIds?: number[]
   calibreIds?: number[]
@@ -107,9 +108,13 @@ async function validarReferencias(data: {
     const cliente = await repo.getClienteExtranjero(data.clienteId)
     if (!cliente) throw new ValidationError('El cliente seleccionado no existe, está inactivo o no es de tipo Cliente Extranjero')
   }
-  if (data.calificacionId != null) {
-    const calificacion = await repo.getCalificacionActiva(data.calificacionId)
-    if (!calificacion) throw new ValidationError('La calificación seleccionada no existe o está bloqueada')
+  if (data.notaCalidadId != null) {
+    const notaCalidad = await repo.getNotaCalidadActiva(data.notaCalidadId)
+    if (!notaCalidad) throw new ValidationError('La Nota de Calidad seleccionada no existe o está bloqueada')
+  }
+  if (data.notaCondicionId != null) {
+    const notaCondicion = await repo.getNotaCondicionActiva(data.notaCondicionId)
+    if (!notaCondicion) throw new ValidationError('La Nota de Condición seleccionada no existe o está bloqueada')
   }
 
   // especieId/mercadoId efectivos (valor nuevo si viene en el body, si no el vigente)

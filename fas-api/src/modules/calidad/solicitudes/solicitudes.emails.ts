@@ -18,7 +18,8 @@ interface SolicitudParaCorreo {
   cliente?: { razonSocial: string } | null
   fechaDespacho?: Date | null
   cantidadPallets?: number | null
-  calificacion?: { descripcion: string } | null
+  notaCalidad?: { descripcion: string } | null
+  notaCondicion?: { descripcion: string } | null
   paises?: { pais: { descripcion: string } }[]
   variedades?: { variedad: { descripcion: string } }[]
   calibres?: { calibre: { descripcion: string } }[]
@@ -72,7 +73,8 @@ ${s.embalajes && s.embalajes.length > 0 ? fila('Embalaje', s.embalajes.map((e) =
 ${s.variedades && s.variedades.length > 0 ? fila('Variedades', s.variedades.map((v) => esc(v.variedad.descripcion)).join(', ')) : ''}
 ${s.calibres && s.calibres.length > 0 ? fila('Calibres', s.calibres.map((c) => esc(c.calibre.descripcion)).join(', ')) : ''}
 ${s.categorias && s.categorias.length > 0 ? fila('Categorías', s.categorias.map((c) => esc(c.categoria.descripcion)).join(', ')) : ''}
-${s.calificacion ? fila('Calificación', esc(s.calificacion.descripcion)) : ''}
+${s.notaCalidad ? fila('Nota de Calidad', esc(s.notaCalidad.descripcion)) : ''}
+${s.notaCondicion ? fila('Nota de Condición', esc(s.notaCondicion.descripcion)) : ''}
 ${s.cantidadPallets != null ? fila('Cant. pallets', String(s.cantidadPallets)) : ''}
 ${acuden ? fila('Debe(n) acudir', acuden) : ''}
 ${s.observaciones ? fila('Observaciones', esc(s.observaciones).replace(/\n/g, '<br>')) : ''}

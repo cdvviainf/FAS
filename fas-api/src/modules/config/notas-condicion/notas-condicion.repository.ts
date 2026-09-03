@@ -72,3 +72,12 @@ export async function softDeleteNotaCondicion(id: number, eliminadoPor: string) 
     data: { eliminadoEn: new Date(), eliminadoPor },
   })
 }
+
+// Pallet no tiene soft-delete propio — cualquier fila existente es vigente.
+export async function countPalletsConNota(id: number) {
+  return prisma.pallet.count({ where: { notaCondicionId: id } })
+}
+
+export async function countSolicitudesConNota(id: number) {
+  return prisma.solicitudInspeccion.count({ where: { notaCondicionId: id, eliminadoEn: null } })
+}

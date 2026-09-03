@@ -26,7 +26,7 @@ import {
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { templatesCargaService } from '../service'
-import { TIPOS_TEMPLATE_CARGA, TIPO_TEMPLATE_CARGA_LABELS, CAMPOS_POR_TIPO, CAMPO_TEMPLATE_CARGA_LABELS } from '../types'
+import { TIPOS_TEMPLATE_CARGA, TIPO_TEMPLATE_CARGA_LABELS, CAMPOS_POR_TIPO, CAMPOS_OPCIONALES_POR_TIPO, CAMPO_TEMPLATE_CARGA_LABELS } from '../types'
 import type { TemplateCarga, TipoTemplateCarga } from '../types'
 
 const ITEM = 'CONFIG_MANTENEDORES'
@@ -57,6 +57,7 @@ export function TemplateCargaFormSheet({ item, open, onOpenChange }: TemplateCar
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const camposDelTipo = CAMPOS_POR_TIPO[tipo]
+  const camposOpcionales = CAMPOS_OPCIONALES_POR_TIPO[tipo]
   const tipoSinCampos = camposDelTipo.length === 0
 
   useEffect(() => {
@@ -128,7 +129,11 @@ export function TemplateCargaFormSheet({ item, open, onOpenChange }: TemplateCar
       const columnasVistas = new Map<string, string>()
       for (const campo of camposDelTipo) {
         const columna = columnas[campo].trim()
-        if (!columna) { e.campos = `Deben completarse las columnas de los ${camposDelTipo.length} campos`; break }
+        if (!columna) {
+          if (camposOpcionales.includes(campo)) continue
+          e.campos = `Deben completarse las columnas de los campos obligatorios`
+          break
+        }
         if (!tieneCabecera && !/^[A-Za-z]+$/.test(columna)) {
           e.campos = 'Sin cabecera, la columna debe ser una letra de Excel (A, B, C...)'
           break
@@ -155,7 +160,9 @@ export function TemplateCargaFormSheet({ item, open, onOpenChange }: TemplateCar
         tieneCabecera,
         filaCabecera: tieneCabecera ? Number(filaCabecera) : null,
         filaPrimerRegistro: Number(filaPrimerRegistro),
-        campos: camposDelTipo.map((campo) => ({ campo, columna: columnas[campo].trim() })),
+        campos: camposDelTipo
+          .map((campo) => ({ campo, columna: columnas[campo].trim() }))
+          .filter((c) => c.columna || !camposOpcionales.includes(c.campo)),
       }
       if (isEdit) return templatesCargaService.update(item!.id, payload)
       return templatesCargaService.create({ ...payload, codigo: codigo.trim(), tipo })
@@ -239,7 +246,10 @@ export function TemplateCargaFormSheet({ item, open, onOpenChange }: TemplateCar
                 <div className='space-y-2 rounded-md border p-3'>
                   {camposDelTipo.map((campo) => (
                     <div key={campo} className='grid grid-cols-2 items-center gap-2'>
-                      <Label className='text-xs font-normal'>{CAMPO_TEMPLATE_CARGA_LABELS[campo]}</Label>
+                      <Label className='text-xs font-normal'>
+                        {CAMPO_TEMPLATE_CARGA_LABELS[campo]}
+                        {camposOpcionales.includes(campo) && <span className='text-muted-foreground'> (opcional)</span>}
+                      </Label>
                       <Input
                         value={columnas[campo] ?? ''}
                         onChange={(e) => setColumnas((prev) => ({ ...prev, [campo]: e.target.value }))}

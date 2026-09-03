@@ -1,4 +1,4 @@
-import { NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { NotFoundError, ValidationError, ConflictError } from '../../../shared/errors.js'
 import * as repo from './notas-condicion.repository.js'
 import type { NotaCondicionCreateInput, NotaCondicionUpdateInput } from './notas-condicion.types.js'
 
@@ -36,7 +36,23 @@ export async function actualizarNotaCondicion(id: number, body: NotaCondicionUpd
   return repo.updateNotaCondicion(id, body, userId)
 }
 
+// (QAR-RCN-002, 2026-09-02): a diferencia de Calificacion (retirado), este
+// mantenedor es referenciado por Pallet Y SolicitudInspeccion — bloquea el
+// softdelete si sigue en uso, mismo criterio que el resto de mantenedores
+// "+ base" (config.service.ts, R8 mantenedores-generales.md).
 export async function eliminarNotaCondicion(id: number, userId: string) {
   await obtenerNotaCondicion(id)
+  const [pallets, solicitudes] = await Promise.all([
+    repo.countPalletsConNota(id),
+    repo.countSolicitudesConNota(id),
+  ])
+  const partes: string[] = []
+  if (pallets > 0) partes.push(`${pallets} pallet${pallets === 1 ? '' : 's'}`)
+  if (solicitudes > 0) partes.push(`${solicitudes} solicitud${solicitudes === 1 ? '' : 'es'} de inspección`)
+  if (partes.length > 0) {
+    throw new ConflictError(
+      `No se puede eliminar: tiene ${partes.join(' y ')} vigente(s) asociado(s). Para dar de baja este registro, bloquéalo en lugar de eliminarlo.`,
+    )
+  }
   await repo.softDeleteNotaCondicion(id, userId)
 }

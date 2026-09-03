@@ -23,6 +23,8 @@ import { entidadesService } from '@/features/entidades/service'
 import { usuariosService } from '@/features/usuarios/service'
 import { articulosService } from '@/features/materiales/articulos/service'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
+import { notasCalidadService } from '@/features/notas-calidad/service'
+import { notasCondicionService } from '@/features/notas-condicion/service'
 import { authClient } from '@/lib/auth-client'
 import { useTemporada } from '@/contexts/temporada-context'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
@@ -38,7 +40,6 @@ const calibresService = createMantenedorService('calibres')
 const categoriasService = createMantenedorService('categorias')
 const mercadosService = createMantenedorService('mercados')
 const paisesService = createMantenedorService('paises')
-const calificacionesService = createMantenedorService('calificaciones')
 
 const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024
 const ACCEPT_ADJUNTOS = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.heic'
@@ -88,7 +89,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const [calibreDesdeId, setCalibreDesdeId] = useState<number | null>(null)
   const [calibreHastaId, setCalibreHastaId] = useState<number | null>(null)
   const [categoriaIds, setCategoriaIds] = useState<number[]>([])
-  const [calificacionId, setCalificacionId] = useState<number | null>(null)
+  const [notaCalidadId, setNotaCalidadId] = useState<number | null>(null)
+  const [notaCondicionId, setNotaCondicionId] = useState<number | null>(null)
   const [cantidadPallets, setCantidadPallets] = useState('')
   const [asignados, setAsignados] = useState<AsignadoInput[]>([])
   const [observaciones, setObservaciones] = useState('')
@@ -136,11 +138,29 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     queryFn: () => articulosService.list({ tipo: 'EMBALAJE', activo: true, limit: 500 }),
     staleTime: 60_000,
   })
-  const { data: calificaciones } = useQuery({
-    queryKey: ['calificaciones-options'],
-    queryFn: () => calificacionesService.list({ soloActivos: true, limit: 500 }),
+  const { data: notasCalidad } = useQuery({
+    queryKey: ['notas-calidad'],
+    queryFn: () => notasCalidadService.list(),
     staleTime: 5 * 60_000,
   })
+  const { data: notasCondicion } = useQuery({
+    queryKey: ['notas-condicion'],
+    queryFn: () => notasCondicionService.list(),
+    staleTime: 5 * 60_000,
+  })
+  // Restringidas por la especie de la solicitud (si está definida), igual
+  // que en Operaciones > Gestión de Pallets — sin especie, se muestra el
+  // catálogo completo sin filtrar.
+  const notasCalidadValidas = useMemo(() => {
+    const todas = (notasCalidad?.data ?? []).filter((n) => !n.bloqueado)
+    if (especieId == null) return todas
+    return todas.filter((n) => n.especies.some((e) => e.especieId === especieId))
+  }, [notasCalidad, especieId])
+  const notasCondicionValidas = useMemo(() => {
+    const todas = (notasCondicion?.data ?? []).filter((n) => !n.bloqueado)
+    if (especieId == null) return todas
+    return todas.filter((n) => n.especies.some((e) => e.especieId === especieId))
+  }, [notasCondicion, especieId])
   const { data: variedadesData } = useQuery({
     queryKey: ['variedades-options-solicitud', especieId],
     queryFn: () => variedadesService.list({ limit: 500, especieId: especieId! }),
@@ -197,7 +217,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       setVariedadIds(d.variedades.map((v) => v.variedad.id))
       setCalibreIds(d.calibres.map((c) => c.calibre.id))
       setCategoriaIds(d.categorias.map((c) => c.categoria.id))
-      setCalificacionId(d.calificacionId)
+      setNotaCalidadId(d.notaCalidadId)
+      setNotaCondicionId(d.notaCondicionId)
       setCantidadPallets(d.cantidadPallets != null ? String(d.cantidadPallets) : '')
       setAsignados(d.asignados.map((a) => ({ usuarioId: a.usuarioId, funcion: a.funcion })))
       setObservaciones(d.observaciones ?? '')
@@ -270,7 +291,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       variedadIds,
       calibreIds,
       categoriaIds,
-      calificacionId,
+      notaCalidadId,
+      notaCondicionId,
       cantidadPallets: cantidadPallets ? Number(cantidadPallets) : null,
       observaciones: observaciones.trim() || null,
       asignados,
@@ -482,6 +504,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
                   const nuevo = v === 'none' ? null : Number(v)
                   setEspecieId(nuevo)
                   setVariedadIds([]); setCalibreIds([]); setCategoriaIds([])
+                  setNotaCalidadId(null); setNotaCondicionId(null)
                   resetCalibreRango()
                 }}
               >
@@ -572,8 +595,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
             )}
           </div>
 
-          {/* Fila 5: Categorías, Calificación, Cantidad de pallet */}
-          <div className='grid gap-4 sm:grid-cols-3'>
+          {/* Fila 5: Categorías, Nota Calidad, Nota Condición, Cantidad de pallet */}
+          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
             <div className='space-y-1.5'>
               <Label>Categorías</Label>
               <SelectMultiple
@@ -585,13 +608,25 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
               />
             </div>
             <div className='space-y-1.5'>
-              <Label>Calificación</Label>
-              <Select value={calificacionId ? String(calificacionId) : 'none'} onValueChange={(v) => setCalificacionId(v === 'none' ? null : Number(v))}>
+              <Label>Nota de Calidad</Label>
+              <Select value={notaCalidadId ? String(notaCalidadId) : 'none'} onValueChange={(v) => setNotaCalidadId(v === 'none' ? null : Number(v))}>
                 <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value='none'>Sin definir</SelectItem>
-                  {(calificaciones?.data ?? []).map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                  {notasCalidadValidas.map((n) => (
+                    <SelectItem key={n.id} value={String(n.id)}>{n.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Nota de Condición</Label>
+              <Select value={notaCondicionId ? String(notaCondicionId) : 'none'} onValueChange={(v) => setNotaCondicionId(v === 'none' ? null : Number(v))}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none'>Sin definir</SelectItem>
+                  {notasCondicionValidas.map((n) => (
+                    <SelectItem key={n.id} value={String(n.id)}>{n.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
