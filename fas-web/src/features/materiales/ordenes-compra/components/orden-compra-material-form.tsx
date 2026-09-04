@@ -25,10 +25,13 @@ import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
+import { MantenedorQuickCreate } from '@/components/shared/mantenedor-simple/mantenedor-quick-create'
+import { MonedaQuickCreate } from '@/features/monedas/components/moneda-quick-create'
 import { entidadesService } from '@/features/entidades/service'
 import { articulosService } from '@/features/materiales/articulos/service'
 import { condicionesPagoService } from '@/features/condiciones-pago/service'
 import { FECHA_REFERENCIA_LABELS } from '@/features/condiciones-pago/types'
+import type { MantenedorSimple, MantenedorSimpleListResponse } from '@/features/mantenedor-simple/types'
 import { ESTADO_MOVIMIENTO_LABELS } from '@/features/materiales/movimientos/types'
 import { ordenCompraMaterialDetailOptions, ordenesCompraMaterialKeys } from '../queries'
 import { ordenesCompraMaterialService } from '../service'
@@ -82,6 +85,16 @@ export function OrdenCompraMaterialForm({ ordenCompraMaterialId }: OrdenCompraMa
   const queryClient = useQueryClient()
   const puedeEscribir = usePuedeEscribir(ITEM)
   const puedeEscribirMovimientos = usePuedeEscribir(ITEM_MOVIMIENTOS)
+
+  // Los selectores de Forma de Pago/Moneda usan una queryKey ad-hoc (no la de
+  // createMantenedorQueries), así que el quick-create no la invalida solo —
+  // agregamos el registro recién creado directo al cache para que aparezca
+  // sin esperar un refetch.
+  function agregarAOpciones(queryKey: unknown[], item: MantenedorSimple) {
+    queryClient.setQueryData<MantenedorSimpleListResponse>(queryKey, (old) =>
+      old ? { ...old, data: [...old.data, item] } : old
+    )
+  }
 
   const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -340,15 +353,25 @@ export function OrdenCompraMaterialForm({ ordenCompraMaterialId }: OrdenCompraMa
             <div className='grid gap-4 sm:grid-cols-3'>
               <div className='space-y-1.5'>
                 <Label>Forma de Pago</Label>
-                <Select value={fields.formaPagoId ? String(fields.formaPagoId) : '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, formaPagoId: v === '__none__' ? null : Number(v) }))}>
-                  <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value='__none__'>Sin definir</SelectItem>
-                    {(formasPagoData?.data ?? []).map((f) => (
-                      <SelectItem key={f.id} value={String(f.id)}>{f.descripcion}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className='flex gap-2'>
+                  <Select value={fields.formaPagoId ? String(fields.formaPagoId) : '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, formaPagoId: v === '__none__' ? null : Number(v) }))}>
+                    <SelectTrigger className='flex-1'><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='__none__'>Sin definir</SelectItem>
+                      {(formasPagoData?.data ?? []).map((f) => (
+                        <SelectItem key={f.id} value={String(f.id)}>{f.descripcion}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <MantenedorQuickCreate
+                    recurso='formas-pago'
+                    titulo='Forma de Pago'
+                    onCreated={(fp) => {
+                      agregarAOpciones(['formas-pago-options'], fp)
+                      setFields((f) => ({ ...f, formaPagoId: fp.id }))
+                    }}
+                  />
+                </div>
               </div>
               <div className='space-y-1.5'>
                 <Label>Condición de Pago</Label>
@@ -365,14 +388,22 @@ export function OrdenCompraMaterialForm({ ordenCompraMaterialId }: OrdenCompraMa
               </div>
               <div className='space-y-1.5'>
                 <Label>Moneda <span className='text-destructive'>*</span></Label>
-                <Select value={fields.monedaId ? String(fields.monedaId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, monedaId: Number(v) }))}>
-                  <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
-                  <SelectContent>
-                    {(monedasData?.data ?? []).map((m) => (
-                      <SelectItem key={m.id} value={String(m.id)}>{m.codigo} — {m.descripcion}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className='flex gap-2'>
+                  <Select value={fields.monedaId ? String(fields.monedaId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, monedaId: Number(v) }))}>
+                    <SelectTrigger className='flex-1'><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+                    <SelectContent>
+                      {(monedasData?.data ?? []).map((m) => (
+                        <SelectItem key={m.id} value={String(m.id)}>{m.codigo} — {m.descripcion}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <MonedaQuickCreate
+                    onCreated={(m) => {
+                      agregarAOpciones(['monedas-options'], m)
+                      setFields((f) => ({ ...f, monedaId: m.id }))
+                    }}
+                  />
+                </div>
                 {errors.monedaId && <p className='text-xs text-destructive'>{errors.monedaId}</p>}
               </div>
             </div>

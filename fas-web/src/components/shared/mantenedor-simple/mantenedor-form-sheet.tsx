@@ -31,6 +31,7 @@ interface MantenedorFormSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   extraFields?: React.ReactNode
+  onCreated?: (item: MantenedorSimple) => void
 }
 
 export function MantenedorFormSheet({
@@ -39,7 +40,8 @@ export function MantenedorFormSheet({
   item,
   open,
   onOpenChange,
-  extraFields
+  extraFields,
+  onCreated
 }: MantenedorFormSheetProps) {
   const isEdit = !!item
   const queryClient = useQueryClient()
@@ -59,11 +61,12 @@ export function MantenedorFormSheet({
 
   const createMutation = useMutation({
     ...mutations.create,
-    onSuccess: () => {
+    onSuccess: (nuevo) => {
       toast.success(`${titulo} creado correctamente`)
       onOpenChange(false)
       form.reset()
       queryClient.invalidateQueries({ queryKey: keys.all })
+      onCreated?.(nuevo)
     },
     onError: (e: Error) => toast.error(e.message || `Error al crear ${titulo.toLowerCase()}`)
   })

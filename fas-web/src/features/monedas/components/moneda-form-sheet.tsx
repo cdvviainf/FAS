@@ -45,9 +45,10 @@ interface MonedaFormSheetProps {
   item?: MonedaItem
   open: boolean
   onOpenChange: (open: boolean) => void
+  onCreated?: (moneda: MantenedorSimple) => void
 }
 
-export function MonedaFormSheet({ item, open, onOpenChange }: MonedaFormSheetProps) {
+export function MonedaFormSheet({ item, open, onOpenChange, onCreated }: MonedaFormSheetProps) {
   const isEdit = !!item
   const queryClient = useQueryClient()
   const mutations = createMantenedorMutations('monedas')
@@ -75,11 +76,12 @@ export function MonedaFormSheet({ item, open, onOpenChange }: MonedaFormSheetPro
 
   const createMutation = useMutation({
     ...mutations.create,
-    onSuccess: () => {
+    onSuccess: (nueva) => {
       toast.success('Moneda creada correctamente')
       onOpenChange(false)
       form.reset()
       queryClient.invalidateQueries({ queryKey: keys.all })
+      onCreated?.(nueva)
     },
     onError: (e: Error) => toast.error(e.message || 'Error al crear la moneda')
   })
