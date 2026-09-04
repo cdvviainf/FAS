@@ -18,6 +18,8 @@ import { Icons } from '@/components/icons'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { articulosService } from '../../articulos/service'
 import { stockService } from '../service'
+import { notasVentaService } from '@/features/ventas/notas-venta/service'
+import { useItemAcceso } from '@/hooks/use-item-acceso'
 import type { EmbalajeCantidad, ResultadoConsultaStock, EstadoStockReceta } from '../types'
 
 const bodegasService = createMantenedorService('bodegas')
@@ -33,6 +35,16 @@ export function ConsultaStockClient() {
   const [embalajes, setEmbalajes] = useState<EmbalajeCantidad[]>([])
   const [bodegaIds, setBodegaIds] = useState<number[]>([])
   const [resultado, setResultado] = useState<ResultadoConsultaStock[] | null>(null)
+  const [notaVentaId, setNotaVentaId] = useState<number | null>(null)
+  // Cierres ya incorporados a la lista — se sacan de las opciones y se limpia
+  // la selección al cargarlos, así queda imposible recargar el mismo Cierre y
+  // duplicar sus cajas (IMP-QA-R1-010).
+  const [cierresCargados, setCierresCargados] = useState<Set<number>>(new Set())
+
+  // Cargar embalajes/cantidades desde un Cierre Comercial requiere poder leer
+  // NotaVenta — se oculta la sección completa si el perfil no tiene ese
+  // acceso (el reporte en sí solo exige LECTURA en OPER_MATERIALES).
+  const puedeVerCierres = useItemAcceso('VENTAS_NV') !== 'SIN_ACCESO'
 
   const { data: embalajesDisponibles } = useQuery({
     queryKey: ['embalajes-options-consulta'],
@@ -44,11 +56,45 @@ export function ConsultaStockClient() {
     queryFn: () => bodegasService.list({ soloActivos: true, limit: 500 }),
     staleTime: 60_000,
   })
+  const { data: cierres } = useQuery({
+    queryKey: ['notas-venta-options-consulta'],
+    // 500 = límite máximo que admite el schema del backend (notas-venta.schema.ts).
+    queryFn: () => notasVentaService.list({ limit: 500 }),
+    staleTime: 60_000,
+    enabled: puedeVerCierres,
+  })
 
   const mutation = useMutation({
     mutationFn: () => stockService.consultaStockReceta(embalajes, bodegaIds),
     onSuccess: (res) => setResultado(res.data),
     onError: (e: Error) => toast.error(e.message || 'Error al consultar stock'),
+  })
+
+  const cargarCierreMutation = useMutation({
+    mutationFn: () => notasVentaService.getById(notaVentaId as number),
+    onSuccess: (res) => {
+      // Un Cierre puede repetir el mismo embalaje en varias líneas (distinta
+      // variedad/calibre) — se suman las cajas por articuloId y se fusiona
+      // con lo que ya haya en la lista (permite combinar varios Cierres o
+      // mezclar con líneas agregadas a mano).
+      const cajasPorArticulo = new Map<number, number>()
+      for (const d of res.data.detalles) {
+        cajasPorArticulo.set(d.articuloId, (cajasPorArticulo.get(d.articuloId) ?? 0) + d.cajas)
+      }
+      setEmbalajes((prev) => {
+        const next = [...prev]
+        for (const [articuloId, cajas] of cajasPorArticulo) {
+          const idx = next.findIndex((e) => e.articuloId === articuloId)
+          if (idx >= 0) next[idx] = { ...next[idx], cantidad: next[idx].cantidad + cajas }
+          else next.push({ articuloId, cantidad: cajas })
+        }
+        return next
+      })
+      setCierresCargados((prev) => new Set(prev).add(res.data.id))
+      setNotaVentaId(null)
+      toast.success(`Embalajes cargados desde Folio ${res.data.folio}`)
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al cargar el Cierre Comercial'),
   })
 
   function agregarEmbalaje(articuloId: string) {
@@ -75,6 +121,31 @@ export function ConsultaStockClient() {
 
   return (
     <div className='space-y-6'>
+      {puedeVerCierres && (
+        <div className='space-y-2'>
+          <Label>Cargar desde Cierre Comercial <span className='text-muted-foreground text-xs'>(opcional)</span></Label>
+          <div className='flex max-w-sm gap-2'>
+            <Select value={notaVentaId ? String(notaVentaId) : ''} onValueChange={(v) => setNotaVentaId(Number(v))}>
+              <SelectTrigger><SelectValue placeholder='Seleccionar Cierre...' /></SelectTrigger>
+              <SelectContent>
+                {(cierres?.data ?? []).filter((nv) => !cierresCargados.has(nv.id)).map((nv) => (
+                  <SelectItem key={nv.id} value={String(nv.id)}>Folio {nv.folio} — {nv.cliente.descripcion}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type='button'
+              variant='outline'
+              disabled={!notaVentaId}
+              isLoading={cargarCierreMutation.isPending}
+              onClick={() => cargarCierreMutation.mutate()}
+            >
+              Cargar
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className='space-y-2'>
         <Label>Embalajes a producir</Label>
         <Select value='' onValueChange={agregarEmbalaje}>
