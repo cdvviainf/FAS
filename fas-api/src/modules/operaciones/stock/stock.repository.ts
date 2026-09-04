@@ -37,7 +37,7 @@ export async function listPalletsConLineas() {
   })
 }
 
-// Gestión de Pallets (2026-09-02, compras.md §4.8): solo valida existencia
+// Calificación de Pallets (2026-09-02, compras.md §4.8): solo valida existencia
 // — la restricción del selector de Nota Calidad/Condición por especie es
 // client-side (decisión del usuario, sin validación dura en backend).
 export async function getPalletParaEdicion(id: number) {

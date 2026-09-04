@@ -149,7 +149,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     staleTime: 5 * 60_000,
   })
   // Restringidas por la especie de la solicitud (si está definida), igual
-  // que en Operaciones > Gestión de Pallets — sin especie, se muestra el
+  // que en Calidad > Calificación de Pallets — sin especie, se muestra el
   // catálogo completo sin filtrar.
   const notasCalidadValidas = useMemo(() => {
     const todas = (notasCalidad?.data ?? []).filter((n) => !n.bloqueado)

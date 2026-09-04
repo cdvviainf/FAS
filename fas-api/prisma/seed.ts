@@ -29,20 +29,21 @@ const itemsMenu = [
   // Ventas
   { codigo: 'VENTAS_NV', nombre: 'Cierre Comercial', seccion: 'Ventas', ruta: '/dashboard/ventas/cierre', esAccion: false, orden: 40 },
   { codigo: 'VENTAS_EMBARQUES', nombre: 'Embarques', seccion: 'Ventas', ruta: '/dashboard/ventas/embarques', esAccion: false, orden: 41 },
-  { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', seccion: 'Ventas', ruta: '/dashboard/ventas/cobranza', esAccion: false, orden: 42 },
   // Operaciones
   { codigo: 'OPER_MATERIALES', nombre: 'Materiales', seccion: 'Operaciones', ruta: '/dashboard/configuracion/articulos', esAccion: false, orden: 50 },
   // Orden de Compra de Materiales (2026-09-03, materiales.md §4.9) — ítem
   // propio, separado de OPER_MATERIALES, mismo patrón que COMPRAS_OC.
-  { codigo: 'MATERIALES_OC', nombre: 'Órdenes de Compra de Materiales', seccion: 'Operaciones', ruta: '/dashboard/operaciones/materiales/ordenes-compra', esAccion: false, orden: 52 },
-  // Gestión de Pallets (2026-09-02, compras.md §4.8): edita Nota de
-  // Calidad/Condición y Completo/Incompleto de un Pallet ya recepcionado —
-  // separado del reporte de solo lectura REPORTES_STOCK_FRUTA.
-  { codigo: 'OPERACIONES_GESTION_PALLETS', nombre: 'Gestión de Pallets', seccion: 'Operaciones', ruta: '/dashboard/operaciones/pallets', esAccion: false, orden: 51 },
+  { codigo: 'MATERIALES_OC', nombre: 'Orden de Compra de Materiales', seccion: 'Operaciones', ruta: '/dashboard/operaciones/materiales/ordenes-compra', esAccion: false, orden: 52 },
+  // Facturación y Cobranza (2026-09-04) — nueva sección propia después de
+  // Ventas; VENTAS_COBRANZA se reubica aquí (mismo codigo, no se huerfana
+  // PerfilAcceso) y FIN_FACTURACION queda superseded por los 2 ítems nuevos
+  // más específicos (Exportación/Nacional). Sin backend/pantalla aún.
+  { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/cobranza', esAccion: false, orden: 63 },
+  { codigo: 'FACT_EXPORTACION', nombre: 'Facturación Exportación', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/exportacion', esAccion: false, orden: 61 },
+  { codigo: 'FACT_NACIONAL', nombre: 'Facturación Nacional', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/nacional', esAccion: false, orden: 62 },
   // Finanzas
   { codigo: 'FIN_COSTOS', nombre: 'Gestión de Costos', seccion: 'Finanzas', ruta: '/dashboard/finanzas/costos', esAccion: false, orden: 60 },
   { codigo: 'FIN_PAGOS', nombre: 'Gestión de Pagos', seccion: 'Finanzas', ruta: '/dashboard/finanzas/pagos', esAccion: false, orden: 61 },
-  { codigo: 'FIN_FACTURACION', nombre: 'Facturación', seccion: 'Finanzas', ruta: '/dashboard/finanzas/facturacion', esAccion: false, orden: 62 },
   // Calidad
   // ruta = prefijo común '/dashboard/calidad' (no solo '/solicitudes'): cubre
   // también /inspeccion-compra (decisión de negocio, Christian, 2026-07-30).
@@ -57,6 +58,13 @@ const itemsMenu = [
   { codigo: 'CAL_RECLAMOS', nombre: 'Reclamos', seccion: 'Calidad', ruta: '/dashboard/calidad/reclamos', esAccion: false, orden: 72 },
   { codigo: 'RECLAMO_VALORIZACION', nombre: 'Valorización Reclamo', seccion: 'Calidad', ruta: null, esAccion: true, orden: 73 },
   { codigo: 'RECLAMO_CIERRE', nombre: 'Cierre/Reapertura Reclamo', seccion: 'Calidad', ruta: null, esAccion: true, orden: 74 },
+  // Calificación de Pallets (antes "Gestión de Pallets" bajo Operaciones,
+  // reubicado a Calidad 2026-09-04 — decisión de negocio, Christian): edita
+  // Nota de Calidad/Condición y Completo/Incompleto de un Pallet ya
+  // recepcionado, separado del reporte de solo lectura REPORTES_STOCK_FRUTA.
+  // Mismo `codigo` que antes (`OPERACIONES_GESTION_PALLETS`) a propósito: el
+  // upsert es por `codigo`, así no se huerfanan los PerfilAcceso existentes.
+  { codigo: 'OPERACIONES_GESTION_PALLETS', nombre: 'Calificación de Pallets', seccion: 'Calidad', ruta: '/dashboard/operaciones/pallets', esAccion: false, orden: 75 },
   // Liquidaciones
   { codigo: 'LIQ_CLIENTES', nombre: 'Liquidación Clientes', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/clientes', esAccion: false, orden: 80 },
   { codigo: 'LIQ_COSTOS', nombre: 'Matriz de Costos', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/costos', esAccion: false, orden: 81 },
@@ -198,6 +206,18 @@ async function main() {
     await prisma.perfilAcceso.deleteMany({ where: { itemMenuId: operStockObsoleto.id } })
     await prisma.itemMenu.delete({ where: { id: operStockObsoleto.id } })
     console.log(`OPER_STOCK migrado a REPORTES_STOCK_FRUTA: ${accesosExistentes.length} acceso(s) trasladados.`)
+  }
+
+  // Limpieza de ítem superseded (2026-09-04): FIN_FACTURACION se reemplaza por
+  // FACT_EXPORTACION + FACT_NACIONAL (split 1:2, sin mapeo 1:1 de nivel que
+  // migrar). Sin pantalla/backend aún, así que no hay acceso real que
+  // preservar más allá de la sync ADMIN de abajo (que recrea el acceso TOTAL
+  // para los 2 ítems nuevos).
+  const finFacturacionObsoleto = await prisma.itemMenu.findUnique({ where: { codigo: 'FIN_FACTURACION' } })
+  if (finFacturacionObsoleto) {
+    await prisma.perfilAcceso.deleteMany({ where: { itemMenuId: finFacturacionObsoleto.id } })
+    await prisma.itemMenu.delete({ where: { id: finFacturacionObsoleto.id } })
+    console.log('FIN_FACTURACION eliminado (superseded por FACT_EXPORTACION/FACT_NACIONAL).')
   }
 
   // Sincronizar accesos TOTAL para el perfil ADMIN a todos los ítems de menú.

@@ -58,10 +58,21 @@ export const navGroups: NavGroup[] = [
         items: [
           { title: 'Cierre Comercial',   url: '/dashboard/ventas/cierre',     icon: 'forms'   },
           { title: 'Embarques',         url: '/dashboard/ventas/embarques',  icon: 'post'    },
-          { title: 'Cobranza / CRM',    url: '/dashboard/ventas/cobranza',   icon: 'billing' },
-          { title: 'Reclamos',          url: '/dashboard/ventas/reclamos',   icon: 'warning' }
+          { title: 'Reclamos',          url: '/dashboard/ventas/reclamos',   icon: 'warning', disabled: true }
         ]
       }
+    ]
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FACTURACIÓN Y COBRANZA
+  // ═══════════════════════════════════════════════════════════════════════════
+  {
+    label: 'Facturación y Cobranza',
+    items: [
+      { title: 'Facturación Exportación', url: '/dashboard/facturacion/exportacion', icon: 'post',    isActive: false, items: [], disabled: true },
+      { title: 'Facturación Nacional',     url: '/dashboard/facturacion/nacional',    icon: 'post',    isActive: false, items: [], disabled: true },
+      { title: 'Cobranza / CRM',           url: '/dashboard/facturacion/cobranza',    icon: 'billing', isActive: false, items: [], disabled: true }
     ]
   },
 
@@ -78,11 +89,11 @@ export const navGroups: NavGroup[] = [
         icon: 'materiales',
         isActive: false,
         items: [
-          { title: 'Órdenes de Compra', url: '/dashboard/operaciones/materiales/ordenes-compra', icon: 'post'           },
-          { title: 'Movimientos',        url: '/dashboard/operaciones/movimientos',    icon: 'tiposMovimiento' }
+          { title: 'Orden de Compra de Materiales', url: '/dashboard/operaciones/materiales/ordenes-compra', icon: 'post'           },
+          { title: 'Movimientos de Materiales',      url: '/dashboard/operaciones/movimientos',    icon: 'tiposMovimiento' },
+          { title: 'Proforma de Venta', url: '#', icon: 'billing', isActive: false, items: [], disabled: true }
         ]
-      },
-      { title: 'Gestión de Pallets', url: '/dashboard/operaciones/pallets', icon: 'bodega', isActive: false, items: [] }
+      }
     ]
   },
 
@@ -100,7 +111,7 @@ export const navGroups: NavGroup[] = [
         items: [
           { title: 'Contrato',          url: '/dashboard/productores/contrato',         icon: 'post'         },
           { title: 'Cuenta Corriente',  url: '/dashboard/productores/cuenta-corriente', icon: 'billing'      },
-          { title: 'Solicitud de Pago', url: '/dashboard/productores/pagos',            icon: 'trendingDown' }
+          { title: 'Solicitud de Pago', url: '/dashboard/productores/pagos',            icon: 'trendingDown', disabled: true }
         ]
       },
       {
@@ -109,9 +120,9 @@ export const navGroups: NavGroup[] = [
         icon: 'billing',
         isActive: false,
         items: [
-          { title: 'Liquidación Clientes',  url: '/dashboard/liquidaciones/clientes',       icon: 'trendingUp' },
-          { title: 'Ajustes de Precios',    url: '/dashboard/liquidaciones/ajustes-precios', icon: 'adjustments' },
-          { title: 'Liquidación Productor', url: '/dashboard/liquidaciones/productores',    icon: 'post'       }
+          { title: 'Liquidación Clientes',  url: '/dashboard/liquidaciones/clientes',       icon: 'trendingUp', disabled: true },
+          { title: 'Ajustes de Precios',    url: '/dashboard/liquidaciones/ajustes-precios', icon: 'adjustments', disabled: true },
+          { title: 'Liquidación Productor', url: '/dashboard/liquidaciones/productores',    icon: 'post', disabled: true       }
         ]
       }
     ]
@@ -124,9 +135,16 @@ export const navGroups: NavGroup[] = [
     label: 'Calidad',
     items: [
       {
-        title: 'Inspección Compra',
+        title: 'Inspección de Compra',
         url: '/dashboard/calidad/inspeccion-compra',
         icon: 'calidad',
+        isActive: false,
+        items: []
+      },
+      {
+        title: 'Calificación de Pallets',
+        url: '/dashboard/operaciones/pallets',
+        icon: 'bodega',
         isActive: false,
         items: []
       }
@@ -139,9 +157,8 @@ export const navGroups: NavGroup[] = [
   {
     label: 'Finanzas',
     items: [
-      { title: 'Gestión de Costos', url: '/dashboard/finanzas/costos',      icon: 'trendingDown', isActive: false, items: [] },
-      { title: 'Gestión de Pagos',  url: '/dashboard/finanzas/pagos',       icon: 'billing',      isActive: false, items: [] },
-      { title: 'Facturación (DTE)', url: '/dashboard/finanzas/facturacion', icon: 'post',         isActive: false, items: [] }
+      { title: 'Gestión de Costos', url: '/dashboard/finanzas/costos',      icon: 'trendingDown', isActive: false, items: [], disabled: true },
+      { title: 'Gestión de Pagos',  url: '/dashboard/finanzas/pagos',       icon: 'billing',      isActive: false, items: [], disabled: true }
     ]
   },
 
@@ -223,7 +240,7 @@ export const navGroups: NavGroup[] = [
           { title: 'Productores',              url: '/dashboard/configuracion/productores',            icon: 'teams'   },
           { title: 'Conceptos de Liquidación', url: '/dashboard/configuracion/conceptos-liquidacion', icon: 'forms'   },
           { title: 'Conceptos Cta. Cte.',      url: '/dashboard/configuracion/conceptos-cta-cte',     icon: 'billing' },
-          { title: 'Matriz de Costos',         url: '/dashboard/configuracion/matriz-costos',         icon: 'billing' }
+          { title: 'Matriz de Costos',         url: '/dashboard/configuracion/matriz-costos',         icon: 'billing', disabled: true }
         ]
       },
 
@@ -235,9 +252,9 @@ export const navGroups: NavGroup[] = [
         isActive: false,
         items: [
           { title: 'Tipos de Defecto',       url: '/dashboard/configuracion/tipos-defecto',            icon: 'page'  },
-          { title: 'Grupos de Defecto',      url: '/dashboard/configuracion/grupos-defecto',           icon: 'page'  },
-          { title: 'Defectos',               url: '/dashboard/configuracion/defectos',                 icon: 'page'  },
-          { title: 'Características Madurez',url: '/dashboard/configuracion/caracteristicas-madurez',  icon: 'forms' },
+          { title: 'Grupos de Defecto',      url: '/dashboard/configuracion/grupos-defecto',           icon: 'page', disabled: true  },
+          { title: 'Defectos',               url: '/dashboard/configuracion/defectos',                 icon: 'page', disabled: true  },
+          { title: 'Características Madurez',url: '/dashboard/configuracion/caracteristicas-madurez',  icon: 'forms', disabled: true },
           { title: 'Notas de Calidad',       url: '/dashboard/configuracion/notas-calidad',            icon: 'page'  },
           { title: 'Notas de Condición',     url: '/dashboard/configuracion/notas-condicion',          icon: 'page'  }
         ]
@@ -250,10 +267,10 @@ export const navGroups: NavGroup[] = [
         icon: 'warning',
         isActive: false,
         items: [
-          { title: 'Escalas de Calificación', url: '/dashboard/configuracion/riesgo/escalas',      icon: 'page'        },
-          { title: 'Ponderadores',            url: '/dashboard/configuracion/riesgo/ponderadores', icon: 'adjustments' },
-          { title: 'Tasa Financiera Mensual', url: '/dashboard/configuracion/riesgo/tasa-mensual', icon: 'billing'     },
-          { title: 'Configuración del Score', url: '/dashboard/configuracion/riesgo/score',         icon: 'settings'    }
+          { title: 'Escalas de Calificación', url: '/dashboard/configuracion/riesgo/escalas',      icon: 'page', disabled: true        },
+          { title: 'Ponderadores',            url: '/dashboard/configuracion/riesgo/ponderadores', icon: 'adjustments', disabled: true },
+          { title: 'Tasa Financiera Mensual', url: '/dashboard/configuracion/riesgo/tasa-mensual', icon: 'billing', disabled: true     },
+          { title: 'Configuración del Score', url: '/dashboard/configuracion/riesgo/score',         icon: 'settings', disabled: true    }
         ]
       },
 
