@@ -204,7 +204,7 @@
           "progreso": 100
         },
         {
-          "nombre": "Consulta de stock por receta",
+          "nombre": "Reporte de stock por receta",
           "horasEstimadas": 0,
           "progreso": 100
         },
@@ -219,25 +219,6 @@
           "nombre": "Mantenedores (Unidad de Medida, Etiqueta, Tipos de Movimiento, Artículos y Recetas)",
           "horasEstimadas": 0,
           "progreso": 100
-        }
-      ]
-    },
-    {
-      "id": 88,
-      "modulo": "Gestión de Materiales — Orden de Compra",
-      "seccion": "Operaciones",
-      "etapa": 1,
-      "progreso": 0,
-      "estado": "Pendiente",
-      "horasEstimadas": 0,
-      "horasUtilizadas": 0,
-      "inicioFecha": "2026-09-03",
-      "terminoFecha": "2026-09-07",
-      "subEtapas": [
-        {
-          "nombre": "Orden de Compra de Materiales (a proveedor)",
-          "horasEstimadas": 0,
-          "progreso": 0
         }
       ]
     },
@@ -896,19 +877,20 @@
         "progreso": 100
       },
       {
-        "id": 43,
-        "nombre": "Consulta de stock por receta",
+        "id": 89,
+        "nombre": "Orden de Compra de Materiales",
         "modulo": "Gestión de Materiales",
         "moduloId": 41,
         "tipo": "subEtapa",
         "etapa": 1,
-        "inicioFecha": "2026-08-25",
-        "terminoFecha": "2026-08-26",
-        "duracionDias": 2,
-        "horasEstimadas": 10,
+        "inicioFecha": "2026-09-03",
+        "terminoFecha": "2026-09-07",
+        "duracionDias": 3,
+        "horasEstimadas": 15,
         "horasUtilizadas": 0,
-        "progreso": 100
+        "progreso": 80
       },
+
       {
         "id": 44,
         "nombre": "Proforma de Venta de Materiales",
@@ -938,16 +920,16 @@
         "progreso": 100
       },
       {
-        "id": 84,
-        "nombre": "Reporte Stock por Receta",
+        "id": 43,
+        "nombre": "Reporte de stock por receta",
         "modulo": "Gestión de Materiales",
         "moduloId": 41,
         "tipo": "subEtapa",
         "etapa": 1,
-        "inicioFecha": "2026-08-30",
-        "terminoFecha": "2026-08-30",
-        "duracionDias": 1,
-        "horasEstimadas": 5,
+        "inicioFecha": "2026-08-25",
+        "terminoFecha": "2026-08-26",
+        "duracionDias": 2,
+        "horasEstimadas": 10,
         "horasUtilizadas": 0,
         "progreso": 100
       },
@@ -958,24 +940,10 @@
         "moduloId": 41,
         "tipo": "subEtapa",
         "etapa": 1,
-        "inicioFecha": "2026-08-31",
-        "terminoFecha": "2026-08-31",
+        "inicioFecha": "2026-09-09",
+        "terminoFecha": "2026-09-09",
         "duracionDias": 1,
         "horasEstimadas": 5,
-        "horasUtilizadas": 0,
-        "progreso": 0
-      },
-      {
-        "id": 89,
-        "nombre": "Orden de Compra de Materiales (a proveedor)",
-        "modulo": "Gestión de Materiales — Orden de Compra",
-        "moduloId": 88,
-        "tipo": "subEtapa",
-        "etapa": 1,
-        "inicioFecha": "2026-09-03",
-        "terminoFecha": "2026-09-07",
-        "duracionDias": 3,
-        "horasEstimadas": 15,
         "horasUtilizadas": 0,
         "progreso": 0
       },

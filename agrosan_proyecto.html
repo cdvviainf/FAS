@@ -517,6 +517,9 @@
   .gt-row.gt-etapa-row .gt-cell { background:#EFEAE0; font-size:12.5px; text-transform:uppercase; letter-spacing:.03em; }
   .gt-row.gt-child:hover .gt-cell, .gt-row.gt-parent:hover .gt-cell { background:#EFEAE0; }
   .gt-row.gt-hidden { display:none; }
+  .gt-row.gt-status-atrasado .gt-cell { background:#FCE9E6; }
+  .gt-row.gt-status-adelantado .gt-cell { background:#E4F5EC; }
+  .gt-head-row-2 .gt-cell.gt-daycell.gt-today-col { background:var(--red); color:white; }
   .gt-toggle { width:14px; height:14px; display:inline-flex; align-items:center; justify-content:center; margin-right:6px; cursor:pointer; color:var(--muted); font-size:9px; flex:0 0 auto; user-select:none; }
   .gt-toggle.gt-leaf { visibility:hidden; }
   .gt-indent { display:inline-flex; align-items:center; overflow:hidden; text-overflow:ellipsis; }
@@ -531,9 +534,11 @@
   .gt-bar.gt-parentbar .gt-bar-done { background:rgba(255,255,255,.5); }
   .gt-conn { position:absolute; inset:0; pointer-events:none; overflow:visible; }
   .gt-conn path { fill:none; stroke:#B9C2CF; stroke-width:1.5; }
+  .gt-todayline { position:absolute; top:0; width:2px; background:var(--red); z-index:1; pointer-events:none; }
   .gt-legend { display:flex; gap:16px; margin-top:12px; font-size:12px; color:var(--muted); align-items:center; flex-wrap:wrap; }
   .gt-legend span { display:inline-flex; align-items:center; gap:6px; }
   .gt-legend i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .gt-legend i.gt-legend-line { width:2px; height:14px; border-radius:0; background:var(--red); }
   .gt-note { font-size:11.5px; color:var(--muted); margin-top:8px; line-height:1.5; }
 
   #mockups { background:var(--light); }
@@ -1464,6 +1469,27 @@ function renderGantt(d){
     const right = xPx(t.terminoFecha) + COLW/7; // incluye el día de término completo
     return { left, width: Math.max(3, right-left-2) };
   };
+  // ---- Semana actual (para línea vertical "hoy" + comparación atrasado/adelantado) ----
+  const now = new Date();
+  const hoyStr = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  const hoy = parseD(hoyStr);
+  const hoyOffsetDays = dayOffset(hoyStr);
+  const showTodayLine = hoyOffsetDays >= 0 && hoyOffsetDays <= totalDays;
+  const todayWeekIdx = Math.floor(hoyOffsetDays/7);
+  const UMBRAL_ATRASO = 8; // puntos de % de diferencia para considerar atraso/adelanto real
+  function taskStatus(inicioFecha, terminoFecha, progreso){
+    const p = progreso||0;
+    if(p>=100) return null;
+    const ini = parseD(inicioFecha), fin = parseD(terminoFecha);
+    let esperado;
+    if(hoy<=ini) esperado = 0;
+    else if(hoy>=fin) esperado = 100;
+    else esperado = ((hoy-ini)/(fin-ini))*100;
+    const delta = p - esperado;
+    if(delta <= -UMBRAL_ATRASO) return 'atrasado';
+    if(delta >= UMBRAL_ATRASO) return 'adelantado';
+    return null;
+  }
   const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const monthFmt = (dt)=> MESES[dt.getUTCMonth()] + ' ' + dt.getUTCFullYear();
   const isoWeek = (dt)=>{
@@ -1514,7 +1540,8 @@ function renderGantt(d){
   COLS.forEach((c,i)=> headRow2 += cellSticky(i,'',c.label));
   for(let w=0; w<weeks; w++){
     const dt = new Date(gridStart); dt.setUTCDate(dt.getUTCDate()+w*7);
-    headRow2 += `<div class="gt-cell gt-daycell" style="width:${COLW}px">S${isoWeek(dt)}</div>`;
+    const todayCls = w===todayWeekIdx ? ' gt-today-col' : '';
+    headRow2 += `<div class="gt-cell gt-daycell${todayCls}" style="width:${COLW}px" title="${w===todayWeekIdx?'Semana actual':''}">S${isoWeek(dt)}</div>`;
   }
   headRow2 += `</div>`;
   const headRow = headRow1 + headRow2;
@@ -1527,7 +1554,9 @@ function renderGantt(d){
     dispId++;
     const indent = level*16;
     const toggle = hasChildren ? `<span class="gt-toggle" data-toggle="${rowId}">▾</span>` : `<span class="gt-toggle gt-leaf">·</span>`;
-    let html = `<div class="gt-row ${hasChildren?'gt-parent':'gt-child'} ${hasChildren?'gt-branch':''} ${kind==='etapa'?'gt-etapa-row':''} ${extraCls||''}" data-row-id="${rowId}" ${parentRowId?`data-parent-row="${parentRowId}"`:''} style="${gridColsAttr}">`;
+    const status = !blank ? taskStatus(inicioFecha, terminoFecha, progreso) : null;
+    const statusCls = status ? 'gt-status-'+status : '';
+    let html = `<div class="gt-row ${hasChildren?'gt-parent':'gt-child'} ${hasChildren?'gt-branch':''} ${kind==='etapa'?'gt-etapa-row':''} ${statusCls} ${extraCls||''}" data-row-id="${rowId}" ${parentRowId?`data-parent-row="${parentRowId}"`:''} style="${gridColsAttr}">`;
     html += cellSticky(0,'gt-num', dispId);
     html += cellSticky(1,'gt-tarea', `<span class="gt-indent" style="padding-left:${indent}px" title="${nombre}">${toggle}${nombre}</span>`);
     if(blank){
@@ -1617,14 +1646,31 @@ function renderGantt(d){
     renderNivelModulos(modulosEtapa, 1, eId, blankEtapa);
   }
 
+  const todayLineHtml = showTodayLine
+    ? `<div class="gt-todayline" id="gt-todayline" style="left:${stickyTotal + xPx(hoyStr)}px" title="Semana actual"></div>`
+    : '';
+
   document.getElementById('gantt-host').innerHTML =
     `<div class="gt-wrap" id="gt-wrap">
        <div class="gt-table">${headRow}${bodyRows}</div>
+       ${todayLineHtml}
      </div>
-     <p class="gt-note">"Horas Ext." = horas estimadas × % de avance (estimado, no es un registro real de horas trabajadas). Agenda en días hábiles (Lun–Vie), secuencial y sin paralelismo entre módulos. Columna de calendario: número de semana ISO 8601.</p>`;
+     <div class="gt-legend">
+       ${showTodayLine ? '<span><i class="gt-legend-line"></i>Semana actual</span>' : ''}
+       <span><i style="background:#FCE9E6;border:1px solid #E8A79C"></i>Atrasada</span>
+       <span><i style="background:#E4F5EC;border:1px solid #9BD6B4"></i>Adelantada</span>
+     </div>
+     <p class="gt-note">"Horas Ext." = horas estimadas × % de avance (estimado, no es un registro real de horas trabajadas). Agenda en días hábiles (Lun–Vie), secuencial y sin paralelismo entre módulos. Columna de calendario: número de semana ISO 8601. Atrasada/adelantada compara el % de avance real contra el esperado según la fecha de hoy (umbral ${UMBRAL_ATRASO} puntos).</p>`;
 
   // ---- Expandir/contraer (cascada por ancestros) ----
   const wrap = document.getElementById('gantt-host');
+  const todayLineEl = document.getElementById('gt-todayline');
+  function updateTodayLineHeight(){
+    if(!todayLineEl) return;
+    const tableEl = wrap.querySelector('.gt-table');
+    if(tableEl) todayLineEl.style.height = tableEl.offsetHeight + 'px';
+  }
+  updateTodayLineHeight();
   const parentOf = {};
   wrap.querySelectorAll('[data-row-id]').forEach(row=>{
     const id = row.getAttribute('data-row-id'), p = row.getAttribute('data-parent-row');
@@ -1645,6 +1691,7 @@ function renderGantt(d){
       const id = t.getAttribute('data-toggle');
       t.textContent = expanded.has(id) ? '▾' : '▸';
     });
+    updateTodayLineHeight();
   }
   wrap.querySelectorAll('[data-toggle]').forEach(t=>{
     t.addEventListener('click', ()=>{
