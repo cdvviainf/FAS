@@ -24,3 +24,9 @@ template-starter/
 
 # Duplicado de docker/pgadmin-servers.json
 pgadmin-servers.json
+
+# Documentos
+XLS/
+Docs/
+
+
