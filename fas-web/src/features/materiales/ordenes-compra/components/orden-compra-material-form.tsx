@@ -454,7 +454,7 @@ export function OrdenCompraMaterialForm({ ordenCompraMaterialId }: OrdenCompraMa
                   <div className='space-y-1.5 md:col-span-2'>
                     <Label>Artículo <span className='text-destructive'>*</span></Label>
                     <Select value={linea.articuloId ? String(linea.articuloId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}>
-                      <SelectTrigger><SelectValue placeholder='Seleccionar artículo...' /></SelectTrigger>
+                      <SelectTrigger className='w-full'><SelectValue placeholder='Seleccionar artículo...' /></SelectTrigger>
                       <SelectContent>
                         {articulos.map((a) => (
                           <SelectItem key={a.id} value={String(a.id)}>{a.codigo} — {a.descripcion}</SelectItem>
