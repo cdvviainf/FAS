@@ -20,6 +20,9 @@ const includeDetalle = {
   detalle: {
     include: { articulo: { select: { id: true, codigo: true, descripcion: true } } },
   },
+  // R23: permite al frontend saber si esta recepción ya fue anulada
+  // (movimientoReverso != null) sin una consulta aparte.
+  movimientoReverso: { select: { id: true } },
 } satisfies Prisma.MovimientoInclude
 
 function buildWhere(filters: MovimientoListFilters): Prisma.MovimientoWhereInput {
@@ -383,6 +386,21 @@ async function validarYCerrarOrdenCompraMaterial(
   }
 }
 
+// R6: la salida se valoriza al PMP vigente pero no lo modifica. Compartido
+// entre confirmarMovimientoTransaccional (SALIDA/TRASLADO) y
+// anularRecepcionTransaccional (movimiento inverso de una recepción, R23).
+async function aplicarSalida(tx: Tx, articuloId: number, bodegaId: number, cantidad: number): Promise<void> {
+  const saldo = await getOrCreateSaldo(tx, articuloId, bodegaId)
+  const cantidadActual = Number(saldo.cantidad)
+  if (cantidadActual < cantidad) {
+    throw new StockInsuficienteError(articuloId, bodegaId, cantidadActual, cantidad)
+  }
+  await tx.saldoArticulo.update({
+    where: { articuloId_bodegaId: { articuloId, bodegaId } },
+    data: { cantidad: cantidadActual - cantidad },
+  })
+}
+
 /**
  * Relee el movimiento (cabecera + detalle) bajo un advisory lock, revalida
  * TODO (R2/R9/R10/R11/R12/R14 — MOV-003, QA ronda 2) contra ese estado recién
@@ -436,16 +454,7 @@ export async function confirmarMovimientoTransaccional(movimientoId: number) {
           data: { cantidad: nuevaCantidad, costoPromedio: nuevoPmp },
         })
       } else if (clase === 'SALIDA') {
-        const saldo = await getOrCreateSaldo(tx, linea.articuloId, movimiento.bodegaOrigenId!)
-        const cantidadActual = Number(saldo.cantidad)
-        if (cantidadActual < cantidad) {
-          throw new StockInsuficienteError(linea.articuloId, movimiento.bodegaOrigenId!, cantidadActual, cantidad)
-        }
-        // R6: la salida se valoriza al PMP vigente pero no lo modifica
-        await tx.saldoArticulo.update({
-          where: { articuloId_bodegaId: { articuloId: linea.articuloId, bodegaId: movimiento.bodegaOrigenId! } },
-          data: { cantidad: cantidadActual - cantidad },
-        })
+        await aplicarSalida(tx, linea.articuloId, movimiento.bodegaOrigenId!, cantidad)
       } else {
         // TRASLADO: R6 — el PMP viaja con la cantidad al destino
         const saldoOrigen = await getOrCreateSaldo(tx, linea.articuloId, movimiento.bodegaOrigenId!)
@@ -479,6 +488,129 @@ export async function confirmarMovimientoTransaccional(movimientoId: number) {
       data: { estado: 'CONFIRMADO', entidadId: movimiento.entidadId },
       include: includeDetalle,
     })
+  })
+}
+
+// ─── R23: anular una recepción (Movimiento CONFIRMADO vinculado a una OC) ───
+
+// Exportado para que tipos-movimiento.service.ts bloquee su creación/edición
+// manual desde el mantenedor genérico (MAT-R24-003, QA ronda 2) — es un
+// registro de sistema, no un tipo de movimiento normal.
+export const CODIGO_TIPO_REVERSO_RECEPCION = 'REVERSO_RECEPCION_OC'
+
+// Uno por empresa — se crea la primera vez que se anula una recepción en esa
+// empresa, no requiere que el administrador lo cree a mano en el mantenedor
+// de Tipos de Movimiento (materiales.md R23).
+// MAT-R24-002 (QA ronda 1): findUnique + create (no atómico) corría una
+// carrera entre dos anulaciones concurrentes de OCs distintas de la misma
+// empresa (ninguna toma el mismo lock por movimiento/OC) — la segunda podía
+// fallar con P2002 en vez de reutilizar el tipo recién creado por la primera.
+// `upsert` es una única sentencia atómica a nivel de base de datos.
+//
+// MAT-R24-003 (QA ronda 2): `update` restablece SIEMPRE la configuración
+// canónica (no solo al crear) — el mantenedor de Tipos de Movimiento ya
+// bloquea tocar este código (tipos-movimiento.service.ts), pero esto es la
+// segunda capa de defensa: si de todos modos quedara un registro con datos
+// incorrectos (ej. import manual a la BD), el reverso lo autocorrige antes
+// de usarlo en vez de heredar una clase/módulo equivocado silenciosamente.
+async function getOrCreateTipoMovimientoReverso(tx: Tx, empresaId: number) {
+  const configCanonica = {
+    descripcion: 'Reverso de Recepción (Orden de Compra de Materiales)',
+    clase: 'SALIDA' as const,
+    modulos: ['MATERIALES' as const],
+    requierePrecio: false,
+    emiteDTE: false,
+    activo: true,
+  }
+  return tx.tipoMovimiento.upsert({
+    where: { empresaId_codigo: { empresaId, codigo: CODIGO_TIPO_REVERSO_RECEPCION } },
+    create: { empresaId, codigo: CODIGO_TIPO_REVERSO_RECEPCION, ...configCanonica },
+    update: configCanonica,
+  })
+}
+
+/**
+ * Anula la recepción de una Orden de Compra de Materiales (materiales.md
+ * R23): genera un Movimiento de SALIDA "espejo" del ENTRADA original (mismas
+ * líneas/cantidades, misma bodega), lo deja CONFIRMADO de inmediato (no pasa
+ * por BORRADOR — es un reverso automático, no una edición manual), y revierte
+ * la OC vinculada de RECEPCIONADA a EMITIDA. El Movimiento original NUNCA se
+ * toca (R1 — un CONFIRMADO es inmutable), queda intacto para el kardex. Falla
+ * con StockInsuficienteError (422 vía el service) si el material ya no tiene
+ * saldo suficiente para revertir (se consumió/trasladó después de recibido).
+ */
+export async function anularRecepcionTransaccional(movimientoOriginalId: number, userId: string) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_MOVIMIENTO_PROCESO}::int, ${movimientoOriginalId}::int)`
+
+    const original = await tx.movimiento.findFirst({
+      where: { id: movimientoOriginalId, eliminadoEn: null },
+      include: { detalle: true, tipoMovimiento: { select: { clase: true } } },
+    })
+    if (!original) throw new ValidationError('El movimiento ya no existe')
+    if (original.estado !== 'CONFIRMADO') throw new ValidationError('Solo se puede anular un movimiento CONFIRMADO (R23)')
+    if (original.ordenCompraMaterialId == null) {
+      throw new ValidationError('Solo se puede anular la recepción de un movimiento vinculado a una Orden de Compra de Materiales (R23)')
+    }
+    if (original.tipoMovimiento.clase !== 'ENTRADA') {
+      // Defensivo: R22 ya impide vincular una OC a algo que no sea ENTRADA.
+      throw new ValidationError('Solo se puede anular un movimiento de clase Entrada (R23)')
+    }
+
+    const yaAnulado = await tx.movimiento.findFirst({
+      where: { movimientoInversoDeId: movimientoOriginalId, eliminadoEn: null },
+      select: { id: true },
+    })
+    if (yaAnulado) throw new ValidationError('Este movimiento ya fue anulado (R23)')
+
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_ORDEN_COMPRA_MATERIAL_PROCESO}::int, ${original.ordenCompraMaterialId}::int)`
+    const oc = await tx.ordenCompraMaterial.findFirst({
+      where: { id: original.ordenCompraMaterialId, eliminadoEn: null },
+      select: { id: true, estado: true },
+    })
+    if (!oc) throw new ValidationError('La Orden de Compra de Materiales vinculada ya no existe (R23)')
+    if (oc.estado !== 'RECEPCIONADA') {
+      throw new ValidationError('La Orden de Compra de Materiales vinculada ya no está RECEPCIONADA (R23)')
+    }
+
+    const articuloIds = [...new Set(original.detalle.map((d) => d.articuloId))]
+    const articulos = await tx.articulo.findMany({
+      where: { id: { in: articuloIds } },
+      select: { id: true, controlaStock: true },
+    })
+    const controlaStockPorArticulo = new Map(articulos.map((a) => [a.id, a.controlaStock]))
+
+    const tipoReverso = await getOrCreateTipoMovimientoReverso(tx, original.empresaId)
+
+    const inverso = await tx.movimiento.create({
+      data: {
+        empresaId: original.empresaId,
+        tipoMovimientoId: tipoReverso.id,
+        entidadId: original.entidadId,
+        fechaMovimiento: new Date(),
+        bodegaOrigenId: original.bodegaDestinoId,
+        usuarioId: userId,
+        estado: 'CONFIRMADO',
+        movimientoInversoDeId: original.id,
+        detalle: {
+          create: original.detalle.map((d) => ({
+            articuloId: d.articuloId,
+            cantidad: d.cantidad,
+            precioUnitario: d.precioUnitario,
+          })),
+        },
+      },
+      include: includeDetalle,
+    })
+
+    for (const linea of inverso.detalle) {
+      if (!controlaStockPorArticulo.get(linea.articuloId)) continue // R8, igual que al confirmar
+      await aplicarSalida(tx, linea.articuloId, original.bodegaDestinoId!, Number(linea.cantidad))
+    }
+
+    await tx.ordenCompraMaterial.update({ where: { id: original.ordenCompraMaterialId }, data: { estado: 'EMITIDA' } })
+
+    return inverso
   })
 }
 

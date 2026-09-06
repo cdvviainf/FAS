@@ -254,6 +254,29 @@ export async function confirmarMovimiento(id: number, userId: string) {
   }
 }
 
+// R23 (materiales.md): anula la recepción de una Orden de Compra de
+// Materiales generando el movimiento inverso — ver
+// repo.anularRecepcionTransaccional para el detalle transaccional. El
+// pre-check acá es solo UX (mensaje rápido); la autoridad real revalida todo
+// bajo lock dentro del repositorio, mismo patrón que confirmarMovimiento.
+export async function anularRecepcion(movimientoId: number, userId: string) {
+  const movimiento = await obtenerMovimiento(movimientoId)
+  if (movimiento.estado !== 'CONFIRMADO') {
+    throw new ValidationError('Solo se puede anular un movimiento CONFIRMADO (R23)')
+  }
+  if (movimiento.ordenCompraMaterialId == null) {
+    throw new ValidationError('Solo se puede anular la recepción de un movimiento vinculado a una Orden de Compra de Materiales (R23)')
+  }
+  try {
+    return await repo.anularRecepcionTransaccional(movimientoId, userId)
+  } catch (err) {
+    if (err instanceof StockInsuficienteError) {
+      throw new ValidationError(err.message)
+    }
+    throw err
+  }
+}
+
 // ─── Saldos ──────────────────────────────────────────────────────────────────
 
 export async function listarSaldos(filters: { bodegaId?: number; tipo?: string; bajoCritico?: boolean }) {

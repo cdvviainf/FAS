@@ -28,6 +28,12 @@ export interface Movimiento {
   // Vincula el ingreso a stock con la Orden de Compra de Materiales que lo
   // autoriza (materiales.md R22) — solo aplica a movimientos clase ENTRADA.
   ordenCompraMaterialId: number | null
+  // R23: si este movimiento ES el reverso de otro (generado por "Anular
+  // recepción"), apunta al original — siempre null para movimientos normales.
+  movimientoInversoDeId: number | null
+  // R23: si esta recepción YA fue anulada, apunta al movimiento de reverso
+  // generado — null si aún no se ha anulado (o si no aplica).
+  movimientoReverso: { id: number } | null
   fechaRegistro: string
   fechaMovimiento: string
   bodegaOrigenId: number | null

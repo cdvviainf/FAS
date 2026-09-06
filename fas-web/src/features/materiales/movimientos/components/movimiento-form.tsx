@@ -27,6 +27,7 @@ import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { articulosService } from '../../articulos/service'
 import { tiposMovimientoService } from '../../tipos-movimiento/service'
 import { ordenesCompraMaterialService } from '../../ordenes-compra/service'
+import { ordenesCompraMaterialKeys } from '../../ordenes-compra/queries'
 import { movimientosService } from '../service'
 import { movimientosKeys, movimientoDetailOptions } from '../queries'
 import { ESTADO_MOVIMIENTO_LABELS } from '../types'
@@ -92,6 +93,7 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
   const [deleteLineaId, setDeleteLineaId] = useState<number | null>(null)
   const [confirmarOpen, setConfirmarOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [anularOpen, setAnularOpen] = useState(false)
 
   const { data: movimientoRes, isLoading } = useQuery({ ...movimientoDetailOptions(movimientoId ?? 0), enabled: isEdit })
   const movimiento = movimientoRes?.data
@@ -301,6 +303,23 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
     onError: (e: Error) => toast.error(e.message || 'Error al confirmar el movimiento'),
   })
 
+  const anularRecepcionMutation = useMutation({
+    mutationFn: () => movimientosService.anularRecepcion(movimientoId!),
+    onSuccess: (res) => {
+      toast.success(`Recepción anulada — se generó el movimiento inverso #${res.data.id}`)
+      setAnularOpen(false)
+      queryClient.invalidateQueries({ queryKey: movimientosKeys.detail(movimientoId!) })
+      queryClient.invalidateQueries({ queryKey: movimientosKeys.all })
+      if (movimiento?.ordenCompraMaterialId) {
+        queryClient.invalidateQueries({ queryKey: ordenesCompraMaterialKeys.detail(movimiento.ordenCompraMaterialId) })
+      }
+    },
+    onError: (e: Error) => {
+      toast.error(e.message || 'Error al anular la recepción')
+      setAnularOpen(false)
+    },
+  })
+
   function handleGuardarLinea() {
     if (editingLineaId) updateLineaMutation.mutate(linea)
     else addLineaMutation.mutate(linea)
@@ -369,7 +388,7 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
 
   return (
     <div className='space-y-6'>
-      <div className='flex items-center gap-2'>
+      <div className='flex flex-wrap items-center gap-2'>
         <Badge variant={movimiento.estado === 'CONFIRMADO' ? 'default' : 'secondary'}>
           {ESTADO_MOVIMIENTO_LABELS[movimiento.estado]}
         </Badge>
@@ -381,6 +400,23 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
             <Link href={`/dashboard/operaciones/materiales/ordenes-compra/${movimiento.ordenCompraMaterialId}`}>
               Ver Orden de Compra de Materiales vinculada
             </Link>
+          </Button>
+        )}
+        {movimiento.movimientoInversoDeId && (
+          <Badge variant='outline'>
+            Reverso del Movimiento #{movimiento.movimientoInversoDeId}
+          </Badge>
+        )}
+        {movimiento.movimientoReverso && (
+          <Button asChild type='button' variant='link' size='sm' className='h-auto p-0 text-xs'>
+            <Link href={`/dashboard/operaciones/movimientos/${movimiento.movimientoReverso.id}`}>
+              Recepción anulada — ver movimiento inverso #{movimiento.movimientoReverso.id}
+            </Link>
+          </Button>
+        )}
+        {puedeEscribir && movimiento.estado === 'CONFIRMADO' && movimiento.ordenCompraMaterialId && !movimiento.movimientoReverso && (
+          <Button type='button' variant='destructive' size='sm' onClick={() => setAnularOpen(true)}>
+            <Icons.trash className='mr-1 h-4 w-4' /> Anular recepción
           </Button>
         )}
       </div>
@@ -602,6 +638,14 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
         onClose={() => setDeleteLineaId(null)}
         onConfirm={() => removeLineaMutation.mutate(deleteLineaId!)}
         loading={removeLineaMutation.isPending}
+      />
+      <AlertModal
+        isOpen={anularOpen}
+        onClose={() => setAnularOpen(false)}
+        onConfirm={() => anularRecepcionMutation.mutate()}
+        loading={anularRecepcionMutation.isPending}
+        title='Anular recepción'
+        description='Se generará un movimiento de Salida que revierte exactamente lo ingresado y la Orden de Compra de Materiales vinculada volverá a EMITIDA (bloqueada para editar, pero eliminable). Este movimiento original no se modifica. Falla si el material ya no tiene saldo suficiente (se consumió o trasladó después de recibido).'
       />
     </div>
   )

@@ -417,11 +417,19 @@ model OrdenCompraMaterialCuotaPago {
 ```
 Solo aplicable a movimientos `clase = ENTRADA`. Ver R22.
 
+**`Movimiento` gana un segundo campo (2026-09-04, R24)** — reverso de recepción:
+```prisma
+  movimientoInversoDeId Int?        @unique
+  movimientoInversoDe   Movimiento? @relation("MovimientoReverso", fields: [movimientoInversoDeId], references: [id])
+  movimientoReverso     Movimiento? @relation("MovimientoReverso")
+```
+Self-relation 1:1 — vive en el Movimiento `SALIDA` generado por "Anular recepción", apuntando al Movimiento `ENTRADA` original. `@unique` impide anular el mismo original dos veces. Ver R24.
+
 ---
 
 ## 5. Reglas de negocio / invariantes
 
-- **R1 — Estado del movimiento (reescrita 2026-08-29, supersede la versión anterior).** Un `Movimiento` nace `BORRADOR`: cabecera y líneas (`MovimientoDetalle`) se editan, agregan y eliminan libremente, **sin efecto en `SaldoArticulo` todavía**. `tipoMovimientoId` queda fijo desde la creación (define bodegas/entidad/DTE de todo el movimiento) — si se eligió mal, se borra el borrador y se crea uno nuevo. La acción explícita `POST /movimientos/:id/confirmar` revalida todas las reglas (R2/R9/R10/R11/R12/R14) contra el estado persistido y recién ahí aplica el motor de PMP/saldo (antes disparado al crear) dentro de una transacción, dejando el movimiento `CONFIRMADO`. Un `CONFIRMADO` es inmutable — no se edita ni se borra, se corrige con un movimiento inverso.
+- **R1 — Estado del movimiento (reescrita 2026-08-29, supersede la versión anterior).** Un `Movimiento` nace `BORRADOR`: cabecera y líneas (`MovimientoDetalle`) se editan, agregan y eliminan libremente, **sin efecto en `SaldoArticulo` todavía**. `tipoMovimientoId` queda fijo desde la creación (define bodegas/entidad/DTE de todo el movimiento) — si se eligió mal, se borra el borrador y se crea uno nuevo. La acción explícita `POST /movimientos/:id/confirmar` revalida todas las reglas (R2/R9/R10/R11/R12/R14) contra el estado persistido y recién ahí aplica el motor de PMP/saldo (antes disparado al crear) dentro de una transacción, dejando el movimiento `CONFIRMADO`. Un `CONFIRMADO` es inmutable — no se edita ni se borra, se corrige con un movimiento inverso (caso concreto para la recepción de una Orden de Compra de Materiales: R24).
 - **R2 — Saldo no negativo.** `SALIDA`/`TRASLADO` no pueden dejar el saldo de la bodega de origen bajo cero → 422.
 - **R3 — Costeo y stock.** `ESTANDAR` ⇒ `valorEstandar` requerido y `controlaStock = false`. `PROMEDIO_PONDERADO` ⇒ `controlaStock = true`.
 - **R4 — Servicio sin stock.** `SERVICIO` debe ser `ESTANDAR`; no controla stock.
@@ -483,7 +491,7 @@ La proforma solo se edita en `BORRADOR`. Una vez `FACTURADA`, se corrige anuland
 
 ### R20 — Estado y edición (OrdenCompraMaterial)
 
-Nace `BORRADOR`: cabecera y líneas editables/eliminables libremente. La acción explícita pasa la OC a `EMITIDA` — **bloquea edición de cabecera y líneas** (a diferencia de la OC de fruta, que sigue editable hasta la Recepción — aquí se decidió bloquear antes, en `EMITIDA`, por ser el punto en que el compromiso se formaliza con el proveedor; decisión de negocio, 2026-09-03). Para corregir una OC `EMITIDA` sin Movimiento asociado: se anula (soft delete, `eliminadoEn`) y se crea una nueva — no hay estado `ANULADA` propio en v1. **Eliminar** (`DELETE /ordenes-compra/:id`) es más permisivo que editar: acepta `BORRADOR` **o** `EMITIDA` siempre que no tenga un Movimiento activo (`BORRADOR` o `CONFIRMADO`, no eliminado) vinculado → 422 si tiene uno. `RECEPCIONADA` nunca se puede eliminar.
+Nace `BORRADOR`: cabecera y líneas editables/eliminables libremente. La acción explícita pasa la OC a `EMITIDA` — **bloquea edición de cabecera y líneas** (a diferencia de la OC de fruta, que sigue editable hasta la Recepción — aquí se decidió bloquear antes, en `EMITIDA`, por ser el punto en que el compromiso se formaliza con el proveedor; decisión de negocio, 2026-09-03). Para corregir una OC `EMITIDA` sin Movimiento asociado: se anula (soft delete, `eliminadoEn`) y se crea una nueva — no hay estado `ANULADA` propio en v1. **Eliminar** (`DELETE /ordenes-compra/:id`) es más permisivo que editar: acepta `BORRADOR` **o** `EMITIDA` siempre que no tenga un Movimiento activo (`BORRADOR` o `CONFIRMADO`, no eliminado) vinculado → 422 si tiene uno. `RECEPCIONADA` no se puede eliminar directamente **pero ya no es terminal**: revierte a `EMITIDA` (y desde ahí sí es eliminable) si su Movimiento de recepción se anula — ver R24 (decisión de negocio, 2026-09-04, corrige la redacción original de esta regla que dejaba `RECEPCIONADA` sin ninguna salida).
 
 ### R21 — Condición de pago sin cuota por unidad
 
@@ -502,6 +510,16 @@ Un `Movimiento` clase `ENTRADA` puede referenciar una `OrdenCompraMaterial` vía
 ### R23 — Numeración
 
 `numero` se genera automáticamente al crear: `OCM-{AAAA}-{NNNN}`, correlativo por año (mismo mecanismo de `pg_advisory_xact_lock` que `OrdenCompra` de fruta — `compras.md` §4.2 — con un namespace de lock propio para no serializarse contra la numeración de OC de fruta).
+
+### R24 — Anular recepción (decisión de negocio, 2026-09-04)
+
+`POST /movimientos/:id/anular-recepcion` anula la recepción de una Orden de Compra de Materiales, solo si el Movimiento es `CONFIRMADO` y está vinculado a una OC (`ordenCompraMaterialId` no nulo; clase `ENTRADA` por R22). No aplica a movimientos sin OC vinculada — la inmutabilidad de un `CONFIRMADO` cualquiera (R1) sigue siendo absoluta fuera de este caso.
+
+- Genera un `Movimiento` nuevo, clase `SALIDA`, con el `TipoMovimiento` reservado `REVERSO_RECEPCION_OC` (uno por empresa, se crea automáticamente la primera vez que se usa — no requiere que el administrador lo cree a mano en el mantenedor de Tipos de Movimiento). Mismas líneas (`articuloId`/`cantidad`) que el Movimiento original, misma bodega (la `bodegaDestino` original pasa a ser la `bodegaOrigen` del reverso).
+- El reverso nace **directamente `CONFIRMADO`** (no pasa por `BORRADOR` — es un reverso automático de sistema, no una edición manual) y aplica el efecto de saldo de inmediato, dentro de la misma transacción que revierte la OC (abajo). Respeta R2: si el material ya no tiene saldo suficiente (se consumió en una Receta o se trasladó después de recibido) → 422, no se anula nada.
+- El Movimiento original **nunca se modifica ni se borra** (R1) — queda intacto para el kardex. Queda vinculado al reverso vía `Movimiento.movimientoInversoDeId` (único — un Movimiento no puede anularse dos veces).
+- En la misma transacción, la `OrdenCompraMaterial` vinculada vuelve de `RECEPCIONADA` a `EMITIDA` — **no** a `BORRADOR`: sigue bloqueada para editar (R20), pero ya es eliminable de nuevo (si no queda otro Movimiento activo vinculado).
+- Permiso: mismo nivel que "Registrar ingreso" — `OPER_MATERIALES` `TOTAL`.
 
 ---
 
@@ -547,6 +565,7 @@ Un `Movimiento` clase `ENTRADA` puede referenciar una `OrdenCompraMaterial` vía
 | PATCH | `/movimientos/:id/detalle/:detalleId` | edita línea — solo mientras `BORRADOR` |
 | DELETE | `/movimientos/:id/detalle/:detalleId` | elimina línea — solo mientras `BORRADOR` |
 | POST | `/movimientos/:id/confirmar` | revalida R2/R9/R10/R11/R12/R14/R5/R6 contra lo persistido, aplica el motor de PMP/saldo en una transacción y pasa a `CONFIRMADO` (inmutable) |
+| POST | `/movimientos/:id/anular-recepcion` | solo si `CONFIRMADO` y vinculado a una OC de Materiales (R24) — genera el Movimiento inverso `SALIDA`, revierte el saldo y la OC vuelve a `EMITIDA`. 422 si ya se anuló o no hay saldo suficiente |
 
 > PDF y Guía de Despacho de un Movimiento van por el Motor de Documentos genérico (Etapa 4), no por `/api/materiales`: `GET /api/documentos/movimiento/:id.pdf` (comprobante, siempre disponible) y `POST /api/documentos/movimiento-guia-despacho/:id/emitir` (interna, no válida como DTE — solo si `tipoMovimiento.emiteDTE` y el movimiento está `CONFIRMADO`).
 
@@ -593,7 +612,7 @@ Un `Movimiento` clase `ENTRADA` puede referenciar una `OrdenCompraMaterial` vía
 | `/articulos/[id]` | Detalle | Datos, saldos por bodega, recetas (si es embalaje), documentos. |
 | `/articulos/[id]/recetas` | Recetas del embalaje | Cabecera (código, descripción, cantidad a producir) + grilla de detalle (componente, cantidad a consumir decimal). |
 | `/tipos-movimiento` | Mantenedor de tipos | Código, descripción, módulos (multiselect), clase, requiere precio, entidad relacionada, emite DTE. |
-| `/movimientos/nuevo`, `/movimientos/:id` | **Materiales y envases** | Pantalla completa (reescrita 2026-08-29, mismo patrón que la Orden de Compra): `/nuevo` solo pide tipo de movimiento + fecha y crea la cabecera `BORRADOR`; `/:id` habilita cabecera editable (entidad, bodega origen/destino, guía/referencia, **bloque DTE** condicional si `emiteDTE`: transportista, RUT y nombre chofer, placas, hora salida/llegada) + tabla de líneas con agregar/editar/eliminar (mutaciones inmediatas contra el backend, sin efecto en saldo). Acciones: "Guardar cabecera", "Eliminar borrador", "Confirmar movimiento" (aplica el motor de PMP y bloquea edición), y en el menú de la fila del listado: "Descargar PDF" y "Emitir Guía de Despacho" (esta última solo si `emiteDTE` y `CONFIRMADO`). |
+| `/movimientos/nuevo`, `/movimientos/:id` | **Materiales y envases** | Pantalla completa (reescrita 2026-08-29, mismo patrón que la Orden de Compra): `/nuevo` solo pide tipo de movimiento + fecha y crea la cabecera `BORRADOR`; `/:id` habilita cabecera editable (entidad, bodega origen/destino, guía/referencia, **bloque DTE** condicional si `emiteDTE`: transportista, RUT y nombre chofer, placas, hora salida/llegada) + tabla de líneas con agregar/editar/eliminar (mutaciones inmediatas contra el backend, sin efecto en saldo). Acciones: "Guardar cabecera", "Eliminar borrador", "Confirmar movimiento" (aplica el motor de PMP y bloquea edición), y en el menú de la fila del listado: "Descargar PDF" y "Emitir Guía de Despacho" (esta última solo si `emiteDTE` y `CONFIRMADO`). Si `CONFIRMADO` y vinculado a una OC de Materiales sin anular todavía: botón **"Anular recepción"** (R24) — genera el movimiento inverso y muestra el vínculo cruzado (badge "Reverso del Movimiento #X" en el inverso, link "ver movimiento inverso" en el original). |
 | `/consulta-stock-receta` | Analizador de stock | Multiselect de embalajes + cantidad c/u, multiselect de bodegas. Resultado: por componente, stock en **cada** bodega + badge de estado: `OK` (verde), `Stock Crítico` (amarillo), `Sin Stock` (rojo), `Trasladar` (amarillo). |
 | `/ordenes-compra/nuevo`, `/ordenes-compra/:id` | Orden de Compra de Materiales | Mismo patrón que la OC de fruta y que `/movimientos/:id`: `/nuevo` crea la cabecera `BORRADOR` (proveedor, forma/condición de pago, moneda); `/:id` habilita cabecera + tabla de líneas (artículo, cantidad, precio unitario, monto calculado) con agregar/editar/eliminar mientras `BORRADOR`. Acciones: "Guardar cabecera", "Eliminar borrador", "Emitir OC" (bloquea edición, R20). Desde una OC `EMITIDA`, botón "Registrar ingreso" que abre `/movimientos/nuevo?ordenCompraMaterialId=:id` precargando entidad y líneas sugeridas desde la OC. |
 
@@ -633,6 +652,9 @@ UI con shadcn/ui. Los campos condicionales (valor estándar, bloque DTE) se mues
 - **CA28 (R22-borrador):** OC `EMITIDA` sin Movimiento; se crea un Movimiento `BORRADOR` con `ordenCompraMaterialId`; se elimina (soft delete) ese Movimiento antes de confirmar → la OC vuelve a estar disponible para un nuevo Movimiento.
 - **CA29 (R22-completo, OCM-QA-003):** OC con líneas de artículos A y B; Movimiento confirma solo el artículo A → 422 ("no hay recepción parcial"), la OC permanece `EMITIDA`.
 - **CA30 (R20-eliminación, OCM-QA-002):** OC `EMITIDA` sin Movimiento → `DELETE` la elimina (soft delete). OC `EMITIDA` con un Movimiento `BORRADOR` o `CONFIRMADO` activo vinculado → `DELETE` → 422.
+- **CA31 (R24-anular):** OC `RECEPCIONADA` con su Movimiento `CONFIRMADO` vinculado; `POST /movimientos/:id/anular-recepcion` → se crea el Movimiento `SALIDA` inverso `CONFIRMADO`, el saldo vuelve al valor previo a la recepción, la OC pasa a `EMITIDA`, y la OC ahora sí acepta `DELETE` (ya no tiene Movimiento activo).
+- **CA32 (R24-doble-anulación):** Sobre el mismo Movimiento del CA31, se intenta `POST /movimientos/:id/anular-recepcion` una segunda vez → 422 ("ya fue anulado").
+- **CA33 (R24-sin-saldo):** El material recibido se consumió después (ej. usado en una Receta) dejando saldo insuficiente; se intenta anular la recepción → 422 (`StockInsuficienteError`), no se crea el reverso, la OC permanece `RECEPCIONADA`.
 
 ---
 

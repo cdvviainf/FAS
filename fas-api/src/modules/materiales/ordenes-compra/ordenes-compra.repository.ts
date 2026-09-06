@@ -78,17 +78,33 @@ async function lockYVerificarBorrador(tx: Tx, ordenCompraMaterialId: number): Pr
 // (OCM-QA-002, ronda 1). Bajo el mismo lock que lockYVerificarBorrador para
 // serializar contra la vinculación de un Movimiento (materiales/movimientos.
 // repository.ts, R22).
+//
+// MAT-R24-001 (QA ronda 1): un Movimiento CONFIRMADO ya anulado (tiene
+// `movimientoReverso`, R24) sigue con `eliminadoEn = null` a propósito — no
+// se borra nunca, queda intacto para el kardex — pero su efecto en stock ya
+// se revirtió, así que NO debe seguir contando como "activo" para bloquear
+// la eliminación de la OC (si no, una OC revertida a EMITIDA nunca sería
+// eliminable, incumpliendo R24/CA31).
 async function lockYVerificarEliminable(tx: Tx, ordenCompraMaterialId: number): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_ORDEN_COMPRA_MATERIAL_PROCESO}::int, ${ordenCompraMaterialId}::int)`
   const actual = await tx.ordenCompraMaterial.findFirst({
     where: { id: ordenCompraMaterialId, eliminadoEn: null },
-    select: { estado: true, movimientos: { where: { eliminadoEn: null }, select: { id: true } } },
+    select: {
+      estado: true,
+      movimientos: {
+        where: { eliminadoEn: null },
+        select: { id: true, movimientoReverso: { select: { id: true } } },
+      },
+    },
   })
   if (!actual) throw new ValidationError('La Orden de Compra de Materiales ya no existe')
   if (actual.estado === 'RECEPCIONADA') {
     throw new ValidationError('La Orden de Compra de Materiales ya fue recepcionada y no puede eliminarse')
   }
-  if (actual.movimientos.length > 0) {
+  const movimientosActivos = actual.movimientos.filter(
+    (m: { id: number; movimientoReverso: { id: number } | null }) => !m.movimientoReverso,
+  )
+  if (movimientosActivos.length > 0) {
     throw new ValidationError('La Orden de Compra de Materiales tiene un Movimiento activo vinculado y no puede eliminarse')
   }
 }

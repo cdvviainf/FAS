@@ -1,5 +1,6 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './tipos-movimiento.repository.js'
+import { CODIGO_TIPO_REVERSO_RECEPCION } from '../movimientos/movimientos.repository.js'
 import type { TipoMovimientoCreateInput, TipoMovimientoUpdateInput, TipoMovimientoListFilters } from './tipos-movimiento.types.js'
 
 export async function listarTiposMovimiento(filters: TipoMovimientoListFilters) {
@@ -14,13 +15,25 @@ export async function obtenerTipoMovimiento(id: number) {
   return tipo
 }
 
+// MAT-R24-003 (QA ronda 2): REVERSO_RECEPCION_OC es un registro de sistema
+// (materiales.md R24) que "Anular recepción" crea y mantiene por su cuenta —
+// no se puede crear a mano con una configuración distinta (ej. clase
+// ENTRADA) ni editar después (desactivarlo, cambiarle la clase/módulos).
+function assertNoEsCodigoReservado(codigo: string) {
+  if (codigo === CODIGO_TIPO_REVERSO_RECEPCION) {
+    throw new ValidationError(`El código "${CODIGO_TIPO_REVERSO_RECEPCION}" está reservado para el sistema (Anular recepción, R24) y no puede crearse ni editarse manualmente`)
+  }
+}
+
 export async function crearTipoMovimiento(body: TipoMovimientoCreateInput) {
+  assertNoEsCodigoReservado(body.codigo)
   const existente = await repo.findTipoMovimientoByCodigo(body.codigo)
   if (existente) throw new ValidationError(`Ya existe un tipo de movimiento con código "${body.codigo}"`)
   return repo.createTipoMovimiento(body)
 }
 
 export async function actualizarTipoMovimiento(id: number, body: TipoMovimientoUpdateInput) {
-  await obtenerTipoMovimiento(id)
+  const actual = await obtenerTipoMovimiento(id)
+  assertNoEsCodigoReservado(actual.codigo)
   return repo.updateTipoMovimiento(id, body)
 }

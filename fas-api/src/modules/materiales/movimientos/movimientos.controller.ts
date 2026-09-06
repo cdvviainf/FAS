@@ -68,6 +68,12 @@ export async function confirmar(req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ data: movimiento })
 }
 
+export async function anularRecepcion(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = movimientoParamsSchema.parse(req.params)
+  const inverso = await service.anularRecepcion(id, req.fasUserId!)
+  return reply.status(201).send({ data: inverso })
+}
+
 // ─── Saldos ──────────────────────────────────────────────────────────────────
 
 const saldosQuerySchema = z.object({

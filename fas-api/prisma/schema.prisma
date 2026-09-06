@@ -1837,6 +1837,15 @@ model Movimiento {
   ordenCompraMaterialId Int?
   ordenCompraMaterial   OrdenCompraMaterial? @relation(fields: [empresaId, ordenCompraMaterialId], references: [empresaId, id])
 
+  // Reverso automático de un Movimiento CONFIRMADO vinculado a una Orden de
+  // Compra de Materiales (materiales.md R23) — este campo vive en el
+  // Movimiento de SALIDA generado por "Anular recepción", apuntando al
+  // Movimiento ENTRADA original. @@unique evita anular el mismo original dos
+  // veces (también reforzado en la capa de servicio, bajo el mismo lock).
+  movimientoInversoDeId Int?        @unique
+  movimientoInversoDe   Movimiento? @relation("MovimientoReverso", fields: [movimientoInversoDeId], references: [id])
+  movimientoReverso     Movimiento? @relation("MovimientoReverso")
+
   detalle   MovimientoDetalle[]
   usuarioId String
   creadoEn  DateTime            @default(now())

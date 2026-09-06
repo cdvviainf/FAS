@@ -14,6 +14,7 @@ export async function movimientosRoutes(app: FastifyInstance) {
   app.patch('/movimientos/:id/detalle/:detalleId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.updateLinea)
   app.delete('/movimientos/:id/detalle/:detalleId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.removeLinea)
   app.post('/movimientos/:id/confirmar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.confirmar)
+  app.post('/movimientos/:id/anular-recepcion', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.anularRecepcion)
 
   app.get('/saldos', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listSaldos)
   app.post('/consulta-stock-receta', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.consultaStockReceta)

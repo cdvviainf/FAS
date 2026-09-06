@@ -45,4 +45,7 @@ export const movimientosService = {
   async confirmar(id: number): Promise<{ data: Movimiento }> {
     return api.post(`materiales/movimientos/${id}/confirmar`).json()
   },
+  async anularRecepcion(id: number): Promise<{ data: Movimiento }> {
+    return api.post(`materiales/movimientos/${id}/anular-recepcion`).json()
+  },
 }
