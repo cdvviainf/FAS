@@ -45,6 +45,7 @@ export const movimientoListQuerySchema = z.object({
   fechaDesde: z.string().date().optional(),
   fechaHasta: z.string().date().optional(),
   bodegaId: z.coerce.number().int().positive().optional(),
+  elegibleProforma: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(500).default(20),
 })

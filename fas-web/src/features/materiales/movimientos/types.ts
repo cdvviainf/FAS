@@ -97,6 +97,9 @@ export interface MovimientoListFilters {
   fechaDesde?: string
   fechaHasta?: string
   bodegaId?: number
+  // R25: solo Movimiento CONFIRMADO, clase SALIDA, tipoMovimiento.generaProforma
+  // = true, sin Proforma de Venta vigente — candidatos para crear una.
+  elegibleProforma?: boolean
   page?: number
   limit?: number
 }

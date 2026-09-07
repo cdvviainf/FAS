@@ -91,7 +91,7 @@ export const navGroups: NavGroup[] = [
         items: [
           { title: 'Orden de Compra de Materiales', url: '/dashboard/operaciones/materiales/ordenes-compra', icon: 'post'           },
           { title: 'Movimientos de Materiales',      url: '/dashboard/operaciones/movimientos',    icon: 'tiposMovimiento' },
-          { title: 'Proforma de Venta', url: '#', icon: 'billing', isActive: false, items: [], disabled: true }
+          { title: 'Proforma de Venta', url: '/dashboard/operaciones/materiales/proformas', icon: 'billing' }
         ]
       }
     ]
@@ -337,6 +337,7 @@ export const navGroups: NavGroup[] = [
           { title: 'Parámetros',            url: '/dashboard/configuracion/parametros',        icon: 'adjustments'     },
           { title: 'Prefijos de Código',    url: '/dashboard/configuracion/prefijos-codigo',   icon: 'adjustments'     },
           { title: 'Templates de Carga',    url: '/dashboard/configuracion/templates-carga',   icon: 'forms'           },
+          { title: 'Integraciones',         url: '/dashboard/configuracion/integraciones',     icon: 'externalLink'    },
           { title: 'Configuración General', url: '/dashboard/configuracion/general',           icon: 'settings'        }
         ]
       },

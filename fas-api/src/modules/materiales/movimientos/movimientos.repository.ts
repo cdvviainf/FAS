@@ -41,6 +41,13 @@ function buildWhere(filters: MovimientoListFilters): Prisma.MovimientoWhereInput
           },
         }
       : {}),
+    ...(filters.elegibleProforma
+      ? {
+          estado: 'CONFIRMADO' as const,
+          tipoMovimiento: { clase: 'SALIDA' as const, generaProforma: true },
+          proformasMaterial: { none: { estado: { not: 'ANULADA' as const } } },
+        }
+      : {}),
   }
 }
 

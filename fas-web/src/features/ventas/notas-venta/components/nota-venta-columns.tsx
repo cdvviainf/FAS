@@ -173,6 +173,25 @@ export const notaVentaColumns: ColumnDef<NotaVentaListItemConEstadoOc>[] = [
     size: 100,
   },
   {
+    id: 'resumenReserva',
+    header: 'Estado Reserva',
+    cell: ({ row }) => {
+      const r = row.original.resumenReserva
+      if (r.totalEmbarques === 0) return <span className='text-xs text-muted-foreground'>—</span>
+      return (
+        <div className='space-y-1 text-xs'>
+          <p className='text-muted-foreground'>Embarques: {r.totalEmbarques}</p>
+          <div className='flex flex-wrap gap-1'>
+            {r.solicitadas > 0 && <Badge variant='secondary'>Solicitadas ({r.solicitadas})</Badge>}
+            {r.confirmadas > 0 && <Badge variant='outline'>Confirmadas ({r.confirmadas})</Badge>}
+            {r.pendientes > 0 && <Badge variant='destructive'>Pendientes ({r.pendientes})</Badge>}
+          </div>
+        </div>
+      )
+    },
+    size: 160,
+  },
+  {
     id: 'actions',
     size: 50,
     cell: ({ row }) => <NotaVentaCellAction notaVenta={row.original} />,

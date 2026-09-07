@@ -39,6 +39,10 @@ export interface MovimientoListFilters {
   fechaDesde?: string
   fechaHasta?: string
   bodegaId?: number
+  // R25: solo Movimiento CONFIRMADO, clase SALIDA, tipoMovimiento.generaProforma
+  // = true, y sin ProformaMaterial ya vinculada — candidatos para crear una
+  // Proforma de Venta de Materiales.
+  elegibleProforma?: boolean
   page?: number
   limit?: number
 }

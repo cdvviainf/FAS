@@ -343,34 +343,68 @@ model InstructivoHijo {
 }
 ```
 
-### 4.3 Solicitud de Reserva
+### 4.3 Solicitud de Reserva (implementado 2026-09-05 — supersede el borrador anterior)
+
+> **Supersesión:** el borrador original de esta sección (modelo `SolicitudReserva` con `gestorLogId` genérico hacia una `Entidad` tipo `GESTOR_LOGISTICO`, pensado para admitir cualquier gestor logístico) nunca se implementó. Lo que se construyó es más simple y concreto: una integración directa con **AGL360**, un sistema propio (no una `Entidad` del mantenedor) que Agrosan está desarrollando en paralelo. Si en el futuro aparece un segundo proveedor de este tipo de servicio, se generaliza entonces — no se modeló por adelantado (YAGNI). Q4 (§10) queda resuelta por la mecánica de abajo, aunque el formato exacto de los campos de AGL360 pueda seguir ajustándose una vez ese sistema exista de verdad.
+
+Generar el Embarque (botón "Solicitar Reserva" en el listado de Cierres) intenta, en el mismo paso, reservar espacio con AGL360:
+
+- **Éxito:** se crean el `Embarque` y su `SolicitudReserva` juntos, `Embarque.estadoReserva = SOLICITADA`.
+- **Falla la integración** (AGL360 no responde, error de red, etc.): no se crea nada todavía — el usuario decide si generar el Embarque igual, sin reserva (`estadoReserva = PENDIENTE`, sin fila `SolicitudReserva`) o cancelar e intentar más tarde.
+- Desde un Embarque `PENDIENTE`, la pestaña "Solicitud de Reserva" del detalle permite reintentar manualmente (mismo mecanismo, ahora sobre el Embarque ya existente).
+- La confirmación llega de vuelta por **webhook** (AGL360 → FAS, `POST /embarques/webhooks/agl360-confirmacion`, contrato real en `Docs/webhook-fas.md` — sin sesión de usuario, autenticado por **firma HMAC-SHA256** del header `X-AGL360-Signature` contra el body crudo, con el secreto compartido `AGL360_WEBHOOK_SECRET`): `Embarque.estadoReserva` pasa a `CONFIRMADA`.
+- Adapter mockeable (mismo patrón documentado para DTE en `CLAUDE.md`): `AGL_PROVIDER=mock|agl360` — en `mock` (default), la llamada saliente siempre "tiene éxito" sin contactar nada externo (`AGL_MOCK_FALLA=true` fuerza el camino de falla para probar el flujo "sin reserva").
+
+> **Actualización (2026-09-07) — contrato real del webhook.** El borrador original de esta sección asumía que la confirmación traería consigo el detalle completo del booking (naviera, nave, contenedor, fechas) y que el body incluiría `empresaId` explícito. El contrato real que AGL360 terminó exponiendo (`Docs/webhook-fas.md`) es más angosto: el único evento hoy es `orden.creada`, que solo informa `{evento, idOrdenServicio, idSolicitudServicio, referencia_externa, estadoOrden: "pendiente"}` — **sin** `empresaId` (se deriva parseando `referencia_externa`, que FAS genera con el formato determinístico `AGL-{empresaId}-{notaVentaId}`) y **sin** ningún dato de booking (ese detalle lo completa el staff de AGL360 después; no existe todavía un endpoint de consulta para leerlo — ver nota en `webhook-fas.md`). Los campos de booking del modelo de abajo quedan declarados para cuando ese endpoint exista, pero esta versión del webhook nunca los puebla.
 
 ```prisma
+enum EstadoReservaEmbarque {
+  PENDIENTE   // sin SolicitudReserva — nunca se intentó o la integración falló y se generó igual
+  SOLICITADA  // SolicitudReserva enviada, esperando confirmación
+  CONFIRMADA  // AGL360 confirmó (webhook "orden.creada") que la Orden de Servicio existe
+}
+
 model SolicitudReserva {
-  id             Int       @id @default(autoincrement())
-  notaVentaId    Int?
-  gestorLogId    Int                               // Entidad tipo GESTOR_LOGISTICO
+  id         Int      @id @default(autoincrement())
+  empresaId  Int
+  embarqueId Int      // a lo más una SolicitudReserva por Embarque (@@unique)
 
-  // Requerimiento (output del sistema)
-  destino        String?
-  viaEmbarqueId  Int?                              // mantenedor Vía de Embarque
-  fechaRequerida DateTime?
+  referenciaFas  String   // lo que enviamos a AGL360 como referencia_externa; nos lo devuelve el webhook para matchear
+  payloadEnviado Json     // snapshot de lo enviado (Docs/api-solicitudes.md)
 
-  // Respuesta del gestor
-  empresaTransporte String?
-  numeroReserva     String?
-  // TODO: naviera, nave, tipo contenedor, etc. según formato de respuesta real
+  // Poblados por el webhook al confirmar (evento "orden.creada").
+  idOrdenServicioAgl     Int?     // idempotencia: reintento de la MISMA notificación no debe duplicar efectos
+  idSolicitudServicioAgl Int?
+  estadoOrdenAgl         String?  // "pendiente" siempre, hoy — el único valor que este evento manda
 
-  observaciones  String?
-  embarques      Embarque[]
+  // Detalle de booking — NO poblados por este webhook (ver nota arriba);
+  // quedan para cuando exista un endpoint de consulta.
+  numeroBooking     String?
+  naviera           String?
+  nave              String?
+  numeroContenedor  String?
+  fechaZarpe        DateTime?
+  fechaRetiroPlanta DateTime?
+  payloadRespuesta  Json?    // el body crudo del webhook, íntegro
 
-  creadoPorId    String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  enviadoEn    DateTime  @default(now())
+  enviadoPor   String
+  confirmadoEn DateTime?
 
-  @@index([gestorLogId])
+  @@unique([empresaId, embarqueId])
+  @@unique([empresaId, referenciaFas])
 }
 ```
+
+**Payload enviado a AGL360**: ver `Docs/api-solicitudes.md` (contrato completo) — implementado en `intentarReservaAgl()` (`embarques.service.ts`), que resuelve los IDs internos de AGL360 (`idCliente`, `idTipoEmbarque`, `idConsignee`, `idPod`, `idProducto`) vía el mantenedor de Integraciones (`Docs/integraciones.md`), nunca hardcodeados. `idProducto` solo se manda si todas las líneas del Cierre comparten una única especie (AGL360 acepta un único producto por solicitud).
+
+`referencia_externa` (`= referenciaFas`) es lo único que el webhook de confirmación usa para resolver el tenant — no hay ningún campo `empresaId` en el payload real de AGL360 (ver actualización arriba).
+
+**Contrato de idempotencia (decisión de negocio, 2026-09-06, IMP-QA-R1-012 QA ronda 2 + arbitraje).** `referenciaFas` es **determinista** (`AGL-{empresaId}-{notaVentaId}`), no un identificador aleatorio por intento — a propósito: si una llamada anterior queda en estado incierto para FAS (timeout, o AGL360 acepta pero el guardado local falla justo después), un reintento para el mismo Cierre manda la **misma** referencia. **AGL360 debe deduplicar por `referenciaFas`**: si ya tiene una reserva con esa referencia, no debe crear una segunda — puede simplemente responder como si la acabara de recibir (o confirmar de nuevo si ya la había procesado). Esto es lo que permite reintentar sin arriesgar una reserva duplicada del lado de AGL360.
+
+Riesgo residual aceptado (deuda documentada, no resuelta con outbox/2PC — desproporcionado mientras AGL360 no tenga un ambiente real para probarlo): si AGL360 acepta la solicitud pero el `INSERT` local de `SolicitudReserva` falla justo después (ej. la BD se cae en ese instante exacto), queda una reserva "huérfana" del lado de AGL360 sin registro en FAS hasta que alguien reintente manualmente (la reintentabilidad por `referenciaFas` determinista mitiga esto, pero no lo elimina si nadie reintenta).
+
+**Idempotencia del lado FAS (webhook entrante, implementado 2026-09-07).** `webhook-fas.md` exige que reintentos de la misma notificación (mismo `idOrdenServicio`, hasta 5 reintentos con esperas crecientes) no dupliquen efectos. `confirmarSolicitudDesdeWebhook` (`embarques.service.ts`) lo cumple así: si `SolicitudReserva.confirmadoEn` ya está seteado y el `idOrdenServicio` entrante coincide con el guardado (`idOrdenServicioAgl`), responde `204` sin volver a escribir nada (no-op). Si en cambio llega un `idOrdenServicio` **distinto** para una Solicitud ya confirmada — algo que el flujo de negocio actual no debería producir (1 Cierre = a lo más 1 Orden) —, se trata como anomalía y responde `409` en vez de sobreescribir silenciosamente.
 
 ---
 
@@ -407,8 +441,8 @@ model SolicitudReserva {
 | POST | `/embarques/:id/contenedores` | Encabezado de contenedor. |
 | POST | `/embarques/:id/contenedores/:cid/asignaciones` | Asignación de fruta, validada contra NV (R8), valor heredado (R5). |
 | GET | `/embarques/:id/instructivos-hijos` | Hijos por punto de retiro (autogenerados en la reserva de pallets, R11). |
-| GET/POST/PATCH | `/reservas[/:id]` | Solicitud + captura de respuesta del gestor. |
-| GET | `/reservas/:id/output` | Genera el documento/listado a enviar al Gestor Logístico. |
+| POST | `/embarques/:id/solicitud-reserva` | Reintento manual de Solicitud de Reserva con AGL360 sobre un Embarque `PENDIENTE` (§4.3). |
+| POST | `/embarques/webhooks/agl360-confirmacion` | Webhook AGL360 → FAS, confirma una Solicitud de Reserva (§4.3, contrato real `Docs/webhook-fas.md`). Sin sesión de usuario — firma HMAC-SHA256 compartida. |
 
 `TODO`: definir validaciones de payload y respuestas de error (patrón 422 como en Reclamos).
 
@@ -455,6 +489,6 @@ Basadas en el sistema legado (screenshots):
 - **✅ Q1 (RESUELTA).** El campo **`Folio`** de la Orden de Embarque **es** el número de instructivo (ej. `MAR0042`) — `Folio` = Número de Instructivo, mismo dato/campo. Desde 2026-08-13 (R10) se **calcula automáticamente** al generar el Embarque, ya no se ingresa a mano. El número es la identidad del instructivo **padre** (el Embarque); los **hijos** por punto de retiro derivan su código automáticamente (`MAR0042-1`, `MAR0042-2`; ver R11). Referenciado por FK al `Embarque` desde Despacho, Compras, Facturas, Reclamos, Liquidaciones, Precios.
 - **Q2.** ¿Puede una NV → Embarque ser también N:1 (varias NV consolidando un Instructivo)? → por resolver (R7).
 - **Q3.** La validación fruta Embarque ⊆ NV (R8), ¿topea además **cantidades**, o solo restringe el catálogo (especie/variedad/artículo/calibre/categoría)?
-- **Q4.** Campos exactos de la **respuesta de reserva** del Gestor Logístico (¿naviera, nave, tipo de contenedor, fechas?).
+- **✅ Q4 (RESUELTA por mecanismo, 2026-09-05).** El "gestor logístico" es AGL360, un sistema propio (no una `Entidad` genérica) — la respuesta llega por webhook a `SolicitudReserva` (§4.3): `numeroBooking`, `naviera`, `nave`, `numeroContenedor`, `fechaZarpe`, `fechaRetiroPlanta` (+ `payloadRespuesta` crudo). El formato exacto puede seguir ajustándose recién cuando AGL360 exista de verdad — la mecánica (webhook + estos campos) ya está definida y construida.
 - **Q5.** Niveles de permiso por perfil/ítem de menú (§3).
 - **Q6.** Programa Comercial: ¿se sistematiza o se descarta definitivamente?

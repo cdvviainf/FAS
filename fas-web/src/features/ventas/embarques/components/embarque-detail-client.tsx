@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { embarqueDetailOptions } from '../queries'
 import { SeleccionarPalletsTab } from './seleccionar-pallets-tab'
 import { DespacharTab } from './despachar-tab'
+import { SolicitudReservaTab } from './solicitud-reserva-tab'
 
 function TabPlaceholder({ titulo }: { titulo: string }) {
   return (
@@ -35,13 +36,13 @@ export function EmbarqueDetailClient({ embarqueId }: { embarqueId: number }) {
 
       <Tabs defaultValue={tabInicial}>
         <TabsList>
-          <TabsTrigger value='espacio'>Solicitar Espacio</TabsTrigger>
+          <TabsTrigger value='espacio'>Solicitud de Reserva</TabsTrigger>
           <TabsTrigger value='pallets'>Seleccionar Pallets</TabsTrigger>
           <TabsTrigger value='instructivos'>Generar Instructivos</TabsTrigger>
           <TabsTrigger value='despacho'>Despachar</TabsTrigger>
         </TabsList>
         <TabsContent value='espacio'>
-          <TabPlaceholder titulo='Solicitar Espacio' />
+          <SolicitudReservaTab embarque={embarque} />
         </TabsContent>
         <TabsContent value='pallets'>
           <SeleccionarPalletsTab embarque={embarque} />

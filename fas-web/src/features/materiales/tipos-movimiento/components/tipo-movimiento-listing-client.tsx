@@ -36,6 +36,7 @@ export function TipoMovimientoListingClient() {
     { id: 'modulos', header: 'Módulos', cell: ({ row }) => row.original.modulos.join(', ') },
     { id: 'requierePrecio', header: 'Precio', cell: ({ row }) => row.original.requierePrecio ? 'Sí' : 'No' },
     { id: 'emiteDTE', header: 'DTE', cell: ({ row }) => row.original.emiteDTE ? 'Sí' : 'No' },
+    { id: 'generaProforma', header: 'Genera Proforma', cell: ({ row }) => row.original.generaProforma ? 'Sí' : 'No' },
     {
       id: 'activo',
       header: 'Estado',

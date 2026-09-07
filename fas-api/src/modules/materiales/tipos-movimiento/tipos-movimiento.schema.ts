@@ -14,6 +14,7 @@ export const tipoMovimientoCreateSchema = z.object({
   requierePrecio: z.boolean().default(false),
   entidadRelacionada: z.enum(TIPO_ENTIDAD_VALUES).optional().nullable(),
   emiteDTE: z.boolean().default(false),
+  generaProforma: z.boolean().default(false),
   activo: z.boolean().default(true),
 })
 

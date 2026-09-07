@@ -3,7 +3,9 @@
 import Link from 'next/link'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/components/icons'
+import { ESTADO_RESERVA_LABELS } from '../types'
 import type { Embarque } from '../types'
 
 export const embarqueColumns: ColumnDef<Embarque>[] = [
@@ -23,6 +25,21 @@ export const embarqueColumns: ColumnDef<Embarque>[] = [
         Folio {row.original.notaVenta.folio}
       </Link>
     ),
+  },
+  {
+    id: 'estadoReserva',
+    accessorKey: 'estadoReserva',
+    header: 'Estado Reserva',
+    enableSorting: false,
+    cell: ({ cell }) => {
+      const estado = cell.getValue<Embarque['estadoReserva']>()
+      return (
+        <Badge variant={estado === 'CONFIRMADA' ? 'default' : estado === 'SOLICITADA' ? 'secondary' : 'destructive'}>
+          {ESTADO_RESERVA_LABELS[estado]}
+        </Badge>
+      )
+    },
+    size: 120,
   },
   {
     id: 'creadoEn',

@@ -37,4 +37,10 @@ export const embarquesService = {
   async despachar(id: number): Promise<{ data: EmbarqueDetalle }> {
     return api.patch(`ventas/embarques/${id}/despachar`).json()
   },
+
+  // ─── Solicitud de Reserva (ventas.md §4.3) ────────────────────────────────
+
+  async solicitarReserva(id: number): Promise<{ data: EmbarqueDetalle }> {
+    return api.post(`ventas/embarques/${id}/solicitud-reserva`).json()
+  },
 }

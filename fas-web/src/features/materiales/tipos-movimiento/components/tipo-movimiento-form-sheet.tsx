@@ -47,6 +47,7 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
   const [requierePrecio, setRequierePrecio] = useState(false)
   const [entidadRelacionada, setEntidadRelacionada] = useState<TipoEntidad | 'none'>('none')
   const [emiteDTE, setEmiteDTE] = useState(false)
+  const [generaProforma, setGeneraProforma] = useState(false)
   const [activo, setActivo] = useState(true)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -61,6 +62,7 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
       setRequierePrecio(item.requierePrecio)
       setEntidadRelacionada(item.entidadRelacionada ?? 'none')
       setEmiteDTE(item.emiteDTE)
+      setGeneraProforma(item.generaProforma)
       setActivo(item.activo)
     } else {
       setCodigo('')
@@ -70,6 +72,7 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
       setRequierePrecio(false)
       setEntidadRelacionada('none')
       setEmiteDTE(false)
+      setGeneraProforma(false)
       setActivo(true)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -97,6 +100,7 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
         requierePrecio,
         entidadRelacionada: entidadRelacionada === 'none' ? null : entidadRelacionada,
         emiteDTE,
+        generaProforma,
         activo,
       }
       if (isEdit) return tiposMovimientoService.update(item!.id, payload)
@@ -145,7 +149,13 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
             </div>
             <div className='space-y-1.5'>
               <Label>Clase <span className='text-destructive'>*</span></Label>
-              <Select value={clase} onValueChange={(v) => setClase(v as ClaseMovimiento)}>
+              <Select
+                value={clase}
+                onValueChange={(v) => {
+                  setClase(v as ClaseMovimiento)
+                  if (v !== 'SALIDA') setGeneraProforma(false)
+                }}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(Object.keys(CLASE_MOVIMIENTO_LABELS) as ClaseMovimiento[]).map((c) => (
@@ -195,6 +205,15 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
           <div className='flex items-center gap-2'>
             <Switch id='emiteDTE' checked={emiteDTE} onCheckedChange={setEmiteDTE} />
             <Label htmlFor='emiteDTE'>Emite DTE (exige datos de transporte)</Label>
+          </div>
+          <div className='flex items-center gap-2'>
+            <Switch
+              id='generaProforma'
+              checked={generaProforma}
+              onCheckedChange={setGeneraProforma}
+              disabled={clase !== 'SALIDA'}
+            />
+            <Label htmlFor='generaProforma'>Genera Proforma de Venta {clase !== 'SALIDA' && <span className='text-xs text-muted-foreground'>(solo Clase Salida)</span>}</Label>
           </div>
           <div className='flex items-center gap-2'>
             <Switch id='activo-tm' checked={activo} onCheckedChange={setActivo} />

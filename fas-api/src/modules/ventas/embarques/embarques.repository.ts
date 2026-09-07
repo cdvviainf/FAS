@@ -1,9 +1,32 @@
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
-import { ValidationError } from '../../../shared/errors.js'
-import { LOCK_NAMESPACE_EMBARQUE_DESPACHO } from '../../../shared/advisory-locks.js'
+import { BusinessError, ValidationError } from '../../../shared/errors.js'
+import { LOCK_NAMESPACE_EMBARQUE_DESPACHO, LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA } from '../../../shared/advisory-locks.js'
 import { palletCalzaConDetalleNV } from './embarques.comparacion.js'
+
+// 502: la integración externa (no FAS) fue la que falló — distingue este
+// caso de un 422 de validación normal para que el frontend sepa mostrar el
+// diálogo "¿Generar Embarque sin reserva?" en vez de un toast genérico.
+// Vive acá (no en el service) porque se lanza DESDE dentro de la transacción
+// de generarEmbarqueTransaccional/solicitarReservaTransaccional — mismo
+// motivo que StockInsuficienteError vive en movimientos.repository.ts.
+export class IntegracionAglFallidaError extends BusinessError {
+  constructor(message: string) {
+    super('AGL_INTEGRACION_FALLIDA', message, 502)
+  }
+}
+
+// Resultado de intentar la integración con AGL360 (implementado en el
+// service, que sabe armar el payload de negocio) — la transacción del
+// repositorio decide qué persistir según esto, pero no sabe llamar a AGL360.
+export interface ResultadoIntentoReserva {
+  ok: boolean
+  referenciaFas?: string
+  payloadEnviado?: unknown
+  payloadRespuesta?: unknown
+  error?: string
+}
 
 const notaVentaRefSelect = { id: true, folio: true }
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
@@ -59,6 +82,7 @@ export async function getEmbarqueById(id: number) {
     include: {
       notaVenta: { select: notaVentaRefSelect },
       pallets: { include: palletInclude, orderBy: { id: 'asc' as const } },
+      solicitudReserva: true,
     },
   })
 }
@@ -176,6 +200,29 @@ export async function getNotaVenta(id: number) {
   })
 }
 
+// Datos para armar el payload de la Solicitud de Reserva (ventas.md §4.3) —
+// en este punto del flujo todavía no hay Embarque ni pallets asignados (eso
+// pasa después, en "Seleccionar Pallets"), así que el "tamaño" que se envía
+// es lo comprometido en el Cierre (cajas de NotaVentaDetalle), no pallets
+// reales.
+// Selección alineada al payload real de AGL360 (Docs/api-solicitudes.md,
+// 2026-09-07) — reemplaza la versión anterior (armada antes de tener la
+// definición real, con campos de texto libre que AGL360 no acepta).
+export async function getNotaVentaParaReserva(id: number) {
+  return prisma.notaVenta.findFirst({
+    where: { id, eliminadoEn: null },
+    select: {
+      folio: true,
+      clienteId: true,
+      consignatarioId: true,
+      tipoEmbarqueId: true,
+      puertoDestinoId: true,
+      direccionDetalle: true,
+      detalles: { select: { especieId: true } },
+    },
+  })
+}
+
 export async function createEmbarque(notaVentaId: number, numeroInstructivo: string, creadoPor: string) {
   return prisma.embarque.create({
     // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
@@ -183,5 +230,159 @@ export async function createEmbarque(notaVentaId: number, numeroInstructivo: str
     // satisfacer el tipo requerido por Prisma.
     data: { empresaId: getEmpresaIdActual()!, notaVentaId, numeroInstructivo, creadoPor },
     include: { notaVenta: { select: notaVentaRefSelect } },
+  })
+}
+
+// IMP-QA-R1-012 (QA ronda 1): el lock serializa TODO el intento (chequeo de
+// numeroInstructivo + llamada a AGL360 vía `procesarReserva` + creación) por
+// notaVentaId — sin esto, dos intentos concurrentes para el mismo Cierre
+// pasaban ambos el chequeo (ninguno había creado nada todavía) y ambos
+// llamaban a AGL360, generando dos solicitudes externas aunque solo una
+// ganara la creación local después. `timeout`/`maxWait` ampliados porque la
+// transacción queda abierta durante la llamada externa (`procesarReserva`,
+// que hace `fetch` — ver agl360.adapter.ts) — aceptable mientras AGL360 no
+// existe de verdad (mock es instantáneo); si el AGL360 real resulta lento,
+// revisar este trade-off (deuda documentada, ventas.md §4.3).
+//
+// `forzarSinReserva` NO se usa para saltarse `procesarReserva` (IMP-QA-R1-013,
+// QA ronda 1: eso permitía a cualquier llamado directo a la API evitar el
+// intento) — solo decide qué hacer SI la integración falla: crear igual en
+// PENDIENTE, o abortar (rollback completo, nada se crea) lanzando
+// IntegracionAglFallidaError para que el frontend ofrezca el diálogo.
+export async function generarEmbarqueTransaccional(
+  notaVentaId: number,
+  numeroInstructivo: string,
+  creadoPor: string,
+  forzarSinReserva: boolean,
+  procesarReserva: () => Promise<ResultadoIntentoReserva>,
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA}::int, ${notaVentaId}::int)`
+
+    const existente = await tx.embarque.findFirst({ where: { numeroInstructivo, eliminadoEn: null } })
+    if (existente) {
+      throw new ValidationError(
+        `Ya existe un Embarque con el número "${numeroInstructivo}" — probablemente ya se generó un Embarque para este Cierre Comercial.`,
+      )
+    }
+
+    const resultado = await procesarReserva()
+    if (!resultado.ok && !forzarSinReserva) {
+      throw new IntegracionAglFallidaError(resultado.error ?? 'No se pudo conectar con AGL360')
+    }
+
+    const empresaId = getEmpresaIdActual()!
+    const embarque = await tx.embarque.create({
+      data: { empresaId, notaVentaId, numeroInstructivo, creadoPor, estadoReserva: resultado.ok ? 'SOLICITADA' : 'PENDIENTE' },
+    })
+    if (resultado.ok) {
+      await tx.solicitudReserva.create({
+        data: {
+          empresaId,
+          embarqueId: embarque.id,
+          referenciaFas: resultado.referenciaFas!,
+          payloadEnviado: resultado.payloadEnviado as Prisma.InputJsonValue,
+          payloadRespuesta: (resultado.payloadRespuesta ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          enviadoPor: creadoPor,
+        },
+      })
+    }
+    return tx.embarque.findFirstOrThrow({
+      where: { id: embarque.id },
+      include: { notaVenta: { select: notaVentaRefSelect } },
+    })
+  }, { timeout: 15_000, maxWait: 15_000 })
+}
+
+// Reintento manual desde un Embarque ya existente en PENDIENTE (pestaña
+// "Solicitud de Reserva" del detalle) — mismo lock (clave embarqueId en vez
+// de notaVentaId) y mismo motivo que generarEmbarqueTransaccional; a
+// diferencia de esa, acá una falla SIEMPRE aborta (no hay "forzar" en el
+// reintento — el Embarque ya existe en PENDIENTE de todos modos, no hay nada
+// que perder con solo re-lanzar el error).
+export async function solicitarReservaTransaccional(
+  embarqueId: number,
+  creadoPor: string,
+  procesarReserva: () => Promise<ResultadoIntentoReserva>,
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA}::int, ${embarqueId}::int)`
+
+    const embarque = await tx.embarque.findFirst({ where: { id: embarqueId, eliminadoEn: null }, select: { estadoReserva: true } })
+    if (!embarque) throw new ValidationError('El Embarque ya no existe')
+    if (embarque.estadoReserva !== 'PENDIENTE') {
+      throw new ValidationError('Este Embarque ya tiene una Solicitud de Reserva enviada')
+    }
+
+    const resultado = await procesarReserva()
+    if (!resultado.ok) {
+      throw new IntegracionAglFallidaError(resultado.error ?? 'No se pudo conectar con AGL360')
+    }
+
+    const empresaId = getEmpresaIdActual()!
+    await tx.solicitudReserva.create({
+      data: {
+        empresaId,
+        embarqueId,
+        referenciaFas: resultado.referenciaFas!,
+        payloadEnviado: resultado.payloadEnviado as Prisma.InputJsonValue,
+        payloadRespuesta: (resultado.payloadRespuesta ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        enviadoPor: creadoPor,
+      },
+    })
+    return tx.embarque.update({
+      where: { id: embarqueId },
+      data: { estadoReserva: 'SOLICITADA' },
+      include: { notaVenta: { select: notaVentaRefSelect } },
+    })
+  }, { timeout: 15_000, maxWait: 15_000 })
+}
+
+// ─── Webhook AGL360 (confirmación) ──────────────────────────────────────────
+
+// El webhook (embarques.controller.ts) extrae el empresaId de
+// `referencia_externa` (el body real de AGL360 no trae empresaId, ver
+// Docs/webhook-fas.md), lo valida contra `Empresa` (modelo no-tenant, no
+// pasa por la extensión) y recién ahí fija `empresaContext` con ese valor
+// ANTES de llamar esta función — por eso acá no se recibe `empresaId`: igual
+// que el resto del repositorio, confía en el contexto ambiente, que la
+// extensión de tenancy ya usa para filtrar automáticamente
+// (prisma-tenancy.ts). `referenciaFas` solo es única DENTRO de una empresa
+// (@@unique([empresaId, referenciaFas])), por eso el orden importa: sin el
+// contexto ya fijado, esta consulta lanzaría EmpresaRequeridaError en vez de
+// filtrar por la empresa correcta.
+export async function getSolicitudPorReferencia(referenciaFas: string) {
+  return prisma.solicitudReserva.findFirst({
+    where: { referenciaFas },
+    select: { id: true, embarqueId: true, confirmadoEn: true, idOrdenServicioAgl: true },
+  })
+}
+
+// Contrato real del webhook (Docs/webhook-fas.md): solo trae
+// idOrdenServicio/idSolicitudServicio/estadoOrden — nada de booking (BL,
+// naviera, contenedor, fechas). Esos campos quedan sin poblar hasta que
+// exista un endpoint de consulta aparte (ver nota en el schema Prisma).
+export async function confirmarSolicitud(
+  solicitudId: number,
+  embarqueId: number,
+  datos: {
+    idOrdenServicioAgl: number
+    idSolicitudServicioAgl: number
+    estadoOrdenAgl: string
+    payloadRespuesta: unknown
+  },
+) {
+  await prisma.$transaction(async (tx) => {
+    await tx.solicitudReserva.update({
+      where: { id: solicitudId },
+      data: {
+        idOrdenServicioAgl: datos.idOrdenServicioAgl,
+        idSolicitudServicioAgl: datos.idSolicitudServicioAgl,
+        estadoOrdenAgl: datos.estadoOrdenAgl,
+        payloadRespuesta: (datos.payloadRespuesta ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        confirmadoEn: new Date(),
+      },
+    })
+    await tx.embarque.update({ where: { id: embarqueId }, data: { estadoReserva: 'CONFIRMADA' } })
   })
 }

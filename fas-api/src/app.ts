@@ -49,6 +49,13 @@ export async function buildApp(options: { logger?: boolean } = {}) {
   })
 
   app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
+    // Body crudo preservado para el webhook AGL360 (verificación HMAC contra
+    // bytes exactos, ver requireAglWebhookSignature en auth-guard.ts) — barato
+    // de guardar para todo request, solo lo lee ese único preHandler.
+    // `parseAs: 'buffer'` garantiza Buffer en runtime; el tipo del callback
+    // solo es más ancho (string | Buffer) porque el parser también acepta
+    // contenido ya-string en otros usos de Fastify.
+    req.rawBody = body as Buffer
     if (req.url?.startsWith('/api/auth')) {
       done(null, body)
       return

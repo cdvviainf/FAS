@@ -227,6 +227,7 @@ model Empresa {
   notasCondicion         NotaCondicion[]
   notasVenta             NotaVenta[]
   embarques              Embarque[]
+  solicitudesReserva     SolicitudReserva[]
   instructivosEmbalaje   InstructivoEmbalaje[]
   ordenesCompra          OrdenCompra[]
   condicionesPago        CondicionPago[]
@@ -236,6 +237,8 @@ model Empresa {
   documentosEmitidos     DocumentoEmitido[]
   logo                   EmpresaLogo?
   OrdenCompraMaterial    OrdenCompraMaterial[]
+  proformasMaterial      ProformaMaterial[]
+  integraciones          Integracion[]
 
   @@map("empresas")
 }
@@ -633,6 +636,7 @@ model FormaPago {
 
   ordenesCompra         OrdenCompra[]
   ordenesCompraMaterial OrdenCompraMaterial[]
+  proformasMaterial     ProformaMaterial[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1173,6 +1177,7 @@ model Moneda {
   ordenCompraCuotasPago OrdenCompraCuotaPago[]
   notaVentaCuotasPago   NotaVentaCuotaPago[]
   ordenesCompraMaterial OrdenCompraMaterial[]
+  proformasMaterial     ProformaMaterial[]
 
   @@map("monedas")
 }
@@ -1336,6 +1341,7 @@ model Entidad {
   notasVentaConsignatario        NotaVenta[]                 @relation("NotaVentaConsignatario")
   ordenesCompraProductor         OrdenCompra[]               @relation("OrdenCompraProductor")
   ordenesCompraMaterialProveedor OrdenCompraMaterial[]       @relation("OrdenCompraMaterialProveedor")
+  proformasMaterialCliente       ProformaMaterial[]          @relation("ProformaMaterialCliente")
   instructivosEmbalajeProductor  InstructivoEmbalaje[]       @relation("InstructivoEmbalajeProductor")
   recepcionesPlanta              Recepcion[]                 @relation("RecepcionPlanta")
   palletsProductor               Pallet[]                    @relation("PalletProductor")
@@ -1613,6 +1619,77 @@ model ConfiguracionCorreo {
   @@map("configuracion_correo")
 }
 
+// ─── Integraciones (2026-09-07) ─────────────────────────────────────────────
+//
+// Mantenedor genérico de configuración de integraciones con sistemas externos
+// (hoy: AGL360). Guarda la URL base y una lista abierta de parámetros que
+// crece según se necesite, sin requerir cambios de schema:
+//   - tipo TEXTO: parámetro plano (ej. credencial) — solo `valorExterno`
+//     importa, `valorLocal` queda "" (URL/token no traducen nada local).
+//   - tipo MAESTRO: traduce un valor de un maestro de FAS (Especie, Entidad,
+//     TipoEmbarque, Puerto) a su equivalente en el sistema externo —
+//     `maestro`+`maestroId` identifican el registro real elegido (sin FK
+//     física: es polimórfico, "maestro" solo nombra la tabla), `valorLocal`
+//     es la descripción cacheada (solo para mostrar en el listado sin join),
+//     `valorExterno` es el ID en el sistema externo.
+// Evita agregar una columna nueva (ej. `Especie.idAgl360`) por cada
+// integración futura que necesite traducir el mismo maestro con otro ID.
+enum TipoParametroIntegracion {
+  TEXTO
+  MAESTRO
+}
+
+enum MaestroIntegracion {
+  ENTIDAD
+  ESPECIE
+  TIPO_EMBARQUE
+  PUERTO
+}
+
+model Integracion {
+  id          Int     @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa @relation(fields: [empresaId], references: [id])
+  codigo      String // 'AGL360' — identifica el sistema externo
+  descripcion String
+  url         String?
+  activo      Boolean @default(true)
+
+  parametros IntegracionParametro[]
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@unique([empresaId, codigo])
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  @@map("integraciones")
+}
+
+model IntegracionParametro {
+  id            Int         @id @default(autoincrement())
+  integracionId Int
+  integracion   Integracion @relation(fields: [integracionId], references: [id], onDelete: Cascade)
+
+  idExterno    String // 'TOKEN', 'IdCliente', 'IdProducto', 'IdTipoEmbarque', 'IdPod', 'IdConsignee', 'IdCiaNaviera' — libre, sin enum
+  tipo         TipoParametroIntegracion @default(TEXTO)
+  maestro      MaestroIntegracion? // solo si tipo = MAESTRO
+  maestroId    Int? // id real del registro elegido del maestro — solo si tipo = MAESTRO
+  valorLocal   String                   @default("") // "" si tipo = TEXTO; descripción cacheada del registro si tipo = MAESTRO
+  valorExterno String // el valor/ID en el sistema externo — cifrado si sensible = true
+  sensible     Boolean                  @default(false) // true = valorExterno cifrado (AES-256-GCM, igual que ConfiguracionCorreo.passwordCifrada), nunca se expone por API
+  descripcion  String?
+
+  @@unique([integracionId, idExterno, valorLocal])
+  @@index([integracionId])
+  @@index([integracionId, idExterno, maestro, maestroId])
+  @@map("integracion_parametros")
+}
+
 // ─── Materiales — Maestro de artículos, recetas y movimientos ───────────────
 
 enum TipoArticulo {
@@ -1684,6 +1761,7 @@ model Articulo {
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
   ordenCompraLineas           OrdenCompraLinea[]
   ordenCompraMaterialLineas   OrdenCompraMaterialLinea[]
+  proformaMaterialLineas      ProformaMaterialLinea[]
   contratoProductorLineas     ProductorContratoLinea[]
   solicitudesInspeccion       SolicitudInspeccionEmbalaje[]
   palletLineas                PalletLinea[]
@@ -1770,6 +1848,10 @@ model TipoMovimiento {
   requierePrecio     Boolean         @default(false)
   entidadRelacionada TipoEntidad?
   emiteDTE           Boolean         @default(false)
+  // Solo aplicable si clase = SALIDA (materiales.md R25) — marca este tipo
+  // como origen elegible para generar una ProformaMaterial a partir de un
+  // Movimiento ya CONFIRMADO de este tipo.
+  generaProforma     Boolean         @default(false)
   activo             Boolean         @default(true)
 
   movimientos Movimiento[]
@@ -1846,6 +1928,13 @@ model Movimiento {
   movimientoInversoDe   Movimiento? @relation("MovimientoReverso", fields: [movimientoInversoDeId], references: [id])
   movimientoReverso     Movimiento? @relation("MovimientoReverso")
 
+  // Solo aplicable a movimientos clase SALIDA cuyo tipoMovimiento.generaProforma
+  // = true — la(s) ProformaMaterial generada(s) a partir de este Movimiento ya
+  // CONFIRMADO (materiales.md R25). Arreglo por la misma razón que
+  // OrdenCompraMaterial.movimientos: a lo más una NO ANULADA a la vez (índice
+  // parcial en la migración), pero Prisma no puede expresar eso como 1:1.
+  proformasMaterial ProformaMaterial[]
+
   detalle   MovimientoDetalle[]
   usuarioId String
   creadoEn  DateTime            @default(now())
@@ -1853,6 +1942,7 @@ model Movimiento {
   eliminadoEn  DateTime?
   eliminadoPor String?
 
+  @@unique([empresaId, id])
   @@index([tipoMovimientoId])
   @@index([fechaMovimiento])
   @@index([empresaId])
@@ -1959,6 +2049,103 @@ model OrdenCompraMaterialCuotaPago {
 
   @@index([ordenCompraMaterialId])
   @@map("orden_compra_material_cuota_pago")
+}
+
+// ─── Proforma de Venta de Materiales (materiales.md §4.8/R25, 2026-09-06) ───
+// Supersede el borrador anterior de este modelo (que dependía de un módulo
+// `cobranza.md` inexistente para generar el Movimiento al confirmarse). Acá
+// la causalidad se invierte: el Movimiento (clase SALIDA, tipo marcado
+// generaProforma=true) se crea y confirma PRIMERO — eso ya descuenta stock y
+// emite la Guía de Despacho interna si corresponde — y la Proforma se genera
+// DESPUÉS a partir de ese Movimiento ya CONFIRMADO, copiando sus líneas
+// (artículo/cantidad, no editables) y agregando las condiciones comerciales
+// (forma/condición de pago, moneda, precio de venta por línea). La emisión
+// de la factura real (DTE) queda para cuando exista `cobranza.md` — esta
+// entrega llega hasta ENVIADA_VALIDACION.
+enum EstadoProformaMaterial {
+  BORRADOR
+  ENVIADA_VALIDACION
+  FACTURADA
+  ANULADA
+}
+
+model ProformaMaterial {
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  numero    String // PVM-{AAAA}-{NNNN}, correlativo por año (R25)
+
+  // Igual que OrdenCompraMaterial↔Movimiento (materiales.md R22): Prisma
+  // exige un campo único para expresar la relación como 1:1, pero la
+  // unicidad real ("a lo más una Proforma NO anulada por Movimiento") es un
+  // índice parcial `WHERE estado <> 'ANULADA'` (no representable en el DSL
+  // de Prisma, ver migración) — así una Proforma ANULADA libera el
+  // Movimiento para un nuevo intento (R25). Por eso la relación de vuelta en
+  // Movimiento es un arreglo, no un campo opcional simple.
+  movimientoId Int
+  // FK compuesta (empresaId, movimientoId) -> Movimiento(empresaId, id).
+  movimiento   Movimiento @relation(fields: [empresaId, movimientoId], references: [empresaId, id])
+
+  // Copiado desde Movimiento.entidadId al crear (snapshot) — debe ser una
+  // Entidad tipo CLIENTE_NACIONAL (R17).
+  entidadId Int
+  entidad   Entidad @relation("ProformaMaterialCliente", fields: [empresaId, entidadId], references: [empresaId, id])
+
+  formaPagoId     Int?
+  formaPago       FormaPago?             @relation(fields: [empresaId, formaPagoId], references: [empresaId, id])
+  condicionPagoId Int? // CondicionPago tipo=VENTA, solo cuotas PORCENTAJE (R25, mismo criterio que R21)
+  condicionPago   CondicionPago?         @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
+  monedaId        Int
+  moneda          Moneda                 @relation(fields: [monedaId], references: [id])
+  observaciones   String?
+  estado          EstadoProformaMaterial @default(BORRADOR)
+
+  lineas     ProformaMaterialLinea[]
+  cuotasPago ProformaMaterialCuotaPago[]
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+
+  @@unique([empresaId, id])
+  @@index([movimientoId])
+  @@index([entidadId])
+  @@index([condicionPagoId])
+  @@index([empresaId])
+  @@map("proformas_material")
+}
+
+model ProformaMaterialLinea {
+  id                 Int              @id @default(autoincrement())
+  proformaMaterialId Int
+  proformaMaterial   ProformaMaterial @relation(fields: [proformaMaterialId], references: [id], onDelete: Cascade)
+
+  articuloId     Int
+  articulo       Articulo @relation(fields: [articuloId], references: [id])
+  cantidad       Decimal  @db.Decimal(14, 3) // copiada desde MovimientoDetalle al crear, no editable (R25)
+  precioUnitario Decimal  @db.Decimal(14, 4)
+  monto          Decimal  @db.Decimal(14, 2)
+
+  @@index([proformaMaterialId])
+  @@index([articuloId])
+  @@map("proforma_material_linea")
+}
+
+// Snapshot inmutable de las cuotas al fijar condicionPagoId — mismo patrón
+// que OrdenCompraMaterialCuotaPago (R21), tipo VENTA en vez de COMPRA.
+model ProformaMaterialCuotaPago {
+  id                 Int              @id @default(autoincrement())
+  proformaMaterialId Int
+  proformaMaterial   ProformaMaterial @relation(fields: [proformaMaterialId], references: [id], onDelete: Cascade)
+
+  fechaReferencia FechaReferenciaPago @default(FACTURA)
+  plazoDias       Int
+  porcentaje      Decimal             @db.Decimal(5, 2)
+  descripcion     String?
+
+  @@index([proformaMaterialId])
+  @@map("proforma_material_cuota_pago")
 }
 
 // ─── Productores — Predios, Contrato, Cuenta Corriente, Conceptos de Liquidación ─
@@ -2431,6 +2618,14 @@ model Embarque {
   despachadoPor String?
   pallets       Pallet[]
 
+  // Solicitud de Reserva (2026-09-05, ventas.md §4.3, reemplaza el borrador
+  // nunca implementado): al generar el Embarque se intenta reservar espacio
+  // con AGL360 — PENDIENTE si la integración falló y el usuario decidió
+  // generar igual sin reserva, SOLICITADA mientras se espera confirmación,
+  // CONFIRMADA cuando AGL360 confirma vía webhook.
+  estadoReserva    EstadoReservaEmbarque @default(PENDIENTE)
+  solicitudReserva SolicitudReserva?
+
   creadoEn       DateTime  @default(now())
   creadoPor      String
   actualizadoEn  DateTime? @updatedAt
@@ -2442,6 +2637,56 @@ model Embarque {
   @@index([notaVentaId])
   @@index([empresaId])
   @@map("embarques")
+}
+
+enum EstadoReservaEmbarque {
+  PENDIENTE
+  SOLICITADA
+  CONFIRMADA
+}
+
+// Solicitud de Reserva de espacio con AGL360 (ventas.md §4.3) — a lo más una
+// por Embarque (@@unique embarqueId): si la primera falla no se crea fila
+// (el Embarque queda PENDIENTE sin registro), solo se persiste cuando la
+// llamada saliente a AGL360 tuvo éxito. `referenciaFas` es lo que AGL360 nos
+// devuelve en el webhook de confirmación para matchear el registro.
+model SolicitudReserva {
+  id         Int      @id @default(autoincrement())
+  empresaId  Int
+  empresa    Empresa  @relation(fields: [empresaId], references: [id])
+  embarqueId Int
+  embarque   Embarque @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
+
+  referenciaFas  String
+  payloadEnviado Json
+
+  // Contrato real del webhook AGL360 -> FAS (Docs/webhook-fas.md,
+  // 2026-09-07): el evento "orden.creada" solo informa que una Orden de
+  // Servicio existe (id + estado inicial "pendiente") — NO trae BL,
+  // contenedor, naviera ni fechas todavía; eso lo completa el staff de
+  // AGL360 después y hoy no hay endpoint de consulta para leerlo (ver nota en
+  // webhook-fas.md). Los campos de detalle de booking se dejan declarados
+  // para cuando ese endpoint de consulta exista, pero esta versión del
+  // webhook nunca los puebla.
+  idOrdenServicioAgl     Int?
+  idSolicitudServicioAgl Int?
+  estadoOrdenAgl         String?
+  numeroBooking          String?
+  naviera                String?
+  nave                   String?
+  numeroContenedor       String?
+  fechaZarpe             DateTime?
+  fechaRetiroPlanta      DateTime?
+  payloadRespuesta       Json?
+
+  enviadoEn    DateTime  @default(now())
+  enviadoPor   String
+  confirmadoEn DateTime?
+
+  @@unique([empresaId, embarqueId])
+  @@unique([empresaId, referenciaFas])
+  @@index([empresaId])
+  @@map("solicitudes_reserva")
 }
 
 // ─── Compras — Instructivo de Embalaje (Docs/compras.md §4.1) ───────────────
@@ -2668,6 +2913,7 @@ model CondicionPago {
   notasVenta            NotaVenta[]
   contratosProductor    ProductorContrato[]
   ordenesCompraMaterial OrdenCompraMaterial[]
+  proformasMaterial     ProformaMaterial[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String

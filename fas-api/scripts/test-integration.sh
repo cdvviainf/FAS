@@ -34,5 +34,6 @@ REDIS_URL="${TEST_REDIS_URL:-redis://:fas_redis_pass@localhost:6379}" \
 BETTER_AUTH_SECRET="${TEST_BETTER_AUTH_SECRET:-test_secret_only_for_local_tests_32chars}" \
 BETTER_AUTH_URL="${TEST_BETTER_AUTH_URL:-http://localhost:3001}" \
 CORS_ORIGIN="${TEST_CORS_ORIGIN:-http://localhost:3000}" \
+AGL360_WEBHOOK_SECRET="${TEST_AGL360_WEBHOOK_SECRET:-test_agl360_webhook_secret_only_for_tests}" \
 NODE_ENV=test \
   npx vitest run --config vitest.integration.config.ts

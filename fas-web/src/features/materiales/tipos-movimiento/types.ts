@@ -28,6 +28,9 @@ export interface TipoMovimiento {
   requierePrecio: boolean
   entidadRelacionada: TipoEntidad | null
   emiteDTE: boolean
+  // Solo aplicable si clase = SALIDA (materiales.md R25) — marca este tipo
+  // como origen elegible para generar una Proforma de Venta de Materiales.
+  generaProforma: boolean
   activo: boolean
 }
 
@@ -39,6 +42,7 @@ export interface TipoMovimientoCreateInput {
   requierePrecio?: boolean
   entidadRelacionada?: TipoEntidad | null
   emiteDTE?: boolean
+  generaProforma?: boolean
   activo?: boolean
 }
 

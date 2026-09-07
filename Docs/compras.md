@@ -383,8 +383,13 @@ Para cada línea de OC, contra el grupo correspondiente del Excel:
 
 ## 9. Integraciones y Dependencias
 
-### 9.1 AGL (empresa relacionada) — solo lectura
-AGL gestiona la **reserva del contenedor**: Agrosan solicita un espacio indicando cliente, destino y fechas; AGL coordina con las empresas de transporte y carga en su sistema el detalle (número de contenedor, número de booking, fechas de retiro por planta, etc.). FAS **consulta por número de embarque** y AGL devuelve la información. Integración **solo de lectura**, sin escritura ni sincronización bidireccional. *(Detalle de campos: pendiente, ver §10.)*
+### 9.1 AGL360 (sistema propio, en desarrollo) — escritura + confirmación por webhook
+
+> **Supersesión (2026-09-05):** este párrafo describía una integración de **solo lectura** ("Agrosan solicita... FAS consulta por número de embarque y AGL devuelve la información. Sin escritura ni sincronización bidireccional") que nunca se implementó. Lo que se construyó es distinto y más rico — ver `ventas.md` §4.3 para el modelo/flujo completo.
+
+AGL360 es un sistema propio de Agrosan (no una `Entidad` del mantenedor, todavía en desarrollo) que gestiona la **reserva del contenedor**. FAS **escribe** la solicitud (al generar el Embarque, `POST` saliente con cliente/destino/cajas totales) y AGL360 **confirma de vuelta** por webhook (`POST /api/ventas/embarques/webhooks/agl360-confirmacion`, autenticado por API key compartida, sin sesión de usuario) con el detalle: número de contenedor, número de booking, naviera, nave, fechas de retiro por planta, etc. — ver `Embarque.estadoReserva` (`PENDIENTE → SOLICITADA → CONFIRMADA`) y modelo `SolicitudReserva`.
+
+Si la llamada saliente a AGL360 falla (el sistema todavía no existe o está caído), el usuario decide si generar el Embarque igual sin reserva (`PENDIENTE`, reintentable después) — no bloquea el flujo de Ventas. Adapter mockeable (`AGL_PROVIDER=mock|agl360`, mismo patrón que el proveedor DTE) mientras AGL360 no tenga un ambiente real.
 
 ### 9.2 Mantenedor de formatos de carga (columnas por planta/origen)
 Patrón único reutilizado tanto para el **reporte de stock de consignación** como para el **Packing List**: un mantenedor que mapea, por planta/origen, cada dato requerido por la aplicación a su **columna del Excel** y **fila de inicio**. Si más adelante alguna planta envía PDF, se amplía con lectura IA (§10).
@@ -417,7 +422,7 @@ Tras capturar, FAS imputa el documento a una o varias OC por montos (CO1) y refl
 
 **Pendientes de definición:**
 - **OC suelta → Cierre a posteriori** — el modelo ya permite una OC **sin** Cierre (FK `notaVentaId` nullable). Queda diferido el **flujo/UX** de digitar una OC suelta y **ligarla** a un Cierre después (endpoint de vinculación + regla de qué campos se bloquean al vincular). *Diferido.*
-- **Detalle de campos AGL** — qué campos exactos devuelve la consulta por número de embarque. *Pendiente.*
+- **Detalle de campos AGL360** — ~~qué campos exactos devuelve la consulta por número de embarque~~ **(resuelto por mecanismo, 2026-09-05, ver §9.1 y `ventas.md` §4.3)**: la mecánica (webhook + campos numeroBooking/naviera/nave/numeroContenedor/fechaZarpe/fechaRetiroPlanta) ya está definida y construida. El formato exacto de esos campos puede seguir ajustándose recién cuando AGL360 tenga un ambiente real — hoy corre en modo mock.
 - **Lectura IA / PDF** — Recepción y Packing List en formato PDF vía IA (Etapa 2). El mantenedor de columnas resuelve Excel en v0.1. *Pendiente.*
 - **Soporte `.xls` (BIFF legado)** — el lector actual solo acepta `.xlsx` (§9.2, QA-RCV-001, 2026-08-17); hay planillas reales de al menos una planta en `.xls`. Requiere una librería adicional para BIFF y normalizar su salida hacia la misma estructura de filas que `.xlsx`. *Diferido — mientras tanto, la planta debe convertir a `.xlsx` antes de subir.*
 - **Template de Carga por planta/origen** — `TemplateCarga` (§9.2) ya distingue **tipo** (`RECEPCION`, `PACKING_LIST`, whitelist ampliable sin migración), pero todavía no está asociado a una planta/origen como dice el enunciado de §9.2 ("mapea, por planta/origen..."). Hoy el picker de Recepción filtra solo por tipo, no por la planta elegida en el encabezado. Falta definir la cardinalidad (¿un template por planta+tipo, o varios seleccionables por planta?) antes de modelarlo. Hallazgo QA `QAS-TCT-001` (ronda 1, 2026-08-03) — diferido a propósito, fuera del alcance de la introducción de `tipo`. *Diferido.*

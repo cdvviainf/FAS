@@ -53,6 +53,7 @@ const MODELOS_TENANT = new Set([
   // Fase 3, lote Ventas:
   'NotaVenta',
   'Embarque',
+  'SolicitudReserva',
   'InstructivoEmbalaje',
   // Fase 3, lote Compras (7/7, último):
   'OrdenCompra',
@@ -62,6 +63,14 @@ const MODELOS_TENANT = new Set([
   'TemplateCarga',
   // Motor de Documentos (Etapa 4):
   'DocumentoEmitido',
+  // Orden de Compra de Materiales (2026-09-03) — faltaba en esta lista desde
+  // su creación: sin aislamiento de tenant hasta ahora (detectado al agregar
+  // ProformaMaterial, que referencia el mismo Movimiento/Entidad).
+  'OrdenCompraMaterial',
+  // Proforma de Venta de Materiales (2026-09-06):
+  'ProformaMaterial',
+  // Mantenedor de Integraciones (2026-09-07):
+  'Integracion',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

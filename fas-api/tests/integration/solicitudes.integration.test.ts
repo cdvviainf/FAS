@@ -48,7 +48,6 @@ async function limpiarDatos() {
       "solicitud_inspeccion_embalajes",
       "solicitud_inspeccion_asignados",
       "solicitudes_inspeccion",
-      "calificaciones",
       "articulos",
       "calibres",
       "categorias",

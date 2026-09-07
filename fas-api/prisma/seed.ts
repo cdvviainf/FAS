@@ -12,6 +12,9 @@ const itemsMenu = [
   { codigo: 'CONFIG_ENTIDADES', nombre: 'Entidades', seccion: 'Configuración', ruta: '/dashboard/configuracion/entidades', esAccion: false, orden: 9 },
   { codigo: 'CONFIG_EMPRESAS', nombre: 'Empresas', seccion: 'Configuración', ruta: '/dashboard/configuracion/empresas', esAccion: false, orden: 8 },
   { codigo: 'CONFIG_GENERAL', nombre: 'Configuración General', seccion: 'Configuración', ruta: '/dashboard/configuracion/general', esAccion: false, orden: 13 },
+  // Mantenedor de Integraciones (2026-09-07) — ítem propio, no el genérico
+  // CONFIG_MANTENEDORES, por guardar credenciales de sistemas externos.
+  { codigo: 'CONFIG_INTEGRACIONES', nombre: 'Integraciones', seccion: 'Configuración', ruta: '/dashboard/configuracion/integraciones', esAccion: false, orden: 14 },
   // Compras
   // Gestión completa (ingresar/editar/notificar/cerrar) de la Solicitud de
   // Inspección — antes vivía únicamente bajo CAL_SOLICITUDES; Calidad ahora
@@ -34,6 +37,9 @@ const itemsMenu = [
   // Orden de Compra de Materiales (2026-09-03, materiales.md §4.9) — ítem
   // propio, separado de OPER_MATERIALES, mismo patrón que COMPRAS_OC.
   { codigo: 'MATERIALES_OC', nombre: 'Orden de Compra de Materiales', seccion: 'Operaciones', ruta: '/dashboard/operaciones/materiales/ordenes-compra', esAccion: false, orden: 52 },
+  // Proforma de Venta de Materiales (2026-09-06, materiales.md §4.8/R25) —
+  // ítem propio, mismo patrón que MATERIALES_OC.
+  { codigo: 'MATERIALES_PROFORMA', nombre: 'Proforma de Venta de Materiales', seccion: 'Operaciones', ruta: '/dashboard/operaciones/materiales/proformas', esAccion: false, orden: 53 },
   // Facturación y Cobranza (2026-09-04) — nueva sección propia después de
   // Ventas; VENTAS_COBRANZA se reubica aquí (mismo codigo, no se huerfana
   // PerfilAcceso) y FIN_FACTURACION queda superseded por los 2 ítems nuevos

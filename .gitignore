@@ -29,4 +29,8 @@ pgadmin-servers.json
 XLS/
 Docs/
 
+# Artefactos de depuración del MCP de Playwright (logs de consola, snapshots
+# de página) — locales a la sesión, no forman parte del proyecto.
+.playwright-mcp/
+
 

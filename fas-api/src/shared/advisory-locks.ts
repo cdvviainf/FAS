@@ -8,7 +8,9 @@
 // (Recepcion correlativo), 490238 (Recepcion proceso), 490239 (OrdenCompra
 // proceso), 490240 (Documentos emitidos), 490241 (NotaVentaDetalle cajas
 // comprometidas), 490242 (Movimiento proceso), 490243 (Embarque despacho),
-// 490244 (OrdenCompraMaterial proceso).
+// 490244 (OrdenCompraMaterial proceso), 490245 (OrdenCompraMaterial
+// correlativo), 490246 (Embarque generar/solicitud de reserva), 490247
+// (ProformaMaterial correlativo), 490248 (ProformaMaterial proceso).
 
 // Serializa el motor de validación de Recepción (recepciones.repository.ts)
 // contra cualquier mutación de la Orden de Compra que esté usando para
@@ -54,3 +56,22 @@ export const LOCK_NAMESPACE_EMBARQUE_DESPACHO = 490243
 // mismo rol que LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO para la OC de fruta.
 // Clave: ordenCompraMaterialId.
 export const LOCK_NAMESPACE_ORDEN_COMPRA_MATERIAL_PROCESO = 490244
+
+// Serializa "Solicitar Reserva" (ventas.md §4.3, IMP-QA-R1-012, QA ronda 1):
+// sin esto, dos intentos concurrentes para el mismo Cierre Comercial pasan
+// ambos el pre-check de numeroInstructivo (ninguno creó nada todavía) y
+// ambos llaman a AGL360, generando dos solicitudes externas aunque solo una
+// gane la creación local después. Clave: notaVentaId (generarEmbarque) o
+// embarqueId (solicitarReservaParaEmbarque, reintento manual) — mismo
+// namespace, dos claves distintas según el punto de entrada, ninguna
+// colisiona entre sí en la práctica (un notaVentaId y un embarqueId son
+// ambos autoincrement de tablas distintas, pero aun si coincidieran
+// numéricamente el efecto es solo serializar de más, nunca de menos).
+//
+// Nota: originalmente este namespace usaba 490245, el mismo valor que
+// LOCK_NAMESPACE_ORDEN_COMPRA_MATERIAL_NUMERO (constante local en
+// materiales/ordenes-compra.repository.ts) — colisión no detectada porque
+// esa constante vive fuera de este archivo centralizado. Corregido a 490246
+// antes del primer despliegue de esta feature (ningún advisory lock persiste
+// en disco, así que renumerar es seguro en cualquier momento).
+export const LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA = 490246

@@ -76,8 +76,19 @@ export interface NotaVentaListItem {
 // en vez de heredarlo NotaVentaDetalle. PENDIENTE si queda alguna caja sin
 // comprometer por una OC vigente (o el Cierre no tiene líneas todavía);
 // COMPLETA si toda la fruta ya está cubierta. Ver compras.md §4.3.
+// Resumen de Solicitud de Reserva (ventas.md §4.3, 2026-09-05) para la
+// columna "Estado Reserva" — un Cierre puede tener más de un Embarque (R7),
+// por eso es un conteo por estado en vez de un único valor.
+export interface ResumenReservaCierre {
+  totalEmbarques: number
+  pendientes: number
+  solicitadas: number
+  confirmadas: number
+}
+
 export interface NotaVentaListItemConEstadoOc extends NotaVentaListItem {
   estadoOc: EstadoOcCierre
+  resumenReserva: ResumenReservaCierre
 }
 
 export interface NotaVentaDetalle extends NotaVentaListItem {

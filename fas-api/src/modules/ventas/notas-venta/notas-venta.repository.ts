@@ -74,6 +74,41 @@ async function resolverEstadoOc(notaVentaIds: number[]): Promise<Map<number, 'PE
   return estadoPorNota
 }
 
+// Resumen de Solicitud de Reserva (2026-09-05, ventas.md §4.3) para la
+// columna "Estado Reserva" del listado de Cierres — un Cierre puede tener
+// más de un Embarque (R7), así que se cuenta por estado en vez de mostrar
+// uno solo. Mismo patrón de 2 pasadas que resolverEstadoOc (groupBy anidado
+// contra una relación N:1 indirecta no es soportado por Prisma).
+export interface ResumenReservaCierre {
+  totalEmbarques: number
+  pendientes: number
+  solicitadas: number
+  confirmadas: number
+}
+
+async function resolverResumenReserva(notaVentaIds: number[]): Promise<Map<number, ResumenReservaCierre>> {
+  const resumenPorNota = new Map<number, ResumenReservaCierre>()
+  if (notaVentaIds.length === 0) return resumenPorNota
+  for (const id of notaVentaIds) {
+    resumenPorNota.set(id, { totalEmbarques: 0, pendientes: 0, solicitadas: 0, confirmadas: 0 })
+  }
+
+  const grupos = await prisma.embarque.groupBy({
+    by: ['notaVentaId', 'estadoReserva'],
+    where: { notaVentaId: { in: notaVentaIds }, eliminadoEn: null },
+    _count: { _all: true },
+  })
+  for (const grupo of grupos) {
+    const resumen = resumenPorNota.get(grupo.notaVentaId)
+    if (!resumen) continue
+    resumen.totalEmbarques += grupo._count._all
+    if (grupo.estadoReserva === 'PENDIENTE') resumen.pendientes += grupo._count._all
+    else if (grupo.estadoReserva === 'SOLICITADA') resumen.solicitadas += grupo._count._all
+    else resumen.confirmadas += grupo._count._all
+  }
+  return resumenPorNota
+}
+
 export async function listNotasVenta(page: number, limit: number, clienteId?: number) {
   const where = {
     eliminadoEn: null,
@@ -95,8 +130,16 @@ export async function listNotasVenta(page: number, limit: number, clienteId?: nu
     prisma.notaVenta.count({ where }),
   ])
 
-  const estadoOcPorNota = await resolverEstadoOc(data.map((d) => d.id))
-  const dataConEstadoOc = data.map((d) => ({ ...d, estadoOc: estadoOcPorNota.get(d.id) ?? 'PENDIENTE' }))
+  const notaVentaIds = data.map((d) => d.id)
+  const [estadoOcPorNota, resumenReservaPorNota] = await Promise.all([
+    resolverEstadoOc(notaVentaIds),
+    resolverResumenReserva(notaVentaIds),
+  ])
+  const dataConEstadoOc = data.map((d) => ({
+    ...d,
+    estadoOc: estadoOcPorNota.get(d.id) ?? 'PENDIENTE',
+    resumenReserva: resumenReservaPorNota.get(d.id) ?? { totalEmbarques: 0, pendientes: 0, solicitadas: 0, confirmadas: 0 },
+  }))
 
   return { data: dataConEstadoOc, total }
 }

@@ -175,6 +175,7 @@ model TipoMovimiento {
   requierePrecio     Boolean             @default(false)
   entidadRelacionada TipoEntidad?                            // función exigida; null = no exige entidad (entidades.md)
   emiteDTE           Boolean             @default(false)
+  generaProforma     Boolean             @default(false)      // solo clase SALIDA (R25) — habilita generar Proforma de Venta desde un Movimiento de este tipo
   activo             Boolean             @default(true)
 
   movimientos        Movimiento[]
@@ -266,58 +267,84 @@ model MovimientoDetalle {
 
 ---
 
-### 4.8 Proforma de Venta de Materiales
+### 4.8 Proforma de Venta de Materiales **(rediseñado, 2026-09-06 — supersede el borrador anterior)**
 
-Venta de materiales a terceros. Se genera aquí y se **valida/emite** en el módulo de Ventas Nacionales de `cobranza.md`. Al confirmarse, se emite la factura y se **descuenta stock automáticamente** (R16).
+> **Reconciliación.** El diseño original de esta sección dependía de un módulo `cobranza.md` (Ventas Nacionales) para validar/emitir la Proforma — ese módulo **no está construido** (0 archivos). Además usaba `moneda` como texto libre, sin numeración, sin condición de pago, y el `Movimiento` de salida se generaba automáticamente **al confirmar** la Proforma. El diseño nuevo invierte la causalidad para poder construirse hoy, sin esperar `cobranza.md`: el `Movimiento` (clase SALIDA, con `tipoMovimiento.generaProforma = true`) se crea y confirma **primero** — eso ya descuenta stock (R1/R2/R6) y emite la Guía de Despacho interna si `tipoMovimiento.emiteDTE` — y la Proforma se genera **después**, a partir de ese Movimiento ya `CONFIRMADO`, agregando las condiciones comerciales (forma/condición de pago, moneda, precio de venta por línea). Ver R25.
+
+Venta de materiales a un cliente nacional. Copia sus líneas (artículo/cantidad) 1:1 desde el `Movimiento` de origen — no editables, son lo que físicamente se despachó — y agrega el precio de venta por línea más las condiciones comerciales. Llega hasta `ENVIADA_VALIDACION`: la emisión de la factura real (DTE) y la transición a `FACTURADA` quedan para cuando exista `cobranza.md`.
 
 ```prisma
 enum EstadoProformaMaterial {
   BORRADOR
   ENVIADA_VALIDACION
-  FACTURADA
+  FACTURADA   // reservado — sin endpoint hasta que exista cobranza.md
   ANULADA
 }
 
 model ProformaMaterial {
-  id                Int                      @id @default(autoincrement())
-  numero            Int                      @unique
-  entidadId         Int                                              // Entidad tipo CLIENTE_NACIONAL (R17)
-  entidad           Entidad                  @relation("ProformasMaterial", fields: [entidadId], references: [id])
-  bodegaId          Int                                              // bodega de salida del stock (R16)
-  bodega            Bodega                   @relation(fields: [bodegaId], references: [id])
-  fecha             DateTime                 @default(now())
-  moneda            String
-  montoTotal        Decimal                  @db.Decimal(14, 2)
-  estado            EstadoProformaMaterial   @default(BORRADOR)
-  facturaNacionalId Int?                                             // FacturaNacional (cobranza.md)
-  movimientoId      Int?                                             // Movimiento SALIDA generado al facturar (R16)
+  id           Int    @id @default(autoincrement())
+  numero       String                                           // PVM-{AAAA}-{NNNN}, correlativo por año (R25)
 
-  detalle           ProformaMaterialDetalle[]
+  movimientoId Int                                              // Movimiento SALIDA de origen, ya CONFIRMADO (R25)
+  movimiento   Movimiento @relation(fields: [movimientoId], references: [id])
 
-  creadoPorId       String
-  creadoEn          DateTime                 @default(now())
-  actualizadoEn     DateTime?                @updatedAt
+  entidadId    Int                                              // copiado desde Movimiento.entidadId al crear — Entidad tipo CLIENTE_NACIONAL (R17)
+  entidad      Entidad    @relation("ProformaMaterialCliente", fields: [entidadId], references: [id])
 
+  formaPagoId     Int?
+  formaPago       FormaPago?             @relation(fields: [formaPagoId], references: [id])
+  condicionPagoId Int?                                          // CondicionPago tipo=VENTA, solo cuotas PORCENTAJE (R25)
+  condicionPago   CondicionPago?         @relation(fields: [condicionPagoId], references: [id])
+  monedaId        Int
+  moneda          Moneda                 @relation(fields: [monedaId], references: [id])
+  observaciones   String?
+  estado          EstadoProformaMaterial @default(BORRADOR)
+
+  lineas       ProformaMaterialLinea[]
+  cuotasPago   ProformaMaterialCuotaPago[]
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+
+  @@index([movimientoId])
   @@index([entidadId])
   @@index([estado])
 }
 
-model ProformaMaterialDetalle {
-  id             Int              @id @default(autoincrement())
-  proformaId     Int
-  proforma       ProformaMaterial @relation(fields: [proformaId], references: [id], onDelete: Cascade)
-  articuloId     Int
-  articulo       Articulo         @relation(fields: [articuloId], references: [id])
-  cantidad       Decimal          @db.Decimal(14, 3)
-  precioUnitario Decimal          @db.Decimal(14, 4)
-  monto          Decimal          @db.Decimal(14, 2)
+model ProformaMaterialLinea {
+  id                 Int              @id @default(autoincrement())
+  proformaMaterialId Int
+  proformaMaterial   ProformaMaterial @relation(fields: [proformaMaterialId], references: [id], onDelete: Cascade)
+  articuloId         Int
+  articulo           Articulo         @relation(fields: [articuloId], references: [id])
+  cantidad           Decimal          @db.Decimal(14, 3)         // copiada desde MovimientoDetalle al crear, no editable
+  precioUnitario     Decimal          @db.Decimal(14, 4)
+  monto              Decimal          @db.Decimal(14, 2)
 
-  @@index([proformaId])
+  @@index([proformaMaterialId])
   @@index([articuloId])
+}
+
+// Snapshot inmutable de las cuotas al fijar condicionPagoId — mismo patrón
+// que OrdenCompraMaterialCuotaPago (R21), tipo VENTA en vez de COMPRA.
+model ProformaMaterialCuotaPago {
+  id                 Int              @id @default(autoincrement())
+  proformaMaterialId Int
+  proformaMaterial   ProformaMaterial @relation(fields: [proformaMaterialId], references: [id], onDelete: Cascade)
+  fechaReferencia    FechaReferenciaPago @default(FACTURA)
+  plazoDias          Int
+  porcentaje         Decimal          @db.Decimal(5, 2)
+  descripcion        String?
+
+  @@index([proformaMaterialId])
 }
 ```
 
-> Back-relations a agregar: `Entidad` → `proformasMaterial`; `Bodega` → `proformasMaterial`; `Articulo` → `lineasProforma`.
+> Back-relations a agregar: `Movimiento` → `proformasMaterial` (arreglo, no 1:1 — ver nota de unicidad abajo); `Entidad` → `proformasMaterialCliente`; `FormaPago`/`CondicionPago`/`Moneda` → `proformasMaterial`; `Articulo` → `proformaMaterialLineas`.
+>
+> **Nota de unicidad (mismo patrón que `OrdenCompraMaterial.movimientos`, R22).** Prisma exige un campo único para modelar una relación 1:1, pero la unicidad real de negocio es "a lo más una Proforma **no ANULADA** por Movimiento" — una vez `ANULADA`, el Movimiento queda libre para una nueva Proforma. Eso no es representable como `@unique` de esquema (bloquearía para siempre tras la primera fila, anulada o no), así que la relación de vuelta en `Movimiento` es un arreglo y la unicidad condicional vive en un **índice parcial** hecho a mano en la migración: `CREATE UNIQUE INDEX ... ON proformas_material(empresa_id, movimiento_id) WHERE estado <> 'ANULADA'`.
 
 ---
 
@@ -469,19 +496,17 @@ else:
 
 ---
 
-### R16 — Emisión de factura descuenta stock
+### R16 — El stock se descuenta al confirmar el Movimiento, no la Proforma **(reescrita 2026-09-06, supersede la versión anterior)**
 
-Al **confirmarse** la proforma en el módulo de validación (`cobranza.md`), el sistema emite la `FacturaNacional` y genera automáticamente un `Movimiento` de clase `SALIDA` desde `ProformaMaterial.bodegaId`, con una línea de `MovimientoDetalle` por cada línea de la proforma. Se aplican las reglas existentes: **R1** (el movimiento es inmutable) y **R2** (el saldo de la bodega no puede quedar negativo → la confirmación **falla con 422** si no hay stock suficiente).
-
-En estado `BORRADOR` / `ENVIADA_VALIDACION` la proforma **no** afecta el stock.
+A diferencia del diseño original (donde confirmar la Proforma generaba el Movimiento), acá el `Movimiento` de clase `SALIDA` ya existe y está `CONFIRMADO` **antes** de crear la Proforma — el stock ya se descontó al confirmarlo (R1/R2/R6 del motor de Movimientos), y si `tipoMovimiento.emiteDTE` ya se emitió la Guía de Despacho interna. La Proforma en sí, en ningún estado (`BORRADOR`, `ENVIADA_VALIDACION` ni `ANULADA`), vuelve a tocar `SaldoArticulo` — es puramente un documento comercial sobre un movimiento de stock ya consumado. Ver R25.
 
 ### R17 — Cliente nacional
 
-`ProformaMaterial.entidadId` debe ser una entidad con `CLIENTE_NACIONAL` en `tipos` (`entidades.md` R8) → 422. Un productor al que se le venden materiales debe estar marcado además como `CLIENTE_NACIONAL`.
+`ProformaMaterial.entidadId` (copiado desde `Movimiento.entidadId` al crear) debe ser una entidad con `CLIENTE_NACIONAL` en `tipos` (`entidades.md` R8) → 422 si el Movimiento no tiene entidad o no corresponde. Un productor al que se le venden materiales debe estar marcado además como `CLIENTE_NACIONAL`.
 
 ### R18 — Edición
 
-La proforma solo se edita en `BORRADOR`. Una vez `FACTURADA`, se corrige anulando la factura y su movimiento con un movimiento inverso (R1).
+La proforma solo se edita en `BORRADOR` (cabecera, condición de pago y precio por línea) — ver R25 para el detalle de qué queda bloqueado en `ENVIADA_VALIDACION`. No existe una transición manual a `FACTURADA` en esta entrega (reservada para cuando exista `cobranza.md`); la única salida manual desde `BORRADOR` o `ENVIADA_VALIDACION` es anular (R25).
 
 ---
 
@@ -521,6 +546,28 @@ Un `Movimiento` clase `ENTRADA` puede referenciar una `OrdenCompraMaterial` vía
 - En la misma transacción, la `OrdenCompraMaterial` vinculada vuelve de `RECEPCIONADA` a `EMITIDA` — **no** a `BORRADOR`: sigue bloqueada para editar (R20), pero ya es eliminable de nuevo (si no queda otro Movimiento activo vinculado).
 - Permiso: mismo nivel que "Registrar ingreso" — `OPER_MATERIALES` `TOTAL`.
 
+### R25 — Proforma de Venta de Materiales, generada desde un Movimiento (decisión de negocio, 2026-09-06)
+
+**Flujo completo:** `Movimiento` (clase `SALIDA`, tipo con `generaProforma = true`) → confirmar (descuenta stock, emite Guía si `emiteDTE`) → crear la `ProformaMaterial` a partir de ese Movimiento → agregar condiciones comerciales y precio por línea → enviar a validación → (fuera de esta entrega) facturar en `cobranza.md`.
+
+**`TipoMovimiento.generaProforma`.** Solo puede ser `true` si `clase = SALIDA` → 422 al crear/editar un Tipo de Movimiento si no corresponde. Marca qué Movimientos son candidatos para generar una Proforma — independiente de `entidadRelacionada` (un tipo puede tener `generaProforma = true` y aun así requerir validar el cliente vía R17 al momento de crear la Proforma, no al confirmar el Movimiento).
+
+**Elegibilidad de un Movimiento para crear la Proforma** (`POST /materiales/proformas`, body `{ movimientoId, formaPagoId?, condicionPagoId?, monedaId, observaciones? }`):
+- El Movimiento debe existir, estar `CONFIRMADO`, ser clase `SALIDA` con `tipoMovimiento.generaProforma = true` → 422 si no.
+- Su `entidadId` debe corresponder a una Entidad tipo `CLIENTE_NACIONAL` (R17) → 422 si no.
+- No debe tener ya una Proforma **no `ANULADA`** vinculada → 422 con mensaje explícito (incluida la carrera concurrente — advisory lock por `movimientoId`, mismo mecanismo que R22).
+- Debe tener al menos una línea (`MovimientoDetalle`).
+
+**Creación.** Las líneas de la Proforma se copian 1:1 desde `MovimientoDetalle` (mismo `articuloId`/`cantidad`, **no editables después**) con `precioUnitario = 0` inicial — el precio de venta se completa después vía `PATCH /materiales/proformas/:id/lineas/:lineaId` (`{ precioUnitario }`, solo mientras `BORRADOR`). `entidadId` se copia desde el Movimiento. La numeración es automática: `PVM-{AAAA}-{NNNN}`, correlativo por año (mismo mecanismo `pg_advisory_xact_lock` que `OrdenCompraMaterial`, namespace propio).
+
+**Condición de pago.** Mismo criterio que R21: solo `CondicionPago` **tipo `VENTA`** (no `COMPRA`) con cuotas 100% `PORCENTAJE` (sin `MONTO_UNITARIO`) → 422 si no. Las cuotas se copian (snapshot) a `ProformaMaterialCuotaPago` al fijar `condicionPagoId`, igual que la OC — cambios posteriores al maestro no afectan Proformas ya creadas.
+
+**Envío a validación.** `POST /materiales/proformas/:id/enviar-validacion` exige que **todas** las líneas tengan `precioUnitario > 0` → 422 si alguna quedó en 0. Pasa a `ENVIADA_VALIDACION`, que bloquea cabecera, condición de pago y precio por línea — igual de bloqueado que `FACTURADA`/`ANULADA` para esos campos, pero reversible vía anular.
+
+**Anular.** `POST /materiales/proformas/:id/anular` — válido desde `BORRADOR` o `ENVIADA_VALIDACION` (no desde `FACTURADA`) → pasa a `ANULADA`. **No revierte el Movimiento** (el stock ya se descontó y esa parte es irreversible por este mecanismo — para revertir el Movimiento en sí, ver R24 si aplica a su Tipo). Como el índice de unicidad es parcial (`WHERE estado <> 'ANULADA'`, ver §4.8), anular libera el Movimiento para una nueva Proforma.
+
+**Permisos.** Ítem de menú propio `MATERIALES_PROFORMA` (`LECTURA`/`TOTAL`), mismo patrón que `MATERIALES_OC`.
+
 ---
 
 ## 6. Contratos API (Fastify, prefijo `/api/materiales`)
@@ -556,7 +603,7 @@ Un `Movimiento` clase `ENTRADA` puede referenciar una `OrdenCompraMaterial` vía
 **Movimientos** (R1 reescrita 2026-08-29 — cabecera primero, líneas después, confirmar al final; mismo patrón que `compras.md` Orden de Compra)
 | Método | Ruta | Notas |
 |---|---|---|
-| GET | `/movimientos` | filtros tipo, **estado**, fecha, bodega, paginado |
+| GET | `/movimientos` | filtros tipo, **estado**, fecha, bodega, `elegibleProforma?` (R25: solo CONFIRMADO, clase SALIDA, tipo con `generaProforma`, sin Proforma vigente), paginado |
 | GET | `/movimientos/:id` | cabecera + detalle |
 | POST | `/movimientos` | solo cabecera (`tipoMovimientoId`, `fechaMovimiento`) — nace `BORRADOR`, sin líneas. Valida R14 |
 | PATCH | `/movimientos/:id` | edita cabecera (entidad, bodegas, guía, datos de transporte) — solo mientras `BORRADOR` |
@@ -577,13 +624,18 @@ Un `Movimiento` clase `ENTRADA` puede referenciar una `OrdenCompraMaterial` vía
 
 ---
 
-**Proformas de venta de materiales**
+**Proformas de venta de materiales** (ítem de menú propio `MATERIALES_PROFORMA`, R25)
 | Método | Ruta | Notas |
 |---|---|---|
-| GET/POST/PATCH | `/proformas[/:id]` | Detalle por artículo. Editable solo en `BORRADOR` (R18). Valida `CLIENTE_NACIONAL` (R17). |
-| POST | `/proformas/:id/enviar-validacion` | Pasa a `ENVIADA_VALIDACION`; queda visible en el confirmador de `cobranza.md`. |
+| GET | `/proformas` | filtros `entidadId?`, `estado?`, paginado |
+| GET | `/proformas/:id` | cabecera + líneas + cuotas + Movimiento de origen |
+| POST | `/proformas` | `{ movimientoId, formaPagoId?, condicionPagoId?, monedaId, observaciones? }` — líneas se copian desde el Movimiento (R25) |
+| PATCH | `/proformas/:id` | cabecera (forma/condición de pago, moneda, observaciones) — solo `BORRADOR` |
+| PATCH | `/proformas/:id/lineas/:lineaId` | solo `{ precioUnitario }` — cantidad/artículo no editables — solo `BORRADOR` |
+| POST | `/proformas/:id/enviar-validacion` | exige todas las líneas con precio > 0 → `ENVIADA_VALIDACION` |
+| POST | `/proformas/:id/anular` | desde `BORRADOR` o `ENVIADA_VALIDACION` → `ANULADA`; libera el Movimiento para una nueva Proforma |
 
-> La **emisión** de la factura (DTE 33/34) y la confirmación ocurren en `cobranza.md` (Ventas Nacionales); el descuento de stock se dispara desde allí (R16).
+> La **emisión** de la factura real (DTE) y la transición a `FACTURADA` quedan para cuando exista `cobranza.md` — fuera de esta entrega.
 
 ---
 

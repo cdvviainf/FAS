@@ -25,8 +25,17 @@ function assertNoEsCodigoReservado(codigo: string) {
   }
 }
 
+// R25: generaProforma marca este tipo como origen elegible para una Proforma
+// de Venta de Materiales — solo tiene sentido en movimientos que sacan stock.
+function validarGeneraProforma(clase: string, generaProforma: boolean | undefined) {
+  if (generaProforma && clase !== 'SALIDA') {
+    throw new ValidationError('Solo un Tipo de Movimiento clase Salida puede marcarse para generar Proforma de Venta (R25)')
+  }
+}
+
 export async function crearTipoMovimiento(body: TipoMovimientoCreateInput) {
   assertNoEsCodigoReservado(body.codigo)
+  validarGeneraProforma(body.clase, body.generaProforma)
   const existente = await repo.findTipoMovimientoByCodigo(body.codigo)
   if (existente) throw new ValidationError(`Ya existe un tipo de movimiento con código "${body.codigo}"`)
   return repo.createTipoMovimiento(body)
@@ -35,5 +44,8 @@ export async function crearTipoMovimiento(body: TipoMovimientoCreateInput) {
 export async function actualizarTipoMovimiento(id: number, body: TipoMovimientoUpdateInput) {
   const actual = await obtenerTipoMovimiento(id)
   assertNoEsCodigoReservado(actual.codigo)
+  const claseFinal = body.clase ?? actual.clase
+  const generaProformaFinal = body.generaProforma ?? actual.generaProforma
+  validarGeneraProforma(claseFinal, generaProformaFinal)
   return repo.updateTipoMovimiento(id, body)
 }

@@ -17,6 +17,7 @@ export const movimientosService = {
     if (filters.fechaDesde) sp.fechaDesde = filters.fechaDesde
     if (filters.fechaHasta) sp.fechaHasta = filters.fechaHasta
     if (filters.bodegaId) sp.bodegaId = String(filters.bodegaId)
+    if (filters.elegibleProforma) sp.elegibleProforma = 'true'
     if (filters.page) sp.page = String(filters.page)
     if (filters.limit) sp.limit = String(filters.limit)
     return api.get('materiales/movimientos', { searchParams: sp }).json()

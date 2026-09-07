@@ -1,8 +1,10 @@
 import type { preHandlerHookHandler } from 'fastify'
+import { timingSafeEqual, createHmac } from 'node:crypto'
 import { fromNodeHeaders } from 'better-auth/node'
 import { auth } from '../lib/auth.js'
 import { prisma } from '../lib/prisma.js'
 import { empresaContext } from '../lib/empresa-context.js'
+import { env } from '../config/env.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -14,6 +16,11 @@ declare module 'fastify' {
     // tiene ninguna empresa asignada todavía (modo soft — no bloquea, ver
     // Docs/empresas.md §4 Fase 1).
     fasEmpresaId?: number | null
+    // Body crudo (bytes exactos, antes de JSON.parse) — poblado en app.ts
+    // para todo request; lo usa requireAglWebhookSignature para verificar el
+    // HMAC contra lo que AGL360 realmente firmó, no un JSON.stringify propio
+    // que podría no ser byte-a-byte igual (orden de claves, espacios, etc.).
+    rawBody?: Buffer
   }
 }
 
@@ -145,5 +152,36 @@ export function requireAnyLevel(
       reply.status(403).send({ error: { code: 'FORBIDDEN', message: mensaje } })
       return
     }
+  }
+}
+
+/**
+ * Autentica el webhook de confirmación de AGL360 (Docs/webhook-fas.md) — no
+ * hay sesión de usuario, así que en vez de `requireAuth` se verifica la
+ * firma HMAC-SHA256 del header `X-AGL360-Signature` contra el body CRUDO
+ * (bytes exactos recibidos, poblado en app.ts — nunca contra un
+ * `JSON.stringify` propio, que podría no coincidir byte a byte con lo que
+ * AGL360 firmó). Sin `AGL360_WEBHOOK_SECRET` configurado, rechaza toda
+ * llamada (fail-closed) en vez de aceptar cualquier webhook.
+ * `timingSafeEqual` evita filtrar la firma por comparación de tiempo; exige
+ * igual longitud primero porque la función lanza si los buffers difieren de
+ * tamaño.
+ */
+export const requireAglWebhookSignature: preHandlerHookHandler = async (request, reply) => {
+  const secreto = env.AGL360_WEBHOOK_SECRET
+  const firmaRaw = request.headers['x-agl360-signature']
+  const firma = Array.isArray(firmaRaw) ? firmaRaw[0] : firmaRaw
+  const raw = request.rawBody
+
+  if (!secreto || !firma || !raw) {
+    reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Autenticación de webhook requerida.' } })
+    return
+  }
+  const esperada = createHmac('sha256', secreto).update(raw).digest('hex')
+  const a = Buffer.from(esperada)
+  const b = Buffer.from(firma)
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Firma inválida.' } })
+    return
   }
 }
