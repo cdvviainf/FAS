@@ -7,6 +7,11 @@ export const integracionCreateSchema = z.object({
   descripcion: z.string().min(1, 'La descripción es requerida').max(200).trim(),
   url: z.string().url().max(300).optional().nullable(),
   activo: z.boolean().default(true),
+  // Gestor Logístico (2026-09-07, ventas.md §4.3) — Entidad tipo
+  // GESTOR_LOGISTICO. Si se vincula y la Integración está activa, ese
+  // gestor dispara la reserva automática al generar un Embarque; si no,
+  // cae a manual. A lo más una Integración por gestor (@@unique).
+  gestorLogisticoId: z.number().int().positive().optional().nullable(),
 })
 
 export const integracionUpdateSchema = integracionCreateSchema.omit({ codigo: true }).partial()

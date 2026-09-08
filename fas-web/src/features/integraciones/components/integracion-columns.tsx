@@ -13,6 +13,11 @@ export function buildIntegracionColumns(): ColumnDef<IntegracionListItem>[] {
     { accessorKey: 'descripcion', header: 'Descripción' },
     { accessorKey: 'url', header: 'URL', cell: ({ row }) => row.original.url || <span className='text-muted-foreground'>—</span> },
     {
+      id: 'gestorLogistico',
+      header: 'Gestor Logístico',
+      cell: ({ row }) => row.original.gestorLogistico?.descripcion ?? <span className='text-muted-foreground'>—</span>,
+    },
+    {
       id: 'activo',
       header: 'Estado',
       cell: ({ row }) => (

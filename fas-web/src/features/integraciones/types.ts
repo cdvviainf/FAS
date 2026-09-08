@@ -23,12 +23,23 @@ export interface IntegracionParametro {
   descripcion: string | null
 }
 
+// Gestor Logístico vinculado (2026-09-07, ventas.md §4.3) — Entidad tipo
+// GESTOR_LOGISTICO. Si está vinculado y la Integración está activa, ese
+// gestor dispara la reserva automática al generar un Embarque.
+export interface GestorLogisticoRef {
+  id: number
+  codigo: string
+  descripcion: string
+}
+
 export interface Integracion {
   id: number
   codigo: string
   descripcion: string
   url: string | null
   activo: boolean
+  gestorLogisticoId: number | null
+  gestorLogistico: GestorLogisticoRef | null
   parametros: IntegracionParametro[]
 }
 
@@ -38,6 +49,8 @@ export interface IntegracionListItem {
   descripcion: string
   url: string | null
   activo: boolean
+  gestorLogisticoId: number | null
+  gestorLogistico: GestorLogisticoRef | null
 }
 
 export interface IntegracionCreateInput {
@@ -45,6 +58,7 @@ export interface IntegracionCreateInput {
   descripcion: string
   url?: string | null
   activo?: boolean
+  gestorLogisticoId?: number | null
 }
 
 export type IntegracionUpdateInput = Partial<Omit<IntegracionCreateInput, 'codigo'>>

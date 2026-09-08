@@ -5,11 +5,23 @@ import * as aglAdapter from './agl360.adapter.js'
 import * as integracionesRepo from '../../config/integraciones/integraciones.repository.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ResultadoIntentoReserva } from './embarques.repository.js'
-import type { EmbarqueCreateInput } from './embarques.types.js'
+import type { DatosReservaManualInput, EmbarqueCreateInput } from './embarques.types.js'
 import type { AglWebhookConfirmarBody } from './embarques.schema.js'
 import type { SolicitudAglPayload } from './agl360.adapter.js'
 
 const CODIGO_INTEGRACION_AGL = 'AGL360'
+
+// Resuelve el modo de reserva de un Gestor Logístico (2026-09-07, ventas.md
+// §4.3 — generaliza el hardcode a AGL360): "automático" solo si tiene una
+// Integración activa vinculada Y esa Integración tiene un adapter real. Hoy
+// el único adapter real es AGL360 (agl360.adapter.ts) — un gestor vinculado
+// a cualquier otro código, o sin Integración vinculada, cae a manual (YAGNI,
+// mismo criterio que el adapter DTE en CLAUDE.md: no se construye un
+// dispatcher genérico multi-adapter mientras solo exista uno).
+async function resolverModoAutomatico(gestorLogisticoId: number): Promise<boolean> {
+  const integracion = await integracionesRepo.getIntegracionActivaPorGestorLogistico(gestorLogisticoId)
+  return integracion?.codigo === CODIGO_INTEGRACION_AGL
+}
 
 export async function listarEmbarques(page: number, limit: number, notaVentaId?: number) {
   const { data, total } = await repo.listEmbarques(page, limit, notaVentaId)
@@ -108,6 +120,14 @@ export async function generarEmbarque(body: EmbarqueCreateInput, creadoPor: stri
   const notaVenta = await repo.getNotaVenta(body.notaVentaId)
   if (!notaVenta) throw new ValidationError('El Cierre Comercial seleccionado no existe')
 
+  // Gestor Logístico (2026-09-07, ventas.md §4.3) — existencia + tipo, mismo
+  // criterio que el consignatario en notas-venta.service.ts.
+  const gestor = await repo.getGestorLogistico(body.gestorLogisticoId)
+  if (!gestor) throw new ValidationError('El Gestor Logístico seleccionado no existe o está inactivo')
+  if (!gestor.tipos.includes('GESTOR_LOGISTICO')) {
+    throw new ValidationError('La entidad seleccionada no tiene tipo Gestor Logístico')
+  }
+
   const prefijoConfig = await prefijosService.obtenerPrefijoEmbarque(notaVenta.tipoEmbarqueId)
   if (!prefijoConfig) {
     throw new ValidationError(
@@ -127,22 +147,44 @@ export async function generarEmbarque(body: EmbarqueCreateInput, creadoPor: stri
     )
   }
 
+  const modoAutomatico = await resolverModoAutomatico(body.gestorLogisticoId)
+
   return repo.generarEmbarqueTransaccional(
     body.notaVentaId,
     numeroInstructivo,
+    body.gestorLogisticoId,
     creadoPor,
     body.forzarSinReserva ?? false,
+    modoAutomatico,
     () => intentarReservaAgl(body.notaVentaId),
   )
 }
 
 // Reintento manual (pestaña "Solicitud de Reserva" de un Embarque ya
 // PENDIENTE) — mismo intento de integración que generarEmbarque, pero sobre
-// un Embarque que ya existe en vez de crear uno nuevo.
+// un Embarque que ya existe en vez de crear uno nuevo. Solo aplica a
+// gestores con integración automática — un Embarque `reservaManual` no tiene
+// nada que reintentar (repo.solicitarReservaTransaccional también lo valida
+// bajo lock, esto es el pre-check amigable).
+//
+// IMP-QA-R1-016 (QA ronda 1): re-resuelve `modoAutomatico` en cada reintento
+// en vez de asumirlo — la integración del gestor pudo desactivarse o
+// desvincularse entre el fallo inicial y este reintento. `gestorLogisticoId`
+// nulo (Embarque legacy, IMP-QA-R1-014) también cae a "no automático".
 export async function solicitarReservaParaEmbarque(embarqueId: number, creadoPor: string) {
   const embarque = await obtenerEmbarque(embarqueId)
   if (embarque.estadoReserva !== 'PENDIENTE') {
     throw new ValidationError('Este Embarque ya tiene una Solicitud de Reserva enviada')
+  }
+  if (embarque.reservaManual) {
+    throw new ValidationError('Este Embarque está en modo de reserva manual — ingresa los datos de booking directamente')
+  }
+
+  const modoAutomatico = embarque.gestorLogisticoId ? await resolverModoAutomatico(embarque.gestorLogisticoId) : false
+  if (!modoAutomatico) {
+    throw new ValidationError(
+      'Este Embarque ya no tiene un Gestor Logístico con integración automática activa — usa "Dejar Manual" para ingresar los datos a mano',
+    )
   }
 
   return repo.solicitarReservaTransaccional(
@@ -150,6 +192,20 @@ export async function solicitarReservaParaEmbarque(embarqueId: number, creadoPor
     creadoPor,
     () => intentarReservaAgl(embarque.notaVentaId),
   )
+}
+
+// "Dejar Manual" (2026-09-07, ventas.md §4.3) — desde un Embarque PENDIENTE,
+// abandona el camino automático (si lo había) y habilita el tipeo directo
+// de los datos de booking. `actualizadoPor` (IMP-QA-R1-017, QA ronda 1):
+// auditoría estándar de la convención global (CLAUDE.md §5).
+export async function dejarReservaManual(embarqueId: number, actualizadoPor: string) {
+  return repo.marcarReservaManualTransaccional(embarqueId, actualizadoPor)
+}
+
+// Guarda los datos de booking manual — exige reservaManual=true (ver
+// repo.guardarDatosReservaManual). CONFIRMADA en cuanto se guarda.
+export async function guardarDatosReservaManual(embarqueId: number, datos: DatosReservaManualInput, actualizadoPor: string) {
+  return repo.guardarDatosReservaManual(embarqueId, datos, actualizadoPor)
 }
 
 // ─── Webhook AGL360 (confirmación) ──────────────────────────────────────────

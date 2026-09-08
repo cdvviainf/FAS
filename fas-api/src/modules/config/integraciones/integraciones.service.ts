@@ -22,14 +22,35 @@ export async function obtenerIntegracion(id: number) {
   return integracion
 }
 
+// IMP-QA-R1-015 (QA ronda 1): la FK compuesta solo garantiza tenant +
+// existencia — no valida que la Entidad sea del tipo correcto. Mismo
+// criterio que embarques.service.ts al elegir el gestor de un Embarque.
+async function validarGestorLogistico(gestorLogisticoId: number) {
+  const entidad = await repo.getEntidadGestorLogistico(gestorLogisticoId)
+  if (!entidad) throw new ValidationError('El Gestor Logístico seleccionado no existe o está inactivo')
+  if (!entidad.tipos.includes('GESTOR_LOGISTICO')) {
+    throw new ValidationError('La entidad seleccionada no tiene tipo Gestor Logístico')
+  }
+}
+
 export async function crearIntegracion(body: IntegracionCreateInput, creadoPor: string) {
   const existente = await repo.findIntegracionByCodigo(body.codigo)
   if (existente) throw new ValidationError(`Ya existe una Integración con código "${body.codigo}"`)
+  if (body.gestorLogisticoId) {
+    await validarGestorLogistico(body.gestorLogisticoId)
+    const conGestor = await repo.findIntegracionByGestorLogistico(body.gestorLogisticoId)
+    if (conGestor) throw new ValidationError('Ese Gestor Logístico ya tiene otra Integración vinculada')
+  }
   return repo.createIntegracion(body, creadoPor)
 }
 
 export async function actualizarIntegracion(id: number, body: IntegracionUpdateInput, actualizadoPor: string) {
   await obtenerIntegracion(id)
+  if (body.gestorLogisticoId) {
+    await validarGestorLogistico(body.gestorLogisticoId)
+    const conGestor = await repo.findIntegracionByGestorLogistico(body.gestorLogisticoId, id)
+    if (conGestor) throw new ValidationError('Ese Gestor Logístico ya tiene otra Integración vinculada')
+  }
   return repo.updateIntegracion(id, body, actualizadoPor)
 }
 

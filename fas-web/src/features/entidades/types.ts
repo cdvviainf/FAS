@@ -11,6 +11,7 @@ export type TipoEntidad =
   | 'PRODUCTOR'
   | 'EXPORTADORA'
   | 'PLANTA'
+  | 'GESTOR_LOGISTICO'
 
 export const TIPO_ENTIDAD_LABELS: Record<TipoEntidad, string> = {
   CLIENTE_NACIONAL: 'Cliente',
@@ -25,6 +26,7 @@ export const TIPO_ENTIDAD_LABELS: Record<TipoEntidad, string> = {
   PRODUCTOR: 'Productor',
   EXPORTADORA: 'Exportadora',
   PLANTA: 'Planta',
+  GESTOR_LOGISTICO: 'Gestor Logístico',
 }
 
 export const TIPOS_ENTIDAD_ORDEN: TipoEntidad[] = [
@@ -40,6 +42,7 @@ export const TIPOS_ENTIDAD_ORDEN: TipoEntidad[] = [
   'NOTIFY',
   'NAVIERA',
   'EXPORTADORA',
+  'GESTOR_LOGISTICO',
 ]
 
 export interface PaisOption {

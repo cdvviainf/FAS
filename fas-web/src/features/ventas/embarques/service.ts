@@ -1,5 +1,12 @@
 import { api } from '@/lib/api'
-import type { Embarque, EmbarqueCreateInput, EmbarqueDetalle, EmbarqueListResponse, PalletResumen } from './types'
+import type {
+  DatosReservaManualInput,
+  Embarque,
+  EmbarqueCreateInput,
+  EmbarqueDetalle,
+  EmbarqueListResponse,
+  PalletResumen,
+} from './types'
 
 export const embarquesService = {
   async list(params: { notaVentaId?: number; page?: number; limit?: number } = {}): Promise<EmbarqueListResponse> {
@@ -42,5 +49,13 @@ export const embarquesService = {
 
   async solicitarReserva(id: number): Promise<{ data: EmbarqueDetalle }> {
     return api.post(`ventas/embarques/${id}/solicitud-reserva`).json()
+  },
+
+  async dejarReservaManual(id: number): Promise<{ data: EmbarqueDetalle }> {
+    return api.post(`ventas/embarques/${id}/reserva-manual`).json()
+  },
+
+  async guardarDatosReservaManual(id: number, data: DatosReservaManualInput): Promise<{ data: EmbarqueDetalle }> {
+    return api.patch(`ventas/embarques/${id}/datos-reserva`, { json: data }).json()
   },
 }

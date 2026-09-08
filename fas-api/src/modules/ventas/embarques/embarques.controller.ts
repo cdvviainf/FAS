@@ -6,6 +6,7 @@ import {
   reservarPalletsSchema,
   embarquePalletParamsSchema,
   aglWebhookConfirmarSchema,
+  datosReservaManualSchema,
 } from './embarques.schema.js'
 import * as service from './embarques.service.js'
 import { prisma } from '../../../lib/prisma.js'
@@ -65,6 +66,20 @@ export async function solicitarReserva(req: FastifyRequest, reply: FastifyReply)
   const { id } = embarqueParamsSchema.parse(req.params)
   const embarque = await service.solicitarReservaParaEmbarque(id, req.fasUserId!)
   return reply.status(201).send({ data: embarque })
+}
+
+// "Dejar Manual" / datos de booking manual (2026-09-07, ventas.md §4.3).
+export async function dejarReservaManual(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const embarque = await service.dejarReservaManual(id, req.fasUserId!)
+  return reply.status(201).send({ data: embarque })
+}
+
+export async function guardarDatosReservaManual(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const body = datosReservaManualSchema.parse(req.body)
+  const embarque = await service.guardarDatosReservaManual(id, body, req.fasUserId!)
+  return reply.send({ data: embarque })
 }
 
 // `referencia_externa` = lo que FAS mandó como `referencia_externa` al crear

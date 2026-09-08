@@ -66,6 +66,7 @@ enum TipoEntidad {
   PRODUCTOR
   EXPORTADORA
   PLANTA
+  GESTOR_LOGISTICO // 2026-09-07, ventas.md §4.3 — generaliza AGL360 (antes hardcodeado como el único gestor posible). Puede tener o no una Integración API activa vinculada (Integracion.gestorLogisticoId); sin ella, sus Embarques son 100% manuales.
 }
 
 model Entidad {

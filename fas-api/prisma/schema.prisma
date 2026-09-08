@@ -1302,6 +1302,12 @@ enum TipoEntidad {
   PRODUCTOR
   EXPORTADORA
   PLANTA
+  // Gestor Logístico (2026-09-07, ventas.md §4.3) — generaliza AGL360, que
+  // hasta ahora estaba hardcodeado como el único gestor posible. Un Gestor
+  // Logístico puede tener o no una Integración API activa vinculada
+  // (Integracion.gestorLogisticoId) — si no la tiene, la Solicitud de
+  // Reserva de sus Embarques es 100% manual (Embarque.reservaManual).
+  GESTOR_LOGISTICO
 }
 
 model Entidad {
@@ -1345,6 +1351,8 @@ model Entidad {
   instructivosEmbalajeProductor  InstructivoEmbalaje[]       @relation("InstructivoEmbalajeProductor")
   recepcionesPlanta              Recepcion[]                 @relation("RecepcionPlanta")
   palletsProductor               Pallet[]                    @relation("PalletProductor")
+  embarquesGestorLogistico       Embarque[]                  @relation("EmbarqueGestorLogistico")
+  integracionesGestorLogistico   Integracion[]               @relation("IntegracionGestorLogistico")
 
   @@unique([empresaId, id])
   @@index([eliminadoEn])
@@ -1655,6 +1663,18 @@ model Integracion {
   url         String?
   activo      Boolean @default(true)
 
+  // Vincula esta Integración a un Gestor Logístico (Entidad tipo
+  // GESTOR_LOGISTICO) — 2026-09-07, ventas.md §4.3: al generar un Embarque,
+  // el gestor elegido dispara la reserva automática vía esta Integración
+  // (si está activa) SOLO si ella misma tiene un adapter real (hoy solo
+  // `codigo='AGL360'`, ver embarques.service.ts) — un gestor sin Integración
+  // vinculada, o vinculado a un código sin adapter, cae directo a manual.
+  // FK compuesta (empresaId, gestorLogisticoId) -> Entidad(empresaId, id) —
+  // mismo patrón que notifyId/consignatarioId en NotaVenta. @@unique abajo
+  // (no acá) porque la unicidad real es (empresaId, gestorLogisticoId).
+  gestorLogisticoId Int?
+  gestorLogistico   Entidad? @relation("IntegracionGestorLogistico", fields: [empresaId, gestorLogisticoId], references: [empresaId, id])
+
   parametros IntegracionParametro[]
 
   creadoEn       DateTime  @default(now())
@@ -1666,6 +1686,7 @@ model Integracion {
 
   @@unique([empresaId, codigo])
   @@unique([empresaId, id])
+  @@unique([empresaId, gestorLogisticoId])
   @@index([empresaId])
   @@map("integraciones")
 }
@@ -2618,13 +2639,35 @@ model Embarque {
   despachadoPor String?
   pallets       Pallet[]
 
-  // Solicitud de Reserva (2026-09-05, ventas.md §4.3, reemplaza el borrador
-  // nunca implementado): al generar el Embarque se intenta reservar espacio
-  // con AGL360 — PENDIENTE si la integración falló y el usuario decidió
-  // generar igual sin reserva, SOLICITADA mientras se espera confirmación,
-  // CONFIRMADA cuando AGL360 confirma vía webhook.
-  estadoReserva    EstadoReservaEmbarque @default(PENDIENTE)
-  solicitudReserva SolicitudReserva?
+  // Solicitud de Reserva (2026-09-05, ventas.md §4.3; generalizado a
+  // cualquier Gestor Logístico el 2026-09-07, reemplaza el hardcode a
+  // AGL360): al generar el Embarque se elige un `gestorLogistico` (Entidad
+  // tipo GESTOR_LOGISTICO). Si tiene una Integración API activa vinculada
+  // (hoy solo AGL360 tiene adapter) se intenta la reserva automática —
+  // PENDIENTE si falló y el usuario decidió generar igual sin reserva,
+  // SOLICITADA mientras se espera confirmación por webhook, CONFIRMADA
+  // cuando el proveedor confirma. Si el gestor NO tiene integración (u
+  // "Dejar Manual" se usó tras un fallo), `reservaManual=true` y los datos
+  // de booking de abajo se tipean directo acá — CONFIRMADA en cuanto se
+  // guardan, sin paso intermedio.
+  gestorLogisticoId Int?
+  // FK compuesta (empresaId, gestorLogisticoId) -> Entidad(empresaId, id) —
+  // mismo patrón que notifyId/consignatarioId en NotaVenta.
+  gestorLogistico   Entidad?              @relation("EmbarqueGestorLogistico", fields: [empresaId, gestorLogisticoId], references: [empresaId, id])
+  estadoReserva     EstadoReservaEmbarque @default(PENDIENTE)
+  reservaManual     Boolean               @default(false)
+  solicitudReserva  SolicitudReserva?
+
+  // Datos de booking cuando reservaManual=true (mismo shape que
+  // SolicitudReserva.numeroBooking/naviera/nave/numeroContenedor/
+  // fechaZarpe/fechaRetiroPlanta, tipeados a mano por el usuario en vez de
+  // venir de un webhook — ventas.md §4.3).
+  numeroBookingManual     String?
+  navieraManual           String?
+  naveManual              String?
+  numeroContenedorManual  String?
+  fechaZarpeManual        DateTime?
+  fechaRetiroPlantaManual DateTime?
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -2636,6 +2679,7 @@ model Embarque {
   @@unique([empresaId, id])
   @@index([notaVentaId])
   @@index([empresaId])
+  @@index([gestorLogisticoId])
   @@map("embarques")
 }
 

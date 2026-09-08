@@ -4,6 +4,7 @@ import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { BusinessError, ValidationError } from '../../../shared/errors.js'
 import { LOCK_NAMESPACE_EMBARQUE_DESPACHO, LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA } from '../../../shared/advisory-locks.js'
 import { palletCalzaConDetalleNV } from './embarques.comparacion.js'
+import type { DatosReservaManualInput } from './embarques.types.js'
 
 // 502: la integración externa (no FAS) fue la que falló — distingue este
 // caso de un 422 de validación normal para que el frontend sepa mostrar el
@@ -83,6 +84,7 @@ export async function getEmbarqueById(id: number) {
       notaVenta: { select: notaVentaRefSelect },
       pallets: { include: palletInclude, orderBy: { id: 'asc' as const } },
       solicitudReserva: true,
+      gestorLogistico: { select: entidadSelect },
     },
   })
 }
@@ -200,6 +202,15 @@ export async function getNotaVenta(id: number) {
   })
 }
 
+// Valida existencia + tipo del Gestor Logístico elegido (ventas.md §4.3,
+// mismo criterio que el consignatario en notas-venta.service.ts).
+export async function getGestorLogistico(id: number) {
+  return prisma.entidad.findFirst({
+    where: { id, eliminadoEn: null, activo: true },
+    select: { id: true, tipos: true },
+  })
+}
+
 // Datos para armar el payload de la Solicitud de Reserva (ventas.md §4.3) —
 // en este punto del flujo todavía no hay Embarque ni pallets asignados (eso
 // pasa después, en "Seleccionar Pallets"), así que el "tamaño" que se envía
@@ -249,11 +260,20 @@ export async function createEmbarque(notaVentaId: number, numeroInstructivo: str
 // intento) — solo decide qué hacer SI la integración falla: crear igual en
 // PENDIENTE, o abortar (rollback completo, nada se crea) lanzando
 // IntegracionAglFallidaError para que el frontend ofrezca el diálogo.
+// `modoAutomatico` (2026-09-07, ventas.md §4.3 — generaliza el hardcode a
+// AGL360): lo resuelve el service ANTES de entrar acá, consultando si
+// `gestorLogisticoId` tiene una Integración activa con adapter real
+// vinculada. Si es `false`, NUNCA se llama `procesarReserva` — el Embarque
+// nace directo en `reservaManual=true`, sin intento ni diálogo de fallo
+// (a diferencia del camino automático, donde un fallo SÍ puede abortar todo
+// si `forzarSinReserva` es false).
 export async function generarEmbarqueTransaccional(
   notaVentaId: number,
   numeroInstructivo: string,
+  gestorLogisticoId: number,
   creadoPor: string,
   forzarSinReserva: boolean,
+  modoAutomatico: boolean,
   procesarReserva: () => Promise<ResultadoIntentoReserva>,
 ) {
   return prisma.$transaction(async (tx) => {
@@ -266,14 +286,29 @@ export async function generarEmbarqueTransaccional(
       )
     }
 
+    const empresaId = getEmpresaIdActual()!
+
+    if (!modoAutomatico) {
+      return tx.embarque.create({
+        data: { empresaId, notaVentaId, numeroInstructivo, gestorLogisticoId, creadoPor, reservaManual: true },
+        include: { notaVenta: { select: notaVentaRefSelect } },
+      })
+    }
+
     const resultado = await procesarReserva()
     if (!resultado.ok && !forzarSinReserva) {
       throw new IntegracionAglFallidaError(resultado.error ?? 'No se pudo conectar con AGL360')
     }
 
-    const empresaId = getEmpresaIdActual()!
     const embarque = await tx.embarque.create({
-      data: { empresaId, notaVentaId, numeroInstructivo, creadoPor, estadoReserva: resultado.ok ? 'SOLICITADA' : 'PENDIENTE' },
+      data: {
+        empresaId,
+        notaVentaId,
+        numeroInstructivo,
+        gestorLogisticoId,
+        creadoPor,
+        estadoReserva: resultado.ok ? 'SOLICITADA' : 'PENDIENTE',
+      },
     })
     if (resultado.ok) {
       await tx.solicitudReserva.create({
@@ -308,10 +343,16 @@ export async function solicitarReservaTransaccional(
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA}::int, ${embarqueId}::int)`
 
-    const embarque = await tx.embarque.findFirst({ where: { id: embarqueId, eliminadoEn: null }, select: { estadoReserva: true } })
+    const embarque = await tx.embarque.findFirst({
+      where: { id: embarqueId, eliminadoEn: null },
+      select: { estadoReserva: true, reservaManual: true },
+    })
     if (!embarque) throw new ValidationError('El Embarque ya no existe')
     if (embarque.estadoReserva !== 'PENDIENTE') {
       throw new ValidationError('Este Embarque ya tiene una Solicitud de Reserva enviada')
+    }
+    if (embarque.reservaManual) {
+      throw new ValidationError('Este Embarque está en modo de reserva manual — ingresa los datos de booking directamente')
     }
 
     const resultado = await procesarReserva()
@@ -336,6 +377,66 @@ export async function solicitarReservaTransaccional(
       include: { notaVenta: { select: notaVentaRefSelect } },
     })
   }, { timeout: 15_000, maxWait: 15_000 })
+}
+
+// "Dejar Manual" (2026-09-07, ventas.md §4.3) — desde un Embarque PENDIENTE
+// (nunca se intentó, o el último intento automático falló), lo pasa a modo
+// manual: reservaManual=true, habilita los campos de booking para tipeo
+// directo. Mismo lock (namespace embarqueId) que solicitarReservaTransaccional
+// para serializarse contra un reintento automático concurrente.
+export async function marcarReservaManualTransaccional(embarqueId: number, actualizadoPor: string) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA}::int, ${embarqueId}::int)`
+
+    const embarque = await tx.embarque.findFirst({
+      where: { id: embarqueId, eliminadoEn: null },
+      select: { estadoReserva: true, reservaManual: true },
+    })
+    if (!embarque) throw new ValidationError('El Embarque ya no existe')
+    if (embarque.estadoReserva !== 'PENDIENTE') {
+      throw new ValidationError('Este Embarque ya tiene una Solicitud de Reserva enviada o confirmada')
+    }
+    if (embarque.reservaManual) {
+      throw new ValidationError('Este Embarque ya está en modo de reserva manual')
+    }
+
+    return tx.embarque.update({
+      where: { id: embarqueId },
+      data: { reservaManual: true, actualizadoPor },
+      include: { notaVenta: { select: notaVentaRefSelect } },
+    })
+  }, { timeout: 15_000, maxWait: 15_000 })
+}
+
+// Guarda los datos de booking manual (ventas.md §4.3) — exige
+// reservaManual=true (defensa en profundidad vía updateMany condicionado,
+// mismo patrón que reservarPalletsEnEmbarque). CONFIRMADA en cuanto se
+// guarda, sin paso intermedio; queda editable después (no se bloquea tras
+// la primera confirmación — decisión de negocio, Christian, 2026-09-07).
+export async function guardarDatosReservaManual(embarqueId: number, datos: DatosReservaManualInput, actualizadoPor: string) {
+  const claim = await prisma.embarque.updateMany({
+    where: { id: embarqueId, eliminadoEn: null, reservaManual: true },
+    data: {
+      numeroBookingManual: datos.numeroBooking,
+      navieraManual: datos.naviera,
+      naveManual: datos.nave,
+      numeroContenedorManual: datos.numeroContenedor,
+      fechaZarpeManual: datos.fechaZarpe,
+      fechaRetiroPlantaManual: datos.fechaRetiroPlanta,
+      estadoReserva: 'CONFIRMADA',
+      actualizadoPor,
+    },
+  })
+  if (claim.count === 0) {
+    const existe = await prisma.embarque.findFirst({ where: { id: embarqueId, eliminadoEn: null }, select: { id: true } })
+    throw new ValidationError(
+      existe ? 'Este Embarque no está en modo de reserva manual' : 'El Embarque ya no existe',
+    )
+  }
+  return prisma.embarque.findFirstOrThrow({
+    where: { id: embarqueId },
+    include: { notaVenta: { select: notaVentaRefSelect } },
+  })
 }
 
 // ─── Webhook AGL360 (confirmación) ──────────────────────────────────────────

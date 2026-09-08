@@ -3,10 +3,37 @@ import { z } from 'zod'
 // numeroInstructivo ya no se ingresa manualmente (2026-08-13, ventas.md
 // R10 — supersesión): se calcula en el service a partir del folio de la NV
 // y el prefijo configurado para su Tipo de Embarque.
+// gestorLogisticoId (2026-09-07, ventas.md §4.3 — generaliza el hardcode a
+// AGL360): obligatorio, se elige junto con el resto de datos al generar el
+// Embarque. Si el gestor tiene una Integración API activa vinculada, se
+// intenta la reserva automática (igual que antes); si no, el Embarque nace
+// directo en modo manual (reservaManual=true).
 export const embarqueCreateSchema = z.object({
   notaVentaId: z.number().int().positive('El Cierre Comercial es requerido'),
+  gestorLogisticoId: z.number().int().positive('El Gestor Logístico es requerido'),
   forzarSinReserva: z.boolean().optional(),
 })
+
+// "Dejar Manual" (2026-09-07): sin body — solo marca el Embarque como
+// reservaManual=true tras un fallo de la integración automática.
+export const dejarReservaManualSchema = z.object({})
+
+// Guardar datos de booking manual — mismo shape que SolicitudReserva
+// (numeroBooking/naviera/nave/numeroContenedor/fechaZarpe/fechaRetiroPlanta),
+// tipeados a mano en vez de recibidos por webhook. Al menos un campo debe
+// venir con valor (guardar "todo vacío" no tiene sentido).
+export const datosReservaManualSchema = z
+  .object({
+    numeroBooking: z.string().trim().max(100).optional().nullable(),
+    naviera: z.string().trim().max(150).optional().nullable(),
+    nave: z.string().trim().max(150).optional().nullable(),
+    numeroContenedor: z.string().trim().max(50).optional().nullable(),
+    fechaZarpe: z.coerce.date().optional().nullable(),
+    fechaRetiroPlanta: z.coerce.date().optional().nullable(),
+  })
+  .refine((d) => Object.values(d).some((v) => v !== undefined && v !== null && v !== ''), {
+    message: 'Debes ingresar al menos un dato de la reserva',
+  })
 
 // Webhook AGL360 -> FAS (Docs/webhook-fas.md, contrato real 2026-09-07):
 // notifica que una SolicitudServicio creada por la API se aprobó y generó
@@ -50,3 +77,4 @@ export const embarquePalletParamsSchema = z.object({
 export type EmbarqueCreateBody = z.infer<typeof embarqueCreateSchema>
 export type ReservarPalletsBody = z.infer<typeof reservarPalletsSchema>
 export type AglWebhookConfirmarBody = z.infer<typeof aglWebhookConfirmarSchema>
+export type DatosReservaManualBody = z.infer<typeof datosReservaManualSchema>

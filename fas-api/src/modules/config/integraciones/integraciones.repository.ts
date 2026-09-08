@@ -19,7 +19,13 @@ function serializeParametro<T extends { valorExterno: string; sensible: boolean 
 export async function listIntegraciones(page: number, limit: number) {
   const where = { eliminadoEn: null }
   const [data, total] = await Promise.all([
-    prisma.integracion.findMany({ where, orderBy: { id: 'desc' }, skip: (page - 1) * limit, take: limit }),
+    prisma.integracion.findMany({
+      where,
+      include: { gestorLogistico: { select: { id: true, codigo: true, descripcion: true } } },
+      orderBy: { id: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
     prisma.integracion.count({ where }),
   ])
   return { data, total }
@@ -28,7 +34,10 @@ export async function listIntegraciones(page: number, limit: number) {
 export async function getIntegracionById(id: number) {
   const integracion = await prisma.integracion.findFirst({
     where: { id, eliminadoEn: null },
-    include: { parametros: { orderBy: { id: 'asc' } } },
+    include: {
+      parametros: { orderBy: { id: 'asc' } },
+      gestorLogistico: { select: { id: true, codigo: true, descripcion: true } },
+    },
   })
   if (!integracion) return null
   return { ...integracion, parametros: integracion.parametros.map(serializeParametro) }
@@ -36,6 +45,24 @@ export async function getIntegracionById(id: number) {
 
 export async function findIntegracionByCodigo(codigo: string) {
   return prisma.integracion.findFirst({ where: { codigo, eliminadoEn: null }, select: { id: true } })
+}
+
+// Existencia + tipo del Gestor Logístico elegido (IMP-QA-R1-015, QA ronda
+// 1) — mismo criterio que embarques.repository.ts#getGestorLogistico.
+export async function getEntidadGestorLogistico(id: number) {
+  return prisma.entidad.findFirst({
+    where: { id, eliminadoEn: null, activo: true },
+    select: { id: true, tipos: true },
+  })
+}
+
+// A lo más una Integración por Gestor Logístico (@@unique) — mismo patrón
+// de pre-check amigable que findIntegracionByCodigo.
+export async function findIntegracionByGestorLogistico(gestorLogisticoId: number, excludeId?: number) {
+  return prisma.integracion.findFirst({
+    where: { gestorLogisticoId, eliminadoEn: null, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    select: { id: true },
+  })
 }
 
 export async function createIntegracion(data: IntegracionCreateInput, creadoPor: string) {
@@ -52,8 +79,18 @@ export async function updateIntegracion(id: number, data: IntegracionUpdateInput
   return getIntegracionById(id)
 }
 
+// IMP-QA-R2-018 (QA ronda 2, arbitrado — decisión de negocio, Christian,
+// 2026-09-07): al eliminar, se libera el vínculo con el Gestor Logístico de
+// inmediato (gestorLogisticoId=null) — el gestor queda disponible para
+// vincularse a otra Integración sin fricción. Sin esto, la fila eliminada
+// seguía ocupando @@unique([empresaId, gestorLogisticoId]) y una nueva
+// vinculación al mismo gestor pasaba la validación de negocio pero violaba
+// la restricción de Postgres.
 export async function softDeleteIntegracion(id: number, eliminadoPor: string) {
-  await prisma.integracion.update({ where: { id }, data: { eliminadoEn: new Date(), eliminadoPor } })
+  await prisma.integracion.update({
+    where: { id },
+    data: { eliminadoEn: new Date(), eliminadoPor, gestorLogisticoId: null },
+  })
 }
 
 // ─── Parámetros ──────────────────────────────────────────────────────────────
@@ -121,6 +158,16 @@ export async function removeParametro(id: number) {
 
 export async function getIntegracionActivaPorCodigo(codigo: string) {
   return prisma.integracion.findFirst({ where: { codigo, activo: true, eliminadoEn: null } })
+}
+
+// Resuelve si un Gestor Logístico tiene una Integración API activa
+// vinculada (ventas.md §4.3, 2026-09-07) — usado por embarques.service.ts
+// para decidir si intentar la reserva automática o caer directo a manual.
+export async function getIntegracionActivaPorGestorLogistico(gestorLogisticoId: number) {
+  return prisma.integracion.findFirst({
+    where: { gestorLogisticoId, activo: true, eliminadoEn: null },
+    select: { codigo: true },
+  })
 }
 
 export async function getValorParametro(

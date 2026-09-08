@@ -68,12 +68,39 @@ export interface SolicitudReserva {
   confirmadoEn: string | null
 }
 
-export interface Embarque {
+// Datos de booking tipeados a mano (2026-09-07, ventas.md §4.3 — Gestor
+// Logístico sin integración, o "Dejar Manual" tras un fallo de AGL360).
+export interface DatosReservaManual {
+  numeroBookingManual: string | null
+  navieraManual: string | null
+  naveManual: string | null
+  numeroContenedorManual: string | null
+  fechaZarpeManual: string | null
+  fechaRetiroPlantaManual: string | null
+}
+
+export interface DatosReservaManualInput {
+  numeroBooking?: string | null
+  naviera?: string | null
+  nave?: string | null
+  numeroContenedor?: string | null
+  fechaZarpe?: string | null
+  fechaRetiroPlanta?: string | null
+}
+
+export interface Embarque extends DatosReservaManual {
   id: number
   notaVentaId: number
   notaVenta: EmbarqueNotaVentaRef
   numeroInstructivo: string
+  // Nullable (2026-09-07, IMP-QA-R1-014): Embarques creados antes de este
+  // campo (o vía fixtures de test que insertan directo por Prisma) no
+  // tienen gestor — la API/UI debe tratarlo como legacy, nunca asumir que
+  // siempre existe.
+  gestorLogisticoId: number | null
+  gestorLogistico: EntidadRef | null
   estadoReserva: EstadoReservaEmbarque
+  reservaManual: boolean
   despachadoEn: string | null
   despachadoPor: string | null
   creadoEn: string
@@ -87,9 +114,12 @@ export interface EmbarqueDetalle extends Omit<Embarque, '_count'> {
 
 // numeroInstructivo ya no se ingresa manualmente (2026-08-13, ventas.md R10):
 // se calcula en el backend a partir del folio de la NV y el prefijo
-// configurado para su Tipo de Embarque.
+// configurado para su Tipo de Embarque. gestorLogisticoId (2026-09-07,
+// ventas.md §4.3) se elige junto al resto — determina si se intenta la
+// reserva automática o si el Embarque nace en modo manual.
 export interface EmbarqueCreateInput {
   notaVentaId: number
+  gestorLogisticoId: number
   forzarSinReserva?: boolean
 }
 

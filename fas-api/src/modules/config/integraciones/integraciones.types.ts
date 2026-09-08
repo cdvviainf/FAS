@@ -6,6 +6,7 @@ export interface IntegracionCreateInput {
   descripcion: string
   url?: string | null
   activo?: boolean
+  gestorLogisticoId?: number | null
 }
 
 export type IntegracionUpdateInput = Partial<Omit<IntegracionCreateInput, 'codigo'>>

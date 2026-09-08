@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Sheet,
@@ -15,9 +15,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
 import { integracionesService } from '../service'
 import { integracionesKeys } from '../queries'
+import { entidadesService } from '@/features/entidades/service'
 import type { Integracion, IntegracionListItem } from '../types'
 
 interface IntegracionFormSheetProps {
@@ -35,7 +37,19 @@ export function IntegracionFormSheet({ item, open, onOpenChange, onCreated }: In
   const [descripcion, setDescripcion] = useState('')
   const [url, setUrl] = useState('')
   const [activo, setActivo] = useState(true)
+  const [gestorLogisticoId, setGestorLogisticoId] = useState<number | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // Gestor Logístico (2026-09-07, ventas.md §4.3) — opcional: vincula esta
+  // Integración a un gestor para que sus Embarques disparen la reserva
+  // automática (hoy solo tiene adapter real el código AGL360).
+  const { data: gestoresData } = useQuery({
+    queryKey: ['entidades-gestor-logistico-options'],
+    queryFn: () => entidadesService.list({ tipo: 'GESTOR_LOGISTICO', activo: true, limit: 200 }),
+    staleTime: 60_000,
+    enabled: open,
+  })
+  const gestores = gestoresData?.data ?? []
 
   useEffect(() => {
     if (!open) return
@@ -46,11 +60,13 @@ export function IntegracionFormSheet({ item, open, onOpenChange, onCreated }: In
       setDescripcion(item.descripcion)
       setUrl(item.url ?? '')
       setActivo(item.activo)
+      setGestorLogisticoId(item.gestorLogisticoId)
     } else {
       setCodigo('')
       setDescripcion('')
       setUrl('')
       setActivo(true)
+      setGestorLogisticoId(null)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item?.id])
@@ -61,6 +77,7 @@ export function IntegracionFormSheet({ item, open, onOpenChange, onCreated }: In
         descripcion: descripcion.trim(),
         url: url.trim() || null,
         activo,
+        gestorLogisticoId,
       }
       if (isEdit) return integracionesService.update(item!.id, payload)
       return integracionesService.create({ ...payload, codigo: codigo.trim() })
@@ -138,6 +155,21 @@ export function IntegracionFormSheet({ item, open, onOpenChange, onCreated }: In
               Con la integración inactiva, ningún adapter la usará aunque tenga sus parámetros configurados.
             </p>
           )}
+
+          <div className='space-y-1.5'>
+            <Label>Gestor Logístico</Label>
+            <Combobox
+              value={gestorLogisticoId ? String(gestorLogisticoId) : 'none'}
+              onChange={(v) => setGestorLogisticoId(v === 'none' ? null : Number(v))}
+              placeholder='Sin gestor vinculado'
+              searchPlaceholder='Buscar entidad...'
+              options={[{ value: 'none', label: 'Sin gestor vinculado' }, ...gestores.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
+            />
+            <p className='text-xs text-muted-foreground'>
+              Si se vincula (ventas.md §4.3), los Embarques de ese gestor intentan la reserva automática con esta
+              integración. Sin vincular, sus Embarques son 100% manuales.
+            </p>
+          </div>
         </div>
 
         <SheetFooter>

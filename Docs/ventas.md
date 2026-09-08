@@ -357,12 +357,33 @@ Generar el Embarque (botón "Solicitar Reserva" en el listado de Cierres) intent
 
 > **Actualización (2026-09-07) — contrato real del webhook.** El borrador original de esta sección asumía que la confirmación traería consigo el detalle completo del booking (naviera, nave, contenedor, fechas) y que el body incluiría `empresaId` explícito. El contrato real que AGL360 terminó exponiendo (`Docs/webhook-fas.md`) es más angosto: el único evento hoy es `orden.creada`, que solo informa `{evento, idOrdenServicio, idSolicitudServicio, referencia_externa, estadoOrden: "pendiente"}` — **sin** `empresaId` (se deriva parseando `referencia_externa`, que FAS genera con el formato determinístico `AGL-{empresaId}-{notaVentaId}`) y **sin** ningún dato de booking (ese detalle lo completa el staff de AGL360 después; no existe todavía un endpoint de consulta para leerlo — ver nota en `webhook-fas.md`). Los campos de booking del modelo de abajo quedan declarados para cuando ese endpoint exista, pero esta versión del webhook nunca los puebla.
 
+> **Segunda actualización (2026-09-07) — se reactiva el Gestor Logístico genérico, con fallback manual.** La supersesión de arriba decía que `GESTOR_LOGISTICO` "nunca se implementó" y que se generalizaría recién si aparecía un segundo proveedor. Ese segundo caso apareció: Agrosan puede operar un Embarque con **otra empresa de logística** que no expone ninguna API — ahí FAS solo debe guardar el registro y dejar que el usuario tipee los datos de la reserva a mano. Se reactiva `GESTOR_LOGISTICO` como tipo de `Entidad` (`entidades.md`), y `Embarque` pasa a elegir un `gestorLogisticoId` en vez de asumir AGL360 siempre:
+>
+> - **Automático:** si el gestor elegido tiene una `Integracion` activa vinculada (`Integracion.gestorLogisticoId`) — hoy solo el código `AGL360` tiene adapter real (`agl360.adapter.ts`) — se intenta la reserva exactamente igual que antes (éxito → `SOLICITADA` → webhook → `CONFIRMADA`; falla → `PENDIENTE`, con la opción de **Reintentar** o **Dejar Manual**).
+> - **Manual:** si el gestor no tiene integración vinculada, el Embarque nace directo con `reservaManual = true`, sin intentar nada ni mostrar el diálogo de fallo. Desde `PENDIENTE` (con o sin intento automático fallido de por medio), "Dejar Manual" (`POST /embarques/:id/reserva-manual`) marca `reservaManual = true`; con eso activo, `PATCH /embarques/:id/datos-reserva` guarda los datos de booking **directo en el `Embarque`** (no en `SolicitudReserva` — decisión de diseño, Christian: evita esperar el `Embarque` extendido completo de §4.2 solo para este subconjunto de campos) y pone `estadoReserva = CONFIRMADA` de inmediato, sin paso intermedio. Los datos quedan editables después (no se bloquean tras la primera confirmación).
+> - Webhook de un segundo proveedor con API propia: diferido — no hay ningún proveedor concreto todavía más allá de AGL360 (mismo criterio YAGNI que motivó la supersesión original).
+> - **(2026-09-07, IMP-QA-R1-016, decisión de negocio Christian, arbitrado AMBIGUO en QA ronda 2):** si la Integración del gestor se desactiva/desvincula/reasigna justo mientras un Reintento automático ya está en curso (llamada HTTP saliente en progreso), el intento en curso **se deja terminar** — el cambio de configuración solo afecta intentos **futuros** (el siguiente "Reintentar" ya resuelve el estado nuevo y cae a manual si corresponde). No se agrega ningún lock sobre la fila `Integracion` durante la llamada externa — la ventana de carrera es de milisegundos y no vale el costo de mantener esa fila bloqueada durante un `fetch` a un sistema externo.
+
 ```prisma
 enum EstadoReservaEmbarque {
-  PENDIENTE   // sin SolicitudReserva — nunca se intentó o la integración falló y se generó igual
-  SOLICITADA  // SolicitudReserva enviada, esperando confirmación
-  CONFIRMADA  // AGL360 confirmó (webhook "orden.creada") que la Orden de Servicio existe
+  PENDIENTE   // sin SolicitudReserva ni datos manuales — nunca se intentó, la integración falló, o el gestor no tiene integración y aún no se tipeó nada
+  SOLICITADA  // SolicitudReserva enviada (solo camino automático), esperando confirmación
+  CONFIRMADA  // confirmada por webhook (automático) o por el usuario al guardar los datos manuales
 }
+
+// Campos del Gestor Logístico + reserva manual, agregados directo al
+// Embarque (2026-09-07, generaliza el hardcode a AGL360 — ver actualización
+// de arriba). Sufijo "Manual" para no colisionar con los campos homólogos
+// de SolicitudReserva.numeroBooking/naviera/nave/numeroContenedor/
+// fechaZarpe/fechaRetiroPlanta.
+//   gestorLogisticoId       Int?      // FK -> Entidad tipo GESTOR_LOGISTICO
+//   reservaManual           Boolean   @default(false)
+//   numeroBookingManual     String?
+//   navieraManual           String?
+//   naveManual              String?
+//   numeroContenedorManual  String?
+//   fechaZarpeManual        DateTime?
+//   fechaRetiroPlantaManual DateTime?
 
 model SolicitudReserva {
   id         Int      @id @default(autoincrement())
@@ -441,7 +462,9 @@ Riesgo residual aceptado (deuda documentada, no resuelta con outbox/2PC — desp
 | POST | `/embarques/:id/contenedores` | Encabezado de contenedor. |
 | POST | `/embarques/:id/contenedores/:cid/asignaciones` | Asignación de fruta, validada contra NV (R8), valor heredado (R5). |
 | GET | `/embarques/:id/instructivos-hijos` | Hijos por punto de retiro (autogenerados en la reserva de pallets, R11). |
-| POST | `/embarques/:id/solicitud-reserva` | Reintento manual de Solicitud de Reserva con AGL360 sobre un Embarque `PENDIENTE` (§4.3). |
+| POST | `/embarques/:id/solicitud-reserva` | Reintento manual de Solicitud de Reserva con la integración automática del Gestor Logístico sobre un Embarque `PENDIENTE` (§4.3). |
+| POST | `/embarques/:id/reserva-manual` | "Dejar Manual" — marca el Embarque `reservaManual=true` (§4.3). |
+| PATCH | `/embarques/:id/datos-reserva` | Guarda los datos de booking tipeados a mano (requiere `reservaManual=true`) → `estadoReserva=CONFIRMADA` (§4.3). |
 | POST | `/embarques/webhooks/agl360-confirmacion` | Webhook AGL360 → FAS, confirma una Solicitud de Reserva (§4.3, contrato real `Docs/webhook-fas.md`). Sin sesión de usuario — firma HMAC-SHA256 compartida. |
 
 `TODO`: definir validaciones de payload y respuestas de error (patrón 422 como en Reclamos).
