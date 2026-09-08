@@ -631,7 +631,14 @@ export async function listSaldos(filters: { bodegaId?: number; tipo?: string; ba
   const saldos = await prisma.saldoArticulo.findMany({
     where,
     include: {
-      articulo: { select: { id: true, codigo: true, descripcion: true, tipo: true, stockCritico: true, controlaStock: true } },
+      articulo: {
+        select: {
+          id: true, codigo: true, descripcion: true, tipo: true, stockCritico: true, controlaStock: true,
+          // Reporte "Stock de Materiales" (2026-09-08): la cantidad sola no
+          // dice nada sin su unidad de medida.
+          unidad: { select: { id: true, codigo: true, descripcion: true } },
+        },
+      },
       bodega: { select: { id: true, codigo: true, descripcion: true } },
     },
     orderBy: [{ articulo: { codigo: 'asc' } }],

@@ -171,6 +171,7 @@ export const navGroups: NavGroup[] = [
       { title: 'Stock Fruta',          url: '/dashboard/reportes/stock-fruta',       icon: 'bodega',     isActive: false, items: [] },
       { title: 'Kardex de Materiales', url: '/dashboard/reportes/kardex-materiales', icon: 'materiales', isActive: false, items: [] },
       { title: 'Stock por Receta',     url: '/dashboard/reportes/stock-materiales',  icon: 'recetas',    isActive: false, items: [] },
+      { title: 'Stock de Materiales',  url: '/dashboard/reportes/saldos-materiales', icon: 'materiales', isActive: false, items: [] },
       { title: 'Gestión de Riesgo',    url: '/dashboard/reportes/gestion-riesgo',    icon: 'warning',    isActive: false, items: [] }
     ]
   },

@@ -88,6 +88,12 @@ const itemsMenu = [
   // menu-acceso-context.tsx) y no aparecían en el admin de Perfiles.
   { codigo: 'REPORTES_STOCK_RECETA', nombre: 'Stock por Receta', seccion: 'Reportes', ruta: '/dashboard/reportes/stock-materiales', esAccion: false, orden: 92 },
   { codigo: 'REPORTES_GESTION_RIESGO', nombre: 'Gestión de Riesgo', seccion: 'Reportes', ruta: '/dashboard/reportes/gestion-riesgo', esAccion: false, orden: 93 },
+  // Stock de Materiales (2026-09-08) — listado plano de SaldoArticulo
+  // (Artículo x Bodega), tercer reporte de Materiales junto a Kardex (ledger
+  // valorizado) y Stock por Receta (simulador de demanda): este es el
+  // inventario actual sin más. Ruta distinta de REPORTES_STOCK_RECETA
+  // (`/stock-materiales`, ya tomada) a propósito.
+  { codigo: 'REPORTES_STOCK_MATERIALES', nombre: 'Stock de Materiales', seccion: 'Reportes', ruta: '/dashboard/reportes/saldos-materiales', esAccion: false, orden: 94 },
 ]
 
 const SISTEMA_USER = 'system'

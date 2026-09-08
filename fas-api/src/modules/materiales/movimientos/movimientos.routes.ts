@@ -3,6 +3,11 @@ import { requireAuth, requireLevel } from '../../../plugins/auth-guard.js'
 import * as ctrl from './movimientos.controller.js'
 
 const ITEM = 'OPER_MATERIALES'
+// Reporte "Stock de Materiales" (2026-09-08) — permiso independiente de
+// OPER_MATERIALES, mismo criterio que REPORTES_KARDEX_MATERIALES/
+// REPORTES_STOCK_FRUTA (un usuario de solo-lectura de Reportes no debería
+// necesitar acceso al módulo operativo de Materiales).
+const ITEM_REPORTE = 'REPORTES_STOCK_MATERIALES'
 
 export async function movimientosRoutes(app: FastifyInstance) {
   app.get('/movimientos', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
@@ -16,6 +21,6 @@ export async function movimientosRoutes(app: FastifyInstance) {
   app.post('/movimientos/:id/confirmar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.confirmar)
   app.post('/movimientos/:id/anular-recepcion', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.anularRecepcion)
 
-  app.get('/saldos', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listSaldos)
+  app.get('/saldos', { preHandler: [requireAuth, requireLevel(ITEM_REPORTE, 'LECTURA')] }, ctrl.listSaldos)
   app.post('/consulta-stock-receta', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.consultaStockReceta)
 }

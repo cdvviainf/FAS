@@ -279,8 +279,18 @@ export async function anularRecepcion(movimientoId: number, userId: string) {
 
 // ─── Saldos ──────────────────────────────────────────────────────────────────
 
+// Decimal -> number acá (no en el repository): mismo criterio que
+// kardex.service.ts — es un reporte de solo lectura, no un valor que se
+// vuelva a escribir, así que no aplica la regla general de Decimal/string de
+// CLAUDE.md §7 (pensada para montos que el frontend reenvía).
 export async function listarSaldos(filters: { bodegaId?: number; tipo?: string; bajoCritico?: boolean }) {
-  return repo.listSaldos(filters)
+  const saldos = await repo.listSaldos(filters)
+  return saldos.map((s) => ({
+    ...s,
+    cantidad: Number(s.cantidad),
+    costoPromedio: Number(s.costoPromedio),
+    articulo: { ...s.articulo, stockCritico: s.articulo.stockCritico != null ? Number(s.articulo.stockCritico) : null },
+  }))
 }
 
 // ─── R15: consulta de stock por receta ──────────────────────────────────────
