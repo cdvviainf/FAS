@@ -64,6 +64,10 @@ const itemsMenu = [
   { codigo: 'CAL_RECLAMOS', nombre: 'Reclamos', seccion: 'Calidad', ruta: '/dashboard/calidad/reclamos', esAccion: false, orden: 72 },
   { codigo: 'RECLAMO_VALORIZACION', nombre: 'Valorización Reclamo', seccion: 'Calidad', ruta: null, esAccion: true, orden: 73 },
   { codigo: 'RECLAMO_CIERRE', nombre: 'Cierre/Reapertura Reclamo', seccion: 'Calidad', ruta: null, esAccion: true, orden: 74 },
+  // Crear/reversar la Provisión del reclamo (2026-09-08, reclamos.md RC-D10)
+  // — permiso específico, distinto de CAL_RECLAMOS (decisión de negocio,
+  // Christian).
+  { codigo: 'RECLAMO_PROVISION', nombre: 'Provisión de Reclamo', seccion: 'Calidad', ruta: null, esAccion: true, orden: 75 },
   // Calificación de Pallets (antes "Gestión de Pallets" bajo Operaciones,
   // reubicado a Calidad 2026-09-04 — decisión de negocio, Christian): edita
   // Nota de Calidad/Condición y Completo/Incompleto de un Pallet ya

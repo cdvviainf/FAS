@@ -58,6 +58,13 @@ export const embarqueParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
 })
 
+// Edición de un Reclamo (IMP-QA-R1-019, reclamos.md §6) — anidado bajo el
+// Embarque: :id es el Embarque, :reclamoId el Reclamo.
+export const embarqueReclamoParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  reclamoId: z.coerce.number().int().positive(),
+})
+
 export const embarqueListQuerySchema = z.object({
   notaVentaId: z.coerce.number().int().positive().optional(),
   page: z.coerce.number().int().positive().default(1),

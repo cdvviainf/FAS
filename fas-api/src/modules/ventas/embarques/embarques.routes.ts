@@ -49,4 +49,22 @@ export async function embarquesRoutes(app: FastifyInstance) {
 
   // ─── Despachar ────────────────────────────────────────────────────────────
   app.patch('/embarques/:id/despachar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.despachar)
+
+  // ─── Reclamos (2026-09-08, reclamos.md) — se crean desde acá ───────────────
+  app.get(
+    '/embarques/:id/lineas-reclamables',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    ctrl.listarLineasReclamables,
+  )
+  app.post('/embarques/:id/reclamos', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.crearReclamo)
+  app.get(
+    '/embarques/:id/reclamos',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    ctrl.listarReclamosDelEmbarque,
+  )
+  app.patch(
+    '/embarques/:id/reclamos/:reclamoId',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.actualizarReclamo,
+  )
 }

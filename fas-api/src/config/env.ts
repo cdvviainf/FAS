@@ -26,6 +26,11 @@ const envSchema = z.object({
   // `referencia_externa`, ver embarques.controller.ts), así que no puede
   // depender de una fila tenant-scoped para verificarse.
   AGL360_WEBHOOK_SECRET: z.string().min(16).optional(),
+  // API externa de solo lectura para documentos de Reclamos (2026-09-08,
+  // reclamos.md) — consumida por sistemas externos, sin sesión de usuario
+  // FAS. Mismo criterio que AGL360_WEBHOOK_SECRET: fail-closed si no está
+  // configurada. Header esperado: `Authorization: Bearer <RECLAMOS_API_KEY>`.
+  RECLAMOS_API_KEY: z.string().min(16).optional(),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   // Motor de documentos (PDF, Etapa 4 — Docs/agrosan_etapa4_motor_documentos.md):
   // en producción (imagen Alpine) apunta al Chromium del sistema instalado vía

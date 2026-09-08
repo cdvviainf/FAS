@@ -57,8 +57,7 @@ export const navGroups: NavGroup[] = [
         isActive: false,
         items: [
           { title: 'Cierre Comercial',   url: '/dashboard/ventas/cierre',     icon: 'forms'   },
-          { title: 'Embarques',         url: '/dashboard/ventas/embarques',  icon: 'post'    },
-          { title: 'Reclamos',          url: '/dashboard/ventas/reclamos',   icon: 'warning', disabled: true }
+          { title: 'Embarques',         url: '/dashboard/ventas/embarques',  icon: 'post'    }
         ]
       }
     ]
@@ -145,6 +144,13 @@ export const navGroups: NavGroup[] = [
         title: 'Calificación de Pallets',
         url: '/dashboard/operaciones/pallets',
         icon: 'bodega',
+        isActive: false,
+        items: []
+      },
+      {
+        title: 'Reclamos',
+        url: '/dashboard/calidad/reclamos',
+        icon: 'warning',
         isActive: false,
         items: []
       }

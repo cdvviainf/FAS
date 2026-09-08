@@ -10,7 +10,8 @@
 // comprometidas), 490242 (Movimiento proceso), 490243 (Embarque despacho),
 // 490244 (OrdenCompraMaterial proceso), 490245 (OrdenCompraMaterial
 // correlativo), 490246 (Embarque generar/solicitud de reserva), 490247
-// (ProformaMaterial correlativo), 490248 (ProformaMaterial proceso).
+// (ProformaMaterial correlativo), 490248 (ProformaMaterial proceso), 490249
+// (Reclamo x PalletLinea disponible).
 
 // Serializa el motor de validación de Recepción (recepciones.repository.ts)
 // contra cualquier mutación de la Orden de Compra que esté usando para
@@ -75,3 +76,12 @@ export const LOCK_NAMESPACE_ORDEN_COMPRA_MATERIAL_PROCESO = 490244
 // antes del primer despliegue de esta feature (ningún advisory lock persiste
 // en disco, así que renumerar es seguro en cualquier momento).
 export const LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA = 490246
+
+// Serializa el chequeo "cajas disponibles" de una PalletLinea (reclamos.md
+// R-NEW1: la suma de cajas reclamadas contra una misma línea, ENTRE
+// reclamos distintos, no puede superar `PalletLinea.cajas`) contra otro
+// Reclamo concurrente tomando cajas de la MISMA línea — mismo rol que
+// LOCK_NAMESPACE_NOTA_VENTA_DETALLE. Clave: palletLineaId (una toma por
+// línea, en orden ascendente de id, para no arriesgar deadlock cuando un
+// Reclamo marca varias líneas a la vez).
+export const LOCK_NAMESPACE_RECLAMO_PALLET_LINEA = 490249

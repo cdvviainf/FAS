@@ -8,6 +8,7 @@ import { validatePasswordComplexity } from './shared/password-validator.js'
 import { healthRoutes } from './modules/health/health.routes.js'
 import { configRoutes } from './modules/config/config.routes.js'
 import { solicitudesRoutes } from './modules/calidad/solicitudes/solicitudes.routes.js'
+import { reclamosRoutes, reclamosExternoRoutes } from './modules/calidad/reclamos/reclamos.routes.js'
 import { materialesRoutes } from './modules/materiales/materiales.routes.js'
 import { productoresRoutes } from './modules/productores/productores.routes.js'
 import { ventasRoutes } from './modules/ventas/ventas.routes.js'
@@ -127,6 +128,10 @@ export async function buildApp(options: { logger?: boolean } = {}) {
   await app.register(healthRoutes)
   await app.register(configRoutes, { prefix: '/api/config' })
   await app.register(solicitudesRoutes, { prefix: '/api/calidad' })
+  await app.register(reclamosRoutes, { prefix: '/api/calidad' })
+  // API externa de solo lectura (reclamos.md, 2026-09-08) — sin sesión FAS,
+  // autenticada por RECLAMOS_API_KEY (ver auth-guard.ts).
+  await app.register(reclamosExternoRoutes, { prefix: '/api/externo' })
   await app.register(materialesRoutes, { prefix: '/api/materiales' })
   await app.register(productoresRoutes, { prefix: '/api/productores' })
   await app.register(ventasRoutes, { prefix: '/api/ventas' })

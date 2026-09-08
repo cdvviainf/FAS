@@ -185,3 +185,27 @@ export const requireAglWebhookSignature: preHandlerHookHandler = async (request,
     return
   }
 }
+
+/**
+ * API externa de documentos de Reclamos (2026-09-08, reclamos.md) — sin
+ * sesión de usuario FAS, autenticada por un secreto compartido fijo (no hay
+ * body que firmar, es un GET: comparación directa, no HMAC). Header
+ * esperado: `Authorization: Bearer <RECLAMOS_API_KEY>`. Fail-closed si la
+ * variable no está configurada, mismo criterio que requireAglWebhookSignature.
+ */
+export const requireReclamosApiKey: preHandlerHookHandler = async (request, reply) => {
+  const secreto = env.RECLAMOS_API_KEY
+  const authHeader = request.headers['authorization']
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : undefined
+
+  if (!secreto || !token) {
+    reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Autenticación requerida.' } })
+    return
+  }
+  const a = Buffer.from(secreto)
+  const b = Buffer.from(token)
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'API key inválida.' } })
+    return
+  }
+}

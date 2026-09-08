@@ -71,6 +71,9 @@ const MODELOS_TENANT = new Set([
   'ProformaMaterial',
   // Mantenedor de Integraciones (2026-09-07):
   'Integracion',
+  // Reclamos (2026-09-08):
+  'Reclamo',
+  'Provision',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

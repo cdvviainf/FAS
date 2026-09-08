@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify'
 import {
   embarqueCreateSchema,
   embarqueParamsSchema,
+  embarqueReclamoParamsSchema,
   embarqueListQuerySchema,
   reservarPalletsSchema,
   embarquePalletParamsSchema,
@@ -11,7 +12,9 @@ import {
 import * as service from './embarques.service.js'
 import { prisma } from '../../../lib/prisma.js'
 import { empresaContext } from '../../../lib/empresa-context.js'
-import { UnauthorizedError } from '../../../shared/errors.js'
+import { ForbiddenError, UnauthorizedError } from '../../../shared/errors.js'
+import * as reclamosService from '../../calidad/reclamos/reclamos.service.js'
+import { reclamoCreateSchema, reclamoUpdateSchema } from '../../calidad/reclamos/reclamos.schema.js'
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
   const { page, limit, notaVentaId } = embarqueListQuerySchema.parse(req.query)
@@ -118,4 +121,46 @@ export async function confirmarWebhookAgl(req: FastifyRequest, reply: FastifyRep
 
   await service.confirmarSolicitudDesdeWebhook(body)
   return reply.status(204).send()
+}
+
+// ─── Reclamos (2026-09-08, reclamos.md) — se crean desde acá (Ventas), el
+// resto del ciclo de vida (análisis, valorización, cierre, provisiones)
+// vive en calidad/reclamos/reclamos.routes.ts. Handlers delgados: la lógica
+// real es la misma que usa Calidad, solo cambia quién puede llamarlos
+// (VENTAS_EMBARQUES en vez de CAL_RECLAMOS).
+
+export async function listarLineasReclamables(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const lineas = await reclamosService.obtenerLineasReclamables(id)
+  return reply.send({ data: lineas })
+}
+
+// IMP-QA-R2-024: crear el Reclamo solo exige VENTAS_EMBARQUES — si el body
+// trae una Provisión inline, esa parte del payload exige el permiso
+// específico RECLAMO_PROVISION (RC-D10), igual que el endpoint dedicado
+// `POST /reclamos/:id/provisiones`. Chequeo condicional acá (no un
+// preHandler fijo) porque solo aplica cuando el body realmente trae `provision`.
+export async function crearReclamo(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const body = reclamoCreateSchema.parse(req.body)
+  if (body.provision && req.fasAccesos?.get('RECLAMO_PROVISION') !== 'TOTAL') {
+    throw new ForbiddenError('Se requiere el permiso de Provisión de Reclamo para agregar una Provisión inicial')
+  }
+  const reclamo = await reclamosService.crearReclamo(id, body, req.fasUserId!)
+  return reply.status(201).send({ data: reclamo })
+}
+
+export async function listarReclamosDelEmbarque(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const reclamos = await reclamosService.listarReclamosPorEmbarque(id)
+  return reply.send({ data: reclamos })
+}
+
+// IMP-QA-R1-019: edición de cabecera/líneas — faltaba, estaba en el
+// contrato de reclamos.md §6 desde el principio.
+export async function actualizarReclamo(req: FastifyRequest, reply: FastifyReply) {
+  const { id, reclamoId } = embarqueReclamoParamsSchema.parse(req.params)
+  const body = reclamoUpdateSchema.parse(req.body)
+  const reclamo = await reclamosService.actualizarReclamo(reclamoId, id, body, req.fasUserId!)
+  return reply.send({ data: reclamo })
 }

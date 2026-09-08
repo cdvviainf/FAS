@@ -7,6 +7,7 @@ import { embarqueDetailOptions } from '../queries'
 import { SeleccionarPalletsTab } from './seleccionar-pallets-tab'
 import { DespacharTab } from './despachar-tab'
 import { SolicitudReservaTab } from './solicitud-reserva-tab'
+import { ReclamosTab } from './reclamos-tab'
 
 function TabPlaceholder({ titulo }: { titulo: string }) {
   return (
@@ -40,6 +41,7 @@ export function EmbarqueDetailClient({ embarqueId }: { embarqueId: number }) {
           <TabsTrigger value='pallets'>Seleccionar Pallets</TabsTrigger>
           <TabsTrigger value='instructivos'>Generar Instructivos</TabsTrigger>
           <TabsTrigger value='despacho'>Despachar</TabsTrigger>
+          <TabsTrigger value='reclamos'>Reclamos</TabsTrigger>
         </TabsList>
         <TabsContent value='espacio'>
           <SolicitudReservaTab embarque={embarque} />
@@ -52,6 +54,9 @@ export function EmbarqueDetailClient({ embarqueId }: { embarqueId: number }) {
         </TabsContent>
         <TabsContent value='despacho'>
           <DespacharTab embarque={embarque} />
+        </TabsContent>
+        <TabsContent value='reclamos'>
+          <ReclamosTab embarque={embarque} />
         </TabsContent>
       </Tabs>
     </div>
