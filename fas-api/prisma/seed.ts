@@ -312,6 +312,73 @@ async function main() {
   }
   console.log(`UnidadMedida: ${unidadesCreadas} unidades nuevas creadas.`)
 
+  // PrefijoCodigo — necesarios para que la Carga Masiva de Maestros autogenere
+  // los códigos vacíos. Uno por cada maestro que autogenera código.
+  console.log('Seeding PrefijoCodigo (Carga Masiva de Maestros)...')
+  const prefijosBase = [
+    { modelo: 'especie', prefijo: 'ESP', digitos: 3 },
+    { modelo: 'etiqueta', prefijo: 'ETQ', digitos: 3 },
+    { modelo: 'grupoVariedad', prefijo: 'GVA', digitos: 3 },
+    { modelo: 'variedad', prefijo: 'VAR', digitos: 4 },
+    { modelo: 'categoria', prefijo: 'CAT', digitos: 3 },
+    { modelo: 'calibre', prefijo: 'CAL', digitos: 4 },
+    { modelo: 'mercado', prefijo: 'MER', digitos: 3 },
+    { modelo: 'puerto', prefijo: 'PTO', digitos: 3 },
+    { modelo: 'entidad', prefijo: 'EN', digitos: 4 },
+    { modelo: 'articulo', prefijo: 'ART', digitos: 4 },
+    { modelo: 'bodega', prefijo: 'BOD', digitos: 3 },
+    { modelo: 'receta', prefijo: 'REC', digitos: 3 },
+  ]
+  let prefijosCreados = 0
+  for (const p of prefijosBase) {
+    const existente = await prisma.prefijoCodigo.findFirst({
+      where: { empresaId: agrosanParaParametros.id, modelo: p.modelo, tipoEmbarqueId: null, eliminadoEn: null },
+    })
+    if (!existente) {
+      await prisma.prefijoCodigo.create({
+        data: { ...p, empresaId: agrosanParaParametros.id, creadoPor: SISTEMA_USER },
+      })
+      prefijosCreados++
+    }
+  }
+  console.log(`PrefijoCodigo: ${prefijosCreados} prefijos nuevos creados.`)
+
+  // Maestros externos que la Carga Masiva referencia pero no crea (el Excel los
+  // usa como "ya existentes"): Grupo de Mercado, Tipos de Embarque, Tipo de
+  // Producción.
+  console.log('Seeding maestros externos (GrupoMercado / TipoEmbarque / TipoProduccion)...')
+  const externos: Array<{ delegate: 'grupoMercado' | 'tipoEmbarque' | 'tipoProduccion'; registros: Array<{ codigo: string; descripcion: string }> }> = [
+    { delegate: 'grupoMercado', registros: [{ codigo: 'GM', descripcion: 'General' }] },
+    {
+      delegate: 'tipoEmbarque',
+      registros: [
+        { codigo: 'MARITIMO', descripcion: 'Marítimo' },
+        { codigo: 'AEREO', descripcion: 'Aéreo' },
+        { codigo: 'TERRESTRE', descripcion: 'Terrestre' },
+      ],
+    },
+    { delegate: 'tipoProduccion', registros: [{ codigo: 'CONVENCIONAL', descripcion: 'Convencional' }] },
+  ]
+  let externosCreados = 0
+  for (const grupo of externos) {
+    for (const r of grupo.registros) {
+      const delegate = prisma[grupo.delegate] as {
+        findFirst: (a: unknown) => Promise<unknown>
+        create: (a: unknown) => Promise<unknown>
+      }
+      const existente = await delegate.findFirst({
+        where: { empresaId: agrosanParaParametros.id, codigo: r.codigo, eliminadoEn: null },
+      })
+      if (!existente) {
+        await delegate.create({
+          data: { empresaId: agrosanParaParametros.id, ...r, creadoPor: SISTEMA_USER },
+        })
+        externosCreados++
+      }
+    }
+  }
+  console.log(`Maestros externos: ${externosCreados} creados.`)
+
   // Notas de Calidad/Condición del Pallet (2026-09-02, compras.md §4.8):
   // catálogo inicial de ejemplo (A-D / 1-4), habilitado desde ya para todas
   // las especies existentes en AGROSAN — decisión del usuario, para poder
