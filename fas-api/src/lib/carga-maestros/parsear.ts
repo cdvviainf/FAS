@@ -10,13 +10,28 @@ import type { ColumnaSpec, ErrorFila, FilaParseada, HojaSpec, ResultadoHoja, Res
 
 function normalizarTexto(v: unknown): string | undefined {
   if (v == null) return undefined
-  // ExcelJS puede devolver objetos {text, hyperlink} o {result} en fórmulas.
+  // ExcelJS devuelve objetos para varios tipos de celda:
+  //   - texto enriquecido: { richText: [{ text }] }
+  //   - hipervínculo:      { text, hyperlink }
+  //   - fórmula:           { formula, result? }  (result puede no venir cacheado)
+  //   - error:             { error: '#N/A' }
   if (typeof v === 'object') {
     const o = v as Record<string, unknown>
-    if ('text' in o) v = o.text
-    else if ('result' in o) v = o.result
-    else if ('richText' in o && Array.isArray(o.richText)) v = (o.richText as Array<{ text: string }>).map((t) => t.text).join('')
+    if ('richText' in o && Array.isArray(o.richText)) {
+      v = (o.richText as Array<{ text: string }>).map((t) => t.text).join('')
+    } else if ('result' in o) {
+      v = o.result // fórmula con resultado cacheado
+    } else if ('text' in o) {
+      v = o.text
+    } else {
+      // Fórmula sin resultado, error, u objeto no textual: no es derivable a
+      // texto — se trata como vacío (NUNCA "[object Object]").
+      return undefined
+    }
+    // Si tras desenvolver sigue siendo objeto (ej. text que era richText), corta.
+    if (v != null && typeof v === 'object') return normalizarTexto(v)
   }
+  if (v == null) return undefined
   const s = String(v).trim()
   return s === '' ? undefined : s
 }
