@@ -192,6 +192,17 @@ export const navGroups: NavGroup[] = [
     label: 'Configuración',
     items: [
 
+      // ── Herramientas ─────────────────────────────────────────────────────
+      {
+        title: 'Herramientas',
+        url: '#',
+        icon: 'settings',
+        isActive: false,
+        items: [
+          { title: 'Carga Masiva de Maestros', url: '/dashboard/configuracion/carga-masiva', icon: 'upload' }
+        ]
+      },
+
       // ── Gestión Comercial ────────────────────────────────────────────────
       {
         title: 'Gestión Comercial',

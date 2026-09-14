@@ -20,7 +20,13 @@
     "db:bootstrap": "tsx prisma/bootstrap-admin.ts",
     "db:bootstrap:prod": "node --experimental-strip-types prisma/bootstrap-admin.ts",
     "db:seed:geografia": "tsx prisma/seed-geografia-chile.ts",
-    "db:seed:geografia:prod": "node --experimental-strip-types prisma/seed-geografia-chile.ts"
+    "db:seed:geografia:prod": "node --experimental-strip-types prisma/seed-geografia-chile.ts",
+    "carga:generar": "tsx prisma/carga-maestros-generar.ts",
+    "carga:validar": "tsx prisma/carga-maestros-validar.ts",
+    "carga:base": "tsx prisma/carga-maestros-base.ts",
+    "carga:cargar": "tsx prisma/carga-maestros-cargar.ts",
+    "carga:reset-completo": "bash scripts/carga-reset-completo.sh",
+    "db:wipe": "tsx prisma/wipe-transaccional.ts"
   },
   "keywords": [],
   "author": "VIAIN Asesorías Informáticas",

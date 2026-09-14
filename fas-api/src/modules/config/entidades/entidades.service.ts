@@ -49,14 +49,14 @@ export async function crearEntidad(input: EntidadCreateInput, userId: string) {
   const pais = await repo.findPaisById(input.paisId)
   if (!pais) throw new NotFoundError('País', String(input.paisId))
 
-  // R3: si país es Chile y hay identificador → validar DV
-  if (input.identificador) {
-    if (pais.esPaisNacional) {
-      if (!validarRutChileno(input.identificador)) {
-        throw new ValidationError(
-          `El identificador "${input.identificador}" no es un RUT chileno válido`,
-        )
-      }
+  // R3: DV y unicidad del identificador SOLO para entidades chilenas. Las
+  // extranjeras (país ≠ Chile) pueden repetir el identificador —no tienen RUT
+  // chileno y suelen compartir un placeholder (ej. 55555555-5).
+  if (input.identificador && pais.esPaisNacional) {
+    if (!validarRutChileno(input.identificador)) {
+      throw new ValidationError(
+        `El identificador "${input.identificador}" no es un RUT chileno válido`,
+      )
     }
     // Unicidad de identificador entre no eliminados
     const existenteId = await repo.findEntidadByIdentificador(input.identificador)
@@ -101,16 +101,14 @@ export async function actualizarEntidad(
   const pais = await repo.findPaisById(paisId)
   if (!pais) throw new NotFoundError('País', String(paisId))
 
-  // R3: identificador
+  // R3: DV y unicidad del identificador SOLO para entidades chilenas (ver crearEntidad).
   const identificadorEfectivo =
     input.identificador !== undefined ? input.identificador : entidad.identificador
-  if (identificadorEfectivo) {
-    if (pais.esPaisNacional) {
-      if (!validarRutChileno(identificadorEfectivo)) {
-        throw new ValidationError(
-          `El identificador "${identificadorEfectivo}" no es un RUT chileno válido`,
-        )
-      }
+  if (identificadorEfectivo && pais.esPaisNacional) {
+    if (!validarRutChileno(identificadorEfectivo)) {
+      throw new ValidationError(
+        `El identificador "${identificadorEfectivo}" no es un RUT chileno válido`,
+      )
     }
     // Unicidad
     const existenteId = await repo.findEntidadByIdentificador(identificadorEfectivo, id)
