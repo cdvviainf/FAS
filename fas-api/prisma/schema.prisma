@@ -1045,6 +1045,13 @@ model Calibre {
   especie               Especie   @relation(fields: [empresaId, especieId], references: [empresaId, id])
   orden                 Int
   control               String[]
+  // Calibre equivalente (auto-referencial): otro calibre de la MISMA especie.
+  // Por defecto apunta a sí mismo (el service lo setea tras crear si no se
+  // indica). FK compuesta (empresaId, calibreEquivalenteId) -> Calibre(empresaId,
+  // id): garantiza misma empresa; la misma-especie se valida en el service.
+  calibreEquivalenteId  Int?
+  calibreEquivalente    Calibre?  @relation("CalibreEquivalente", fields: [empresaId, calibreEquivalenteId], references: [empresaId, id])
+  calibresEquivalentesDe Calibre[] @relation("CalibreEquivalente")
   bloqueado             Boolean   @default(false)
   creadoEn              DateTime  @default(now())
   creadoPor             String
@@ -1061,6 +1068,7 @@ model Calibre {
   solicitudesInspeccion              SolicitudInspeccionCalibre[]
   palletLineas                       PalletLinea[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@map("calibres")
 }

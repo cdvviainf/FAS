@@ -133,7 +133,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
     hoja: 'Calibres',
     modelo: 'calibre',
     titulo: 'Calibres',
-    descripcion: 'Calibres por especie. El "Orden" debe ser único por especie.',
+    descripcion: 'Calibres por especie. El "Orden" debe ser único por especie. El calibre equivalente (opcional) debe ser de la misma especie; si se deja vacío, el calibre queda como su propio equivalente.',
     dependeDe: ['Especies'],
     columnas: [
       { encabezado: 'Código', campo: 'codigo', tipo: 'texto', autogenerar: true },
@@ -142,6 +142,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
       { encabezado: 'Especie (código)', campo: 'especieId', tipo: 'fk', requerido: true, fk: { hoja: 'Especies' } },
       { encabezado: 'Orden', campo: 'orden', tipo: 'entero', requerido: true },
       { encabezado: 'Control (lista separada por coma)', campo: 'control', tipo: 'listaControl' },
+      { encabezado: 'Calibre Equivalente (código, misma especie, opcional)', campo: 'calibreEquivalenteId', tipo: 'fk', fk: { hoja: 'Calibres', modelo: 'calibre' }, ayuda: 'Otro calibre de la misma especie. Vacío = el mismo calibre. Debe referenciar un calibre de una fila anterior.' },
     ],
   },
   {

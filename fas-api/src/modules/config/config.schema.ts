@@ -120,6 +120,9 @@ export const calibreBodySchema = mantenedorBaseSchema.extend({
   especieId: z.number().int().positive({ message: 'Selecciona una especie' }),
   orden: z.number().int().min(1, 'El orden debe ser mayor a 0'),
   control: z.array(controlEnum).default([]),
+  // Calibre equivalente (misma especie). Opcional al crear: si no viene, el
+  // service lo deja apuntando a sí mismo.
+  calibreEquivalenteId: z.number().int().positive().optional(),
 })
 
 export const calibreUpdateSchema = calibreBodySchema

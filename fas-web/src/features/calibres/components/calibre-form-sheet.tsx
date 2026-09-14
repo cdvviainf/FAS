@@ -41,6 +41,9 @@ const calibreSchema = z.object({
   especieId: z.coerce.number().int().min(1, 'Selecciona una especie'),
   orden: z.coerce.number().int().min(1, 'El orden debe ser mayor a 0'),
   control: z.array(z.string()),
+  // 0 = "el mismo calibre" (por defecto). Se omite al enviar para que el
+  // backend lo deje apuntando a sí mismo.
+  calibreEquivalenteId: z.coerce.number().int().optional(),
 })
 
 type CalibreFormValues = z.infer<typeof calibreSchema>
@@ -49,6 +52,7 @@ interface CalibreItem extends MantenedorSimple {
   especieId?: number
   orden?: number
   control?: string[]
+  calibreEquivalenteId?: number
   especie?: { id: number; descripcion: string }
 }
 
@@ -67,6 +71,16 @@ export function CalibreFormSheet({ item, open, onOpenChange }: CalibreFormSheetP
 
   const { data: especiesData } = useQuery(especiesQueries.listOptions({ limit: 300, soloActivos: true }))
   const especies = especiesData?.data ?? []
+
+  // Calibre equivalente: otro calibre de la MISMA especie. Se filtra por la
+  // especie seleccionada en el form (0 = ninguna aún).
+  const [especieSel, setEspecieSel] = useState<number>(item?.especieId ?? 0)
+  const calibresQueries = createMantenedorQueries('calibres')
+  const { data: calibresData } = useQuery({
+    ...calibresQueries.listOptions({ especieId: especieSel, limit: 300, soloActivos: true }),
+    enabled: especieSel > 0,
+  })
+  const calibresEquivalentes = calibresData?.data ?? []
 
   const createMutation = useMutation({
     ...mutations.create,
@@ -97,14 +111,20 @@ export function CalibreFormSheet({ item, open, onOpenChange }: CalibreFormSheetP
       especieId: item?.especieId ?? 0,
       orden: item?.orden ?? 1,
       control: item?.control ?? [],
+      // Si el equivalente es sí mismo, se muestra como "el mismo calibre" (0).
+      calibreEquivalenteId:
+        item?.calibreEquivalenteId && item.calibreEquivalenteId !== item.id ? item.calibreEquivalenteId : 0,
     } as CalibreFormValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validators: { onSubmit: calibreSchema as any },
     onSubmit: async ({ value }) => {
+      // 0 = "el mismo calibre": se omite para que el backend lo resuelva a sí mismo.
+      const payload: CalibreFormValues = { ...value }
+      if (!payload.calibreEquivalenteId) delete payload.calibreEquivalenteId
       if (isEdit) {
-        await updateMutation.mutateAsync({ id: item.id, values: value })
+        await updateMutation.mutateAsync({ id: item.id, values: payload })
       } else {
-        await createMutation.mutateAsync(value)
+        await createMutation.mutateAsync(payload)
       }
     }
   })
@@ -114,6 +134,8 @@ export function CalibreFormSheet({ item, open, onOpenChange }: CalibreFormSheetP
 
   const handleEspecieCreada = (especie: MantenedorSimple) => {
     form.setFieldValue('especieId', especie.id)
+    setEspecieSel(especie.id)
+    form.setFieldValue('calibreEquivalenteId', 0)
   }
 
   // El Sheet permanece montado entre aperturas (lo controla el padre vía `open`),
@@ -150,7 +172,13 @@ export function CalibreFormSheet({ item, open, onOpenChange }: CalibreFormSheetP
                     <div className='flex gap-2'>
                       <Select
                         value={field.state.value ? String(field.state.value) : ''}
-                        onValueChange={(v) => field.handleChange(parseInt(v, 10))}
+                        onValueChange={(v) => {
+                          const n = parseInt(v, 10)
+                          field.handleChange(n)
+                          setEspecieSel(n)
+                          // El equivalente debe ser de la misma especie: al cambiarla, se resetea.
+                          form.setFieldValue('calibreEquivalenteId', 0)
+                        }}
                       >
                         <SelectTrigger className='flex-1'>
                           <SelectValue placeholder='Seleccionar especie...' />
@@ -173,6 +201,36 @@ export function CalibreFormSheet({ item, open, onOpenChange }: CalibreFormSheetP
               </form.Field>
 
               <FormTextField name='orden' label='Orden' required placeholder='Ej: 1' type='number' />
+
+              <form.Field name='calibreEquivalenteId'>
+                {(field) => (
+                  <div className='space-y-1.5'>
+                    <Label className='text-sm font-medium'>Calibre equivalente</Label>
+                    <p className='text-xs text-muted-foreground'>
+                      Otro calibre de la misma especie. Vacío = el mismo calibre.
+                    </p>
+                    <Select
+                      value={field.state.value ? String(field.state.value) : '0'}
+                      onValueChange={(v) => field.handleChange(parseInt(v, 10))}
+                      disabled={especieSel === 0}
+                    >
+                      <SelectTrigger className='w-full'>
+                        <SelectValue placeholder={especieSel === 0 ? 'Selecciona una especie primero' : 'El mismo calibre (por defecto)'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value='0'>El mismo calibre (por defecto)</SelectItem>
+                        {calibresEquivalentes
+                          .filter((c) => c.id !== item?.id)
+                          .map((c) => (
+                            <SelectItem key={c.id} value={String(c.id)}>
+                              {c.codigo} — {c.descripcion}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </form.Field>
 
               <form.Field name='control'>
                 {(field) => (

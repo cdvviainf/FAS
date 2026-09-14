@@ -114,7 +114,10 @@ function parsearHoja(ws: ExcelJS.Worksheet | undefined, hoja: HojaSpec, erroresG
     if (t) encHeader.set(t, col)
   })
   for (const col of hoja.columnas) {
-    if (!encHeader.has(col.encabezado)) {
+    // Solo se exige la columna si es obligatoria: una columna opcional que
+    // falte (ej. una plantilla anterior sin un campo nuevo) se trata como
+    // vacía, sin marcar error.
+    if (col.requerido && !encHeader.has(col.encabezado)) {
       erroresGlobales.push({ hoja: hoja.hoja, fila: 1, columna: col.encabezado, codigo: 'ENCABEZADO_FALTANTE', mensaje: `Falta la columna "${col.encabezado}".` })
     }
   }

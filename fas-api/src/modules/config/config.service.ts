@@ -224,6 +224,16 @@ export async function crearMantenedor(
     }
   }
 
+  // Calibre equivalente: debe ser un calibre de la MISMA especie (y del tenant
+  // activo — getMantenedorById ya queda tenant-scoped por la extensión Prisma).
+  if (modelo === 'calibre' && data.calibreEquivalenteId != null) {
+    const equiv = (await repo.getMantenedorById('calibre', data.calibreEquivalenteId)) as { especieId?: number } | null
+    if (!equiv) throw new ValidationError('El calibre equivalente no existe o no pertenece a esta empresa')
+    if (equiv.especieId !== data.especieId) {
+      throw new ValidationError('El calibre equivalente debe ser de la misma especie')
+    }
+  }
+
   // Fase 2b: mercadoId de Pais no es una columna propia — se extrae acá y se
   // resuelve aparte (MercadoPais) después de crear el país.
   const { contactos, mercadoId, ...coreData } = data as MantenedorCreateInput & {
@@ -248,6 +258,12 @@ export async function crearMantenedor(
     return repo.getMantenedorById(modelo, created.id)
   }
 
+  // Calibre: por defecto es su propio equivalente (si no se indicó otro).
+  if (modelo === 'calibre' && data.calibreEquivalenteId == null) {
+    await repo.updateMantenedor('calibre', created.id, { calibreEquivalenteId: created.id }, userId)
+    return repo.getMantenedorById(modelo, created.id)
+  }
+
   return created
 }
 
@@ -268,6 +284,17 @@ export async function actualizarMantenedor(
       if (existeOrden) {
         throw new ValidationError(`Ya existe un registro con orden ${data.orden} para esta especie`)
       }
+    }
+  }
+
+  // Calibre equivalente — debe ser de la misma especie (on update)
+  if (modelo === 'calibre' && data.calibreEquivalenteId != null) {
+    const current = (await repo.getMantenedorById('calibre', id)) as { especieId?: number } | null
+    const targetEspecieId = data.especieId ?? current?.especieId
+    const equiv = (await repo.getMantenedorById('calibre', data.calibreEquivalenteId)) as { especieId?: number } | null
+    if (!equiv) throw new ValidationError('El calibre equivalente no existe o no pertenece a esta empresa')
+    if (equiv.especieId !== targetEspecieId) {
+      throw new ValidationError('El calibre equivalente debe ser de la misma especie')
     }
   }
 

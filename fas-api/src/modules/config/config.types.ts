@@ -79,6 +79,7 @@ export interface MantenedorCreateInput {
   tipoEmbarqueId?: number
   orden?: number             // Categoria, Calibre
   control?: string[]         // Categoria, Calibre
+  calibreEquivalenteId?: number | null  // Calibre (auto-referencial, misma especie)
   // Moneda
   esMonedaBase?: boolean
   decimales?: number
