@@ -720,10 +720,10 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                         return (
                           <TableRow key={d.id}>
                             <TableCell className='font-medium whitespace-nowrap'>{d.especie.descripcion} / {d.variedad.descripcion}</TableCell>
-                            <TableCell className='whitespace-nowrap text-muted-foreground'>{d.articulo.descripcion}</TableCell>
+                            <TableCell className='whitespace-nowrap text-muted-foreground'>{d.articulo.codigo}</TableCell>
                             <TableCell className='whitespace-nowrap text-muted-foreground'>{d.categoria?.descripcion ?? '—'}</TableCell>
                             <TableCell className='max-w-[180px] text-muted-foreground'>
-                              {d.calibres.map((c) => c.calibre.codigo).join(', ')}
+                              {d.calibres.map((c) => c.calibre.descripcion).join(', ')}
                             </TableCell>
                             <TableCell className='whitespace-nowrap text-muted-foreground'>
                               {palletsDisponibles} pallets ({d.cajasDisponibles} cajas)
