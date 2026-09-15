@@ -16,6 +16,7 @@ const itemsMenu = [
   // CONFIG_MANTENEDORES, por guardar credenciales de sistemas externos.
   { codigo: 'CONFIG_INTEGRACIONES', nombre: 'Integraciones', seccion: 'Configuración', ruta: '/dashboard/configuracion/integraciones', esAccion: false, orden: 14 },
   { codigo: 'CONFIG_CARGA_MASIVA', nombre: 'Carga Masiva de Maestros', seccion: 'Configuración', ruta: '/dashboard/configuracion/carga-masiva', esAccion: false, orden: 15 },
+  { codigo: 'CONFIG_CAJAS_POR_PALLET', nombre: 'Cajas por Pallet', seccion: 'Configuración', ruta: '/dashboard/configuracion/cajas-por-pallet', esAccion: false, orden: 16 },
   // Compras
   // Gestión completa (ingresar/editar/notificar/cerrar) de la Solicitud de
   // Inspección — antes vivía únicamente bajo CAL_SOLICITUDES; Calidad ahora

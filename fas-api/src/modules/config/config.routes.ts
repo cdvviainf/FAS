@@ -15,6 +15,7 @@ import { notasCalidadRoutes } from './notas-calidad/notas-calidad.routes.js'
 import { notasCondicionRoutes } from './notas-condicion/notas-condicion.routes.js'
 import { integracionesRoutes } from './integraciones/integraciones.routes.js'
 import { cargaMaestrosRoutes } from './carga-maestros/carga-maestros.routes.js'
+import { cajasPorPalletRoutes } from './cajas-por-pallet/cajas-por-pallet.routes.js'
 
 const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'pais', prefixRuta: 'paises', label: 'País', tienePaisOrigen: true, schemaKey: 'pais' },
@@ -65,6 +66,7 @@ export async function configRoutes(app: FastifyInstance) {
   await app.register(notasCondicionRoutes)
   await app.register(integracionesRoutes)
   await app.register(cargaMaestrosRoutes)
+  await app.register(cajasPorPalletRoutes)
 
   // Menú accesible del usuario autenticado
   app.get('/me/menu', { preHandler: [requireAuth] }, getMiMenu)

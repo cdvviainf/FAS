@@ -26,6 +26,7 @@ import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { entidadesService } from '@/features/entidades/service'
 import { entidadDetailOptions } from '@/features/entidades/queries'
 import { articulosService } from '@/features/materiales/articulos/service'
+import { cajasPorPalletService } from '@/features/cajas-por-pallet/service'
 import { condicionesPagoService } from '@/features/condiciones-pago/service'
 import { FECHA_REFERENCIA_LABELS } from '@/features/condiciones-pago/types'
 import { notaVentaDetailOptions, notasVentaKeys } from '../queries'
@@ -335,6 +336,21 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     const payload = buildPayload()
     if (isEdit) updateMutation.mutate(payload)
     else createMutation.mutate(payload)
+  }
+
+  // Auto-fill: al elegir embalaje + tipo de pallet, precarga la cifra teórica
+  // (editable). Solo por acción del usuario.
+  async function aplicarTeoricaCajas(artId: number, tpId: number | null) {
+    if (!artId || !tpId) return
+    try {
+      const r = await cajasPorPalletService.buscar(artId, tpId)
+      if (r) setLinea((l) => {
+        const pallets = Number(l.cantidadPallets)
+        return { ...l, cajasPorPallet: String(r.cajasPorPallet), cajas: pallets > 0 ? String(pallets * r.cajasPorPallet) : l.cajas }
+      })
+    } catch {
+      /* sin teórica configurada: se mantiene el valor actual */
+    }
   }
 
   function validarLinea(): boolean {
@@ -702,7 +718,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                   <Combobox
                     options={(articulosData?.data ?? []).map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
                     value={linea.articuloId ? String(linea.articuloId) : null}
-                    onChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}
+                    onChange={(v) => { const id = Number(v); setLinea((l) => ({ ...l, articuloId: id })); void aplicarTeoricaCajas(id, linea.tipoPalletId) }}
                     placeholder='Seleccionar...'
                     searchPlaceholder='Buscar embalaje...'
                   />
@@ -710,7 +726,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 </div>
                 <div className='space-y-1.5'>
                   <Label>Tipo Pallet</Label>
-                  <Select value={linea.tipoPalletId ? String(linea.tipoPalletId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, tipoPalletId: v ? Number(v) : null }))}>
+                  <Select value={linea.tipoPalletId ? String(linea.tipoPalletId) : ''} onValueChange={(v) => { const id = v ? Number(v) : null; setLinea((l) => ({ ...l, tipoPalletId: id })); void aplicarTeoricaCajas(linea.articuloId, id) }}>
                     <SelectTrigger><SelectValue placeholder='Sin tipo pallet' /></SelectTrigger>
                     <SelectContent>
                       {(tiposPalletData?.data ?? []).map((t) => (

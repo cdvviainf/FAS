@@ -197,6 +197,7 @@ model Empresa {
   formasPago             FormaPago[]
   unidadesMedida         UnidadMedida[]
   tiposPallet            TipoPallet[]
+  cajasPorPallet         CajasPorPallet[]
   etiquetas              Etiqueta[]
   alturas                Altura[]
   tiposProduccion        TipoProduccion[]
@@ -690,9 +691,36 @@ model TipoPallet {
   notaVentaDetalles           NotaVentaDetalle[]
   ordenCompraLineas           OrdenCompraLinea[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
+  cajasPorPallet              CajasPorPallet[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@map("tipos_pallet")
+}
+
+// Mantenedor: cajas teóricas por (embalaje, tipo de pallet) — precarga
+// `cajasPorPallet` en las líneas de OC/Instructivo/Nota de Venta. Mapeo por
+// empresa; artículo debe ser tipo EMBALAJE (validado en el service). Unicidad
+// del par vía índice parcial (WHERE eliminadoEn IS NULL) en la migración.
+model CajasPorPallet {
+  id             Int        @id @default(autoincrement())
+  empresaId      Int
+  empresa        Empresa    @relation(fields: [empresaId], references: [id])
+  articuloId     Int
+  articulo       Articulo   @relation(fields: [empresaId, articuloId], references: [empresaId, id])
+  tipoPalletId   Int
+  tipoPallet     TipoPallet @relation(fields: [empresaId, tipoPalletId], references: [empresaId, id])
+  cajasPorPallet Int
+  bloqueado      Boolean    @default(false)
+  creadoEn       DateTime   @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime?  @updatedAt
+  actualizadoPor String?
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@index([empresaId])
+  @@map("cajas_por_pallet")
 }
 
 model Etiqueta {
@@ -1798,6 +1826,7 @@ model Articulo {
   contratoProductorLineas     ProductorContratoLinea[]
   solicitudesInspeccion       SolicitudInspeccionEmbalaje[]
   palletLineas                PalletLinea[]
+  cajasPorPallet              CajasPorPallet[]
 
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt

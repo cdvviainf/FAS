@@ -302,6 +302,18 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
     ],
   },
   {
+    hoja: 'CajasPorPallet',
+    modelo: 'cajasPorPallet',
+    titulo: 'Cajas por Pallet',
+    descripcion: 'Cajas teóricas por embalaje + tipo de pallet (upsert). El Embalaje y el Tipo de Pallet YA DEBEN EXISTIR.',
+    dependeDe: ['Articulos'],
+    columnas: [
+      { encabezado: 'Embalaje (código de Artículo tipo EMBALAJE)', campo: 'articuloId', tipo: 'fk', requerido: true, fk: { hoja: 'Articulos', externo: true, modelo: 'articulo' } },
+      { encabezado: 'Tipo de Pallet (código, ya existente)', campo: 'tipoPalletId', tipo: 'fk', requerido: true, fk: { externo: true, modelo: 'tipoPallet' } },
+      { encabezado: 'Cajas por Pallet', campo: 'cajasPorPallet', tipo: 'entero', requerido: true },
+    ],
+  },
+  {
     hoja: 'RecetasDetalle',
     modelo: 'recetaDetalle',
     titulo: 'Detalle de Recetas',

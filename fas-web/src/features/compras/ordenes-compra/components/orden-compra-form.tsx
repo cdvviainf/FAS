@@ -29,6 +29,7 @@ import { MonedaQuickCreate } from '@/features/monedas/components/moneda-quick-cr
 import type { MantenedorSimple, MantenedorSimpleListResponse } from '@/features/mantenedor-simple/types'
 import { entidadesService } from '@/features/entidades/service'
 import { articulosService } from '@/features/materiales/articulos/service'
+import { cajasPorPalletService } from '@/features/cajas-por-pallet/service'
 import { notasVentaService } from '@/features/ventas/notas-venta/service'
 import { usuariosService } from '@/features/usuarios/service'
 import { condicionesPagoService } from '@/features/condiciones-pago/service'
@@ -231,6 +232,19 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       })
     }
   }, [ordenCompra])
+
+  // Auto-fill: al elegir embalaje + tipo de pallet, precarga la cifra teórica
+  // (editable). Se dispara solo por acción del usuario (no al cargar líneas de
+  // un Cierre), para no pisar el cajasPorPallet que venga de ahí.
+  async function aplicarTeoricaCajas(artId: number, tpId: number | null) {
+    if (!artId || !tpId) return
+    try {
+      const r = await cajasPorPalletService.buscar(artId, tpId)
+      if (r) setLinea((l) => ({ ...l, cajasPorPallet: r.cajasPorPallet, cajas: l.cantidadPallets ? l.cantidadPallets * r.cajasPorPallet : l.cajas }))
+    } catch {
+      /* sin teórica configurada: se mantiene el valor actual */
+    }
+  }
 
   function validate(): boolean {
     const e: Record<string, string> = {}
@@ -777,7 +791,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   <Combobox
                     options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
                     value={linea.articuloId ? String(linea.articuloId) : null}
-                    onChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}
+                    onChange={(v) => { const id = Number(v); setLinea((l) => ({ ...l, articuloId: id })); void aplicarTeoricaCajas(id, linea.tipoPalletId) }}
                     placeholder='Seleccionar...'
                     searchPlaceholder='Buscar embalaje...'
                     disabled={lineaBloqueadaPorCierre}
@@ -889,7 +903,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   <Label>Tipo Pallet</Label>
                   <Select
                     value={linea.tipoPalletId ? String(linea.tipoPalletId) : '__none__'}
-                    onValueChange={(v) => setLinea((l) => ({ ...l, tipoPalletId: v === '__none__' ? null : Number(v) }))}
+                    onValueChange={(v) => { const id = v === '__none__' ? null : Number(v); setLinea((l) => ({ ...l, tipoPalletId: id })); void aplicarTeoricaCajas(linea.articuloId, id) }}
                     disabled={lineaBloqueadaPorCierre}
                   >
                     <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>

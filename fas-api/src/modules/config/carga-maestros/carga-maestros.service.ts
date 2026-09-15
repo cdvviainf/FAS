@@ -16,6 +16,7 @@ import * as articulosRepo from '../../materiales/articulos/articulos.repository.
 import { crearReceta } from '../../materiales/recetas/recetas.service.js'
 import * as recetasRepo from '../../materiales/recetas/recetas.repository.js'
 import { crearPredio } from '../../productores/predios/predios.service.js'
+import { upsertPorPar as upsertCajasPorPallet } from '../cajas-por-pallet/cajas-por-pallet.service.js'
 
 const SISTEMA_USER = 'sistema'
 const MODELO_POR_HOJA = new Map(REGISTRO_MAESTROS.map((h) => [h.hoja, h.modelo]))
@@ -154,6 +155,10 @@ async function crearRegistro(hoja: HojaSpec, input: Record<string, any>, userId:
     case 'mercadoPais':
       // Mapeo país↔mercado por empresa: upsert (no crea país ni mercado).
       await configRepo.upsertMercadoPais(input.paisId, input.mercadoId, userId)
+      break
+    case 'cajasPorPallet':
+      // Cajas teóricas por embalaje+tipo pallet: upsert validado.
+      await upsertCajasPorPallet(input.articuloId, input.tipoPalletId, input.cajasPorPallet, userId)
       break
     default:
       await configService.crearMantenedor(hoja.modelo as any, input as any, userId)

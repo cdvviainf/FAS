@@ -26,6 +26,7 @@ import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { formatFechaCorta } from '@/lib/format'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { articulosService } from '@/features/materiales/articulos/service'
+import { cajasPorPalletService } from '@/features/cajas-por-pallet/service'
 import { entidadesService } from '@/features/entidades/service'
 import { instructivoEmbalajeDetailOptions, instructivosEmbalajeKeys } from '../queries'
 import { instructivoEmbalajeService } from '../service'
@@ -167,6 +168,21 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
 
   function etiquetaDe(articuloId: number): string {
     return articulos.find((a) => a.id === articuloId)?.etiqueta?.descripcion ?? '—'
+  }
+
+  // Auto-fill: al elegir embalaje + tipo de pallet, precarga la cifra teórica
+  // (editable). Solo por acción del usuario.
+  async function aplicarTeoricaCajas(artId: number, tpId: number | null) {
+    if (!artId || !tpId) return
+    try {
+      const r = await cajasPorPalletService.buscar(artId, tpId)
+      if (r) setLinea((l) => {
+        const pallets = Number(l.cantidadPallets)
+        return { ...l, cajasPorPallet: String(r.cajasPorPallet), cajas: pallets > 0 ? String(pallets * r.cajasPorPallet) : l.cajas }
+      })
+    } catch {
+      /* sin teórica configurada: se mantiene el valor actual */
+    }
   }
 
   useEffect(() => {
@@ -470,7 +486,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
               <Combobox
                 options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
                 value={linea.articuloId ? String(linea.articuloId) : null}
-                onChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}
+                onChange={(v) => { const id = Number(v); setLinea((l) => ({ ...l, articuloId: id })); void aplicarTeoricaCajas(id, linea.tipoPalletId) }}
                 placeholder='Seleccionar...'
                 searchPlaceholder='Buscar embalaje...'
               />
@@ -583,7 +599,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
           <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Tipo Pallet</Label>
-              <Select value={linea.tipoPalletId ? String(linea.tipoPalletId) : '__none__'} onValueChange={(v) => setLinea((l) => ({ ...l, tipoPalletId: v === '__none__' ? null : Number(v) }))}>
+              <Select value={linea.tipoPalletId ? String(linea.tipoPalletId) : '__none__'} onValueChange={(v) => { const id = v === '__none__' ? null : Number(v); setLinea((l) => ({ ...l, tipoPalletId: id })); void aplicarTeoricaCajas(linea.articuloId, id) }}>
                 <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value='__none__'>Sin definir</SelectItem>

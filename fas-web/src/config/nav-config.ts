@@ -229,7 +229,8 @@ export const navGroups: NavGroup[] = [
         items: [
           { title: 'Entidades',  url: '/dashboard/configuracion/entidades', icon: 'teams'   },
           { title: 'Artículos',  url: '/dashboard/configuracion/articulos', icon: 'product' },
-          { title: 'Recetas',    url: '/dashboard/configuracion/recetas',   icon: 'recetas' }
+          { title: 'Recetas',    url: '/dashboard/configuracion/recetas',   icon: 'recetas' },
+          { title: 'Cajas por Pallet', url: '/dashboard/configuracion/cajas-por-pallet', icon: 'product' }
         ]
       },
 
