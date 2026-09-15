@@ -346,6 +346,45 @@ async function main() {
   }
   console.log(`PrefijoCodigo: ${prefijosCreados} prefijos nuevos creados.`)
 
+  // Template de Carga BASE (Recepción de Fruta): formato estándar con columnas
+  // canónicas, para que exista un formato base descargable sin tener que armar
+  // un template a mano. Con cabecera en fila 1, datos desde la fila 2.
+  console.log('Seeding Template de Carga base (Recepción)...')
+  const templateBaseCampos: Array<{ campo: string; columna: string }> = [
+    { campo: 'NUMERO_PALLET', columna: 'N° Pallet' },
+    { campo: 'ESPECIE', columna: 'Especie' },
+    { campo: 'VARIEDAD', columna: 'Variedad' },
+    { campo: 'CATEGORIA', columna: 'Categoría' },
+    { campo: 'ARTICULO', columna: 'Artículo / Embalaje' },
+    { campo: 'CALIBRE', columna: 'Calibre' },
+    { campo: 'CAJAS', columna: 'Cajas' },
+    { campo: 'PRODUCTOR', columna: 'Productor' },
+    { campo: 'NOTA_CALIDAD', columna: 'Nota de Calidad' },
+    { campo: 'NOTA_CONDICION', columna: 'Nota de Condición' },
+    { campo: 'COMPLETO', columna: 'Completo/Incompleto' },
+  ]
+  const templateBaseExistente = await prisma.templateCarga.findFirst({
+    where: { empresaId: agrosanParaParametros.id, codigo: 'BASE', eliminadoEn: null },
+  })
+  if (!templateBaseExistente) {
+    await prisma.templateCarga.create({
+      data: {
+        empresaId: agrosanParaParametros.id,
+        codigo: 'BASE',
+        tipo: 'RECEPCION',
+        descripcion: 'Formato base FAS (columnas estándar)',
+        tieneCabecera: true,
+        filaCabecera: 1,
+        filaPrimerRegistro: 2,
+        creadoPor: SISTEMA_USER,
+        campos: { create: templateBaseCampos },
+      },
+    })
+    console.log('Template de Carga base creado (código BASE).')
+  } else {
+    console.log('Template de Carga base ya existe (código BASE).')
+  }
+
   // Maestros externos que la Carga Masiva referencia pero no crea (el Excel los
   // usa como "ya existentes"): Grupo de Mercado, Tipos de Embarque, Tipo de
   // Producción.
