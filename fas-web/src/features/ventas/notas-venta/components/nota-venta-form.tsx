@@ -864,9 +864,9 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Especie / Variedad</TableHead>
-                        <TableHead>Artículo</TableHead>
+                        <TableHead className='w-[110px]'>Artículo</TableHead>
                         <TableHead>Categoría</TableHead>
-                        <TableHead className='max-w-[180px]'>Calibre</TableHead>
+                        <TableHead className='min-w-[240px]'>Calibre</TableHead>
                         <TableHead>Cantidad</TableHead>
                         <TableHead>Precio</TableHead>
                         <TableHead className='w-20 text-right'>Acciones</TableHead>
@@ -876,9 +876,9 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                       {notaVenta!.data.detalles.map((d) => (
                         <TableRow key={d.id}>
                           <TableCell className='font-medium whitespace-nowrap'>{d.especie.descripcion} / {d.variedad.descripcion}</TableCell>
-                          <TableCell className='whitespace-nowrap text-muted-foreground'>{d.articulo.descripcion}</TableCell>
+                          <TableCell className='w-[110px] max-w-[110px] truncate text-muted-foreground' title={d.articulo.descripcion}>{d.articulo.codigo}</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{d.categoria?.descripcion ?? '—'}</TableCell>
-                          <TableCell className='max-w-[180px] text-muted-foreground'>
+                          <TableCell className='min-w-[240px] text-muted-foreground'>
                             <div className='flex flex-wrap gap-1'>
                               {d.calibres.map((c) => (
                                 <Badge key={c.calibre.id} variant='outline' className='text-xs'>{c.calibre.descripcion}</Badge>

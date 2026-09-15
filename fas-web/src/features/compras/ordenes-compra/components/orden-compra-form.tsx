@@ -993,9 +993,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Especie / Variedad</TableHead>
-                        <TableHead>Embalaje</TableHead>
+                        <TableHead className='w-[110px]'>Embalaje</TableHead>
                         <TableHead>Categoría</TableHead>
-                        <TableHead>Calibre</TableHead>
+                        <TableHead className='min-w-[240px]'>Calibre</TableHead>
                         <TableHead>Cantidad</TableHead>
                         <TableHead>Valor</TableHead>
                         <TableHead className='w-20 text-right'>Acciones</TableHead>
@@ -1005,12 +1005,12 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                       {ordenCompra!.data.lineas.map((l) => (
                         <TableRow key={l.id}>
                           <TableCell className='font-medium whitespace-nowrap'>{l.especie.descripcion} / {l.variedad.descripcion}</TableCell>
-                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.articulo.descripcion}</TableCell>
+                          <TableCell className='w-[110px] max-w-[110px] truncate text-muted-foreground' title={l.articulo.descripcion}>{l.articulo.codigo}</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{l.categoria.descripcion}</TableCell>
-                          <TableCell className='max-w-[180px] text-muted-foreground'>
+                          <TableCell className='min-w-[240px] text-muted-foreground'>
                             <div className='flex flex-wrap gap-1'>
                               {l.calibres.map((c) => (
-                                <Badge key={c.calibre.id} variant='outline' className='text-xs'>{c.calibre.codigo}</Badge>
+                                <Badge key={c.calibre.id} variant='outline' className='text-xs'>{c.calibre.descripcion}</Badge>
                               ))}
                             </div>
                           </TableCell>
