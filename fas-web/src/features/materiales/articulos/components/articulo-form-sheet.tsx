@@ -35,6 +35,7 @@ import type { Articulo, TipoArticulo, TipoCosteo } from '../types'
 
 const unidadesService = createMantenedorService('unidades-medida')
 const etiquetasService = createMantenedorService('etiquetas')
+const especiesService = createMantenedorService('especies')
 const ITEM = 'OPER_MATERIALES'
 
 interface ArticuloFormSheetProps {
@@ -59,6 +60,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
   const [etiquetaId, setEtiquetaId] = useState<number | null>(null)
   const [kgNetoEnvase, setKgNetoEnvase] = useState('')
   const [kgBrutoEnvase, setKgBrutoEnvase] = useState('')
+  const [especieId, setEspecieId] = useState<number | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const { data: unidades } = useQuery({
@@ -68,6 +70,11 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
     enabled: open,
   })
 
+  const { data: especies } = useQuery({
+    queryKey: ['especies-options'],
+    queryFn: () => especiesService.list({ soloActivos: true, limit: 300 }),
+    staleTime: 5 * 60_000,
+  })
   const { data: etiquetas } = useQuery({
     queryKey: ['etiquetas-options'],
     queryFn: () => etiquetasService.list({ soloActivos: true, limit: 500 }),
@@ -90,6 +97,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
 
   useEffect(() => {
     if (!open) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación del form al abrir
     setErrors({})
     if (item) {
       setTipo(item.tipo)
@@ -104,6 +112,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setEtiquetaId(item.etiquetaId)
       setKgNetoEnvase(item.kgNetoEnvase ?? '')
       setKgBrutoEnvase(item.kgBrutoEnvase ?? '')
+      setEspecieId(item.especieId ?? null)
     } else {
       setTipo('MATERIAL_EMBALAJE')
       setCodigo('')
@@ -117,6 +126,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setEtiquetaId(null)
       setKgNetoEnvase('')
       setKgBrutoEnvase('')
+      setEspecieId(null)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item?.id])
@@ -136,6 +146,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
         etiquetaId: tipo === 'EMBALAJE' ? etiquetaId : null,
         kgNetoEnvase: tipo === 'EMBALAJE' && kgNetoEnvase ? Number(kgNetoEnvase) : null,
         kgBrutoEnvase: tipo === 'EMBALAJE' && kgBrutoEnvase ? Number(kgBrutoEnvase) : null,
+        especieId: tipo === 'EMBALAJE' ? especieId : null,
       }
       if (isEdit) {
         return articulosService.update(item!.id, payload)
@@ -285,6 +296,19 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
                   }} />
                 </div>
                 {errors.etiquetaId && <p className='text-xs text-destructive'>{errors.etiquetaId}</p>}
+              </div>
+
+              <div className='space-y-1.5'>
+                <Label>Especie</Label>
+                <Select value={especieId ? String(especieId) : ''} onValueChange={(v) => setEspecieId(parseInt(v))}>
+                  <SelectTrigger><SelectValue placeholder='Seleccionar especie...' /></SelectTrigger>
+                  <SelectContent>
+                    {(especies?.data ?? []).map((e) => (
+                      <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className='text-muted-foreground text-xs'>Opcional. Agrupa el embalaje en el editor de Cajas por Pallet.</p>
               </div>
               <div className='grid grid-cols-2 gap-3'>
                 <div className='space-y-1.5'>

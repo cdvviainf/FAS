@@ -268,7 +268,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
       { encabezado: 'Etiqueta (código, requerido si Tipo = EMBALAJE)', campo: 'etiquetaId', tipo: 'fk', fk: { hoja: 'Etiquetas' }, ayuda: 'Obligatorio si Tipo = EMBALAJE.' },
       { encabezado: 'Kg Neto Envase', campo: 'kgNetoEnvase', tipo: 'decimal' },
       { encabezado: 'Kg Bruto Envase', campo: 'kgBrutoEnvase', tipo: 'decimal' },
-      { encabezado: 'Especie', tipo: 'texto', ayuda: 'Columna informativa: el modelo Artículo no tiene especie, este valor se ignora al cargar.' },
+      { encabezado: 'Especie', campo: 'especieId', tipo: 'fk', fk: { hoja: 'Especies' }, ayuda: 'Especie del embalaje (opcional). Agrupa los embalajes en el editor de Cajas por Pallet.' },
     ],
   },
   {

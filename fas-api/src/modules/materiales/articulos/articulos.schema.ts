@@ -17,6 +17,8 @@ export const articuloCreateSchema = z.object({
   etiquetaId: z.number().int().positive().optional().nullable(),
   kgNetoEnvase: z.number().min(0).optional().nullable(),
   kgBrutoEnvase: z.number().min(0).optional().nullable(),
+  // Especie del embalaje (opcional): agrupa embalajes en Cajas por Pallet.
+  especieId: z.number().int().positive().optional().nullable(),
 })
 
 // El código es inmutable (mismo patrón que mantenedores generales)

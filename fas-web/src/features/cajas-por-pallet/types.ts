@@ -14,3 +14,10 @@ export interface CajasPorPalletCreateInput {
 }
 
 export type CajasPorPalletUpdateInput = Partial<CajasPorPalletCreateInput>
+
+export interface MatrizEmbalajeRow {
+  articuloId: number
+  codigo: string
+  descripcion: string
+  cajasPorPallet: number | null
+}

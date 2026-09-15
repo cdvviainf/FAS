@@ -87,6 +87,27 @@ export async function getArticulo(articuloId: number) {
   return prisma.articulo.findFirst({ where: { id: articuloId }, select: { id: true, tipo: true } })
 }
 
+// Matriz del editor: embalajes de una especie con su cantidad para un tipo de
+// pallet (null si aún no tiene). Left-join vía relación filtrada.
+export async function listEmbalajesConCajas(especieId: number, tipoPalletId: number) {
+  const articulos = await prisma.articulo.findMany({
+    where: { tipo: 'EMBALAJE', especieId, activo: true },
+    select: {
+      id: true,
+      codigo: true,
+      descripcion: true,
+      cajasPorPallet: { where: { tipoPalletId, eliminadoEn: null }, select: { cajasPorPallet: true } },
+    },
+    orderBy: { codigo: 'asc' },
+  })
+  return articulos.map((a) => ({
+    articuloId: a.id,
+    codigo: a.codigo,
+    descripcion: a.descripcion,
+    cajasPorPallet: a.cajasPorPallet[0]?.cajasPorPallet ?? null,
+  }))
+}
+
 export async function getTipoPallet(tipoPalletId: number) {
   return prisma.tipoPallet.findFirst({ where: { id: tipoPalletId, eliminadoEn: null }, select: { id: true } })
 }

@@ -52,8 +52,15 @@ export async function buscar(articuloId: number, tipoPalletId: number): Promise<
   return item ? { cajasPorPallet: item.cajasPorPallet } : null
 }
 
-/** Upsert validado (usado por la Carga Masiva): valida referencias y crea/actualiza. */
+/** Upsert validado (Carga Masiva + editor matriz on-blur): valida y crea/actualiza. */
 export async function upsertPorPar(articuloId: number, tipoPalletId: number, cajasPorPallet: number, userId: string) {
   await validarReferencias(articuloId, tipoPalletId)
   return repo.upsertPorPar(articuloId, tipoPalletId, cajasPorPallet, userId)
+}
+
+/** Editor matriz: embalajes de la especie con su cantidad para el tipo de pallet. */
+export async function matriz(especieId: number, tipoPalletId: number) {
+  const tipoPallet = await repo.getTipoPallet(tipoPalletId)
+  if (!tipoPallet) throw new ValidationError('El tipo de pallet seleccionado no existe')
+  return repo.listEmbalajesConCajas(especieId, tipoPalletId)
 }

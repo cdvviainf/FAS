@@ -6,6 +6,8 @@ import {
   cajasPorPalletParamsSchema,
   cajasPorPalletBuscarSchema,
   cajasPorPalletListSchema,
+  cajasPorPalletMatrizSchema,
+  cajasPorPalletUpsertSchema,
 } from './cajas-por-pallet.schema.js'
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
@@ -17,6 +19,18 @@ export async function list(req: FastifyRequest, reply: FastifyReply) {
 export async function buscar(req: FastifyRequest, reply: FastifyReply) {
   const { articuloId, tipoPalletId } = cajasPorPalletBuscarSchema.parse(req.query)
   const data = await service.buscar(articuloId, tipoPalletId)
+  return reply.send({ data })
+}
+
+export async function matriz(req: FastifyRequest, reply: FastifyReply) {
+  const { especieId, tipoPalletId } = cajasPorPalletMatrizSchema.parse(req.query)
+  const data = await service.matriz(especieId, tipoPalletId)
+  return reply.send({ data })
+}
+
+export async function upsert(req: FastifyRequest, reply: FastifyReply) {
+  const body = cajasPorPalletUpsertSchema.parse(req.body)
+  const data = await service.upsertPorPar(body.articuloId, body.tipoPalletId, body.cajasPorPallet, req.fasUserId!)
   return reply.send({ data })
 }
 

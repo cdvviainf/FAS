@@ -15,6 +15,7 @@ export interface ArticuloCreateInput {
   etiquetaId?: number | null
   kgNetoEnvase?: number | null
   kgBrutoEnvase?: number | null
+  especieId?: number | null
 }
 
 export type ArticuloUpdateInput = Partial<ArticuloCreateInput>

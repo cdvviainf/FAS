@@ -17,6 +17,17 @@ export const cajasPorPalletBuscarSchema = z.object({
   tipoPalletId: z.coerce.number().int().positive(),
 })
 
+export const cajasPorPalletMatrizSchema = z.object({
+  especieId: z.coerce.number().int().positive(),
+  tipoPalletId: z.coerce.number().int().positive(),
+})
+
+export const cajasPorPalletUpsertSchema = z.object({
+  articuloId: z.number().int().positive(),
+  tipoPalletId: z.number().int().positive(),
+  cajasPorPallet: z.number().int().positive('Las cajas por pallet deben ser mayor a 0'),
+})
+
 export const cajasPorPalletListSchema = z.object({
   page: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().positive().optional(),

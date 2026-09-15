@@ -5,6 +5,7 @@ import type { ArticuloCreateInput, ArticuloUpdateInput, ArticuloListFilters } fr
 
 const unidadSelect = { id: true, codigo: true, descripcion: true }
 const etiquetaSelect = { id: true, codigo: true, descripcion: true }
+const especieSelect = { id: true, codigo: true, descripcion: true }
 
 function buildWhere(filters: ArticuloListFilters): Prisma.ArticuloWhereInput {
   return {
@@ -27,7 +28,7 @@ export async function listArticulos(filters: ArticuloListFilters) {
   const [data, total] = await Promise.all([
     prisma.articulo.findMany({
       where,
-      include: { unidad: { select: unidadSelect }, etiqueta: { select: etiquetaSelect } },
+      include: { unidad: { select: unidadSelect }, etiqueta: { select: etiquetaSelect }, especie: { select: especieSelect } },
       orderBy: { codigo: 'asc' },
       skip: (page - 1) * limit,
       take: limit,
@@ -43,6 +44,7 @@ export async function getArticuloById(id: number) {
     include: {
       unidad: { select: unidadSelect },
       etiqueta: { select: etiquetaSelect },
+      especie: { select: especieSelect },
       saldos: {
         include: { bodega: { select: { id: true, codigo: true, descripcion: true } } },
       },
@@ -75,7 +77,7 @@ export async function createArticulo(data: ArticuloCreateInput) {
     // valor con la empresa activa del contexto — se declara aquí solo para
     // satisfacer el tipo requerido por Prisma.
     data: { ...data, empresaId: getEmpresaIdActual()! },
-    include: { unidad: { select: unidadSelect }, etiqueta: { select: etiquetaSelect } },
+    include: { unidad: { select: unidadSelect }, etiqueta: { select: etiquetaSelect }, especie: { select: especieSelect } },
   })
 }
 
@@ -83,7 +85,7 @@ export async function updateArticulo(id: number, data: ArticuloUpdateInput) {
   return prisma.articulo.update({
     where: { id },
     data,
-    include: { unidad: { select: unidadSelect }, etiqueta: { select: etiquetaSelect } },
+    include: { unidad: { select: unidadSelect }, etiqueta: { select: etiquetaSelect }, especie: { select: especieSelect } },
   })
 }
 

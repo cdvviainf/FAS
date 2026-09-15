@@ -955,6 +955,7 @@ model Especie {
   variedades                  Variedad[]
   categorias                  Categoria[]
   calibres                    Calibre[]
+  articulos                   Articulo[]
   solicitudesInspeccion       SolicitudInspeccion[]
   conceptosLiquidacion        ConceptoLiquidacionEspecie[]
   notaVentaDetalles           NotaVentaDetalle[]
@@ -1812,6 +1813,11 @@ model Articulo {
   etiqueta              Etiqueta?    @relation(fields: [empresaId, etiquetaId], references: [empresaId, id])
   kgNetoEnvase          Decimal?     @db.Decimal(10, 3)
   kgBrutoEnvase         Decimal?     @db.Decimal(10, 3)
+  // Especie del embalaje (opcional): agrupa los embalajes por especie en el
+  // editor de Cajas por Pallet. FK compuesta (empresaId, especieId) ->
+  // Especie(empresaId, id), mismo patrón que unidad/etiqueta.
+  especieId             Int?
+  especie               Especie?     @relation(fields: [empresaId, especieId], references: [empresaId, id])
 
   documentos                  DocumentoArticulo[]
   recetas                     Receta[]                      @relation("EmbalajeRecetas")

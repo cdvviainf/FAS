@@ -38,6 +38,8 @@ export interface Articulo {
   etiqueta: { id: number; codigo: string; descripcion: string } | null
   kgNetoEnvase: string | null
   kgBrutoEnvase: string | null
+  especieId: number | null
+  especie?: { id: number; codigo: string; descripcion: string } | null
   saldos?: SaldoBodega[]
 }
 
@@ -54,6 +56,7 @@ export interface ArticuloCreateInput {
   etiquetaId?: number | null
   kgNetoEnvase?: number | null
   kgBrutoEnvase?: number | null
+  especieId?: number | null
 }
 
 export type ArticuloUpdateInput = Partial<Omit<ArticuloCreateInput, 'codigo'>>

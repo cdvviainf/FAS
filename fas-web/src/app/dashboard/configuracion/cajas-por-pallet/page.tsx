@@ -1,6 +1,5 @@
 import PageContainer from '@/components/layout/page-container'
-import { CajasPorPalletListingClient } from '@/features/cajas-por-pallet/components/cajas-por-pallet-listing-client'
-import { CajasPorPalletFormSheetTrigger } from '@/features/cajas-por-pallet/components/cajas-por-pallet-form-sheet'
+import { CajasPorPalletMatriz } from '@/features/cajas-por-pallet/components/cajas-por-pallet-matriz'
 
 export const metadata = {
   title: 'FAS — Cajas por Pallet'
@@ -10,10 +9,9 @@ export default function Page() {
   return (
     <PageContainer
       pageTitle='Cajas por Pallet'
-      pageDescription='Cajas teóricas por embalaje y tipo de pallet (precarga la cantidad en OC, Instructivo y Nota de Venta).'
-      pageHeaderAction={<CajasPorPalletFormSheetTrigger />}
+      pageDescription='Elige tipo de pallet y especie, e ingresa las cajas teóricas de cada embalaje. Se graba al salir de cada campo.'
     >
-      <CajasPorPalletListingClient />
+      <CajasPorPalletMatriz />
     </PageContainer>
   )
 }
