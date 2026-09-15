@@ -6,6 +6,7 @@ import { DataTable } from '@/components/ui/table/data-table'
 import { DataTableToolbar } from '@/components/ui/table/data-table-toolbar'
 import { DataTableSkeleton } from '@/components/ui/table/data-table-skeleton'
 import { useDataTable } from '@/hooks/use-data-table'
+import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -54,7 +55,13 @@ export function EntidadListingClient() {
 
   return (
     <div className='flex flex-1 flex-col space-y-3'>
-      <div className='flex items-center gap-2'>
+      <div className='flex flex-wrap items-center gap-2'>
+        <Input
+          placeholder='Buscar nombre, código o razón social...'
+          value={params.q ?? ''}
+          onChange={(e) => setParams({ q: e.target.value || null, page: 1 })}
+          className='h-8 w-[280px] text-sm'
+        />
         <Select
           value={params.tipo ?? ''}
           onValueChange={(v) => setParams({ tipo: (v as TipoEntidad) || null, page: 1 })}

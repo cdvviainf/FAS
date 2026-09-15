@@ -326,6 +326,7 @@ async function main() {
     { modelo: 'mercado', prefijo: 'MER', digitos: 3 },
     { modelo: 'puerto', prefijo: 'PTO', digitos: 3 },
     { modelo: 'entidad', prefijo: 'EN', digitos: 4 },
+    { modelo: 'entidadDireccion', prefijo: 'DIR', digitos: 3 },
     { modelo: 'articulo', prefijo: 'ART', digitos: 4 },
     { modelo: 'bodega', prefijo: 'BOD', digitos: 3 },
     { modelo: 'receta', prefijo: 'REC', digitos: 3 },

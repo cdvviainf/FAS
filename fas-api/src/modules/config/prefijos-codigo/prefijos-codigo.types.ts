@@ -10,7 +10,7 @@ export const MODELOS_CON_CODIGO = [
   'categoria', 'calibre', 'parametro', 'mercado', 'puerto', 'moneda',
   'temporada', 'bodega', 'conceptoCtaCte',
   // Módulos dedicados
-  'entidad', 'articulo', 'condicionPago', 'receta', 'tipoMovimiento',
+  'entidad', 'entidadDireccion', 'articulo', 'condicionPago', 'receta', 'tipoMovimiento',
   'conceptoLiquidacion', 'perfil', 'templateCarga',
 ] as const
 

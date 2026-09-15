@@ -84,7 +84,8 @@ function validarRutChileno(rut: string): boolean {
 interface DireccionDialogProps {
   open: boolean
   initial?: Partial<DireccionCreateInput> & { id?: number }
-  paisOrigen: number | null
+  // País de la entidad: se predetermina en direcciones nuevas (cambiable).
+  defaultPaisId: number | null
   onClose: () => void
   onSave: (data: DireccionCreateInput & { id?: number }) => Promise<void>
   isSaving: boolean
@@ -92,12 +93,12 @@ interface DireccionDialogProps {
   comunas: { id: number; descripcion: string }[]
 }
 
-function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving, paises, comunas }: DireccionDialogProps) {
+function DireccionDialog({ open, initial, defaultPaisId, onClose, onSave, isSaving, paises, comunas }: DireccionDialogProps) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState<DireccionCreateInput>({
     codigo: '',
     descripcion: '',
-    paisId: paisOrigen ?? 0,
+    paisId: defaultPaisId ?? 0,
     comunaId: null,
     direccion: '',
     esPorDefecto: false,
@@ -111,7 +112,7 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
       setForm({
         codigo: initial?.codigo ?? '',
         descripcion: initial?.descripcion ?? '',
-        paisId: initial?.paisId ?? paisOrigen ?? (paises[0]?.id ?? 0),
+        paisId: initial?.paisId ?? defaultPaisId ?? (paises[0]?.id ?? 0),
         comunaId: initial?.comunaId ?? null,
         direccion: initial?.direccion ?? '',
         esPorDefecto: initial?.esPorDefecto ?? false,
@@ -123,7 +124,9 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const selectedPaisEsChile = form.paisId === paisOrigen
+  // La comuna solo aplica (y se exige) cuando el país seleccionado es el
+  // nacional (Chile) — no cuando la entidad/dirección es extranjera.
+  const selectedPaisEsChile = paises.find((p) => p.id === form.paisId)?.esPaisNacional ?? false
 
   function validate(): boolean {
     const e: Record<string, string> = {}
@@ -535,6 +538,15 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
     if (!isEdit && codigoSugerido) setFields((f) => ({ ...f, codigo: codigoSugerido }))
   }, [codigoSugerido, isEdit])
 
+  // ── Sugerencia de código para direcciones (Prefijos de Código, modelo
+  // 'entidadDireccion'). null si no hay prefijo configurado → código manual.
+  // Aplica tanto al crear como al editar (ambos modos agregan direcciones).
+  const { data: codigoSugeridoDireccion } = useQuery({
+    queryKey: ['prefijo-codigo-siguiente', 'entidadDireccion'],
+    queryFn: () => prefijosCodigoService.siguienteCodigo('entidadDireccion'),
+    staleTime: 0,
+  })
+
   // ── Set default paisId on create when paises load ──
   useEffect(() => {
     if (!isEdit && !fields.paisId && paisOrigen) {
@@ -796,6 +808,27 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
         esRepresentanteLegal: c.esRepresentanteLegal,
       }))
 
+  // Próximo código de dirección: parte de la sugerencia del servidor y la
+  // ajusta contra las direcciones ya presentes (varias nuevas en modo creación
+  // comparten la misma base del servidor, así que hay que incrementar local).
+  // undefined si no hay prefijo configurado → el campo queda vacío (manual).
+  function calcularCodigoDireccion(): string | undefined {
+    const base = codigoSugeridoDireccion
+    if (!base) return undefined
+    const m = base.match(/^(\D*)(\d+)$/)
+    if (!m) return base
+    const prefijo = m[1]
+    const digitos = m[2].length
+    let max = parseInt(m[2], 10) - 1
+    for (const d of direccionesToShow) {
+      if (d.codigo?.startsWith(prefijo)) {
+        const n = parseInt(d.codigo.slice(prefijo.length), 10)
+        if (!isNaN(n) && n > max) max = n
+      }
+    }
+    return `${prefijo}${String(max + 1).padStart(digitos, '0')}`
+  }
+
   const isPending = createMutation.isPending || updateMutation.isPending
 
   if (isEdit && isLoading) {
@@ -988,7 +1021,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
               <Button
                 size='sm'
                 variant='outline'
-                onClick={() => setDirDialog({ open: true })}
+                onClick={() => setDirDialog({ open: true, initial: { codigo: calcularCodigoDireccion() } })}
               >
                 <Icons.add className='h-4 w-4 mr-1.5' />
                 Agregar
@@ -1200,7 +1233,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
       <DireccionDialog
         open={dirDialog.open}
         initial={dirDialog.initial}
-        paisOrigen={paisOrigen}
+        defaultPaisId={fields.paisId || paisOrigen}
         paises={paises}
         comunas={comunas}
         onClose={() => setDirDialog({ open: false })}
