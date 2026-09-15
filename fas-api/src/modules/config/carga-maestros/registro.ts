@@ -175,6 +175,19 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
     ],
   },
 
+  // ─── País ↔ Mercado (mapeo por empresa) ─────────────────────────────────────
+  {
+    hoja: 'PaisMercado',
+    modelo: 'mercadoPais',
+    titulo: 'Países por Mercado',
+    descripcion: 'Asigna cada país a un mercado (mapeo por empresa). El País y el Mercado YA DEBEN EXISTIR; se puede recargar para reasignar (upsert, no duplica).',
+    dependeDe: ['Paises', 'Mercados'],
+    columnas: [
+      { encabezado: 'País (código)', campo: 'paisId', tipo: 'fk', requerido: true, fk: { hoja: 'Paises', externo: true, modelo: 'pais' } },
+      { encabezado: 'Mercado (código)', campo: 'mercadoId', tipo: 'fk', requerido: true, fk: { hoja: 'Mercados', externo: true, modelo: 'mercado' } },
+    ],
+  },
+
   // ─── Entidades y predios ───────────────────────────────────────────────────
   {
     hoja: 'Entidades',

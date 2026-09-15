@@ -151,6 +151,10 @@ async function crearRegistro(hoja: HojaSpec, input: Record<string, any>, userId:
     case 'prefijoCodigo':
       await crearPrefijoCodigo(input as any, userId)
       break
+    case 'mercadoPais':
+      // Mapeo país↔mercado por empresa: upsert (no crea país ni mercado).
+      await configRepo.upsertMercadoPais(input.paisId, input.mercadoId, userId)
+      break
     default:
       await configService.crearMantenedor(hoja.modelo as any, input as any, userId)
   }

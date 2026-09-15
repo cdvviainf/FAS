@@ -188,7 +188,10 @@ export function validarReferenciasInternas(parseo: ResultadoParseo, hojas: HojaS
   }
 
   for (const hoja of hojas) {
-    const fkCols = hoja.columnas.filter((c) => c.tipo === 'fk' && c.fk?.hoja && c.campo)
+    // Solo FKs internas (resuelven contra el propio archivo). Las marcadas
+    // `externo` referencian maestros que ya existen en BD (aunque tengan `hoja`
+    // para el dropdown) y se resuelven en el commit, no acá.
+    const fkCols = hoja.columnas.filter((c) => c.tipo === 'fk' && c.fk?.hoja && !c.fk?.externo && c.campo)
     for (const fila of parseo.hojas[hoja.hoja]?.filas ?? []) {
       for (const col of fkCols) {
         const val = fila.valores[col.campo!]
