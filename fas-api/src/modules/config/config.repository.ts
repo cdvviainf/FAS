@@ -130,8 +130,16 @@ function resolveOrderBy(modelo: MantenedorModelo, sort?: string): any {
           case 'descripcion': return { descripcion: dir }
           case 'descripcionExtranjera': return { descripcionExtranjera: dir }
           case 'bloqueado': return { bloqueado: dir }
-          case 'orden': if (MODELOS_CON_ORDEN.has(modelo)) return [{ especieId: 'asc' }, { orden: dir }]; break
-          case 'especie': if (MODELOS_CON_ESPECIE.has(modelo)) return { especie: { descripcion: dir } }; break
+          // Clic en "Orden": orden numérico puro (columna Int), especie como desempate.
+          case 'orden': if (MODELOS_CON_ORDEN.has(modelo)) return [{ orden: dir }, { especieId: 'asc' }]; break
+          // Clic en "Especie": especie primero, y dentro por orden (o código).
+          case 'especie':
+            if (MODELOS_CON_ESPECIE.has(modelo)) {
+              return MODELOS_CON_ORDEN.has(modelo)
+                ? [{ especie: { descripcion: dir } }, { orden: 'asc' }]
+                : [{ especie: { descripcion: dir } }, { codigo: 'asc' }]
+            }
+            break
         }
       }
     } catch {
