@@ -1,9 +1,8 @@
 import PageContainer from '@/components/layout/page-container'
 import { searchParamsCache } from '@/lib/searchparams'
 import { SearchParams } from 'nuqs/server'
-import MantenedorListing from '@/components/shared/mantenedor-simple/mantenedor-listing'
 import { PaisFormSheetTrigger } from '@/components/shared/mantenedor-simple/pais-form-sheet'
-import { paisExtraColumns } from '@/components/shared/mantenedor-simple/pais-columns'
+import { PaisesListing } from '@/features/paises/components/paises-listing'
 
 export const metadata = {
   title: 'FAS — Países'
@@ -23,7 +22,7 @@ export default async function Page(props: PageProps) {
       pageDescription='Países de origen y destino para operaciones de exportación.'
       pageHeaderAction={<PaisFormSheetTrigger />}
     >
-      <MantenedorListing recurso='paises' titulo='País' extraColumns={paisExtraColumns} />
+      <PaisesListing />
     </PageContainer>
   )
 }
