@@ -8,6 +8,7 @@ export const FECHA_REFERENCIA_LABEL: Record<string, string> = {
   FACTURA: 'Factura',
   ZARPE: 'Zarpe',
   ENVIO_DOCUMENTOS: 'Envío de documentos',
+  ARRIBO: 'Arribo',
 }
 
 // Resolver de Orden de Compra — Etapa 4 §4: "consulta la base y arma un

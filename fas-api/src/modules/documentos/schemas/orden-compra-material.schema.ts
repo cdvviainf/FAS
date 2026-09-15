@@ -22,7 +22,7 @@ export const ordenCompraMaterialPdfPayloadSchema = z.object({
   observaciones: z.string().nullable(),
   cuotas: z.array(z.object({
     plazoDias: z.number(),
-    fechaReferencia: z.enum(['FACTURA', 'ZARPE', 'ENVIO_DOCUMENTOS']),
+    fechaReferencia: z.enum(['FACTURA', 'ZARPE', 'ENVIO_DOCUMENTOS', 'ARRIBO']),
     porcentaje: z.string(),
   })),
   lineas: z.array(z.object({

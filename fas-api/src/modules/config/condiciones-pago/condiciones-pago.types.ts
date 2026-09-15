@@ -1,4 +1,4 @@
-export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS'
+export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS' | 'ARRIBO'
 export type TipoValorCuota = 'PORCENTAJE' | 'MONTO_UNITARIO'
 export type TipoCondicionPago = 'COMPRA' | 'VENTA'
 

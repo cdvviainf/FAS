@@ -68,7 +68,7 @@ export interface NotaVentaDetalleDisponibilidad {
   cajasDisponibles: number
 }
 
-export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS'
+export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS' | 'ARRIBO'
 export type TipoValorCuota = 'PORCENTAJE' | 'MONTO_UNITARIO'
 
 export interface OrdenCompraCuotaPagoItem {

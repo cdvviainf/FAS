@@ -37,7 +37,7 @@ export const cierreComercialPdfPayloadSchema = z.object({
   // mismo shape crudo que orden-compra.schema.ts, la plantilla arma el texto.
   cuotas: z.array(z.object({
     plazoDias: z.number().int(),
-    fechaReferencia: z.enum(['FACTURA', 'ZARPE', 'ENVIO_DOCUMENTOS']),
+    fechaReferencia: z.enum(['FACTURA', 'ZARPE', 'ENVIO_DOCUMENTOS', 'ARRIBO']),
     tipoValor: z.enum(['PORCENTAJE', 'MONTO_UNITARIO']),
     porcentaje: z.string().nullable(),
     valorUnitario: z.string().nullable(),

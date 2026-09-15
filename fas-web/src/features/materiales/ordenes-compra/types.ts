@@ -25,7 +25,7 @@ export interface CondicionPagoRef {
   descripcion: string
 }
 
-export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS'
+export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS' | 'ARRIBO'
 
 export interface OrdenCompraMaterialCuotaPagoItem {
   id: number

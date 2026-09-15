@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 const cuotaSchema = z
   .object({
-    fechaReferencia: z.enum(['FACTURA', 'ZARPE', 'ENVIO_DOCUMENTOS']).default('FACTURA'),
+    fechaReferencia: z.enum(['FACTURA', 'ZARPE', 'ENVIO_DOCUMENTOS', 'ARRIBO']).default('FACTURA'),
     plazoDias: z.number().int().min(0),
     tipoValor: z.enum(['PORCENTAJE', 'MONTO_UNITARIO']).default('PORCENTAJE'),
     porcentaje: z.number().positive().max(100).optional().nullable(),

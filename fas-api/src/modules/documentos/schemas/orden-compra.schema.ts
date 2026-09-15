@@ -35,7 +35,7 @@ export const ordenCompraPdfPayloadSchema = z.object({
   // 4 §5: "prohibido formatear a mano dentro de una plantilla").
   cuotas: z.array(z.object({
     plazoDias: z.number().int(),
-    fechaReferencia: z.enum(['FACTURA', 'ZARPE', 'ENVIO_DOCUMENTOS']),
+    fechaReferencia: z.enum(['FACTURA', 'ZARPE', 'ENVIO_DOCUMENTOS', 'ARRIBO']),
     tipoValor: z.enum(['PORCENTAJE', 'MONTO_UNITARIO']),
     porcentaje: z.string().nullable(),
     valorUnitario: z.string().nullable(),

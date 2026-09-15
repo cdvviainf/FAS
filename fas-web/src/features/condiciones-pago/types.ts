@@ -1,4 +1,4 @@
-export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS'
+export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS' | 'ARRIBO'
 export type TipoValorCuota = 'PORCENTAJE' | 'MONTO_UNITARIO'
 export type TipoCondicionPago = 'COMPRA' | 'VENTA'
 
@@ -6,6 +6,7 @@ export const FECHA_REFERENCIA_LABELS: Record<FechaReferenciaPago, string> = {
   FACTURA: 'Fecha de Factura',
   ZARPE: 'Fecha de Zarpe',
   ENVIO_DOCUMENTOS: 'Fecha de Envío de Documentos',
+  ARRIBO: 'Fecha de Arribo',
 }
 
 export const TIPO_CONDICION_PAGO_LABELS: Record<TipoCondicionPago, string> = {

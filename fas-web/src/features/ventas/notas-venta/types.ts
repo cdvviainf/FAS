@@ -10,7 +10,7 @@ export interface CondicionPagoRef {
   descripcion: string
 }
 
-export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS'
+export type FechaReferenciaPago = 'FACTURA' | 'ZARPE' | 'ENVIO_DOCUMENTOS' | 'ARRIBO'
 export type TipoValorCuota = 'PORCENTAJE' | 'MONTO_UNITARIO'
 
 // Snapshot inmutable de las cuotas de la Forma de Pago al momento de guardar

@@ -3143,6 +3143,7 @@ enum FechaReferenciaPago {
   FACTURA
   ZARPE
   ENVIO_DOCUMENTOS
+  ARRIBO
 }
 
 // PORCENTAJE: cuota expresada como % (deben sumar 100% entre las cuotas
