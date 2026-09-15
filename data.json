@@ -10,7 +10,7 @@
     "horasPorSemana": 25,
     "nota": "Horas de desarrollo efectivo (excluye reuniones/overhead). 1 día hábil = 5h. Cada tarea agenda días hábiles (Lun-Vie); las fechas son editables directamente en gantt.tareas[] (sin recalculo en cadena). Reconstrucción en curso: solo los módulos con horas ya confirmadas por el cliente tienen Horas Estimadas > 0; Gestión de Riesgo y Finanzas quedan en 0 hasta confirmarse. \"Horas Utilizadas\" (resumen superior) = horas de tareas con progreso 100%. \"Horas Extras\" = suma de horasUtilizadas por tarea (sin registro real todavía, en 0)."
   },
-  "horasTotalesProyecto": 520,
+  "horasTotalesProyecto": 444,
   "avances": [
     {
       "id": 1,
@@ -245,7 +245,7 @@
     },
     {
       "id": 24,
-      "modulo": "Calidad — Solicitud de Inspección (v1 vigente)",
+      "modulo": "Calidad — Solicitud de Inspección",
       "grupo": "Calidad",
       "seccion": "Calidad",
       "etapa": 1,
@@ -265,27 +265,23 @@
       ]
     },
     {
-      "id": 26,
-      "modulo": "Calidad — Inspección de Calidad",
+      "id": 25,
+      "modulo": "Calidad — Calificación de Pallets",
       "grupo": "Calidad",
       "seccion": "Calidad",
-      "etapa": 2,
-      "progreso": 0,
-      "estado": "Postergado · Etapa 3",
-      "horasEstimadas": 0,
+      "etapa": 1,
+      "progreso": 100,
+      "estado": "Pendiente",
+      "horasEstimadas": 5,
       "horasUtilizadas": 0,
-      "inicioFecha": "2026-08-21",
-      "terminoFecha": "2026-08-24",
+      "inicioFecha": "2026-08-20",
+      "terminoFecha": "2026-08-20",
+      "nota": "Agregado",
       "subEtapas": [
         {
-          "nombre": "Inspección de Calidad (por caja: defectos, madurez, fotos, resultado, informe PDF)",
+          "nombre": "Solicitud de Inspección (visita a terreno, adjuntos, correo, campos Documento 107, tipo Compra/Proceso, veredictos)",
           "horasEstimadas": 0,
-          "progreso": 0
-        },
-        {
-          "nombre": "App Móvil Offline (PWA, service worker, IndexedDB, cola de sincronización)",
-          "horasEstimadas": 0,
-          "progreso": 0
+          "progreso": 100
         }
       ]
     },
@@ -705,7 +701,7 @@
         "terminoFecha": "2026-08-04",
         "duracionDias": 2,
         "horasEstimadas": 10,
-        "horasUtilizadas": 5,
+        "horasUtilizadas": 0,
         "progreso": 100
       },
       {
@@ -771,8 +767,8 @@
         "moduloId": 11,
         "tipo": "subEtapa",
         "etapa": 1,
-        "inicioFecha": "2026-08-11",
-        "terminoFecha": "2026-08-11",
+        "inicioFecha": "2026-09-11",
+        "terminoFecha": "2026-09-11",
         "duracionDias": 1,
         "horasEstimadas": 5,
         "horasUtilizadas": 0,
@@ -814,11 +810,11 @@
         "tipo": "subEtapa",
         "etapa": 1,
         "inicioFecha": "2026-08-14",
-        "terminoFecha": "2026-08-18",
-        "duracionDias": 3,
+        "terminoFecha": "2026-09-11",
+        "duracionDias": 6,
         "horasEstimadas": 30,
-        "horasUtilizadas": 0,
-        "progreso": 30
+        "horasUtilizadas": 5,
+        "progreso": 70
       },
       {
         "id": 21,
@@ -827,12 +823,12 @@
         "moduloId": 17,
         "tipo": "subEtapa",
         "etapa": 1,
-        "inicioFecha": "2026-08-18",
-        "terminoFecha": "2026-08-20",
+        "inicioFecha": "2026-09-08",
+        "terminoFecha": "2026-09-11",
         "duracionDias": 3,
         "horasEstimadas": 15,
         "horasUtilizadas": 0,
-        "progreso": 0
+        "progreso": 30
       },
       {
         "id": 66,
@@ -841,8 +837,8 @@
         "moduloId": 17,
         "tipo": "subEtapa",
         "etapa": 1,
-        "inicioFecha": "2026-08-21",
-        "terminoFecha": "2026-08-21",
+        "inicioFecha": "2026-09-15",
+        "terminoFecha": "2026-09-15",
         "duracionDias": 1,
         "horasEstimadas": 5,
         "horasUtilizadas": 0,
@@ -890,7 +886,6 @@
         "horasUtilizadas": 0,
         "progreso": 95
       },
-
       {
         "id": 44,
         "nombre": "Proforma de Venta de Materiales",
@@ -903,7 +898,7 @@
         "duracionDias": 3,
         "horasEstimadas": 15,
         "horasUtilizadas": 0,
-        "progreso": 0
+        "progreso": 95
       },
       {
         "id": 83,
@@ -934,6 +929,20 @@
         "progreso": 100
       },
       {
+        "id": 90,
+        "nombre": "Reporte Stock Materiales",
+        "modulo": "Gestión de Materiales",
+        "moduloId": 41,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-08",
+        "terminoFecha": "2026-09-08",
+        "duracionDias": 1,
+        "horasEstimadas": 5,
+        "horasUtilizadas": 0,
+        "progreso": 100
+      },
+      {
         "id": 67,
         "nombre": "Entrega y validación",
         "modulo": "Gestión de Materiales",
@@ -959,12 +968,12 @@
         "duracionDias": 2,
         "horasEstimadas": 10,
         "horasUtilizadas": 0,
-        "progreso": 75
+        "progreso": 100
       },
       {
         "id": 25,
         "nombre": "Solicitud de Inspección (visita a terreno, adjuntos, correo, campos Documento 107, tipo Compra/Proceso, veredictos)",
-        "modulo": "Calidad — Solicitud de Inspección (v1 vigente)",
+        "modulo": "Calidad — Solicitud de Inspección",
         "moduloId": 24,
         "tipo": "subEtapa",
         "etapa": 1,
@@ -972,6 +981,20 @@
         "terminoFecha": "2026-08-31",
         "duracionDias": 3,
         "horasEstimadas": 15,
+        "horasUtilizadas": 10,
+        "progreso": 100
+      },
+      {
+        "id": 26,
+        "nombre": "Solicitud de Inspección (visita a terreno, adjuntos, correo, campos Documento 107, tipo Compra/Proceso, veredictos)",
+        "modulo": "Calidad — Calificación de Pallets",
+        "moduloId": 25,
+        "tipo": "subEtapa",
+        "etapa": 1,
+        "inicioFecha": "2026-09-05",
+        "terminoFecha": "2026-09-05",
+        "duracionDias": 3,
+        "horasEstimadas": 0,
         "horasUtilizadas": 5,
         "progreso": 100
       },
@@ -1004,30 +1027,16 @@
         "progreso": 0
       },
       {
-        "id": 70,
-        "nombre": "Entrega y validación",
-        "modulo": "Calidad — Entrega y validación",
-        "moduloId": 86,
-        "tipo": "subEtapa",
-        "etapa": 2,
-        "inicioFecha": "2026-09-07",
-        "terminoFecha": "2026-09-07",
-        "duracionDias": 1,
-        "horasEstimadas": 5,
-        "horasUtilizadas": 0,
-        "progreso": 0
-      },
-      {
         "id": 30,
         "nombre": "Reclamos (ingreso, valorización, cierre/reapertura, provisión)",
         "modulo": "Calidad — Análisis de Reclamos",
         "moduloId": 29,
         "tipo": "subEtapa",
         "etapa": 1,
-        "inicioFecha": "2026-09-03",
-        "terminoFecha": "2026-09-07",
+        "inicioFecha": "2026-09-08",
+        "terminoFecha": "2026-09-08",
         "duracionDias": 3,
-        "horasEstimadas": 15,
+        "horasEstimadas": 5,
         "horasUtilizadas": 0,
         "progreso": 0
       },
@@ -1041,7 +1050,7 @@
         "inicioFecha": "2026-09-08",
         "terminoFecha": "2026-09-08",
         "duracionDias": 1,
-        "horasEstimadas": 15,
+        "horasEstimadas": 5,
         "horasUtilizadas": 0,
         "progreso": 0
       },
