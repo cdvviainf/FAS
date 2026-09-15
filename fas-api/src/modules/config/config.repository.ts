@@ -97,6 +97,20 @@ function getDelegate(modelo: MantenedorModelo): any {
   return (prisma as unknown as Record<string, any>)[modelMap[modelo]]
 }
 
+// Orden de listado por modelo: los maestros con `orden` por especie (Categoría,
+// Calibre) salen por (especie, orden); los que dependen de especie sin `orden`
+// (Grupo de Variedad, Variedad) por (especie, código); el resto por código.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function orderByMantenedor(modelo: MantenedorModelo): any {
+  if (modelo === 'categoria' || modelo === 'calibre') {
+    return [{ especieId: 'asc' }, { orden: 'asc' }]
+  }
+  if (modelo === 'grupoVariedad' || modelo === 'variedad') {
+    return [{ especieId: 'asc' }, { codigo: 'asc' }]
+  }
+  return { codigo: 'asc' }
+}
+
 export async function listMantenedor(modelo: MantenedorModelo, filters: MantenedorListFilters) {
   if (modelo === 'pais') return listPaises(filters)
 
@@ -139,7 +153,7 @@ export async function listMantenedor(modelo: MantenedorModelo, filters: Mantened
   const [data, total] = await Promise.all([
     delegate.findMany({
       where,
-      orderBy: { codigo: 'asc' },
+      orderBy: orderByMantenedor(modelo),
       skip: (page - 1) * limit,
       take: limit,
       ...(includeClause ? { include: includeClause } : {}),
