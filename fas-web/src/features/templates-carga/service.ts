@@ -20,4 +20,17 @@ export const templatesCargaService = {
   async remove(id: number): Promise<void> {
     await api.delete(`config/templates-carga/${id}`)
   },
+  // Descarga el Excel en blanco (formato base) con las columnas del template,
+  // listo para llenar y subir.
+  async descargarFormatoBase(id: number, nombreArchivo: string): Promise<void> {
+    const blob = await api.get(`config/templates-carga/${id}/formato-base`).blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombreArchivo
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  },
 }

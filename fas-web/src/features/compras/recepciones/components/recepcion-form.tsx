@@ -114,6 +114,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [erroresCarga, setErroresCarga] = useState<{ mensaje: string; diferencias: string[] } | null>(null)
   const [advertencias, setAdvertencias] = useState<{ items: string[]; adjuntoId: number } | null>(null)
+  const [descargandoFormato, setDescargandoFormato] = useState(false)
 
   const { data: recepcion, isLoading } = useQuery({
     ...recepcionDetailOptions(recepcionId ?? 0),
@@ -268,6 +269,22 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
       setAdvertencias(null)
     },
   })
+
+  async function descargarFormatoBase() {
+    if (!fields.templateCargaId) return
+    const tpl = templatesCarga.find((t) => t.id === fields.templateCargaId)
+    setDescargandoFormato(true)
+    try {
+      await templatesCargaService.descargarFormatoBase(
+        fields.templateCargaId,
+        `Formato_${tpl?.codigo ?? 'carga'}.xlsx`,
+      )
+    } catch (e) {
+      toast.error((e as Error).message || 'No se pudo descargar el formato base')
+    } finally {
+      setDescargandoFormato(false)
+    }
+  }
 
   function agregarArchivo(files: FileList | null) {
     if (!files || files.length === 0) return
@@ -434,19 +451,33 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
 
           <div className='space-y-1.5'>
             <Label>Template de Carga <span className='text-muted-foreground text-xs'>(opcional)</span></Label>
-            <Select
-              value={fields.templateCargaId ? String(fields.templateCargaId) : '__none__'}
-              onValueChange={(v) => setFields((f) => ({ ...f, templateCargaId: v === '__none__' ? null : Number(v) }))}
-              disabled={soloLectura}
-            >
-              <SelectTrigger><SelectValue placeholder='Sin template...' /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value='__none__'>Sin template</SelectItem>
-                {templatesCarga.map((t) => (
-                  <SelectItem key={t.id} value={String(t.id)}>{t.codigo} — {t.descripcion}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className='flex items-center gap-2'>
+              <Select
+                value={fields.templateCargaId ? String(fields.templateCargaId) : '__none__'}
+                onValueChange={(v) => setFields((f) => ({ ...f, templateCargaId: v === '__none__' ? null : Number(v) }))}
+                disabled={soloLectura}
+              >
+                <SelectTrigger className='flex-1'><SelectValue placeholder='Sin template...' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='__none__'>Sin template</SelectItem>
+                  {templatesCarga.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>{t.codigo} — {t.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                disabled={!fields.templateCargaId || descargandoFormato}
+                onClick={descargarFormatoBase}
+              >
+                <Icons.download className='mr-1 h-4 w-4' /> Formato base
+              </Button>
+            </div>
+            <p className='text-xs text-muted-foreground'>
+              Elige un template y descarga el Excel en blanco con sus columnas para llenarlo y subirlo.
+            </p>
           </div>
 
           <div className='space-y-1.5'>
