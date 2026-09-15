@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query'
+import { queryOptions, keepPreviousData } from '@tanstack/react-query'
 import { entidadesService } from './service'
 import type { TipoEntidad } from './types'
 
@@ -15,6 +15,9 @@ export function entidadesListOptions(filters: { page?: number; limit?: number; q
     queryKey: entidadesKeys.list(filters),
     queryFn: () => entidadesService.list(filters),
     staleTime: 30_000,
+    // Mantiene los datos previos mientras se refiltra: evita que el árbol
+    // (y el input de búsqueda) se desmonte y pierda el foco en cada tecla.
+    placeholderData: keepPreviousData,
   })
 }
 
