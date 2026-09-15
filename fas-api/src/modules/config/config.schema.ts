@@ -4,6 +4,8 @@ export const mantenedorListQuerySchema = z.object({
   q: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(500).default(20),
+  // Orden server-side: JSON [{ id, desc }] (formato de TanStack/getSortingStateParser).
+  sort: z.string().optional(),
   // FK filters (optional)
   regionId: z.coerce.number().int().positive().optional(),
   provinciaId: z.coerce.number().int().positive().optional(),

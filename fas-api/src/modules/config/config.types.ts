@@ -50,6 +50,8 @@ export interface MantenedorListFilters {
   comunaId?: number
   // Mostrar solo no bloqueados (para selects FK)
   soloActivos?: boolean
+  // Orden server-side: JSON [{ id, desc }] (TanStack/getSortingStateParser)
+  sort?: string
 }
 
 export interface BodegaContactoInput {

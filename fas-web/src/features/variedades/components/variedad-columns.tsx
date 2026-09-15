@@ -1,6 +1,7 @@
 'use client'
 
-import type { ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef, Column } from '@tanstack/react-table'
+import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-header'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 
 type VariedadItem = MantenedorSimple & {
@@ -11,8 +12,9 @@ type VariedadItem = MantenedorSimple & {
 export const variedadExtraColumns: ColumnDef<MantenedorSimple>[] = [
   {
     id: 'especie',
-    header: 'Especie',
-    enableSorting: false,
+    header: ({ column }: { column: Column<MantenedorSimple, unknown> }) => (
+      <DataTableColumnHeader column={column} title='Especie' />
+    ),
     cell: ({ row }) => (row.original as VariedadItem).especie?.descripcion ?? '—'
   },
   {

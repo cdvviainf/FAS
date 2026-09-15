@@ -29,6 +29,8 @@ export interface MantenedorSimpleFilters {
   tipoEmbarqueId?: number
   contexto?: 'origen' | 'destino'
   soloActivos?: boolean
+  // Orden server-side: JSON [{ id, desc }] (getSortingStateParser)
+  sort?: string
 }
 
 export interface MantenedorSimpleCreateInput {

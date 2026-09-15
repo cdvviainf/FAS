@@ -6,6 +6,7 @@ import { DataTableSkeleton } from '@/components/ui/table/data-table-skeleton'
 import { useDataTable } from '@/hooks/use-data-table'
 import { useQuery } from '@tanstack/react-query'
 import { parseAsInteger, parseAsString, useQueryStates } from 'nuqs'
+import { getSortingStateParser } from '@/lib/parsers'
 import { createMantenedorQueries } from '@/features/mantenedor-simple/queries'
 import { createMantenedorColumns } from './mantenedor-columns'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -21,21 +22,24 @@ interface MantenedorTableProps {
 export function MantenedorTable({ recurso, titulo, extraColumns, renderEditSheet }: MantenedorTableProps) {
   const { listOptions } = createMantenedorQueries(recurso)
 
+  const columns = createMantenedorColumns(recurso, titulo, extraColumns, renderEditSheet)
+  const columnIds = columns.map((c) => c.id).filter(Boolean) as string[]
+
   const [params] = useQueryStates({
     page: parseAsInteger.withDefault(1),
     perPage: parseAsInteger.withDefault(10),
-    q: parseAsString
+    q: parseAsString,
+    sort: getSortingStateParser(columnIds).withDefault([])
   })
 
   const filters = {
     page: params.page,
     limit: params.perPage,
-    ...(params.q ? { q: params.q } : {})
+    ...(params.q ? { q: params.q } : {}),
+    ...(params.sort.length > 0 ? { sort: JSON.stringify(params.sort) } : {})
   }
 
   const { data, isPending } = useQuery(listOptions(filters))
-
-  const columns = createMantenedorColumns(recurso, titulo, extraColumns, renderEditSheet)
 
   const pageCount = data ? Math.ceil(data.meta.total / params.perPage) : 0
 

@@ -111,6 +111,36 @@ function orderByMantenedor(modelo: MantenedorModelo): any {
   return { codigo: 'asc' }
 }
 
+const MODELOS_CON_ORDEN = new Set<MantenedorModelo>(['categoria', 'calibre'])
+const MODELOS_CON_ESPECIE = new Set<MantenedorModelo>(['grupoVariedad', 'variedad', 'categoria', 'calibre'])
+
+// Orden explícito pedido por el usuario (header clicable). `sort` viene como
+// JSON [{ id, desc }] (formato TanStack). Si es inválido o no aplica al modelo,
+// cae al orden por defecto.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolveOrderBy(modelo: MantenedorModelo, sort?: string): any {
+  if (sort) {
+    try {
+      const arr = JSON.parse(sort) as Array<{ id: string; desc: boolean }>
+      const first = Array.isArray(arr) ? arr[0] : null
+      if (first?.id) {
+        const dir = first.desc ? 'desc' : 'asc'
+        switch (first.id) {
+          case 'codigo': return { codigo: dir }
+          case 'descripcion': return { descripcion: dir }
+          case 'descripcionExtranjera': return { descripcionExtranjera: dir }
+          case 'bloqueado': return { bloqueado: dir }
+          case 'orden': if (MODELOS_CON_ORDEN.has(modelo)) return [{ especieId: 'asc' }, { orden: dir }]; break
+          case 'especie': if (MODELOS_CON_ESPECIE.has(modelo)) return { especie: { descripcion: dir } }; break
+        }
+      }
+    } catch {
+      /* sort inválido: orden por defecto */
+    }
+  }
+  return orderByMantenedor(modelo)
+}
+
 export async function listMantenedor(modelo: MantenedorModelo, filters: MantenedorListFilters) {
   if (modelo === 'pais') return listPaises(filters)
 
@@ -153,7 +183,7 @@ export async function listMantenedor(modelo: MantenedorModelo, filters: Mantened
   const [data, total] = await Promise.all([
     delegate.findMany({
       where,
-      orderBy: orderByMantenedor(modelo),
+      orderBy: resolveOrderBy(modelo, filters.sort),
       skip: (page - 1) * limit,
       take: limit,
       ...(includeClause ? { include: includeClause } : {}),

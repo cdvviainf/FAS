@@ -25,6 +25,7 @@ export function createMantenedorService(recurso: string) {
       if (filters.tipoEmbarqueId) params.tipoEmbarqueId = String(filters.tipoEmbarqueId)
       if (filters.contexto) params.contexto = filters.contexto
       if (filters.soloActivos !== undefined) params.soloActivos = String(filters.soloActivos)
+      if (filters.sort) params.sort = filters.sort
       return api.get(`config/${recurso}`, { searchParams: params }).json()
     },
     async getById(id: number): Promise<MantenedorSimple> {
