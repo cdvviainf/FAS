@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -140,6 +140,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const [deleteLineaId, setDeleteLineaId] = useState<number | null>(null)
   const [calibreDesdeId, setCalibreDesdeId] = useState<number | null>(null)
   const [calibreHastaId, setCalibreHastaId] = useState<number | null>(null)
+  // Al usar una línea del Cierre el resto queda bloqueado y solo falta el
+  // precio: saltamos el foco a ese campo.
+  const precioInputRef = useRef<HTMLInputElement>(null)
   // Grilla de líneas del Cierre Comercial: pallets a tomar por línea, antes
   // de "usar" (precargar el form de línea de abajo) — 2026-08-23.
   const [palletsPorLineaCierre, setPalletsPorLineaCierre] = useState<Record<number, string>>({})
@@ -423,6 +426,12 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     })
     setLineaErrors({})
     resetCalibreRango()
+    // Tras pintar la línea precargada, lleva el foco al Valor (único campo que
+    // falta) y lo trae a la vista.
+    requestAnimationFrame(() => {
+      precioInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      precioInputRef.current?.focus({ preventScroll: true })
+    })
   }
 
   function handleCancelarEdicionLinea() {
@@ -948,7 +957,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
                 <div className='space-y-1.5'>
                   <Label>Valor (USD/Caja)</Label>
-                  <Input type='number' step='0.01' value={linea.precioUsdCaja || ''} onChange={(e) => setLinea((l) => ({ ...l, precioUsdCaja: Number(e.target.value) }))} />
+                  <Input ref={precioInputRef} type='number' step='0.01' value={linea.precioUsdCaja || ''} onChange={(e) => setLinea((l) => ({ ...l, precioUsdCaja: Number(e.target.value) }))} />
                   {lineaErrors.precioUsdCaja && <p className='text-xs text-destructive'>{lineaErrors.precioUsdCaja}</p>}
                 </div>
               </div>
