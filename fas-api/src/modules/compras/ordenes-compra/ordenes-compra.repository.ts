@@ -228,7 +228,7 @@ export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor:
         // de la tabla puente es la última defensa contra doble vínculo; el
         // service ya valida antes con un mensaje amigable.
         solicitudes: {
-          create: solicitudInspeccionIds.map((solicitudInspeccionId) => ({ solicitudInspeccionId, creadoPor })),
+          create: (solicitudInspeccionIds ?? []).map((solicitudInspeccionId) => ({ solicitudInspeccionId, creadoPor })),
         },
       },
       include: includeDetalle,

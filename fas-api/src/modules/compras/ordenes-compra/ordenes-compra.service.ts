@@ -184,13 +184,8 @@ export async function obtenerOrdenCompra(id: number) {
 }
 
 export async function crearOrdenCompra(body: OrdenCompraCreateInput, creadoPor: string) {
-  // La columna se eliminó (tabla puente N:M, Etapa 2), así que la
-  // obligatoriedad de al menos 1 solicitud al crear vive acá, no solo en el
-  // schema Zod: cualquier caller directo del service (incluidos los tests)
-  // debe cumplirla igual que el HTTP (QA-R1-TEST-001).
-  if (!body.solicitudInspeccionIds || body.solicitudInspeccionIds.length === 0) {
-    throw new ValidationError('La inspección de compra es requerida')
-  }
+  // La Inspección de Compra ya NO es requerida (2026-09-15): la OC puede
+  // crearse sin solicitudes. Si se envían, validarReferenciasHeader las valida.
   await validarReferenciasHeader(body)
   try {
     return await repo.createOrdenCompra(body, creadoPor)
