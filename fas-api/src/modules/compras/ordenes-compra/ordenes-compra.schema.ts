@@ -4,9 +4,11 @@ import { z } from 'zod'
 // lista con repeticiones — sin este refine, un duplicado (ej. [10, 10]) pasa
 // Zod y choca contra el @@unique de la tabla puente como error interno sin
 // traducir (FAS-OCSI-003, QA ronda 1).
+// 2026-09-15: la Solicitud de Inspección ya NO es requerida en la OC (decisión
+// de negocio) — se quitó el .min(1) y del formulario. Sigue siendo vinculable
+// (opcional); si se envían, se validan (ver validarReferenciasHeader).
 const solicitudInspeccionIdsSchema = z
   .array(z.number().int().positive())
-  .min(1, 'La inspección de compra es requerida')
   .refine((ids) => new Set(ids).size === ids.length, {
     message: 'No se puede repetir la misma inspección de compra',
   })
@@ -28,9 +30,9 @@ export const ordenCompraCreateSchema = z.object({
   entidadProductorId: z.number().int().positive('El productor es requerido'),
   notaVentaId: z.number().int().positive().optional().nullable(),
   // N:M (2026-08-22, Etapa 2 — compras.md §4.2): una OC puede tener varias
-  // Solicitudes de Inspección; al menos 1 requerida a nivel de aplicación
-  // (no de schema, mismo criterio que el campo singular anterior).
-  solicitudInspeccionIds: solicitudInspeccionIdsSchema,
+  // Solicitudes de Inspección. Ya NO es requerida (2026-09-15) — opcional,
+  // default vacío.
+  solicitudInspeccionIds: solicitudInspeccionIdsSchema.optional().default([]),
   fecha: z.coerce.date().optional(),
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
