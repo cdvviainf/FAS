@@ -48,31 +48,40 @@ function construirListasFijas(wb: ExcelJS.Workbook, listas: Record<string, strin
   return rangos
 }
 
-function agregarHojaInstrucciones(wb: ExcelJS.Workbook, hojas: HojaSpec[]) {
+function agregarHojaInstrucciones(wb: ExcelJS.Workbook, hojas: HojaSpec[], titulo: string, fueraDeAlcance: string[]) {
   const ws = wb.addWorksheet('Instrucciones', { properties: { tabColor: { argb: 'FF1F4E78' } } })
   ws.getColumn(1).width = 120
+  const hayReferencia = hojas.some((h) => h.soloReferencia)
   const lineas: Array<[string, boolean]> = [
-    ['CARGA MASIVA DE MAESTROS — FRUTERA AGROSAN', true],
+    [titulo, true],
     ['', false],
     ['Cómo usar este archivo:', true],
-    ['1. Completa las hojas en el orden en que aparecen (de izquierda a derecha). Cada hoja puede depender de códigos creados en una hoja anterior.', false],
+    ['1. Completa las hojas de datos en el orden en que aparecen (de izquierda a derecha). Cada hoja puede depender de códigos creados en una hoja anterior.', false],
     ['2. Las celdas de encabezado con fondo verde son columnas obligatorias.', false],
-    ['3. Las columnas "Código" propias de cada maestro pueden dejarse vacías: el sistema genera el código automáticamente (según Prefijos de Código). Excepciones: País (ISO alfa-3) y Predio (único por productor).', false],
-    ['4. Las columnas marcadas "(código, ya existente)" hacen referencia a maestros que YA DEBEN EXISTIR en el sistema (Grupo de Mercado, Tipo de Embarque, Comuna, Unidad de Medida, Tipo de Producción, Zona). No se crean en este archivo.', false],
-    ['5. No cambies los nombres de las hojas ni el orden/nombre de las columnas: el motor de carga los usa para saber qué maestro y qué campo corresponde a cada dato.', false],
+    ['3. Las columnas "Código" propias de cada registro pueden dejarse vacías: el sistema genera el código automáticamente (según Prefijos de Código). Excepciones: País (ISO alfa-3) y Predio (único por productor).', false],
+    ['4. Las columnas marcadas "(código, ya existente)" hacen referencia a datos que YA DEBEN EXISTIR en el sistema. No se crean en este archivo.', false],
+    ['5. No cambies los nombres de las hojas ni el orden/nombre de las columnas: el motor de carga los usa para saber qué registro y qué campo corresponde a cada dato.', false],
     ['6. El sistema valida cada hoja por separado: si una hoja tiene filas con error, se cargan las filas válidas y se reportan las erróneas.', false],
-    ['7. Esta primera carga asume base vacía: si un código ya existe, la fila queda como error (no se actualiza el registro existente).', false],
-    ['', false],
-    ['Hojas incluidas y de qué dependen:', true],
+    ['7. Esta carga asume que el registro no existe: si un código ya existe, la fila queda como error (no se actualiza el registro existente).', false],
   ]
+  if (hayReferencia) {
+    lineas.push(['8. Las hojas con pestaña gris son de SOLO REFERENCIA (datos ya existentes en el sistema): úsalas para copiar los códigos correctos en las hojas de datos. No las edites.', false])
+  }
+  lineas.push(['', false])
+  lineas.push(['Hojas incluidas y de qué dependen:', true])
   for (const h of hojas) {
+    if (h.soloReferencia) {
+      lineas.push([`  ${h.titulo} — SOLO REFERENCIA. ${h.descripcion}`, false])
+      continue
+    }
     const dep = h.dependeDe.length ? `depende de: ${h.dependeDe.join(', ')}` : 'independiente'
     lineas.push([`  ${h.titulo} — ${dep}. ${h.descripcion}`, false])
   }
-  lineas.push(['', false])
-  lineas.push(['Fuera de alcance de esta carga (se agregan manualmente después):', true])
-  lineas.push(['  - Direcciones y Contactos de Entidad', false])
-  lineas.push(['  - Documentos adjuntos de Artículo', false])
+  if (fueraDeAlcance.length) {
+    lineas.push(['', false])
+    lineas.push(['Fuera de alcance de esta carga (se agregan por separado):', true])
+    for (const f of fueraDeAlcance) lineas.push([`  - ${f}`, false])
+  }
 
   lineas.forEach(([texto, negrita], i) => {
     const cell = ws.getCell(`A${i + 1}`)
@@ -82,8 +91,17 @@ function agregarHojaInstrucciones(wb: ExcelJS.Workbook, hojas: HojaSpec[]) {
   })
 }
 
-function agregarHojaMaestro(wb: ExcelJS.Workbook, hoja: HojaSpec, rangos: Record<string, string>, letraCodigoPorHoja: Record<string, string>) {
-  const ws = wb.addWorksheet(hoja.hoja)
+function agregarHojaMaestro(
+  wb: ExcelJS.Workbook,
+  hoja: HojaSpec,
+  rangos: Record<string, string>,
+  letraCodigoPorHoja: Record<string, string>,
+  datos?: Array<Record<string, unknown>>,
+) {
+  const ws = wb.addWorksheet(
+    hoja.hoja,
+    hoja.soloReferencia ? { properties: { tabColor: { argb: 'FFBDBDBD' } } } : undefined,
+  )
   hoja.columnas.forEach((col, i) => {
     const idx = i + 1
     const letra = letraColumna(idx)
@@ -100,8 +118,22 @@ function agregarHojaMaestro(wb: ExcelJS.Workbook, hoja: HojaSpec, rangos: Record
     if (col.ayuda) cell.note = col.ayuda
     ws.getColumn(idx).width = Math.min(42, Math.max(16, col.encabezado.length + 2))
 
-    aplicarValidacion(ws, letra, col, rangos, letraCodigoPorHoja)
+    // Las hojas de solo-referencia no llevan validaciones (son de lectura).
+    if (!hoja.soloReferencia) aplicarValidacion(ws, letra, col, rangos, letraCodigoPorHoja)
   })
+
+  // Datos precargados (hojas de referencia): una fila por registro de la BD,
+  // mapeando cada columna por su `campo`.
+  if (datos?.length) {
+    datos.forEach((registro, r) => {
+      hoja.columnas.forEach((col, i) => {
+        if (!col.campo) return
+        const v = registro[col.campo]
+        if (v != null) ws.getCell(r + 2, i + 1).value = v as ExcelJS.CellValue
+      })
+    })
+  }
+
   ws.getRow(1).height = 42
   ws.views = [{ state: 'frozen', ySplit: 1 }]
 }
@@ -151,6 +183,15 @@ function mapaEnumALista(valores: string[]): string | null {
 export interface OpcionesGenerar {
   /** Listas de enums a materializar en ListasFijas (nombre -> valores). */
   listasEnum: Record<string, string[]>
+  /**
+   * Datos a precargar por hoja (para hojas `soloReferencia`): nombre de hoja ->
+   * filas, cada fila mapeada por `campo`. Ej. { Entidades: [{ codigo, descripcion }] }.
+   */
+  datosPorHoja?: Record<string, Array<Record<string, unknown>>>
+  /** Título de la hoja de Instrucciones. */
+  titulo?: string
+  /** Ítems "fuera de alcance" a listar al final de las instrucciones. */
+  fueraDeAlcance?: string[]
 }
 
 export async function generarTemplate(hojas: HojaSpec[], opciones: OpcionesGenerar): Promise<ExcelJS.Buffer> {
@@ -161,14 +202,19 @@ export async function generarTemplate(hojas: HojaSpec[], opciones: OpcionesGener
   LISTAS_ENUM = opciones.listasEnum
   const listas: Record<string, string[]> = { SiNo: ['SI', 'NO'], ...opciones.listasEnum }
 
-  agregarHojaInstrucciones(wb, hojas)
+  agregarHojaInstrucciones(
+    wb,
+    hojas,
+    opciones.titulo ?? 'CARGA MASIVA DE MAESTROS — FRUTERA AGROSAN',
+    opciones.fueraDeAlcance ?? ['Direcciones y Contactos de Entidad', 'Documentos adjuntos de Artículo'],
+  )
   const rangos = construirListasFijas(wb, listas)
 
   // Letra de la columna 'codigo' por hoja, para dropdowns de FK interna.
   const letraCodigoPorHoja: Record<string, string> = {}
   for (const h of hojas) letraCodigoPorHoja[h.hoja] = letraColumna(indiceColumnaCodigo(h))
 
-  for (const h of hojas) agregarHojaMaestro(wb, h, rangos, letraCodigoPorHoja)
+  for (const h of hojas) agregarHojaMaestro(wb, h, rangos, letraCodigoPorHoja, opciones.datosPorHoja?.[h.hoja])
 
   return wb.xlsx.writeBuffer()
 }

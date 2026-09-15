@@ -9,7 +9,7 @@ import * as configService from '../config.service.js'
 import * as configRepo from '../config.repository.js'
 import { siguienteCodigo } from '../prefijos-codigo/prefijos-codigo.service.js'
 import { crearPrefijoCodigo } from '../prefijos-codigo/prefijos-codigo.service.js'
-import { crearEntidad } from '../entidades/entidades.service.js'
+import { crearEntidad, crearDireccion, crearContacto } from '../entidades/entidades.service.js'
 import * as entidadesRepo from '../entidades/entidades.repository.js'
 import { crearArticulo } from '../../materiales/articulos/articulos.service.js'
 import * as articulosRepo from '../../materiales/articulos/articulos.repository.js'
@@ -138,6 +138,23 @@ async function crearRegistro(hoja: HojaSpec, input: Record<string, any>, userId:
     case 'entidad':
       await crearEntidad(input as any, userId)
       break
+    case 'entidadDireccion': {
+      // La dirección se cuelga de una entidad existente. Si no se indicó país,
+      // se usa el de la entidad (mismo criterio que el formulario).
+      const { entidadId, paisId, ...body } = input
+      let pid = paisId
+      if (pid == null) {
+        const ent = await entidadesRepo.findEntidadById(entidadId)
+        pid = (ent as any)?.paisId
+      }
+      await crearDireccion(entidadId, { ...body, paisId: pid } as any, userId)
+      break
+    }
+    case 'entidadContacto': {
+      const { entidadId, ...body } = input
+      await crearContacto(entidadId, body as any, userId)
+      break
+    }
     case 'articulo':
       await crearArticulo(input as any)
       break
@@ -187,17 +204,25 @@ async function ensamblarDetalleRecetas(
   return porReceta
 }
 
-export async function cargarMaestros(rutaOBuffer: string | Buffer, opciones: OpcionesCarga): Promise<ResultadoCarga> {
+export async function cargarMaestros(
+  rutaOBuffer: string | Buffer,
+  opciones: OpcionesCarga,
+  registro: HojaSpec[] = REGISTRO_MAESTROS,
+): Promise<ResultadoCarga> {
   const { empresaId, userId = SISTEMA_USER, dryRun = false } = opciones
 
-  const parseo = await parsearLibro(rutaOBuffer, REGISTRO_MAESTROS)
+  const parseo = await parsearLibro(rutaOBuffer, registro)
   const errores: ErrorFila[] = [
     ...parseo.errores,
     ...Object.values(parseo.hojas).flatMap((h) => h.errores),
-    ...validarReferenciasInternas(parseo, REGISTRO_MAESTROS),
+    ...validarReferenciasInternas(parseo, registro),
   ]
   const resumen: Record<string, { filas: number; creados: number }> = {}
-  for (const h of REGISTRO_MAESTROS) resumen[h.hoja] = { filas: parseo.hojas[h.hoja]?.filas.length ?? 0, creados: 0 }
+  // Las hojas de solo-referencia no producen registros: no entran al resumen.
+  for (const h of registro) {
+    if (h.soloReferencia) continue
+    resumen[h.hoja] = { filas: parseo.hojas[h.hoja]?.filas.length ?? 0, creados: 0 }
+  }
 
   if (dryRun) {
     // Sin BD no se pueden validar unicidad ni FKs internas contra registros aún
@@ -209,7 +234,8 @@ export async function cargarMaestros(rutaOBuffer: string | Buffer, opciones: Opc
   await empresaContext.run({ empresaId }, async () => {
     const detallePorReceta = await ensamblarDetalleRecetas(parseo.hojas['RecetasDetalle']?.filas ?? [], errores)
 
-    for (const hoja of ordenTopologico()) {
+    for (const hoja of ordenTopologico(registro)) {
+      if (hoja.soloReferencia) continue // hojas de referencia: no se cargan
       if (hoja.hoja === 'RecetasDetalle') continue // se carga junto con Recetas
 
       for (const fila of parseo.hojas[hoja.hoja]?.filas ?? []) {

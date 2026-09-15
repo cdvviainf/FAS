@@ -31,6 +31,7 @@ export const MODELOS_CON_CODIGO_OPTIONS: { value: string; label: string }[] = [
   { value: 'conceptoCtaCte', label: 'Concepto Cta. Cte.' },
   { value: 'entidad', label: 'Entidad' },
   { value: 'entidadDireccion', label: 'Dirección de Entidad' },
+  { value: 'entidadContacto', label: 'Contacto de Entidad' },
   { value: 'articulo', label: 'Artículo' },
   { value: 'condicionPago', label: 'Condición de Pago' },
   { value: 'receta', label: 'Receta' },

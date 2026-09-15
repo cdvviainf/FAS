@@ -37,7 +37,7 @@ export const ENUM_MODELO_PREFIJO = [
   'tipoPallet', 'etiqueta', 'altura', 'tipoProduccion', 'tipoDefecto',
   'tipoParametro', 'especie', 'grupoVariedad', 'variedad', 'categoria',
   'calibre', 'parametro', 'mercado', 'puerto', 'moneda', 'temporada', 'bodega',
-  'entidad', 'articulo', 'receta', 'embarque',
+  'entidad', 'entidadDireccion', 'entidadContacto', 'articulo', 'receta', 'embarque',
 ]
 
 // Columnas comunes reutilizadas.

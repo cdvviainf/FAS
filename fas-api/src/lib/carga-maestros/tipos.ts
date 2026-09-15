@@ -76,6 +76,12 @@ export interface HojaSpec {
    * duplicado dentro de la hoja (evita falsos positivos). Default: true.
    */
   codigoUnicoGlobal?: boolean
+  /**
+   * `true` = hoja de SOLO REFERENCIA: el generador la llena con datos de la BD
+   * (maestros ya existentes) para que el usuario copie los códigos en las hojas
+   * de datos; el cargador la IGNORA (no crea registros desde ella).
+   */
+  soloReferencia?: boolean
   columnas: ColumnaSpec[]
 }
 
