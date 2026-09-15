@@ -11,9 +11,11 @@ type GrupoVariedadItem = MantenedorSimple & {
 export const grupoVariedadExtraColumns: ColumnDef<MantenedorSimple>[] = [
   {
     id: 'especie',
+    accessorFn: (row) => (row as GrupoVariedadItem).especie?.descripcion ?? '',
     header: ({ column }: { column: Column<MantenedorSimple, unknown> }) => (
       <DataTableColumnHeader column={column} title='Especie' />
     ),
+    meta: { label: 'Especie' },
     cell: ({ row }) => (row.original as GrupoVariedadItem).especie?.descripcion ?? '—'
   }
 ]
