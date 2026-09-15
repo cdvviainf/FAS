@@ -48,7 +48,7 @@ export function CajasPorPalletMatriz() {
 
   const habilitado = tipoPalletId > 0 && especieId > 0
   const matrizKey = ['cajas-por-pallet-matriz', especieId, tipoPalletId]
-  const { data: matrizData, isFetching } = useQuery({
+  const { data: matrizData, isFetching, error } = useQuery({
     queryKey: matrizKey,
     queryFn: () => cajasPorPalletService.matriz(especieId, tipoPalletId),
     enabled: habilitado,
@@ -113,10 +113,12 @@ export function CajasPorPalletMatriz() {
 
       {!habilitado ? (
         <p className='text-muted-foreground text-sm'>Selecciona un tipo de pallet y una especie para ver los embalajes.</p>
+      ) : error ? (
+        <p className='text-destructive text-sm'>Error al cargar los embalajes: {(error as Error).message}</p>
       ) : isFetching && filas.length === 0 ? (
         <p className='text-muted-foreground text-sm'>Cargando embalajes...</p>
       ) : filas.length === 0 ? (
-        <p className='text-muted-foreground text-sm'>No hay embalajes asociados a esta especie.</p>
+        <p className='text-muted-foreground text-sm'>No hay embalajes con esta especie asignada. Asígnales la especie en el mantenedor de Artículos (o revisa que el backend esté actualizado).</p>
       ) : (
         <div className='overflow-x-auto rounded-md border'>
           <Table>
