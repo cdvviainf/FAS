@@ -205,6 +205,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   useEffect(() => {
     if (notaVenta) {
       const d = notaVenta.data
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación del form al cargar la NV a editar
       setFields({
         fecha: d.fecha.slice(0, 10),
         clienteId: d.clienteId,
@@ -698,14 +699,13 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
                 <div className='space-y-1.5 sm:col-span-2'>
                   <Label>Artículo (Embalaje) <span className='text-destructive'>*</span></Label>
-                  <Select value={linea.articuloId ? String(linea.articuloId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}>
-                    <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
-                    <SelectContent>
-                      {(articulosData?.data ?? []).map((a) => (
-                        <SelectItem key={a.id} value={String(a.id)}>{a.codigo} — {a.descripcion}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    options={(articulosData?.data ?? []).map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+                    value={linea.articuloId ? String(linea.articuloId) : null}
+                    onChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}
+                    placeholder='Seleccionar...'
+                    searchPlaceholder='Buscar embalaje...'
+                  />
                   {lineaErrors.articuloId && <p className='text-xs text-destructive'>{lineaErrors.articuloId}</p>}
                 </div>
                 <div className='space-y-1.5'>

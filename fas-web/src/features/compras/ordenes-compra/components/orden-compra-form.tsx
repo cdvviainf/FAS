@@ -774,18 +774,14 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 </div>
                 <div className='space-y-1.5 md:col-span-2'>
                   <Label>Embalaje <span className='text-destructive'>*</span></Label>
-                  <Select
-                    value={linea.articuloId ? String(linea.articuloId) : ''}
-                    onValueChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}
+                  <Combobox
+                    options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+                    value={linea.articuloId ? String(linea.articuloId) : null}
+                    onChange={(v) => setLinea((l) => ({ ...l, articuloId: Number(v) }))}
+                    placeholder='Seleccionar...'
+                    searchPlaceholder='Buscar embalaje...'
                     disabled={lineaBloqueadaPorCierre}
-                  >
-                    <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
-                    <SelectContent>
-                      {articulos.map((a) => (
-                        <SelectItem key={a.id} value={String(a.id)}>{a.codigo} — {a.descripcion}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                   {lineaErrors.articuloId && <p className='text-xs text-destructive'>{lineaErrors.articuloId}</p>}
                 </div>
               </div>

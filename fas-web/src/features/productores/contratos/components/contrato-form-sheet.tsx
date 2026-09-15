@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { articulosService } from '@/features/materiales/articulos/service'
@@ -127,6 +128,7 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
   useEffect(() => {
     if (!open) return
     if (item) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación del form al cargar el contrato a editar
       setTemporadaId(item.temporadaId)
       setEspecieId(item.especieId)
       setFechaInicio(item.fechaInicio.slice(0, 10))
@@ -409,14 +411,13 @@ function LineaContrato({
       <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
         <div className='space-y-1.5'>
           <Label className='text-xs'>Embalaje</Label>
-          <Select value={linea.articuloId ? String(linea.articuloId) : ''} onValueChange={(v) => onChange({ articuloId: Number(v) })}>
-            <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
-            <SelectContent>
-              {articulos.map((a) => (
-                <SelectItem key={a.id} value={String(a.id)}>{a.codigo} — {a.descripcion}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Combobox
+            options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+            value={linea.articuloId ? String(linea.articuloId) : null}
+            onChange={(v) => onChange({ articuloId: Number(v) })}
+            placeholder='Seleccionar...'
+            searchPlaceholder='Buscar embalaje...'
+          />
         </div>
         <div className='space-y-1.5'>
           <Label className='text-xs'>Variedad</Label>
