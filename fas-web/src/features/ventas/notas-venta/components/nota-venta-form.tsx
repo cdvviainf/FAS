@@ -341,16 +341,23 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   // Auto-fill: al elegir embalaje + tipo de pallet, precarga la cifra teórica
   // (editable). Solo por acción del usuario.
   async function aplicarTeoricaCajas(artId: number, tpId: number | null) {
-    if (!artId || !tpId) return
-    try {
-      const r = await cajasPorPalletService.buscar(artId, tpId)
-      if (r) setLinea((l) => {
-        const pallets = Number(l.cantidadPallets)
-        return { ...l, cajasPorPallet: String(r.cajasPorPallet), cajas: pallets > 0 ? String(pallets * r.cajasPorPallet) : l.cajas }
-      })
-    } catch {
-      /* sin teórica configurada: se mantiene el valor actual */
+    // Busca la cifra teórica para (embalaje, tipo de pallet). Si no hay una
+    // configurada —o falta algún dato—, NO se arrastra el valor del artículo/
+    // pallet anterior: se vuelve al valor por defecto.
+    let teorica: number | null = null
+    if (artId && tpId) {
+      try {
+        const r = await cajasPorPalletService.buscar(artId, tpId)
+        if (r) teorica = r.cajasPorPallet
+      } catch {
+        /* sin teórica configurada */
+      }
     }
+    const valor = teorica ?? CAJAS_POR_PALLET_DEFAULT
+    setLinea((l) => {
+      const pallets = Number(l.cantidadPallets)
+      return { ...l, cajasPorPallet: String(valor), cajas: pallets > 0 ? String(pallets * valor) : l.cajas }
+    })
   }
 
   function validarLinea(): boolean {
@@ -560,7 +567,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
             <div className='space-y-1.5'>
               <Label>Dirección</Label>
               <Select value={fields.direccionId ? String(fields.direccionId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, direccionId: v ? Number(v) : null }))} disabled={!fields.clienteId}>
-                <SelectTrigger><SelectValue placeholder={fields.clienteId ? 'Sin dirección' : 'Elige un cliente primero'} /></SelectTrigger>
+                <SelectTrigger className='w-full'><SelectValue placeholder={fields.clienteId ? 'Sin dirección' : 'Elige un cliente primero'} /></SelectTrigger>
                 <SelectContent>
                   {direccionesCliente.map((d) => (
                     <SelectItem key={d.id} value={String(d.id)}>{d.descripcion} — {d.direccion}</SelectItem>

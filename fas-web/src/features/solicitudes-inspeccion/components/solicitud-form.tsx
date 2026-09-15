@@ -408,7 +408,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
             <div className='space-y-1.5'>
               <Label>Dirección <span className='text-destructive'>*</span></Label>
               <Select value={direccionId ? String(direccionId) : ''} onValueChange={(v) => setDireccionId(Number(v))} disabled={!productorId}>
-                <SelectTrigger>
+                <SelectTrigger className='w-full'>
                   <SelectValue placeholder={productorId ? 'Seleccionar dirección...' : 'Selecciona un productor primero'} />
                 </SelectTrigger>
                 <SelectContent>

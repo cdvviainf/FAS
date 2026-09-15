@@ -173,16 +173,22 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   // Auto-fill: al elegir embalaje + tipo de pallet, precarga la cifra teórica
   // (editable). Solo por acción del usuario.
   async function aplicarTeoricaCajas(artId: number, tpId: number | null) {
-    if (!artId || !tpId) return
-    try {
-      const r = await cajasPorPalletService.buscar(artId, tpId)
-      if (r) setLinea((l) => {
-        const pallets = Number(l.cantidadPallets)
-        return { ...l, cajasPorPallet: String(r.cajasPorPallet), cajas: pallets > 0 ? String(pallets * r.cajasPorPallet) : l.cajas }
-      })
-    } catch {
-      /* sin teórica configurada: se mantiene el valor actual */
+    // Sin teórica configurada (o falta algún dato) NO se arrastra el valor
+    // anterior: se vuelve al valor por defecto.
+    let teorica: number | null = null
+    if (artId && tpId) {
+      try {
+        const r = await cajasPorPalletService.buscar(artId, tpId)
+        if (r) teorica = r.cajasPorPallet
+      } catch {
+        /* sin teórica configurada */
+      }
     }
+    const valor = teorica ?? CAJAS_POR_PALLET_DEFAULT
+    setLinea((l) => {
+      const pallets = Number(l.cantidadPallets)
+      return { ...l, cajasPorPallet: String(valor), cajas: pallets > 0 ? String(pallets * valor) : l.cajas }
+    })
   }
 
   useEffect(() => {

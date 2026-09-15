@@ -237,13 +237,19 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   // (editable). Se dispara solo por acción del usuario (no al cargar líneas de
   // un Cierre), para no pisar el cajasPorPallet que venga de ahí.
   async function aplicarTeoricaCajas(artId: number, tpId: number | null) {
-    if (!artId || !tpId) return
-    try {
-      const r = await cajasPorPalletService.buscar(artId, tpId)
-      if (r) setLinea((l) => ({ ...l, cajasPorPallet: r.cajasPorPallet, cajas: l.cantidadPallets ? l.cantidadPallets * r.cajasPorPallet : l.cajas }))
-    } catch {
-      /* sin teórica configurada: se mantiene el valor actual */
+    // Sin teórica configurada (o falta algún dato) NO se arrastra el valor
+    // anterior: se vuelve al valor por defecto.
+    let teorica: number | null = null
+    if (artId && tpId) {
+      try {
+        const r = await cajasPorPalletService.buscar(artId, tpId)
+        if (r) teorica = r.cajasPorPallet
+      } catch {
+        /* sin teórica configurada */
+      }
     }
+    const valor = teorica ?? CAJAS_POR_PALLET_DEFAULT
+    setLinea((l) => ({ ...l, cajasPorPallet: valor, cajas: l.cantidadPallets ? l.cantidadPallets * valor : l.cajas }))
   }
 
   function validate(): boolean {

@@ -421,7 +421,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
                 onValueChange={(v) => setFields((f) => ({ ...f, direccionPlantaId: Number(v) }))}
                 disabled={soloLectura || !fields.plantaId}
               >
-                <SelectTrigger><SelectValue placeholder='Seleccionar dirección...' /></SelectTrigger>
+                <SelectTrigger className='w-full'><SelectValue placeholder='Seleccionar dirección...' /></SelectTrigger>
                 <SelectContent>
                   {direccionesPlanta.map((d) => (
                     <SelectItem key={d.id} value={String(d.id)}>{d.descripcion} — {d.direccion}</SelectItem>
