@@ -7,6 +7,17 @@ export const ESTADO_MOVIMIENTO_LABELS: Record<EstadoMovimiento, string> = {
   CONFIRMADO: 'Confirmado',
 }
 
+// Estado del DTE (Guía de Despacho electrónica, tipo 52) de un Movimiento —
+// Fase 1: solo llega hasta TEMPORAL_CREADO (ver DocumentoDte en fas-api).
+export type EstadoDocumentoDte = 'PENDIENTE' | 'EMITIENDO' | 'TEMPORAL_CREADO' | 'ERROR'
+
+export interface GuiaDespachoDte {
+  id: number
+  estado: EstadoDocumentoDte
+  libredteCodigoTemporal: string | null
+  errorMensaje: string | null
+}
+
 export interface MovimientoDetalleItem {
   id: number
   articuloId: number

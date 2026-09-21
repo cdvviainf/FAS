@@ -63,6 +63,8 @@ const MODELOS_TENANT = new Set([
   'TemplateCarga',
   // Motor de Documentos (Etapa 4):
   'DocumentoEmitido',
+  // Guía de Despacho DTE / LibreDTE (2026-09-21, materiales.md R26):
+  'DocumentoDte',
   // Orden de Compra de Materiales (2026-09-03) — faltaba en esta lista desde
   // su creación: sin aislamiento de tenant hasta ahora (detectado al agregar
   // ProformaMaterial, que referencia el mismo Movimiento/Entidad).

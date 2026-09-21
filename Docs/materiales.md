@@ -40,7 +40,7 @@ Permitir a Bernardo: (a) mantener el catálogo de artículos con su costeo y sto
 4. **Consulta de stock por receta** — analizador con estados OK / Stock Crítico / Sin Stock / Trasladar.
 
 **NO construye (fuera de alcance):**
-- Emisión real de la Guía de Despacho como DTE ante el SII (timbre PDF417, folio CAF) — se genera un PDF interno equivalente vía el Motor de Documentos (`documentos.md`/Etapa 4), marcado explícitamente como no válido tributariamente; la emisión real va por un proveedor DTE — proyecto/servicio aparte, no iniciado (`Docs/agrosan_etapa4_motor_documentos.md` §7).
+- Timbrado real de la Guía de Despacho ante el SII (folio CAF, XML timbrado, PDF con timbre PDF417) — proveedor elegido: **LibreDTE** (`fas-api/src/modules/finanzas/facturacion/`, ver R26). Fase 1 (2026-09-21) solo llega hasta crear el **documento temporal** en LibreDTE (borrador, no consume folio) — el timbrado real (`generarReal()`, folio, XML, PDF) queda para la Fase 2, bloqueada hoy por falta de firma electrónica cargada en la cuenta LibreDTE de Agrosan. El PDF interno vía Motor de Documentos (`documentos.md`/Etapa 4, endpoint `movimiento-guia-despacho`) sigue existiendo en el backend pero ya no es la acción por defecto del botón "Emitir Guía de Despacho" (ver rutas).
 - Lectura por IA de guías/facturas (Etapa 2).
 - Edición o borrado de un movimiento ya `CONFIRMADO` (ver R1) — mientras está `BORRADOR` sí se edita/borra libremente.
 - Generación automática de OC por reorden.
@@ -58,10 +58,11 @@ Permitir a Bernardo: (a) mantener el catálogo de artículos con su costeo y sto
 | D5 | Demanda de componente | `cantidadAConsumir × (cantidadProducir / receta.cantidadAProducir)` (admite decimales). |
 | D6 | Multi-bodega | `Bodega` es canónica en Configuración (mantenedores-generales.md); Materiales solo la referencia. Seed inicial bodega `PRINCIPAL`. |
 | D7 | Stock crítico (motivo CRITICO) | Se evalúa sobre el **stock total** (suma de todas las bodegas) tras descontar la demanda. |
-| D8 | DTE | Tipo de movimiento marca `emiteDTE`; el formulario captura datos de transporte; emisión real vía adaptador (fuera de alcance). |
+| D8 | DTE | Tipo de movimiento marca `emiteDTE`; el formulario captura datos de transporte; emisión real vía LibreDTE (R26) — Fase 1 solo temporal. |
 | D9 | Entidad relacionada | FK a `Entidad` (entidades.md). La función exigida se expresa con `TipoEntidad?` y se valida contra `Entidad.tipos`. |
 | D10 | Documentos adjuntos | Se guarda metadata + ruta en storage; backend de storage (local/S3) se define en infra. |
 | D11 | Tipo de movimiento | Es transversal: un tipo declara a qué `modulos` aplica (`MATERIALES`, `FRUTA`). |
+| D12 | Motivo de traslado SII | `TipoMovimiento.indTrasladoSii` (catálogo SII 1-9, ver R26) — requerido solo si `emiteDTE = true`, configurable por tipo (no fijo) porque distintos tipos de movimiento pueden tener motivos distintos (traslado interno vs. entrega sin venta, etc.). |
 
 ---
 
@@ -568,6 +569,24 @@ Un `Movimiento` clase `ENTRADA` puede referenciar una `OrdenCompraMaterial` vía
 
 **Permisos.** Ítem de menú propio `MATERIALES_PROFORMA` (`LECTURA`/`TOTAL`), mismo patrón que `MATERIALES_OC`.
 
+### R26 — Guía de Despacho electrónica vía LibreDTE — Fase 1: solo DTE temporal (decisión de negocio, 2026-09-21)
+
+Reemplaza la nota de D8/"NO construye" original ("emisión real fuera de alcance"): se autorizó y construyó la integración real con **LibreDTE** (`fas-api/src/modules/finanzas/facturacion/libredte.adapter.ts`, probado contra la cuenta real de Agrosan, RUT 77089369-0) como proveedor DTE. El alcance de esta fase llega **solo hasta crear el documento temporal** (`emitirTemporal()` de LibreDTE) — el timbrado real (`generarReal()`: folio CAF, XML, PDF timbrado, envío al SII) es Fase 2, bloqueada hoy porque la cuenta LibreDTE de Agrosan no tiene firma electrónica cargada.
+
+**Trigger.** Acción manual explícita — botón "Emitir Guía de Despacho" en el listado de Movimientos, habilitado solo si `tipoMovimiento.emiteDTE` y `estado = CONFIRMADO` (mismo gate de R10). No se dispara automáticamente al confirmar.
+
+**Modelo `DocumentoDte`** (genérico por `origenTipo`/`origenId`, pensado para reutilizarse en Facturación de Ventas cuando exista `cobranza.md`): a lo más una fila por Movimiento (`@@unique([empresaId, origenTipo, origenId])`). Estados: `PENDIENTE` (transitorio) → `EMITIENDO` (un request "ganó" el turno de llamar a LibreDTE; otro request concurrente para el mismo origen ve este estado y NO vuelve a llamar a LibreDTE — advisory lock namespace `LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION`) → `TEMPORAL_CREADO` (con `libredteCodigoTemporal`) o `ERROR` (con `errorMensaje`, reintentable con el mismo botón).
+
+**`TipoMovimiento.indTrasladoSii`** (D12) es requerido si `emiteDTE = true` — motivo de traslado del catálogo SII (1-9), validado al crear/editar el Tipo de Movimiento (no al confirmar el Movimiento).
+
+**Receptor del DTE.** Si el Movimiento tiene `entidadId`, el receptor es esa Entidad (RUT = `identificador`). Si no (traslado interno bodega↔bodega sin tercero), el receptor es la propia Empresa (RUT emisor = RUT receptor) — patrón estándar SII para traslados internos.
+
+**`DTE_PROVIDER` (env, valores `mock|chilesystems|simplefactura|libredte`).** Si no es `'libredte'` (default `'mock'`), NUNCA se llama al adapter real — se registra un `TEMPORAL_CREADO` simulado (código `MOCK-...`), mismo criterio que `AGL_PROVIDER` en Embarques. Evita que dev/staging con la config default dispare llamadas reales a LibreDTE.
+
+**Contrato API** (bajo `/api/materiales`, ver §6): `POST /movimientos/:id/guia-despacho/emitir` (idempotente — reintenta si `ERROR`, no reemite si ya `TEMPORAL_CREADO`), `GET /movimientos/:id/guia-despacho` (estado actual, 404 si aún no se ha intentado). Mismo ítem de menú `OPER_MATERIALES` (`TOTAL` para emitir, `LECTURA` para consultar) — sin permiso separado en esta fase.
+
+**Fuera de esta fase:** folio, XML, PDF timbrado (`getPdfEmitido` en el adapter), estado ante el SII, ruta `.pdf`, badge de estado persistente en el frontend (hoy el resultado se muestra por `toast`, sin descarga). El PDF interno vía Motor de Documentos (`movimiento-guia-despacho`, Etapa 4) sigue existiendo en el backend (`POST /api/documentos/movimiento-guia-despacho/:id/emitir`) pero el botón del listado ya no lo usa.
+
 ---
 
 ## 6. Contratos API (Fastify, prefijo `/api/materiales`)
@@ -597,7 +616,7 @@ Un `Movimiento` clase `ENTRADA` puede referenciar una `OrdenCompraMaterial` vía
 | Método | Ruta | Notas |
 |---|---|---|
 | GET | `/tipos-movimiento` | filtro `modulo?`, `clase?` |
-| POST | `/tipos-movimiento` | `{ codigo, descripcion, modulos[], clase, requierePrecio, entidadRelacionada, emiteDTE }` |
+| POST | `/tipos-movimiento` | `{ codigo, descripcion, modulos[], clase, requierePrecio, entidadRelacionada, emiteDTE, indTrasladoSii }` (D12/R26: `indTrasladoSii` requerido si `emiteDTE = true`) |
 | PATCH | `/tipos-movimiento/:id` | |
 
 **Movimientos** (R1 reescrita 2026-08-29 — cabecera primero, líneas después, confirmar al final; mismo patrón que `compras.md` Orden de Compra)
@@ -613,8 +632,10 @@ Un `Movimiento` clase `ENTRADA` puede referenciar una `OrdenCompraMaterial` vía
 | DELETE | `/movimientos/:id/detalle/:detalleId` | elimina línea — solo mientras `BORRADOR` |
 | POST | `/movimientos/:id/confirmar` | revalida R2/R9/R10/R11/R12/R14/R5/R6 contra lo persistido, aplica el motor de PMP/saldo en una transacción y pasa a `CONFIRMADO` (inmutable) |
 | POST | `/movimientos/:id/anular-recepcion` | solo si `CONFIRMADO` y vinculado a una OC de Materiales (R24) — genera el Movimiento inverso `SALIDA`, revierte el saldo y la OC vuelve a `EMITIDA`. 422 si ya se anuló o no hay saldo suficiente |
+| POST | `/movimientos/:id/guia-despacho/emitir` | Guía de Despacho electrónica vía LibreDTE (R26, Fase 1: solo DTE temporal) — solo si `tipoMovimiento.emiteDTE` y `estado = CONFIRMADO`. Idempotente: reintenta si el `DocumentoDte` quedó en `ERROR`, no reemite si ya está `TEMPORAL_CREADO` |
+| GET | `/movimientos/:id/guia-despacho` | estado actual del `DocumentoDte` del Movimiento (R26) — 404 si aún no se ha intentado emitir |
 
-> PDF y Guía de Despacho de un Movimiento van por el Motor de Documentos genérico (Etapa 4), no por `/api/materiales`: `GET /api/documentos/movimiento/:id.pdf` (comprobante, siempre disponible) y `POST /api/documentos/movimiento-guia-despacho/:id/emitir` (interna, no válida como DTE — solo si `tipoMovimiento.emiteDTE` y el movimiento está `CONFIRMADO`).
+> PDF del comprobante de Movimiento sigue vía Motor de Documentos genérico (Etapa 4), no por `/api/materiales`: `GET /api/documentos/movimiento/:id.pdf`. El PDF interno de Guía de Despacho (`POST /api/documentos/movimiento-guia-despacho/:id/emitir`, no válido como DTE) sigue existiendo en el backend pero el botón del listado ya no lo usa — ver R26.
 
 **Saldos / Consulta**
 | Método | Ruta | Notas |
@@ -664,7 +685,7 @@ Un `Movimiento` clase `ENTRADA` puede referenciar una `OrdenCompraMaterial` vía
 | `/articulos/[id]` | Detalle | Datos, saldos por bodega, recetas (si es embalaje), documentos. |
 | `/articulos/[id]/recetas` | Recetas del embalaje | Cabecera (código, descripción, cantidad a producir) + grilla de detalle (componente, cantidad a consumir decimal). |
 | `/tipos-movimiento` | Mantenedor de tipos | Código, descripción, módulos (multiselect), clase, requiere precio, entidad relacionada, emite DTE. |
-| `/movimientos/nuevo`, `/movimientos/:id` | **Materiales y envases** | Pantalla completa (reescrita 2026-08-29, mismo patrón que la Orden de Compra): `/nuevo` solo pide tipo de movimiento + fecha y crea la cabecera `BORRADOR`; `/:id` habilita cabecera editable (entidad, bodega origen/destino, guía/referencia, **bloque DTE** condicional si `emiteDTE`: transportista, RUT y nombre chofer, placas, hora salida/llegada) + tabla de líneas con agregar/editar/eliminar (mutaciones inmediatas contra el backend, sin efecto en saldo). Acciones: "Guardar cabecera", "Eliminar borrador", "Confirmar movimiento" (aplica el motor de PMP y bloquea edición), y en el menú de la fila del listado: "Descargar PDF" y "Emitir Guía de Despacho" (esta última solo si `emiteDTE` y `CONFIRMADO`). Si `CONFIRMADO` y vinculado a una OC de Materiales sin anular todavía: botón **"Anular recepción"** (R24) — genera el movimiento inverso y muestra el vínculo cruzado (badge "Reverso del Movimiento #X" en el inverso, link "ver movimiento inverso" en el original). |
+| `/movimientos/nuevo`, `/movimientos/:id` | **Materiales y envases** | Pantalla completa (reescrita 2026-08-29, mismo patrón que la Orden de Compra): `/nuevo` solo pide tipo de movimiento + fecha y crea la cabecera `BORRADOR`; `/:id` habilita cabecera editable (entidad, bodega origen/destino, guía/referencia, **bloque DTE** condicional si `emiteDTE`: transportista, RUT y nombre chofer, placas, hora salida/llegada) + tabla de líneas con agregar/editar/eliminar (mutaciones inmediatas contra el backend, sin efecto en saldo). Acciones: "Guardar cabecera", "Eliminar borrador", "Confirmar movimiento" (aplica el motor de PMP y bloquea edición), y en el menú de la fila del listado: "Descargar PDF" y "Emitir Guía de Despacho" (esta última solo si `emiteDTE` y `CONFIRMADO` — dispara el DTE temporal real vía LibreDTE, R26, no el PDF interno; el resultado se muestra por toast, sin diálogo ni descarga en esta fase). Si `CONFIRMADO` y vinculado a una OC de Materiales sin anular todavía: botón **"Anular recepción"** (R24) — genera el movimiento inverso y muestra el vínculo cruzado (badge "Reverso del Movimiento #X" en el inverso, link "ver movimiento inverso" en el original). |
 | `/consulta-stock-receta` | Analizador de stock | Multiselect de embalajes + cantidad c/u, multiselect de bodegas. Resultado: por componente, stock en **cada** bodega + badge de estado: `OK` (verde), `Stock Crítico` (amarillo), `Sin Stock` (rojo), `Trasladar` (amarillo). |
 | `/ordenes-compra/nuevo`, `/ordenes-compra/:id` | Orden de Compra de Materiales | Mismo patrón que la OC de fruta y que `/movimientos/:id`: `/nuevo` crea la cabecera `BORRADOR` (proveedor, forma/condición de pago, moneda); `/:id` habilita cabecera + tabla de líneas (artículo, cantidad, precio unitario, monto calculado) con agregar/editar/eliminar mientras `BORRADOR`. Acciones: "Guardar cabecera", "Eliminar borrador", "Emitir OC" (bloquea edición, R20). Desde una OC `EMITIDA`, botón "Registrar ingreso" que abre `/movimientos/nuevo?ordenCompraMaterialId=:id` precargando entidad y líneas sugeridas desde la OC. |
 

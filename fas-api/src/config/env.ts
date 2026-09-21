@@ -9,7 +9,12 @@ const envSchema = z.object({
   BETTER_AUTH_URL: z.string().url(),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().default('noreply@agrosan.cl'),
-  DTE_PROVIDER: z.enum(['mock', 'chilesystems', 'simplefactura']).default('mock'),
+  DTE_PROVIDER: z.enum(['mock', 'chilesystems', 'simplefactura', 'libredte']).default('mock'),
+  // Ambiente de DTE para el proveedor 'libredte' — mapea al parámetro
+  // `_contribuyente_certificacion` de la API (0=producción, 1=certificación).
+  // Es flag de ambiente (dev/test vs prod), por eso vive en env y no en el
+  // mantenedor de Integraciones — mismo criterio que AGL_PROVIDER.
+  DTE_AMBIENTE: z.enum(['certificacion', 'produccion']).default('certificacion'),
   // Solicitud de Reserva de espacio (ventas.md §4.3) — 'mock' simula una
   // respuesta exitosa sin llamar a nada externo. En 'agl360', la URL y el
   // token YA NO viven acá — se configuran en el mantenedor de Integraciones

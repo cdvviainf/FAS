@@ -27,7 +27,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Icons } from '@/components/icons'
 import { tiposMovimientoService } from '../service'
 import { tiposMovimientoKeys } from '../queries'
-import { CLASE_MOVIMIENTO_LABELS, MODULO_SISTEMA_LABELS, TIPO_ENTIDAD_OPTIONS } from '../types'
+import { CLASE_MOVIMIENTO_LABELS, MODULO_SISTEMA_LABELS, TIPO_ENTIDAD_OPTIONS, IND_TRASLADO_SII_LABELS } from '../types'
 import type { TipoMovimiento, ModuloSistema, ClaseMovimiento, TipoEntidad } from '../types'
 
 interface TipoMovimientoFormSheetProps {
@@ -47,6 +47,7 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
   const [requierePrecio, setRequierePrecio] = useState(false)
   const [entidadRelacionada, setEntidadRelacionada] = useState<TipoEntidad | 'none'>('none')
   const [emiteDTE, setEmiteDTE] = useState(false)
+  const [indTrasladoSii, setIndTrasladoSii] = useState<string>('')
   const [generaProforma, setGeneraProforma] = useState(false)
   const [activo, setActivo] = useState(true)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -62,6 +63,7 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
       setRequierePrecio(item.requierePrecio)
       setEntidadRelacionada(item.entidadRelacionada ?? 'none')
       setEmiteDTE(item.emiteDTE)
+      setIndTrasladoSii(item.indTrasladoSii != null ? String(item.indTrasladoSii) : '')
       setGeneraProforma(item.generaProforma)
       setActivo(item.activo)
     } else {
@@ -72,6 +74,7 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
       setRequierePrecio(false)
       setEntidadRelacionada('none')
       setEmiteDTE(false)
+      setIndTrasladoSii('')
       setGeneraProforma(false)
       setActivo(true)
     }
@@ -100,6 +103,7 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
         requierePrecio,
         entidadRelacionada: entidadRelacionada === 'none' ? null : entidadRelacionada,
         emiteDTE,
+        indTrasladoSii: emiteDTE && indTrasladoSii ? Number(indTrasladoSii) : null,
         generaProforma,
         activo,
       }
@@ -123,6 +127,7 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
     if (!isEdit && !codigo.trim()) e.codigo = 'El código es requerido'
     if (!descripcion.trim()) e.descripcion = 'La descripción es requerida'
     if (modulos.length === 0) e.modulos = 'Debe seleccionar al menos un módulo'
+    if (emiteDTE && !indTrasladoSii) e.indTrasladoSii = 'Requerido si el tipo emite DTE'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -206,6 +211,20 @@ export function TipoMovimientoFormSheet({ item, open, onOpenChange }: TipoMovimi
             <Switch id='emiteDTE' checked={emiteDTE} onCheckedChange={setEmiteDTE} />
             <Label htmlFor='emiteDTE'>Emite DTE (exige datos de transporte)</Label>
           </div>
+          {emiteDTE && (
+            <div className='space-y-1.5'>
+              <Label>Motivo de traslado SII <span className='text-destructive'>*</span></Label>
+              <Select value={indTrasladoSii} onValueChange={setIndTrasladoSii}>
+                <SelectTrigger><SelectValue placeholder='Selecciona un motivo' /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(IND_TRASLADO_SII_LABELS).map(([v, label]) => (
+                    <SelectItem key={v} value={v}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.indTrasladoSii && <p className='text-xs text-destructive'>{errors.indTrasladoSii}</p>}
+            </div>
+          )}
           <div className='flex items-center gap-2'>
             <Switch
               id='generaProforma'

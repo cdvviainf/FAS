@@ -11,7 +11,7 @@
 // 490244 (OrdenCompraMaterial proceso), 490245 (OrdenCompraMaterial
 // correlativo), 490246 (Embarque generar/solicitud de reserva), 490247
 // (ProformaMaterial correlativo), 490248 (ProformaMaterial proceso), 490249
-// (Reclamo x PalletLinea disponible).
+// (Reclamo x PalletLinea disponible), 490250 (DocumentoDte emisión).
 
 // Serializa el motor de validación de Recepción (recepciones.repository.ts)
 // contra cualquier mutación de la Orden de Compra que esté usando para
@@ -85,3 +85,11 @@ export const LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA = 490246
 // línea, en orden ascendente de id, para no arriesgar deadlock cuando un
 // Reclamo marca varias líneas a la vez).
 export const LOCK_NAMESPACE_RECLAMO_PALLET_LINEA = 490249
+
+// Serializa la emisión idempotente de un DocumentoDte (facturacion/
+// dte-emitidos.repository.ts) contra sí misma — mismo rol que
+// LOCK_NAMESPACE_DOCUMENTOS_EMISION pero para el ciclo de vida ante el SII
+// (vía LibreDTE) en vez del Motor de Documentos interno. El namespace es
+// compartido entre todos los orígenes (hoy solo 'movimiento'); la clave
+// combina origenTipo+origenId con hashtext(), igual criterio que ese lock.
+export const LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION = 490250

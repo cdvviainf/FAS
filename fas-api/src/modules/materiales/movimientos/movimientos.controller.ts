@@ -74,6 +74,20 @@ export async function anularRecepcion(req: FastifyRequest, reply: FastifyReply) 
   return reply.status(201).send({ data: inverso })
 }
 
+// ─── Guía de Despacho DTE (Fase 1: solo temporal) ───────────────────────────
+
+export async function emitirGuiaDespacho(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = movimientoParamsSchema.parse(req.params)
+  const doc = await service.emitirGuiaDespachoDteTemporal(id, req.fasUserId!)
+  return reply.send({ data: doc })
+}
+
+export async function getGuiaDespacho(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = movimientoParamsSchema.parse(req.params)
+  const doc = await service.obtenerGuiaDespachoDte(id)
+  return reply.send({ data: doc })
+}
+
 // ─── Saldos ──────────────────────────────────────────────────────────────────
 
 const saldosQuerySchema = z.object({

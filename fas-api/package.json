@@ -26,7 +26,8 @@
     "carga:base": "tsx prisma/carga-maestros-base.ts",
     "carga:cargar": "tsx prisma/carga-maestros-cargar.ts",
     "carga:reset-completo": "bash scripts/carga-reset-completo.sh",
-    "db:wipe": "tsx prisma/wipe-transaccional.ts"
+    "db:wipe": "tsx prisma/wipe-transaccional.ts",
+    "dte:test-libredte": "tsx prisma/test-libredte-dte.ts"
   },
   "keywords": [],
   "author": "VIAIN Asesorías Informáticas",

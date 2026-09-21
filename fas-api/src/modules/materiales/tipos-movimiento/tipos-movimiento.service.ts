@@ -33,9 +33,19 @@ function validarGeneraProforma(clase: string, generaProforma: boolean | undefine
   }
 }
 
+// La Guía de Despacho DTE exige IndTraslado (catálogo SII) en cada emisión —
+// si el tipo emite DTE, el dato tiene que estar configurado de antemano, no
+// pedirse recién al confirmar un Movimiento de ese tipo.
+function validarIndTrasladoSii(emiteDTE: boolean | undefined, indTrasladoSii: number | null | undefined) {
+  if (emiteDTE && indTrasladoSii == null) {
+    throw new ValidationError('Un Tipo de Movimiento que emite DTE debe tener configurado el motivo de traslado SII (indTrasladoSii)')
+  }
+}
+
 export async function crearTipoMovimiento(body: TipoMovimientoCreateInput) {
   assertNoEsCodigoReservado(body.codigo)
   validarGeneraProforma(body.clase, body.generaProforma)
+  validarIndTrasladoSii(body.emiteDTE, body.indTrasladoSii)
   const existente = await repo.findTipoMovimientoByCodigo(body.codigo)
   if (existente) throw new ValidationError(`Ya existe un tipo de movimiento con código "${body.codigo}"`)
   return repo.createTipoMovimiento(body)
@@ -47,5 +57,8 @@ export async function actualizarTipoMovimiento(id: number, body: TipoMovimientoU
   const claseFinal = body.clase ?? actual.clase
   const generaProformaFinal = body.generaProforma ?? actual.generaProforma
   validarGeneraProforma(claseFinal, generaProformaFinal)
+  const emiteDTEFinal = body.emiteDTE ?? actual.emiteDTE
+  const indTrasladoSiiFinal = body.indTrasladoSii !== undefined ? body.indTrasladoSii : actual.indTrasladoSii
+  validarIndTrasladoSii(emiteDTEFinal, indTrasladoSiiFinal)
   return repo.updateTipoMovimiento(id, body)
 }

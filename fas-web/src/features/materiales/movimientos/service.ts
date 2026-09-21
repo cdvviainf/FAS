@@ -7,6 +7,7 @@ import type {
   MovimientoDetalleItem,
   MovimientoListResponse,
   MovimientoListFilters,
+  GuiaDespachoDte,
 } from './types'
 
 export const movimientosService = {
@@ -48,5 +49,8 @@ export const movimientosService = {
   },
   async anularRecepcion(id: number): Promise<{ data: Movimiento }> {
     return api.post(`materiales/movimientos/${id}/anular-recepcion`).json()
+  },
+  async emitirGuiaDespacho(id: number): Promise<{ data: GuiaDespachoDte }> {
+    return api.post(`materiales/movimientos/${id}/guia-despacho/emitir`).json()
   },
 }

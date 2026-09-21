@@ -13,6 +13,7 @@ export interface TipoMovimientoCreateInput {
   requierePrecio?: boolean
   entidadRelacionada?: TipoEntidad | null
   emiteDTE?: boolean
+  indTrasladoSii?: number | null
   generaProforma?: boolean
   activo?: boolean
 }

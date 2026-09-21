@@ -1,6 +1,10 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import * as repo from './movimientos.repository.js'
 import { StockInsuficienteError } from './movimientos.repository.js'
+import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
+import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
+import { mapMovimientoAGuiaDespachoTemporal } from '../../finanzas/facturacion/mappers/movimiento.mapper.js'
 import type { MovimientoCreateInput, MovimientoDetalleInput, MovimientoListFilters, MovimientoUpdateInput } from './movimientos.types.js'
 
 export async function listarMovimientos(filters: MovimientoListFilters) {
@@ -380,4 +384,73 @@ export async function consultarStockReceta(embalajes: EmbalajeCantidad[], bodega
       motivos,
     }
   })
+}
+
+// ─── Guía de Despacho electrónica (DTE 52, vía LibreDTE) ────────────────────
+// Fase 1 (2026-09-21): llega solo hasta emitirTemporal() — ver DocumentoDte
+// en schema.prisma y facturacion/dte-emitidos.service.ts.
+
+const ORIGEN_TIPO_GUIA_DESPACHO = 'movimiento'
+const TIPO_DTE_GUIA_DESPACHO = 52
+
+export async function emitirGuiaDespachoDteTemporal(movimientoId: number, usuario: string) {
+  const movimiento = await repo.getMovimientoParaDte(movimientoId)
+  if (!movimiento) throw new NotFoundError('Movimiento', String(movimientoId))
+  if (!movimiento.tipoMovimiento.emiteDTE) {
+    throw new ValidationError('Este tipo de movimiento no emite DTE — no corresponde generar una Guía de Despacho')
+  }
+  if (movimiento.estado !== 'CONFIRMADO') {
+    throw new ValidationError('El movimiento debe estar confirmado para emitir la Guía de Despacho')
+  }
+  if (movimiento.tipoMovimiento.indTrasladoSii == null) {
+    throw new ValidationError('El tipo de movimiento no tiene configurado el motivo de traslado SII (indTrasladoSii)')
+  }
+
+  const empresaId = getEmpresaIdActual()!
+  const empresa = await dteRepo.getEmpresaParaDte(empresaId)
+  if (!empresa?.rut) {
+    throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas antes de emitir DTE')
+  }
+
+  const receptor = movimiento.entidadId
+    ? await dteRepo.getEntidadParaDte(movimiento.entidadId)
+    : empresa
+  if (!receptor?.rut) {
+    throw new ValidationError(
+      movimiento.entidadId
+        ? 'La entidad del movimiento no tiene RUT configurado — complétalo en el mantenedor de Entidades antes de emitir DTE'
+        : 'La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas antes de emitir DTE',
+    )
+  }
+
+  const payload = mapMovimientoAGuiaDespachoTemporal({
+    indTrasladoSii: movimiento.tipoMovimiento.indTrasladoSii,
+    detalle: movimiento.detalle.map((d) => ({ articuloDescripcion: d.articulo.descripcion, cantidad: Number(d.cantidad) })),
+    transporte: {
+      transportistaRut: movimiento.transporteEntidad?.identificador ?? null,
+      transportistaRazonSocial: movimiento.transporteEntidad?.razonSocial ?? null,
+      choferRut: movimiento.choferRut,
+      choferNombre: movimiento.choferNombre,
+      placaCamion: movimiento.placaCamion,
+      placaRemolque: movimiento.placaRemolque,
+    },
+    emisor: { ...empresa, rut: empresa.rut },
+    receptor: { ...receptor, rut: receptor.rut },
+  })
+
+  return dteService.emitirDteTemporal({
+    origenTipo: ORIGEN_TIPO_GUIA_DESPACHO,
+    origenId: movimiento.id,
+    tipoDte: TIPO_DTE_GUIA_DESPACHO,
+    payload,
+    rutEmisor: empresa.rut,
+    rutReceptor: receptor.rut,
+    creadoPor: usuario,
+  })
+}
+
+export async function obtenerGuiaDespachoDte(movimientoId: number) {
+  const doc = await dteService.obtenerDocumentoDte(ORIGEN_TIPO_GUIA_DESPACHO, movimientoId)
+  if (!doc) throw new NotFoundError('Guía de Despacho DTE del Movimiento', String(movimientoId))
+  return doc
 }

@@ -236,6 +236,7 @@ model Empresa {
   pallets                Pallet[]
   templatesCarga         TemplateCarga[]
   documentosEmitidos     DocumentoEmitido[]
+  documentosDte          DocumentoDte[]
   logo                   EmpresaLogo?
   OrdenCompraMaterial    OrdenCompraMaterial[]
   proformasMaterial      ProformaMaterial[]
@@ -1916,6 +1917,12 @@ model TipoMovimiento {
   requierePrecio     Boolean         @default(false)
   entidadRelacionada TipoEntidad?
   emiteDTE           Boolean         @default(false)
+  // Motivo del traslado exigido por el SII en toda Guía de Despacho
+  // electrónica (catálogo IndTraslado: 1=Venta, 2=Ventas por efectuar,
+  // 3=Consignación, 4=Entrega gratuita, 5=Traslado interno, 6=Otro traslado
+  // no venta, 7=Devolución, 8=Traslado exportación, 9=Venta exportación).
+  // Requerido solo si emiteDTE=true — validado en tipos-movimiento.service.ts.
+  indTrasladoSii     Int?
   // Solo aplicable si clase = SALIDA (materiales.md R25) — marca este tipo
   // como origen elegible para generar una ProformaMaterial a partir de un
   // Movimiento ya CONFIRMADO de este tipo.
@@ -3574,4 +3581,56 @@ model DocumentoEmitido {
   @@unique([empresaId, tipo, documentoId, plantillaVersion, hashSha256])
   @@index([tipo, documentoId])
   @@map("documentos_emitidos")
+}
+
+// Documento Tributario Electrónico real (vía proveedor LibreDTE — ver
+// finanzas/facturacion). Distinto de DocumentoEmitido: ese es un PDF interno
+// propio (Motor de Documentos, sin validez tributaria); este representa el
+// ciclo de vida ante el SII. Genérico por origenTipo/origenId (mismo criterio
+// que DocumentoEmitido) porque el mismo ciclo lo va a necesitar Facturación
+// de Ventas más adelante (CLAUDE.md §7) — hoy solo lo usa origenTipo='movimiento'.
+//
+// Alcance actual (2026-09-21): solo llega hasta emitirTemporal() de LibreDTE
+// (TEMPORAL_CREADO) — generarReal() (folio, XML, PDF timbrado) queda para
+// cuando se resuelva el bloqueo de firma electrónica en LibreDTE. Por eso NO
+// existen todavía columnas de folio/xml/pdf/estado-SII — se agregan en esa
+// siguiente ronda para no cargar columnas sin uso ni código sin probar.
+enum EstadoDocumentoDte {
+  PENDIENTE       // fila creada, aún no se llamó a LibreDTE (transitorio, ver EMITIENDO)
+  // Un request "ganó" el derecho a llamar a LibreDTE y está en eso (IMP-QA-R1-029,
+  // QA ronda 1) — mientras esté en este estado, otro request concurrente para el
+  // mismo origen NO vuelve a llamar a LibreDTE, solo devuelve la fila tal cual.
+  // Riesgo aceptado en esta fase (bajo volumen, un click manual por vez): si el
+  // proceso que puso EMITIENDO se cae antes de marcar el resultado, la fila queda
+  // varada y requiere corrección manual — sin mecanismo de expiración automática.
+  EMITIENDO
+  TEMPORAL_CREADO // emitirTemporal() OK — hay codigo de LibreDTE
+  ERROR           // el intento más reciente falló (ver errorMensaje)
+}
+
+model DocumentoDte {
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  origenTipo String // 'movimiento' (futuro: 'nota-venta', etc.)
+  origenId   Int
+  tipoDte    Int // código SII, ej. 52 = Guía de despacho electrónica
+
+  estado                 EstadoDocumentoDte @default(PENDIENTE)
+  libredteCodigoTemporal String? // "codigo" que devuelve POST /api/dte/documentos/emitir
+  rutEmisor              String
+  rutReceptor            String
+  payloadEnviado         Json // snapshot del payload armado — auditoría/diagnóstico
+  errorMensaje           String?
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+
+  // A lo más un DocumentoDte por origen — reintentar tras ERROR actualiza
+  // esta misma fila, no duplica (emitirTemporal no consume folio).
+  @@unique([empresaId, origenTipo, origenId])
+  @@map("documentos_dte")
 }

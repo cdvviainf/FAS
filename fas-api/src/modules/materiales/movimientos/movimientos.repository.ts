@@ -71,6 +71,28 @@ export async function getMovimientoById(id: number) {
   return prisma.movimiento.findFirst({ where: { id, eliminadoEn: null }, include: includeDetalle })
 }
 
+// Select propio para armar el payload de la Guía de Despacho DTE (facturacion/
+// mappers/movimiento.mapper.ts) — trae indTrasladoSii y el RUT (identificador)
+// de la entidad, que list/getById no necesitan y por eso no están en
+// `includeDetalle` (no hay que inflar la respuesta HTTP normal del Movimiento).
+export async function getMovimientoParaDte(id: number) {
+  return prisma.movimiento.findFirst({
+    where: { id, eliminadoEn: null },
+    select: {
+      id: true,
+      estado: true,
+      entidadId: true,
+      choferRut: true,
+      choferNombre: true,
+      placaCamion: true,
+      placaRemolque: true,
+      tipoMovimiento: { select: { emiteDTE: true, indTrasladoSii: true } },
+      transporteEntidad: { select: { razonSocial: true, identificador: true } },
+      detalle: { select: { cantidad: true, articulo: { select: { descripcion: true } } } },
+    },
+  })
+}
+
 // ─── Validación de referencias ───────────────────────────────────────────────
 
 export async function getTipoMovimientoActivo(id: number) {

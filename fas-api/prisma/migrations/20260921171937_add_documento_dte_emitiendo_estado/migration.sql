@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "EstadoDocumentoDte" ADD VALUE 'EMITIENDO' BEFORE 'TEMPORAL_CREADO';
