@@ -504,6 +504,11 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
   const comunas = comunasData?.data ?? []
   const paisOrigen = paises.find((p) => p.esPaisNacional)?.id ?? null
   const selectedPaisEsChile = fields.paisId === paisOrigen
+  // Packing (compras.md §4.10, 2026-09-21): entidades que existen SOLO para
+  // identificar dónde se embaló la fruta rara vez tienen RUT/giro cargados a
+  // mano por Agrosan — se exime del RUT/giro obligatorios de Chile y se
+  // asume un RUT genérico si no se indica uno (decisión de negocio).
+  const esSoloPacking = fields.tipos.length === 1 && fields.tipos[0] === 'PACKING'
 
   // ── Load existing entity ──
   useEffect(() => {
@@ -564,8 +569,8 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
     if (!fields.paisId) e.paisId = 'El país es requerido'
     if (fields.tipos.length === 0) e.tipos = 'Debe seleccionar al menos un tipo'
     if (fields.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email)) e.email = 'Email inválido'
-    if (selectedPaisEsChile && fields.giro.trim() === '') e.giro = 'El giro es requerido para Chile'
-    if (selectedPaisEsChile && fields.identificador.trim()) {
+    if (selectedPaisEsChile && !esSoloPacking && fields.giro.trim() === '') e.giro = 'El giro es requerido para Chile'
+    if (selectedPaisEsChile && !esSoloPacking && fields.identificador.trim()) {
       if (!validarRutChileno(fields.identificador)) e.identificador = 'RUT inválido'
     }
     if (!isEdit && localDirecciones.length === 0) e.direcciones = 'Debe agregar al menos una dirección'
@@ -642,7 +647,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
       descripcionExtranjera: fields.descripcionExtranjera.trim() || undefined,
       razonSocial: fields.razonSocial.trim(),
       giro: fields.giro.trim() || undefined,
-      identificador: fields.identificador.trim() || undefined,
+      identificador: fields.identificador.trim() || (esSoloPacking ? '1-9' : undefined),
       paisId: fields.paisId,
       email: fields.email.trim() || undefined,
       telefono: fields.telefono.trim() || undefined,
@@ -934,14 +939,14 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                   <Input
                     value={fields.identificador}
                     onChange={(e) => setFields((f) => ({ ...f, identificador: e.target.value }))}
-                    placeholder={selectedPaisEsChile ? '12.345.678-9' : 'Identificador fiscal'}
+                    placeholder={esSoloPacking ? 'Vacío = se asume 1-9' : selectedPaisEsChile ? '12.345.678-9' : 'Identificador fiscal'}
                   />
                   {fieldErrors.identificador && <p className='text-xs text-destructive'>{fieldErrors.identificador}</p>}
                 </div>
                 <div className='space-y-1.5'>
                   <Label>
                     Giro
-                    {selectedPaisEsChile && <span className='text-destructive ml-1'>*</span>}
+                    {selectedPaisEsChile && !esSoloPacking && <span className='text-destructive ml-1'>*</span>}
                   </Label>
                   <Input
                     value={fields.giro}
