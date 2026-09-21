@@ -425,6 +425,8 @@ Comparación a **nivel de pallet**, en dos pasos:
 
 Discrepancia → se informan las diferencias y el despacho queda bloqueado (no facturable) hasta cuadrar.
 
+**Formato de carga (2026-09-21).** El Template de Carga tipo `PACKING_LIST` (§9.2) ya tiene columnas definidas — todas obligatorias (`CAMPOS_POR_TIPO.PACKING_LIST`, `templates-carga.types.ts`): `NUMERO_PALLET`, `ESPECIE`, `VARIEDAD`, `CATEGORIA`, `CALIBRE`, `ARTICULO`, `CAJAS`, `PRODUCTOR`, `ETIQUETA`, `FECHA_EMBALAJE` — mismos campos que Recepción salvo Nota Calidad/Condición/Completo y Packing, que no aplican acá. Solo define el **formato de columnas** para poder crear el Template en el mantenedor; el motor de reconciliación descrito arriba (comparación contra Stock/Embarque) sigue sin construir.
+
 ### 9.4 Calidad (`calidad.md`)
 La Solicitud/Informe de Inspección habilita la generación de la OC en la vía de compra directa. La OC referencia el informe (`informeCalidadId` + PDF).
 

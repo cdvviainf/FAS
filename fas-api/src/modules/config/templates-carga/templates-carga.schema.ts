@@ -4,8 +4,9 @@ import { TIPOS_TEMPLATE_CARGA } from './templates-carga.types.js'
 // `campo` es texto libre a nivel Zod (no `z.enum`): la pertenencia al
 // whitelist de campos mapeables se valida en el service según el `tipo` del
 // template (`CAMPOS_POR_TIPO`), que puede estar vacío para un tipo todavía
-// sin campos definidos (ej. PACKING_LIST) — `z.enum` no admite un array
-// vacío, así que esa validación no puede vivir a nivel de schema aquí.
+// sin campos definidos (todos los tipos actuales ya los tienen, pero un tipo
+// nuevo podría agregarse así) — `z.enum` no admite un array vacío, así que
+// esa validación no puede vivir a nivel de schema aquí.
 const campoSchema = z.object({
   campo: z.string().min(1, 'El campo es requerido'),
   columna: z.string().min(1, 'La columna es requerida').max(100).trim(),

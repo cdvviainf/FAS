@@ -26,9 +26,8 @@ function validarCoherenciaTemplate(d: TemplateCoherencia) {
   }
 
   // Whitelist de campos mapeables del tipo (compras.md §9.2). Un tipo sin
-  // campos definidos todavía (ej. PACKING_LIST) no puede crear/editar
-  // templates — mensaje explícito en vez de un rechazo confuso campo por
-  // campo.
+  // campos definidos todavía no puede crear/editar templates — mensaje
+  // explícito en vez de un rechazo confuso campo por campo.
   const camposDelTipo = CAMPOS_POR_TIPO[d.tipo]
   if (camposDelTipo.length === 0) {
     throw new ValidationError(`El tipo "${TIPO_TEMPLATE_CARGA_LABELS[d.tipo]}" todavía no tiene campos definidos`)

@@ -10,8 +10,6 @@ export const TIPO_TEMPLATE_CARGA_LABELS: Record<TipoTemplateCarga, string> = {
   PACKING_LIST: 'Packing List',
 }
 
-// PACKING_LIST queda [] a propósito: el spec todavía no define sus columnas
-// (ver comentario en el backend) — un tipo sin campos no se puede crear.
 export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
   RECEPCION: [
     'NUMERO_PALLET',
@@ -29,7 +27,21 @@ export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
     'ETIQUETA',
     'PACKING',
   ],
-  PACKING_LIST: [],
+  // Formato de carga del Packing List (2026-09-21) — mismos campos que
+  // Recepción salvo Nota Calidad/Condición/Completo y Packing; todos
+  // obligatorios (sin entradas en CAMPOS_OPCIONALES_POR_TIPO).
+  PACKING_LIST: [
+    'NUMERO_PALLET',
+    'ESPECIE',
+    'VARIEDAD',
+    'CATEGORIA',
+    'CALIBRE',
+    'ARTICULO',
+    'CAJAS',
+    'PRODUCTOR',
+    'ETIQUETA',
+    'FECHA_EMBALAJE',
+  ],
 }
 
 // Campos del tipo que NO son obligatorios de mapear (2026-09-02, compras.md
