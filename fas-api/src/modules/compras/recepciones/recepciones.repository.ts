@@ -317,6 +317,26 @@ export async function findProductorByTexto(texto: string) {
   })
 }
 
+// Etiqueta y Packing (compras.md §4.6, 2026-09-21) — obligatorios por línea.
+// Mismo criterio que findNotaCalidadByTexto (bloqueado:false = no asignable
+// a una carga nueva) y findProductorByTexto (Entidad por tipo + texto).
+export async function findEtiquetaByTexto(texto: string) {
+  return prisma.etiqueta.findFirst({
+    where: { eliminadoEn: null, bloqueado: false, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
+  })
+}
+
+export async function findPackingByTexto(texto: string) {
+  return prisma.entidad.findFirst({
+    where: {
+      eliminadoEn: null,
+      activo: true,
+      tipos: { has: 'PACKING' },
+      OR: condicionesPorCampos(['codigo', 'descripcion', 'razonSocial'], texto),
+    },
+  })
+}
+
 // OC con lineas + calibres, para el motor de comparación §7.2. Distinta de
 // getOrdenCompra() (usada solo para validar estado al crear la Recepción).
 export async function getOrdenCompraConLineas(id: number) {
@@ -384,7 +404,17 @@ export async function crearPalletsYValidar(
     notaCalidadId: number | null
     notaCondicionId: number | null
     completo: boolean
-    lineas: Array<{ especieId: number; variedadId: number; categoriaId: number; articuloId: number; calibreId: number; cajas: number }>
+    lineas: Array<{
+      especieId: number
+      variedadId: number
+      categoriaId: number
+      articuloId: number
+      calibreId: number
+      cajas: number
+      fechaEmbalaje: Date
+      etiquetaId: number
+      packingId: number
+    }>
   }>,
   opciones: { aceptarAdvertencias: boolean; userId: string },
 ) {

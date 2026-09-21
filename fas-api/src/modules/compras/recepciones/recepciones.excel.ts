@@ -26,6 +26,11 @@ export interface FilaExcelCruda {
   notaCalidad: string
   notaCondicion: string
   completo: string
+  // Obligatorios por línea (compras.md §4.6, 2026-09-21) — a diferencia de
+  // las 3 de arriba, no se colapsan a nivel de Pallet.
+  fechaEmbalaje: string
+  etiqueta: string
+  packing: string
 }
 
 interface TemplateParaLectura {
@@ -164,6 +169,9 @@ export function leerFilasCrudas(
       notaCalidad: valores.NOTA_CALIDAD,
       notaCondicion: valores.NOTA_CONDICION,
       completo: valores.COMPLETO,
+      fechaEmbalaje: valores.FECHA_EMBALAJE,
+      etiqueta: valores.ETIQUETA,
+      packing: valores.PACKING,
     })
     fila++
   }

@@ -42,6 +42,12 @@ interface FilaResuelta {
   notaCalidadId: number | null
   notaCondicionId: number | null
   completo: boolean | null
+  // Fecha de embalaje/Etiqueta/Packing (compras.md §4.6, 2026-09-21) —
+  // obligatorios por línea, NO se colapsan a nivel de Pallet (a diferencia
+  // de las 3 de arriba): viajan tal cual hasta crear cada PalletLinea.
+  fechaEmbalaje: Date
+  etiquetaId: number
+  packingId: number
 }
 
 interface RecepcionParaMotor {
@@ -71,6 +77,9 @@ function validarFilasCompletas(filasCrudas: FilaExcelCruda[]): string[] {
     if (!f.articulo) errores.push(`Fila ${f.fila}: falta el Artículo/Embalaje`)
     if (!f.calibre) errores.push(`Fila ${f.fila}: falta el Calibre`)
     if (!f.productor) errores.push(`Fila ${f.fila}: falta el Productor`)
+    if (!f.fechaEmbalaje) errores.push(`Fila ${f.fila}: falta la Fecha de Embalaje`)
+    if (!f.etiqueta) errores.push(`Fila ${f.fila}: falta la Etiqueta`)
+    if (!f.packing) errores.push(`Fila ${f.fila}: falta el Packing`)
 
     if (!f.cajas) {
       errores.push(`Fila ${f.fila}: faltan las Cajas`)
@@ -100,6 +109,43 @@ function parseCompletoTexto(texto: string): boolean | null | typeof COMPLETO_INV
   return COMPLETO_INVALIDO
 }
 
+// Fecha de Embalaje (compras.md §4.6, 2026-09-21) — obligatoria, sin el caso
+// "celda vacía es válida" que tiene parseCompletoTexto arriba (la Etapa 2 ya
+// rechazó filas sin texto en esta columna). Acepta SOLO:
+//   - ISO yyyy-mm-dd (u ISO datetime completo) — textoCelda() ya convierte
+//     una celda Date real de Excel a esto vía toISOString().
+//   - dd-mm-yyyy / dd/mm/yyyy (formato manual típico de estos Excels).
+// IMP-QA-R1-033 (QA ronda 1): NO se usa `new Date(texto)` como fallback
+// genérico — Date.parse() del runtime acepta formatos no deseados (ej.
+// "09/21/2026" en mes/día americano, o "September 21, 2026"), que
+// silenciosamente interpretarían mal una fecha ambigua.
+const FECHA_INVALIDA = Symbol('FECHA_INVALIDA')
+function parseFechaEmbalajeTexto(texto: string): Date | typeof FECHA_INVALIDA {
+  const t = texto.trim()
+
+  const matchManual = t.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
+  if (matchManual) {
+    const [, dd, mm, yyyy] = matchManual
+    const fecha = new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd)))
+    const valida = fecha.getUTCFullYear() === Number(yyyy) && fecha.getUTCMonth() === Number(mm) - 1 && fecha.getUTCDate() === Number(dd)
+    return valida ? fecha : FECHA_INVALIDA
+  }
+
+  const matchIso = t.match(/^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)?$/)
+  if (matchIso) {
+    const [, yyyy, mm, dd] = matchIso
+    const fecha = new Date(t)
+    const valida =
+      !Number.isNaN(fecha.getTime()) &&
+      fecha.getUTCFullYear() === Number(yyyy) &&
+      fecha.getUTCMonth() === Number(mm) - 1 &&
+      fecha.getUTCDate() === Number(dd)
+    return valida ? fecha : FECHA_INVALIDA
+  }
+
+  return FECHA_INVALIDA
+}
+
 async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ filas: FilaResuelta[]; errores: string[] }> {
   const cacheEspecie = new Map<string, Awaited<ReturnType<typeof repo.findEspecieByTexto>>>()
   const cacheVariedad = new Map<string, Awaited<ReturnType<typeof repo.findVariedadByTexto>>>()
@@ -109,6 +155,8 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
   const cacheProductor = new Map<string, Awaited<ReturnType<typeof repo.findProductorByTexto>>>()
   const cacheNotaCalidad = new Map<string, Awaited<ReturnType<typeof repo.findNotaCalidadByTexto>>>()
   const cacheNotaCondicion = new Map<string, Awaited<ReturnType<typeof repo.findNotaCondicionByTexto>>>()
+  const cacheEtiqueta = new Map<string, Awaited<ReturnType<typeof repo.findEtiquetaByTexto>>>()
+  const cachePacking = new Map<string, Awaited<ReturnType<typeof repo.findPackingByTexto>>>()
 
   const errores: string[] = []
   const filas: FilaResuelta[] = []
@@ -183,6 +231,23 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
       completo = completoParseado
     }
 
+    // Obligatorios (compras.md §4.6): Etapa 2 ya garantizó que la celda no
+    // viene vacía — acá se resuelve/valida el formato/existencia.
+    const fechaParseada = parseFechaEmbalajeTexto(cruda.fechaEmbalaje)
+    if (fechaParseada === FECHA_INVALIDA) {
+      erroresFila.push(`Fila ${cruda.fila}: Fecha de Embalaje "${cruda.fechaEmbalaje}" no es una fecha válida (usa dd-mm-aaaa)`)
+    }
+
+    const keyEtiqueta = cruda.etiqueta.toLowerCase()
+    if (!cacheEtiqueta.has(keyEtiqueta)) cacheEtiqueta.set(keyEtiqueta, await repo.findEtiquetaByTexto(cruda.etiqueta))
+    const etiqueta = cacheEtiqueta.get(keyEtiqueta)
+    if (!etiqueta) erroresFila.push(`Fila ${cruda.fila}: Etiqueta "${cruda.etiqueta}" no existe en el maestro`)
+
+    const keyPacking = cruda.packing.toLowerCase()
+    if (!cachePacking.has(keyPacking)) cachePacking.set(keyPacking, await repo.findPackingByTexto(cruda.packing))
+    const packing = cachePacking.get(keyPacking)
+    if (!packing) erroresFila.push(`Fila ${cruda.fila}: Packing "${cruda.packing}" no existe en el maestro`)
+
     if (erroresFila.length > 0) {
       errores.push(...erroresFila)
       continue
@@ -191,6 +256,7 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
     // Etapa 2 ya garantizó formato; acá solo falta el parseo final.
     const cajas = Number(cruda.cajas.replace(',', '.'))
     const e = especie!, v = variedad!, c = categoria!, cal = calibre!, art = articulo!, prod = productor!
+    const etq = etiqueta!, pack = packing!
     filas.push({
       fila: cruda.fila,
       numeroPallet: cruda.numeroPallet,
@@ -202,6 +268,9 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
       calibreId: cal.id,
       calibreLabel: cal.descripcion,
       cajas,
+      fechaEmbalaje: fechaParseada as Date,
+      etiquetaId: etq.id,
+      packingId: pack.id,
       productorId: prod.id,
       comboLabel: `${e.descripcion} / ${v.descripcion} / ${c.descripcion} / ${art.descripcion}`,
       comboKey: `${e.id}-${v.id}-${c.id}-${art.id}`,
@@ -231,7 +300,17 @@ function agruparEnPallets(filas: FilaResuelta[]) {
     notaCalidadId: number | null
     notaCondicionId: number | null
     completo: boolean
-    lineas: Array<{ especieId: number; variedadId: number; categoriaId: number; articuloId: number; calibreId: number; cajas: number }>
+    lineas: Array<{
+      especieId: number
+      variedadId: number
+      categoriaId: number
+      articuloId: number
+      calibreId: number
+      cajas: number
+      fechaEmbalaje: Date
+      etiquetaId: number
+      packingId: number
+    }>
   }> = []
 
   for (const [numeroPallet, lineasDelPallet] of porPallet) {
@@ -275,6 +354,9 @@ function agruparEnPallets(filas: FilaResuelta[]) {
         articuloId: l.articuloId,
         calibreId: l.calibreId,
         cajas: l.cajas,
+        fechaEmbalaje: l.fechaEmbalaje,
+        etiquetaId: l.etiquetaId,
+        packingId: l.packingId,
       })),
     })
   }

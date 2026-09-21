@@ -362,6 +362,9 @@ async function main() {
     { campo: 'NOTA_CALIDAD', columna: 'Nota de Calidad' },
     { campo: 'NOTA_CONDICION', columna: 'Nota de Condición' },
     { campo: 'COMPLETO', columna: 'Completo/Incompleto' },
+    { campo: 'FECHA_EMBALAJE', columna: 'Fecha de Embalaje' },
+    { campo: 'ETIQUETA', columna: 'Etiqueta' },
+    { campo: 'PACKING', columna: 'Packing' },
   ]
   const templateBaseExistente = await prisma.templateCarga.findFirst({
     where: { empresaId: agrosanParaParametros.id, codigo: 'BASE', eliminadoEn: null },

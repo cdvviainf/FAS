@@ -35,6 +35,11 @@ export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
     'NOTA_CALIDAD',
     'NOTA_CONDICION',
     'COMPLETO',
+    // Fecha de embalaje / Etiqueta / Packing (2026-09-21, compras.md §4.6) —
+    // por línea (no por pallet, a diferencia de las 3 de arriba), obligatorios.
+    'FECHA_EMBALAJE',
+    'ETIQUETA',
+    'PACKING',
   ],
   PACKING_LIST: [],
 }
@@ -61,6 +66,9 @@ export const CAMPO_TEMPLATE_CARGA_LABELS: Record<string, string> = {
   NOTA_CALIDAD: 'Nota de Calidad',
   NOTA_CONDICION: 'Nota de Condición',
   COMPLETO: 'Completo/Incompleto',
+  FECHA_EMBALAJE: 'Fecha de Embalaje',
+  ETIQUETA: 'Etiqueta',
+  PACKING: 'Packing',
 }
 
 export interface TemplateCargaCampoInput {

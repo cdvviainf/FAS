@@ -739,7 +739,8 @@ model Etiqueta {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  articulos Articulo[]
+  articulos    Articulo[]
+  palletLineas PalletLinea[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1349,6 +1350,11 @@ enum TipoEntidad {
   // (Integracion.gestorLogisticoId) — si no la tiene, la Solicitud de
   // Reserva de sus Embarques es 100% manual (Embarque.reservaManual).
   GESTOR_LOGISTICO
+  // Packing (2026-09-21, compras.md §4.6) — instalación donde se embaló la
+  // fruta, capturada por línea en la carga de Recepción de Stock. Mismo
+  // patrón que PLANTA: sin mantenedor propio, es una Entidad más con este
+  // tipo en `tipos[]`.
+  PACKING
 }
 
 model Entidad {
@@ -1392,6 +1398,7 @@ model Entidad {
   instructivosEmbalajeProductor  InstructivoEmbalaje[]       @relation("InstructivoEmbalajeProductor")
   recepcionesPlanta              Recepcion[]                 @relation("RecepcionPlanta")
   palletsProductor               Pallet[]                    @relation("PalletProductor")
+  palletLineasPacking            PalletLinea[]               @relation("PalletLineaPacking")
   embarquesGestorLogistico       Embarque[]                  @relation("EmbarqueGestorLogistico")
   integracionesGestorLogistico   Integracion[]               @relation("IntegracionGestorLogistico")
   reclamosCliente                Reclamo[]                   @relation("ReclamoCliente")
@@ -3495,6 +3502,22 @@ model PalletLinea {
   calibre     Calibre   @relation(fields: [calibreId], references: [id])
 
   cajas Int
+
+  // Fecha de embalaje, Etiqueta y Packing (2026-09-21, compras.md §4.6/§4.10) —
+  // capturados por línea en la carga de Recepción (a diferencia de Nota de
+  // Calidad/Condición/Completo, que son por Pallet completo, §4.8) porque un
+  // mismo pallet puede mezclar cajas embaladas en fechas/packings distintos.
+  // Obligatorios en la CARGA (Etapa 2 de recepciones.motor.ts, decisión de
+  // negocio 2026-09-21) pero nullable acá a nivel de columna (IMP-QA-R1-032,
+  // QA ronda 1): forzar NOT NULL en la base rompería la migración si ya
+  // existen PalletLinea históricas (sin un backfill real posible — no hay
+  // dato de negocio para inventar la fecha/etiqueta/packing de una carga
+  // pasada). El motor de carga sigue exigiéndolos siempre para filas nuevas.
+  fechaEmbalaje DateTime?
+  etiquetaId    Int?
+  etiqueta      Etiqueta? @relation(fields: [etiquetaId], references: [id])
+  packingId     Int? // Entidad tipo PACKING
+  packing       Entidad?  @relation("PalletLineaPacking", fields: [packingId], references: [id])
 
   reclamoLineas ReclamoPalletLinea[]
 

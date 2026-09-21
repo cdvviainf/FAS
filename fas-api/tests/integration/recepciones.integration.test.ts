@@ -72,6 +72,7 @@ async function limpiarDatos() {
       "predios",
       "entidad_direcciones",
       "entidades",
+      "etiquetas",
       "paises",
       "temporadas",
       "usuarios",
@@ -127,6 +128,14 @@ async function crearFixtures() {
   const articulo = await prisma.articulo.create({
     data: { empresaId: empresa.id, tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
+  // Fecha de Embalaje/Etiqueta/Packing (compras.md §4.10) — maestros que
+  // resuelven las 3 columnas nuevas y obligatorias del Excel de Recepción.
+  const etiqueta = await prisma.etiqueta.create({
+    data: { empresaId: empresa.id, codigo: 'ETQ-01', descripcion: 'Etiqueta Uno', creadoPor: 'test' },
+  })
+  const packing = await prisma.entidad.create({
+    data: { empresaId: empresa.id, codigo: 'PACK-01', descripcion: 'Packing Uno', razonSocial: 'Packing Uno SpA', paisId: pais.id, tipos: ['PACKING'], creadoPor: 'test' },
+  })
 
   const perfilInspector = await prisma.perfil.create({ data: { codigo: 'PERFIL-INSPECTOR', descripcion: 'Inspector', creadoPor: 'test' } })
   const usuarioInspector = await prisma.usuario.create({
@@ -146,7 +155,7 @@ async function crearFixtures() {
   await notificarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'test')
   const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'APROBADA', 'test')
 
-  return { empresa, pais, productor, predioProductor, planta, direccionPlanta, especie, variedad, categoria, calibreChico, calibreGrande, articulo, solicitudInspeccionCompraAprobada }
+  return { empresa, pais, productor, predioProductor, planta, direccionPlanta, especie, variedad, categoria, calibreChico, calibreGrande, articulo, etiqueta, packing, solicitudInspeccionCompraAprobada }
 }
 
 // TemplateCarga con cabecera (título de columna = nombre del campo, simple
@@ -172,6 +181,10 @@ async function crearTemplateCarga(empresaId: number) {
           { campo: 'CALIBRE', columna: 'Calibre' },
           { campo: 'CAJAS', columna: 'Cajas' },
           { campo: 'PRODUCTOR', columna: 'Productor' },
+          // Fecha de Embalaje/Etiqueta/Packing (compras.md §4.10) — obligatorias.
+          { campo: 'FECHA_EMBALAJE', columna: 'FechaEmbalaje' },
+          { campo: 'ETIQUETA', columna: 'Etiqueta' },
+          { campo: 'PACKING', columna: 'Packing' },
         ],
       },
     },
@@ -187,14 +200,20 @@ interface FilaTestExcel {
   calibre: string
   cajas: number | string // string para forzar un valor no numérico en los tests de Etapa 2
   productor: string
+  // Opcionales acá (no en el motor real): los tests de filas de cierre
+  // (Total, Firma...) arman objetos literales sin estos campos — ver "ignora
+  // las filas de cierre..." más abajo.
+  fechaEmbalaje?: string
+  etiqueta?: string
+  packing?: string
 }
 
 async function armarExcel(filas: FilaTestExcel[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
   const hoja = wb.addWorksheet('Recepcion')
-  hoja.addRow(['Pallet', 'Especie', 'Variedad', 'Categoria', 'Articulo', 'Calibre', 'Cajas', 'Productor'])
+  hoja.addRow(['Pallet', 'Especie', 'Variedad', 'Categoria', 'Articulo', 'Calibre', 'Cajas', 'Productor', 'FechaEmbalaje', 'Etiqueta', 'Packing'])
   for (const f of filas) {
-    hoja.addRow([f.pallet, f.especie, f.variedad, f.categoria, f.articulo, f.calibre, f.cajas, f.productor])
+    hoja.addRow([f.pallet, f.especie, f.variedad, f.categoria, f.articulo, f.calibre, f.cajas, f.productor, f.fechaEmbalaje ?? '', f.etiqueta ?? '', f.packing ?? ''])
   }
   const arrayBuffer = await wb.xlsx.writeBuffer()
   return Buffer.from(arrayBuffer)
@@ -212,6 +231,9 @@ function filaBase(f: Awaited<ReturnType<typeof crearFixtures>>, overrides: Parti
     calibre: 'XL',
     cajas: 100,
     productor: 'PROD-01',
+    fechaEmbalaje: '21-09-2026',
+    etiqueta: f.etiqueta.codigo,
+    packing: f.packing.codigo,
     ...overrides,
   }
 }

@@ -186,6 +186,7 @@ Unidad mínima **indivisible** de inventario. Generado por la Recepción. Compue
 - `palletId` (FK → Pallet)
 - `especieId`, `variedadId`, `categoriaId`, `articuloId` (embalaje), `calibreId`
 - `cajas` (Int)
+- `fechaEmbalaje` (DateTime), `etiquetaId` (FK → Etiqueta), `packingId` (FK → Entidad tipo PACKING) **(nuevo, 2026-09-21 — ver §4.10)**
 
 ### 4.7 Relaciones y cardinalidades
 
@@ -199,6 +200,7 @@ Unidad mínima **indivisible** de inventario. Generado por la Recepción. Compue
 - Pallet `1 — N` PalletLinea
 - Pallet `N — 0..1` Embarque *(reserva; nullable hasta reservar, desvinculable hasta confirmar despacho)*
 - Pallet `N — 0..1` NotaCalidad, Pallet `N — 0..1` NotaCondicion **(nuevo, 2026-09-02 — ver §4.8)**
+- PalletLinea `N — 1` Etiqueta, PalletLinea `N — 1` Entidad (tipo PACKING) **(nuevo, 2026-09-21 — ver §4.10, ambos obligatorios)**
 
 
 ### 4.8 Notas de Calidad/Condición y Completo/Incompleto del Pallet (2026-09-02)
@@ -285,6 +287,26 @@ model CuotaDocumentoCompra {
 ```
 
 > El **pago** de estos documentos y su imputación a la cuenta corriente del productor viven en `productores.md` (módulo Solicitud de Pago). Compras solo captura y cuadra.
+
+### 4.10 Fecha de Embalaje, Etiqueta y Packing del PalletLinea (2026-09-21)
+
+A diferencia de Nota de Calidad/Condición/Completo (§4.8, a nivel de **Pallet completo**), estos 3 campos van a nivel de **PalletLinea** — un mismo pallet puede mezclar cajas embaladas en fechas o packings distintos entre sus líneas.
+
+- **`PalletLinea.fechaEmbalaje`** (DateTime): fecha en que se embaló esa línea.
+- **`PalletLinea.etiquetaId`** (FK → `Etiqueta`): reutiliza el mismo mantenedor `Etiqueta` que ya usa `Articulo.etiquetaId` (materiales.md) — acá registra cuál Etiqueta se usó **realmente** en esta línea, independiente de la etiqueta por defecto del Artículo/embalaje elegido.
+- **`PalletLinea.packingId`** (FK → `Entidad` tipo `PACKING`): instalación donde se embaló. `PACKING` es un tipo de `Entidad` nuevo (`entidades.md`), sin mantenedor propio — mismo patrón que `PLANTA`.
+
+> **Obligatorios en la carga, nullable en la columna (IMP-QA-R1-032, QA ronda 1).** Los 3 campos son obligatorios en el flujo de carga por Excel (Etapa 2 del motor los rechaza si vienen vacíos), pero las columnas en sí son `nullable` a nivel de base de datos — un `NOT NULL` duro habría roto la migración sobre cualquier `PalletLinea` histórica ya existente, sin un backfill real posible (no hay forma de reconstruir con qué Packing/Etiqueta/fecha se embaló una carga pasada). Toda `PalletLinea` creada a partir de esta fecha vía el motor de carga sí trae los 3 valores siempre.
+
+**Captura — Excel de Recepción (los tres orígenes: COMPRA, CONSIGNACION y PROCESO — el motor no distingue origen para estos 3 campos).** El Template de Carga gana 3 columnas nuevas **obligatorias** de mapear (no entran en `CAMPOS_OPCIONALES_POR_TIPO` — a diferencia de §4.8, un Template de Carga existente que no las mapee queda inválido y debe editarse antes de poder procesar un nuevo Excel): `FECHA_EMBALAJE`, `ETIQUETA`, `PACKING`. Reglas del motor (`recepciones.motor.ts`):
+- Celda vacía en cualquiera de las 3 es error de Etapa 2 (falta el dato), igual que Especie/Variedad/Cajas/Productor — no hay caso "vacío = sin definir" acá.
+- `FECHA_EMBALAJE` acepta ISO (una celda Excel con formato Fecha real) o texto `dd-mm-aaaa`/`dd/mm/aaaa` — cualquier otro formato es error de Etapa 3.
+- `ETIQUETA` y `PACKING` se resuelven contra sus maestros por `codigo`/`descripcion` (Etiqueta) o `codigo`/`descripcion`/`razonSocial` (Packing, vía Entidad tipo `PACKING`) — mismo matching que Especie/Productor. Texto que no matchea ningún registro es error de Etapa 3.
+- **Sin colapso por Pallet**: a diferencia de §4.8, no hay chequeo de consistencia entre filas del mismo N° de Pallet — cada línea guarda su propio valor tal cual, porque es válido que difieran dentro de un mismo pallet.
+
+**Sin edición posterior en esta fase**: a diferencia de §4.8 (editable en Operaciones → Gestión de Pallets), estos 3 campos solo se capturan en la carga — no hay UI de edición posterior todavía.
+
+**Consecuencia operativa**: cualquier `TemplateCarga` de tipo `RECEPCION` creado antes de esta fecha debe editarse en Configuración → Templates de Carga para mapear las 3 columnas nuevas antes de procesar el próximo Excel de Recepción — sin eso, la carga se rechaza con "falta Fecha de Embalaje/Etiqueta/Packing" en cada fila.
 
 ---
 

@@ -25,6 +25,9 @@ export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
     'NOTA_CALIDAD',
     'NOTA_CONDICION',
     'COMPLETO',
+    'FECHA_EMBALAJE',
+    'ETIQUETA',
+    'PACKING',
   ],
   PACKING_LIST: [],
 }
@@ -48,6 +51,9 @@ export const CAMPO_TEMPLATE_CARGA_LABELS: Record<string, string> = {
   NOTA_CALIDAD: 'Nota de Calidad',
   NOTA_CONDICION: 'Nota de Condición',
   COMPLETO: 'Completo/Incompleto',
+  FECHA_EMBALAJE: 'Fecha de Embalaje',
+  ETIQUETA: 'Etiqueta',
+  PACKING: 'Packing',
 }
 
 export interface TemplateCargaCampo {
