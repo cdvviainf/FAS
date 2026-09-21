@@ -18,7 +18,7 @@ export async function listPalletsConLineas() {
     where: { embarqueId: null },
     include: {
       productor: { select: entidadSelect },
-      recepcion: { select: { estado: true } },
+      recepcion: { select: { estado: true, plantaId: true, planta: { select: entidadSelect } } },
       notaCalidad: { select: mantenedorSelect },
       notaCondicion: { select: mantenedorSelect },
       lineas: {
@@ -30,6 +30,7 @@ export async function listPalletsConLineas() {
           // orden del maestro (por especie), no el orden alfabético.
           calibre: { select: { ...mantenedorSelect, orden: true } },
           articulo: { select: { kgNetoEnvase: true } },
+          packing: { select: entidadSelect },
         },
       },
     },

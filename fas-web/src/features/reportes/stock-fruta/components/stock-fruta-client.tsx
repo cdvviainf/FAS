@@ -7,8 +7,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Icons } from '@/components/icons'
+import { cn } from '@/lib/utils'
 import { MultiCombobox } from '@/components/shared/multi-combobox'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { stockFrutaService } from '../service'
@@ -19,6 +21,13 @@ import type { StockDetalleRow, AntiguedadBucket } from '../types'
 // todavía sigue siendo un valor filtrable, no un registro a excluir.
 const SIN_NOTA = '__SIN_NOTA__'
 
+// Antigüedad se calcula sobre la Fecha de Embalaje (compras.md §4.10,
+// 2026-09-21) — más representativa que la fecha de creación del Pallet.
+// Cae a fechaRecepcion en PalletLinea históricas sin fechaEmbalaje.
+function fechaAntiguedad(row: StockDetalleRow): string {
+  return row.fechaEmbalaje ?? row.fechaRecepcion
+}
+
 interface Filters {
   especieIds: string[]
   variedadIds: string[]
@@ -26,6 +35,8 @@ interface Filters {
   categoriaIds: string[]
   estados: string[]
   productorIds: string[]
+  plantaIds: string[]
+  packingIds: string[]
   notaCalidadIds: string[]
   notaCondicionIds: string[]
   completos: string[]
@@ -33,6 +44,7 @@ interface Filters {
 
 const FILTROS_VACIOS: Filters = {
   especieIds: [], variedadIds: [], calibreIds: [], categoriaIds: [], estados: [], productorIds: [],
+  plantaIds: [], packingIds: [],
   notaCalidadIds: [], notaCondicionIds: [], completos: [],
 }
 
@@ -49,6 +61,8 @@ const FACETS: {
   { key: 'categoriaIds', label: 'Categoría', getValue: (r) => String(r.categoriaId), getLabel: (r) => r.categoria.descripcion },
   { key: 'estados', label: 'Estado', getValue: (r) => r.estado, getLabel: (r) => ESTADO_STOCK_LABELS[r.estado] },
   { key: 'productorIds', label: 'Productor', getValue: (r) => String(r.productorId), getLabel: (r) => r.productor.descripcion },
+  { key: 'plantaIds', label: 'Planta', getValue: (r) => String(r.plantaId), getLabel: (r) => r.planta.descripcion },
+  { key: 'packingIds', label: 'Packing', getValue: (r) => r.packingId != null ? String(r.packingId) : SIN_NOTA, getLabel: (r) => r.packing?.descripcion ?? 'Sin packing' },
   { key: 'notaCalidadIds', label: 'Nota Calidad', getValue: (r) => r.notaCalidadId != null ? String(r.notaCalidadId) : SIN_NOTA, getLabel: (r) => r.notaCalidad?.descripcion ?? 'Sin nota' },
   { key: 'notaCondicionIds', label: 'Nota Condición', getValue: (r) => r.notaCondicionId != null ? String(r.notaCondicionId) : SIN_NOTA, getLabel: (r) => r.notaCondicion?.descripcion ?? 'Sin nota' },
   { key: 'completos', label: 'Completo', getValue: (r) => String(r.completo), getLabel: (r) => r.completo ? 'Sí' : 'No' },
@@ -63,6 +77,8 @@ function matches(row: StockDetalleRow, filters: Filters, exclude?: keyof Filters
   }
   return true
 }
+
+const fmtFecha = new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeZone: 'America/Santiago' })
 
 const AGING_BADGE_VARIANT: Record<AntiguedadBucket, string> = {
   fresh: 'border-emerald-600/30 bg-emerald-600/10 text-emerald-700 dark:text-emerald-400',
@@ -84,6 +100,10 @@ function groupKey(row: StockDetalleRow): string {
 export function StockFrutaClient() {
   const [filters, setFilters] = useState<Filters>(FILTROS_VACIOS)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  // Antigüedad desde/hasta (días) — rango numérico, no un facet de multi-
+  // selección como el resto de los filtros de arriba.
+  const [antiguedadDesde, setAntiguedadDesde] = useState('')
+  const [antiguedadHasta, setAntiguedadHasta] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['stock-fruta'],
@@ -91,7 +111,18 @@ export function StockFrutaClient() {
     staleTime: 30_000,
   })
   const rows = useMemo(() => data?.data ?? [], [data])
-  const filteredRows = useMemo(() => rows.filter((r) => matches(r, filters)), [rows, filters]);
+  const filteredRows = useMemo(() => {
+    const desde = antiguedadDesde.trim() ? Number(antiguedadDesde) : null
+    const hasta = antiguedadHasta.trim() ? Number(antiguedadHasta) : null
+    return rows.filter((r) => {
+      if (!matches(r, filters)) return false
+      if (desde == null && hasta == null) return true
+      const dias = diasAntiguedad(fechaAntiguedad(r))
+      if (desde != null && dias < desde) return false
+      if (hasta != null && dias > hasta) return false
+      return true
+    })
+  }, [rows, filters, antiguedadDesde, antiguedadHasta]);
 
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {
@@ -117,7 +148,7 @@ export function StockFrutaClient() {
       }
       g.cajas += row.cajas
       g.kg += row.kg
-      g[bucketAntiguedad(diasAntiguedad(row.fechaRecepcion))] += row.cajas
+      g[bucketAntiguedad(diasAntiguedad(fechaAntiguedad(row)))] += row.cajas
       g.pallets.add(row.palletId)
       const c = g.calibres.get(row.calibreId) ?? { orden: row.calibre.orden, label: row.calibre.descripcion, cajas: 0 }
       c.cajas += row.cajas
@@ -197,11 +228,11 @@ export function StockFrutaClient() {
                   <div className='mt-2 flex gap-5'>
                     <div>
                       <div className='text-2xl font-bold tabular-nums'>{g.cajas.toLocaleString('es-CL')}</div>
-                      <div className='text-muted-foreground text-[10px] tracking-wide uppercase'>Cajas</div>
+                      <div className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Cajas</div>
                     </div>
                     <div>
                       <div className='text-2xl font-bold tabular-nums'>{Math.round(g.kg).toLocaleString('es-CL')}</div>
-                      <div className='text-muted-foreground text-[10px] tracking-wide uppercase'>Kilos</div>
+                      <div className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Kilos</div>
                     </div>
                   </div>
                   <div className='mt-3'>
@@ -276,7 +307,40 @@ export function StockFrutaClient() {
               </div>
             )
           })}
-          <Button type='button' variant='ghost' size='sm' onClick={() => setFilters(FILTROS_VACIOS)}>
+          <div className='min-w-[110px] space-y-1'>
+            <Label className='text-[10.5px] tracking-wide uppercase'>Antigüedad desde</Label>
+            <Input
+              type='number'
+              min={0}
+              inputMode='numeric'
+              placeholder='días'
+              value={antiguedadDesde}
+              onChange={(e) => setAntiguedadDesde(e.target.value)}
+              className='h-8'
+            />
+          </div>
+          <div className='min-w-[110px] space-y-1'>
+            <Label className='text-[10.5px] tracking-wide uppercase'>Antigüedad hasta</Label>
+            <Input
+              type='number'
+              min={0}
+              inputMode='numeric'
+              placeholder='días'
+              value={antiguedadHasta}
+              onChange={(e) => setAntiguedadHasta(e.target.value)}
+              className='h-8'
+            />
+          </div>
+          <Button
+            type='button'
+            variant='ghost'
+            size='sm'
+            onClick={() => {
+              setFilters(FILTROS_VACIOS)
+              setAntiguedadDesde('')
+              setAntiguedadHasta('')
+            }}
+          >
             <Icons.close className='mr-2 h-4 w-4' /> Limpiar filtros
           </Button>
         </CardContent>
@@ -301,7 +365,7 @@ export function StockFrutaClient() {
         <div className='overflow-x-auto rounded-md border'>
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className='[&>th]:text-muted-foreground [&>th]:font-normal'>
                 <TableHead className='w-8'></TableHead>
                 <TableHead>Especie</TableHead>
                 <TableHead>Variedad</TableHead>
@@ -309,22 +373,41 @@ export function StockFrutaClient() {
                 <TableHead>Categoría</TableHead>
                 <TableHead className='text-right'>Cajas</TableHead>
                 <TableHead className='text-right'>Kilos</TableHead>
-                <TableHead>Nota Calidad</TableHead>
-                <TableHead>Nota Condición</TableHead>
-                <TableHead>Completo</TableHead>
+                {/* Nota Calidad/Condición/Completo son por línea (Pallet), no
+                    por grupo — la fila de grupo siempre las deja vacías; solo
+                    tienen sentido al abrir el grupo, donde ya aparece su
+                    propio sub-encabezado (más abajo). Se dejan las 3 columnas
+                    en blanco acá para mantener alineado el resto de la tabla. */}
+                <TableHead></TableHead>
+                <TableHead></TableHead>
+                <TableHead></TableHead>
+                {/* Fecha de Embalaje/Packing/Planta: mismo criterio — por
+                    línea (Planta es por Pallet, pero igual solo tiene sentido
+                    al abrir el grupo, junto al resto del detalle). */}
+                <TableHead></TableHead>
+                <TableHead></TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {grupos.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className='text-muted-foreground text-center'>Sin combinaciones para estos filtros.</TableCell>
+                  <TableCell colSpan={13} className='text-muted-foreground text-center'>Sin combinaciones para estos filtros.</TableCell>
                 </TableRow>
               )}
               {grupos.map((g) => {
                 const isOpen = expandedGroups.has(g.key)
                 return (
                   <Fragment key={g.key}>
-                    <TableRow className='bg-muted/40 hover:bg-muted/60 cursor-pointer font-medium' onClick={() => toggleGroup(g.key)}>
+                    <TableRow
+                      className={cn(
+                        'cursor-pointer transition-colors',
+                        // Al abrir el grupo, su fila resumen pierde protagonismo
+                        // (tono suave) para que la atención vaya al detalle.
+                        isOpen ? 'bg-muted/20 hover:bg-muted/30 text-muted-foreground font-normal' : 'bg-muted/40 hover:bg-muted/60 font-medium',
+                      )}
+                      onClick={() => toggleGroup(g.key)}
+                    >
                       <TableCell>{isOpen ? <Icons.chevronDown className='h-4 w-4' /> : <Icons.chevronRight className='h-4 w-4' />}</TableCell>
                       <TableCell>{g.especie}</TableCell>
                       <TableCell>{g.variedad}</TableCell>
@@ -335,31 +418,37 @@ export function StockFrutaClient() {
                       <TableCell></TableCell>
                       <TableCell></TableCell>
                       <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
                     </TableRow>
                     {isOpen && (
                       <>
                         <TableRow className='bg-muted/20 hover:bg-muted/20'>
                           <TableCell></TableCell>
-                          <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Folio</TableCell>
-                          <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Productor</TableCell>
-                          <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Antigüedad</TableCell>
-                          <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Estado</TableCell>
-                          <TableCell className='text-muted-foreground text-right text-[10px] tracking-wide uppercase'>Cajas</TableCell>
-                          <TableCell className='text-muted-foreground text-right text-[10px] tracking-wide uppercase'>Kilos</TableCell>
-                          <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Nota Calidad</TableCell>
-                          <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Nota Condición</TableCell>
-                          <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Completo</TableCell>
+                          <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Folio</TableCell>
+                          <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Productor</TableCell>
+                          <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Antigüedad</TableCell>
+                          <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Estado</TableCell>
+                          <TableCell className='text-foreground text-right text-[10px] font-semibold tracking-wide uppercase'>Cajas</TableCell>
+                          <TableCell className='text-foreground text-right text-[10px] font-semibold tracking-wide uppercase'>Kilos</TableCell>
+                          <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Nota Calidad</TableCell>
+                          <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Nota Condición</TableCell>
+                          <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Completo</TableCell>
+                          <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Fecha Embalaje</TableCell>
+                          <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Packing</TableCell>
+                          <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Planta</TableCell>
                         </TableRow>
                         {g.rows
                           .slice()
                           .sort((a, b) => b.cajas - a.cajas)
                           .map((row) => {
-                            const dias = diasAntiguedad(row.fechaRecepcion)
+                            const dias = diasAntiguedad(fechaAntiguedad(row))
                             const bucket = bucketAntiguedad(dias)
                             return (
-                              <TableRow key={row.palletLineaId}>
+                              <TableRow key={row.palletLineaId} className='font-medium'>
                                 <TableCell></TableCell>
-                                <TableCell className='text-muted-foreground'>{row.numeroPallet}</TableCell>
+                                <TableCell>{row.numeroPallet}</TableCell>
                                 <TableCell>{row.productor.descripcion}</TableCell>
                                 <TableCell>
                                   <Badge variant='outline' className={AGING_BADGE_VARIANT[bucket]}>{dias} d</Badge>
@@ -367,13 +456,16 @@ export function StockFrutaClient() {
                                 <TableCell>
                                   <Badge variant={row.estado === 'VALIDADA' ? 'default' : 'secondary'}>{ESTADO_STOCK_LABELS[row.estado]}</Badge>
                                 </TableCell>
-                                <TableCell className='text-muted-foreground text-right tabular-nums'>{row.cajas.toLocaleString('es-CL')}</TableCell>
-                                <TableCell className='text-muted-foreground text-right tabular-nums'>{Math.round(row.kg).toLocaleString('es-CL')}</TableCell>
-                                <TableCell className='text-muted-foreground'>{row.notaCalidad?.descripcion ?? '—'}</TableCell>
-                                <TableCell className='text-muted-foreground'>{row.notaCondicion?.descripcion ?? '—'}</TableCell>
+                                <TableCell className='text-right tabular-nums'>{row.cajas.toLocaleString('es-CL')}</TableCell>
+                                <TableCell className='text-right tabular-nums'>{Math.round(row.kg).toLocaleString('es-CL')}</TableCell>
+                                <TableCell>{row.notaCalidad?.descripcion ?? '—'}</TableCell>
+                                <TableCell>{row.notaCondicion?.descripcion ?? '—'}</TableCell>
                                 <TableCell>
                                   <Badge variant={row.completo ? 'default' : 'secondary'}>{row.completo ? 'Sí' : 'No'}</Badge>
                                 </TableCell>
+                                <TableCell>{row.fechaEmbalaje ? fmtFecha.format(new Date(row.fechaEmbalaje)) : '—'}</TableCell>
+                                <TableCell>{row.packing?.descripcion ?? '—'}</TableCell>
+                                <TableCell>{row.planta.descripcion}</TableCell>
                               </TableRow>
                             )
                           })}

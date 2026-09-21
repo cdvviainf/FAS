@@ -19,6 +19,7 @@ export interface EntidadRef {
 // qué Instructivo(s) de Embalaje (modo PROCESO) viene, para la trazabilidad
 // Cierre Comercial ↔ Embarque ↔ Pallet (2026-09-02).
 export interface PalletOrigenRecepcion {
+  planta: EntidadRef
   ordenCompra: { id: number; numero: string } | null
   instructivos: Array<{ instructivo: { id: number; numero: number } }>
 }
@@ -31,17 +32,25 @@ export interface PalletLineaResumen {
   categoriaId: number
   categoria: MantenedorRef
   articuloId: number
-  articulo: MantenedorRef
+  articulo: MantenedorRef & { kgNetoEnvase: string | null }
   calibreId: number
   calibre: MantenedorRef
   cajas: number
+  // Antigüedad del Pallet en Seleccionar Pallets = la mayor entre sus líneas
+  // (compras.md §4.10) — null en PalletLinea históricas, cae a Pallet.creadoEn.
+  fechaEmbalaje: string | null
 }
 
 export interface PalletResumen {
   id: number
   numeroPallet: string
   origen: 'COMPRA' | 'CONSIGNACION' | 'PROCESO'
+  creadoEn: string
   productor: EntidadRef
+  notaCalidadId: number | null
+  notaCalidad: MantenedorRef | null
+  notaCondicionId: number | null
+  notaCondicion: MantenedorRef | null
   recepcion: PalletOrigenRecepcion
   lineas: PalletLineaResumen[]
 }

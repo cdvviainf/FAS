@@ -26,7 +26,12 @@ export async function obtenerStock(): Promise<StockDetalleRow[]> {
         // La Recepción que generó el Pallet nunca es RECHAZADA (una
         // Recepción rechazada no genera Pallets) — el cast es seguro.
         estado: pallet.recepcion.estado as 'CARGADA' | 'VALIDADA',
+        plantaId: pallet.recepcion.plantaId,
+        planta: pallet.recepcion.planta,
         fechaRecepcion: pallet.creadoEn,
+        fechaEmbalaje: linea.fechaEmbalaje,
+        packingId: linea.packingId,
+        packing: linea.packing,
         cajas: linea.cajas,
         // Sin redondear acá (QAS-STK-004, QA ronda 2): redondear por línea
         // pierde precisión y acumula diferencia en los totales agregados —

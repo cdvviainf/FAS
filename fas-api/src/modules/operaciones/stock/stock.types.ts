@@ -35,7 +35,19 @@ export interface StockDetalleRow {
   // Estado de la Recepción que generó el Pallet (CARGADA|VALIDADA) — RECHAZADA
   // nunca llega acá porque una Recepción rechazada no genera Pallets.
   estado: EstadoStock
+  // Planta de la Recepción que generó el Pallet (compras.md §4.4) — siempre
+  // presente, a diferencia de packing/etiqueta que son por línea.
+  plantaId: number
+  planta: Mantenedor
   fechaRecepcion: Date
+  // Antigüedad del stock se calcula sobre esta fecha cuando existe
+  // (compras.md §4.10) — null en PalletLinea históricas anteriores a esa
+  // fecha; el frontend cae a fechaRecepcion en ese caso.
+  fechaEmbalaje: Date | null
+  // Packing donde se embaló la línea (compras.md §4.10) — null en
+  // PalletLinea históricas.
+  packingId: number | null
+  packing: Mantenedor | null
   cajas: number
   // cajas × Articulo.kgNetoEnvase de la línea (peso neto de fruta, sin el
   // embalaje) — 0 si el artículo no tiene kgNetoEnvase configurado.

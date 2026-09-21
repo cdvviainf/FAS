@@ -39,8 +39,13 @@ const entidadSelect = { id: true, codigo: true, descripcion: true }
 // pueda mostrar la trazabilidad completa (2026-09-02).
 const palletInclude = {
   productor: { select: entidadSelect },
+  // Nota de Calidad/Condición (compras.md §4.8) — a nivel de Pallet, para la
+  // columna "Calificación" (código+código, ej. "A1") en Seleccionar Pallets.
+  notaCalidad: { select: mantenedorSelect },
+  notaCondicion: { select: mantenedorSelect },
   recepcion: {
     select: {
+      planta: { select: entidadSelect },
       ordenCompra: { select: { id: true, numero: true } },
       instructivos: { select: { instructivo: { select: { id: true, numero: true } } } },
     },
@@ -54,10 +59,13 @@ const palletInclude = {
       categoriaId: true,
       categoria: { select: mantenedorSelect },
       articuloId: true,
-      articulo: { select: mantenedorSelect },
+      articulo: { select: { ...mantenedorSelect, kgNetoEnvase: true } },
       calibreId: true,
       calibre: { select: mantenedorSelect },
       cajas: true,
+      // Antigüedad del pallet en Seleccionar Pallets = la mayor entre sus
+      // líneas (compras.md §4.10) — null en PalletLinea históricas.
+      fechaEmbalaje: true,
     },
   },
 } satisfies Prisma.PalletInclude

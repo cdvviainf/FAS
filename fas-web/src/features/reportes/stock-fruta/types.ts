@@ -37,7 +37,14 @@ export interface StockDetalleRow {
   productor: MantenedorRef
   origen: OrigenStock
   estado: EstadoStock
+  plantaId: number
+  planta: MantenedorRef
   fechaRecepcion: string
+  // Antigüedad se calcula sobre esta fecha cuando existe (compras.md §4.10);
+  // null en PalletLinea históricas — se cae a fechaRecepcion en ese caso.
+  fechaEmbalaje: string | null
+  packingId: number | null
+  packing: MantenedorRef | null
   cajas: number
   kg: number
   // Nota de Calidad/Condición y Completo/Incompleto (2026-09-02) — a nivel de
