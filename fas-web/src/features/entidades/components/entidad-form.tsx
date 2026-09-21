@@ -573,8 +573,8 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
     if (selectedPaisEsChile && !esSoloPacking && fields.identificador.trim()) {
       if (!validarRutChileno(fields.identificador)) e.identificador = 'RUT inválido'
     }
-    if (!isEdit && localDirecciones.length === 0) e.direcciones = 'Debe agregar al menos una dirección'
-    if (!isEdit && !localDirecciones.some((d) => d.esPorDefecto)) e.direccionesPorDefecto = 'Una dirección debe ser la principal'
+    if (!isEdit && !esSoloPacking && localDirecciones.length === 0) e.direcciones = 'Debe agregar al menos una dirección'
+    if (!isEdit && !esSoloPacking && !localDirecciones.some((d) => d.esPorDefecto)) e.direccionesPorDefecto = 'Una dirección debe ser la principal'
     setFieldErrors(e)
     const firstErrorField = Object.keys(e)[0]
     if (firstErrorField) {
