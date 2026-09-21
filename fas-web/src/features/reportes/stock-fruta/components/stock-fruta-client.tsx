@@ -365,7 +365,7 @@ export function StockFrutaClient() {
         <div className='overflow-x-auto rounded-md border'>
           <Table>
             <TableHeader>
-              <TableRow className='[&>th]:text-muted-foreground [&>th]:font-normal'>
+              <TableRow className='[&>th]:text-foreground [&>th]:font-semibold'>
                 <TableHead className='w-8'></TableHead>
                 <TableHead>Especie</TableHead>
                 <TableHead>Variedad</TableHead>
@@ -402,9 +402,11 @@ export function StockFrutaClient() {
                     <TableRow
                       className={cn(
                         'cursor-pointer transition-colors',
-                        // Al abrir el grupo, su fila resumen pierde protagonismo
-                        // (tono suave) para que la atención vaya al detalle.
-                        isOpen ? 'bg-muted/20 hover:bg-muted/30 text-muted-foreground font-normal' : 'bg-muted/40 hover:bg-muted/60 font-medium',
+                        // Jerarquía: el título de columna (arriba) siempre es lo
+                        // más oscuro. Cerrado, la fila de grupo es apenas más
+                        // clara que el título. Al abrir, pierde protagonismo del
+                        // todo (más suave aún) porque la atención pasa al detalle.
+                        isOpen ? 'bg-muted/20 hover:bg-muted/30 text-muted-foreground/70 font-normal' : 'bg-muted/40 hover:bg-muted/60 text-foreground/80 font-medium',
                       )}
                       onClick={() => toggleGroup(g.key)}
                     >
@@ -446,7 +448,7 @@ export function StockFrutaClient() {
                             const dias = diasAntiguedad(fechaAntiguedad(row))
                             const bucket = bucketAntiguedad(dias)
                             return (
-                              <TableRow key={row.palletLineaId} className='font-medium'>
+                              <TableRow key={row.palletLineaId} className='text-muted-foreground font-normal'>
                                 <TableCell></TableCell>
                                 <TableCell>{row.numeroPallet}</TableCell>
                                 <TableCell>{row.productor.descripcion}</TableCell>
