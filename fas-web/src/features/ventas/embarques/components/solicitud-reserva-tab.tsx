@@ -18,7 +18,6 @@ const ITEM = 'VENTAS_EMBARQUES'
 
 interface DatosReservaForm {
   numeroBooking: string
-  naviera: string
   nave: string
   numeroContenedor: string
   fechaZarpe: string
@@ -28,7 +27,6 @@ interface DatosReservaForm {
 function formInicial(embarque: EmbarqueDetalle): DatosReservaForm {
   return {
     numeroBooking: embarque.numeroBookingManual ?? '',
-    naviera: embarque.navieraManual ?? '',
     nave: embarque.naveManual ?? '',
     numeroContenedor: embarque.numeroContenedorManual ?? '',
     fechaZarpe: embarque.fechaZarpeManual ? embarque.fechaZarpeManual.slice(0, 10) : '',
@@ -82,7 +80,6 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
   const guardarDatos = () => {
     guardarDatosMutation.mutate({
       numeroBooking: form.numeroBooking || null,
-      naviera: form.naviera || null,
       nave: form.nave || null,
       numeroContenedor: form.numeroContenedor || null,
       fechaZarpe: form.fechaZarpe || null,
@@ -142,10 +139,6 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
             <div className='space-y-1.5'>
               <Label>N° Booking</Label>
               <Input value={form.numeroBooking} onChange={(e) => setForm((f) => ({ ...f, numeroBooking: e.target.value }))} disabled={!puedeEscribir} />
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Naviera</Label>
-              <Input value={form.naviera} onChange={(e) => setForm((f) => ({ ...f, naviera: e.target.value }))} disabled={!puedeEscribir} />
             </div>
             <div className='space-y-1.5'>
               <Label>Nave</Label>

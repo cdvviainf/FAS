@@ -223,19 +223,22 @@ describe('Embarques — Gestor Logístico + reserva manual contra PostgreSQL', (
       const nv = await f.crearNotaVenta()
       const embarque = await service.generarEmbarque({ notaVentaId: nv.id, gestorLogisticoId: f.gestorManual.id }, 'test')
 
+      // naviera salió de este payload (2026-09-21) — pasó a navieraId,
+      // campo compartido del Instructivo de Embarque editable vía
+      // guardarDatosInstructivo, ya no parte de la reserva manual.
       const datos = {
-        numeroBooking: 'BK-001', naviera: 'Naviera X', nave: 'Nave X',
+        numeroBooking: 'BK-001', nave: 'Nave X',
         numeroContenedor: 'CONT-001', fechaZarpe: new Date('2026-10-01'), fechaRetiroPlanta: new Date('2026-09-28'),
       }
       const guardado = await service.guardarDatosReservaManual(embarque.id, datos, 'test')
 
       expect(guardado.estadoReserva).toBe('CONFIRMADA')
       expect(guardado.numeroBookingManual).toBe('BK-001')
-      expect(guardado.navieraManual).toBe('Naviera X')
+      expect(guardado.naveManual).toBe('Nave X')
 
       // Editable después — no se bloquea tras la primera confirmación.
-      const reeditado = await service.guardarDatosReservaManual(embarque.id, { ...datos, naviera: 'Naviera Y' }, 'test')
-      expect(reeditado.navieraManual).toBe('Naviera Y')
+      const reeditado = await service.guardarDatosReservaManual(embarque.id, { ...datos, nave: 'Nave Y' }, 'test')
+      expect(reeditado.naveManual).toBe('Nave Y')
     })
   })
 

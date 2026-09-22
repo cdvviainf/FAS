@@ -12,7 +12,6 @@ export interface EmbarqueCreateInput {
 
 export interface DatosReservaManualInput {
   numeroBooking?: string | null
-  naviera?: string | null
   nave?: string | null
   numeroContenedor?: string | null
   fechaZarpe?: Date | null
@@ -21,4 +20,28 @@ export interface DatosReservaManualInput {
 
 export interface ReservarPalletsInput {
   palletIds: number[]
+}
+
+// Datos del Instructivo de Embarque compartidos por todo el Embarque
+// (ventas.md R11 + gap analysis contra el Instructivo real del cliente) —
+// independiente de reservaManual, editable siempre desde la pestaña "Generar
+// Instructivos". `navieraId` reemplaza el texto libre que antes vivía en
+// DatosReservaManualInput — misma Entidad, ya no duplicada.
+export interface DatosInstructivoInput {
+  puertoZarpeId?: number | null
+  voyageNumber?: string | null
+  deposito?: string | null
+  awbBl?: string | null
+  cutoffDate?: Date | null
+  tipoBultos?: string | null
+  agenteAduanaId?: number | null
+  embarcadorId?: number | null
+  navieraId?: number | null
+}
+
+export interface InstructivoHijoUpdateInput {
+  fechaCargaPlanta?: Date | null
+  stackingDesde?: Date | null
+  stackingHasta?: Date | null
+  observaciones?: string | null
 }

@@ -228,6 +228,7 @@ model Empresa {
   notasCondicion         NotaCondicion[]
   notasVenta             NotaVenta[]
   embarques              Embarque[]
+  instructivosHijos      InstructivoHijo[]
   solicitudesReserva     SolicitudReserva[]
   instructivosEmbalaje   InstructivoEmbalaje[]
   ordenesCompra          OrdenCompra[]
@@ -1190,6 +1191,7 @@ model Puerto {
   eliminadoPor          String?
 
   notasVenta NotaVenta[]
+  embarquesZarpe Embarque[] @relation("EmbarquePuertoZarpe")
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1402,6 +1404,11 @@ model Entidad {
   embarquesGestorLogistico       Embarque[]                  @relation("EmbarqueGestorLogistico")
   integracionesGestorLogistico   Integracion[]               @relation("IntegracionGestorLogistico")
   reclamosCliente                Reclamo[]                   @relation("ReclamoCliente")
+  // Instructivo de Embarque (2026-09-21, ventas.md R11).
+  embarquesAgenteAduana          Embarque[]                  @relation("EmbarqueAgenteAduana")
+  embarquesEmbarcador            Embarque[]                  @relation("EmbarqueEmbarcador")
+  embarquesNaviera               Embarque[]                  @relation("EmbarqueNaviera")
+  instructivosHijosPlanta        InstructivoHijo[]           @relation("InstructivoHijoPlanta")
 
   @@unique([empresaId, id])
   @@index([eliminadoEn])
@@ -2724,15 +2731,40 @@ model Embarque {
   reclamos Reclamo[]
 
   // Datos de booking cuando reservaManual=true (mismo shape que
-  // SolicitudReserva.numeroBooking/naviera/nave/numeroContenedor/
-  // fechaZarpe/fechaRetiroPlanta, tipeados a mano por el usuario en vez de
-  // venir de un webhook — ventas.md §4.3).
+  // SolicitudReserva.numeroBooking/nave/numeroContenedor/fechaZarpe/
+  // fechaRetiroPlanta, tipeados a mano por el usuario en vez de venir de un
+  // webhook — ventas.md §4.3). `navieraManual` (texto libre) fue reemplazado
+  // por `navieraId` (2026-09-21, ver bloque de Instructivo de Embarque abajo)
+  // — se unifica con el mismo dato que usa el Instructivo, sin duplicar.
   numeroBookingManual     String?
-  navieraManual           String?
   naveManual              String?
   numeroContenedorManual  String?
   fechaZarpeManual        DateTime?
   fechaRetiroPlantaManual DateTime?
+
+  // ─── Instructivo de Embarque (2026-09-21, ventas.md R11 + gap analysis
+  // contra el "Instructivo de Embarque (AGA)" real del cliente) — campos
+  // compartidos por todo el Embarque (a diferencia de los hitos por planta,
+  // que viven en InstructivoHijo abajo). Todos opcionales: se completan
+  // desde la pestaña "Generar Instructivos" antes de emitir el PDF, no al
+  // crear el Embarque.
+  puertoZarpeId  Int?
+  // FK compuesta (empresaId, puertoZarpeId) -> Puerto(empresaId, id) — mismo
+  // patrón que NotaVenta.puertoDestinoId.
+  puertoZarpe    Puerto?   @relation("EmbarquePuertoZarpe", fields: [empresaId, puertoZarpeId], references: [empresaId, id])
+  voyageNumber   String?
+  deposito       String?
+  awbBl          String?
+  cutoffDate     DateTime?
+  tipoBultos     String?
+  agenteAduanaId Int? // Entidad tipo AGENTE_ADUANA
+  agenteAduana   Entidad?  @relation("EmbarqueAgenteAduana", fields: [empresaId, agenteAduanaId], references: [empresaId, id])
+  embarcadorId   Int? // Entidad tipo COMPANIA_EMBARQUE
+  embarcador     Entidad?  @relation("EmbarqueEmbarcador", fields: [empresaId, embarcadorId], references: [empresaId, id])
+  navieraId      Int? // Entidad tipo NAVIERA — reemplaza el texto libre navieraManual
+  naviera        Entidad?  @relation("EmbarqueNaviera", fields: [empresaId, navieraId], references: [empresaId, id])
+
+  instructivosHijos InstructivoHijo[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -2745,7 +2777,50 @@ model Embarque {
   @@index([notaVentaId])
   @@index([empresaId])
   @@index([gestorLogisticoId])
+  @@index([puertoZarpeId])
+  @@index([agenteAduanaId])
+  @@index([embarcadorId])
+  @@index([navieraId])
   @@map("embarques")
+}
+
+// Instructivo hijo por punto de retiro (ventas.md R11): un Embarque genera
+// ≥1 InstructivoHijo, uno por Planta que aporta pallets al contenedor —
+// derivado de la reserva de pallets (Pallet.recepcion.plantaId), agrupando
+// por Planta. Generación vía botón explícito ("Generar Instructivos" en el
+// detalle del Embarque, decisión de negocio Christian 2026-09-21) — no se
+// recalcula automáticamente al reservar/desvincular pallets.
+model InstructivoHijo {
+  id         Int      @id @default(autoincrement())
+  empresaId  Int
+  empresa    Empresa  @relation(fields: [empresaId], references: [id])
+  embarqueId Int
+  embarque   Embarque @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
+
+  codigo    String // autogenerado "{numeroInstructivo}-{n}", ej. "MAR0042-1"
+  secuencia Int // n correlativo dentro del embarque (1, 2, 3…) — estable una vez asignado
+  plantaId  Int // Entidad tipo PLANTA
+  // FK compuesta (empresaId, plantaId) -> Entidad(empresaId, id).
+  planta    Entidad  @relation("InstructivoHijoPlanta", fields: [empresaId, plantaId], references: [empresaId, id])
+
+  // Hitos logísticos por planta — varían entre plantas (ventas.md R11).
+  // "Carga en planta" = fecha/hora real de retiro de esa planta.
+  fechaCargaPlanta DateTime?
+  stackingDesde    DateTime?
+  stackingHasta    DateTime?
+
+  observaciones String?
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+
+  @@unique([empresaId, embarqueId, plantaId])
+  @@unique([empresaId, codigo])
+  @@index([embarqueId])
+  @@index([plantaId])
+  @@map("instructivos_hijos")
 }
 
 enum EstadoReservaEmbarque {

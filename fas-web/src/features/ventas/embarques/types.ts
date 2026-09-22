@@ -79,9 +79,10 @@ export interface SolicitudReserva {
 
 // Datos de booking tipeados a mano (2026-09-07, ventas.md §4.3 — Gestor
 // Logístico sin integración, o "Dejar Manual" tras un fallo de AGL360).
+// `navieraManual` (texto libre) salió de acá (2026-09-21) — pasó a
+// `navieraId` en DatosInstructivo, compartido con el Instructivo de Embarque.
 export interface DatosReservaManual {
   numeroBookingManual: string | null
-  navieraManual: string | null
   naveManual: string | null
   numeroContenedorManual: string | null
   fechaZarpeManual: string | null
@@ -90,14 +91,64 @@ export interface DatosReservaManual {
 
 export interface DatosReservaManualInput {
   numeroBooking?: string | null
-  naviera?: string | null
   nave?: string | null
   numeroContenedor?: string | null
   fechaZarpe?: string | null
   fechaRetiroPlanta?: string | null
 }
 
-export interface Embarque extends DatosReservaManual {
+// Instructivo de Embarque (2026-09-21, ventas.md R11 + gap analysis) —
+// campos compartidos por todo el Embarque, independientes de reservaManual.
+export interface DatosInstructivo {
+  puertoZarpeId: number | null
+  puertoZarpe: MantenedorRef | null
+  voyageNumber: string | null
+  deposito: string | null
+  awbBl: string | null
+  cutoffDate: string | null
+  tipoBultos: string | null
+  agenteAduanaId: number | null
+  agenteAduana: EntidadRef | null
+  embarcadorId: number | null
+  embarcador: EntidadRef | null
+  navieraId: number | null
+  naviera: EntidadRef | null
+}
+
+export interface DatosInstructivoInput {
+  puertoZarpeId?: number | null
+  voyageNumber?: string | null
+  deposito?: string | null
+  awbBl?: string | null
+  cutoffDate?: string | null
+  tipoBultos?: string | null
+  agenteAduanaId?: number | null
+  embarcadorId?: number | null
+  navieraId?: number | null
+}
+
+// Hitos por Planta/punto de retiro (ventas.md R11) — generados vía el botón
+// "Generar Instructivos", nunca creados a mano.
+export interface InstructivoHijo {
+  id: number
+  codigo: string
+  secuencia: number
+  plantaId: number
+  planta: EntidadRef
+  fechaCargaPlanta: string | null
+  stackingDesde: string | null
+  stackingHasta: string | null
+  observaciones: string | null
+}
+
+export interface InstructivoHijoUpdateInput {
+  fechaCargaPlanta?: string | null
+  stackingDesde?: string | null
+  stackingHasta?: string | null
+  observaciones?: string | null
+}
+
+export interface Embarque extends DatosReservaManual, DatosInstructivo {
   id: number
   notaVentaId: number
   notaVenta: EmbarqueNotaVentaRef
@@ -119,6 +170,7 @@ export interface Embarque extends DatosReservaManual {
 export interface EmbarqueDetalle extends Omit<Embarque, '_count'> {
   pallets: PalletResumen[]
   solicitudReserva: SolicitudReserva | null
+  instructivosHijos: InstructivoHijo[]
 }
 
 // numeroInstructivo ya no se ingresa manualmente (2026-08-13, ventas.md R10):

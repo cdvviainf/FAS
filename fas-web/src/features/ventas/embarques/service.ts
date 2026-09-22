@@ -1,10 +1,13 @@
 import { api } from '@/lib/api'
 import type {
+  DatosInstructivoInput,
   DatosReservaManualInput,
   Embarque,
   EmbarqueCreateInput,
   EmbarqueDetalle,
   EmbarqueListResponse,
+  InstructivoHijo,
+  InstructivoHijoUpdateInput,
   PalletResumen,
 } from './types'
 
@@ -57,5 +60,23 @@ export const embarquesService = {
 
   async guardarDatosReservaManual(id: number, data: DatosReservaManualInput): Promise<{ data: EmbarqueDetalle }> {
     return api.patch(`ventas/embarques/${id}/datos-reserva`, { json: data }).json()
+  },
+
+  // ─── Instructivo de Embarque (2026-09-21, ventas.md R11) ──────────────────
+
+  async guardarDatosInstructivo(id: number, data: DatosInstructivoInput): Promise<{ data: EmbarqueDetalle }> {
+    return api.patch(`ventas/embarques/${id}/datos-instructivo`, { json: data }).json()
+  },
+
+  async listarInstructivosHijos(id: number): Promise<{ data: InstructivoHijo[] }> {
+    return api.get(`ventas/embarques/${id}/instructivos`).json()
+  },
+
+  async generarInstructivosHijos(id: number): Promise<{ data: InstructivoHijo[] }> {
+    return api.post(`ventas/embarques/${id}/instructivos/generar`).json()
+  },
+
+  async actualizarInstructivoHijo(id: number, instructivoId: number, data: InstructivoHijoUpdateInput): Promise<{ data: InstructivoHijo }> {
+    return api.patch(`ventas/embarques/${id}/instructivos/${instructivoId}`, { json: data }).json()
   },
 }

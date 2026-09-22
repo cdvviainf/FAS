@@ -76,6 +76,8 @@ const MODELOS_TENANT = new Set([
   // Reclamos (2026-09-08):
   'Reclamo',
   'Provision',
+  // Instructivo de Embarque (2026-09-21, ventas.md R11):
+  'InstructivoHijo',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

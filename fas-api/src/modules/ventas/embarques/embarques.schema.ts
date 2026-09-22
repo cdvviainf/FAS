@@ -19,13 +19,15 @@ export const embarqueCreateSchema = z.object({
 export const dejarReservaManualSchema = z.object({})
 
 // Guardar datos de booking manual — mismo shape que SolicitudReserva
-// (numeroBooking/naviera/nave/numeroContenedor/fechaZarpe/fechaRetiroPlanta),
+// (numeroBooking/nave/numeroContenedor/fechaZarpe/fechaRetiroPlanta),
 // tipeados a mano en vez de recibidos por webhook. Al menos un campo debe
-// venir con valor (guardar "todo vacío" no tiene sentido).
+// venir con valor (guardar "todo vacío" no tiene sentido). `naviera` salió
+// de acá (2026-09-21): pasó a ser `navieraId` (Entidad seleccionable) en
+// datosInstructivoSchema, compartido con el Instructivo de Embarque en vez
+// de vivir solo en la reserva manual.
 export const datosReservaManualSchema = z
   .object({
     numeroBooking: z.string().trim().max(100).optional().nullable(),
-    naviera: z.string().trim().max(150).optional().nullable(),
     nave: z.string().trim().max(150).optional().nullable(),
     numeroContenedor: z.string().trim().max(50).optional().nullable(),
     fechaZarpe: z.coerce.date().optional().nullable(),
@@ -34,6 +36,49 @@ export const datosReservaManualSchema = z
   .refine((d) => Object.values(d).some((v) => v !== undefined && v !== null && v !== ''), {
     message: 'Debes ingresar al menos un dato de la reserva',
   })
+
+// Datos del Instructivo de Embarque compartidos por todo el Embarque
+// (2026-09-21, ventas.md R11 + gap analysis) — independiente de
+// reservaManual, editables siempre desde la pestaña "Generar Instructivos".
+export const datosInstructivoSchema = z
+  .object({
+    puertoZarpeId: z.number().int().positive().optional().nullable(),
+    voyageNumber: z.string().trim().max(100).optional().nullable(),
+    deposito: z.string().trim().max(150).optional().nullable(),
+    awbBl: z.string().trim().max(100).optional().nullable(),
+    cutoffDate: z.coerce.date().optional().nullable(),
+    tipoBultos: z.string().trim().max(150).optional().nullable(),
+    agenteAduanaId: z.number().int().positive().optional().nullable(),
+    embarcadorId: z.number().int().positive().optional().nullable(),
+    navieraId: z.number().int().positive().optional().nullable(),
+  })
+  // FAS-IE-QA-003 (QA ronda 1): antes exigía al menos un valor NO-nulo, lo
+  // que impedía volver a dejar el bloque completo en vacío tras haber
+  // guardado algo — el frontend siempre manda las 9 llaves (con `null` para
+  // "vacío"), así que solo se exige que el payload traiga alguna propiedad
+  // (mismo criterio que instructivoHijoUpdateSchema).
+  .refine((d) => Object.values(d).some((v) => v !== undefined), {
+    message: 'Debes ingresar al menos un dato del Instructivo',
+  })
+
+// Edición de un InstructivoHijo (hitos por planta — ventas.md R11): la
+// pertenencia (embarqueId/plantaId/secuencia/codigo) es siempre derivada,
+// nunca editable a mano.
+export const instructivoHijoUpdateSchema = z
+  .object({
+    fechaCargaPlanta: z.coerce.date().optional().nullable(),
+    stackingDesde: z.coerce.date().optional().nullable(),
+    stackingHasta: z.coerce.date().optional().nullable(),
+    observaciones: z.string().trim().max(500).optional().nullable(),
+  })
+  .refine((d) => Object.values(d).some((v) => v !== undefined), {
+    message: 'Debes ingresar al menos un dato del instructivo',
+  })
+
+export const instructivoHijoParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  instructivoId: z.coerce.number().int().positive(),
+})
 
 // Webhook AGL360 -> FAS (Docs/webhook-fas.md, contrato real 2026-09-07):
 // notifica que una SolicitudServicio creada por la API se aprobó y generó
@@ -85,3 +130,5 @@ export type EmbarqueCreateBody = z.infer<typeof embarqueCreateSchema>
 export type ReservarPalletsBody = z.infer<typeof reservarPalletsSchema>
 export type AglWebhookConfirmarBody = z.infer<typeof aglWebhookConfirmarSchema>
 export type DatosReservaManualBody = z.infer<typeof datosReservaManualSchema>
+export type DatosInstructivoBody = z.infer<typeof datosInstructivoSchema>
+export type InstructivoHijoUpdateBody = z.infer<typeof instructivoHijoUpdateSchema>

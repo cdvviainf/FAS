@@ -17,6 +17,9 @@ import { MovimientoGuiaDespachoV1 } from './templates/movimiento-guia-despacho/v
 import { resolverOrdenCompraMaterial } from './resolvers/orden-compra-material.resolver.js'
 import { ordenCompraMaterialPdfPayloadSchema } from './schemas/orden-compra-material.schema.js'
 import { OrdenCompraMaterialV1 } from './templates/orden-compra-material/v1/index.js'
+import { resolverInstructivoEmbarque } from './resolvers/instructivo-embarque.resolver.js'
+import { instructivoEmbarquePdfPayloadSchema } from './schemas/instructivo-embarque.schema.js'
+import { InstructivoEmbarqueV1 } from './templates/instructivo-embarque/v1/index.js'
 import type { DocumentRegistry } from './documentos.types.js'
 
 // Registro central — Etapa 4 §4: "un solo lugar donde se declara todo".
@@ -113,6 +116,21 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     controlCopia: true,
     nombreArchivo: (p) => `OCM_${p.numero}.pdf`,
     folio: (p) => p.numero,
+  },
+  'instructivo-embarque': {
+    titulo: 'Instructivo de Embarque',
+    resolver: resolverInstructivoEmbarque,
+    schema: instructivoEmbarquePdfPayloadSchema,
+    plantillaActual: 'v1',
+    plantillas: { v1: InstructivoEmbarqueV1 },
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    itemMenu: 'VENTAS_EMBARQUES',
+    // Un documento por InstructivoHijo (Planta), regenerable en cualquier
+    // momento desde la pestaña "Generar Instructivos" — sin distinción
+    // borrador/oficial, mismo criterio que Instructivo de Embalaje.
+    controlCopia: false,
+    nombreArchivo: (p) => `Instructivo_${p.codigo}.pdf`,
+    folio: (p) => p.codigo,
   },
 }
 

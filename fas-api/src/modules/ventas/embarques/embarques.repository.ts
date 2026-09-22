@@ -2,9 +2,12 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { BusinessError, ValidationError } from '../../../shared/errors.js'
-import { LOCK_NAMESPACE_EMBARQUE_DESPACHO, LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA } from '../../../shared/advisory-locks.js'
+import {
+  LOCK_NAMESPACE_EMBARQUE_DESPACHO,
+  LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA,
+} from '../../../shared/advisory-locks.js'
 import { palletCalzaConDetalleNV } from './embarques.comparacion.js'
-import type { DatosReservaManualInput } from './embarques.types.js'
+import type { DatosReservaManualInput, DatosInstructivoInput, InstructivoHijoUpdateInput } from './embarques.types.js'
 
 // 502: la integración externa (no FAS) fue la que falló — distingue este
 // caso de un 422 de validación normal para que el frontend sepa mostrar el
@@ -93,6 +96,12 @@ export async function getEmbarqueById(id: number) {
       pallets: { include: palletInclude, orderBy: { id: 'asc' as const } },
       solicitudReserva: true,
       gestorLogistico: { select: entidadSelect },
+      // Instructivo de Embarque (2026-09-21, ventas.md R11).
+      puertoZarpe: { select: mantenedorSelect },
+      agenteAduana: { select: entidadSelect },
+      embarcador: { select: entidadSelect },
+      naviera: { select: entidadSelect },
+      instructivosHijos: { include: { planta: { select: entidadSelect } }, orderBy: { secuencia: 'asc' as const } },
     },
   })
 }
@@ -133,6 +142,13 @@ export async function getPalletsDisponibles(
 // `$transaction` revierte todo el lote, no solo informa el fallo.
 export async function reservarPalletsEnEmbarque(palletIds: number[], embarqueId: number) {
   await prisma.$transaction(async (tx) => {
+    // FAS-IE-QA-005 (QA ronda 4): mismo lock que desvincularPallet/
+    // confirmarDespacho/generarInstructivosHijos — sin esto, una generación
+    // de Instructivos concurrente podía leer el conjunto de pallets justo
+    // antes de que esta reserva commiteara, dejando hijos que no reflejan
+    // los pallets realmente reservados.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_DESPACHO}::int, ${embarqueId}::int)`
+
     // completo: true — defensa en profundidad (2026-09-02, compras.md §4.8):
     // getPalletsDisponibles ya filtra los incompletos, pero esto evita que
     // un pallet marcado incompleto justo entre el listado y la reserva (o
@@ -426,7 +442,6 @@ export async function guardarDatosReservaManual(embarqueId: number, datos: Datos
     where: { id: embarqueId, eliminadoEn: null, reservaManual: true },
     data: {
       numeroBookingManual: datos.numeroBooking,
-      navieraManual: datos.naviera,
       naveManual: datos.nave,
       numeroContenedorManual: datos.numeroContenedor,
       fechaZarpeManual: datos.fechaZarpe,
@@ -444,6 +459,182 @@ export async function guardarDatosReservaManual(embarqueId: number, datos: Datos
   return prisma.embarque.findFirstOrThrow({
     where: { id: embarqueId },
     include: { notaVenta: { select: notaVentaRefSelect } },
+  })
+}
+
+// ─── Instructivo de Embarque (2026-09-21, ventas.md R11) ───────────────────
+
+// Existencia + tipos de una Entidad genérica — usado para validar
+// agenteAduanaId/embarcadorId/navieraId contra su tipo esperado (mismo
+// criterio que getGestorLogistico).
+export async function getEntidadConTipos(id: number) {
+  return prisma.entidad.findFirst({
+    where: { id, eliminadoEn: null, activo: true },
+    select: { id: true, tipos: true },
+  })
+}
+
+export async function getPuertoPorId(id: number) {
+  return prisma.puerto.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function guardarDatosInstructivo(embarqueId: number, datos: DatosInstructivoInput, actualizadoPor: string) {
+  const claim = await prisma.embarque.updateMany({
+    where: { id: embarqueId, eliminadoEn: null },
+    data: { ...datos, actualizadoPor },
+  })
+  if (claim.count === 0) throw new ValidationError('El Embarque ya no existe')
+  return getEmbarqueById(embarqueId)
+}
+
+export async function listInstructivosHijos(embarqueId: number) {
+  return prisma.instructivoHijo.findMany({
+    where: { embarqueId },
+    include: { planta: { select: entidadSelect } },
+    orderBy: { secuencia: 'asc' },
+  })
+}
+
+// Deriva los InstructivoHijo (uno por Planta) desde los pallets ya
+// reservados al Embarque — botón explícito, no recomputa automáticamente
+// (decisión de negocio, Christian, 2026-09-21). Idempotente: agrega
+// instructivos para plantas nuevas, elimina los de plantas que ya no tienen
+// pallets reservados, y NO toca los campos ya editados (fechaCargaPlanta/
+// stacking/observaciones) de los que se mantienen — la secuencia/código de
+// un instructivo que sobrevive nunca cambia, aunque se agreguen/quiten otros.
+export async function generarInstructivosHijos(embarqueId: number, actualizadoPor: string) {
+  return prisma.$transaction(async (tx) => {
+    // FAS-IE-QA-005 (QA ronda 4): mismo lock que reservarPalletsEnEmbarque/
+    // desvincularPallet/confirmarDespacho (LOCK_NAMESPACE_EMBARQUE_DESPACHO)
+    // — antes usaba un namespace propio, que no serializaba esta lectura de
+    // pallets contra una reserva/desvinculación concurrente sobre el mismo
+    // Embarque.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_DESPACHO}::int, ${embarqueId}::int)`
+
+    const embarque = await tx.embarque.findFirst({
+      where: { id: embarqueId, eliminadoEn: null },
+      select: { id: true, numeroInstructivo: true },
+    })
+    if (!embarque) throw new ValidationError('El Embarque ya no existe')
+
+    const pallets = await tx.pallet.findMany({
+      where: { embarqueId },
+      select: { recepcion: { select: { plantaId: true } } },
+    })
+    // FAS-IE-QA-004 (QA ronda 3): 0 plantas es un resultado válido, no un
+    // error — antes esto abortaba ANTES de llegar al paso de limpieza, así
+    // que desvincular todos los pallets y volver a generar dejaba huérfanos
+    // los InstructivoHijo de plantas que ya no aportan pallets (con PDF
+    // todavía descargable, desactualizado). Ahora la sincronización corre
+    // igual: elimina los obsoletos, no crea ninguno nuevo, devuelve [].
+    const plantaIds = new Set(pallets.map((p) => p.recepcion.plantaId))
+
+    const existentes = await tx.instructivoHijo.findMany({ where: { embarqueId } })
+    const plantasConInstructivo = new Set(existentes.map((i) => i.plantaId))
+
+    const aEliminar = existentes.filter((i) => !plantaIds.has(i.plantaId))
+    if (aEliminar.length > 0) {
+      await tx.instructivoHijo.deleteMany({ where: { id: { in: aEliminar.map((i) => i.id) } } })
+    }
+
+    const empresaId = getEmpresaIdActual()!
+    let siguienteSecuencia = existentes.reduce((max, i) => Math.max(max, i.secuencia), 0) + 1
+    for (const plantaId of plantaIds) {
+      if (plantasConInstructivo.has(plantaId)) continue
+      await tx.instructivoHijo.create({
+        data: {
+          empresaId,
+          embarqueId,
+          plantaId,
+          secuencia: siguienteSecuencia,
+          codigo: `${embarque.numeroInstructivo}-${siguienteSecuencia}`,
+          creadoPor: actualizadoPor,
+        },
+      })
+      siguienteSecuencia += 1
+    }
+
+    return tx.instructivoHijo.findMany({
+      where: { embarqueId },
+      include: { planta: { select: entidadSelect } },
+      orderBy: { secuencia: 'asc' },
+    })
+  })
+}
+
+// Detalle completo de un InstructivoHijo para el Motor de Documentos
+// (resolvers/instructivo-embarque.resolver.ts) — reusado en vez de duplicar
+// la query ahí (mismo criterio que "el resolver reusa el repository del
+// módulo dueño de los datos", CLAUDE.md/Etapa 4 §4). Los pallets se
+// consultan aparte, filtrados por la Planta de ESTE instructivo (un Embarque
+// puede reservar pallets de varias plantas, cada InstructivoHijo solo
+// documenta los suyos).
+export async function getInstructivoHijoConDetalle(instructivoHijoId: number) {
+  const instructivo = await prisma.instructivoHijo.findFirst({
+    where: { id: instructivoHijoId },
+    include: {
+      embarque: {
+        include: {
+          notaVenta: {
+            select: {
+              clienteId: true,
+              consignatarioId: true,
+              notifyId: true,
+              tipoEmbarque: { select: mantenedorSelect },
+              mercado: { select: mantenedorSelect },
+              paisDestino: { select: { descripcion: true } },
+              puertoDestino: { select: mantenedorSelect },
+            },
+          },
+          puertoZarpe: { select: mantenedorSelect },
+          // FAS-IE-QA-006 (QA ronda 5): el booking efectivo depende del modo
+          // de reserva — reservaManual=true usa los campos *Manual de acá
+          // mismo, pero el camino automático lo guarda en SolicitudReserva
+          // (ver resolver).
+          solicitudReserva: {
+            select: { numeroBooking: true, nave: true, numeroContenedor: true, fechaZarpe: true },
+          },
+        },
+      },
+    },
+  })
+  if (!instructivo) return null
+
+  const pallets = await prisma.pallet.findMany({
+    where: { embarqueId: instructivo.embarqueId, recepcion: { plantaId: instructivo.plantaId } },
+    include: {
+      productor: { select: { razonSocial: true } },
+      lineas: {
+        select: {
+          especie: { select: mantenedorSelect },
+          variedad: { select: mantenedorSelect },
+          categoria: { select: mantenedorSelect },
+          calibre: { select: mantenedorSelect },
+          articulo: { select: mantenedorSelect },
+          cajas: true,
+        },
+      },
+    },
+    orderBy: { numeroPallet: 'asc' },
+  })
+
+  return { instructivo, pallets }
+}
+
+export async function updateInstructivoHijo(
+  embarqueId: number,
+  instructivoId: number,
+  datos: InstructivoHijoUpdateInput,
+  actualizadoPor: string,
+) {
+  const claim = await prisma.instructivoHijo.updateMany({
+    where: { id: instructivoId, embarqueId },
+    data: { ...datos, actualizadoPor },
+  })
+  if (claim.count === 0) throw new ValidationError('El Instructivo ya no existe para este Embarque')
+  return prisma.instructivoHijo.findFirstOrThrow({
+    where: { id: instructivoId },
+    include: { planta: { select: entidadSelect } },
   })
 }
 

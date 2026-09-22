@@ -11,7 +11,8 @@
 // 490244 (OrdenCompraMaterial proceso), 490245 (OrdenCompraMaterial
 // correlativo), 490246 (Embarque generar/solicitud de reserva), 490247
 // (ProformaMaterial correlativo), 490248 (ProformaMaterial proceso), 490249
-// (Reclamo x PalletLinea disponible), 490250 (DocumentoDte emisión).
+// (Reclamo x PalletLinea disponible), 490250 (DocumentoDte emisión). 490251
+// se usó brevemente y se retiró — ver nota junto a LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION.
 
 // Serializa el motor de validación de Recepción (recepciones.repository.ts)
 // contra cualquier mutación de la Orden de Compra que esté usando para
@@ -49,6 +50,13 @@ export const LOCK_NAMESPACE_MOVIMIENTO_PROCESO = 490242
 // fila de Embarque, así que una confirmación de despacho concurrente podía
 // colarse en la ventana antes de que el UPDATE del pallet commiteara. Ambas
 // operaciones toman este lock por embarqueId antes de leer/escribir.
+//
+// Ampliado (2026-09-21, FAS-IE-QA-005, QA ronda 4) a reservarPalletsEnEmbarque
+// y generarInstructivosHijos: cualquier operación que cambie el conjunto de
+// pallets reservados de un Embarque, o que lea ese conjunto para derivar los
+// InstructivoHijo (ventas.md R11), toma este mismo lock — sin esto, una
+// reserva/desvinculación concurrente con "Generar Instructivos" podía dejar
+// hijos que no reflejan los pallets realmente reservados.
 export const LOCK_NAMESPACE_EMBARQUE_DESPACHO = 490243
 
 // Serializa el CRUD de cabecera/líneas de una OrdenCompraMaterial
@@ -93,3 +101,8 @@ export const LOCK_NAMESPACE_RECLAMO_PALLET_LINEA = 490249
 // compartido entre todos los orígenes (hoy solo 'movimiento'); la clave
 // combina origenTipo+origenId con hashtext(), igual criterio que ese lock.
 export const LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION = 490250
+
+// 490251 se usó brevemente para "Generar Instructivos" y se retiró
+// (2026-09-21, FAS-IE-QA-005, QA ronda 4): esa operación ahora comparte
+// LOCK_NAMESPACE_EMBARQUE_DESPACHO con reservarPalletsEnEmbarque/
+// desvincularPallet/confirmarDespacho — ver su comentario arriba.

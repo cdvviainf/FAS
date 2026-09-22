@@ -8,6 +8,9 @@ import {
   embarquePalletParamsSchema,
   aglWebhookConfirmarSchema,
   datosReservaManualSchema,
+  datosInstructivoSchema,
+  instructivoHijoUpdateSchema,
+  instructivoHijoParamsSchema,
 } from './embarques.schema.js'
 import * as service from './embarques.service.js'
 import { prisma } from '../../../lib/prisma.js'
@@ -83,6 +86,34 @@ export async function guardarDatosReservaManual(req: FastifyRequest, reply: Fast
   const body = datosReservaManualSchema.parse(req.body)
   const embarque = await service.guardarDatosReservaManual(id, body, req.fasUserId!)
   return reply.send({ data: embarque })
+}
+
+// ─── Instructivo de Embarque (2026-09-21, ventas.md R11) ───────────────────
+
+export async function guardarDatosInstructivo(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const body = datosInstructivoSchema.parse(req.body)
+  const embarque = await service.guardarDatosInstructivo(id, body, req.fasUserId!)
+  return reply.send({ data: embarque })
+}
+
+export async function listarInstructivosHijos(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const data = await service.listarInstructivosHijos(id)
+  return reply.send({ data })
+}
+
+export async function generarInstructivosHijos(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const data = await service.generarInstructivosHijos(id, req.fasUserId!)
+  return reply.status(201).send({ data })
+}
+
+export async function actualizarInstructivoHijo(req: FastifyRequest, reply: FastifyReply) {
+  const { id, instructivoId } = instructivoHijoParamsSchema.parse(req.params)
+  const body = instructivoHijoUpdateSchema.parse(req.body)
+  const data = await service.actualizarInstructivoHijo(id, instructivoId, body, req.fasUserId!)
+  return reply.send({ data })
 }
 
 // `referencia_externa` = lo que FAS mandó como `referencia_externa` al crear

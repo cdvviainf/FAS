@@ -25,6 +25,28 @@ export async function embarquesRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
     ctrl.guardarDatosReservaManual,
   )
+
+  // ─── Instructivo de Embarque (2026-09-21, ventas.md R11) ─────────────────
+  app.patch(
+    '/embarques/:id/datos-instructivo',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.guardarDatosInstructivo,
+  )
+  app.get(
+    '/embarques/:id/instructivos',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    ctrl.listarInstructivosHijos,
+  )
+  app.post(
+    '/embarques/:id/instructivos/generar',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.generarInstructivosHijos,
+  )
+  app.patch(
+    '/embarques/:id/instructivos/:instructivoId',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.actualizarInstructivoHijo,
+  )
   // Webhook AGL360 -> FAS: sin requireAuth/requireLevel a propósito (no hay
   // sesión de usuario) — se autentica por firma HMAC compartida
   // (Docs/webhook-fas.md).

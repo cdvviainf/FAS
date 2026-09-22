@@ -8,14 +8,7 @@ import { SeleccionarPalletsTab } from './seleccionar-pallets-tab'
 import { DespacharTab } from './despachar-tab'
 import { SolicitudReservaTab } from './solicitud-reserva-tab'
 import { ReclamosTab } from './reclamos-tab'
-
-function TabPlaceholder({ titulo }: { titulo: string }) {
-  return (
-    <p className='rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground'>
-      {titulo} — próximamente.
-    </p>
-  )
-}
+import { GenerarInstructivosTab } from './generar-instructivos-tab'
 
 export function EmbarqueDetailClient({ embarqueId }: { embarqueId: number }) {
   const searchParams = useSearchParams()
@@ -50,7 +43,7 @@ export function EmbarqueDetailClient({ embarqueId }: { embarqueId: number }) {
           <SeleccionarPalletsTab embarque={embarque} />
         </TabsContent>
         <TabsContent value='instructivos'>
-          <TabPlaceholder titulo='Generar Instructivos' />
+          <GenerarInstructivosTab embarque={embarque} />
         </TabsContent>
         <TabsContent value='despacho'>
           <DespacharTab embarque={embarque} />

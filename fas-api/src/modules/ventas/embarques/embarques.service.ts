@@ -1,3 +1,4 @@
+import type { TipoEntidad } from '@prisma/client'
 import { ConflictError, NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './embarques.repository.js'
 import * as prefijosService from '../../config/prefijos-codigo/prefijos-codigo.service.js'
@@ -5,7 +6,7 @@ import * as aglAdapter from './agl360.adapter.js'
 import * as integracionesRepo from '../../config/integraciones/integraciones.repository.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ResultadoIntentoReserva } from './embarques.repository.js'
-import type { DatosReservaManualInput, EmbarqueCreateInput } from './embarques.types.js'
+import type { DatosReservaManualInput, DatosInstructivoInput, InstructivoHijoUpdateInput, EmbarqueCreateInput } from './embarques.types.js'
 import type { AglWebhookConfirmarBody } from './embarques.schema.js'
 import type { SolicitudAglPayload } from './agl360.adapter.js'
 
@@ -208,6 +209,57 @@ export async function guardarDatosReservaManual(embarqueId: number, datos: Datos
   return repo.guardarDatosReservaManual(embarqueId, datos, actualizadoPor)
 }
 
+// ─── Instructivo de Embarque (2026-09-21, ventas.md R11) ───────────────────
+
+async function validarEntidadDeTipo(id: number, tipo: TipoEntidad, etiqueta: string) {
+  const entidad = await repo.getEntidadConTipos(id)
+  if (!entidad) throw new ValidationError(`${etiqueta} seleccionado no existe o está inactivo`)
+  if (!entidad.tipos.includes(tipo)) {
+    throw new ValidationError(`La entidad seleccionada no tiene tipo ${etiqueta}`)
+  }
+}
+
+// Datos compartidos del Instructivo (puerto de zarpe, voyage, depósito,
+// AWB/BL, cutoff, tipo de bultos, agente de aduana, embarcador, naviera) —
+// independiente de reservaManual, editable siempre desde la pestaña "Generar
+// Instructivos".
+export async function guardarDatosInstructivo(embarqueId: number, datos: DatosInstructivoInput, actualizadoPor: string) {
+  await obtenerEmbarque(embarqueId)
+  if (datos.puertoZarpeId != null) {
+    const puerto = await repo.getPuertoPorId(datos.puertoZarpeId)
+    if (!puerto) throw new ValidationError('El Puerto de Zarpe seleccionado no existe')
+  }
+  if (datos.agenteAduanaId != null) await validarEntidadDeTipo(datos.agenteAduanaId, 'AGENTE_ADUANA', 'Agente de Aduana')
+  if (datos.embarcadorId != null) await validarEntidadDeTipo(datos.embarcadorId, 'COMPANIA_EMBARQUE', 'Embarcador')
+  if (datos.navieraId != null) await validarEntidadDeTipo(datos.navieraId, 'NAVIERA', 'Naviera')
+
+  return repo.guardarDatosInstructivo(embarqueId, datos, actualizadoPor)
+}
+
+export async function listarInstructivosHijos(embarqueId: number) {
+  await obtenerEmbarque(embarqueId)
+  return repo.listInstructivosHijos(embarqueId)
+}
+
+// Botón explícito "Generar Instructivos" (decisión de negocio, Christian,
+// 2026-09-21) — deriva/sincroniza los InstructivoHijo desde los pallets ya
+// reservados al Embarque, agrupando por Planta. No se recalcula
+// automáticamente al reservar/desvincular pallets.
+export async function generarInstructivosHijos(embarqueId: number, actualizadoPor: string) {
+  await obtenerEmbarque(embarqueId)
+  return repo.generarInstructivosHijos(embarqueId, actualizadoPor)
+}
+
+export async function actualizarInstructivoHijo(
+  embarqueId: number,
+  instructivoId: number,
+  datos: InstructivoHijoUpdateInput,
+  actualizadoPor: string,
+) {
+  await obtenerEmbarque(embarqueId)
+  return repo.updateInstructivoHijo(embarqueId, instructivoId, datos, actualizadoPor)
+}
+
 // ─── Webhook AGL360 (confirmación) ──────────────────────────────────────────
 
 // Contrato real (Docs/webhook-fas.md): AGL360 reintenta hasta 5 veces con
@@ -252,15 +304,17 @@ export async function confirmarSolicitudDesdeWebhook(body: AglWebhookConfirmarBo
 // ─── Seleccionar Pallets (ventas.md R8/R9) ──────────────────────────────────
 //
 // Deuda aceptada explícitamente (decisión de negocio, Christian, 2026-09-02
-// — QA ronda 3, EP-QA-003/EP-QA-004, ambos persisten a propósito, no son
-// bugs de esta entrega):
+// — QA ronda 3, EP-QA-003, persiste a propósito, no es bug de esta entrega):
 //   - EP-QA-003: confirmarDespacho() no exige reconciliación contra Packing
 //     List (compras.md §9.3) — ese módulo no existe todavía en el sistema.
-//   - EP-QA-004: reservar pallets no genera InstructivoHijo por punto de
-//     retiro (ventas.md R11) — ese modelo tampoco existe; la pestaña
-//     "Generar Instructivos" sigue como placeholder a propósito.
-// Ninguno de los dos bloquea lo construido en esta entrega (Seleccionar
-// Pallets + Despachar mínimo); quedan para cuando se aborden esos módulos.
+// No bloquea lo construido en esta entrega (Seleccionar Pallets + Despachar
+// mínimo); queda para cuando se aborde ese módulo.
+//
+// EP-QA-004 (reservar pallets no generaba InstructivoHijo) CERRADA
+// 2026-09-21: la generación es un botón explícito ("Generar Instructivos" en
+// el detalle del Embarque, decisión de negocio Christian) en vez de un
+// recompute automático al reservar/desvincular — ver
+// generarInstructivosHijos más abajo.
 
 // Pallets sin reservar que calzan con el detalle de la NV de este Embarque —
 // candidatos para el paso "Seleccionar Pallets" (solo catálogo, sin tope de
