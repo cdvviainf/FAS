@@ -84,9 +84,11 @@ export async function resolverInstructivoEmbarque(id: number, empresaId: number)
       const fecha = embarque.reservaManual ? embarque.fechaZarpeManual : embarque.solicitudReserva?.fechaZarpe
       return fecha ? fecha.toISOString() : null
     })(),
+    fechaArribo: embarque.fechaArribo ? embarque.fechaArribo.toISOString() : null,
     fechaCargaPlanta: instructivo.fechaCargaPlanta ? instructivo.fechaCargaPlanta.toISOString() : null,
-    stackingDesde: instructivo.stackingDesde ? instructivo.stackingDesde.toISOString() : null,
-    stackingHasta: instructivo.stackingHasta ? instructivo.stackingHasta.toISOString() : null,
+    stackingDesde: embarque.stackingDesde ? embarque.stackingDesde.toISOString() : null,
+    stackingHasta: embarque.stackingHasta ? embarque.stackingHasta.toISOString() : null,
+    observacionesGenerales: embarque.observacionesInstructivo,
     observaciones: instructivo.observaciones,
     lineas,
     totales: {

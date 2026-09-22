@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
@@ -42,6 +43,15 @@ function soloFecha(iso: string | null): string {
   return iso ? iso.slice(0, 10) : ''
 }
 
+// Valor para un input `datetime-local` — mismo formato que generar-
+// instructivos-tab.tsx (stacking se trasladó acá, 2026-09-22).
+function soloFechaHora(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 interface DatosInstructivoForm {
   puertoZarpeId: string
   voyageNumber: string
@@ -52,6 +62,10 @@ interface DatosInstructivoForm {
   agenteAduanaId: string
   embarcadorId: string
   navieraId: string
+  fechaArribo: string
+  stackingDesde: string
+  stackingHasta: string
+  observacionesInstructivo: string
 }
 
 function formInstructivoInicial(embarque: EmbarqueDetalle): DatosInstructivoForm {
@@ -65,6 +79,10 @@ function formInstructivoInicial(embarque: EmbarqueDetalle): DatosInstructivoForm
     agenteAduanaId: embarque.agenteAduanaId ? String(embarque.agenteAduanaId) : '',
     embarcadorId: embarque.embarcadorId ? String(embarque.embarcadorId) : '',
     navieraId: embarque.navieraId ? String(embarque.navieraId) : '',
+    fechaArribo: soloFecha(embarque.fechaArribo),
+    stackingDesde: soloFechaHora(embarque.stackingDesde),
+    stackingHasta: soloFechaHora(embarque.stackingHasta),
+    observacionesInstructivo: embarque.observacionesInstructivo ?? '',
   }
 }
 
@@ -101,15 +119,6 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
     onError: (e: Error) => toast.error(e.message || 'No se pudo pasar a modo manual'),
   })
 
-  const guardarDatosMutation = useMutation({
-    mutationFn: (datos: DatosReservaManualInput) => embarquesService.guardarDatosReservaManual(embarque.id, datos),
-    onSuccess: () => {
-      toast.success('Datos de la reserva guardados')
-      invalidar()
-    },
-    onError: (e: Error) => toast.error(e.message || 'No se pudieron guardar los datos de la reserva'),
-  })
-
   // ─── Datos del Instructivo (ventas.md R11) — independientes de
   // reservaManual/estadoReserva, siempre editables desde esta misma pantalla
   // (2026-09-22, decisión de negocio Christian: "todos los datos del
@@ -137,40 +146,52 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
     staleTime: 60_000,
   })
 
-  const guardarDatosInstructivoMutation = useMutation({
-    mutationFn: (datos: DatosInstructivoInput) => embarquesService.guardarDatosInstructivo(embarque.id, datos),
-    onSuccess: () => {
-      toast.success('Datos del Instructivo guardados')
-      invalidar()
-    },
-    onError: (e: Error) => toast.error(e.message || 'No se pudieron guardar los datos del Instructivo'),
-  })
-
-  const guardarDatosInstructivo = () => {
-    guardarDatosInstructivoMutation.mutate({
-      puertoZarpeId: formInstructivo.puertoZarpeId ? Number(formInstructivo.puertoZarpeId) : null,
-      voyageNumber: formInstructivo.voyageNumber || null,
-      deposito: formInstructivo.deposito || null,
-      awbBl: formInstructivo.awbBl || null,
-      cutoffDate: formInstructivo.cutoffDate || null,
-      tipoBultos: formInstructivo.tipoBultos || null,
-      agenteAduanaId: formInstructivo.agenteAduanaId ? Number(formInstructivo.agenteAduanaId) : null,
-      embarcadorId: formInstructivo.embarcadorId ? Number(formInstructivo.embarcadorId) : null,
-      navieraId: formInstructivo.navieraId ? Number(formInstructivo.navieraId) : null,
-    })
-  }
-
   const solicitud = embarque.solicitudReserva
 
-  const guardarDatos = () => {
-    guardarDatosMutation.mutate({
-      numeroBooking: form.numeroBooking || null,
-      nave: form.nave || null,
-      numeroContenedor: form.numeroContenedor || null,
-      fechaZarpe: form.fechaZarpe || null,
-      fechaRetiroPlanta: form.fechaRetiroPlanta || null,
-    })
-  }
+  // "Un solo Guardar para todo" (2026-09-22, decisión de negocio Christian):
+  // antes había un botón por card (Reserva Manual / Datos del Instructivo),
+  // cada uno con su propio PATCH. Se mantienen los dos endpoints (dominios
+  // distintos en el backend), pero un único botón dispara ambos a la vez —
+  // la Reserva Manual solo si esa card está visible/editable.
+  const mostrarReservaManual = embarque.reservaManual && embarque.estadoReserva !== 'SOLICITADA'
+
+  const guardarTodoMutation = useMutation({
+    mutationFn: async () => {
+      const tareas: Promise<unknown>[] = []
+      if (mostrarReservaManual) {
+        const datosReserva: DatosReservaManualInput = {
+          numeroBooking: form.numeroBooking || null,
+          nave: form.nave || null,
+          numeroContenedor: form.numeroContenedor || null,
+          fechaZarpe: form.fechaZarpe || null,
+          fechaRetiroPlanta: form.fechaRetiroPlanta || null,
+        }
+        tareas.push(embarquesService.guardarDatosReservaManual(embarque.id, datosReserva))
+      }
+      const datosInstructivo: DatosInstructivoInput = {
+        puertoZarpeId: formInstructivo.puertoZarpeId ? Number(formInstructivo.puertoZarpeId) : null,
+        voyageNumber: formInstructivo.voyageNumber || null,
+        deposito: formInstructivo.deposito || null,
+        awbBl: formInstructivo.awbBl || null,
+        cutoffDate: formInstructivo.cutoffDate || null,
+        tipoBultos: formInstructivo.tipoBultos || null,
+        agenteAduanaId: formInstructivo.agenteAduanaId ? Number(formInstructivo.agenteAduanaId) : null,
+        embarcadorId: formInstructivo.embarcadorId ? Number(formInstructivo.embarcadorId) : null,
+        navieraId: formInstructivo.navieraId ? Number(formInstructivo.navieraId) : null,
+        fechaArribo: formInstructivo.fechaArribo || null,
+        stackingDesde: formInstructivo.stackingDesde || null,
+        stackingHasta: formInstructivo.stackingHasta || null,
+        observacionesInstructivo: formInstructivo.observacionesInstructivo || null,
+      }
+      tareas.push(embarquesService.guardarDatosInstructivo(embarque.id, datosInstructivo))
+      await Promise.all(tareas)
+    },
+    onSuccess: () => {
+      toast.success('Datos guardados')
+      invalidar()
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudieron guardar los datos'),
+  })
 
   return (
     <div className='space-y-6'>
@@ -243,11 +264,6 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
                 <Input type='date' value={form.fechaRetiroPlanta} onChange={(e) => setForm((f) => ({ ...f, fechaRetiroPlanta: e.target.value }))} disabled={!puedeEscribir} />
               </div>
             </div>
-            {puedeEscribir && (
-              <Button type='button' onClick={guardarDatos} isLoading={guardarDatosMutation.isPending}>
-                <Icons.check className='mr-1 h-4 w-4' /> Guardar
-              </Button>
-            )}
           </div>
         )}
 
@@ -330,13 +346,36 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
             <Label>Cutoff</Label>
             <Input type='date' value={formInstructivo.cutoffDate} onChange={(e) => setFormInstructivo((f) => ({ ...f, cutoffDate: e.target.value }))} disabled={!puedeEscribir} />
           </div>
+          <div className='space-y-1.5'>
+            <Label>Fecha de Arribo</Label>
+            <Input type='date' value={formInstructivo.fechaArribo} onChange={(e) => setFormInstructivo((f) => ({ ...f, fechaArribo: e.target.value }))} disabled={!puedeEscribir} />
+          </div>
+          <div className='space-y-1.5'>
+            <Label>Stacking desde</Label>
+            <Input type='datetime-local' value={formInstructivo.stackingDesde} onChange={(e) => setFormInstructivo((f) => ({ ...f, stackingDesde: e.target.value }))} disabled={!puedeEscribir} />
+          </div>
+          <div className='space-y-1.5'>
+            <Label>Stacking hasta</Label>
+            <Input type='datetime-local' value={formInstructivo.stackingHasta} onChange={(e) => setFormInstructivo((f) => ({ ...f, stackingHasta: e.target.value }))} disabled={!puedeEscribir} />
+          </div>
         </div>
-        {puedeEscribir && (
-          <Button type='button' onClick={guardarDatosInstructivo} isLoading={guardarDatosInstructivoMutation.isPending}>
+        <div className='space-y-1.5'>
+          <Label>Observaciones</Label>
+          <Textarea
+            value={formInstructivo.observacionesInstructivo}
+            onChange={(e) => setFormInstructivo((f) => ({ ...f, observacionesInstructivo: e.target.value }))}
+            disabled={!puedeEscribir}
+          />
+        </div>
+      </div>
+
+      {puedeEscribir && (
+        <div className='flex justify-center'>
+          <Button type='button' onClick={() => guardarTodoMutation.mutate()} isLoading={guardarTodoMutation.isPending}>
             <Icons.check className='mr-1 h-4 w-4' /> Guardar
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

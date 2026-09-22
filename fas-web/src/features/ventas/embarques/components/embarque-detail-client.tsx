@@ -20,7 +20,9 @@ export function EmbarqueDetailClient({ embarqueId }: { embarqueId: number }) {
   const embarque = data.data
 
   return (
-    <div className='max-w-4xl space-y-4'>
+    // max-w-4xl (56rem) + 25% = max-w-[70rem] — vistas del Instructivo con
+    // más campos de los que caben cómodamente en el ancho original.
+    <div className='max-w-[70rem] space-y-4'>
       <div>
         <h2 className='text-xl font-semibold'>Embarque {embarque.numeroInstructivo}</h2>
         <p className='text-sm text-muted-foreground'>

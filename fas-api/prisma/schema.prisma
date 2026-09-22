@@ -2749,21 +2749,32 @@ model Embarque {
   // que viven en InstructivoHijo abajo). Todos opcionales: se completan
   // desde la pestaña "Generar Instructivos" antes de emitir el PDF, no al
   // crear el Embarque.
-  puertoZarpeId  Int?
+  puertoZarpeId            Int?
   // FK compuesta (empresaId, puertoZarpeId) -> Puerto(empresaId, id) — mismo
   // patrón que NotaVenta.puertoDestinoId.
-  puertoZarpe    Puerto?   @relation("EmbarquePuertoZarpe", fields: [empresaId, puertoZarpeId], references: [empresaId, id])
-  voyageNumber   String?
-  deposito       String?
-  awbBl          String?
-  cutoffDate     DateTime?
-  tipoBultos     String?
-  agenteAduanaId Int? // Entidad tipo AGENTE_ADUANA
-  agenteAduana   Entidad?  @relation("EmbarqueAgenteAduana", fields: [empresaId, agenteAduanaId], references: [empresaId, id])
-  embarcadorId   Int? // Entidad tipo COMPANIA_EMBARQUE
-  embarcador     Entidad?  @relation("EmbarqueEmbarcador", fields: [empresaId, embarcadorId], references: [empresaId, id])
-  navieraId      Int? // Entidad tipo NAVIERA — reemplaza el texto libre navieraManual
-  naviera        Entidad?  @relation("EmbarqueNaviera", fields: [empresaId, navieraId], references: [empresaId, id])
+  puertoZarpe              Puerto?   @relation("EmbarquePuertoZarpe", fields: [empresaId, puertoZarpeId], references: [empresaId, id])
+  voyageNumber             String?
+  deposito                 String?
+  awbBl                    String?
+  cutoffDate               DateTime?
+  tipoBultos               String?
+  agenteAduanaId           Int? // Entidad tipo AGENTE_ADUANA
+  agenteAduana             Entidad?  @relation("EmbarqueAgenteAduana", fields: [empresaId, agenteAduanaId], references: [empresaId, id])
+  embarcadorId             Int? // Entidad tipo COMPANIA_EMBARQUE
+  embarcador               Entidad?  @relation("EmbarqueEmbarcador", fields: [empresaId, embarcadorId], references: [empresaId, id])
+  navieraId                Int? // Entidad tipo NAVIERA — reemplaza el texto libre navieraManual
+  naviera                  Entidad?  @relation("EmbarqueNaviera", fields: [empresaId, navieraId], references: [empresaId, id])
+  // Fecha de Arribo estimada/real a destino (2026-09-22, gap analysis).
+  fechaArribo              DateTime?
+  // Ventana de stacking del contenedor en el puerto (2026-09-22, decisión de
+  // negocio Christian) — trasladada desde InstructivoHijo: es una propiedad
+  // del contenedor/nave, compartida por todas las plantas de retiro, no un
+  // hito propio de cada una.
+  stackingDesde            DateTime?
+  stackingHasta            DateTime?
+  // Observaciones generales del Instructivo (todo el Embarque) — distintas de
+  // `InstructivoHijo.observaciones` (por Planta/punto de retiro).
+  observacionesInstructivo String?
 
   instructivosHijos InstructivoHijo[]
 
@@ -2811,11 +2822,14 @@ model InstructivoHijo {
   planta    Entidad @relation("InstructivoHijoPlanta", fields: [empresaId, plantaId], references: [empresaId, id])
 
   // Hitos logísticos por planta — varían entre plantas (ventas.md R11).
-  // "Carga en planta" = fecha/hora real de retiro de esa planta.
+  // "Carga en planta" = fecha/hora real de retiro de esa planta. Stacking
+  // (ventana de recepción del contenedor en el puerto) se trasladó a
+  // `Embarque.stackingDesde/stackingHasta` (2026-09-22, decisión de negocio
+  // Christian): es una propiedad del contenedor/nave, no de cada planta.
   fechaCargaPlanta DateTime?
-  stackingDesde    DateTime?
-  stackingHasta    DateTime?
 
+  // Observaciones propias de este punto de retiro (por Planta) — distintas de
+  // `Embarque.observacionesInstructivo` (generales, todo el Instructivo).
   observaciones String?
 
   creadoEn       DateTime  @default(now())

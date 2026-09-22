@@ -51,6 +51,10 @@ export const datosInstructivoSchema = z
     agenteAduanaId: z.number().int().positive().optional().nullable(),
     embarcadorId: z.number().int().positive().optional().nullable(),
     navieraId: z.number().int().positive().optional().nullable(),
+    fechaArribo: z.coerce.date().optional().nullable(),
+    stackingDesde: z.coerce.date().optional().nullable(),
+    stackingHasta: z.coerce.date().optional().nullable(),
+    observacionesInstructivo: z.string().trim().max(1000).optional().nullable(),
   })
   // FAS-IE-QA-003 (QA ronda 1): antes exigía al menos un valor NO-nulo, lo
   // que impedía volver a dejar el bloque completo en vacío tras haber
@@ -67,8 +71,6 @@ export const datosInstructivoSchema = z
 export const instructivoHijoUpdateSchema = z
   .object({
     fechaCargaPlanta: z.coerce.date().optional().nullable(),
-    stackingDesde: z.coerce.date().optional().nullable(),
-    stackingHasta: z.coerce.date().optional().nullable(),
     observaciones: z.string().trim().max(500).optional().nullable(),
   })
   .refine((d) => Object.values(d).some((v) => v !== undefined), {

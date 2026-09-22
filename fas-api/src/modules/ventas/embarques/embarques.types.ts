@@ -37,11 +37,13 @@ export interface DatosInstructivoInput {
   agenteAduanaId?: number | null
   embarcadorId?: number | null
   navieraId?: number | null
+  fechaArribo?: Date | null
+  stackingDesde?: Date | null
+  stackingHasta?: Date | null
+  observacionesInstructivo?: string | null
 }
 
 export interface InstructivoHijoUpdateInput {
   fechaCargaPlanta?: Date | null
-  stackingDesde?: Date | null
-  stackingHasta?: Date | null
   observaciones?: string | null
 }

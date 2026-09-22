@@ -52,8 +52,6 @@ function InstructivoHijoEditDialog({
   const queryClient = useQueryClient()
   const [form, setForm] = useState(() => ({
     fechaCargaPlanta: soloFechaHora(instructivo.fechaCargaPlanta),
-    stackingDesde: soloFechaHora(instructivo.stackingDesde),
-    stackingHasta: soloFechaHora(instructivo.stackingHasta),
     observaciones: instructivo.observaciones ?? '',
   }))
 
@@ -79,16 +77,6 @@ function InstructivoHijoEditDialog({
             <Label>Carga en planta</Label>
             <Input type='datetime-local' value={form.fechaCargaPlanta} onChange={(e) => setForm((f) => ({ ...f, fechaCargaPlanta: e.target.value }))} />
           </div>
-          <div className='grid grid-cols-2 gap-3'>
-            <div className='space-y-1.5'>
-              <Label>Stacking desde</Label>
-              <Input type='datetime-local' value={form.stackingDesde} onChange={(e) => setForm((f) => ({ ...f, stackingDesde: e.target.value }))} />
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Stacking hasta</Label>
-              <Input type='datetime-local' value={form.stackingHasta} onChange={(e) => setForm((f) => ({ ...f, stackingHasta: e.target.value }))} />
-            </div>
-          </div>
           <div className='space-y-1.5'>
             <Label>Observaciones</Label>
             <Textarea value={form.observaciones} onChange={(e) => setForm((f) => ({ ...f, observaciones: e.target.value }))} />
@@ -102,8 +90,6 @@ function InstructivoHijoEditDialog({
             onClick={() =>
               mutation.mutate({
                 fechaCargaPlanta: form.fechaCargaPlanta || null,
-                stackingDesde: form.stackingDesde || null,
-                stackingHasta: form.stackingHasta || null,
                 observaciones: form.observaciones || null,
               })
             }
@@ -161,7 +147,6 @@ export function GenerarInstructivosTab({ embarque }: { embarque: EmbarqueDetalle
                 <TableHead>Código</TableHead>
                 <TableHead>Planta</TableHead>
                 <TableHead>Carga en planta</TableHead>
-                <TableHead>Stacking</TableHead>
                 <TableHead className='w-32'></TableHead>
               </TableRow>
             </TableHeader>
@@ -171,11 +156,6 @@ export function GenerarInstructivosTab({ embarque }: { embarque: EmbarqueDetalle
                   <TableCell className='font-medium'>{i.codigo}</TableCell>
                   <TableCell>{i.planta.descripcion}</TableCell>
                   <TableCell>{i.fechaCargaPlanta ? new Date(i.fechaCargaPlanta).toLocaleString('es-CL') : '—'}</TableCell>
-                  <TableCell>
-                    {i.stackingDesde || i.stackingHasta
-                      ? `${i.stackingDesde ? new Date(i.stackingDesde).toLocaleString('es-CL') : '—'} a ${i.stackingHasta ? new Date(i.stackingHasta).toLocaleString('es-CL') : '—'}`
-                      : '—'}
-                  </TableCell>
                   <TableCell className='flex justify-end gap-1'>
                     {puedeEscribir && (
                       <Button type='button' variant='ghost' size='icon' onClick={() => setEditando(i)}>

@@ -78,6 +78,7 @@ export function InstructivoEmbarqueV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
             { label: 'País destino', valor: d.paisDestino ?? '—' },
             { label: 'Puerto destino', valor: d.puertoDestino ?? '—' },
             { label: 'Puerto de zarpe', valor: d.puertoZarpe ?? '—' },
+            { label: 'Fecha de arribo', valor: d.fechaArribo ? fmt.fecha(d.fechaArribo) : '—' },
           ]}
         />
       </div>
@@ -108,18 +109,24 @@ export function InstructivoEmbarqueV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
       </div>
 
       <GrupoCampos
-        titulo='Hitos en planta'
+        titulo='Hitos en planta y stacking'
         campos={[
           // FAS-IE-QA-002 (QA ronda 1): fecha/hora completa, no solo fecha
           // (ventas.md R11 exige "fecha/hora de retiro" por planta).
           { label: 'Carga en planta', valor: d.fechaCargaPlanta ? fmt.fechaHora(d.fechaCargaPlanta) : '—' },
+          // Stacking (2026-09-22): compartido por todo el Embarque, no por
+          // Planta — mismo valor en todos los InstructivoHijo de este Embarque.
           { label: 'Stacking desde', valor: d.stackingDesde ? fmt.fechaHora(d.stackingDesde) : '—' },
           { label: 'Stacking hasta', valor: d.stackingHasta ? fmt.fechaHora(d.stackingHasta) : '—' },
         ]}
       />
 
+      {d.observacionesGenerales && (
+        <GrupoCampos titulo='Observaciones Generales' campos={[{ label: '', valor: d.observacionesGenerales }]} />
+      )}
+
       {d.observaciones && (
-        <GrupoCampos titulo='Observaciones' campos={[{ label: '', valor: d.observaciones }]} />
+        <GrupoCampos titulo='Observaciones Planta' campos={[{ label: '', valor: d.observaciones }]} />
       )}
 
       <TablaLineas

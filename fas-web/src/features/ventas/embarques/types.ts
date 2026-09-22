@@ -99,6 +99,9 @@ export interface DatosReservaManualInput {
 
 // Instructivo de Embarque (2026-09-21, ventas.md R11 + gap analysis) —
 // campos compartidos por todo el Embarque, independientes de reservaManual.
+// fechaArribo/stackingDesde/stackingHasta/observacionesInstructivo
+// (2026-09-22): stacking se trasladó desde InstructivoHijo (por Planta) a
+// acá — es una propiedad del contenedor/nave, no de cada punto de retiro.
 export interface DatosInstructivo {
   puertoZarpeId: number | null
   puertoZarpe: MantenedorRef | null
@@ -113,6 +116,10 @@ export interface DatosInstructivo {
   embarcador: EntidadRef | null
   navieraId: number | null
   naviera: EntidadRef | null
+  fechaArribo: string | null
+  stackingDesde: string | null
+  stackingHasta: string | null
+  observacionesInstructivo: string | null
 }
 
 export interface DatosInstructivoInput {
@@ -125,10 +132,15 @@ export interface DatosInstructivoInput {
   agenteAduanaId?: number | null
   embarcadorId?: number | null
   navieraId?: number | null
+  fechaArribo?: string | null
+  stackingDesde?: string | null
+  stackingHasta?: string | null
+  observacionesInstructivo?: string | null
 }
 
 // Hitos por Planta/punto de retiro (ventas.md R11) — generados vía el botón
-// "Generar Instructivos", nunca creados a mano.
+// "Generar Instructivos", nunca creados a mano. Stacking ya no vive acá (ver
+// DatosInstructivo arriba) — "Observaciones" acá es propia de esta Planta.
 export interface InstructivoHijo {
   id: number
   codigo: string
@@ -136,15 +148,11 @@ export interface InstructivoHijo {
   plantaId: number
   planta: EntidadRef
   fechaCargaPlanta: string | null
-  stackingDesde: string | null
-  stackingHasta: string | null
   observaciones: string | null
 }
 
 export interface InstructivoHijoUpdateInput {
   fechaCargaPlanta?: string | null
-  stackingDesde?: string | null
-  stackingHasta?: string | null
   observaciones?: string | null
 }
 
