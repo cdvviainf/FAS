@@ -36,6 +36,20 @@ const notaVentaRefSelect = { id: true, folio: true }
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 const entidadSelect = { id: true, codigo: true, descripcion: true }
 
+// Metadata de la reconciliación de Packing List (compras.md §9.3) — sin el
+// blob del Excel, mismo criterio que RecepcionAdjunto/RecepcionAdjuntoContenido.
+const packingListSelect = {
+  id: true,
+  templateCargaId: true,
+  nombreArchivo: true,
+  mime: true,
+  tamano: true,
+  estado: true,
+  discrepancias: true,
+  cargadoEn: true,
+  cargadoPor: true,
+} satisfies Prisma.EmbarquePackingListSelect
+
 // Detalle de origen de cada pallet — de qué OC (modo COMPRA) o de qué
 // Instructivo(s) de Embalaje (modo PROCESO) viene, para que el paso
 // "Seleccionar Pallets" del Embarque (y el detalle ya reservado) siempre
@@ -102,6 +116,9 @@ export async function getEmbarqueById(id: number) {
       embarcador: { select: entidadSelect },
       naviera: { select: entidadSelect },
       instructivosHijos: { include: { planta: { select: entidadSelect } }, orderBy: { secuencia: 'asc' as const } },
+      // Reconciliación de Packing List (compras.md §9.3) — sin `contenido`
+      // (el blob se descarga aparte, ver getPackingListContenido).
+      packingList: { select: packingListSelect },
     },
   })
 }
@@ -186,10 +203,12 @@ export async function desvincularPallet(embarqueId: number, palletId: number): P
 }
 
 // Confirma el despacho — atómico y condicionado a que aún no esté despachado
-// (evita una doble confirmación concurrente) y a que tenga al menos un
-// pallet reservado (decisión de negocio, Christian: no se despacha vacío).
-// Mismo advisory lock por embarqueId que desvincularPallet (EP-QA-002, QA
-// ronda 2) — serializa ambas operaciones entre sí.
+// (evita una doble confirmación concurrente), a que tenga al menos un
+// pallet reservado (decisión de negocio, Christian: no se despacha vacío) y,
+// desde 2026-09-22 (compras.md §9.3, cierra EP-QA-003), a que exista una
+// reconciliación de Packing List vigente en estado OK. Mismo advisory lock
+// por embarqueId que desvincularPallet (EP-QA-002, QA ronda 2) — serializa
+// ambas operaciones entre sí, y ahora también contra guardarPackingList.
 export async function confirmarDespacho(embarqueId: number, despachadoPor: string) {
   // El read final (getEmbarqueById) corre DESPUÉS de que la transacción
   // commitea, no adentro — usar `prisma` en vez de `tx` dentro del callback
@@ -199,11 +218,13 @@ export async function confirmarDespacho(embarqueId: number, despachadoPor: strin
 
     const embarque = await tx.embarque.findFirst({
       where: { id: embarqueId, eliminadoEn: null },
-      include: { _count: { select: { pallets: true } } },
+      include: { _count: { select: { pallets: true } }, packingList: { select: { estado: true } } },
     })
     if (!embarque) return 'NO_ENCONTRADO' as const
     if (embarque.despachadoEn) return 'YA_DESPACHADO' as const
     if (embarque._count.pallets === 0) return 'SIN_PALLETS' as const
+    if (!embarque.packingList) return 'SIN_PACKING_LIST' as const
+    if (embarque.packingList.estado !== 'OK') return 'PACKING_LIST_CON_DISCREPANCIAS' as const
 
     const claim = await tx.embarque.updateMany({
       where: { id: embarqueId, despachadoEn: null },
@@ -213,6 +234,85 @@ export async function confirmarDespacho(embarqueId: number, despachadoPor: strin
   })
   if (resultado !== 'OK') return resultado
   return getEmbarqueById(embarqueId)
+}
+
+// ─── Packing List (compras.md §9.3, cierra EP-QA-003) ──────────────────────
+
+// Pallets ya reservados a este Embarque, con el detalle mínimo que necesita
+// el motor de reconciliación (embarques.packing-list.motor.ts) para el Paso
+// 2 (compras.md §9.3) — a diferencia de palletInclude (usado en el detalle
+// completo del Embarque), no trae relaciones de mantenedor, solo IDs.
+export async function getPalletsReservadosParaReconciliar(embarqueId: number) {
+  return prisma.pallet.findMany({
+    where: { embarqueId },
+    select: {
+      numeroPallet: true,
+      productorId: true,
+      lineas: {
+        select: { especieId: true, variedadId: true, categoriaId: true, articuloId: true, calibreId: true, cajas: true },
+      },
+    },
+  })
+}
+
+// Reemplaza la reconciliación vigente por una nueva — cada subida de Excel
+// pisa la anterior (no se conserva historial, ver comentario en el modelo
+// Prisma). Mismo advisory lock que confirmarDespacho/reservarPalletsEnEmbarque
+// (LOCK_NAMESPACE_EMBARQUE_DESPACHO): sin esto, una subida concurrente con
+// una reserva/desvinculación de pallets podría guardar un resultado OK
+// calculado contra un conjunto de pallets que ya cambió.
+export async function guardarPackingList(
+  embarqueId: number,
+  datos: {
+    templateCargaId: number
+    nombreArchivo: string
+    mime: string
+    tamano: number
+    contenido: Buffer
+    estado: 'OK' | 'DISCREPANCIA'
+    discrepancias: string[]
+    cargadoPor: string
+  },
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_DESPACHO}::int, ${embarqueId}::int)`
+
+    const embarque = await tx.embarque.findFirst({ where: { id: embarqueId, eliminadoEn: null }, select: { id: true } })
+    if (!embarque) throw new ValidationError('El Embarque ya no existe')
+
+    // delete-then-create en vez de upsert: la fila de contenido (bytes)
+    // depende de la fila padre por FK cascade — recrear ambas de cero es más
+    // simple que un update parcial de dos tablas relacionadas.
+    await tx.embarquePackingList.deleteMany({ where: { embarqueId } })
+    const empresaId = getEmpresaIdActual()!
+    const creado = await tx.embarquePackingList.create({
+      data: {
+        empresaId,
+        embarqueId,
+        templateCargaId: datos.templateCargaId,
+        nombreArchivo: datos.nombreArchivo,
+        mime: datos.mime,
+        tamano: datos.tamano,
+        estado: datos.estado,
+        discrepancias: datos.discrepancias,
+        cargadoPor: datos.cargadoPor,
+        contenido: { create: { datos: datos.contenido } },
+      },
+      select: packingListSelect,
+    })
+    return creado
+  })
+}
+
+export async function getPackingListParaDescarga(embarqueId: number) {
+  const meta = await prisma.embarquePackingList.findFirst({
+    where: { embarqueId },
+    select: { id: true, nombreArchivo: true, mime: true },
+  })
+  if (!meta) return null
+  const contenido = await prisma.embarquePackingListContenido.findUnique({ where: { packingListId: meta.id } })
+  if (!contenido) return null
+  return { meta, datos: contenido.datos }
 }
 
 export async function findByNumeroInstructivo(numeroInstructivo: string) {

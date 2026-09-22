@@ -72,6 +72,18 @@ export async function embarquesRoutes(app: FastifyInstance) {
   // ─── Despachar ────────────────────────────────────────────────────────────
   app.patch('/embarques/:id/despachar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.despachar)
 
+  // ─── Packing List (compras.md §9.3, cierra EP-QA-003) ────────────────────
+  app.post(
+    '/embarques/:id/packing-list',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.subirPackingList,
+  )
+  app.get(
+    '/embarques/:id/packing-list/descarga',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    ctrl.descargarPackingList,
+  )
+
   // ─── Reclamos (2026-09-08, reclamos.md) — se crean desde acá ───────────────
   app.get(
     '/embarques/:id/lineas-reclamables',

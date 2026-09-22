@@ -4,6 +4,8 @@ import * as repo from './embarques.repository.js'
 import * as prefijosService from '../../config/prefijos-codigo/prefijos-codigo.service.js'
 import * as aglAdapter from './agl360.adapter.js'
 import * as integracionesRepo from '../../config/integraciones/integraciones.repository.js'
+import * as templatesCargaRepo from '../../config/templates-carga/templates-carga.repository.js'
+import { reconciliarPackingList } from './embarques.packing-list.motor.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ResultadoIntentoReserva } from './embarques.repository.js'
 import type { DatosReservaManualInput, DatosInstructivoInput, InstructivoHijoUpdateInput, EmbarqueCreateInput } from './embarques.types.js'
@@ -303,12 +305,9 @@ export async function confirmarSolicitudDesdeWebhook(body: AglWebhookConfirmarBo
 
 // ─── Seleccionar Pallets (ventas.md R8/R9) ──────────────────────────────────
 //
-// Deuda aceptada explícitamente (decisión de negocio, Christian, 2026-09-02
-// — QA ronda 3, EP-QA-003, persiste a propósito, no es bug de esta entrega):
-//   - EP-QA-003: confirmarDespacho() no exige reconciliación contra Packing
-//     List (compras.md §9.3) — ese módulo no existe todavía en el sistema.
-// No bloquea lo construido en esta entrega (Seleccionar Pallets + Despachar
-// mínimo); queda para cuando se aborde ese módulo.
+// EP-QA-003 (confirmarDespacho() no exigía reconciliación contra Packing
+// List, compras.md §9.3) CERRADA 2026-09-22 — ver subirPackingList() más
+// abajo y el gate en repo.confirmarDespacho.
 //
 // EP-QA-004 (reservar pallets no generaba InstructivoHijo) CERRADA
 // 2026-09-21: la generación es un botón explícito ("Generar Instructivos" en
@@ -370,5 +369,78 @@ export async function confirmarDespacho(embarqueId: number, userId: string) {
   if (resultado === 'NO_ENCONTRADO') throw new NotFoundError('Embarque', String(embarqueId))
   if (resultado === 'YA_DESPACHADO') throw new ConflictError('Este Embarque ya fue despachado')
   if (resultado === 'SIN_PALLETS') throw new ValidationError('No se puede despachar un Embarque sin pallets reservados')
+  if (resultado === 'SIN_PACKING_LIST') {
+    throw new ValidationError('Debes subir y reconciliar el Packing List de este Embarque antes de despachar (compras.md §9.3)')
+  }
+  if (resultado === 'PACKING_LIST_CON_DISCREPANCIAS') {
+    throw new ValidationError('El Packing List cargado tiene discrepancias contra los pallets reservados — corrígelas y vuelve a subirlo antes de despachar')
+  }
+  return resultado
+}
+
+// ─── Packing List (compras.md §9.3, cierra EP-QA-003) ──────────────────────
+//
+// Reconciliación a nivel de pallet (compras.md §9.3): los N° de Pallet del PL
+// deben ser exactamente los reservados al Embarque, y el detalle de cada
+// pallet coincidente debe cuadrar contra Stock. No inserta nada — a
+// diferencia del motor de Recepción, los pallets ya existen; esto solo
+// compara y persiste el resultado (embarques.packing-list.motor.ts). Todo o
+// nada a nivel de ARCHIVO (formato/mapeo/maestros abortan sin guardar,
+// mismos criterios que Recepción) pero las discrepancias de negocio (Paso
+// 1/2) SÍ se guardan como estado DISCREPANCIA — el usuario necesita ver qué
+// no cuadró para poder corregirlo y reintentar.
+const MIMES_EXCEL_PERMITIDOS = new Set(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
+export const MAX_PACKING_LIST_BYTES = 10 * 1024 * 1024 // 10 MB, mismo tope que Recepción
+
+async function validarTemplateCargaPackingList(templateCargaId: number) {
+  const template = await templatesCargaRepo.getTemplateCargaById(templateCargaId)
+  if (!template) throw new ValidationError('El Template de Carga seleccionado no existe')
+  if (template.bloqueado) throw new ValidationError('El Template de Carga seleccionado está bloqueado')
+  if (template.tipo !== 'PACKING_LIST') throw new ValidationError('El Template de Carga seleccionado no es de tipo Packing List')
+  return template
+}
+
+export async function subirPackingList(
+  embarqueId: number,
+  templateCargaId: number,
+  archivo: { nombre: string; mime: string; datos: Buffer },
+  userId: string,
+) {
+  const embarque = await obtenerEmbarque(embarqueId)
+  if (embarque.despachadoEn) {
+    throw new ValidationError('Este Embarque ya fue despachado — no admite reconciliar un nuevo Packing List')
+  }
+  if (!MIMES_EXCEL_PERMITIDOS.has(archivo.mime)) {
+    throw new ValidationError('Tipo de archivo no permitido. Se acepta solo Excel (.xlsx)')
+  }
+  if (archivo.datos.length > MAX_PACKING_LIST_BYTES) {
+    throw new ValidationError('El archivo supera el tamaño máximo de 10 MB')
+  }
+
+  const template = await validarTemplateCargaPackingList(templateCargaId)
+
+  const palletsStock = await repo.getPalletsReservadosParaReconciliar(embarqueId)
+  if (palletsStock.length === 0) {
+    throw new ValidationError('Este Embarque no tiene pallets reservados — no hay nada que reconciliar contra el Packing List')
+  }
+
+  const resultado = await reconciliarPackingList(template, archivo.datos, palletsStock)
+
+  return repo.guardarPackingList(embarqueId, {
+    templateCargaId,
+    nombreArchivo: archivo.nombre,
+    mime: archivo.mime,
+    tamano: archivo.datos.length,
+    contenido: archivo.datos,
+    estado: resultado.estado,
+    discrepancias: resultado.discrepancias,
+    cargadoPor: userId,
+  })
+}
+
+export async function descargarPackingList(embarqueId: number) {
+  await obtenerEmbarque(embarqueId)
+  const resultado = await repo.getPackingListParaDescarga(embarqueId)
+  if (!resultado) throw new NotFoundError('Packing List', String(embarqueId))
   return resultado
 }

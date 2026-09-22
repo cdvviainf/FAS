@@ -103,6 +103,13 @@ export const embarqueParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
 })
 
+// Subida del Excel de Packing List (compras.md §9.3, cierra EP-QA-003) —
+// templateCargaId viaja como query param (mismo criterio que ?commit=true en
+// carga-maestros.controller.ts), el archivo va en el body multipart.
+export const packingListUploadQuerySchema = z.object({
+  templateCargaId: z.coerce.number().int().positive('El Template de Carga es requerido'),
+})
+
 // Edición de un Reclamo (IMP-QA-R1-019, reclamos.md §6) — anidado bajo el
 // Embarque: :id es el Embarque, :reclamoId el Reclamo.
 export const embarqueReclamoParamsSchema = z.object({

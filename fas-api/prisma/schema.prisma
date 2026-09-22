@@ -244,6 +244,7 @@ model Empresa {
   integraciones          Integracion[]
   reclamos               Reclamo[]
   provisiones            Provision[]
+  EmbarquePackingList    EmbarquePackingList[]
 
   @@map("empresas")
 }
@@ -1066,31 +1067,31 @@ model Categoria {
 }
 
 model Calibre {
-  id                    Int       @id @default(autoincrement())
-  empresaId             Int
-  empresa               Empresa   @relation(fields: [empresaId], references: [id])
-  codigo                String
-  descripcion           String
-  descripcionExtranjera String?
-  especieId             Int
+  id                     Int       @id @default(autoincrement())
+  empresaId              Int
+  empresa                Empresa   @relation(fields: [empresaId], references: [id])
+  codigo                 String
+  descripcion            String
+  descripcionExtranjera  String?
+  especieId              Int
   // FK compuesta (empresaId, especieId) -> Especie(empresaId, id).
-  especie               Especie   @relation(fields: [empresaId, especieId], references: [empresaId, id])
-  orden                 Int
-  control               String[]
+  especie                Especie   @relation(fields: [empresaId, especieId], references: [empresaId, id])
+  orden                  Int
+  control                String[]
   // Calibre equivalente (auto-referencial): otro calibre de la MISMA especie.
   // Por defecto apunta a sí mismo (el service lo setea tras crear si no se
   // indica). FK compuesta (empresaId, calibreEquivalenteId) -> Calibre(empresaId,
   // id): garantiza misma empresa; la misma-especie se valida en el service.
-  calibreEquivalenteId  Int?
-  calibreEquivalente    Calibre?  @relation("CalibreEquivalente", fields: [empresaId, calibreEquivalenteId], references: [empresaId, id])
+  calibreEquivalenteId   Int?
+  calibreEquivalente     Calibre?  @relation("CalibreEquivalente", fields: [empresaId, calibreEquivalenteId], references: [empresaId, id])
   calibresEquivalentesDe Calibre[] @relation("CalibreEquivalente")
-  bloqueado             Boolean   @default(false)
-  creadoEn              DateTime  @default(now())
-  creadoPor             String
-  actualizadoEn         DateTime? @updatedAt
-  actualizadoPor        String?
-  eliminadoEn           DateTime?
-  eliminadoPor          String?
+  bloqueado              Boolean   @default(false)
+  creadoEn               DateTime  @default(now())
+  creadoPor              String
+  actualizadoEn          DateTime? @updatedAt
+  actualizadoPor         String?
+  eliminadoEn            DateTime?
+  eliminadoPor           String?
 
   notaVentaDetalleCalibres           NotaVentaDetalleCalibre[]
   instructivoEmbalajeDetalleCalibres InstructivoEmbalajeDetalleCalibre[]
@@ -1190,8 +1191,8 @@ model Puerto {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  notasVenta NotaVenta[]
-  embarquesZarpe Embarque[] @relation("EmbarquePuertoZarpe")
+  notasVenta     NotaVenta[]
+  embarquesZarpe Embarque[]  @relation("EmbarquePuertoZarpe")
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -2766,6 +2767,12 @@ model Embarque {
 
   instructivosHijos InstructivoHijo[]
 
+  // Reconciliación de Packing List (compras.md §9.3, cierra EP-QA-003,
+  // 2026-09-22): a lo más una por Embarque — cada subida nueva reemplaza la
+  // anterior (ver embarques.repository.ts guardarPackingList). Mientras no
+  // exista o su estado no sea OK, confirmarDespacho() bloquea.
+  packingList EmbarquePackingList?
+
   creadoEn       DateTime  @default(now())
   creadoPor      String
   actualizadoEn  DateTime? @updatedAt
@@ -2801,7 +2808,7 @@ model InstructivoHijo {
   secuencia Int // n correlativo dentro del embarque (1, 2, 3…) — estable una vez asignado
   plantaId  Int // Entidad tipo PLANTA
   // FK compuesta (empresaId, plantaId) -> Entidad(empresaId, id).
-  planta    Entidad  @relation("InstructivoHijoPlanta", fields: [empresaId, plantaId], references: [empresaId, id])
+  planta    Entidad @relation("InstructivoHijoPlanta", fields: [empresaId, plantaId], references: [empresaId, id])
 
   // Hitos logísticos por planta — varían entre plantas (ventas.md R11).
   // "Carga en planta" = fecha/hora real de retiro de esa planta.
@@ -2871,6 +2878,64 @@ model SolicitudReserva {
   @@unique([empresaId, referenciaFas])
   @@index([empresaId])
   @@map("solicitudes_reserva")
+}
+
+// ─── Packing List — reconciliación (compras.md §9.3, ventas.md §4.7) ─────────
+// Cierra EP-QA-003 (deuda aceptada desde 2026-09-02): confirmarDespacho()
+// exigía solo tener pallets reservados, sin reconciliar contra el Packing
+// List real de la planta. Reconciliación a nivel de pallet, en dos pasos
+// (compras.md §9.3): 1) los N° de Pallet del PL = los reservados al Embarque;
+// 2) el detalle de cada pallet coincidente (especie/variedad/categoría/
+// artículo/calibre/cajas + productor) = el detalle en Stock. A lo más una fila
+// por Embarque (@@unique embarqueId) — cada subida nueva reemplaza la
+// anterior en una transacción (delete + create, ver
+// embarques.repository.ts), no se conserva historial de intentos previos
+// (decisión de negocio: lo que importa es si el estado ACTUAL cuadra, mismo
+// criterio de simplicidad que DocumentoEmitido.pdf en CLAUDE.md #13).
+model EmbarquePackingList {
+  id         Int      @id @default(autoincrement())
+  empresaId  Int
+  empresa    Empresa  @relation(fields: [empresaId], references: [id])
+  embarqueId Int
+  embarque   Embarque @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
+
+  templateCargaId Int
+  templateCarga   TemplateCarga @relation(fields: [templateCargaId], references: [id])
+
+  nombreArchivo String
+  mime          String
+  tamano        Int
+  contenido     EmbarquePackingListContenido?
+
+  estado        EstadoPackingList
+  // Lista de diferencias en texto plano (mismo patrón que
+  // ValidationError.details.diferencias del motor de Recepción) — vacío
+  // cuando estado = OK.
+  discrepancias Json
+
+  cargadoEn  DateTime @default(now())
+  cargadoPor String
+
+  @@unique([empresaId, embarqueId])
+  @@index([empresaId])
+  @@index([templateCargaId])
+  @@map("embarque_packing_lists")
+}
+
+// Metadata + contenido separados (mismo patrón que RecepcionAdjunto/
+// RecepcionAdjuntoContenido) — evita cargar el blob al solo leer el estado de
+// la reconciliación desde el detalle del Embarque.
+model EmbarquePackingListContenido {
+  packingListId Int                 @id
+  packingList   EmbarquePackingList @relation(fields: [packingListId], references: [id], onDelete: Cascade)
+  datos         Bytes
+
+  @@map("embarque_packing_lists_contenido")
+}
+
+enum EstadoPackingList {
+  OK
+  DISCREPANCIA
 }
 
 // ─── Reclamos (2026-09-08, reclamos.md — reconciliado contra el Embarque
@@ -3617,8 +3682,9 @@ model TemplateCarga {
   filaPrimerRegistro Int
   bloqueado          Boolean @default(false)
 
-  campos      TemplateCargaCampo[]
-  recepciones Recepcion[]
+  campos               TemplateCargaCampo[]
+  recepciones          Recepcion[]
+  embarquePackingLists EmbarquePackingList[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -3694,7 +3760,7 @@ model DocumentoEmitido {
 // existen todavía columnas de folio/xml/pdf/estado-SII — se agregan en esa
 // siguiente ronda para no cargar columnas sin uso ni código sin probar.
 enum EstadoDocumentoDte {
-  PENDIENTE       // fila creada, aún no se llamó a LibreDTE (transitorio, ver EMITIENDO)
+  PENDIENTE // fila creada, aún no se llamó a LibreDTE (transitorio, ver EMITIENDO)
   // Un request "ganó" el derecho a llamar a LibreDTE y está en eso (IMP-QA-R1-029,
   // QA ronda 1) — mientras esté en este estado, otro request concurrente para el
   // mismo origen NO vuelve a llamar a LibreDTE, solo devuelve la fila tal cual.
@@ -3703,7 +3769,7 @@ enum EstadoDocumentoDte {
   // varada y requiere corrección manual — sin mecanismo de expiración automática.
   EMITIENDO
   TEMPORAL_CREADO // emitirTemporal() OK — hay codigo de LibreDTE
-  ERROR           // el intento más reciente falló (ver errorMensaje)
+  ERROR // el intento más reciente falló (ver errorMensaje)
 }
 
 model DocumentoDte {

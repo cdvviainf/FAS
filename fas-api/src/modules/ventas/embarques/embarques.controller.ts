@@ -11,11 +11,12 @@ import {
   datosInstructivoSchema,
   instructivoHijoUpdateSchema,
   instructivoHijoParamsSchema,
+  packingListUploadQuerySchema,
 } from './embarques.schema.js'
 import * as service from './embarques.service.js'
 import { prisma } from '../../../lib/prisma.js'
 import { empresaContext } from '../../../lib/empresa-context.js'
-import { ForbiddenError, UnauthorizedError } from '../../../shared/errors.js'
+import { ForbiddenError, UnauthorizedError, ValidationError } from '../../../shared/errors.js'
 import * as reclamosService from '../../calidad/reclamos/reclamos.service.js'
 import { reclamoCreateSchema, reclamoUpdateSchema } from '../../calidad/reclamos/reclamos.schema.js'
 
@@ -64,6 +65,35 @@ export async function despachar(req: FastifyRequest, reply: FastifyReply) {
   const { id } = embarqueParamsSchema.parse(req.params)
   const embarque = await service.confirmarDespacho(id, req.fasUserId!)
   return reply.send({ data: embarque })
+}
+
+// ─── Packing List (compras.md §9.3, cierra EP-QA-003) ──────────────────────
+
+export async function subirPackingList(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const { templateCargaId } = packingListUploadQuerySchema.parse(req.query)
+
+  const archivo = await req.file()
+  if (!archivo) throw new ValidationError('No se recibió ningún archivo')
+  const datos = await archivo.toBuffer()
+
+  const resultado = await service.subirPackingList(
+    id,
+    templateCargaId,
+    { nombre: archivo.filename, mime: archivo.mimetype, datos },
+    req.fasUserId!,
+  )
+  return reply.status(201).send({ data: resultado })
+}
+
+export async function descargarPackingList(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const { meta, datos } = await service.descargarPackingList(id)
+  return reply
+    .header('Content-Type', meta.mime)
+    .header('Content-Disposition', `attachment; filename="${encodeURIComponent(meta.nombreArchivo)}"`)
+    .header('Content-Length', String(datos.length))
+    .send(datos)
 }
 
 // ─── Solicitud de Reserva (ventas.md §4.3) ──────────────────────────────────

@@ -53,7 +53,10 @@ function columnaLetraAIndice(letra: string): number {
 // cell.value de ExcelJS puede venir como string, number, Date, o un objeto
 // (rich text / resultado de fórmula) según el tipo de celda — normalizamos
 // todo a texto plano y recortado.
-function textoCelda(valor: ExcelJS.CellValue): string {
+// Exportada (no solo usada internamente): embarques.excel.ts (Packing List,
+// compras.md §9.3) la reusa para no duplicar el manejo de NBSP/rich-text/
+// fórmula de celdas Excel.
+export function textoCelda(valor: ExcelJS.CellValue): string {
   if (valor == null) return ''
   if (valor instanceof Date) return valor.toISOString()
   if (typeof valor === 'object') {

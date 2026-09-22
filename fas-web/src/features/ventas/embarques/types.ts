@@ -167,10 +167,27 @@ export interface Embarque extends DatosReservaManual, DatosInstructivo {
   _count: { pallets: number }
 }
 
+// Reconciliación de Packing List (compras.md §9.3, cierra EP-QA-003) — a lo
+// más una por Embarque, cada subida nueva reemplaza la anterior.
+export type EstadoPackingList = 'OK' | 'DISCREPANCIA'
+
+export interface PackingListEmbarque {
+  id: number
+  templateCargaId: number
+  nombreArchivo: string
+  mime: string
+  tamano: number
+  estado: EstadoPackingList
+  discrepancias: string[]
+  cargadoEn: string
+  cargadoPor: string
+}
+
 export interface EmbarqueDetalle extends Omit<Embarque, '_count'> {
   pallets: PalletResumen[]
   solicitudReserva: SolicitudReserva | null
   instructivosHijos: InstructivoHijo[]
+  packingList: PackingListEmbarque | null
 }
 
 // numeroInstructivo ya no se ingresa manualmente (2026-08-13, ventas.md R10):

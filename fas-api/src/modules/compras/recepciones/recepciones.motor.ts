@@ -119,8 +119,11 @@ function parseCompletoTexto(texto: string): boolean | null | typeof COMPLETO_INV
 // genérico — Date.parse() del runtime acepta formatos no deseados (ej.
 // "09/21/2026" en mes/día americano, o "September 21, 2026"), que
 // silenciosamente interpretarían mal una fecha ambigua.
-const FECHA_INVALIDA = Symbol('FECHA_INVALIDA')
-function parseFechaEmbalajeTexto(texto: string): Date | typeof FECHA_INVALIDA {
+// Exportado junto con el símbolo (no solo usado internamente):
+// embarques.packing-list.motor.ts (Packing List, compras.md §9.3) reusa el
+// mismo parseo/validación de Fecha de Embalaje en vez de duplicarlo.
+export const FECHA_INVALIDA = Symbol('FECHA_INVALIDA')
+export function parseFechaEmbalajeTexto(texto: string): Date | typeof FECHA_INVALIDA {
   const t = texto.trim()
 
   const matchManual = t.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)

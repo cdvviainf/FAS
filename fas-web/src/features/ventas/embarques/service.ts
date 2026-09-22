@@ -8,6 +8,7 @@ import type {
   EmbarqueListResponse,
   InstructivoHijo,
   InstructivoHijoUpdateInput,
+  PackingListEmbarque,
   PalletResumen,
 } from './types'
 
@@ -46,6 +47,20 @@ export const embarquesService = {
 
   async despachar(id: number): Promise<{ data: EmbarqueDetalle }> {
     return api.patch(`ventas/embarques/${id}/despachar`).json()
+  },
+
+  // ─── Packing List (compras.md §9.3, cierra EP-QA-003) ────────────────────
+
+  async subirPackingList(id: number, templateCargaId: number, archivo: File): Promise<{ data: PackingListEmbarque }> {
+    const formData = new FormData()
+    formData.append('file', archivo)
+    return api
+      .post(`ventas/embarques/${id}/packing-list`, { body: formData, searchParams: { templateCargaId: String(templateCargaId) } })
+      .json()
+  },
+
+  urlDescargaPackingList(id: number): string {
+    return `/api/ventas/embarques/${id}/packing-list/descarga`
   },
 
   // ─── Solicitud de Reserva (ventas.md §4.3) ────────────────────────────────
