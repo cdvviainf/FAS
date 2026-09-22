@@ -67,6 +67,14 @@ export async function despachar(req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ data: embarque })
 }
 
+// "Anular Despacho" (2026-09-22) — sin body: soft delete de la confirmación
+// (ver embarques.service.ts anularDespacho).
+export async function anularDespacho(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const embarque = await service.anularDespacho(id, req.fasUserId!)
+  return reply.send({ data: embarque })
+}
+
 // ─── Packing List (compras.md §9.3, cierra EP-QA-003) ──────────────────────
 
 export async function subirPackingList(req: FastifyRequest, reply: FastifyReply) {

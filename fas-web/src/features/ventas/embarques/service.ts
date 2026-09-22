@@ -49,6 +49,10 @@ export const embarquesService = {
     return api.patch(`ventas/embarques/${id}/despachar`).json()
   },
 
+  async anularDespacho(id: number): Promise<{ data: EmbarqueDetalle }> {
+    return api.patch(`ventas/embarques/${id}/anular-despacho`).json()
+  },
+
   // ─── Packing List (compras.md §9.3, cierra EP-QA-003) ────────────────────
 
   async subirPackingList(id: number, templateCargaId: number, archivo: File): Promise<{ data: PackingListEmbarque }> {

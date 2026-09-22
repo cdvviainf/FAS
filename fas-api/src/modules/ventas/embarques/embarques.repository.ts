@@ -102,8 +102,12 @@ export async function listEmbarques(page: number, limit: number, notaVentaId?: n
   return { data, total }
 }
 
+// `instructivosHijos`/`packingLists` filtran `eliminadoEn: null` (soft
+// delete, 2026-09-22, "Anular Despacho") — la respuesta expone `packingList`
+// (singular, `packingLists[0] ?? null`) para no tocar el contrato del
+// frontend, que sigue viendo a lo más una reconciliación vigente.
 export async function getEmbarqueById(id: number) {
-  return prisma.embarque.findFirst({
+  const embarque = await prisma.embarque.findFirst({
     where: { id, eliminadoEn: null },
     include: {
       notaVenta: { select: notaVentaRefSelect },
@@ -115,14 +119,21 @@ export async function getEmbarqueById(id: number) {
       agenteAduana: { select: entidadSelect },
       embarcador: { select: entidadSelect },
       naviera: { select: entidadSelect },
-      instructivosHijos: { include: { planta: { select: entidadSelect } }, orderBy: { secuencia: 'asc' as const } },
+      instructivosHijos: {
+        where: { eliminadoEn: null },
+        include: { planta: { select: entidadSelect } },
+        orderBy: { secuencia: 'asc' as const },
+      },
       // Rangos de stacking (ventas.md R11, 2026-09-22) — N por Embarque.
       stackingRangos: { orderBy: { orden: 'asc' as const } },
       // Reconciliación de Packing List (compras.md §9.3) — sin `contenido`
       // (el blob se descarga aparte, ver getPackingListContenido).
-      packingList: { select: packingListSelect },
+      packingLists: { where: { eliminadoEn: null }, select: packingListSelect },
     },
   })
+  if (!embarque) return null
+  const { packingLists, ...resto } = embarque
+  return { ...resto, packingList: packingLists[0] ?? null }
 }
 
 // Detalle de la NV para el motor de comparación (§7 equivalente de
@@ -195,22 +206,29 @@ export async function desvincularPallet(embarqueId: number, palletId: number): P
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_DESPACHO}::int, ${embarqueId}::int)`
 
-    const embarque = await tx.embarque.findFirst({ where: { id: embarqueId, eliminadoEn: null }, select: { despachadoEn: true } })
+    const embarque = await tx.embarque.findFirst({
+      where: { id: embarqueId, eliminadoEn: null },
+      select: { despachadoEn: true, despachoAnuladoEn: true },
+    })
     if (!embarque) return 'NO_ENCONTRADO'
-    if (embarque.despachadoEn) return 'DESPACHADO'
+    // "Efectivamente despachado" (2026-09-22, Anular Despacho): un Embarque
+    // despachado y luego anulado vuelve a admitir desvincular pallets.
+    if (embarque.despachadoEn && !embarque.despachoAnuladoEn) return 'DESPACHADO'
 
     const result = await tx.pallet.updateMany({ where: { id: palletId, embarqueId }, data: { embarqueId: null } })
     return result.count > 0 ? 'OK' : 'NO_ENCONTRADO'
   })
 }
 
-// Confirma el despacho — atómico y condicionado a que aún no esté despachado
-// (evita una doble confirmación concurrente), a que tenga al menos un
-// pallet reservado (decisión de negocio, Christian: no se despacha vacío) y,
-// desde 2026-09-22 (compras.md §9.3, cierra EP-QA-003), a que exista una
-// reconciliación de Packing List vigente en estado OK. Mismo advisory lock
-// por embarqueId que desvincularPallet (EP-QA-002, QA ronda 2) — serializa
-// ambas operaciones entre sí, y ahora también contra guardarPackingList.
+// Confirma el despacho — atómico y condicionado a que no esté EFECTIVAMENTE
+// despachado ya (evita una doble confirmación concurrente; un Embarque
+// despachado y luego anulado SÍ puede volver a confirmarse), a que tenga al
+// menos un pallet reservado (decisión de negocio, Christian: no se despacha
+// vacío) y, desde 2026-09-22 (compras.md §9.3, cierra EP-QA-003), a que
+// exista una reconciliación de Packing List vigente en estado OK. Mismo
+// advisory lock por embarqueId que desvincularPallet (EP-QA-002, QA ronda 2)
+// — serializa ambas operaciones entre sí, y ahora también contra
+// guardarPackingList y anularDespacho.
 export async function confirmarDespacho(embarqueId: number, despachadoPor: string) {
   // El read final (getEmbarqueById) corre DESPUÉS de que la transacción
   // commitea, no adentro — usar `prisma` en vez de `tx` dentro del callback
@@ -220,22 +238,78 @@ export async function confirmarDespacho(embarqueId: number, despachadoPor: strin
 
     const embarque = await tx.embarque.findFirst({
       where: { id: embarqueId, eliminadoEn: null },
-      include: { _count: { select: { pallets: true } }, packingList: { select: { estado: true } } },
+      include: {
+        _count: { select: { pallets: true } },
+        packingLists: { where: { eliminadoEn: null }, select: { estado: true } },
+      },
     })
     if (!embarque) return 'NO_ENCONTRADO' as const
-    if (embarque.despachadoEn) return 'YA_DESPACHADO' as const
+    const efectivamenteDespachado = !!embarque.despachadoEn && !embarque.despachoAnuladoEn
+    if (efectivamenteDespachado) return 'YA_DESPACHADO' as const
     if (embarque._count.pallets === 0) return 'SIN_PALLETS' as const
-    if (!embarque.packingList) return 'SIN_PACKING_LIST' as const
-    if (embarque.packingList.estado !== 'OK') return 'PACKING_LIST_CON_DISCREPANCIAS' as const
+    const packingList = embarque.packingLists[0]
+    if (!packingList) return 'SIN_PACKING_LIST' as const
+    if (packingList.estado !== 'OK') return 'PACKING_LIST_CON_DISCREPANCIAS' as const
 
+    // Re-despachar tras una anulación pisa la confirmación anterior (no se
+    // conserva historial de ciclos completos, ver comentario en el schema).
     const claim = await tx.embarque.updateMany({
-      where: { id: embarqueId, despachadoEn: null },
-      data: { despachadoEn: new Date(), despachadoPor },
+      where: { id: embarqueId, OR: [{ despachadoEn: null }, { despachoAnuladoEn: { not: null } }] },
+      data: { despachadoEn: new Date(), despachadoPor, despachoAnuladoEn: null, despachoAnuladoPor: null },
     })
     return claim.count === 0 ? ('YA_DESPACHADO' as const) : ('OK' as const)
   })
   if (resultado !== 'OK') return resultado
   return getEmbarqueById(embarqueId)
+}
+
+type AnularDespachoResultado = 'OK' | 'NO_ENCONTRADO' | 'NO_DESPACHADO' | 'TIENE_RECLAMOS'
+
+// "Anular Despacho" (2026-09-22, decisión de negocio Christian) — soft
+// delete de la confirmación: `despachadoEn`/`despachadoPor` NO se limpian
+// (quedan como registro histórico), se marca `despachoAnuladoEn`/Por. Los
+// pallets NO se desvinculan (siguen reservados/seleccionados — decisión de
+// negocio explícita), pero sí se descarta lo que quedó derivado de un
+// despacho que ya no es válido: los `InstructivoHijo` (se regeneran con
+// "Generar Instructivos" cuando corresponda) y la reconciliación de Packing
+// List vigente (compras.md §9.3 — un futuro despacho debe volver a
+// reconciliar). Bloqueado si el Embarque ya tiene Reclamos activos: son
+// incompatibles con "esta fruta en realidad no salió" (decisión de negocio).
+// Mismo advisory lock que confirmarDespacho/desvincularPallet.
+export async function anularDespacho(embarqueId: number, actualizadoPor: string): Promise<AnularDespachoResultado> {
+  const resultado = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_DESPACHO}::int, ${embarqueId}::int)`
+
+    const embarque = await tx.embarque.findFirst({
+      where: { id: embarqueId, eliminadoEn: null },
+      select: { despachadoEn: true, despachoAnuladoEn: true },
+    })
+    if (!embarque) return 'NO_ENCONTRADO' as const
+    const efectivamenteDespachado = !!embarque.despachadoEn && !embarque.despachoAnuladoEn
+    if (!efectivamenteDespachado) return 'NO_DESPACHADO' as const
+
+    const reclamosActivos = await tx.reclamo.count({ where: { embarqueId, eliminadoEn: null } })
+    if (reclamosActivos > 0) return 'TIENE_RECLAMOS' as const
+
+    const claim = await tx.embarque.updateMany({
+      where: { id: embarqueId, despachadoEn: { not: null }, despachoAnuladoEn: null },
+      data: { despachoAnuladoEn: new Date(), despachoAnuladoPor: actualizadoPor },
+    })
+    if (claim.count === 0) return 'NO_DESPACHADO' as const
+
+    // Soft delete (2026-09-22, decisión de negocio Christian) — se
+    // conservan como historial del despacho anulado, no se borran de verdad.
+    await tx.instructivoHijo.updateMany({
+      where: { embarqueId, eliminadoEn: null },
+      data: { eliminadoEn: new Date(), eliminadoPor: actualizadoPor },
+    })
+    await tx.embarquePackingList.updateMany({
+      where: { embarqueId, eliminadoEn: null },
+      data: { eliminadoEn: new Date(), eliminadoPor: actualizadoPor },
+    })
+    return 'OK' as const
+  })
+  return resultado
 }
 
 // ─── Packing List (compras.md §9.3, cierra EP-QA-003) ──────────────────────
@@ -282,10 +356,14 @@ export async function guardarPackingList(
     const embarque = await tx.embarque.findFirst({ where: { id: embarqueId, eliminadoEn: null }, select: { id: true } })
     if (!embarque) throw new ValidationError('El Embarque ya no existe')
 
-    // delete-then-create en vez de upsert: la fila de contenido (bytes)
-    // depende de la fila padre por FK cascade — recrear ambas de cero es más
-    // simple que un update parcial de dos tablas relacionadas.
-    await tx.embarquePackingList.deleteMany({ where: { embarqueId } })
+    // Soft-delete-then-create (2026-09-22, decisión de negocio Christian):
+    // la activa anterior queda como historial en vez de borrarse — mismo
+    // motivo que anularDespacho. `contenido` (bytes) no se toca: cuelga de
+    // la fila soft-deleted por FK cascade, sigue siendo descargable.
+    await tx.embarquePackingList.updateMany({
+      where: { embarqueId, eliminadoEn: null },
+      data: { eliminadoEn: new Date(), eliminadoPor: datos.cargadoPor },
+    })
     const empresaId = getEmpresaIdActual()!
     const creado = await tx.embarquePackingList.create({
       data: {
@@ -308,7 +386,7 @@ export async function guardarPackingList(
 
 export async function getPackingListParaDescarga(embarqueId: number) {
   const meta = await prisma.embarquePackingList.findFirst({
-    where: { embarqueId },
+    where: { embarqueId, eliminadoEn: null },
     select: { id: true, nombreArchivo: true, mime: true },
   })
   if (!meta) return null
@@ -607,7 +685,7 @@ export async function guardarDatosInstructivo(embarqueId: number, datos: DatosIn
 
 export async function listInstructivosHijos(embarqueId: number) {
   return prisma.instructivoHijo.findMany({
-    where: { embarqueId },
+    where: { embarqueId, eliminadoEn: null },
     include: { planta: { select: entidadSelect } },
     orderBy: { secuencia: 'asc' },
   })
@@ -647,16 +725,26 @@ export async function generarInstructivosHijos(embarqueId: number, actualizadoPo
     // igual: elimina los obsoletos, no crea ninguno nuevo, devuelve [].
     const plantaIds = new Set(pallets.map((p) => p.recepcion.plantaId))
 
-    const existentes = await tx.instructivoHijo.findMany({ where: { embarqueId } })
-    const plantasConInstructivo = new Set(existentes.map((i) => i.plantaId))
+    // Solo entre ACTIVOS: uno soft-deleted (2026-09-22, "Anular Despacho" o
+    // una sincronización anterior) no cuenta como "ya tiene instructivo" ni
+    // debe volver a soft-eliminarse.
+    const existentesActivos = await tx.instructivoHijo.findMany({ where: { embarqueId, eliminadoEn: null } })
+    const plantasConInstructivo = new Set(existentesActivos.map((i) => i.plantaId))
 
-    const aEliminar = existentes.filter((i) => !plantaIds.has(i.plantaId))
+    const aEliminar = existentesActivos.filter((i) => !plantaIds.has(i.plantaId))
     if (aEliminar.length > 0) {
-      await tx.instructivoHijo.deleteMany({ where: { id: { in: aEliminar.map((i) => i.id) } } })
+      await tx.instructivoHijo.updateMany({
+        where: { id: { in: aEliminar.map((i) => i.id) } },
+        data: { eliminadoEn: new Date(), eliminadoPor: actualizadoPor },
+      })
     }
 
+    // La siguiente secuencia se calcula sobre TODAS las filas (incluidas las
+    // soft-deleted): `codigo` es único para siempre, nunca se reutiliza un
+    // número aunque la fila que lo tenía haya sido soft-eliminada.
+    const secuenciaMaxima = await tx.instructivoHijo.aggregate({ where: { embarqueId }, _max: { secuencia: true } })
     const empresaId = getEmpresaIdActual()!
-    let siguienteSecuencia = existentes.reduce((max, i) => Math.max(max, i.secuencia), 0) + 1
+    let siguienteSecuencia = (secuenciaMaxima._max.secuencia ?? 0) + 1
     for (const plantaId of plantaIds) {
       if (plantasConInstructivo.has(plantaId)) continue
       await tx.instructivoHijo.create({
@@ -673,7 +761,7 @@ export async function generarInstructivosHijos(embarqueId: number, actualizadoPo
     }
 
     return tx.instructivoHijo.findMany({
-      where: { embarqueId },
+      where: { embarqueId, eliminadoEn: null },
       include: { planta: { select: entidadSelect } },
       orderBy: { secuencia: 'asc' },
     })
@@ -686,10 +774,13 @@ export async function generarInstructivosHijos(embarqueId: number, actualizadoPo
 // módulo dueño de los datos", CLAUDE.md/Etapa 4 §4). Los pallets se
 // consultan aparte, filtrados por la Planta de ESTE instructivo (un Embarque
 // puede reservar pallets de varias plantas, cada InstructivoHijo solo
-// documenta los suyos).
+// documenta los suyos). `eliminadoEn: null` (FAS-AD-QA-002, QA ronda 3,
+// 2026-09-22): un Instructivo soft-eliminado (Embarque despachado y luego
+// anulado) deja de ser descargable/previsualizable por completo, aunque el
+// registro siga en la BD para auditoría.
 export async function getInstructivoHijoConDetalle(instructivoHijoId: number) {
   const instructivo = await prisma.instructivoHijo.findFirst({
-    where: { id: instructivoHijoId },
+    where: { id: instructivoHijoId, eliminadoEn: null },
     include: {
       embarque: {
         include: {
@@ -747,7 +838,7 @@ export async function updateInstructivoHijo(
   actualizadoPor: string,
 ) {
   const claim = await prisma.instructivoHijo.updateMany({
-    where: { id: instructivoId, embarqueId },
+    where: { id: instructivoId, embarqueId, eliminadoEn: null },
     data: { ...datos, actualizadoPor },
   })
   if (claim.count === 0) throw new ValidationError('El Instructivo ya no existe para este Embarque')

@@ -378,6 +378,21 @@ export async function confirmarDespacho(embarqueId: number, userId: string) {
   return resultado
 }
 
+// "Anular Despacho" (2026-09-22, decisión de negocio Christian) — soft
+// delete de la confirmación (repo.anularDespacho): los pallets NO se
+// desvinculan, quedan reservados/seleccionados; se borran los
+// InstructivoHijo y la reconciliación de Packing List vigente, ambos
+// derivados de un despacho que ya no es válido.
+export async function anularDespacho(embarqueId: number, userId: string) {
+  const resultado = await repo.anularDespacho(embarqueId, userId)
+  if (resultado === 'NO_ENCONTRADO') throw new NotFoundError('Embarque', String(embarqueId))
+  if (resultado === 'NO_DESPACHADO') throw new ValidationError('Este Embarque no está despachado')
+  if (resultado === 'TIENE_RECLAMOS') {
+    throw new ValidationError('Este Embarque tiene Reclamos registrados — no se puede anular el despacho')
+  }
+  return repo.getEmbarqueById(embarqueId)
+}
+
 // ─── Packing List (compras.md §9.3, cierra EP-QA-003) ──────────────────────
 //
 // Reconciliación a nivel de pallet (compras.md §9.3): los N° de Pallet del PL
@@ -407,7 +422,7 @@ export async function subirPackingList(
   userId: string,
 ) {
   const embarque = await obtenerEmbarque(embarqueId)
-  if (embarque.despachadoEn) {
+  if (embarque.despachadoEn && !embarque.despachoAnuladoEn) {
     throw new ValidationError('Este Embarque ya fue despachado — no admite reconciliar un nuevo Packing List')
   }
   if (!MIMES_EXCEL_PERMITIDOS.has(archivo.mime)) {

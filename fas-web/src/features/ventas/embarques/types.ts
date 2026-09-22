@@ -178,10 +178,22 @@ export interface Embarque extends DatosReservaManual, DatosInstructivo {
   gestorLogistico: EntidadRef | null
   estadoReserva: EstadoReservaEmbarque
   reservaManual: boolean
+  // "Efectivamente despachado" = despachadoEn && !despachoAnuladoEn — ver
+  // estaDespachado() abajo. despachadoEn/despachadoPor quedan como registro
+  // histórico de la ÚLTIMA confirmación, no se limpian al anular
+  // (2026-09-22, "Anular Despacho" — decisión de negocio Christian).
   despachadoEn: string | null
   despachadoPor: string | null
+  despachoAnuladoEn: string | null
+  despachoAnuladoPor: string | null
   creadoEn: string
   _count: { pallets: number }
+}
+
+// Único punto de verdad para "¿está despachado ahora mismo?" — no leer
+// `despachadoEn` solo, porque queda seteado incluso después de anular.
+export function estaDespachado(embarque: Pick<Embarque, 'despachadoEn' | 'despachoAnuladoEn'>): boolean {
+  return !!embarque.despachadoEn && !embarque.despachoAnuladoEn
 }
 
 // Reconciliación de Packing List (compras.md §9.3, cierra EP-QA-003) — a lo

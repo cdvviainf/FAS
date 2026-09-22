@@ -13,6 +13,7 @@ import { MultiCombobox } from '@/components/shared/multi-combobox'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { embarquesService } from '../service'
 import { embarquesKeys, embarquePalletsDisponiblesOptions } from '../queries'
+import { estaDespachado } from '../types'
 import type { EmbarqueDetalle, PalletResumen } from '../types'
 
 const ITEM = 'VENTAS_EMBARQUES'
@@ -109,7 +110,7 @@ export function SeleccionarPalletsTab({ embarque }: { embarque: EmbarqueDetalle 
     [disponibles, filtros],
   )
   const reservadosOrdenados = useMemo(() => ordenarPorAntiguedad(embarque.pallets), [embarque.pallets])
-  const yaDespachado = !!embarque.despachadoEn
+  const yaDespachado = estaDespachado(embarque)
 
   function invalidar() {
     queryClient.invalidateQueries({ queryKey: embarquesKeys.detail(embarque.id) })

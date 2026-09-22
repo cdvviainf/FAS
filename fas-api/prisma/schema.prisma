@@ -2702,12 +2702,27 @@ model Embarque {
 
   // Reserva de pallets (2026-09-02, cierra compras.md §4.5/§4.7 y ventas.md
   // R9/R11, antes diferidos): un pallet se reserva a este Embarque vía
-  // Pallet.embarqueId. despachadoEn marca el único gatillo de bloqueo que
-  // exige compras.md §6.4 — una vez seteado, ya no se pueden desvincular
+  // Pallet.embarqueId. "Efectivamente despachado" = `despachadoEn != null &&
+  // despachoAnuladoEn == null` — mientras lo esté, no se pueden desvincular
   // pallets (agregar sigue permitido, decisión de negocio, Christian).
-  despachadoEn  DateTime?
-  despachadoPor String?
-  pallets       Pallet[]
+  //
+  // Anular Despacho (2026-09-22, decisión de negocio Christian): `despachadoEn`/
+  // `despachadoPor` quedan como registro histórico inmutable de la ÚLTIMA
+  // confirmación (no se limpian al anular) — `despachoAnuladoEn`/
+  // `despachoAnuladoPor` son el "soft delete" de esa confirmación, mismo
+  // criterio que `eliminadoEn`/`eliminadoPor` en el resto del schema. Los
+  // pallets NO se desvinculan al anular — siguen reservados/seleccionados a
+  // este Embarque (decisión de negocio: "no desmarcarlos, dejarlos
+  // seleccionados"), la única forma de soltarlos es desvincularlos a mano
+  // desde "Seleccionar Pallets", ahora posible de nuevo tras la anulación.
+  // Un `confirmarDespacho` posterior sobreescribe `despachadoEn`/`despachadoPor`
+  // con la nueva confirmación y limpia `despachoAnuladoEn`/`despachoAnuladoPor`
+  // — no se conserva historial de ciclos completos, solo el vigente.
+  despachadoEn       DateTime?
+  despachadoPor      String?
+  despachoAnuladoEn  DateTime?
+  despachoAnuladoPor String?
+  pallets            Pallet[]
 
   // Solicitud de Reserva (2026-09-05, ventas.md §4.3; generalizado a
   // cualquier Gestor Logístico el 2026-09-07, reemplaza el hardcode a
@@ -2787,10 +2802,12 @@ model Embarque {
   stackingRangos EmbarqueStackingRango[]
 
   // Reconciliación de Packing List (compras.md §9.3, cierra EP-QA-003,
-  // 2026-09-22): a lo más una por Embarque — cada subida nueva reemplaza la
-  // anterior (ver embarques.repository.ts guardarPackingList). Mientras no
-  // exista o su estado no sea OK, confirmarDespacho() bloquea.
-  packingList EmbarquePackingList?
+  // 2026-09-22): a lo más una ACTIVA por Embarque — cada subida nueva
+  // soft-elimina la anterior (ver embarques.repository.ts guardarPackingList).
+  // Mientras no exista una activa o su estado no sea OK, confirmarDespacho()
+  // bloquea. `[]` no `?` — la unicidad real es un índice parcial a nivel de
+  // BD (ver comentario en el modelo `EmbarquePackingList`).
+  packingLists EmbarquePackingList[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -2844,11 +2861,22 @@ model InstructivoHijo {
   creadoPor      String
   actualizadoEn  DateTime? @updatedAt
   actualizadoPor String?
+  // Soft delete (2026-09-22, decisión de negocio Christian): "Anular
+  // Despacho" descarta los InstructivoHijo derivados del despacho anulado
+  // sin borrarlos de verdad (auditoría/historial) — "Generar Instructivos"
+  // también soft-elimina acá los de una Planta que dejó de aportar pallets
+  // (antes hard delete). `codigo` sigue siendo único para siempre (nunca se
+  // reutiliza un número de secuencia, aunque la fila quede soft-deleted) —
+  // solo `(empresaId, embarqueId, plantaId)` necesita ser único apenas entre
+  // filas ACTIVAS (índice parcial a nivel de BD, WHERE "eliminadoEn" IS
+  // NULL, ver migration.sql — mismo patrón que Recepcion.ordenCompraId).
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
 
-  @@unique([empresaId, embarqueId, plantaId])
   @@unique([empresaId, codigo])
   @@index([embarqueId])
   @@index([plantaId])
+  @@index([eliminadoEn])
   @@map("instructivos_hijos")
 }
 
@@ -2930,11 +2958,15 @@ model SolicitudReserva {
 // (compras.md §9.3): 1) los N° de Pallet del PL = los reservados al Embarque;
 // 2) el detalle de cada pallet coincidente (especie/variedad/categoría/
 // artículo/calibre/cajas + productor) = el detalle en Stock. A lo más una fila
-// por Embarque (@@unique embarqueId) — cada subida nueva reemplaza la
-// anterior en una transacción (delete + create, ver
-// embarques.repository.ts), no se conserva historial de intentos previos
-// (decisión de negocio: lo que importa es si el estado ACTUAL cuadra, mismo
-// criterio de simplicidad que DocumentoEmitido.pdf en CLAUDE.md #13).
+// ACTIVA por Embarque — cada subida nueva soft-elimina la anterior (2026-09-22:
+// pasa de hard delete a soft delete, decisión de negocio Christian — "Anular
+// Despacho" necesita conservar la reconciliación de un despacho ya anulado
+// como historial). Sin `@@unique` de Prisma (no soporta índices parciales en
+// el DSL, mismo motivo que `Recepcion.ordenCompraId`): la unicidad real
+// (empresaId, embarqueId) es un índice único parcial a nivel de BD, solo
+// entre filas activas (WHERE "eliminadoEn" IS NULL, ver migration.sql) — por
+// eso `Embarque.packingLists` de abajo es `[]`, no `?` (filas soft-deleted
+// pueden repetir embarqueId).
 model EmbarquePackingList {
   id         Int      @id @default(autoincrement())
   empresaId  Int
@@ -2956,12 +2988,15 @@ model EmbarquePackingList {
   // cuando estado = OK.
   discrepancias Json
 
-  cargadoEn  DateTime @default(now())
-  cargadoPor String
+  cargadoEn    DateTime  @default(now())
+  cargadoPor   String
+  eliminadoEn  DateTime?
+  eliminadoPor String?
 
-  @@unique([empresaId, embarqueId])
   @@index([empresaId])
+  @@index([embarqueId])
   @@index([templateCargaId])
+  @@index([eliminadoEn])
   @@map("embarque_packing_lists")
 }
 

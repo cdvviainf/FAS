@@ -71,6 +71,11 @@ export async function embarquesRoutes(app: FastifyInstance) {
 
   // ─── Despachar ────────────────────────────────────────────────────────────
   app.patch('/embarques/:id/despachar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.despachar)
+  app.patch(
+    '/embarques/:id/anular-despacho',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.anularDespacho,
+  )
 
   // ─── Packing List (compras.md §9.3, cierra EP-QA-003) ────────────────────
   app.post(

@@ -14,11 +14,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { templatesCargaService } from '@/features/templates-carga/service'
 import { embarquesService } from '../service'
 import { embarquesKeys } from '../queries'
+import { estaDespachado } from '../types'
 import type { EmbarqueDetalle } from '../types'
 
 const ITEM = 'VENTAS_EMBARQUES'
@@ -34,17 +43,69 @@ function diferenciasDelError(err: unknown): string[] {
   return Array.isArray(diferencias) ? diferencias.filter((d): d is string => typeof d === 'string') : []
 }
 
+// "Anular Despacho" (2026-09-22, decisión de negocio Christian) — soft
+// delete de la confirmación: no desvincula pallets (siguen reservados/
+// seleccionados), pero borra los Instructivos por Planta y la reconciliación
+// de Packing List vigente (ambos derivados de un despacho que ya no es
+// válido). Confirmación explícita porque, aunque no toca los pallets, sí
+// tiene efecto real y visible en otras dos pestañas.
+function AnularDespachoDialog({
+  embarque,
+  open,
+  onOpenChange,
+}: {
+  embarque: EmbarqueDetalle
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: () => embarquesService.anularDespacho(embarque.id),
+    onSuccess: () => {
+      toast.success('Despacho anulado')
+      queryClient.invalidateQueries({ queryKey: embarquesKeys.detail(embarque.id) })
+      onOpenChange(false)
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo anular el despacho'),
+  })
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className='sm:max-w-md'>
+        <DialogHeader>
+          <DialogTitle>Anular Despacho</DialogTitle>
+          <DialogDescription>
+            Los {embarque.pallets.length} pallet{embarque.pallets.length === 1 ? '' : 's'} de este Embarque
+            seguirán reservados/seleccionados — no se devuelven al stock automáticamente. Se eliminarán los
+            Instructivos por Planta generados y la reconciliación de Packing List vigente; deberás rehacerlos
+            antes de volver a despachar.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type='button' variant='outline' onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button type='button' variant='destructive' isLoading={mutation.isPending} onClick={() => mutation.mutate()}>
+            <Icons.xCircle className='mr-1 h-4 w-4' /> Anular Despacho
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
   const puedeEscribir = usePuedeEscribir(ITEM)
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
   const [templateCargaId, setTemplateCargaId] = useState<string>('')
   const [erroresCarga, setErroresCarga] = useState<{ mensaje: string; diferencias: string[] } | null>(null)
+  const [anulando, setAnulando] = useState(false)
+
+  const despachado = estaDespachado(embarque)
 
   const { data: templatesData } = useQuery({
     queryKey: ['templates-carga', 'PACKING_LIST'],
     queryFn: () => templatesCargaService.list({ tipo: 'PACKING_LIST' }),
-    enabled: !embarque.despachadoEn,
+    enabled: !despachado,
   })
   const templates = templatesData?.data ?? []
 
@@ -90,15 +151,20 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
     subirPackingListMutation.mutate(f)
   }
 
-  if (embarque.despachadoEn) {
+  if (despachado) {
     return (
       <div className='space-y-4'>
         <div className='space-y-2 rounded-md border border-dashed p-6 text-center'>
           <Badge>Despachado</Badge>
           <p className='text-muted-foreground text-sm'>
-            Confirmado el {new Date(embarque.despachadoEn).toLocaleString('es-CL')}
+            Confirmado el {new Date(embarque.despachadoEn!).toLocaleString('es-CL')}
             {embarque.despachadoPor ? ` — ${embarque.despachadoPor}` : ''}
           </p>
+          {puedeEscribir && (
+            <Button type='button' variant='outline' size='sm' onClick={() => setAnulando(true)}>
+              <Icons.xCircle className='mr-1 h-4 w-4' /> Anular Despacho
+            </Button>
+          )}
         </div>
         {embarque.packingList && (
           <div className='flex items-center gap-2 rounded-md border p-3 text-sm'>
@@ -114,6 +180,7 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
             <span className='text-muted-foreground text-xs'>Packing List reconciliado</span>
           </div>
         )}
+        <AnularDespachoDialog embarque={embarque} open={anulando} onOpenChange={setAnulando} />
       </div>
     )
   }
@@ -123,6 +190,13 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
 
   return (
     <div className='space-y-4'>
+      {embarque.despachoAnuladoEn && (
+        <p className='text-muted-foreground rounded-md border border-dashed p-3 text-center text-xs'>
+          Despacho anulado el {new Date(embarque.despachoAnuladoEn).toLocaleString('es-CL')}
+          {embarque.despachoAnuladoPor ? ` — ${embarque.despachoAnuladoPor}` : ''} — reconcilia el Packing List de
+          nuevo antes de volver a despachar.
+        </p>
+      )}
       <div className='space-y-3 rounded-md border p-6'>
         <p className='text-muted-foreground text-center text-sm'>
           {embarque.pallets.length} pallet{embarque.pallets.length === 1 ? '' : 's'} reservado
