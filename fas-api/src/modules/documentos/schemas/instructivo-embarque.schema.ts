@@ -45,10 +45,9 @@ export const instructivoEmbarquePdfPayloadSchema = z.object({
   fechaZarpe: z.string().nullable(), // ISO
   fechaArribo: z.string().nullable(), // ISO — Embarque.fechaArribo (2026-09-22)
   fechaCargaPlanta: z.string().nullable(), // ISO
-  // Stacking del contenedor (2026-09-22): compartido por todo el Embarque,
-  // ya no por Planta — ver Embarque.stackingDesde/stackingHasta.
-  stackingDesde: z.string().nullable(), // ISO
-  stackingHasta: z.string().nullable(), // ISO
+  // Rangos de stacking del contenedor (2026-09-22): compartidos por todo el
+  // Embarque, ya no por Planta — ver Embarque.stackingRangos (N por Embarque).
+  stackingRangos: z.array(z.object({ desde: z.string(), hasta: z.string() })),
   // Observaciones generales del Instructivo (Embarque.observacionesInstructivo)
   // — distintas de `observaciones`, que sigue siendo por Planta.
   observacionesGenerales: z.string().nullable(),

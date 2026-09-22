@@ -16,17 +16,19 @@ import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { embarquesService } from '../service'
 import { embarquesKeys } from '../queries'
 import { ESTADO_RESERVA_LABELS } from '../types'
-import type { DatosInstructivoInput, DatosReservaManualInput, EmbarqueDetalle } from '../types'
+import type { DatosInstructivoInput, DatosReservaManualInput, EmbarqueDetalle, StackingRangoInput } from '../types'
 
 const ITEM = 'VENTAS_EMBARQUES'
 const puertosService = createMantenedorService('puertos')
 
+// Datos de booking manual (2026-09-07, ventas.md §4.3) — "Retiro Planta"
+// salió del formulario (2026-09-22, decisión de negocio Christian), sin
+// reemplazo.
 interface DatosReservaForm {
   numeroBooking: string
   nave: string
   numeroContenedor: string
   fechaZarpe: string
-  fechaRetiroPlanta: string
 }
 
 function formReservaInicial(embarque: EmbarqueDetalle): DatosReservaForm {
@@ -35,7 +37,6 @@ function formReservaInicial(embarque: EmbarqueDetalle): DatosReservaForm {
     nave: embarque.naveManual ?? '',
     numeroContenedor: embarque.numeroContenedorManual ?? '',
     fechaZarpe: embarque.fechaZarpeManual ? embarque.fechaZarpeManual.slice(0, 10) : '',
-    fechaRetiroPlanta: embarque.fechaRetiroPlantaManual ? embarque.fechaRetiroPlantaManual.slice(0, 10) : '',
   }
 }
 
@@ -43,9 +44,8 @@ function soloFecha(iso: string | null): string {
   return iso ? iso.slice(0, 10) : ''
 }
 
-// Valor para un input `datetime-local` — mismo formato que generar-
-// instructivos-tab.tsx (stacking se trasladó acá, 2026-09-22).
-function soloFechaHora(iso: string | null): string {
+// Valor para un input `datetime-local` (formato `YYYY-MM-DDTHH:mm`, sin zona).
+function soloFechaHora(iso: string): string {
   if (!iso) return ''
   const d = new Date(iso)
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -63,8 +63,6 @@ interface DatosInstructivoForm {
   embarcadorId: string
   navieraId: string
   fechaArribo: string
-  stackingDesde: string
-  stackingHasta: string
   observacionesInstructivo: string
 }
 
@@ -80,10 +78,19 @@ function formInstructivoInicial(embarque: EmbarqueDetalle): DatosInstructivoForm
     embarcadorId: embarque.embarcadorId ? String(embarque.embarcadorId) : '',
     navieraId: embarque.navieraId ? String(embarque.navieraId) : '',
     fechaArribo: soloFecha(embarque.fechaArribo),
-    stackingDesde: soloFechaHora(embarque.stackingDesde),
-    stackingHasta: soloFechaHora(embarque.stackingHasta),
     observacionesInstructivo: embarque.observacionesInstructivo ?? '',
   }
+}
+
+// Un rango en edición — strings vacíos mientras se está completando una fila
+// nueva; se descartan al guardar si quedan incompletas (ver validarRangos).
+interface RangoForm {
+  desde: string
+  hasta: string
+}
+
+function rangosInicial(embarque: EmbarqueDetalle): RangoForm[] {
+  return embarque.stackingRangos.map((r) => ({ desde: soloFechaHora(r.desde), hasta: soloFechaHora(r.hasta) }))
 }
 
 export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle }) {
@@ -91,6 +98,7 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
   const queryClient = useQueryClient()
   const [form, setForm] = useState<DatosReservaForm>(() => formReservaInicial(embarque))
   const [formInstructivo, setFormInstructivo] = useState<DatosInstructivoForm>(() => formInstructivoInicial(embarque))
+  const [rangos, setRangos] = useState<RangoForm[]>(() => rangosInicial(embarque))
 
   const invalidar = () => {
     queryClient.invalidateQueries({ queryKey: embarquesKeys.detail(embarque.id) })
@@ -119,12 +127,6 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
     onError: (e: Error) => toast.error(e.message || 'No se pudo pasar a modo manual'),
   })
 
-  // ─── Datos del Instructivo (ventas.md R11) — independientes de
-  // reservaManual/estadoReserva, siempre editables desde esta misma pantalla
-  // (2026-09-22, decisión de negocio Christian: "todos los datos del
-  // instructivo deben quedar en la misma pantalla"; la pestaña "Generar
-  // Instructivos" queda solo con la generación por planta).
-
   const { data: puertosData } = useQuery({
     queryKey: ['puertos-options-instructivo'],
     queryFn: () => puertosService.list({ limit: 200 }),
@@ -148,23 +150,66 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
 
   const solicitud = embarque.solicitudReserva
 
-  // "Un solo Guardar para todo" (2026-09-22, decisión de negocio Christian):
-  // antes había un botón por card (Reserva Manual / Datos del Instructivo),
-  // cada uno con su propio PATCH. Se mantienen los dos endpoints (dominios
-  // distintos en el backend), pero un único botón dispara ambos a la vez —
-  // la Reserva Manual solo si esa card está visible/editable.
-  const mostrarReservaManual = embarque.reservaManual && embarque.estadoReserva !== 'SOLICITADA'
+  // El booking (Booking/Contenedor/Nave/Fecha Embarque) solo es editable en
+  // modo manual — en modo automático (AGL360) se muestra de solo lectura,
+  // tomado de `solicitud` una vez confirmada (2026-09-22: unificado en un
+  // solo bloque junto a los Datos del Instructivo, ver campoBooking abajo).
+  const bookingEditable = embarque.reservaManual && embarque.estadoReserva !== 'SOLICITADA'
 
+  function campoBooking(valor: string, onChange: (v: string) => void, automatico: string | null | undefined, tipo: 'text' | 'date' = 'text') {
+    if (bookingEditable) {
+      return <Input type={tipo} value={valor} onChange={(e) => onChange(e.target.value)} disabled={!puedeEscribir} />
+    }
+    const texto = tipo === 'date' && automatico ? new Date(automatico).toLocaleDateString('es-CL') : (automatico ?? '—')
+    return <p className='text-muted-foreground py-2 text-sm'>{texto}</p>
+  }
+
+  function agregarRango() {
+    setRangos((r) => [...r, { desde: '', hasta: '' }])
+  }
+  function quitarRango(i: number) {
+    setRangos((r) => r.filter((_, idx) => idx !== i))
+  }
+  function actualizarRango(i: number, campo: 'desde' | 'hasta', valor: string) {
+    setRangos((r) => r.map((row, idx) => (idx === i ? { ...row, [campo]: valor } : row)))
+  }
+
+  // Solo filas completas viajan al backend — una fila con un solo lado
+  // lleno se rechaza acá mismo (mensaje claro) en vez de dejar que el 422
+  // del backend sea la primera noticia.
+  function rangosParaGuardar(): StackingRangoInput[] | null {
+    const completos: StackingRangoInput[] = []
+    for (const r of rangos) {
+      if (!r.desde && !r.hasta) continue
+      if (!r.desde || !r.hasta) {
+        toast.error('Hay un rango de Stacking con solo una fecha completada — llena ambas o elimina la fila')
+        return null
+      }
+      if (new Date(r.hasta) <= new Date(r.desde)) {
+        toast.error('En cada rango de Stacking, "hasta" debe ser posterior a "desde"')
+        return null
+      }
+      completos.push({ desde: r.desde, hasta: r.hasta })
+    }
+    return completos
+  }
+
+  // "Un solo Guardar para todo" (2026-09-22, decisión de negocio Christian):
+  // un único bloque (Reserva + Instructivo, ya no dos cards separadas) con
+  // un único botón — sigue habiendo dos PATCH distintos en el backend
+  // (dominios separados), pero un solo click dispara ambos.
   const guardarTodoMutation = useMutation({
     mutationFn: async () => {
+      const stackingRangos = rangosParaGuardar()
+      if (stackingRangos === null) throw new Error('__VALIDACION_LOCAL__')
+
       const tareas: Promise<unknown>[] = []
-      if (mostrarReservaManual) {
+      if (bookingEditable) {
         const datosReserva: DatosReservaManualInput = {
           numeroBooking: form.numeroBooking || null,
           nave: form.nave || null,
           numeroContenedor: form.numeroContenedor || null,
           fechaZarpe: form.fechaZarpe || null,
-          fechaRetiroPlanta: form.fechaRetiroPlanta || null,
         }
         tareas.push(embarquesService.guardarDatosReservaManual(embarque.id, datosReserva))
       }
@@ -179,8 +224,7 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
         embarcadorId: formInstructivo.embarcadorId ? Number(formInstructivo.embarcadorId) : null,
         navieraId: formInstructivo.navieraId ? Number(formInstructivo.navieraId) : null,
         fechaArribo: formInstructivo.fechaArribo || null,
-        stackingDesde: formInstructivo.stackingDesde || null,
-        stackingHasta: formInstructivo.stackingHasta || null,
+        stackingRangos,
         observacionesInstructivo: formInstructivo.observacionesInstructivo || null,
       }
       tareas.push(embarquesService.guardarDatosInstructivo(embarque.id, datosInstructivo))
@@ -190,183 +234,180 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
       toast.success('Datos guardados')
       invalidar()
     },
-    onError: (e: Error) => toast.error(e.message || 'No se pudieron guardar los datos'),
+    onError: (e: Error) => {
+      if (e.message === '__VALIDACION_LOCAL__') return // toast ya mostrado en rangosParaGuardar()
+      toast.error(e.message || 'No se pudieron guardar los datos')
+    },
   })
 
   return (
-    <div className='space-y-6'>
-      <div className='space-y-4 rounded-md border p-6'>
-        <div className='flex items-center gap-2'>
-          <Badge variant={embarque.estadoReserva === 'CONFIRMADA' ? 'default' : embarque.estadoReserva === 'SOLICITADA' ? 'secondary' : 'destructive'}>
-            {ESTADO_RESERVA_LABELS[embarque.estadoReserva]}
-          </Badge>
-          {embarque.reservaManual && <Badge variant='outline'>Manual</Badge>}
-          <span className='text-sm text-muted-foreground'>
-            Gestor: {embarque.gestorLogistico?.descripcion ?? 'Sin gestor asignado (Embarque anterior a esta función)'}
-          </span>
-        </div>
-
-        {embarque.estadoReserva === 'PENDIENTE' && !embarque.reservaManual && (
-          <div className='space-y-3 text-center'>
-            <p className='text-sm text-muted-foreground'>
-              Este Embarque no tiene una Solicitud de Reserva enviada — la última integración falló o nunca se
-              intentó.
-            </p>
-            {puedeEscribir && (
-              <div className='flex justify-center gap-2'>
-                <Button type='button' onClick={() => solicitarMutation.mutate()} isLoading={solicitarMutation.isPending}>
-                  <Icons.check className='mr-1 h-4 w-4' /> Reintentar
-                </Button>
-                <Button
-                  type='button'
-                  variant='outline'
-                  onClick={() => dejarManualMutation.mutate()}
-                  isLoading={dejarManualMutation.isPending}
-                >
-                  Dejar Manual
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {embarque.estadoReserva === 'SOLICITADA' && (
-          <p className='text-sm text-muted-foreground'>
-            Solicitud enviada el {solicitud ? new Date(solicitud.enviadoEn).toLocaleString('es-CL') : '—'} — esperando
-            confirmación del gestor logístico.
-          </p>
-        )}
-
-        {embarque.reservaManual && embarque.estadoReserva !== 'SOLICITADA' && (
-          <div className='space-y-3'>
-            <p className='text-sm text-muted-foreground'>
-              Reserva manual — ingresa los datos de booking a medida que los recibas del gestor logístico.
-            </p>
-            <div className='grid grid-cols-2 gap-3'>
-              <div className='space-y-1.5'>
-                <Label>N° Booking</Label>
-                <Input value={form.numeroBooking} onChange={(e) => setForm((f) => ({ ...f, numeroBooking: e.target.value }))} disabled={!puedeEscribir} />
-              </div>
-              <div className='space-y-1.5'>
-                <Label>Nave</Label>
-                <Input value={form.nave} onChange={(e) => setForm((f) => ({ ...f, nave: e.target.value }))} disabled={!puedeEscribir} />
-              </div>
-              <div className='space-y-1.5'>
-                <Label>Contenedor</Label>
-                <Input value={form.numeroContenedor} onChange={(e) => setForm((f) => ({ ...f, numeroContenedor: e.target.value }))} disabled={!puedeEscribir} />
-              </div>
-              <div className='space-y-1.5'>
-                <Label>Fecha Zarpe</Label>
-                <Input type='date' value={form.fechaZarpe} onChange={(e) => setForm((f) => ({ ...f, fechaZarpe: e.target.value }))} disabled={!puedeEscribir} />
-              </div>
-              <div className='space-y-1.5'>
-                <Label>Retiro Planta</Label>
-                <Input type='date' value={form.fechaRetiroPlanta} onChange={(e) => setForm((f) => ({ ...f, fechaRetiroPlanta: e.target.value }))} disabled={!puedeEscribir} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {embarque.estadoReserva === 'CONFIRMADA' && !embarque.reservaManual && solicitud && (
-          <div className='grid grid-cols-2 gap-3 text-sm'>
-            {solicitud.numeroBooking && <div><span className='text-muted-foreground'>N° Booking:</span> {solicitud.numeroBooking}</div>}
-            {solicitud.naviera && <div><span className='text-muted-foreground'>Naviera:</span> {solicitud.naviera}</div>}
-            {solicitud.nave && <div><span className='text-muted-foreground'>Nave:</span> {solicitud.nave}</div>}
-            {solicitud.numeroContenedor && <div><span className='text-muted-foreground'>Contenedor:</span> {solicitud.numeroContenedor}</div>}
-            {solicitud.fechaZarpe && <div><span className='text-muted-foreground'>Fecha zarpe:</span> {new Date(solicitud.fechaZarpe).toLocaleDateString('es-CL')}</div>}
-            {solicitud.fechaRetiroPlanta && <div><span className='text-muted-foreground'>Retiro planta:</span> {new Date(solicitud.fechaRetiroPlanta).toLocaleDateString('es-CL')}</div>}
-          </div>
-        )}
+    <div className='space-y-4 rounded-md border p-6'>
+      <div className='flex items-center gap-2'>
+        <Badge variant={embarque.estadoReserva === 'CONFIRMADA' ? 'default' : embarque.estadoReserva === 'SOLICITADA' ? 'secondary' : 'destructive'}>
+          {ESTADO_RESERVA_LABELS[embarque.estadoReserva]}
+        </Badge>
+        {embarque.reservaManual && <Badge variant='outline'>Manual</Badge>}
+        <span className='text-sm text-muted-foreground'>
+          Gestor: {embarque.gestorLogistico?.descripcion ?? 'Sin gestor asignado (Embarque anterior a esta función)'}
+        </span>
       </div>
 
-      <div className='space-y-3 rounded-md border p-6'>
-        <h3 className='text-sm font-semibold'>Datos del Instructivo</h3>
-        <div className='grid grid-cols-2 gap-3'>
-          <div className='space-y-1.5'>
-            <Label>Puerto de zarpe</Label>
-            <Combobox
-              value={formInstructivo.puertoZarpeId}
-              onChange={(v) => setFormInstructivo((f) => ({ ...f, puertoZarpeId: v }))}
-              placeholder='Seleccionar puerto...'
-              searchPlaceholder='Buscar puerto...'
-              options={(puertosData?.data ?? []).map((p) => ({ value: String(p.id), label: p.descripcion }))}
-              disabled={!puedeEscribir}
-            />
-          </div>
-          <div className='space-y-1.5'>
-            <Label>Naviera</Label>
-            <Combobox
-              value={formInstructivo.navieraId}
-              onChange={(v) => setFormInstructivo((f) => ({ ...f, navieraId: v }))}
-              placeholder='Seleccionar naviera...'
-              searchPlaceholder='Buscar naviera...'
-              options={(navierasData?.data ?? []).map((e) => ({ value: String(e.id), label: e.descripcion }))}
-              disabled={!puedeEscribir}
-            />
-          </div>
-          <div className='space-y-1.5'>
-            <Label>Embarcador</Label>
-            <Combobox
-              value={formInstructivo.embarcadorId}
-              onChange={(v) => setFormInstructivo((f) => ({ ...f, embarcadorId: v }))}
-              placeholder='Seleccionar embarcador...'
-              searchPlaceholder='Buscar embarcador...'
-              options={(embarcadoresData?.data ?? []).map((e) => ({ value: String(e.id), label: e.descripcion }))}
-              disabled={!puedeEscribir}
-            />
-          </div>
-          <div className='space-y-1.5'>
-            <Label>Agente de aduana</Label>
-            <Combobox
-              value={formInstructivo.agenteAduanaId}
-              onChange={(v) => setFormInstructivo((f) => ({ ...f, agenteAduanaId: v }))}
-              placeholder='Seleccionar agente...'
-              searchPlaceholder='Buscar agente...'
-              options={(agentesData?.data ?? []).map((e) => ({ value: String(e.id), label: e.descripcion }))}
-              disabled={!puedeEscribir}
-            />
-          </div>
-          <div className='space-y-1.5'>
-            <Label>Voyage Number</Label>
-            <Input value={formInstructivo.voyageNumber} onChange={(e) => setFormInstructivo((f) => ({ ...f, voyageNumber: e.target.value }))} disabled={!puedeEscribir} />
-          </div>
-          <div className='space-y-1.5'>
-            <Label>Depósito</Label>
-            <Input value={formInstructivo.deposito} onChange={(e) => setFormInstructivo((f) => ({ ...f, deposito: e.target.value }))} disabled={!puedeEscribir} />
-          </div>
-          <div className='space-y-1.5'>
-            <Label>AWB / BL</Label>
-            <Input value={formInstructivo.awbBl} onChange={(e) => setFormInstructivo((f) => ({ ...f, awbBl: e.target.value }))} disabled={!puedeEscribir} />
-          </div>
-          <div className='space-y-1.5'>
-            <Label>Tipo de bultos</Label>
-            <Input value={formInstructivo.tipoBultos} onChange={(e) => setFormInstructivo((f) => ({ ...f, tipoBultos: e.target.value }))} disabled={!puedeEscribir} />
-          </div>
-          <div className='space-y-1.5'>
-            <Label>Cutoff</Label>
-            <Input type='date' value={formInstructivo.cutoffDate} onChange={(e) => setFormInstructivo((f) => ({ ...f, cutoffDate: e.target.value }))} disabled={!puedeEscribir} />
-          </div>
-          <div className='space-y-1.5'>
-            <Label>Fecha de Arribo</Label>
-            <Input type='date' value={formInstructivo.fechaArribo} onChange={(e) => setFormInstructivo((f) => ({ ...f, fechaArribo: e.target.value }))} disabled={!puedeEscribir} />
-          </div>
-          <div className='space-y-1.5'>
-            <Label>Stacking desde</Label>
-            <Input type='datetime-local' value={formInstructivo.stackingDesde} onChange={(e) => setFormInstructivo((f) => ({ ...f, stackingDesde: e.target.value }))} disabled={!puedeEscribir} />
-          </div>
-          <div className='space-y-1.5'>
-            <Label>Stacking hasta</Label>
-            <Input type='datetime-local' value={formInstructivo.stackingHasta} onChange={(e) => setFormInstructivo((f) => ({ ...f, stackingHasta: e.target.value }))} disabled={!puedeEscribir} />
-          </div>
+      {embarque.estadoReserva === 'PENDIENTE' && !embarque.reservaManual && (
+        <div className='space-y-3 text-center'>
+          <p className='text-sm text-muted-foreground'>
+            Este Embarque no tiene una Solicitud de Reserva enviada — la última integración falló o nunca se
+            intentó.
+          </p>
+          {puedeEscribir && (
+            <div className='flex justify-center gap-2'>
+              <Button type='button' onClick={() => solicitarMutation.mutate()} isLoading={solicitarMutation.isPending}>
+                <Icons.check className='mr-1 h-4 w-4' /> Reintentar
+              </Button>
+              <Button
+                type='button'
+                variant='outline'
+                onClick={() => dejarManualMutation.mutate()}
+                isLoading={dejarManualMutation.isPending}
+              >
+                Dejar Manual
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {embarque.estadoReserva === 'SOLICITADA' && (
+        <p className='text-sm text-muted-foreground'>
+          Solicitud enviada el {solicitud ? new Date(solicitud.enviadoEn).toLocaleString('es-CL') : '—'} — esperando
+          confirmación del gestor logístico.
+        </p>
+      )}
+
+      {/* Un solo bloque (2026-09-22, decisión de negocio Christian): booking
+          (manual o automático, ver campoBooking) y Datos del Instructivo
+          conviven en la misma grilla, en pares lógicos. */}
+      <div className='grid grid-cols-2 gap-3'>
+        <div className='space-y-1.5'>
+          <Label>Booking</Label>
+          {campoBooking(form.numeroBooking, (v) => setForm((f) => ({ ...f, numeroBooking: v })), solicitud?.numeroBooking)}
         </div>
         <div className='space-y-1.5'>
-          <Label>Observaciones</Label>
-          <Textarea
-            value={formInstructivo.observacionesInstructivo}
-            onChange={(e) => setFormInstructivo((f) => ({ ...f, observacionesInstructivo: e.target.value }))}
+          <Label>AWB / BL</Label>
+          <Input value={formInstructivo.awbBl} onChange={(e) => setFormInstructivo((f) => ({ ...f, awbBl: e.target.value }))} disabled={!puedeEscribir} />
+        </div>
+
+        <div className='space-y-1.5'>
+          <Label>Contenedor</Label>
+          {campoBooking(form.numeroContenedor, (v) => setForm((f) => ({ ...f, numeroContenedor: v })), solicitud?.numeroContenedor)}
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Naviera</Label>
+          <Combobox
+            value={formInstructivo.navieraId}
+            onChange={(v) => setFormInstructivo((f) => ({ ...f, navieraId: v }))}
+            placeholder='Seleccionar naviera...'
+            searchPlaceholder='Buscar naviera...'
+            options={(navierasData?.data ?? []).map((e) => ({ value: String(e.id), label: e.descripcion }))}
             disabled={!puedeEscribir}
           />
         </div>
+
+        <div className='space-y-1.5'>
+          <Label>Nave</Label>
+          {campoBooking(form.nave, (v) => setForm((f) => ({ ...f, nave: v })), solicitud?.nave)}
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Número de Viaje</Label>
+          <Input value={formInstructivo.voyageNumber} onChange={(e) => setFormInstructivo((f) => ({ ...f, voyageNumber: e.target.value }))} disabled={!puedeEscribir} />
+        </div>
+
+        <div className='space-y-1.5'>
+          <Label>Fecha Embarque</Label>
+          {campoBooking(form.fechaZarpe, (v) => setForm((f) => ({ ...f, fechaZarpe: v })), solicitud?.fechaZarpe, 'date')}
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Fecha Arribo</Label>
+          <Input type='date' value={formInstructivo.fechaArribo} onChange={(e) => setFormInstructivo((f) => ({ ...f, fechaArribo: e.target.value }))} disabled={!puedeEscribir} />
+        </div>
+
+        <div className='space-y-1.5'>
+          <Label>Puerto Embarque</Label>
+          <Combobox
+            value={formInstructivo.puertoZarpeId}
+            onChange={(v) => setFormInstructivo((f) => ({ ...f, puertoZarpeId: v }))}
+            placeholder='Seleccionar puerto...'
+            searchPlaceholder='Buscar puerto...'
+            options={(puertosData?.data ?? []).map((p) => ({ value: String(p.id), label: p.descripcion }))}
+            disabled={!puedeEscribir}
+          />
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Depósito</Label>
+          <Input value={formInstructivo.deposito} onChange={(e) => setFormInstructivo((f) => ({ ...f, deposito: e.target.value }))} disabled={!puedeEscribir} />
+        </div>
+
+        <div className='space-y-1.5'>
+          <Label>Embarcador</Label>
+          <Combobox
+            value={formInstructivo.embarcadorId}
+            onChange={(v) => setFormInstructivo((f) => ({ ...f, embarcadorId: v }))}
+            placeholder='Seleccionar embarcador...'
+            searchPlaceholder='Buscar embarcador...'
+            options={(embarcadoresData?.data ?? []).map((e) => ({ value: String(e.id), label: e.descripcion }))}
+            disabled={!puedeEscribir}
+          />
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Agente de Aduana</Label>
+          <Combobox
+            value={formInstructivo.agenteAduanaId}
+            onChange={(v) => setFormInstructivo((f) => ({ ...f, agenteAduanaId: v }))}
+            placeholder='Seleccionar agente...'
+            searchPlaceholder='Buscar agente...'
+            options={(agentesData?.data ?? []).map((e) => ({ value: String(e.id), label: e.descripcion }))}
+            disabled={!puedeEscribir}
+          />
+        </div>
+
+        <div className='space-y-1.5'>
+          <Label>Tipo de Bulto</Label>
+          <Input value={formInstructivo.tipoBultos} onChange={(e) => setFormInstructivo((f) => ({ ...f, tipoBultos: e.target.value }))} disabled={!puedeEscribir} />
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Cutoff</Label>
+          <Input type='date' value={formInstructivo.cutoffDate} onChange={(e) => setFormInstructivo((f) => ({ ...f, cutoffDate: e.target.value }))} disabled={!puedeEscribir} />
+        </div>
+      </div>
+
+      <div className='space-y-2'>
+        <Label>Stacking</Label>
+        {rangos.length === 0 && <p className='text-muted-foreground text-sm'>Sin rangos de stacking definidos.</p>}
+        {rangos.map((r, i) => (
+          <div key={i} className='flex items-center gap-2'>
+            <Input type='datetime-local' value={r.desde} onChange={(e) => actualizarRango(i, 'desde', e.target.value)} disabled={!puedeEscribir} />
+            <span className='text-muted-foreground text-sm'>a</span>
+            <Input type='datetime-local' value={r.hasta} onChange={(e) => actualizarRango(i, 'hasta', e.target.value)} disabled={!puedeEscribir} />
+            {puedeEscribir && (
+              <Button type='button' variant='ghost' size='icon' onClick={() => quitarRango(i)}>
+                <Icons.trash className='h-4 w-4' />
+              </Button>
+            )}
+          </div>
+        ))}
+        {puedeEscribir && (
+          <Button type='button' variant='outline' size='sm' onClick={agregarRango}>
+            <Icons.add className='mr-1 h-4 w-4' /> Agregar rango
+          </Button>
+        )}
+      </div>
+
+      <div className='space-y-1.5'>
+        <Label>Observaciones</Label>
+        <Textarea
+          value={formInstructivo.observacionesInstructivo}
+          onChange={(e) => setFormInstructivo((f) => ({ ...f, observacionesInstructivo: e.target.value }))}
+          disabled={!puedeEscribir}
+        />
       </div>
 
       {puedeEscribir && (

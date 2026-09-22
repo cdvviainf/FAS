@@ -116,6 +116,8 @@ export async function getEmbarqueById(id: number) {
       embarcador: { select: entidadSelect },
       naviera: { select: entidadSelect },
       instructivosHijos: { include: { planta: { select: entidadSelect } }, orderBy: { secuencia: 'asc' as const } },
+      // Rangos de stacking (ventas.md R11, 2026-09-22) — N por Embarque.
+      stackingRangos: { orderBy: { orden: 'asc' as const } },
       // Reconciliación de Packing List (compras.md §9.3) — sin `contenido`
       // (el blob se descarga aparte, ver getPackingListContenido).
       packingList: { select: packingListSelect },
@@ -545,7 +547,6 @@ export async function guardarDatosReservaManual(embarqueId: number, datos: Datos
       naveManual: datos.nave,
       numeroContenedorManual: datos.numeroContenedor,
       fechaZarpeManual: datos.fechaZarpe,
-      fechaRetiroPlantaManual: datos.fechaRetiroPlanta,
       estadoReserva: 'CONFIRMADA',
       actualizadoPor,
     },
@@ -578,12 +579,29 @@ export async function getPuertoPorId(id: number) {
   return prisma.puerto.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
 }
 
+// `stackingRangos` se maneja aparte del resto de `datos` (spread directo a
+// Prisma): no es un campo escalar de Embarque, es una lista completa que se
+// reemplaza entera (delete-then-create) dentro de la misma transacción —
+// mismo criterio que TemplateCarga.campos en templates-carga.service.ts.
 export async function guardarDatosInstructivo(embarqueId: number, datos: DatosInstructivoInput, actualizadoPor: string) {
-  const claim = await prisma.embarque.updateMany({
-    where: { id: embarqueId, eliminadoEn: null },
-    data: { ...datos, actualizadoPor },
+  const { stackingRangos, ...resto } = datos
+  await prisma.$transaction(async (tx) => {
+    const claim = await tx.embarque.updateMany({
+      where: { id: embarqueId, eliminadoEn: null },
+      data: { ...resto, actualizadoPor },
+    })
+    if (claim.count === 0) throw new ValidationError('El Embarque ya no existe')
+
+    if (stackingRangos) {
+      await tx.embarqueStackingRango.deleteMany({ where: { embarqueId } })
+      if (stackingRangos.length > 0) {
+        const empresaId = getEmpresaIdActual()!
+        await tx.embarqueStackingRango.createMany({
+          data: stackingRangos.map((r, i) => ({ empresaId, embarqueId, desde: r.desde, hasta: r.hasta, orden: i + 1 })),
+        })
+      }
+    }
   })
-  if (claim.count === 0) throw new ValidationError('El Embarque ya no existe')
   return getEmbarqueById(embarqueId)
 }
 
@@ -694,6 +712,7 @@ export async function getInstructivoHijoConDetalle(instructivoHijoId: number) {
           solicitudReserva: {
             select: { numeroBooking: true, nave: true, numeroContenedor: true, fechaZarpe: true },
           },
+          stackingRangos: { orderBy: { orden: 'asc' } },
         },
       },
     },

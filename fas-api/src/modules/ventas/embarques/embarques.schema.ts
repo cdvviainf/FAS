@@ -19,23 +19,33 @@ export const embarqueCreateSchema = z.object({
 export const dejarReservaManualSchema = z.object({})
 
 // Guardar datos de booking manual — mismo shape que SolicitudReserva
-// (numeroBooking/nave/numeroContenedor/fechaZarpe/fechaRetiroPlanta),
-// tipeados a mano en vez de recibidos por webhook. Al menos un campo debe
-// venir con valor (guardar "todo vacío" no tiene sentido). `naviera` salió
-// de acá (2026-09-21): pasó a ser `navieraId` (Entidad seleccionable) en
-// datosInstructivoSchema, compartido con el Instructivo de Embarque en vez
-// de vivir solo en la reserva manual.
+// (numeroBooking/nave/numeroContenedor/fechaZarpe), tipeados a mano en vez
+// de recibidos por webhook. Al menos un campo debe venir con valor (guardar
+// "todo vacío" no tiene sentido). `naviera` salió de acá (2026-09-21): pasó
+// a ser `navieraId` (Entidad seleccionable) en datosInstructivoSchema,
+// compartido con el Instructivo de Embarque en vez de vivir solo en la
+// reserva manual. `fechaRetiroPlanta` salió del formulario (2026-09-22,
+// decisión de negocio Christian) — sin reemplazo.
 export const datosReservaManualSchema = z
   .object({
     numeroBooking: z.string().trim().max(100).optional().nullable(),
     nave: z.string().trim().max(150).optional().nullable(),
     numeroContenedor: z.string().trim().max(50).optional().nullable(),
     fechaZarpe: z.coerce.date().optional().nullable(),
-    fechaRetiroPlanta: z.coerce.date().optional().nullable(),
   })
   .refine((d) => Object.values(d).some((v) => v !== undefined && v !== null && v !== ''), {
     message: 'Debes ingresar al menos un dato de la reserva',
   })
+
+// Un rango de stacking (ventas.md R11, 2026-09-22) — el conjunto completo se
+// reemplaza en cada guardado (ver embarques.repository.ts), nunca un rango
+// individual.
+const stackingRangoSchema = z
+  .object({
+    desde: z.coerce.date(),
+    hasta: z.coerce.date(),
+  })
+  .refine((r) => r.hasta > r.desde, { message: 'La fecha/hora "hasta" debe ser posterior a "desde"', path: ['hasta'] })
 
 // Datos del Instructivo de Embarque compartidos por todo el Embarque
 // (2026-09-21, ventas.md R11 + gap analysis) — independiente de
@@ -52,8 +62,7 @@ export const datosInstructivoSchema = z
     embarcadorId: z.number().int().positive().optional().nullable(),
     navieraId: z.number().int().positive().optional().nullable(),
     fechaArribo: z.coerce.date().optional().nullable(),
-    stackingDesde: z.coerce.date().optional().nullable(),
-    stackingHasta: z.coerce.date().optional().nullable(),
+    stackingRangos: z.array(stackingRangoSchema).optional(),
     observacionesInstructivo: z.string().trim().max(1000).optional().nullable(),
   })
   // FAS-IE-QA-003 (QA ronda 1): antes exigía al menos un valor NO-nulo, lo

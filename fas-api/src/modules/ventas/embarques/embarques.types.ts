@@ -15,7 +15,6 @@ export interface DatosReservaManualInput {
   nave?: string | null
   numeroContenedor?: string | null
   fechaZarpe?: Date | null
-  fechaRetiroPlanta?: Date | null
 }
 
 export interface ReservarPalletsInput {
@@ -38,9 +37,16 @@ export interface DatosInstructivoInput {
   embarcadorId?: number | null
   navieraId?: number | null
   fechaArribo?: Date | null
-  stackingDesde?: Date | null
-  stackingHasta?: Date | null
+  // Rangos de stacking (ventas.md R11, 2026-09-22) — reemplaza siempre el
+  // conjunto completo (delete-then-create), nunca un rango individual.
+  // `undefined` = no tocar los rangos existentes; `[]` = borrarlos todos.
+  stackingRangos?: StackingRangoInput[]
   observacionesInstructivo?: string | null
+}
+
+export interface StackingRangoInput {
+  desde: Date
+  hasta: Date
 }
 
 export interface InstructivoHijoUpdateInput {

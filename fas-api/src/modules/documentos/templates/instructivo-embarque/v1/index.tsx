@@ -114,10 +114,14 @@ export function InstructivoEmbarqueV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
           // FAS-IE-QA-002 (QA ronda 1): fecha/hora completa, no solo fecha
           // (ventas.md R11 exige "fecha/hora de retiro" por planta).
           { label: 'Carga en planta', valor: d.fechaCargaPlanta ? fmt.fechaHora(d.fechaCargaPlanta) : '—' },
-          // Stacking (2026-09-22): compartido por todo el Embarque, no por
-          // Planta — mismo valor en todos los InstructivoHijo de este Embarque.
-          { label: 'Stacking desde', valor: d.stackingDesde ? fmt.fechaHora(d.stackingDesde) : '—' },
-          { label: 'Stacking hasta', valor: d.stackingHasta ? fmt.fechaHora(d.stackingHasta) : '—' },
+          // Stacking (2026-09-22): N rangos compartidos por todo el Embarque
+          // (no por Planta) — mismos rangos en todos los InstructivoHijo.
+          ...(d.stackingRangos.length > 0
+            ? d.stackingRangos.map((r, i) => ({
+                label: d.stackingRangos.length > 1 ? `Stacking ${i + 1}` : 'Stacking',
+                valor: `${fmt.fechaHora(r.desde)} a ${fmt.fechaHora(r.hasta)}`,
+              }))
+            : [{ label: 'Stacking', valor: '—' }]),
         ]}
       />
 

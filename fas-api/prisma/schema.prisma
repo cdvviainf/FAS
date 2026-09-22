@@ -245,6 +245,7 @@ model Empresa {
   reclamos               Reclamo[]
   provisiones            Provision[]
   EmbarquePackingList    EmbarquePackingList[]
+  embarqueStackingRangos EmbarqueStackingRango[]
 
   @@map("empresas")
 }
@@ -2732,16 +2733,18 @@ model Embarque {
   reclamos Reclamo[]
 
   // Datos de booking cuando reservaManual=true (mismo shape que
-  // SolicitudReserva.numeroBooking/nave/numeroContenedor/fechaZarpe/
-  // fechaRetiroPlanta, tipeados a mano por el usuario en vez de venir de un
-  // webhook — ventas.md §4.3). `navieraManual` (texto libre) fue reemplazado
-  // por `navieraId` (2026-09-21, ver bloque de Instructivo de Embarque abajo)
-  // — se unifica con el mismo dato que usa el Instructivo, sin duplicar.
-  numeroBookingManual     String?
-  naveManual              String?
-  numeroContenedorManual  String?
-  fechaZarpeManual        DateTime?
-  fechaRetiroPlantaManual DateTime?
+  // SolicitudReserva.numeroBooking/nave/numeroContenedor/fechaZarpe,
+  // tipeados a mano por el usuario en vez de venir de un webhook — ventas.md
+  // §4.3). `navieraManual` (texto libre) fue reemplazado por `navieraId`
+  // (2026-09-21, ver bloque de Instructivo de Embarque abajo) — se unifica
+  // con el mismo dato que usa el Instructivo, sin duplicar.
+  // `fechaRetiroPlantaManual` se eliminó (2026-09-22, decisión de negocio
+  // Christian) — el campo "Retiro Planta" salió del formulario, sin
+  // reemplazo (el retiro por Planta ya vive en InstructivoHijo.fechaCargaPlanta).
+  numeroBookingManual    String?
+  naveManual             String?
+  numeroContenedorManual String?
+  fechaZarpeManual       DateTime?
 
   // ─── Instructivo de Embarque (2026-09-21, ventas.md R11 + gap analysis
   // contra el "Instructivo de Embarque (AGA)" real del cliente) — campos
@@ -2766,17 +2769,22 @@ model Embarque {
   naviera                  Entidad?  @relation("EmbarqueNaviera", fields: [empresaId, navieraId], references: [empresaId, id])
   // Fecha de Arribo estimada/real a destino (2026-09-22, gap analysis).
   fechaArribo              DateTime?
-  // Ventana de stacking del contenedor en el puerto (2026-09-22, decisión de
-  // negocio Christian) — trasladada desde InstructivoHijo: es una propiedad
-  // del contenedor/nave, compartida por todas las plantas de retiro, no un
-  // hito propio de cada una.
-  stackingDesde            DateTime?
-  stackingHasta            DateTime?
   // Observaciones generales del Instructivo (todo el Embarque) — distintas de
   // `InstructivoHijo.observaciones` (por Planta/punto de retiro).
   observacionesInstructivo String?
 
   instructivosHijos InstructivoHijo[]
+
+  // Ventana(s) de stacking del contenedor en el puerto (2026-09-22, decisión
+  // de negocio Christian) — trasladada desde InstructivoHijo (es una
+  // propiedad del contenedor/nave, compartida por todas las plantas de
+  // retiro, no un hito propio de cada una) y ampliada a **N rangos**
+  // (ej. "22/09 08:00-21:00" y "23/09 08:00-21:00" del mismo Embarque) — un
+  // solo par de fechas no alcanzaba para el caso real. Reemplaza los
+  // `stackingDesde`/`stackingHasta` escalares agregados el 2026-09-22 en la
+  // misma sesión, sin backfill (mismo criterio que el resto de este bloque:
+  // sin filas reales todavía).
+  stackingRangos EmbarqueStackingRango[]
 
   // Reconciliación de Packing List (compras.md §9.3, cierra EP-QA-003,
   // 2026-09-22): a lo más una por Embarque — cada subida nueva reemplaza la
@@ -2842,6 +2850,27 @@ model InstructivoHijo {
   @@index([embarqueId])
   @@index([plantaId])
   @@map("instructivos_hijos")
+}
+
+// Rango de stacking del contenedor (ventas.md R11, 2026-09-22) — un Embarque
+// puede tener varios (ej. dos días de stacking con ventanas distintas).
+// Reemplazado completo en cada guardado del Instructivo (delete-then-create,
+// ver embarques.repository.ts guardarDatosInstructivo), no editable rango a
+// rango — mismo criterio que TemplateCargaCampo.
+model EmbarqueStackingRango {
+  id         Int      @id @default(autoincrement())
+  empresaId  Int
+  empresa    Empresa  @relation(fields: [empresaId], references: [id])
+  embarqueId Int
+  embarque   Embarque @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
+
+  desde DateTime
+  hasta DateTime
+  orden Int // estable dentro de un mismo guardado, para respetar el orden ingresado
+
+  @@index([embarqueId])
+  @@index([empresaId])
+  @@map("embarque_stacking_rangos")
 }
 
 enum EstadoReservaEmbarque {

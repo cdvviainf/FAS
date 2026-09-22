@@ -86,7 +86,6 @@ export interface DatosReservaManual {
   naveManual: string | null
   numeroContenedorManual: string | null
   fechaZarpeManual: string | null
-  fechaRetiroPlantaManual: string | null
 }
 
 export interface DatosReservaManualInput {
@@ -94,14 +93,26 @@ export interface DatosReservaManualInput {
   nave?: string | null
   numeroContenedor?: string | null
   fechaZarpe?: string | null
-  fechaRetiroPlanta?: string | null
+}
+
+// Un rango de stacking (ventas.md R11, 2026-09-22) — un Embarque puede tener
+// varios (ej. dos días de stacking con ventanas distintas).
+export interface StackingRango {
+  id: number
+  desde: string
+  hasta: string
+}
+
+export interface StackingRangoInput {
+  desde: string
+  hasta: string
 }
 
 // Instructivo de Embarque (2026-09-21, ventas.md R11 + gap analysis) —
 // campos compartidos por todo el Embarque, independientes de reservaManual.
-// fechaArribo/stackingDesde/stackingHasta/observacionesInstructivo
-// (2026-09-22): stacking se trasladó desde InstructivoHijo (por Planta) a
-// acá — es una propiedad del contenedor/nave, no de cada punto de retiro.
+// fechaArribo/observacionesInstructivo (2026-09-22) son generales, todo el
+// Instructivo. Stacking vive aparte (`EmbarqueDetalle.stackingRangos`, ver
+// abajo) — no es un campo escalar, es una lista.
 export interface DatosInstructivo {
   puertoZarpeId: number | null
   puertoZarpe: MantenedorRef | null
@@ -117,8 +128,6 @@ export interface DatosInstructivo {
   navieraId: number | null
   naviera: EntidadRef | null
   fechaArribo: string | null
-  stackingDesde: string | null
-  stackingHasta: string | null
   observacionesInstructivo: string | null
 }
 
@@ -133,8 +142,8 @@ export interface DatosInstructivoInput {
   embarcadorId?: number | null
   navieraId?: number | null
   fechaArribo?: string | null
-  stackingDesde?: string | null
-  stackingHasta?: string | null
+  // `undefined` = no tocar los rangos existentes; `[]` = borrarlos todos.
+  stackingRangos?: StackingRangoInput[]
   observacionesInstructivo?: string | null
 }
 
@@ -195,6 +204,7 @@ export interface EmbarqueDetalle extends Omit<Embarque, '_count'> {
   pallets: PalletResumen[]
   solicitudReserva: SolicitudReserva | null
   instructivosHijos: InstructivoHijo[]
+  stackingRangos: StackingRango[]
   packingList: PackingListEmbarque | null
 }
 
