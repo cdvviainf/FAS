@@ -78,6 +78,10 @@ const MODELOS_TENANT = new Set([
   'Provision',
   // Instructivo de Embarque (2026-09-21, ventas.md R11):
   'InstructivoHijo',
+  'EmbarqueStackingRango',
+  // Packing List (compras.md §9.3, cierra EP-QA-003, 2026-09-22) — faltaba
+  // desde su creación: sin aislamiento de tenant hasta ahora.
+  'EmbarquePackingList',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar
