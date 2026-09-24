@@ -39,6 +39,7 @@ export const MODELOS_CON_CODIGO_OPTIONS: { value: string; label: string }[] = [
   { value: 'conceptoLiquidacion', label: 'Concepto de Liquidación' },
   { value: 'perfil', label: 'Perfil' },
   { value: 'templateCarga', label: 'Template de Carga' },
+  { value: 'proforma', label: 'Proforma' },
 ]
 
 // 'embarque' es un caso especial (2026-08-13, ventas.md R10): no tiene campo
