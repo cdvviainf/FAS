@@ -40,6 +40,31 @@ export function palletCalzaConDetalleNV(lineasPallet: LineaPalletParaComparar[],
   )
 }
 
+// Precio sugerido de la Proforma (cobranza.md, 2026-09-24): mismo criterio de
+// calce que arriba, pero devuelve el `precio` (por caja) de la línea de NV
+// que corresponde a esta línea de pallet en vez de un booleano — sugerencia
+// editable, no una validación bloqueante. `null` si ninguna línea de la NV
+// calza (ej. el detalle de la NV cambió después de reservar el pallet); en
+// ese caso el service trata la línea como precio 0, no bloquea la emisión.
+export interface LineaNotaVentaConPrecioParaComparar extends LineaNotaVentaParaComparar {
+  precio: number
+}
+
+export function precioNVParaLineaPallet(
+  lineaPallet: LineaPalletParaComparar,
+  detalleNV: LineaNotaVentaConPrecioParaComparar[],
+): number | null {
+  const match = detalleNV.find(
+    (ln) =>
+      ln.especieId === lineaPallet.especieId &&
+      ln.variedadId === lineaPallet.variedadId &&
+      ln.articuloId === lineaPallet.articuloId &&
+      (ln.categoriaId === null || ln.categoriaId === lineaPallet.categoriaId) &&
+      ln.calibres.some((c) => c.calibreId === lineaPallet.calibreId),
+  )
+  return match ? match.precio : null
+}
+
 // ─── Comparación pura Packing List ↔ Stock (compras.md §9.3, cierra
 // EP-QA-003) — mismo motivo que arriba (sin acceso a BD): el motor la llama
 // después de leer tanto los pallets reservados como el Excel ya resuelto.

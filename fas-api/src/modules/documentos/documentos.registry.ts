@@ -20,6 +20,9 @@ import { OrdenCompraMaterialV1 } from './templates/orden-compra-material/v1/inde
 import { resolverInstructivoEmbarque } from './resolvers/instructivo-embarque.resolver.js'
 import { instructivoEmbarquePdfPayloadSchema } from './schemas/instructivo-embarque.schema.js'
 import { InstructivoEmbarqueV1 } from './templates/instructivo-embarque/v1/index.js'
+import { resolverProforma } from './resolvers/proforma.resolver.js'
+import { proformaPdfPayloadSchema } from './schemas/proforma.schema.js'
+import { ProformaV1 } from './templates/proforma/v1/index.js'
 import type { DocumentRegistry } from './documentos.types.js'
 
 // Registro central — Etapa 4 §4: "un solo lugar donde se declara todo".
@@ -130,6 +133,23 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     // borrador/oficial, mismo criterio que Instructivo de Embalaje.
     controlCopia: false,
     nombreArchivo: (p) => `Instructivo_${p.codigo}.pdf`,
+    folio: (p) => p.codigo,
+  },
+  'proforma': {
+    titulo: 'Proforma de Exportación',
+    resolver: resolverProforma,
+    schema: proformaPdfPayloadSchema,
+    plantillaActual: 'v1',
+    plantillas: { v1: ProformaV1 },
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    itemMenu: 'FACT_EXPORTACION',
+    // Sin distinción borrador/oficial (mismo criterio que Instructivo de
+    // Embarque/Embalaje): la emisión de negocio ya ocurrió al crear la
+    // Proforma (POST .../proforma, un solo paso) — el Motor de Documentos
+    // acá solo genera el PDF de un registro que ya es definitivo, no hay un
+    // segundo paso de "oficializar" (D12: documento interno, sin folio SII).
+    controlCopia: false,
+    nombreArchivo: (p) => `Proforma_${p.codigo}.pdf`,
     folio: (p) => p.codigo,
   },
 }

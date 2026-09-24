@@ -1,11 +1,21 @@
 import type { FastifyInstance } from 'fastify'
-import { requireAuth, requireLevel, requireAglWebhookSignature } from '../../../plugins/auth-guard.js'
+import { requireAuth, requireAnyLevel, requireLevel, requireAglWebhookSignature } from '../../../plugins/auth-guard.js'
 import * as ctrl from './embarques.controller.js'
 
 const ITEM = 'VENTAS_EMBARQUES'
+// El selector "Nueva Proforma" (Facturación Exportación) lee este mismo
+// listado para elegir el Embarque despachado a facturar (FAS-PROF-EXP-009,
+// QA ronda 4) — mismo criterio que reclamos.routes.ts (CAL_RECLAMOS |
+// VENTAS_RECLAMOS): la lectura acepta cualquiera de los dos ítems, sin
+// exigir acceso a Embarques solo para poder emitir una Proforma.
+const ITEM_FACTURACION_EXPORTACION = 'FACT_EXPORTACION'
 
 export async function embarquesRoutes(app: FastifyInstance) {
-  app.get('/embarques', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
+  app.get(
+    '/embarques',
+    { preHandler: [requireAuth, requireAnyLevel([ITEM, ITEM_FACTURACION_EXPORTACION], 'LECTURA')] },
+    ctrl.list,
+  )
   app.get('/embarques/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
   app.post('/embarques', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)
 

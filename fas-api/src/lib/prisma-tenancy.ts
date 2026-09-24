@@ -82,6 +82,8 @@ const MODELOS_TENANT = new Set([
   // Packing List (compras.md §9.3, cierra EP-QA-003, 2026-09-22) — faltaba
   // desde su creación: sin aislamiento de tenant hasta ahora.
   'EmbarquePackingList',
+  // Proforma de Exportación (2026-09-24, cobranza.md).
+  'Proforma',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

@@ -1,8 +1,24 @@
 # Cobranza — Emisión de documentos, cuotas y pagos
 
-**Sección:** Ventas · **Etapa:** 1 · **Estado:** ✅ Listo para implementación (v2 — reemplaza versión anterior)
+**Sección:** Ventas · **Etapa:** 1 · **Estado:** 🟡 Proforma de Exportación construida (2026-09-24) — resto del módulo pendiente
 **Key user:** María José (Cobranza) · **Relacionado:** Giovanni (Ventas), Fabián (Finanzas), Isella (Calidad)
 **Prefijo API:** `/api/ventas/cobranza`
+
+## 0.b Supersesión (2026-09-24) — Proforma de Exportación construida, reconciliación contra el código real
+
+> Este spec (v2) se escribió antes de que existieran varias piezas que hoy ya están construidas en otros módulos. Se implementó **solo la Proforma** (objetivo 1 de §1, primer paso del plan de §9) — Factura DTE/Cuotas/NC-ND/Pagos/Saldo a Favor/Ventas Nacionales siguen **sin construir**, tal como los dejó este documento. Reconciliación aplicada a la Proforma:
+>
+> - **`FormaPago`/`FormaPagoCuota` (que este spec proponía crear) NO se crearon.** Ya existen como `CondicionPago`/`CondicionPagoCuota` (mismo mantenedor que usan Compras y Ventas) — la Proforma hereda `condicionPagoId` de la Nota de Venta del Embarque (decisión de negocio, Christian). Cuando se construya Factura DTE, sus `Cuota` reales deberán generarse igual desde `CondicionPago`, no desde un `FormaPago` nuevo.
+> - **`clienteId`/`moneda: String` → `Entidad`/`Moneda` (FK reales)**, heredados de la Nota de Venta vía el Embarque — no editables, mismo criterio que Reclamos (RC-D4).
+> - **`pdfUrl: String` → Motor de Documentos** (`DocumentoEmitido`, PDF en Bytes en Postgres, plantilla React+TSX vía Playwright) — se registró `'proforma'` en `documentos.registry.ts` con `controlCopia: false` (la emisión de negocio ya es definitiva al crear el registro — un solo paso, sin `BORRADOR` previo — así que no hay un segundo paso de "oficializar" el PDF, mismo criterio que Instructivo de Embarque/Embalaje).
+> - **`numero: Int @unique` → `codigo: String`** generado vía `PrefijoCodigo` (modelo `'proforma'`, prefijo `PRF`, 4 dígitos), mismo mecanismo que el resto del sistema.
+> - **`detalleFruta: Json` → líneas reales persistidas (`ProformaLinea`)**, no un blob. Decisión de negocio nueva (Christian, no estaba en el spec original): la Proforma puede facturar agrupado por **Especie siempre + cualquier combinación de Variedad/Artículo/Calibre/Categoría/Marca(Etiqueta)** elegida por el usuario al emitir — no siempre al detalle completo de cada `PalletLinea`. El monto de cada línea agrupada se sugiere sumando `cajas × precio` de la línea de Nota de Venta que calce (mismo criterio de calce que `palletCalzaConDetalleNV`, ver `embarques.comparacion.ts:precioNVParaLineaPallet`) y queda editable antes de emitir.
+> - **Sin `BORRADOR` (D12 aplicado literalmente):** al no ser tributaria, la emisión es un solo paso — `POST .../proforma` crea el registro ya en estado `EMITIDA`. `ANULADA` es soft delete (libera el índice único parcial `(empresaId, embarqueId) WHERE eliminadoEn IS NULL`, permitiendo reemitir).
+> - **Tabla de vencimientos estimada (D4):** se arma en el resolver del PDF a partir de `NotaVentaCuotaPago` (snapshot de cuotas del Cierre Comercial, ventas.md R12), no de una entidad `Cuota` nueva — las cuotas `PORCENTAJE` se recalculan contra el `montoTotal` real de la Proforma; las `MONTO_UNITARIO` usan el monto ya congelado en el Cierre Comercial. El enum real es `FechaReferenciaPago` (`FACTURA`/`ZARPE`/`ENVIO_DOCUMENTOS`/`ARRIBO`, sin `EMBARQUE`/`BL`/`PROFORMA` como decía este spec) — solo `ZARPE` y `ARRIBO` tienen fecha resoluble hoy; `FACTURA`/`ENVIO_DOCUMENTOS` quedan "Pendiente" hasta que exista Factura DTE.
+> - **Pantalla propia, no pestaña del Embarque** (decisión de negocio, Christian): `Facturación → Cobranza / Factura Exportación` (`/dashboard/facturacion/exportacion`, ítem `FACT_EXPORTACION` ya sembrado desde 2026-07-24 sin uso hasta ahora) — pensada para que la futura emisión del DTE 110 viva en la misma pantalla junto a la Proforma.
+> - **Idioma:** selector real (EN/ES) al emitir, guardado en `Proforma.idioma` — el PDF traduce sus rótulos principales según ese valor.
+> - **Selector "Nueva Proforma" lee Embarques ajeno al módulo:** el listado `GET /api/ventas/embarques` (usado para elegir el Embarque despachado a facturar) pertenece a Ventas y exige `VENTAS_EMBARQUES` — se cambió su guard a `requireAnyLevel([VENTAS_EMBARQUES, FACT_EXPORTACION], 'LECTURA')` (mismo criterio que reclamos.routes.ts) para que un usuario con solo `FACT_EXPORTACION` pueda usar el flujo completo de su propio módulo sin necesitar acceso a Embarques.
+> - **Integridad de las líneas al emitir:** el backend nunca confía en los IDs/cajas que manda el cliente — recalcula los grupos canónicos desde los pallets reales del Embarque y exige que el body cubra ese multiconjunto exacto (sin faltantes, duplicados ni líneas ajenas). `montoTotal` se suma en centavos enteros (no floats) para que sea exactamente Σ `montoLinea`.
 
 ## 0. Contexto
 
@@ -44,8 +60,8 @@ Dependencias externas (specs pendientes o de otro documento):
 ## 2. Alcance
 
 ### Construye
-- Catálogo **Forma de Pago** con 1 a 3 cuotas, cada una con % del monto, fecha de referencia (de 6 posibles) y días de plazo.
-- Generación de **Proforma** (PDF) por embarque, con tabla de vencimientos estimada (no persistida como Cuota).
+- ✅ **Generación de Proforma (PDF) por embarque** (2026-09-24), con tabla de vencimientos estimada (no persistida como Cuota) — ver §0.b. El resto de los ítems de abajo sigue sin construir.
+- ~~Catálogo **Forma de Pago** con 1 a 3 cuotas~~ — no se construye: ya existe como `CondicionPago`/`CondicionPagoCuota` (§0.b).
 - Emisión de **Factura DTE (110)** por embarque vía adaptador, con generación automática de **Cuotas** persistidas.
 - Recálculo de vencimientos de cuotas cuando cambian las fechas base del Embarque (arribo confirmado, cambio de BL, etc.).
 - Emisión de **NC (112)** / **ND (111)** sobre el DTE, prorrateadas entre cuotas con saldo pendiente.
@@ -184,6 +200,15 @@ model Embarque {
   factura               Factura?
 }
 
+// ⚠️ Bloque histórico (spec original) — el modelo REAL implementado (2026-09-24)
+// está reconciliado en §0.b y vive en `fas-api/prisma/schema.prisma` (models
+// `Proforma`/`ProformaLinea`, enums `EstadoProforma`/`DimensionProforma`).
+// Diferencias principales: sin `formaPagoId` (usa `condicionPagoId` real);
+// `codigo: String` en vez de `numero: Int`; `moneda`→`monedaId` (FK real);
+// `detalleFruta: Json` reemplazado por la relación `lineas ProformaLinea[]`;
+// sin `pdfUrl` (Motor de Documentos); sin estado `BORRADOR` (emisión en un
+// solo paso). Se deja el bloque original sin editar como referencia de la
+// intención de negocio original.
 model Proforma {
   id            Int            @id @default(autoincrement())
   numero        Int            @unique               // correlativo interno Agrosan
@@ -476,9 +501,12 @@ Prefijo: `/api/ventas/cobranza`
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| POST/GET/PATCH | `/formas-pago` | Mantenedor de Forma de Pago, con sus cuotas anidadas. Valida CB1. |
-| POST | `/embarques/:id/proforma` | Genera y emite la Proforma en PDF para el embarque. |
-| GET | `/proformas` / `/proformas/:id` | Listado / detalle, con tabla de vencimientos estimada calculada al vuelo. |
+| ~~POST/GET/PATCH~~ | ~~`/formas-pago`~~ | No se construye — usar el mantenedor `CondicionPago` ya existente (§0.b). |
+| ✅ GET | `/embarques/:id/proforma/sugerencia?dimensiones=...` | Líneas sugeridas (agrupadas por Especie + dimensiones elegidas), sin persistir. |
+| ✅ GET | `/embarques/:id/proforma` | Proforma activa del embarque, o `null`. |
+| ✅ POST | `/embarques/:id/proforma` | Crea y emite la Proforma en un solo paso (líneas ya confirmadas por el usuario en el body). |
+| ✅ GET | `/proformas` / `/proformas/:id` | Listado / detalle, con tabla de vencimientos estimada calculada al vuelo (implementado en el resolver del PDF). |
+| ✅ POST | `/proformas/:id/anular` | Anula (soft delete) — libera el embarque para reemitir. |
 | POST | `/embarques/:id/factura` | Emite la Factura DTE (110) vía adaptador y genera las Cuotas (CB5). |
 | GET | `/facturas` | Cartera. Filtros: `clienteId`, `estado`, `vencidas=true`, `desde`, `hasta`. |
 | GET | `/facturas/:id` | Detalle con cuotas, NC/ND, pagos y saldo a favor aplicados. |
@@ -509,7 +537,8 @@ Prefijo: `/api/ventas/cobranza/nacionales`
 
 ## 7. Frontend
 
-- **Detalle de Embarque**: pestañas Proforma / Factura DTE, cada una con su estado y acciones (`Emitir Proforma`, `Emitir Factura`). Tabla de Cuotas visible bajo la Factura, con columnas: N° cuota, %, monto, fecha de referencia, vencimiento, saldo pendiente, estado.
+- ✅ **Facturación → Cobranza / Factura Exportación** (`/dashboard/facturacion/exportacion`, ítem `FACT_EXPORTACION`, 2026-09-24 — reemplaza la idea original de pestañas dentro del Embarque, decisión de negocio Christian): listado de Proformas (filtro por folio/estado) + botón "Nueva Proforma" (selector de Embarque despachado) → pantalla de emisión con checkboxes de agrupación (Variedad/Artículo/Calibre/Categoría/Marca, Especie siempre incluida), tabla de líneas sugeridas editable (descripción y monto), selector de idioma, botón "Emitir Proforma". Una vez emitida: detalle de solo lectura + "Ver PDF" + "Anular". Cuando se construya la Factura DTE, su emisión debería vivir en esta misma pantalla (por eso no se hizo una pestaña aparte en el Embarque).
+- **Detalle de Embarque**: pestaña Factura DTE (pendiente de construir), con su estado y acción `Emitir Factura`. Tabla de Cuotas visible bajo la Factura, con columnas: N° cuota, %, monto, fecha de referencia, vencimiento, saldo pendiente, estado.
 - **Cartera (Facturas)**: listado server-side con filtros de §6, columna de días de atraso, badges de NC/ND/Provisión vigente.
 - **Modal "Registrar pago"**: selección de cliente → moneda del pago → lista de sus facturas pendientes (en esa moneda) con checkbox y campo de monto por factura → validación en vivo de que la suma no exceda `Pago.monto` (el remanente se muestra como "quedará a favor del cliente").
 - **Emisión de NC**: si existe Provisión vigente para el embarque, se muestra un banner de alerta con el monto sugerido antes de confirmar.
@@ -533,9 +562,9 @@ Prefijo: `/api/ventas/cobranza/nacionales`
 
 ## 9. Plan de implementación
 
-1. Migraciones Prisma de §4.
+1. ✅ Migraciones Prisma de `Proforma`/`ProformaLinea` (2026-09-24, ver §0.b — el resto del modelo de §4 sigue pendiente).
 2. Confirmar/definir la interfaz del adaptador DTE (emisión 110/111/112) — puede ser un paquete compartido con Finanzas si "Facturación" termina siendo el mismo adaptador.
-3. Servicio `ProformaService` (PDF, tabla de vencimientos calculada al vuelo).
+3. ✅ Servicio de Proforma (PDF vía Motor de Documentos, tabla de vencimientos calculada al vuelo) — `fas-api/src/modules/ventas/cobranza/proforma.*`.
 4. Servicio `FacturacionService`: emisión DTE + generación de Cuotas (CB5/CB6) + recálculo de vencimientos.
 5. Servicio `AjusteService`: NC/ND + prorrateo (CB8) + alerta de Provisión vigente (CB10, requiere endpoint de lectura del spec de Reclamos).
 6. Servicio `PagoService`: aplicación en cascada (CB11), generación de saldo a favor (CB12), aplicación de saldo a favor (CB13).

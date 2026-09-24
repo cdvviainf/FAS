@@ -244,6 +244,7 @@ model Empresa {
   integraciones          Integracion[]
   reclamos               Reclamo[]
   provisiones            Provision[]
+  proformas              Proforma[]
   EmbarquePackingList    EmbarquePackingList[]
   embarqueStackingRangos EmbarqueStackingRango[]
 
@@ -742,8 +743,9 @@ model Etiqueta {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  articulos    Articulo[]
-  palletLineas PalletLinea[]
+  articulos      Articulo[]
+  palletLineas   PalletLinea[]
+  proformaLineas ProformaLinea[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -964,6 +966,7 @@ model Especie {
   solicitudesInspeccion       SolicitudInspeccion[]
   conceptosLiquidacion        ConceptoLiquidacionEspecie[]
   notaVentaDetalles           NotaVentaDetalle[]
+  proformaLineas              ProformaLinea[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
   ordenCompraLineas           OrdenCompraLinea[]
   contratosProductor          ProductorContrato[]
@@ -1031,6 +1034,7 @@ model Variedad {
   contratoProductorLineas             ProductorContratoLinea[]
   solicitudesInspeccion               SolicitudInspeccionVariedad[]
   palletLineas                        PalletLinea[]
+  proformaLineas                      ProformaLinea[]
 
   @@index([empresaId])
   @@map("variedades")
@@ -1062,6 +1066,7 @@ model Categoria {
   contratoProductorLineas     ProductorContratoLinea[]
   solicitudesInspeccion       SolicitudInspeccionCategoria[]
   palletLineas                PalletLinea[]
+  proformaLineas              ProformaLinea[]
 
   @@index([empresaId])
   @@map("categorias")
@@ -1100,6 +1105,7 @@ model Calibre {
   contratoProductorLineaDesde        ProductorContratoLinea[]            @relation("ProductorContratoCalibreDesde")
   contratoProductorLineaHasta        ProductorContratoLinea[]            @relation("ProductorContratoCalibreHasta")
   solicitudesInspeccion              SolicitudInspeccionCalibre[]
+  proformaLineas                     ProformaLinea[]
   palletLineas                       PalletLinea[]
 
   @@unique([empresaId, id])
@@ -1224,6 +1230,7 @@ model Moneda {
   ordenesCompraMaterial OrdenCompraMaterial[]
   proformasMaterial     ProformaMaterial[]
   reclamos              Reclamo[]
+  proformas             Proforma[]
 
   @@map("monedas")
 }
@@ -1406,6 +1413,7 @@ model Entidad {
   embarquesGestorLogistico       Embarque[]                  @relation("EmbarqueGestorLogistico")
   integracionesGestorLogistico   Integracion[]               @relation("IntegracionGestorLogistico")
   reclamosCliente                Reclamo[]                   @relation("ReclamoCliente")
+  proformasCliente               Proforma[]                  @relation("ProformaCliente")
   // Instructivo de Embarque (2026-09-21, ventas.md R11).
   embarquesAgenteAduana          Embarque[]                  @relation("EmbarqueAgenteAduana")
   embarquesEmbarcador            Embarque[]                  @relation("EmbarqueEmbarcador")
@@ -1850,6 +1858,7 @@ model Articulo {
   solicitudesInspeccion       SolicitudInspeccionEmbalaje[]
   palletLineas                PalletLinea[]
   cajasPorPallet              CajasPorPallet[]
+  proformaLineas              ProformaLinea[]
 
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
@@ -2747,6 +2756,10 @@ model Embarque {
   // Embarque (Ventas/Comercial), Calidad los analiza después.
   reclamos Reclamo[]
 
+  // Proforma de Exportación (2026-09-24, cobranza.md) — a lo más una ACTIVA
+  // por Embarque (índice único parcial, ver modelo Proforma).
+  proformas Proforma[]
+
   // Datos de booking cuando reservaManual=true (mismo shape que
   // SolicitudReserva.numeroBooking/nave/numeroContenedor/fechaZarpe,
   // tipeados a mano por el usuario en vez de venir de un webhook — ventas.md
@@ -3171,6 +3184,108 @@ model Provision {
   @@map("provisiones")
 }
 
+// ─── Proforma de Exportación (Docs/cobranza.md, reconciliado 2026-09-24) ───
+// Primera etapa del módulo de Facturación/Cobranza: solo la Proforma (PDF
+// comercial por Embarque, D12 "no requiere folio SII ni CAF"). Factura DTE/
+// Cuotas/NC-ND/Pagos quedan para etapas futuras — ver §0 de cobranza.md.
+enum EstadoProforma {
+  EMITIDA
+  ANULADA
+}
+
+// Dimensiones adicionales que el usuario puede sumar sobre Especie (siempre
+// implícita) al agrupar las líneas de la Proforma — decisión de negocio,
+// Christian 2026-09-24: una Proforma puede facturar "toda la Especie a un
+// precio" o desglosar hasta el detalle completo, según lo que pida el cliente.
+enum DimensionProforma {
+  VARIEDAD
+  ARTICULO
+  CALIBRE
+  CATEGORIA
+  MARCA
+}
+
+model Proforma {
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  embarqueId Int
+  // FK compuesta (empresaId, embarqueId) -> Embarque(empresaId, id). Sin
+  // `@@unique` de Prisma en (empresaId, embarqueId) — la unicidad real
+  // ("a lo más una Proforma activa por Embarque", CB2) es un índice único
+  // parcial a nivel de BD (WHERE "eliminadoEn" IS NULL, ver migración) —
+  // mismo patrón que EmbarquePackingList/InstructivoHijo: permite reemitir
+  // tras Anular sin perder el historial de la anterior.
+  embarque Embarque @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
+
+  codigo String // autogenerado vía PrefijoCodigo (modelo='proforma')
+
+  // Heredados de la Nota de Venta (vía el Embarque) al emitir — no editables.
+  clienteId Int
+  cliente   Entidad @relation("ProformaCliente", fields: [empresaId, clienteId], references: [empresaId, id])
+  monedaId  Int
+  moneda    Moneda  @relation(fields: [monedaId], references: [id])
+
+  condicionPagoId Int?
+  condicionPago   CondicionPago? @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
+
+  idioma                String              @default("EN") // selector EN/ES al emitir
+  dimensionesAgrupacion DimensionProforma[] // qué se sumó encima de Especie (siempre implícita)
+  montoTotal            Decimal             @db.Decimal(14, 2) // = Σ ProformaLinea.montoLinea
+
+  estado       EstadoProforma @default(EMITIDA)
+  fechaEmision DateTime       @default(now())
+
+  lineas ProformaLinea[]
+
+  creadoPorId    String
+  creadoEn       DateTime  @default(now())
+  actualizadoEn  DateTime? @updatedAt
+  // "Anular Proforma" = soft delete (mismo criterio que el resto del
+  // sistema) — libera el índice único parcial para poder reemitir.
+  eliminadoEn    DateTime?
+  eliminadoPor   String?
+
+  @@index([empresaId, embarqueId])
+  @@index([clienteId])
+  @@map("proformas")
+}
+
+// Línea agrupada de la Proforma (Especie siempre + las dimensiones elegidas
+// en `Proforma.dimensionesAgrupacion`) — persistida como snapshot al emitir,
+// no recalculada después. `montoLinea` nace sugerido (Σ cajas×precio de las
+// PalletLinea agrupadas, cruzando contra el precio de la línea de Nota de
+// Venta que calce — mismo criterio que `palletCalzaConDetalleNV`) pero es
+// editable por el usuario antes de confirmar la emisión.
+model ProformaLinea {
+  id         Int      @id @default(autoincrement())
+  proformaId Int
+  proforma   Proforma @relation(fields: [proformaId], references: [id], onDelete: Cascade)
+
+  descripcion String // armada automáticamente desde las dimensiones incluidas
+
+  especieId   Int
+  especie     Especie    @relation(fields: [especieId], references: [id])
+  variedadId  Int?
+  variedad    Variedad?  @relation(fields: [variedadId], references: [id])
+  articuloId  Int?
+  articulo    Articulo?  @relation(fields: [articuloId], references: [id])
+  calibreId   Int?
+  calibre     Calibre?   @relation(fields: [calibreId], references: [id])
+  categoriaId Int?
+  categoria   Categoria? @relation(fields: [categoriaId], references: [id])
+  etiquetaId  Int?
+  etiqueta    Etiqueta?  @relation(fields: [etiquetaId], references: [id])
+
+  cantidadCajas  Int
+  precioUnitario Decimal @db.Decimal(14, 4) // = montoLinea / cantidadCajas
+  montoLinea     Decimal @db.Decimal(14, 2) // sugerido, editable
+
+  @@index([proformaId])
+  @@map("proforma_lineas")
+}
+
 // ─── Compras — Instructivo de Embalaje (Docs/compras.md §4.1) ───────────────
 // Documento que instruye qué embalar. Sin FK a OrdenCompra (relación
 // inexistente por diseño, ver compras.md §6.1). Sin máquina de estados
@@ -3396,6 +3511,7 @@ model CondicionPago {
   contratosProductor    ProductorContrato[]
   ordenesCompraMaterial OrdenCompraMaterial[]
   proformasMaterial     ProformaMaterial[]
+  proformas             Proforma[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String

@@ -343,6 +343,8 @@ async function main() {
     { modelo: 'articulo', prefijo: 'ART', digitos: 4 },
     { modelo: 'bodega', prefijo: 'BOD', digitos: 3 },
     { modelo: 'receta', prefijo: 'REC', digitos: 3 },
+    // Proforma de Exportación (2026-09-24, cobranza.md).
+    { modelo: 'proforma', prefijo: 'PRF', digitos: 4 },
   ]
   let prefijosCreados = 0
   for (const p of prefijosBase) {
