@@ -84,6 +84,10 @@ const MODELOS_TENANT = new Set([
   'EmbarquePackingList',
   // Proforma de Exportación (2026-09-24, cobranza.md).
   'Proforma',
+  // Factura de Exportación (DTE 110, 2026-09-24, cobranza.md). Las líneas y
+  // cuotas cuelgan de la Factura (empresaId indirecto vía cascade), pero la
+  // raíz sí lleva empresaId — mismo criterio que Proforma/ProformaLinea.
+  'FacturaExportacion',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

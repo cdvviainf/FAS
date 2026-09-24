@@ -1,6 +1,7 @@
 'use client'
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,8 +11,8 @@ import { Icons } from '@/components/icons'
 import { formatMonto } from '@/lib/format'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { documentosService } from '@/features/documentos/service'
-import { proformasKeys } from '../queries'
-import { proformaService } from '../service'
+import { facturasKeys, proformasKeys } from '../queries'
+import { facturaExportacionService, proformaService } from '../service'
 import type { Proforma } from '../types'
 
 const ITEM = 'FACT_EXPORTACION'
@@ -22,6 +23,7 @@ const ITEM = 'FACT_EXPORTACION'
 // Embarque) y desde el detalle histórico por id (`/proforma/[id]`).
 export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
   const queryClient = useQueryClient()
+  const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
 
   const anular = useMutation({
@@ -33,6 +35,25 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
       queryClient.invalidateQueries({ queryKey: proformasKeys.all })
     },
     onError: (e: Error) => toast.error(e.message || 'Error al anular'),
+  })
+
+  // Factura activa del Embarque (si ya existe, se ofrece "Ver Factura" en vez
+  // de "Generar" — el backend igual bloquea una segunda por CB2).
+  const { data: facturaData } = useQuery({
+    queryKey: facturasKeys.porEmbarque(proforma.embarqueId),
+    queryFn: () => facturaExportacionService.obtenerPorEmbarque(proforma.embarqueId),
+    staleTime: 10_000,
+    enabled: proforma.estado === 'EMITIDA',
+  })
+  const facturaExistente = facturaData?.data ?? null
+
+  const generarFactura = useMutation({
+    mutationFn: () => facturaExportacionService.crearDesdeProforma(proforma.id),
+    onSuccess: ({ data }) => {
+      toast.success('Factura de Exportación creada (borrador)')
+      router.push(`/dashboard/facturacion/exportacion/factura/${data.id}`)
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al crear la Factura'),
   })
 
   return (
@@ -54,6 +75,19 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
           {proforma.estado === 'EMITIDA' && (
             <Button variant='outline' onClick={() => documentosService.abrirPdf('proforma', proforma.id)}>
               <Icons.download className='mr-2 h-4 w-4' /> Ver PDF
+            </Button>
+          )}
+          {proforma.estado === 'EMITIDA' && facturaExistente && (
+            <Button
+              variant='outline'
+              onClick={() => router.push(`/dashboard/facturacion/exportacion/factura/${facturaExistente.id}`)}
+            >
+              <Icons.billing className='mr-2 h-4 w-4' /> Ver Factura {facturaExistente.codigo}
+            </Button>
+          )}
+          {puedeEscribir && proforma.estado === 'EMITIDA' && !facturaExistente && (
+            <Button onClick={() => generarFactura.mutate()} isLoading={generarFactura.isPending}>
+              <Icons.billing className='mr-2 h-4 w-4' /> Generar Factura de Exportación
             </Button>
           )}
           {puedeEscribir && proforma.estado === 'EMITIDA' && (

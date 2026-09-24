@@ -153,3 +153,64 @@ export async function marcarError(id: number, mensaje: string, actualizadoPor: s
     data: { estado: 'ERROR', errorMensaje: mensaje, actualizadoPor },
   })
 }
+
+// ─── generarReal() — timbrado real (Fase 2, 2026-09-24) ──────────────────────
+
+export interface DocumentoDteParaGenerar {
+  doc: Prisma.DocumentoDteGetPayload<Record<string, never>>
+  // true = este caller "ganó" el turno y debe llamar a generarReal(); false =
+  // ya está GENERADO (folio asignado) o hay otro intento GENERANDO en curso.
+  debeGenerar: boolean
+}
+
+// Análogo a tomarDocumentoDteParaEmitir pero para el segundo paso (generarReal).
+// Solo procede si hay un TEMPORAL_CREADO (existe libredteCodigoTemporal). Mismo
+// advisory lock por origen: emitir y generar del mismo origen nunca corren a la
+// vez. Un ERROR previo de generar deja la fila en TEMPORAL_CREADO (el temporal
+// sigue vigente), así que un reintento vuelve a entrar acá.
+export async function tomarDocumentoDteParaGenerar(
+  origenTipo: string,
+  origenId: number,
+  actualizadoPor: string,
+): Promise<DocumentoDteParaGenerar | { error: string }> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION}::int, hashtext(${`${origenTipo}:${origenId}`}))`
+
+    const existente = await tx.documentoDte.findFirst({ where: { origenTipo, origenId } })
+    if (!existente) return { error: 'No existe un DTE temporal para timbrar — emite primero el documento' }
+    if (existente.estado === 'GENERADO') return { doc: existente, debeGenerar: false }
+    if (existente.estado === 'GENERANDO') return { doc: existente, debeGenerar: false }
+    if (existente.estado !== 'TEMPORAL_CREADO' || !existente.libredteCodigoTemporal) {
+      return { error: 'El DTE no está en un estado timbrable (falta el paso temporal previo)' }
+    }
+
+    const doc = await tx.documentoDte.update({
+      where: { id: existente.id },
+      data: { estado: 'GENERANDO', errorMensaje: null, actualizadoPor },
+    })
+    return { doc, debeGenerar: true }
+  })
+}
+
+export async function marcarGenerado(id: number, folio: number | null, respuesta: unknown, actualizadoPor: string) {
+  return prisma.documentoDte.update({
+    where: { id },
+    data: {
+      estado: 'GENERADO',
+      folio,
+      respuestaGenerar: respuesta as never,
+      generadoEn: new Date(),
+      errorMensaje: null,
+      actualizadoPor,
+    },
+  })
+}
+
+// Falla del timbrado: el temporal sigue vigente, así que se vuelve a
+// TEMPORAL_CREADO (no ERROR) para permitir reintentar generarReal sin re-emitir.
+export async function marcarErrorGenerar(id: number, mensaje: string, actualizadoPor: string) {
+  return prisma.documentoDte.update({
+    where: { id },
+    data: { estado: 'TEMPORAL_CREADO', errorMensaje: mensaje, actualizadoPor },
+  })
+}

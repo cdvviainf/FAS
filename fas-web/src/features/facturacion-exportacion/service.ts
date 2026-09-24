@@ -1,6 +1,10 @@
 import { api } from '@/lib/api'
 import type {
   DimensionProforma,
+  FacturaExportacion,
+  FacturaExportacionActualizarInput,
+  FacturasExportacionListFilters,
+  FacturasExportacionListResponse,
   Proforma,
   ProformaEmitirInput,
   ProformaLineaSugerida,
@@ -35,5 +39,36 @@ export const proformaService = {
   },
   async anular(id: number): Promise<{ data: Proforma }> {
     return api.post(`ventas/cobranza/proformas/${id}/anular`).json()
+  },
+}
+
+export const facturaExportacionService = {
+  async crearDesdeProforma(proformaId: number): Promise<{ data: FacturaExportacion }> {
+    return api.post(`ventas/cobranza/proformas/${proformaId}/factura-exportacion`).json()
+  },
+  async obtenerPorId(id: number): Promise<{ data: FacturaExportacion }> {
+    return api.get(`ventas/cobranza/facturas-exportacion/${id}`).json()
+  },
+  async obtenerPorEmbarque(embarqueId: number): Promise<{ data: FacturaExportacion | null }> {
+    return api.get(`ventas/cobranza/embarques/${embarqueId}/factura-exportacion`).json()
+  },
+  async actualizar(id: number, body: FacturaExportacionActualizarInput): Promise<{ data: FacturaExportacion }> {
+    return api.patch(`ventas/cobranza/facturas-exportacion/${id}`, { json: body }).json()
+  },
+  async emitir(id: number): Promise<{ data: FacturaExportacion }> {
+    return api.post(`ventas/cobranza/facturas-exportacion/${id}/emitir`).json()
+  },
+  async anular(id: number): Promise<{ data: FacturaExportacion }> {
+    return api.post(`ventas/cobranza/facturas-exportacion/${id}/anular`).json()
+  },
+  async list(filters: FacturasExportacionListFilters = {}): Promise<FacturasExportacionListResponse> {
+    const sp: Record<string, string> = {}
+    if (filters.page) sp.page = String(filters.page)
+    if (filters.limit) sp.limit = String(filters.limit)
+    if (filters.embarqueId) sp.embarqueId = String(filters.embarqueId)
+    if (filters.clienteId) sp.clienteId = String(filters.clienteId)
+    if (filters.estado) sp.estado = filters.estado
+    if (filters.folio) sp.folio = filters.folio
+    return api.get('ventas/cobranza/facturas-exportacion', { searchParams: sp }).json()
   },
 }

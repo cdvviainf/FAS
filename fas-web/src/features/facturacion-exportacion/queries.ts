@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
-import { proformaService } from './service'
-import type { DimensionProforma, ProformasListFilters } from './types'
+import { facturaExportacionService, proformaService } from './service'
+import type { DimensionProforma, FacturasExportacionListFilters, ProformasListFilters } from './types'
 
 export const proformasKeys = {
   all: ['proformas'] as const,
@@ -35,6 +35,32 @@ export function proformaPorIdOptions(id: number) {
   return queryOptions({
     queryKey: proformasKeys.detalle(id),
     queryFn: () => proformaService.obtenerPorId(id),
+    staleTime: 10_000,
+    enabled: id > 0,
+  })
+}
+
+// ─── Factura de Exportación ───────────────────────────────────────────────────
+
+export const facturasKeys = {
+  all: ['facturas-exportacion'] as const,
+  list: (filters: object) => ['facturas-exportacion', 'list', filters] as const,
+  porEmbarque: (embarqueId: number) => ['facturas-exportacion', 'embarque', embarqueId] as const,
+  detalle: (id: number) => ['facturas-exportacion', 'detalle', id] as const,
+}
+
+export function facturasListOptions(filters: FacturasExportacionListFilters = {}) {
+  return queryOptions({
+    queryKey: facturasKeys.list(filters),
+    queryFn: () => facturaExportacionService.list(filters),
+    staleTime: 15_000,
+  })
+}
+
+export function facturaPorIdOptions(id: number) {
+  return queryOptions({
+    queryKey: facturasKeys.detalle(id),
+    queryFn: () => facturaExportacionService.obtenerPorId(id),
     staleTime: 10_000,
     enabled: id > 0,
   })

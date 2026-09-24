@@ -148,7 +148,7 @@ export async function sugerirLineas(embarqueId: number, dimensiones: DimensionPr
 // body cubra el multiconjunto EXACTO de grupos canónicos (ni de más, ni de
 // menos, ni repetidos), o un consumidor directo podía omitir/duplicar fruta
 // y alterar el total.
-async function validarYCompletarLineas(embarqueId: number, dimensiones: DimensionProforma[], lineasCliente: ProformaLineaInput[]) {
+export async function validarYCompletarLineas(embarqueId: number, dimensiones: DimensionProforma[], lineasCliente: ProformaLineaInput[]) {
   const canonicas = await sugerirLineas(embarqueId, dimensiones)
   const porClave = new Map(canonicas.map((c) => [claveGrupo(c, dimensiones), c]))
 

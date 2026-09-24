@@ -345,6 +345,8 @@ async function main() {
     { modelo: 'receta', prefijo: 'REC', digitos: 3 },
     // Proforma de Exportación (2026-09-24, cobranza.md).
     { modelo: 'proforma', prefijo: 'PRF', digitos: 4 },
+    // Factura de Exportación / DTE 110 (2026-09-24, cobranza.md).
+    { modelo: 'facturaExportacion', prefijo: 'FEX', digitos: 4 },
   ]
   // A diferencia del resto de los parámetros (acotados a AGROSAN como empresa
   // base), los prefijos SÍ se siembran para TODAS las empresas: sin prefijo,

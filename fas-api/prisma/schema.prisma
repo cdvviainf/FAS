@@ -245,6 +245,7 @@ model Empresa {
   reclamos               Reclamo[]
   provisiones            Provision[]
   proformas              Proforma[]
+  facturasExportacion    FacturaExportacion[]
   EmbarquePackingList    EmbarquePackingList[]
   embarqueStackingRangos EmbarqueStackingRango[]
 
@@ -743,9 +744,10 @@ model Etiqueta {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  articulos      Articulo[]
-  palletLineas   PalletLinea[]
-  proformaLineas ProformaLinea[]
+  articulos                Articulo[]
+  palletLineas             PalletLinea[]
+  proformaLineas           ProformaLinea[]
+  facturaExportacionLineas FacturaExportacionLinea[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -967,6 +969,7 @@ model Especie {
   conceptosLiquidacion        ConceptoLiquidacionEspecie[]
   notaVentaDetalles           NotaVentaDetalle[]
   proformaLineas              ProformaLinea[]
+  facturaExportacionLineas    FacturaExportacionLinea[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
   ordenCompraLineas           OrdenCompraLinea[]
   contratosProductor          ProductorContrato[]
@@ -1035,6 +1038,7 @@ model Variedad {
   solicitudesInspeccion               SolicitudInspeccionVariedad[]
   palletLineas                        PalletLinea[]
   proformaLineas                      ProformaLinea[]
+  facturaExportacionLineas            FacturaExportacionLinea[]
 
   @@index([empresaId])
   @@map("variedades")
@@ -1067,6 +1071,7 @@ model Categoria {
   solicitudesInspeccion       SolicitudInspeccionCategoria[]
   palletLineas                PalletLinea[]
   proformaLineas              ProformaLinea[]
+  facturaExportacionLineas    FacturaExportacionLinea[]
 
   @@index([empresaId])
   @@map("categorias")
@@ -1106,6 +1111,7 @@ model Calibre {
   contratoProductorLineaHasta        ProductorContratoLinea[]            @relation("ProductorContratoCalibreHasta")
   solicitudesInspeccion              SolicitudInspeccionCalibre[]
   proformaLineas                     ProformaLinea[]
+  facturaExportacionLineas           FacturaExportacionLinea[]
   palletLineas                       PalletLinea[]
 
   @@unique([empresaId, id])
@@ -1231,6 +1237,7 @@ model Moneda {
   proformasMaterial     ProformaMaterial[]
   reclamos              Reclamo[]
   proformas             Proforma[]
+  facturasExportacion   FacturaExportacion[]
 
   @@map("monedas")
 }
@@ -1414,6 +1421,7 @@ model Entidad {
   integracionesGestorLogistico   Integracion[]               @relation("IntegracionGestorLogistico")
   reclamosCliente                Reclamo[]                   @relation("ReclamoCliente")
   proformasCliente               Proforma[]                  @relation("ProformaCliente")
+  facturasExportacionCliente     FacturaExportacion[]        @relation("FacturaExportacionCliente")
   // Instructivo de Embarque (2026-09-21, ventas.md R11).
   embarquesAgenteAduana          Embarque[]                  @relation("EmbarqueAgenteAduana")
   embarquesEmbarcador            Embarque[]                  @relation("EmbarqueEmbarcador")
@@ -1859,6 +1867,7 @@ model Articulo {
   palletLineas                PalletLinea[]
   cajasPorPallet              CajasPorPallet[]
   proformaLineas              ProformaLinea[]
+  facturaExportacionLineas    FacturaExportacionLinea[]
 
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
@@ -2758,7 +2767,10 @@ model Embarque {
 
   // Proforma de Exportación (2026-09-24, cobranza.md) — a lo más una ACTIVA
   // por Embarque (índice único parcial, ver modelo Proforma).
-  proformas Proforma[]
+  proformas           Proforma[]
+  // Factura de Exportación (DTE 110, 2026-09-24) — a lo más una ACTIVA por
+  // Embarque (mismo índice único parcial, ver modelo FacturaExportacion).
+  facturasExportacion FacturaExportacion[]
 
   // Datos de booking cuando reservaManual=true (mismo shape que
   // SolicitudReserva.numeroBooking/nave/numeroContenedor/fechaZarpe,
@@ -3079,7 +3091,7 @@ model Reclamo {
   // Moneda no es tenant (mantenedor global) — FK simple.
   moneda    Moneda  @relation(fields: [monedaId], references: [id])
 
-  fechaReclamo   DateTime  @db.Date // fecha en que el cliente reclamó (obligatoria)
+  fechaReclamo   DateTime @db.Date // fecha en que el cliente reclamó (obligatoria)
   resumenCliente String?
 
   estado      EstadoReclamo @default(INGRESADO)
@@ -3170,14 +3182,14 @@ model Provision {
   montoCalculado   Decimal              @db.Decimal(12, 2) // resultado final, en la moneda del Reclamo
   estado           EstadoProvision      @default(VIGENTE)
 
-  fechaCreacion  DateTime  @default(now())
-  creadoPorId    String
-  fechaReversa   DateTime?
-  reversadoPorId String?
+  fechaCreacion            DateTime  @default(now())
+  creadoPorId              String
+  fechaReversa             DateTime?
+  reversadoPorId           String?
   // Distingue la reversa automática al valorizar (R6) de una reversa manual
   // (permiso RECLAMO_PROVISION) — permite que "Anular Valorización" restaure
   // solo las que ELLA reversó, no una reversa manual previa coincidente.
-  reversadaPorValorizacion Boolean @default(false)
+  reversadaPorValorizacion Boolean   @default(false)
 
   @@index([empresaId])
   @@index([reclamoId])
@@ -3217,7 +3229,7 @@ model Proforma {
   // parcial a nivel de BD (WHERE "eliminadoEn" IS NULL, ver migración) —
   // mismo patrón que EmbarquePackingList/InstructivoHijo: permite reemitir
   // tras Anular sin perder el historial de la anterior.
-  embarque Embarque @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
+  embarque   Embarque @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
 
   codigo String // autogenerado vía PrefijoCodigo (modelo='proforma')
 
@@ -3239,13 +3251,17 @@ model Proforma {
 
   lineas ProformaLinea[]
 
-  creadoPorId    String
-  creadoEn       DateTime  @default(now())
-  actualizadoEn  DateTime? @updatedAt
+  // Factura de Exportación generada desde esta Proforma (0 o 1 activa por
+  // Embarque; se puede reemitir tras anular, de ahí la lista).
+  facturasExportacion FacturaExportacion[]
+
+  creadoPorId   String
+  creadoEn      DateTime  @default(now())
+  actualizadoEn DateTime? @updatedAt
   // "Anular Proforma" = soft delete (mismo criterio que el resto del
   // sistema) — libera el índice único parcial para poder reemitir.
-  eliminadoEn    DateTime?
-  eliminadoPor   String?
+  eliminadoEn   DateTime?
+  eliminadoPor  String?
 
   @@index([empresaId, embarqueId])
   @@index([clienteId])
@@ -3284,6 +3300,136 @@ model ProformaLinea {
 
   @@index([proformaId])
   @@map("proforma_lineas")
+}
+
+// ─── Cobranza — Factura de Exportación (DTE 110, cobranza.md §1/§4) ──────────
+// Documento tributario de exportación por Embarque. Se crea SIEMPRE desde una
+// Proforma emitida (decisión de negocio, Christian 2026-09-24): hereda sus
+// líneas/agrupación como punto de partida, pero valores y agrupación son
+// editables mientras esté en BORRADOR. Al "Emitir", se timbra vía LibreDTE
+// (emitirTemporal → generarReal, motor DocumentoDte genérico) y se generan las
+// Cuotas desde el snapshot NotaVentaCuotaPago (CB5/CB6). Comparte con la
+// Proforma solo Cliente/Monto/Condición de Pago/Fecha (D1) — no es la misma
+// entidad. `codigo` vía PrefijoCodigo (modelo='facturaExportacion', prefijo FEX).
+enum EstadoFacturaExportacion {
+  BORRADOR // creada, editable, sin efectos tributarios
+  EMITIDA // DTE timbrado (folio asignado)
+  ANULADA // soft delete
+}
+
+// Estado de cada Cuota. Pagos/NC/ND están fuera del alcance de esta etapa
+// (Factura + Cuotas), así que hoy solo se usan PENDIENTE/VENCIDA; el resto
+// queda declarado para forward-compat con cobranza.md (CB14).
+enum EstadoCuotaFacturaExportacion {
+  PENDIENTE
+  PARCIAL
+  PAGADA
+  VENCIDA
+}
+
+model FacturaExportacion {
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  embarqueId Int
+  // FK compuesta (empresaId, embarqueId) -> Embarque(empresaId, id). Unicidad
+  // real ("a lo más una Factura activa por Embarque", CB2) = índice único
+  // parcial WHERE eliminadoEn IS NULL (ver migración) — mismo patrón que
+  // Proforma; permite reemitir tras Anular sin perder el historial.
+  embarque   Embarque @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
+
+  // Origen: siempre una Proforma emitida (no se permite Factura sin Proforma).
+  proformaId Int
+  proforma   Proforma @relation(fields: [proformaId], references: [id])
+
+  codigo String // autogenerado vía PrefijoCodigo (modelo='facturaExportacion')
+
+  // Heredados de la Nota de Venta (vía el Embarque) — no editables.
+  clienteId Int
+  cliente   Entidad @relation("FacturaExportacionCliente", fields: [empresaId, clienteId], references: [empresaId, id])
+  monedaId  Int
+  moneda    Moneda  @relation(fields: [monedaId], references: [id])
+
+  condicionPagoId Int?
+  condicionPago   CondicionPago? @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
+
+  dimensionesAgrupacion DimensionProforma[] // reutiliza el enum de agrupación de Proforma
+  montoTotal            Decimal             @db.Decimal(14, 2) // = Σ FacturaExportacionLinea.montoLinea
+
+  estado       EstadoFacturaExportacion @default(BORRADOR)
+  fechaEmision DateTime? // se fija al timbrar el DTE (referencia FACTURA de las cuotas)
+
+  // DTE de exportación (110) — se completan al timbrar (generarReal).
+  tipoDte    Int     @default(110)
+  folio      Int?
+  trackIdSii String?
+
+  lineas FacturaExportacionLinea[]
+  cuotas FacturaExportacionCuota[]
+
+  creadoPorId   String
+  creadoEn      DateTime  @default(now())
+  emitidoPorId  String?
+  emitidoEn     DateTime?
+  actualizadoEn DateTime? @updatedAt
+  eliminadoEn   DateTime?
+  eliminadoPor  String?
+
+  @@index([empresaId, embarqueId])
+  @@index([clienteId])
+  @@index([proformaId])
+  @@map("facturas_exportacion")
+}
+
+model FacturaExportacionLinea {
+  id                   Int                @id @default(autoincrement())
+  facturaExportacionId Int
+  facturaExportacion   FacturaExportacion @relation(fields: [facturaExportacionId], references: [id], onDelete: Cascade)
+
+  descripcion String
+
+  especieId   Int
+  especie     Especie    @relation(fields: [especieId], references: [id])
+  variedadId  Int?
+  variedad    Variedad?  @relation(fields: [variedadId], references: [id])
+  articuloId  Int?
+  articulo    Articulo?  @relation(fields: [articuloId], references: [id])
+  calibreId   Int?
+  calibre     Calibre?   @relation(fields: [calibreId], references: [id])
+  categoriaId Int?
+  categoria   Categoria? @relation(fields: [categoriaId], references: [id])
+  etiquetaId  Int?
+  etiqueta    Etiqueta?  @relation(fields: [etiquetaId], references: [id])
+
+  cantidadCajas  Int
+  precioUnitario Decimal @db.Decimal(14, 4)
+  montoLinea     Decimal @db.Decimal(14, 2)
+
+  @@index([facturaExportacionId])
+  @@map("factura_exportacion_lineas")
+}
+
+// Cuota generada al emitir la Factura, copiando el snapshot NotaVentaCuotaPago
+// del Cierre Comercial (CB5). `fechaVencimiento` = fecha de referencia +
+// plazoDias (CB6); referencia FACTURA usa `FacturaExportacion.fechaEmision`,
+// ZARPE/ARRIBO usan las fechas del Embarque, ENVIO_DOCUMENTOS queda null
+// (pendiente). Pagos aún fuera de alcance.
+model FacturaExportacionCuota {
+  id                   Int                @id @default(autoincrement())
+  facturaExportacionId Int
+  facturaExportacion   FacturaExportacion @relation(fields: [facturaExportacionId], references: [id], onDelete: Cascade)
+
+  numeroCuota      Int
+  fechaReferencia  FechaReferenciaPago
+  plazoDias        Int
+  montoCuota       Decimal                       @db.Decimal(14, 2)
+  fechaVencimiento DateTime?
+  estado           EstadoCuotaFacturaExportacion @default(PENDIENTE)
+
+  @@unique([facturaExportacionId, numeroCuota])
+  @@index([facturaExportacionId])
+  @@map("factura_exportacion_cuotas")
 }
 
 // ─── Compras — Instructivo de Embalaje (Docs/compras.md §4.1) ───────────────
@@ -3512,6 +3658,7 @@ model CondicionPago {
   ordenesCompraMaterial OrdenCompraMaterial[]
   proformasMaterial     ProformaMaterial[]
   proformas             Proforma[]
+  facturasExportacion   FacturaExportacion[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -3967,6 +4114,8 @@ enum EstadoDocumentoDte {
   // varada y requiere corrección manual — sin mecanismo de expiración automática.
   EMITIENDO
   TEMPORAL_CREADO // emitirTemporal() OK — hay codigo de LibreDTE
+  GENERANDO // segundo advisory lock: un request está timbrando (generarReal)
+  GENERADO // generarReal() OK — DTE timbrado, hay folio real
   ERROR // el intento más reciente falló (ver errorMensaje)
 }
 
@@ -3985,6 +4134,11 @@ model DocumentoDte {
   rutReceptor            String
   payloadEnviado         Json // snapshot del payload armado — auditoría/diagnóstico
   errorMensaje           String?
+
+  // generarReal() (timbrado real, 2026-09-24 — firma electrónica ya configurada):
+  folio            Int? // folio real asignado por el SII vía LibreDTE
+  respuestaGenerar Json? // snapshot de la respuesta de POST /api/dte/documentos/generar
+  generadoEn       DateTime?
 
   creadoEn       DateTime  @default(now())
   creadoPor      String

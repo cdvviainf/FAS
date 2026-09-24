@@ -1,4 +1,10 @@
-export type EstadoDocumentoDte = 'PENDIENTE' | 'EMITIENDO' | 'TEMPORAL_CREADO' | 'ERROR'
+export type EstadoDocumentoDte =
+  | 'PENDIENTE'
+  | 'EMITIENDO'
+  | 'TEMPORAL_CREADO'
+  | 'GENERANDO'
+  | 'GENERADO'
+  | 'ERROR'
 
 // Forma normalizada de "una parte" del DTE (emisor o receptor) — Empresa usa
 // `rut` y Entidad usa `identificador` en su modelo Prisma, pero para armar el
