@@ -30,7 +30,10 @@ import type { PrefijoCodigo } from '../types'
 
 const ITEM = 'CONFIG_MANTENEDORES'
 const tiposEmbarqueService = createMantenedorService('tipos-embarque')
-const TODAS_LAS_OPCIONES = [...MODELOS_CON_CODIGO_OPTIONS, MODELO_EMBARQUE_OPTION]
+// Ordenadas alfabéticamente por etiqueta para el selector de Mantenedor.
+const TODAS_LAS_OPCIONES = [...MODELOS_CON_CODIGO_OPTIONS, MODELO_EMBARQUE_OPTION].sort((a, b) =>
+  a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }),
+)
 
 interface PrefijoCodigoFormSheetProps {
   item?: PrefijoCodigo
