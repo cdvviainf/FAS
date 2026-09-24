@@ -142,10 +142,12 @@ export async function sugerirLineas(embarqueId: number, dimensiones: DimensionPr
 // los IDs de especie/variedad/artículo/calibre/categoría/marca que manda el
 // cliente (podrían no corresponder a los pallets reales del Embarque, o
 // referenciar mantenedores de otra empresa). Solo `descripcion` (si vino) y
-// `montoLinea` son realmente editables. Ronda 2: no basta con validar cada
-// línea aislada — se exige además que el body cubra el multiconjunto
-// EXACTO de grupos canónicos (ni de más, ni de menos, ni repetidos), o un
-// consumidor directo podía omitir/duplicar fruta y alterar el total.
+// `precioUnitario` son realmente editables; `montoLinea` = precioUnitario ×
+// cantidadCajas (cajas canónicas) se deriva acá y se redondea a 2 decimales.
+// Ronda 2: no basta con validar cada línea aislada — se exige además que el
+// body cubra el multiconjunto EXACTO de grupos canónicos (ni de más, ni de
+// menos, ni repetidos), o un consumidor directo podía omitir/duplicar fruta
+// y alterar el total.
 async function validarYCompletarLineas(embarqueId: number, dimensiones: DimensionProforma[], lineasCliente: ProformaLineaInput[]) {
   const canonicas = await sugerirLineas(embarqueId, dimensiones)
   const porClave = new Map(canonicas.map((c) => [claveGrupo(c, dimensiones), c]))
@@ -163,6 +165,7 @@ async function validarYCompletarLineas(embarqueId: number, dimensiones: Dimensio
       throw new ValidationError('Hay una línea repetida — cada combinación debe aparecer una sola vez (recalcula la sugerencia)')
     }
     vistas.add(clave)
+    const precioUnitario = l.precioUnitario
     return {
       descripcion: l.descripcion?.trim() || canonica.descripcion,
       especieId: canonica.especieId,
@@ -172,7 +175,8 @@ async function validarYCompletarLineas(embarqueId: number, dimensiones: Dimensio
       categoriaId: canonica.categoriaId,
       etiquetaId: canonica.etiquetaId,
       cantidadCajas: canonica.cantidadCajas,
-      montoLinea: l.montoLinea,
+      precioUnitario,
+      montoLinea: Math.round(precioUnitario * canonica.cantidadCajas * 100) / 100,
     }
   })
 
@@ -220,7 +224,7 @@ export async function emitirProforma(embarqueId: number, body: ProformaEmitirInp
         condicionPagoId: embarque.notaVenta.condicionPagoId,
         montoTotal,
       },
-      { ...body, lineas },
+      { idioma: body.idioma, dimensiones: body.dimensiones, lineas },
       userId,
     )
   } catch (err) {

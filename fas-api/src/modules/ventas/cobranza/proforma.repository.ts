@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
-import type { ProformaEmitirInput, ProformasListFilters } from './proforma.types.js'
+import type { DimensionProforma, ProformasListFilters } from './proforma.types.js'
 
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 
@@ -181,7 +181,29 @@ interface DatosCrearProforma {
   montoTotal: number
 }
 
-export async function crearProforma(datos: DatosCrearProforma, body: ProformaEmitirInput, creadoPorId: string) {
+// Línea ya validada y derivada por el service (precioUnitario editado por el
+// usuario; montoLinea = precioUnitario × cantidadCajas redondeado a 2). El
+// repo solo persiste — no vuelve a calcular montos.
+export interface LineaProformaPersistir {
+  descripcion: string
+  especieId: number
+  variedadId: number | null
+  articuloId: number | null
+  calibreId: number | null
+  categoriaId: number | null
+  etiquetaId: number | null
+  cantidadCajas: number
+  precioUnitario: number
+  montoLinea: number
+}
+
+interface MetaCrearProforma {
+  idioma: string
+  dimensiones: DimensionProforma[]
+  lineas: LineaProformaPersistir[]
+}
+
+export async function crearProforma(datos: DatosCrearProforma, meta: MetaCrearProforma, creadoPorId: string) {
   const empresaId = getEmpresaIdActual()!
   return prisma.proforma.create({
     data: {
@@ -191,12 +213,12 @@ export async function crearProforma(datos: DatosCrearProforma, body: ProformaEmi
       clienteId: datos.clienteId,
       monedaId: datos.monedaId,
       condicionPagoId: datos.condicionPagoId,
-      idioma: body.idioma,
-      dimensionesAgrupacion: body.dimensiones,
+      idioma: meta.idioma,
+      dimensionesAgrupacion: meta.dimensiones,
       montoTotal: datos.montoTotal,
       creadoPorId,
       lineas: {
-        create: body.lineas.map((l) => ({
+        create: meta.lineas.map((l) => ({
           descripcion: l.descripcion,
           especieId: l.especieId,
           variedadId: l.variedadId ?? undefined,
@@ -205,7 +227,7 @@ export async function crearProforma(datos: DatosCrearProforma, body: ProformaEmi
           categoriaId: l.categoriaId ?? undefined,
           etiquetaId: l.etiquetaId ?? undefined,
           cantidadCajas: l.cantidadCajas,
-          precioUnitario: l.montoLinea / l.cantidadCajas,
+          precioUnitario: l.precioUnitario,
           montoLinea: l.montoLinea,
         })),
       },

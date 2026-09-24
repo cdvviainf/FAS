@@ -346,19 +346,27 @@ async function main() {
     // Proforma de Exportación (2026-09-24, cobranza.md).
     { modelo: 'proforma', prefijo: 'PRF', digitos: 4 },
   ]
+  // A diferencia del resto de los parámetros (acotados a AGROSAN como empresa
+  // base), los prefijos SÍ se siembran para TODAS las empresas: sin prefijo,
+  // una empresa no puede generar ningún documento con código autogenerado
+  // (ej. Proforma). AGDry se creó sin prefijos y no podía emitir Proformas
+  // (2026-09-24). Idempotente por (empresaId, modelo).
+  const empresasParaPrefijos = await prisma.empresa.findMany({ where: { eliminadoEn: null }, select: { id: true } })
   let prefijosCreados = 0
-  for (const p of prefijosBase) {
-    const existente = await prisma.prefijoCodigo.findFirst({
-      where: { empresaId: agrosanParaParametros.id, modelo: p.modelo, tipoEmbarqueId: null, eliminadoEn: null },
-    })
-    if (!existente) {
-      await prisma.prefijoCodigo.create({
-        data: { ...p, empresaId: agrosanParaParametros.id, creadoPor: SISTEMA_USER },
+  for (const empresa of empresasParaPrefijos) {
+    for (const p of prefijosBase) {
+      const existente = await prisma.prefijoCodigo.findFirst({
+        where: { empresaId: empresa.id, modelo: p.modelo, tipoEmbarqueId: null, eliminadoEn: null },
       })
-      prefijosCreados++
+      if (!existente) {
+        await prisma.prefijoCodigo.create({
+          data: { ...p, empresaId: empresa.id, creadoPor: SISTEMA_USER },
+        })
+        prefijosCreados++
+      }
     }
   }
-  console.log(`PrefijoCodigo: ${prefijosCreados} prefijos nuevos creados.`)
+  console.log(`PrefijoCodigo: ${prefijosCreados} prefijos nuevos creados (${empresasParaPrefijos.length} empresa(s)).`)
 
   // Template de Carga BASE (Recepción de Fruta): formato estándar con columnas
   // canónicas, para que exista un formato base descargable sin tener que armar

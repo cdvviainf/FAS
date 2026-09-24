@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Icons } from '@/components/icons'
+import { formatMonto } from '@/lib/format'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { proformaPorEmbarqueOptions, proformasKeys } from '../queries'
 import { proformaService } from '../service'
@@ -56,7 +57,8 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
       prev.map((l, i) => {
         if (i !== index) return l
         const actualizada = { ...l, ...cambios }
-        actualizada.precioUnitario = actualizada.cantidadCajas > 0 ? actualizada.montoLinea / actualizada.cantidadCajas : 0
+        // El usuario edita el precio unitario; el monto de línea se deriva.
+        actualizada.montoLinea = Math.round(actualizada.precioUnitario * actualizada.cantidadCajas * 100) / 100
         return actualizada
       }),
     )
@@ -78,7 +80,7 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
           categoriaId: l.categoriaId,
           etiquetaId: l.etiquetaId,
           cantidadCajas: l.cantidadCajas,
-          montoLinea: l.montoLinea,
+          precioUnitario: l.precioUnitario,
         })),
       }),
     onSuccess: () => {
@@ -143,7 +145,8 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
                 <TableRow>
                   <TableHead>Descripción</TableHead>
                   <TableHead className='text-right'>Cajas</TableHead>
-                  <TableHead className='w-36 text-right'>Monto</TableHead>
+                  <TableHead className='w-36 text-right'>Precio Unitario</TableHead>
+                  <TableHead className='w-36 text-right'>Total Línea</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -156,25 +159,27 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
                         className='h-8'
                       />
                     </TableCell>
-                    <TableCell className='text-right tabular-nums'>{l.cantidadCajas}</TableCell>
+                    <TableCell className='text-right tabular-nums'>{formatMonto(l.cantidadCajas, 0)}</TableCell>
                     <TableCell>
                       <Input
                         type='number'
                         min={0}
-                        step='0.01'
-                        value={l.montoLinea}
-                        onChange={(e) => actualizarLinea(i, { montoLinea: Number(e.target.value) })}
+                        step='0.0001'
+                        value={l.precioUnitario}
+                        onChange={(e) => actualizarLinea(i, { precioUnitario: Number(e.target.value) })}
                         className='h-8 text-right'
                       />
                     </TableCell>
+                    <TableCell className='text-right tabular-nums'>{formatMonto(l.montoLinea)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
               <TableFooter>
                 <TableRow>
                   <TableCell>Total</TableCell>
-                  <TableCell className='text-right tabular-nums'>{lineas.reduce((a, l) => a + l.cantidadCajas, 0)}</TableCell>
-                  <TableCell className='text-right tabular-nums'>{montoTotal.toFixed(2)}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{formatMonto(lineas.reduce((a, l) => a + l.cantidadCajas, 0), 0)}</TableCell>
+                  <TableCell />
+                  <TableCell className='text-right tabular-nums'>{formatMonto(montoTotal)}</TableCell>
                 </TableRow>
               </TableFooter>
             </Table>

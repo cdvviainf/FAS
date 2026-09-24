@@ -43,13 +43,19 @@ export function PrefijoCodigoListingClient() {
 
   if (isPending) return <p className='text-sm text-muted-foreground'>Cargando...</p>
 
+  // El backend ordena por `modelo` (clave interna); acá se reordena por la
+  // etiqueta visible para que el listado quede en orden alfabético real.
+  const prefijosOrdenados = [...(data?.data ?? [])].sort((a, b) =>
+    labelDeModelo(a.modelo).localeCompare(labelDeModelo(b.modelo), 'es', { sensitivity: 'base' }),
+  )
+
   return (
     <div className='space-y-3'>
-      {(data?.data ?? []).length === 0 ? (
+      {prefijosOrdenados.length === 0 ? (
         <p className='text-sm text-muted-foreground'>No hay prefijos configurados.</p>
       ) : (
         <div className='space-y-2'>
-          {data!.data.map((p) => (
+          {prefijosOrdenados.map((p) => (
             <div key={p.id} className='flex items-center justify-between rounded-md border p-3'>
               <p className='font-medium'>
                 {labelDeModelo(p.modelo)}{p.tipoEmbarque && <> ({p.tipoEmbarque.descripcion})</>} — <span className='font-mono text-muted-foreground'>{p.prefijo}{'0'.repeat(p.digitos)}</span>

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Icons } from '@/components/icons'
+import { formatMonto } from '@/lib/format'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { documentosService } from '@/features/documentos/service'
 import { proformasKeys } from '../queries'
@@ -79,16 +80,16 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
               {proforma.lineas.map((l) => (
                 <TableRow key={l.id}>
                   <TableCell>{l.descripcion}</TableCell>
-                  <TableCell className='text-right tabular-nums'>{l.cantidadCajas}</TableCell>
-                  <TableCell className='text-right tabular-nums'>{proforma.moneda.codigo} {l.precioUnitario}</TableCell>
-                  <TableCell className='text-right tabular-nums'>{proforma.moneda.codigo} {l.montoLinea}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{formatMonto(l.cantidadCajas, 0)}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{proforma.moneda.codigo} {formatMonto(l.precioUnitario)}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{proforma.moneda.codigo} {formatMonto(l.montoLinea)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
             <TableFooter>
               <TableRow>
                 <TableCell colSpan={3}>Total</TableCell>
-                <TableCell className='text-right tabular-nums'>{proforma.moneda.codigo} {proforma.montoTotal}</TableCell>
+                <TableCell className='text-right tabular-nums'>{proforma.moneda.codigo} {formatMonto(proforma.montoTotal)}</TableCell>
               </TableRow>
             </TableFooter>
           </Table>

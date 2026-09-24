@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Icons } from '@/components/icons'
+import { formatMonto } from '@/lib/format'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { proformasListOptions } from '../queries'
 import type { EstadoProforma } from '../types'
@@ -101,7 +102,7 @@ export function ProformasListingClient() {
                     <TableCell>{p.embarque.numeroInstructivo}</TableCell>
                     <TableCell>{p.cliente.descripcion}</TableCell>
                     <TableCell className='text-muted-foreground'>{new Date(p.fechaEmision).toLocaleDateString('es-CL')}</TableCell>
-                    <TableCell className='text-right tabular-nums'>{p.moneda.codigo} {p.montoTotal}</TableCell>
+                    <TableCell className='text-right tabular-nums'>{p.moneda.codigo} {formatMonto(p.montoTotal)}</TableCell>
                     <TableCell>
                       <Badge variant={p.estado === 'EMITIDA' ? 'default' : 'secondary'}>{ESTADO_LABELS[p.estado]}</Badge>
                     </TableCell>

@@ -10,6 +10,18 @@ export function formatFechaCorta(value: string): string {
   return new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString('es-CL')
 }
 
+// Monto con separador de miles (es-CL: miles con '.', decimales con ',').
+// Acepta el string decimal que llega del backend (Decimal de Prisma) o un
+// number ya calculado en el cliente. Devuelve '—' si no es un número finito.
+export function formatMonto(value: number | string, decimals = 2): string {
+  const n = typeof value === 'string' ? Number(value) : value
+  if (!Number.isFinite(n)) return '—'
+  return new Intl.NumberFormat('es-CL', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(n)
+}
+
 export function formatDate(
   date: Date | string | number | undefined,
   opts: Intl.DateTimeFormatOptions = {}

@@ -21,10 +21,13 @@ const lineaSchema = z.object({
   categoriaId: z.number().int().positive().optional().nullable(),
   etiquetaId: z.number().int().positive().optional().nullable(),
   cantidadCajas: z.number().int().positive(),
-  // Máximo 2 decimales (FAS-PROF-EXP-007, QA ronda 2) — sin esto, sumar
-  // montos con más precisión que la moneda arrastra error de punto flotante
-  // y `montoTotal` deja de ser exactamente Σ montoLinea.
-  montoLinea: z.number().min(0).multipleOf(0.01, 'El monto debe tener máximo 2 decimales'),
+  // El usuario edita el PRECIO UNITARIO (decisión de negocio, Christian
+  // 2026-09-24): el monto de línea (= precio × cajas) y el total se derivan
+  // server-side. Se admiten hasta 4 decimales (igual que la columna
+  // ProformaLinea.precioUnitario @db.Decimal(14,4)); la suma sigue siendo
+  // exacta porque montoLinea se redondea a 2 decimales antes de sumar en
+  // centavos (FAS-PROF-EXP-007, QA ronda 2).
+  precioUnitario: z.number().min(0).max(9_999_999_999),
 })
 
 export const proformaEmitirSchema = z.object({

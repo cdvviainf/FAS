@@ -37,7 +37,7 @@ export interface ProformaLineaInput {
   categoriaId?: number | null
   etiquetaId?: number | null
   cantidadCajas: number
-  montoLinea: number
+  precioUnitario: number
 }
 
 export interface ProformaLinea {
