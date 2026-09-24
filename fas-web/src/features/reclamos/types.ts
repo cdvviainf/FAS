@@ -85,6 +85,7 @@ export interface Provision {
   creadoPorId: string
   fechaReversa: string | null
   reversadoPorId: string | null
+  reversadaPorValorizacion: boolean
 }
 
 export interface Reclamo {
@@ -95,7 +96,7 @@ export interface Reclamo {
   cliente: MantenedorRef
   monedaId: number
   moneda: MantenedorRef
-  fechaReclamo: string | null
+  fechaReclamo: string
   resumenCliente: string | null
   estado: EstadoReclamo
   procedencia: Procedencia | null
@@ -119,7 +120,7 @@ export interface ProvisionInput {
 }
 
 export interface ReclamoCreateInput {
-  fechaReclamo?: string | null
+  fechaReclamo: string
   resumenCliente?: string | null
   temporadaId?: number | null
   lineas: { palletLineaId: number; cantidadCajas: number }[]
@@ -128,7 +129,7 @@ export interface ReclamoCreateInput {
 
 // IMP-QA-R1-019: edición — sin `provision` (tiene su propio endpoint).
 export interface ReclamoUpdateInput {
-  fechaReclamo?: string | null
+  fechaReclamo?: string
   resumenCliente?: string | null
   temporadaId?: number | null
   lineas?: { palletLineaId: number; cantidadCajas: number }[]

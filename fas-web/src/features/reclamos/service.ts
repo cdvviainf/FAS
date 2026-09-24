@@ -50,6 +50,9 @@ export const reclamosService = {
   async valorizar(id: number, valorConfirmado: number): Promise<{ data: Reclamo }> {
     return api.post(`calidad/reclamos/${id}/valorizar`, { json: { valorConfirmado } }).json()
   },
+  async anularValorizacion(id: number): Promise<{ data: Reclamo }> {
+    return api.post(`calidad/reclamos/${id}/anular-valorizacion`).json()
+  },
   async cerrar(id: number, procedencia: Procedencia): Promise<{ data: Reclamo }> {
     return api.post(`calidad/reclamos/${id}/cerrar`, { json: { procedencia } }).json()
   },

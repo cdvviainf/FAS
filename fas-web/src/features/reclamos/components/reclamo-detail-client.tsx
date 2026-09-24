@@ -21,30 +21,25 @@ import {
   TIPO_CALCULO_PROVISION_LABELS,
 } from '../types'
 import type { Procedencia } from '../types'
-import { ProvisionForm } from './provision-form'
-import type { ProvisionInput } from '../types'
 
 const ITEM_ANALISIS = 'CAL_RECLAMOS'
-const ITEM_VALORIZACION = 'RECLAMO_VALORIZACION'
 const ITEM_CIERRE = 'RECLAMO_CIERRE'
-const ITEM_PROVISION = 'RECLAMO_PROVISION'
 
+// Pantalla de Calidad (split Ventas/Calidad, 2026-09-23): Análisis (comentario
+// + documentos) y Veredicto Final/Cierre — Provisión y Valorización son de
+// Comercial (ver ReclamoVentasDetailClient) y acá se muestran solo de lectura
+// para que Calidad sepa qué hizo la otra área.
 export function ReclamoDetailClient({ id }: { id: number }) {
   const queryClient = useQueryClient()
   const puedeAnalizar = usePuedeEscribir(ITEM_ANALISIS)
-  const puedeValorizar = usePuedeEscribir(ITEM_VALORIZACION)
   const puedeCerrar = usePuedeEscribir(ITEM_CIERRE)
-  const puedeProvisionar = usePuedeEscribir(ITEM_PROVISION)
 
   const { data, isPending } = useQuery(reclamoDetailOptions(id))
   const reclamo = data?.data
 
   const [comentario, setComentario] = useState('')
   const [comentarioTocado, setComentarioTocado] = useState(false)
-  const [valorConfirmado, setValorConfirmado] = useState('')
   const [procedencia, setProcedencia] = useState<Procedencia | ''>('')
-  const [provisionOpen, setProvisionOpen] = useState(false)
-  const [provisionInput, setProvisionInput] = useState<ProvisionInput>({ tipoCalculo: 'POR_UNIDAD_CAJA' })
 
   function invalidar() {
     queryClient.invalidateQueries({ queryKey: reclamosKeys.detail(id) })
@@ -69,12 +64,6 @@ export function ReclamoDetailClient({ id }: { id: number }) {
     onError: (e: Error) => toast.error(e.message || 'Error al eliminar'),
   })
 
-  const valorizar = useMutation({
-    mutationFn: () => reclamosService.valorizar(id, Number(valorConfirmado)),
-    onSuccess: () => { toast.success('Reclamo valorizado'); invalidar() },
-    onError: (e: Error) => toast.error(e.message || 'Error al valorizar'),
-  })
-
   const cerrar = useMutation({
     mutationFn: () => reclamosService.cerrar(id, procedencia as Procedencia),
     onSuccess: () => { toast.success('Reclamo cerrado'); invalidar() },
@@ -87,23 +76,12 @@ export function ReclamoDetailClient({ id }: { id: number }) {
     onError: (e: Error) => toast.error(e.message || 'Error al reabrir'),
   })
 
-  const crearProvision = useMutation({
-    mutationFn: () => reclamosService.crearProvision(id, provisionInput),
-    onSuccess: () => { toast.success('Provisión creada'); setProvisionOpen(false); invalidar() },
-    onError: (e: Error) => toast.error(e.message || 'Error al crear la Provisión'),
-  })
-
-  const reversarProvision = useMutation({
-    mutationFn: (provisionId: number) => reclamosService.reversarProvision(provisionId),
-    onSuccess: () => { toast.success('Provisión reversada'); invalidar() },
-    onError: (e: Error) => toast.error(e.message || 'Error al reversar'),
-  })
-
   if (isPending || !reclamo) return <p className='text-muted-foreground text-sm'>Cargando...</p>
 
   const cajasTotales = reclamo.lineas.reduce((acc, l) => acc + l.cantidadCajas, 0)
   const noCerrado = reclamo.estado !== 'CERRADO'
   const comentarioActual = comentarioTocado ? comentario : reclamo.comentarioCalidad ?? ''
+  const provisionVigente = reclamo.provisiones.find((p) => p.estado === 'VIGENTE')
 
   return (
     <div className='max-w-4xl space-y-4'>
@@ -115,7 +93,7 @@ export function ReclamoDetailClient({ id }: { id: number }) {
             {reclamo.procedencia && <Badge variant='secondary'>{PROCEDENCIA_LABELS[reclamo.procedencia]}</Badge>}
           </h2>
           <p className='text-muted-foreground text-sm'>
-            {reclamo.cliente.descripcion} · {reclamo.moneda.codigo} · {reclamo.fechaReclamo ?? 'sin fecha'}
+            {reclamo.cliente.descripcion} · {reclamo.moneda.codigo} · {reclamo.fechaReclamo}
           </p>
           {reclamo.resumenCliente && <p className='mt-1 text-sm'>{reclamo.resumenCliente}</p>}
         </div>
@@ -204,82 +182,38 @@ export function ReclamoDetailClient({ id }: { id: number }) {
         </CardContent>
       </Card>
 
-      {/* Provisiones */}
+      {/* Provisión y Valorización — de solo lectura acá (las gestiona Ventas,
+          ver ReclamoVentasDetailClient); informa a Calidad qué hizo Comercial. */}
       <Card>
-        <CardHeader className='flex flex-row items-center justify-between'>
-          <CardTitle className='text-sm'>Provisiones</CardTitle>
-          {puedeProvisionar && noCerrado && !provisionOpen && (
-            <Button size='sm' variant='outline' onClick={() => setProvisionOpen(true)}>
-              <Icons.add className='mr-1 h-4 w-4' /> Nueva Provisión
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent className='space-y-3'>
-          {provisionOpen && (
-            <div className='space-y-2 rounded-md border p-3'>
-              <ProvisionForm value={provisionInput} onChange={setProvisionInput} cajasDisponibles={cajasTotales} />
-              <div className='flex gap-2'>
-                <Button size='sm' onClick={() => crearProvision.mutate()} isLoading={crearProvision.isPending}>Guardar</Button>
-                <Button size='sm' variant='ghost' onClick={() => setProvisionOpen(false)}>Cancelar</Button>
-              </div>
-            </div>
-          )}
-          {reclamo.provisiones.length === 0 ? (
-            <p className='text-muted-foreground text-sm'>Sin provisiones.</p>
+        <CardHeader><CardTitle className='text-sm'>Provisión y Valorización (Comercial)</CardTitle></CardHeader>
+        <CardContent className='space-y-2 text-sm'>
+          {provisionVigente ? (
+            <p>
+              Provisión vigente: <span className='font-medium'>{reclamo.moneda.codigo} {provisionVigente.montoCalculado}</span>{' '}
+              <span className='text-muted-foreground'>({TIPO_CALCULO_PROVISION_LABELS[provisionVigente.tipoCalculo]})</span>
+            </p>
           ) : (
-            reclamo.provisiones.map((p) => (
-              <div key={p.id} className='flex items-center justify-between rounded-md border p-2 text-sm'>
-                <div>
-                  <span className='font-medium'>{reclamo.moneda.codigo} {p.montoCalculado}</span>
-                  <span className='text-muted-foreground ml-2'>{TIPO_CALCULO_PROVISION_LABELS[p.tipoCalculo]}</span>
-                </div>
-                {p.estado === 'VIGENTE' ? (
-                  puedeProvisionar && noCerrado && (
-                    <Button size='sm' variant='ghost' onClick={() => reversarProvision.mutate(p.id)}>Reversar</Button>
-                  )
-                ) : (
-                  <Badge variant='secondary'>Reversada</Badge>
-                )}
-              </div>
-            ))
+            <p className='text-muted-foreground'>Sin Provisión vigente.</p>
+          )}
+          {reclamo.valorConfirmado != null ? (
+            <p>Valorizado: <span className='font-medium'>{reclamo.moneda.codigo} {reclamo.valorConfirmado}</span></p>
+          ) : (
+            <p className='text-muted-foreground'>Aún no valorizado.</p>
           )}
         </CardContent>
       </Card>
 
-      {/* Valorización */}
-      {puedeValorizar && noCerrado && (
-        <Card>
-          <CardHeader><CardTitle className='text-sm'>Valorización</CardTitle></CardHeader>
-          <CardContent className='flex items-end gap-3'>
-            <div className='flex-1 space-y-1.5'>
-              <Label>Monto confirmado ({reclamo.moneda.codigo})</Label>
-              <Input
-                type='number'
-                min={0}
-                step='0.01'
-                value={valorConfirmado || reclamo.valorConfirmado || ''}
-                onChange={(e) => setValorConfirmado(e.target.value)}
-              />
-            </div>
-            <Button onClick={() => valorizar.mutate()} isLoading={valorizar.isPending}>Valorizar</Button>
-          </CardContent>
-        </Card>
-      )}
-      {reclamo.valorConfirmado != null && (
-        <p className='text-muted-foreground text-sm'>Valorizado: {reclamo.moneda.codigo} {reclamo.valorConfirmado}</p>
-      )}
-
-      {/* Cierre — solo se puede cerrar desde VALORIZADO (R5/IMP-QA-R1-020);
-          antes de eso, el backend igual lo rechaza (422), pero no tiene
-          sentido ofrecer el control. */}
+      {/* Veredicto Final — solo se puede cerrar desde VALORIZADO (R5/IMP-QA-
+          R1-020); antes de eso, el backend igual lo rechaza (422), pero no
+          tiene sentido ofrecer el control. */}
       {puedeCerrar && (
         <Card>
-          <CardHeader><CardTitle className='text-sm'>Cierre</CardTitle></CardHeader>
+          <CardHeader><CardTitle className='text-sm'>Veredicto Final</CardTitle></CardHeader>
           <CardContent className='flex items-end gap-3'>
             {reclamo.estado === 'VALORIZADO' ? (
               <>
                 <div className='flex-1 space-y-1.5'>
-                  <Label>Procedencia</Label>
+                  <Label>Estado</Label>
                   <Select value={procedencia} onValueChange={(v) => setProcedencia(v as Procedencia)}>
                     <SelectTrigger><SelectValue placeholder='Selecciona...' /></SelectTrigger>
                     <SelectContent>
@@ -294,7 +228,7 @@ export function ReclamoDetailClient({ id }: { id: number }) {
             ) : reclamo.estado === 'CERRADO' ? (
               <Button variant='outline' onClick={() => reabrir.mutate()} isLoading={reabrir.isPending}>Reabrir Reclamo</Button>
             ) : (
-              <p className='text-muted-foreground text-sm'>Valoriza el Reclamo antes de poder cerrarlo.</p>
+              <p className='text-muted-foreground text-sm'>Ventas debe valorizar el Reclamo antes de poder cerrarlo.</p>
             )}
           </CardContent>
         </Card>

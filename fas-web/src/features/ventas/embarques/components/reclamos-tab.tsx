@@ -17,9 +17,10 @@ import type { EmbarqueDetalle } from '../types'
 const ITEM = 'VENTAS_EMBARQUES'
 
 // Creación/edición de Reclamos (reclamos.md) — vive acá, en el detalle del
-// Embarque (Comercial). El análisis (comentario + documentos) y el resto
-// del ciclo de vida vive en Calidad → Reclamos; el link de cada fila lleva
-// para allá.
+// Embarque (Comercial). El detalle (Provisión/Valorización) vive en la
+// pantalla de Ventas → Reclamos (split Ventas/Calidad, 2026-09-23); el
+// análisis de Calidad (comentario + documentos) y el Veredicto Final viven
+// en Calidad → Reclamos, aparte.
 export function ReclamosTab({ embarque }: { embarque: EmbarqueDetalle }) {
   const puedeEscribir = usePuedeEscribir(ITEM)
   const router = useRouter()
@@ -76,7 +77,7 @@ export function ReclamosTab({ embarque }: { embarque: EmbarqueDetalle }) {
                   <TableRow
                     key={r.id}
                     className='cursor-pointer'
-                    onClick={() => router.push(`/dashboard/calidad/reclamos/${r.id}`)}
+                    onClick={() => router.push(`/dashboard/ventas/reclamos/${r.id}`)}
                   >
                     <TableCell className='text-muted-foreground'>{r.fechaReclamo ?? '—'}</TableCell>
                     <TableCell className='max-w-xs truncate'>{r.resumenCliente ?? '—'}</TableCell>

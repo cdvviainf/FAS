@@ -93,6 +93,12 @@ export async function reabrirReclamo(id: number, userId: string) {
   return repo.reabrirReclamo(id, userId)
 }
 
+// Anular Valorización (2026-09-23): vuelve el Reclamo a INGRESADO y restaura
+// las Provisiones que la valorización había reversado automáticamente.
+export async function anularValorizacion(id: number, userId: string) {
+  return repo.anularValorizacionTransaccional(id, userId)
+}
+
 // ─── Documentos ─────────────────────────────────────────────────────────────
 
 export async function subirDocumento(reclamoId: number, archivo: DocumentoArchivo, userId: string) {

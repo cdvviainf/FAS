@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
@@ -37,6 +38,25 @@ export function LineasSelector({ pallets, value, onChange }: LineasSelectorProps
     const clamped = Math.max(0, Math.min(cantidad, disponible))
     if (clamped === 0) next.delete(lineaId)
     else next.set(lineaId, clamped)
+    onChange(next)
+  }
+
+  // Checkbox por línea: marcar completa con el total disponible (feedback
+  // 2026-09-23, "por defecto completar en las cajas el total de cajas");
+  // sigue editable después vía el input numérico. Desmarcar limpia la línea.
+  function toggleLinea(l: LineaReclamable, marcado: boolean) {
+    setCantidad(l.id, marcado ? l.cajasDisponibles : 0, l.cajasDisponibles)
+  }
+
+  const todasLasLineas = useMemo(() => pallets.flatMap((p) => p.lineas.filter((l) => l.cajasDisponibles > 0)), [pallets])
+  const todasMarcadas = todasLasLineas.length > 0 && todasLasLineas.every((l) => (value.get(l.id) ?? 0) === l.cajasDisponibles)
+
+  function toggleTodasPallet(marcado: boolean) {
+    const next = new Map(value)
+    for (const l of todasLasLineas) {
+      if (marcado) next.set(l.id, l.cajasDisponibles)
+      else next.delete(l.id)
+    }
     onChange(next)
   }
 
@@ -80,6 +100,25 @@ export function LineasSelector({ pallets, value, onChange }: LineasSelectorProps
     onChange(next)
   }
 
+  function toggleGrupo(lineas: LineaReclamable[], marcado: boolean) {
+    setCantidadGrupo(lineas, marcado ? disponibleGrupo(lineas) : 0)
+  }
+
+  const gruposConDisponible = useMemo(() => grupos.filter((g) => disponibleGrupo(g.lineas) > 0), [grupos])
+  const todosGruposMarcados =
+    gruposConDisponible.length > 0 && gruposConDisponible.every((g) => cantidadGrupo(g.lineas) === disponibleGrupo(g.lineas))
+
+  function toggleTodosGrupos(marcado: boolean) {
+    const next = new Map(value)
+    for (const g of gruposConDisponible) {
+      for (const l of g.lineas) {
+        if (marcado) next.set(l.id, l.cajasDisponibles)
+        else next.delete(l.id)
+      }
+    }
+    onChange(next)
+  }
+
   return (
     <div className='space-y-3'>
       <div className='flex items-center justify-between'>
@@ -91,7 +130,16 @@ export function LineasSelector({ pallets, value, onChange }: LineasSelectorProps
             Por Características
           </Button>
         </div>
-        <p className='text-muted-foreground text-xs tabular-nums'>{totalSeleccionado} caja(s) marcada(s)</p>
+        <div className='flex items-center gap-4'>
+          <label className='flex items-center gap-2 text-xs'>
+            <Checkbox
+              checked={vista === 'pallet' ? todasMarcadas : todosGruposMarcados}
+              onCheckedChange={(c) => (vista === 'pallet' ? toggleTodasPallet(!!c) : toggleTodosGrupos(!!c))}
+            />
+            Seleccionar todos
+          </label>
+          <p className='text-muted-foreground text-xs tabular-nums'>{totalSeleccionado} caja(s) marcada(s)</p>
+        </div>
       </div>
 
       <div className='max-h-80 overflow-y-auto rounded-md border'>
@@ -99,6 +147,7 @@ export function LineasSelector({ pallets, value, onChange }: LineasSelectorProps
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className='w-8'></TableHead>
                 <TableHead>Pallet</TableHead>
                 <TableHead>Especie</TableHead>
                 <TableHead>Variedad</TableHead>
@@ -112,6 +161,13 @@ export function LineasSelector({ pallets, value, onChange }: LineasSelectorProps
               {pallets.flatMap((p) =>
                 p.lineas.map((l) => (
                   <TableRow key={l.id} className={l.cajasDisponibles === 0 ? 'opacity-50' : ''}>
+                    <TableCell>
+                      <Checkbox
+                        checked={(value.get(l.id) ?? 0) === l.cajasDisponibles && l.cajasDisponibles > 0}
+                        disabled={l.cajasDisponibles === 0}
+                        onCheckedChange={(c) => toggleLinea(l, !!c)}
+                      />
+                    </TableCell>
                     <TableCell className='text-muted-foreground'>{p.numeroPallet}</TableCell>
                     <TableCell>{l.especie.descripcion}</TableCell>
                     <TableCell>{l.variedad.descripcion}</TableCell>
@@ -134,7 +190,7 @@ export function LineasSelector({ pallets, value, onChange }: LineasSelectorProps
               )}
               {pallets.every((p) => p.lineas.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={7} className='text-muted-foreground text-center'>Este Embarque no tiene pallets con fruta.</TableCell>
+                  <TableCell colSpan={8} className='text-muted-foreground text-center'>Este Embarque no tiene pallets con fruta.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -143,6 +199,7 @@ export function LineasSelector({ pallets, value, onChange }: LineasSelectorProps
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className='w-8'></TableHead>
                 <TableHead>Especie</TableHead>
                 <TableHead>Variedad</TableHead>
                 <TableHead>Calibre</TableHead>
@@ -156,6 +213,13 @@ export function LineasSelector({ pallets, value, onChange }: LineasSelectorProps
                 const disponible = disponibleGrupo(g.lineas)
                 return (
                   <TableRow key={g.key} className={disponible === 0 ? 'opacity-50' : ''}>
+                    <TableCell>
+                      <Checkbox
+                        checked={cantidadGrupo(g.lineas) === disponible && disponible > 0}
+                        disabled={disponible === 0}
+                        onCheckedChange={(c) => toggleGrupo(g.lineas, !!c)}
+                      />
+                    </TableCell>
                     <TableCell>{g.especie}</TableCell>
                     <TableCell>{g.variedad}</TableCell>
                     <TableCell>{g.calibre}</TableCell>
@@ -177,7 +241,7 @@ export function LineasSelector({ pallets, value, onChange }: LineasSelectorProps
               })}
               {grupos.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className='text-muted-foreground text-center'>Este Embarque no tiene pallets con fruta.</TableCell>
+                  <TableCell colSpan={7} className='text-muted-foreground text-center'>Este Embarque no tiene pallets con fruta.</TableCell>
                 </TableRow>
               )}
             </TableBody>

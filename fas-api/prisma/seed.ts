@@ -34,6 +34,12 @@ const itemsMenu = [
   // Ventas
   { codigo: 'VENTAS_NV', nombre: 'Cierre Comercial', seccion: 'Ventas', ruta: '/dashboard/ventas/cierre', esAccion: false, orden: 40 },
   { codigo: 'VENTAS_EMBARQUES', nombre: 'Embarques', seccion: 'Ventas', ruta: '/dashboard/ventas/embarques', esAccion: false, orden: 41 },
+  // Reclamos — pantalla de Comercial (2026-09-23, split Ventas/Calidad):
+  // crear reclamo, Provisión, Valorización. Lee el mismo Reclamo que Calidad
+  // (backend acepta CAL_RECLAMOS o VENTAS_RECLAMOS en las lecturas
+  // compartidas), pero es una ruta y un ítem de menú propios — no depende
+  // del permiso de Calidad para poder abrir la pantalla.
+  { codigo: 'VENTAS_RECLAMOS', nombre: 'Reclamos', seccion: 'Ventas', ruta: '/dashboard/ventas/reclamos', esAccion: false, orden: 42 },
   // Operaciones
   { codigo: 'OPER_MATERIALES', nombre: 'Materiales', seccion: 'Operaciones', ruta: '/dashboard/configuracion/articulos', esAccion: false, orden: 50 },
   // Orden de Compra de Materiales (2026-09-03, materiales.md §4.9) — ítem
@@ -63,13 +69,19 @@ const itemsMenu = [
   { codigo: 'CAL_SOLICITUDES', nombre: 'Solicitudes de Inspección', seccion: 'Calidad', ruta: '/dashboard/calidad', esAccion: false, orden: 69 },
   { codigo: 'CAL_CONTROL', nombre: 'Control de Calidad', seccion: 'Calidad', ruta: '/dashboard/calidad/control', esAccion: false, orden: 70 },
   { codigo: 'CAL_LOTES', nombre: 'Validación de Lotes', seccion: 'Calidad', ruta: '/dashboard/calidad/lotes', esAccion: false, orden: 71 },
+  // CAL_RECLAMOS = pantalla de Calidad: fruta reclamada (solo lectura),
+  // Análisis (comentario/documentos) y Veredicto Final/Cierre. Provisión y
+  // Valorización se reubican a Ventas (2026-09-23, decisión de negocio,
+  // Christian): son funciones de Comercial, y ahora viven en la pantalla de
+  // Ventas (VENTAS_RECLAMOS) — la sección acá es solo agrupación visual del
+  // sidebar, el guard de cada acción sigue siendo su propio ítem.
   { codigo: 'CAL_RECLAMOS', nombre: 'Reclamos', seccion: 'Calidad', ruta: '/dashboard/calidad/reclamos', esAccion: false, orden: 72 },
-  { codigo: 'RECLAMO_VALORIZACION', nombre: 'Valorización Reclamo', seccion: 'Calidad', ruta: null, esAccion: true, orden: 73 },
-  { codigo: 'RECLAMO_CIERRE', nombre: 'Cierre/Reapertura Reclamo', seccion: 'Calidad', ruta: null, esAccion: true, orden: 74 },
+  { codigo: 'RECLAMO_VALORIZACION', nombre: 'Valorización Reclamo', seccion: 'Ventas', ruta: null, esAccion: true, orden: 73 },
+  { codigo: 'RECLAMO_CIERRE', nombre: 'Veredicto Final / Cierre Reclamo', seccion: 'Calidad', ruta: null, esAccion: true, orden: 74 },
   // Crear/reversar la Provisión del reclamo (2026-09-08, reclamos.md RC-D10)
   // — permiso específico, distinto de CAL_RECLAMOS (decisión de negocio,
   // Christian).
-  { codigo: 'RECLAMO_PROVISION', nombre: 'Provisión de Reclamo', seccion: 'Calidad', ruta: null, esAccion: true, orden: 75 },
+  { codigo: 'RECLAMO_PROVISION', nombre: 'Provisión de Reclamo', seccion: 'Ventas', ruta: null, esAccion: true, orden: 75 },
   // Calificación de Pallets (antes "Gestión de Pallets" bajo Operaciones,
   // reubicado a Calidad 2026-09-04 — decisión de negocio, Christian): edita
   // Nota de Calidad/Condición y Completo/Incompleto de un Pallet ya

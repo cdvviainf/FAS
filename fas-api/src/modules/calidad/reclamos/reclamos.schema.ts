@@ -46,8 +46,16 @@ const provisionBaseSchema = z.object({
 
 export const provisionCreateSchema = provisionBaseSchema.superRefine(refineProvision)
 
+// RCV-QA-R1-001: `z.coerce.date()` a secas acepta `null` (lo coerciona a
+// `new Date(null)` = 1970-01-01) en vez de rechazarlo — no sirve para exigir
+// que la fecha sea obligatoria. `z.string().date()` primero exige un string
+// con formato de fecha real (rechaza null/undefined/number con 422) y recién
+// después se convierte a `Date` — mantiene la validación de formato del
+// código original más la conversión que Prisma necesita.
+const fechaReclamoSchema = z.string().date('La fecha del reclamo debe ser una fecha válida').transform((v) => new Date(v))
+
 export const reclamoCreateSchema = z.object({
-  fechaReclamo: z.string().date().optional().nullable(),
+  fechaReclamo: fechaReclamoSchema,
   resumenCliente: z.string().trim().max(2000).optional().nullable(),
   temporadaId: z.number().int().positive().optional().nullable(),
   lineas: lineasSchema('Selecciona al menos una línea de pallet'),
@@ -56,9 +64,10 @@ export const reclamoCreateSchema = z.object({
 
 // IMP-QA-R1-019: edición — todo opcional (PATCH parcial), pero si viene
 // `lineas` exige al menos una (reemplaza el set completo, no tiene sentido
-// "editar a cero líneas" — para eso existe el cierre/anulación).
+// "editar a cero líneas" — para eso existe el cierre/anulación). `fechaReclamo`
+// ya no admite null (obligatoria) — solo se omite si no se está editando.
 export const reclamoUpdateSchema = z.object({
-  fechaReclamo: z.string().date().optional().nullable(),
+  fechaReclamo: fechaReclamoSchema.optional(),
   resumenCliente: z.string().trim().max(2000).optional().nullable(),
   temporadaId: z.number().int().positive().optional().nullable(),
   lineas: lineasSchema('Selecciona al menos una línea de pallet').optional(),

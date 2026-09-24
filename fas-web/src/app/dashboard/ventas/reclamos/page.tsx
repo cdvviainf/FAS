@@ -9,9 +9,9 @@ export default function Page() {
   return (
     <PageContainer
       pageTitle='Reclamos'
-      pageDescription='Reclamos ingresados desde Ventas — análisis de calidad y veredicto final.'
+      pageDescription='Reclamos de clientes — Provisión y Valorización.'
     >
-      <ReclamosListingClient />
+      <ReclamosListingClient basePath='/dashboard/ventas/reclamos' />
     </PageContainer>
   )
 }

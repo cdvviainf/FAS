@@ -77,6 +77,12 @@ export async function reabrir(req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ data: reclamo })
 }
 
+export async function anularValorizacion(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = reclamoParamsSchema.parse(req.params)
+  const reclamo = await service.anularValorizacion(id, req.fasUserId!)
+  return reply.send({ data: reclamo })
+}
+
 // ─── Documentos ─────────────────────────────────────────────────────────────
 
 export async function subirDocumento(req: FastifyRequest, reply: FastifyReply) {

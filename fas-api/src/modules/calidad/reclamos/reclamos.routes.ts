@@ -1,20 +1,23 @@
 import type { FastifyInstance } from 'fastify'
-import { requireAuth, requireLevel, requireReclamosApiKey } from '../../../plugins/auth-guard.js'
+import { requireAuth, requireAnyLevel, requireLevel, requireReclamosApiKey } from '../../../plugins/auth-guard.js'
 import * as ctrl from './reclamos.controller.js'
 
-// Análisis (comentario + documentos) y ciclo de vida — la creación vive en
-// ventas/embarques/embarques.routes.ts (se crea desde el detalle del
-// Embarque, no acá). Permisos separados por acción (reclamos.md R10):
-// listar/analizar con el acceso general, valorizar/cerrar/provisionar con
-// ítems dedicados ya sembrados (seed.ts).
+// Análisis (comentario + documentos) y Veredicto Final/Cierre son exclusivos
+// de Calidad — la creación vive en ventas/embarques/embarques.routes.ts.
+// Provisión/Valorización son de Comercial, con ítems dedicados. Las lecturas
+// compartidas (listar/obtener/provisiones) aceptan CUALQUIERA de los dos
+// ítems "de pantalla" (CAL_RECLAMOS o VENTAS_RECLAMOS) porque, desde
+// 2026-09-23, Ventas y Calidad son dos pantallas independientes que leen el
+// mismo Reclamo (reclamos.md, split Ventas/Calidad).
 const ITEM = 'CAL_RECLAMOS'
+const ITEM_VENTAS = 'VENTAS_RECLAMOS'
 const ITEM_VALORIZACION = 'RECLAMO_VALORIZACION'
 const ITEM_CIERRE = 'RECLAMO_CIERRE'
 const ITEM_PROVISION = 'RECLAMO_PROVISION'
 
 export async function reclamosRoutes(app: FastifyInstance) {
-  app.get('/reclamos', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listar)
-  app.get('/reclamos/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.obtener)
+  app.get('/reclamos', { preHandler: [requireAuth, requireAnyLevel([ITEM, ITEM_VENTAS], 'LECTURA')] }, ctrl.listar)
+  app.get('/reclamos/:id', { preHandler: [requireAuth, requireAnyLevel([ITEM, ITEM_VENTAS], 'LECTURA')] }, ctrl.obtener)
   app.patch('/reclamos/:id/analisis', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.actualizarAnalisis)
 
   app.post('/reclamos/:id/documentos', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.subirDocumento)
@@ -30,6 +33,11 @@ export async function reclamosRoutes(app: FastifyInstance) {
   )
 
   app.post('/reclamos/:id/valorizar', { preHandler: [requireAuth, requireLevel(ITEM_VALORIZACION, 'TOTAL')] }, ctrl.valorizar)
+  app.post(
+    '/reclamos/:id/anular-valorizacion',
+    { preHandler: [requireAuth, requireLevel(ITEM_VALORIZACION, 'TOTAL')] },
+    ctrl.anularValorizacion,
+  )
   app.post('/reclamos/:id/cerrar', { preHandler: [requireAuth, requireLevel(ITEM_CIERRE, 'TOTAL')] }, ctrl.cerrar)
   app.post('/reclamos/:id/reabrir', { preHandler: [requireAuth, requireLevel(ITEM_CIERRE, 'TOTAL')] }, ctrl.reabrir)
 
@@ -43,7 +51,7 @@ export async function reclamosRoutes(app: FastifyInstance) {
   )
   app.get(
     '/reclamos/:id/provisiones',
-    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    { preHandler: [requireAuth, requireAnyLevel([ITEM, ITEM_VENTAS], 'LECTURA')] },
     ctrl.listarProvisiones,
   )
   app.post(

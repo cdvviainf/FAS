@@ -86,13 +86,13 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
       const lineas = [...seleccion.entries()].map(([palletLineaId, cantidadCajas]) => ({ palletLineaId, cantidadCajas }))
       if (esEdicion) {
         return reclamosService.actualizar(embarqueId, reclamoParaEditar!.id, {
-          fechaReclamo: fechaReclamo || null,
+          fechaReclamo,
           resumenCliente: resumenCliente.trim() || null,
           lineas,
         })
       }
       return reclamosService.crear(embarqueId, {
-        fechaReclamo: fechaReclamo || null,
+        fechaReclamo,
         resumenCliente: resumenCliente.trim() || null,
         lineas,
         provision: conProvision ? provision : null,
@@ -108,6 +108,10 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
   })
 
   function handleSubmit() {
+    if (!fechaReclamo) {
+      toast.error('La fecha del reclamo es obligatoria')
+      return
+    }
     if (totalCajas === 0) {
       toast.error('Selecciona al menos una línea de pallet')
       return
@@ -136,8 +140,8 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
 
           <div className='grid grid-cols-2 gap-3'>
             <div className='space-y-1.5'>
-              <Label>Fecha del reclamo del cliente</Label>
-              <Input type='date' value={fechaReclamo} onChange={(e) => setFechaReclamo(e.target.value)} />
+              <Label>Fecha del reclamo del cliente *</Label>
+              <Input type='date' required value={fechaReclamo} onChange={(e) => setFechaReclamo(e.target.value)} />
             </div>
           </div>
           <div className='space-y-1.5'>

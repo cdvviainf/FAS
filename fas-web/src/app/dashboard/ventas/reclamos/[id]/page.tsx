@@ -1,5 +1,5 @@
 import PageContainer from '@/components/layout/page-container'
-import { ReclamoDetailClient } from '@/features/reclamos/components/reclamo-detail-client'
+import { ReclamoVentasDetailClient } from '@/features/reclamos/components/reclamo-ventas-detail-client'
 
 export const metadata = {
   title: 'FAS — Reclamo',
@@ -14,8 +14,8 @@ export default async function Page(props: PageProps) {
   const id = parseInt(params.id, 10)
 
   return (
-    <PageContainer pageTitle='Reclamo' pageDescription='Análisis de calidad y Veredicto Final.'>
-      <ReclamoDetailClient id={id} />
+    <PageContainer pageTitle='Reclamo' pageDescription='Provisión y Valorización.'>
+      <ReclamoVentasDetailClient id={id} />
     </PageContainer>
   )
 }

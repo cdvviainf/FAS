@@ -4,12 +4,12 @@
 >
 > | | |
 > |---|---|
-> | **Key users** | Comercial (crea el reclamo, arma la Provisión, valoriza) · Calidad (completa el análisis: comentario + documentación) |
-> | **Secciones de menú** | Ventas › Embarques (creación, dentro del detalle del Embarque) · Calidad › Reclamos (listado + análisis) |
-> | **Backend** | `fas-api` · módulo `/api/ventas` (recurso anidado a Embarque) + `/api/calidad` (listado/análisis) |
-> | **Frontend** | `fas-web` · pestaña "Reclamos" en `features/ventas/embarques/` + `features/calidad/reclamos/` |
+> | **Key users** | Comercial (crea el reclamo, arma la Provisión, valoriza) · Calidad (análisis: comentario + documentación + Veredicto Final) |
+> | **Secciones de menú** | Ventas › Embarques (creación, dentro del detalle del Embarque) · Ventas › Reclamos (Provisión/Valorización) · Calidad › Reclamos (análisis + Veredicto Final) |
+> | **Backend** | `fas-api` · módulo `/api/ventas` (recurso anidado a Embarque) + `/api/calidad` (detalle/análisis/ciclo de vida) |
+> | **Frontend** | `fas-web` · pestaña "Reclamos" en `features/ventas/embarques/` + `features/reclamos/` (2 pantallas: Ventas y Calidad) |
 > | **Depende de** | Embarque (`ventas.md`, con Pallet/PalletLinea ya reservados), Entidad (Cliente, heredado), Moneda (heredada) |
-> | **Estado** | Reconciliado (2026-09-08) — pendiente de construir |
+> | **Estado** | Construido — split Ventas/Calidad (2026-09-23) |
 
 ---
 
@@ -25,6 +25,19 @@
 > - **Se elimina el mantenedor dinámico de "Características de reclamo por especie" y el checklist "Criterios de Cumplimiento"** (Documento 107-like) — decisión de negocio, Christian: simplificado a un campo de texto (`comentarioCalidad`) + documentos adjuntos.
 > - **Sin correlativo propio.** El Reclamo es parte del Embarque — no lleva un número de documento independiente (nada de `PrefijoCodigo`). Se identifica por el folio/número de instructivo del Embarque al que pertenece; si un Embarque tiene más de un Reclamo, se listan todos bajo ese mismo folio (fecha/cliente/resumen para diferenciarlos en pantalla).
 > - **`PR6`/`PR7` (alerta de Nota de Crédito en Cobranza, alimentar el Score de Riesgo) quedan solo documentados, sin implementación** — los módulos de los que dependen (Facturación/Cobranza, Score) no existen todavía en el código.
+
+---
+
+## 0.b Supersesión (2026-09-23) — split Ventas/Calidad, fecha obligatoria, Anular Valorización
+
+> Feedback de uso real tras el primer despliegue (Christian): la pantalla única `Calidad → Reclamos` mezclaba dos áreas con permisos distintos en una sola vista — un usuario de Comercial sin acceso a Calidad no podía siquiera abrir la página para gestionar su Provisión/Valorización, y Ventas veía (aunque deshabilitados) los controles de análisis de Calidad. Se separa en **dos pantallas independientes que leen el mismo Reclamo**, cada una con su propio ítem de menú y ruta:
+>
+> - **Ventas › Reclamos** (`/dashboard/ventas/reclamos`, ítem `VENTAS_RECLAMOS`, nuevo): fruta reclamada (solo lectura), **Provisión** (crear/reversar, `RECLAMO_PROVISION`), **Valorización** (`RECLAMO_VALORIZACION`, incluye "Anular Valorización"), y un panel de solo lectura con el Veredicto de Calidad una vez cerrado. Sin comentario ni documentos de Calidad.
+> - **Calidad › Reclamos** (`/dashboard/calidad/reclamos`, ítem `CAL_RECLAMOS`, sin cambios de ruta): fruta reclamada (solo lectura), **Análisis** (comentario + documentos), **Veredicto Final** (antes "Cierre" — mismo permiso `RECLAMO_CIERRE`, label interno del campo `procedencia` pasa de "Procedencia" a "Estado"), y un panel de solo lectura con la Provisión vigente/Valorización de Comercial.
+> - Las lecturas compartidas (`GET /reclamos`, `GET /reclamos/:id`, `GET /reclamos/:id/provisiones`) aceptan **cualquiera** de los dos ítems (`CAL_RECLAMOS` o `VENTAS_RECLAMOS`, nivel LECTURA) vía `requireAnyLevel` — así ninguna de las dos pantallas depende del permiso de la otra para poder leer. Las acciones de escritura (análisis/documentos/cerrar → `CAL_RECLAMOS`/`RECLAMO_CIERRE`; provisión/valorizar → `RECLAMO_PROVISION`/`RECLAMO_VALORIZACION`) no cambian.
+> - **`fechaReclamo` pasa a obligatoria** (antes opcional) — es la fecha real en que el cliente reclamó, no tiene sentido dejarla en blanco. De paso se corrige un bug real: el schema Zod usaba `z.string().date()` (dejaba pasar un string crudo) en vez del `z.coerce.date()` que usa el resto del código para columnas `@db.Date` — Prisma rechazaba ese string con un 500 al escribir.
+> - **Anular Valorización** (nuevo): revierte `VALORIZADO → INGRESADO`, limpia `valorConfirmado`/`valorizadoPor`/`fechaValorizacion`, y restaura automáticamente las Provisiones que ESA valorización había reversado (nuevo flag `Provision.reversadaPorValorizacion`, distingue de una reversa manual previa que no debe restaurarse). Mismo permiso que valorizar (`RECLAMO_VALORIZACION`), solo si `estado = VALORIZADO`.
+> - **Selector de líneas** (`LineasSelector`, usado al crear/editar el Reclamo): cada fila (por Pallet y por Características) suma un checkbox que marca la línea/grupo completo con el total disponible (editable después), más un control "Seleccionar todos" por vista.
 
 ---
 
@@ -57,8 +70,8 @@ Tras exportar la fruta, el **cliente en destino** puede reclamar por la calidad 
 | RC-D1 | Asociación a embarque | FK real `embarqueId` (ya no texto libre). |
 | RC-D2 | Documentación | Cualquier archivo digital (imagen, PDF, correo, otro) — igual que antes. |
 | RC-D4 | Cliente / Moneda | Heredados del Embarque (vía su Nota de Venta) al crear — no editables. |
-| RC-D6 | Estados | `INGRESADO` (Comercial crea) → `VALORIZADO` (Comercial confirma monto) → `CERRADO`. `CERRADO` bloquea edición (R9). El paso de Calidad (comentario + documentos) **no es una transición de estado** — se puede completar mientras el reclamo no esté `CERRADO`. |
-| RC-D7 | Valorización | Campo único `valorConfirmado`, sin relación `≤`/`≥` con la Provisión — ambos `≥ 0`. Permiso separado de valorización (no basta el acceso general). |
+| RC-D6 | Estados | `INGRESADO` (Comercial crea) → `VALORIZADO` (Comercial confirma monto) → `CERRADO`. `CERRADO` bloquea edición (R9). El paso de Calidad (comentario + documentos) **no es una transición de estado** — se puede completar mientras el reclamo no esté `CERRADO`. `VALORIZADO → INGRESADO` también es posible vía "Anular Valorización" (R6b, 2026-09-23). |
+| RC-D7 | Valorización | Campo único `valorConfirmado`, sin relación `≤`/`≥` con la Provisión — ambos `≥ 0`. Permiso separado de valorización (no basta el acceso general). Reversible (Anular Valorización, R6b). |
 | RC-D8 | Veredicto | Campo explícito `procedencia` (`PROCEDENTE`/`IMPROCEDENTE`/`PARCIAL`), requerido para cerrar. |
 | RC-D9 | Season-scope | `temporadaId` en el reclamo. |
 | RC-D10 | Provisión | Se crea desde el reclamo (no desde Cobranza), en el momento de la creación o después. Nunca se elimina: se reversa (a mano, con permiso `RECLAMO_PROVISION`; o sola, al valorizar — ver R6). Permiso de crear/reversar **específico** (`RECLAMO_PROVISION`), distinto del acceso general a Reclamos. |
@@ -91,7 +104,7 @@ model Reclamo {
   monedaId      Int                                  // heredado del Embarque al crear (RC-D4)
   moneda        Moneda   @relation(fields: [monedaId], references: [id])
 
-  fechaReclamo   DateTime? @db.Date                  // fecha en que el cliente reclamó
+  fechaReclamo   DateTime  @db.Date                  // fecha en que el cliente reclamó (obligatoria, 2026-09-23)
   resumenCliente String?                             // resumen breve de lo reclamado
 
   estado        EstadoReclamo @default(INGRESADO)
@@ -163,6 +176,7 @@ model Provision {
   creadoPorId      String
   fechaReversa     DateTime?
   reversadoPorId   String?
+  reversadaPorValorizacion Boolean      @default(false)  // 2026-09-23: distingue reversa automática (R6) de manual (PR3), ver R6b
 
   @@index([reclamoId])
 }
@@ -179,7 +193,8 @@ model Provision {
 - **R-NEW1 — Cantidad reclamada acotada, acumulada entre reclamos.** La suma de `cantidadCajas` reclamadas contra una misma `PalletLinea`, **sumando entre todos los reclamos no eliminados** (no solo dentro del mismo reclamo), no puede superar `PalletLinea.cajas` → 422. Evita que dos reclamos distintos reclamen la misma caja dos veces. La misma `palletLineaId` **no puede repetirse dos veces dentro del mismo body** (`lineas`) → 422 (evita una violación de índice único al persistir).
 - **R-NEW2 — Líneas del mismo embarque.** Toda `PalletLinea` marcada en `ReclamoPalletLinea` debe pertenecer a un `Pallet` con `embarqueId` igual al del Reclamo → 422 si no.
 - **R5 — Flujo.** `INGRESADO` (Comercial crea) → `VALORIZADO` (Comercial confirma monto) → `CERRADO`. El paso de Calidad (comentario + documentos) no es una transición de estado — editable mientras el reclamo no esté `CERRADO`. **Cerrar exige estar `VALORIZADO` primero** — cerrar directo desde `INGRESADO` → 422 (no se puede saltar la valorización). **R5b:** antes de cerrar debe registrarse la `procedencia`.
-- **R6 — Valorización.** `valorConfirmado ≥ 0`. Solo usuarios con el **permiso específico de valorización** (`RECLAMO_VALORIZACION`) — no basta el acceso general a reclamos. **Efecto colateral (2026-09-08):** al valorizar, cualquier Provisión `VIGENTE` del mismo reclamo se **reversa automáticamente** — es un efecto de sistema (la estimación inicial ya no aplica una vez que existe el monto confirmado), no pasa por el chequeo "no la reversa quien la creó" de PR3 (eso rige solo para la reversa manual).
+- **R6 — Valorización.** `valorConfirmado ≥ 0`. Solo usuarios con el **permiso específico de valorización** (`RECLAMO_VALORIZACION`) — no basta el acceso general a reclamos. **Efecto colateral (2026-09-08):** al valorizar, cualquier Provisión `VIGENTE` del mismo reclamo se **reversa automáticamente** (marcada `reversadaPorValorizacion = true`) — es un efecto de sistema (la estimación inicial ya no aplica una vez que existe el monto confirmado), no pasa por el chequeo "no la reversa quien la creó" de PR3 (eso rige solo para la reversa manual).
+- **R6b — Anular Valorización (2026-09-23).** Mismo permiso (`RECLAMO_VALORIZACION`), solo si `estado = VALORIZADO` (422 si no; 403 si ya `CERRADO`, R9). Vuelve a `INGRESADO`, limpia `valorConfirmado`/`valorizadoPor`/`fechaValorizacion`, y restaura a `VIGENTE` **únicamente** las Provisiones con `reversadaPorValorizacion = true` (limpiando el flag y `fechaReversa`/`reversadoPorId`) — una reversa manual previa (PR3) no se toca.
 - **R9 — Bloqueo por cierre.** Un reclamo `CERRADO` no admite modificaciones (líneas, documentos, comentario, valorización, provisiones) → **403** (no 422 — el bloqueo por estado es un caso de permiso/autorización, no de validación de datos). Reabrir requiere permiso específico (`RECLAMO_CIERRE`, misma acción cubre cerrar/reabrir). El chequeo de estado y la escritura van en la misma operación atómica — un cierre concurrente no puede colarse en la ventana entre "revisar estado" y "escribir".
 - **R8 — Auditoría + softdelete** en el reclamo.
 
@@ -204,21 +219,26 @@ model Provision {
 | GET | `/api/ventas/embarques/:embarqueId/reclamos` | Lista los reclamos de ese Embarque. |
 | PATCH | `/api/ventas/embarques/:embarqueId/reclamos/:id` | Edita cabecera/líneas mientras no esté `CERRADO` (403 si lo está). Si viene `lineas`, **reemplaza el set completo** (no un merge) — revalida R-NEW1/R-NEW2 excluyendo las líneas propias del reclamo del cálculo de "ya reclamado" (se están reemplazando, no sumando). Sin `provision` — esa tiene su propio endpoint. |
 
-**Análisis y ciclo de vida (Calidad)**
-| Método | Ruta | Notas |
-|---|---|---|
-| GET | `/api/calidad/reclamos` | Lista todos los reclamos (todos los Embarques), filtrable por `folio` (busca sobre `embarque.numeroInstructivo`, contains/insensitive), `estado` y `clienteId`. Paginado (`page`/`limit`). |
-| GET | `/api/calidad/reclamos/:id` | Detalle completo (líneas, documentos, provisiones). |
-| PATCH | `/api/calidad/reclamos/:id/analisis` | `{ comentarioCalidad }` — sin cambio de estado. |
-| POST | `/api/calidad/reclamos/:id/documentos` | Sube documentación. |
-| POST | `/api/calidad/reclamos/:id/valorizar` | `{ valorConfirmado }` → `VALORIZADO` (R6, permiso `RECLAMO_VALORIZACION`). |
-| POST | `/api/calidad/reclamos/:id/cerrar` | `{ procedencia }` → `CERRADO` (R5b/R9, permiso `RECLAMO_CIERRE`). |
-| POST | `/api/calidad/reclamos/:id/reabrir` | Reabre (mismo permiso `RECLAMO_CIERRE`). |
+**Detalle, análisis y ciclo de vida (rutas bajo `/api/calidad`, usadas por ambas pantallas — 2026-09-23)**
+
+Las lecturas (`listar`/`obtener`/`provisiones`) aceptan `CAL_RECLAMOS` **o** `VENTAS_RECLAMOS` (nivel LECTURA, `requireAnyLevel`) — ninguna de las dos pantallas depende del permiso de la otra para poder leer el Reclamo. Las escrituras mantienen su ítem específico.
+
+| Método | Ruta | Permiso | Notas |
+|---|---|---|---|
+| GET | `/api/calidad/reclamos` | `CAL_RECLAMOS` o `VENTAS_RECLAMOS` | Lista todos los reclamos (todos los Embarques), filtrable por `folio` (busca sobre `embarque.numeroInstructivo`, contains/insensitive), `estado` y `clienteId`. Paginado (`page`/`limit`). |
+| GET | `/api/calidad/reclamos/:id` | `CAL_RECLAMOS` o `VENTAS_RECLAMOS` | Detalle completo (líneas, documentos, provisiones). |
+| PATCH | `/api/calidad/reclamos/:id/analisis` | `CAL_RECLAMOS` (TOTAL) | `{ comentarioCalidad }` — sin cambio de estado. |
+| POST | `/api/calidad/reclamos/:id/documentos` | `CAL_RECLAMOS` (TOTAL) | Sube documentación. |
+| POST | `/api/calidad/reclamos/:id/valorizar` | `RECLAMO_VALORIZACION` | `{ valorConfirmado }` → `VALORIZADO` (R6). |
+| POST | `/api/calidad/reclamos/:id/anular-valorizacion` | `RECLAMO_VALORIZACION` | Sin body. `VALORIZADO → INGRESADO` (R6b, 2026-09-23). |
+| POST | `/api/calidad/reclamos/:id/cerrar` | `RECLAMO_CIERRE` | `{ procedencia }` → `CERRADO` (R5b/R9). En frontend, esta acción vive bajo "Veredicto Final" (antes "Cierre"). |
+| POST | `/api/calidad/reclamos/:id/reabrir` | `RECLAMO_CIERRE` | Reabre. |
 
 **Provisiones**
 | Método | Ruta | Notas |
 |---|---|---|
-| GET/POST | `/api/calidad/reclamos/:id/provisiones` | Crea/lista provisiones del reclamo. Requiere permiso `RECLAMO_PROVISION`. Valida PR1/PR2. |
+| GET | `/api/calidad/reclamos/:id/provisiones` | Lista provisiones del reclamo. Permiso `CAL_RECLAMOS` o `VENTAS_RECLAMOS` (LECTURA). |
+| POST | `/api/calidad/reclamos/:id/provisiones` | Crea una provisión. Requiere permiso `RECLAMO_PROVISION`. Valida PR1/PR2. |
 | POST | `/api/calidad/provisiones/:id/reversar` | Reversa la provisión (PR3, permiso `RECLAMO_PROVISION`). Nunca elimina. |
 
 ### API externa de documentos (2026-09-08)
@@ -240,14 +260,17 @@ Consultas externas a la documentación de un reclamo — sistema externo con su 
 ## 7. Frontend
 
 **Ventas → Embarques → detalle → pestaña "Reclamos" (creación/edición, Comercial):**
-- Botón "Nuevo Reclamo" → selector de líneas afectadas con **dos vistas intercambiables** (RC-D12): por Pallet (lista plana, elige líneas puntuales) o por características (agrupado especie/variedad/calibre/categoría, elige el grupo y marca cuántas cajas de él) — misma lógica de agrupación que ya usa Stock de Fruta, aplicada acá para seleccionar en vez de solo visualizar.
-- Cabecera: fecha del reclamo del cliente, resumen. Cliente y moneda se muestran heredados (no editables).
+- Botón "Nuevo Reclamo" → selector de líneas afectadas con **dos vistas intercambiables** (RC-D12): por Pallet (lista plana, elige líneas puntuales) o por características (agrupado especie/variedad/calibre/categoría, elige el grupo y marca cuántas cajas de él) — misma lógica de agrupación que ya usa Stock de Fruta, aplicada acá para seleccionar en vez de solo visualizar. Cada fila/grupo tiene un **checkbox** que marca el disponible completo (editable después) y un control "Seleccionar todos" (2026-09-23).
+- Cabecera: fecha del reclamo del cliente (**obligatoria**), resumen. Cliente y moneda se muestran heredados (no editables).
 - Provisión opcional en el mismo paso: tipo de cálculo (caja/kilo/monto cerrado), valor unitario o monto fijo, cantidad afectada (prellenada desde las líneas marcadas, editable).
-- Cada fila de la tabla de reclamos del Embarque tiene un botón "Editar" (oculto si el reclamo está `CERRADO`) que reabre el mismo diálogo precargado, para modificar cabecera/líneas vía el `PATCH` (sin Provisión — esa se administra desde el detalle en Calidad).
+- Cada fila de la tabla de reclamos del Embarque tiene un botón "Editar" (oculto si el reclamo está `CERRADO`) que reabre el mismo diálogo precargado, para modificar cabecera/líneas vía el `PATCH` (sin Provisión — esa se administra desde el detalle). El click en la fila navega al detalle en **Ventas → Reclamos**.
 
-**Calidad → Reclamos (análisis, listado propio):**
+**Ventas → Reclamos (`/dashboard/ventas/reclamos`, ítem `VENTAS_RECLAMOS`, 2026-09-23):**
+- Listado (mismo componente que Calidad, filtrable por folio/cliente/estado) + detalle: fruta reclamada (solo lectura), **Provisiones** (crear/reversar, permiso `RECLAMO_PROVISION`), **Valorización** (permiso `RECLAMO_VALORIZACION`, incluye botón "Anular Valorización" cuando `estado = VALORIZADO`), y un panel de solo lectura "Veredicto de Calidad" (muestra `procedencia` una vez `CERRADO`). Sin comentario ni documentos de Calidad.
+
+**Calidad → Reclamos (`/dashboard/calidad/reclamos`, ítem `CAL_RECLAMOS`):**
 - Tabla de todos los reclamos, identificados por **folio del Embarque** (no tienen número propio) + fecha + cliente + estado, filtrable por folio/cliente/estado y paginada.
-- Detalle: comentario de Calidad (texto), documentos adjuntos (**selector de archivo simple** — no drag&drop, decisión de negocio: es funcionalmente equivalente y no vale la pena el trabajo de UI extra), y desde ahí también provisiones/valorización/cierre (según permiso).
+- Detalle: fruta reclamada (solo lectura), comentario de Calidad (texto), documentos adjuntos (**selector de archivo simple** — no drag&drop, decisión de negocio: es funcionalmente equivalente y no vale la pena el trabajo de UI extra), tarjeta **"Veredicto Final"** (antes "Cierre" — mismo permiso `RECLAMO_CIERRE`; el campo `procedencia` se etiqueta "Estado" en el formulario), y un panel de solo lectura con la Provisión vigente/Valorización de Comercial.
 
 ---
 
@@ -271,6 +294,9 @@ Consultas externas a la documentación de un reclamo — sistema externo con su 
 - **CA16 (PR3/R9):** Reversar una Provisión de un Reclamo ya `CERRADO` → 403, aunque quien reversa no sea quien la creó.
 - **CA17 (R-NEW1):** Mandar dos entradas con el mismo `palletLineaId` en `lineas` (crear o editar) → 422, no un error 500 de base de datos.
 - **CA18 (PR2):** Un reclamo con una Provisión `VIGENTE` de 10 cajas se edita reduciendo el total reclamado a 2 cajas → 422, la edición no se aplica y la Provisión sigue en 10.
+- **CA19 (R6b):** Valorizar un reclamo con una Provisión `VIGENTE` (queda `REVERSADA` + `reversadaPorValorizacion=true`), luego Anular Valorización → el reclamo vuelve a `INGRESADO` y la Provisión vuelve a `VIGENTE`. Una Provisión reversada manualmente antes de valorizar (PR3) **no** se restaura al anular.
+- **CA20 (fechaReclamo obligatoria):** Crear un reclamo sin `fechaReclamo` → 422 (antes se aceptaba `null`).
+- **CA21 (split de pantallas):** Un usuario con `VENTAS_RECLAMOS` (LECTURA) pero sin `CAL_RECLAMOS` puede `GET /reclamos/:id`; un usuario con solo `CAL_RECLAMOS` también puede. Un usuario sin ninguno de los dos → 403.
 
 ---
 

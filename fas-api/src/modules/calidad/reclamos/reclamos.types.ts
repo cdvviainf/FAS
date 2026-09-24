@@ -16,7 +16,7 @@ export interface ProvisionInput {
 }
 
 export interface ReclamoCreateInput {
-  fechaReclamo?: string | null
+  fechaReclamo: Date
   resumenCliente?: string | null
   temporadaId?: number | null
   lineas: ReclamoLineaInput[]
@@ -26,7 +26,7 @@ export interface ReclamoCreateInput {
 // IMP-QA-R1-019: edición de cabecera/líneas — sin `provision` (esa tiene su
 // propio endpoint crear/reversar, no se edita acá).
 export interface ReclamoUpdateInput {
-  fechaReclamo?: string | null
+  fechaReclamo?: Date
   resumenCliente?: string | null
   temporadaId?: number | null
   lineas?: ReclamoLineaInput[]

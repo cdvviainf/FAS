@@ -128,7 +128,7 @@ interface DatosReclamo {
   embarqueId: number
   clienteId: number
   monedaId: number
-  fechaReclamo?: string | null
+  fechaReclamo: Date
   resumenCliente?: string | null
   temporadaId?: number | null
   lineas: ReclamoLineaInput[]
@@ -212,7 +212,7 @@ export async function crearReclamoTransaccional(
         embarqueId: datos.embarqueId,
         clienteId: datos.clienteId,
         monedaId: datos.monedaId,
-        fechaReclamo: datos.fechaReclamo ?? undefined,
+        fechaReclamo: datos.fechaReclamo,
         resumenCliente: datos.resumenCliente ?? undefined,
         temporadaId: datos.temporadaId ?? undefined,
         creadoPor,
@@ -246,7 +246,7 @@ export async function crearReclamoTransaccional(
 }
 
 interface DatosReclamoUpdate {
-  fechaReclamo?: string | null
+  fechaReclamo?: Date
   resumenCliente?: string | null
   temporadaId?: number | null
   lineas?: ReclamoLineaInput[]
@@ -419,7 +419,40 @@ export async function valorizarReclamoTransaccional(id: number, valorConfirmado:
 
     await tx.provision.updateMany({
       where: { reclamoId: id, estado: 'VIGENTE' },
-      data: { estado: 'REVERSADA', fechaReversa: new Date(), reversadoPorId: userId },
+      data: { estado: 'REVERSADA', fechaReversa: new Date(), reversadoPorId: userId, reversadaPorValorizacion: true },
+    })
+    return tx.reclamo.findUniqueOrThrow({ where: { id }, include: reclamoInclude })
+  })
+}
+
+// Anular Valorización (2026-09-23): revierte VALORIZADO -> INGRESADO y
+// restaura únicamente las Provisiones que ESTA valorización reversó
+// automáticamente (`reversadaPorValorizacion`) — una reversa manual previa
+// (permiso RECLAMO_PROVISION) no se toca. Mismo patrón de claim atómico
+// (updateMany con `estado: 'VALORIZADO'` en el where) que el resto del ciclo
+// de vida: 0 filas afectadas distingue "no existe" de "no está valorizado".
+export async function anularValorizacionTransaccional(id: number, userId: string) {
+  return prisma.$transaction(async (tx) => {
+    const claim = await tx.reclamo.updateMany({
+      where: { id, eliminadoEn: null, estado: 'VALORIZADO' },
+      data: {
+        estado: 'INGRESADO',
+        valorConfirmado: null,
+        valorizadoPor: null,
+        fechaValorizacion: null,
+        actualizadoPor: userId,
+      },
+    })
+    if (claim.count === 0) {
+      const actual = await tx.reclamo.findFirst({ where: { id, eliminadoEn: null }, select: { estado: true } })
+      if (!actual) throw new NotFoundError('Reclamo', String(id))
+      if (actual.estado === 'CERRADO') throw new ForbiddenError('El Reclamo está cerrado — no admite modificaciones (R9)')
+      throw new ValidationError('El Reclamo no está valorizado')
+    }
+
+    await tx.provision.updateMany({
+      where: { reclamoId: id, estado: 'REVERSADA', reversadaPorValorizacion: true },
+      data: { estado: 'VIGENTE', fechaReversa: null, reversadoPorId: null, reversadaPorValorizacion: false },
     })
     return tx.reclamo.findUniqueOrThrow({ where: { id }, include: reclamoInclude })
   })

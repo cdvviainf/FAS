@@ -18,7 +18,9 @@ import type { EstadoReclamo } from '../types'
 
 // IMP-QA-R1-022: filtros por folio de Embarque y cliente (antes solo
 // estado), más paginación real (antes solo mostraba los primeros 20).
-export function ReclamosListingClient() {
+// `basePath` (2026-09-23, split Ventas/Calidad): la tabla es la misma para
+// ambas pantallas, solo cambia a qué detalle navega cada fila.
+export function ReclamosListingClient({ basePath = '/dashboard/calidad/reclamos' }: { basePath?: string }) {
   const router = useRouter()
   const [estado, setEstado] = useState<EstadoReclamo | 'TODOS'>('TODOS')
   const [folio, setFolio] = useState('')
@@ -111,7 +113,7 @@ export function ReclamosListingClient() {
               </TableHeader>
               <TableBody>
                 {reclamos.map((r) => (
-                  <TableRow key={r.id} className='cursor-pointer' onClick={() => router.push(`/dashboard/calidad/reclamos/${r.id}`)}>
+                  <TableRow key={r.id} className='cursor-pointer' onClick={() => router.push(`${basePath}/${r.id}`)}>
                     <TableCell className='font-medium'>{r.embarque.numeroInstructivo}</TableCell>
                     <TableCell>{r.cliente.descripcion}</TableCell>
                     <TableCell className='text-muted-foreground'>{r.fechaReclamo ?? '—'}</TableCell>

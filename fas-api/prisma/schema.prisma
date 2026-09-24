@@ -3066,7 +3066,7 @@ model Reclamo {
   // Moneda no es tenant (mantenedor global) — FK simple.
   moneda    Moneda  @relation(fields: [monedaId], references: [id])
 
-  fechaReclamo   DateTime? @db.Date // fecha en que el cliente reclamó
+  fechaReclamo   DateTime  @db.Date // fecha en que el cliente reclamó (obligatoria)
   resumenCliente String?
 
   estado      EstadoReclamo @default(INGRESADO)
@@ -3161,6 +3161,10 @@ model Provision {
   creadoPorId    String
   fechaReversa   DateTime?
   reversadoPorId String?
+  // Distingue la reversa automática al valorizar (R6) de una reversa manual
+  // (permiso RECLAMO_PROVISION) — permite que "Anular Valorización" restaure
+  // solo las que ELLA reversó, no una reversa manual previa coincidente.
+  reversadaPorValorizacion Boolean @default(false)
 
   @@index([empresaId])
   @@index([reclamoId])
