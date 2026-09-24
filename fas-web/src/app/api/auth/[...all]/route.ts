@@ -16,6 +16,13 @@ async function handler(req: NextRequest): Promise<NextResponse> {
   const target = `${API_BASE}${path}${search}`
 
   const headers = new Headers(req.headers)
+  // Cabeceras hop-by-hop / calculadas por el propio fetch (mismo bug que el
+  // proxy genérico en api/[...path]/route.ts): reenviarlas tal cual hace que
+  // undici rechace la request con `UND_ERR_INVALID_ARG: invalid
+  // transfer-encoding header` antes de llegar a fas-api.
+  headers.delete('transfer-encoding')
+  headers.delete('content-length')
+  headers.delete('connection')
   // Next.js añade x-forwarded-for; aseguramos que el host no confunda a Better Auth
   headers.set('x-forwarded-host', req.nextUrl.host)
 
@@ -24,7 +31,7 @@ async function handler(req: NextRequest): Promise<NextResponse> {
   const upstream = await fetch(target, {
     method: req.method,
     headers,
-    body: body ? Buffer.from(body) : undefined,
+    body: body && body.byteLength > 0 ? Buffer.from(body) : undefined,
     // @ts-expect-error — Node fetch no tiene duplex, pero Next.js lo necesita en streaming
     duplex: 'half',
   })

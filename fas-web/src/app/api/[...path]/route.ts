@@ -21,6 +21,18 @@ async function handler(req: NextRequest): Promise<NextResponse> {
   const target = `${API_BASE}${path}${search}`
 
   const headers = new Headers(req.headers)
+  // Cabeceras hop-by-hop / calculadas por el propio fetch: reenviarlas tal
+  // cual (ej. `transfer-encoding` que Coolify/Traefik agrega en algunos PATCH
+  // sin body) hace que undici rechace la request completa con
+  // `UND_ERR_INVALID_ARG: invalid transfer-encoding header` ANTES de llegar a
+  // fas-api — el síntoma es un 500 vacío, sin log ni en fas-api (nunca la
+  // recibe) ni visible para el usuario (solo aparece en el log de fas-web).
+  // `fetch` calcula `content-length`/`transfer-encoding` solo a partir del
+  // `body` que se le pasa acá, así que estas cabeceras del request original
+  // ya no aplican.
+  headers.delete('transfer-encoding')
+  headers.delete('content-length')
+  headers.delete('connection')
   headers.set('x-forwarded-host', req.nextUrl.host)
 
   const body = req.method !== 'GET' && req.method !== 'HEAD' ? await req.arrayBuffer() : undefined
@@ -28,7 +40,7 @@ async function handler(req: NextRequest): Promise<NextResponse> {
   const upstream = await fetch(target, {
     method: req.method,
     headers,
-    body: body ? Buffer.from(body) : undefined,
+    body: body && body.byteLength > 0 ? Buffer.from(body) : undefined,
     // @ts-expect-error — Node fetch no tiene duplex, pero Next.js lo necesita en streaming
     duplex: 'half',
   })
