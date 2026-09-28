@@ -69,6 +69,9 @@ export interface NotaVentaListItem {
   cliente: { id: number; codigo: string; descripcion: string; razonSocial: string }
   mercado: MantenedorRef
   moneda: MantenedorRef
+  // Bloqueo del Cierre (2026-09-28): cerrado = solo lectura hasta reabrir.
+  cerradoEn: string | null
+  cerradoPor: string | null
 }
 
 // Solo el listado trae este campo calculado (2026-08-23) — el GET de un

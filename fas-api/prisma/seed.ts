@@ -33,6 +33,10 @@ const itemsMenu = [
   { codigo: 'PROD_CONCEPTOS_LIQ', nombre: 'Conceptos de Liquidación', seccion: 'Productores', ruta: '/dashboard/configuracion/conceptos-liquidacion', esAccion: false, orden: 33 },
   // Ventas
   { codigo: 'VENTAS_NV', nombre: 'Cierre Comercial', seccion: 'Ventas', ruta: '/dashboard/ventas/cierre', esAccion: false, orden: 40 },
+  // Permiso especial (acción) para reabrir un Cierre Comercial ya bloqueado
+  // (2026-09-28). Cerrar/bloquear lo puede hacer quien tenga TOTAL en VENTAS_NV;
+  // reabrir exige TOTAL en este ítem dedicado.
+  { codigo: 'VENTAS_REABRIR_CIERRE', nombre: 'Reabrir Cierre Comercial', seccion: 'Ventas', ruta: null, esAccion: true, orden: 400 },
   { codigo: 'VENTAS_EMBARQUES', nombre: 'Embarques', seccion: 'Ventas', ruta: '/dashboard/ventas/embarques', esAccion: false, orden: 41 },
   // Reclamos — pantalla de Comercial (2026-09-23, split Ventas/Calidad):
   // crear reclamo, Provisión, Valorización. Lee el mismo Reclamo que Calidad

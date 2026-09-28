@@ -1,6 +1,8 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import {
   embarqueCreateSchema,
+  embarquesMultiplesSchema,
+  estimacionContenedoresQuerySchema,
   embarqueParamsSchema,
   embarqueReclamoParamsSchema,
   embarqueListQuerySchema,
@@ -36,6 +38,18 @@ export async function create(req: FastifyRequest, reply: FastifyReply) {
   const body = embarqueCreateSchema.parse(req.body)
   const embarque = await service.generarEmbarque(body, req.fasUserId!)
   return reply.status(201).send({ data: embarque })
+}
+
+export async function createMultiples(req: FastifyRequest, reply: FastifyReply) {
+  const body = embarquesMultiplesSchema.parse(req.body)
+  const resultado = await service.generarEmbarquesMultiples(body, req.fasUserId!)
+  return reply.status(201).send({ data: resultado })
+}
+
+export async function estimacionContenedores(req: FastifyRequest, reply: FastifyReply) {
+  const { notaVentaId } = estimacionContenedoresQuerySchema.parse(req.query)
+  const data = await service.estimarContenedores(notaVentaId)
+  return reply.send({ data })
 }
 
 // ─── Seleccionar Pallets ────────────────────────────────────────────────────

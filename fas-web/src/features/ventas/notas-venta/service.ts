@@ -44,4 +44,12 @@ export const notasVentaService = {
   async removeDetalle(id: number, detalleId: number): Promise<void> {
     await api.delete(`ventas/notas-venta/${id}/detalles/${detalleId}`)
   },
+
+  async cerrar(id: number): Promise<{ data: NotaVentaDetalle }> {
+    return api.post(`ventas/notas-venta/${id}/cerrar`).json()
+  },
+
+  async reabrir(id: number): Promise<{ data: NotaVentaDetalle }> {
+    return api.post(`ventas/notas-venta/${id}/reabrir`).json()
+  },
 }

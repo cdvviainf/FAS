@@ -18,6 +18,9 @@ export async function embarquesRoutes(app: FastifyInstance) {
   )
   app.get('/embarques/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
   app.post('/embarques', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)
+  // Generación múltiple: una reserva/Embarque por contenedor (2026-09-28).
+  app.get('/embarques/estimacion-contenedores', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.estimacionContenedores)
+  app.post('/embarques/multiples', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.createMultiples)
 
   // ─── Solicitud de Reserva (ventas.md §4.3) ─────────────────────────────────
   app.post(

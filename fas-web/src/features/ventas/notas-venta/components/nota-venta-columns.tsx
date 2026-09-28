@@ -30,6 +30,7 @@ import { DocumentoPreviewDialog } from '@/features/documentos/components/documen
 
 const ITEM = 'VENTAS_NV'
 const ITEM_EMBARQUES = 'VENTAS_EMBARQUES'
+const ITEM_REABRIR = 'VENTAS_REABRIR_CIERRE'
 
 function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -40,6 +41,25 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
   const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
   const puedeEscribirEmbarques = usePuedeEscribir(ITEM_EMBARQUES)
+  const puedeReabrir = usePuedeEscribir(ITEM_REABRIR)
+  const cerrado = notaVenta.cerradoEn != null
+
+  const cerrarMutation = useMutation({
+    mutationFn: () => notasVentaService.cerrar(notaVenta.id),
+    onSuccess: () => {
+      toast.success('Cierre Comercial bloqueado')
+      queryClient.invalidateQueries({ queryKey: notasVentaKeys.all })
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al cerrar el Cierre Comercial'),
+  })
+  const reabrirMutation = useMutation({
+    mutationFn: () => notasVentaService.reabrir(notaVenta.id),
+    onSuccess: () => {
+      toast.success('Cierre Comercial reabierto')
+      queryClient.invalidateQueries({ queryKey: notasVentaKeys.all })
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al reabrir el Cierre Comercial'),
+  })
 
   async function descargarPdf() {
     setDescargando(true)
@@ -82,12 +102,24 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => router.push(`/dashboard/ventas/cierre/${notaVenta.id}`)}>
             <Icons.edit className='mr-2 h-4 w-4' />
-            {puedeEscribir ? 'Editar' : 'Ver detalle'}
+            {puedeEscribir && !cerrado ? 'Editar' : 'Ver detalle'}
           </DropdownMenuItem>
           {puedeEscribirEmbarques && (
             <DropdownMenuItem onClick={() => setEmbarqueOpen(true)}>
               <Icons.post className='mr-2 h-4 w-4' />
               Solicitar espacio
+            </DropdownMenuItem>
+          )}
+          {puedeEscribir && !cerrado && (
+            <DropdownMenuItem onClick={() => cerrarMutation.mutate()} disabled={cerrarMutation.isPending}>
+              <Icons.lock className='mr-2 h-4 w-4' />
+              Cerrar (bloquear)
+            </DropdownMenuItem>
+          )}
+          {cerrado && puedeReabrir && (
+            <DropdownMenuItem onClick={() => reabrirMutation.mutate()} disabled={reabrirMutation.isPending}>
+              <Icons.reopen className='mr-2 h-4 w-4' />
+              Reabrir
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onClick={() => setPreviewOpen(true)}>
@@ -98,7 +130,7 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
             <Icons.download className='mr-2 h-4 w-4' />
             Descargar PDF
           </DropdownMenuItem>
-          {puedeEscribir && (
+          {puedeEscribir && !cerrado && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -129,8 +161,17 @@ export const notaVentaColumns: ColumnDef<NotaVentaListItemConEstadoOc>[] = [
     id: 'folio',
     accessorKey: 'folio',
     header: ({ column }) => <DataTableColumnHeader column={column} title='Folio' />,
-    cell: ({ cell }) => <span className='font-mono text-sm'>{cell.getValue<number>()}</span>,
-    size: 90,
+    cell: ({ row }) => (
+      <div className='flex items-center gap-1.5'>
+        <span className='font-mono text-sm'>{row.original.folio}</span>
+        {row.original.cerradoEn && (
+          <Badge variant='secondary' className='gap-1 px-1.5 py-0'>
+            <Icons.lock className='h-3 w-3' /> Cerrado
+          </Badge>
+        )}
+      </div>
+    ),
+    size: 130,
   },
   {
     id: 'fecha',

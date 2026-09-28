@@ -322,6 +322,22 @@ export async function softDeleteNotaVenta(id: number, eliminadoPor: string) {
   })
 }
 
+export async function cerrarNotaVenta(id: number, cerradoPor: string) {
+  return prisma.notaVenta.update({
+    where: { id },
+    data: { cerradoEn: new Date(), cerradoPor },
+    include: includeDetalle,
+  })
+}
+
+export async function reabrirNotaVenta(id: number, actualizadoPor: string) {
+  return prisma.notaVenta.update({
+    where: { id },
+    data: { cerradoEn: null, cerradoPor: null, actualizadoPor },
+    include: includeDetalle,
+  })
+}
+
 const detalleInclude = {
   especie: { select: { id: true, codigo: true, descripcion: true } },
   variedad: { select: { id: true, codigo: true, descripcion: true } },

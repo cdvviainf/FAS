@@ -14,6 +14,15 @@ export const embarqueCreateSchema = z.object({
   forzarSinReserva: z.boolean().optional(),
 })
 
+// Generación múltiple (2026-09-28): una reserva/Embarque por contenedor.
+export const embarquesMultiplesSchema = embarqueCreateSchema.extend({
+  cantidad: z.number().int().min(1).max(100),
+})
+
+export const estimacionContenedoresQuerySchema = z.object({
+  notaVentaId: z.coerce.number().int().positive(),
+})
+
 // "Dejar Manual" (2026-09-07): sin body — solo marca el Embarque como
 // reservaManual=true tras un fallo de la integración automática.
 export const dejarReservaManualSchema = z.object({})

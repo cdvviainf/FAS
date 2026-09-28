@@ -19,6 +19,15 @@ export const articuloCreateSchema = z.object({
   kgBrutoEnvase: z.number().min(0).optional().nullable(),
   // Especie del embalaje (opcional): agrupa embalajes en Cajas por Pallet.
   especieId: z.number().int().positive().optional().nullable(),
+  // Códigos equivalentes/alternativos (2026-09-28) — lista libre por artículo.
+  codigosEquivalentes: z
+    .array(
+      z.object({
+        codigo: z.string().min(1, 'El código es requerido').max(50).trim(),
+        descripcion: z.string().max(200).trim().optional().nullable(),
+      }),
+    )
+    .optional(),
 })
 
 // El código es inmutable (mismo patrón que mantenedores generales)

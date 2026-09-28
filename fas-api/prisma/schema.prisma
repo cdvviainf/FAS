@@ -1868,6 +1868,7 @@ model Articulo {
   cajasPorPallet              CajasPorPallet[]
   proformaLineas              ProformaLinea[]
   facturaExportacionLineas    FacturaExportacionLinea[]
+  codigosEquivalentes         ArticuloCodigoEquivalente[]
 
   creadoEn      DateTime @default(now())
   actualizadoEn DateTime @updatedAt
@@ -1878,6 +1879,21 @@ model Articulo {
   @@index([activo])
   @@index([empresaId])
   @@map("articulos")
+}
+
+// Códigos equivalentes / alternativos de un Artículo (2026-09-28): un artículo
+// puede tener varios códigos con los que se lo identifica (código del cliente,
+// legacy, proveedor, etc.). Hijo de Articulo (tenant vía el padre, igual que
+// las demás líneas hijas — no lleva empresaId ni entra a MODELOS_TENANT).
+model ArticuloCodigoEquivalente {
+  id          Int      @id @default(autoincrement())
+  articuloId  Int
+  articulo    Articulo @relation(fields: [articuloId], references: [id], onDelete: Cascade)
+  codigo      String
+  descripcion String? // opcional: a qué corresponde (cliente, proveedor, etc.)
+
+  @@index([articuloId])
+  @@map("articulo_codigos_equivalentes")
 }
 
 model DocumentoArticulo {
@@ -2613,6 +2629,12 @@ model NotaVenta {
   detalles      NotaVentaDetalle[]
   ordenesCompra OrdenCompra[]
   embarques     Embarque[]
+
+  // Bloqueo del Cierre Comercial (2026-09-28): al cerrar, la NV queda de solo
+  // lectura (no se editan encabezado, líneas ni se borra). Reabrir exige el
+  // permiso especial VENTAS_REABRIR_CIERRE.
+  cerradoEn  DateTime?
+  cerradoPor String?
 
   creadoEn       DateTime  @default(now())
   creadoPor      String

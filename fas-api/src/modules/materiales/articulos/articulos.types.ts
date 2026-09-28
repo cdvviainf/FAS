@@ -1,6 +1,11 @@
 export type TipoArticulo = 'EMBALAJE' | 'ENVASE' | 'MATERIAL_EMBALAJE' | 'SERVICIO'
 export type TipoCosteo = 'PROMEDIO_PONDERADO' | 'ESTANDAR'
 
+export interface CodigoEquivalenteInput {
+  codigo: string
+  descripcion?: string | null
+}
+
 export interface ArticuloCreateInput {
   tipo: TipoArticulo
   codigo: string
@@ -16,6 +21,9 @@ export interface ArticuloCreateInput {
   kgNetoEnvase?: number | null
   kgBrutoEnvase?: number | null
   especieId?: number | null
+  // Lista de códigos equivalentes/alternativos (2026-09-28). En update, si viene
+  // definida reemplaza toda la lista; si es undefined, no se toca.
+  codigosEquivalentes?: CodigoEquivalenteInput[]
 }
 
 export type ArticuloUpdateInput = Partial<ArticuloCreateInput>

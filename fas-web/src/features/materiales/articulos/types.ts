@@ -40,7 +40,19 @@ export interface Articulo {
   kgBrutoEnvase: string | null
   especieId: number | null
   especie?: { id: number; codigo: string; descripcion: string } | null
+  codigosEquivalentes?: CodigoEquivalente[]
   saldos?: SaldoBodega[]
+}
+
+export interface CodigoEquivalente {
+  id: number
+  codigo: string
+  descripcion: string | null
+}
+
+export interface CodigoEquivalenteInput {
+  codigo: string
+  descripcion?: string | null
 }
 
 export interface ArticuloCreateInput {
@@ -57,6 +69,7 @@ export interface ArticuloCreateInput {
   kgNetoEnvase?: number | null
   kgBrutoEnvase?: number | null
   especieId?: number | null
+  codigosEquivalentes?: CodigoEquivalenteInput[]
 }
 
 export type ArticuloUpdateInput = Partial<Omit<ArticuloCreateInput, 'codigo'>>

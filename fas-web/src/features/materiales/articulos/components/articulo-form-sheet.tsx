@@ -61,6 +61,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
   const [kgNetoEnvase, setKgNetoEnvase] = useState('')
   const [kgBrutoEnvase, setKgBrutoEnvase] = useState('')
   const [especieId, setEspecieId] = useState<number | null>(null)
+  const [codigosEquivalentes, setCodigosEquivalentes] = useState<{ codigo: string; descripcion: string }[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const { data: unidades } = useQuery({
@@ -113,6 +114,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setKgNetoEnvase(item.kgNetoEnvase ?? '')
       setKgBrutoEnvase(item.kgBrutoEnvase ?? '')
       setEspecieId(item.especieId ?? null)
+      setCodigosEquivalentes((item.codigosEquivalentes ?? []).map((c) => ({ codigo: c.codigo, descripcion: c.descripcion ?? '' })))
     } else {
       setTipo('MATERIAL_EMBALAJE')
       setCodigo('')
@@ -127,6 +129,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setKgNetoEnvase('')
       setKgBrutoEnvase('')
       setEspecieId(null)
+      setCodigosEquivalentes([])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item?.id])
@@ -147,6 +150,9 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
         kgNetoEnvase: tipo === 'EMBALAJE' && kgNetoEnvase ? Number(kgNetoEnvase) : null,
         kgBrutoEnvase: tipo === 'EMBALAJE' && kgBrutoEnvase ? Number(kgBrutoEnvase) : null,
         especieId: tipo === 'EMBALAJE' ? especieId : null,
+        codigosEquivalentes: codigosEquivalentes
+          .map((c) => ({ codigo: c.codigo.trim(), descripcion: c.descripcion.trim() || null }))
+          .filter((c) => c.codigo.length > 0),
       }
       if (isEdit) {
         return articulosService.update(item!.id, payload)
@@ -322,6 +328,52 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
               </div>
             </>
           )}
+
+          <div className='space-y-2'>
+            <div className='flex items-center justify-between'>
+              <Label>Códigos equivalentes</Label>
+              <Button
+                type='button'
+                variant='ghost'
+                size='sm'
+                onClick={() => setCodigosEquivalentes((prev) => [...prev, { codigo: '', descripcion: '' }])}
+              >
+                <Icons.add className='mr-1 h-4 w-4' /> Agregar
+              </Button>
+            </div>
+            <p className='text-muted-foreground text-xs'>Otros códigos con los que se identifica este artículo (cliente, proveedor, legacy).</p>
+            {codigosEquivalentes.length === 0 ? (
+              <p className='text-muted-foreground text-xs italic'>Sin códigos equivalentes.</p>
+            ) : (
+              <div className='space-y-2'>
+                {codigosEquivalentes.map((c, i) => (
+                  <div key={i} className='flex items-center gap-2'>
+                    <Input
+                      value={c.codigo}
+                      onChange={(e) => setCodigosEquivalentes((prev) => prev.map((x, j) => (j === i ? { ...x, codigo: e.target.value } : x)))}
+                      placeholder='Código'
+                      className='w-32'
+                    />
+                    <Input
+                      value={c.descripcion}
+                      onChange={(e) => setCodigosEquivalentes((prev) => prev.map((x, j) => (j === i ? { ...x, descripcion: e.target.value } : x)))}
+                      placeholder='Descripción (opcional)'
+                      className='flex-1'
+                    />
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='icon'
+                      className='h-8 w-8 shrink-0'
+                      onClick={() => setCodigosEquivalentes((prev) => prev.filter((_, j) => j !== i))}
+                    >
+                      <Icons.trash className='h-4 w-4' />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className='flex items-center gap-2'>
             <Switch id='activo-articulo' checked={activo} onCheckedChange={setActivo} />

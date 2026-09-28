@@ -41,6 +41,18 @@ export async function remove(req: FastifyRequest, reply: FastifyReply) {
   return reply.status(204).send()
 }
 
+export async function cerrar(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = notaVentaParamsSchema.parse(req.params)
+  const notaVenta = await service.cerrarNotaVenta(id, req.fasUserId!)
+  return reply.send({ data: notaVenta })
+}
+
+export async function reabrir(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = notaVentaParamsSchema.parse(req.params)
+  const notaVenta = await service.reabrirNotaVenta(id, req.fasUserId!)
+  return reply.send({ data: notaVenta })
+}
+
 export async function addDetalle(req: FastifyRequest, reply: FastifyReply) {
   const { id } = notaVentaParamsSchema.parse(req.params)
   const body = notaVentaDetalleCreateSchema.parse(req.body)

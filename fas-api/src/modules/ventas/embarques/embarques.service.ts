@@ -53,7 +53,16 @@ export async function obtenerEmbarque(id: number) {
 // de texto libre armado antes de tener la definición: los IDs de AGL360 se
 // resuelven vía el mantenedor de Integraciones (Configuración →
 // Integraciones, código 'AGL360'), nunca hardcodeados ni derivados de texto.
-async function intentarReservaAgl(notaVentaId: number): Promise<ResultadoIntentoReserva> {
+// referenciaFas por-embarque (2026-09-28): antes era `AGL-{empresa}-{nvId}`,
+// pero al generar varios Embarques por Cierre eso colisionaba con el índice
+// único de SolicitudReserva. Ahora deriva del numeroInstructivo (único por
+// Embarque), sigue siendo determinista (IMP-QA-R1-012) y estable entre
+// reintentos del mismo Embarque.
+function referenciaFasDe(numeroInstructivo: string): string {
+  return `AGL-${getEmpresaIdActual()!}-${numeroInstructivo}`
+}
+
+async function intentarReservaAgl(notaVentaId: number, referenciaFas: string): Promise<ResultadoIntentoReserva> {
   const nv = await repo.getNotaVentaParaReserva(notaVentaId)
   if (!nv) return { ok: false, error: 'El Cierre Comercial ya no existe' }
 
@@ -87,7 +96,6 @@ async function intentarReservaAgl(notaVentaId: number): Promise<ResultadoIntento
     ? await integracionesRepo.getValorParametro(CODIGO_INTEGRACION_AGL, 'IdProducto', { maestro: 'ESPECIE', maestroId: especiesUnicas[0] })
     : null
 
-  const referenciaFas = `AGL-${getEmpresaIdActual()!}-${notaVentaId}`
   const payloadEnviado: SolicitudAglPayload = {
     referencia_externa: referenciaFas,
     idCliente: Number(idCliente),
@@ -119,12 +127,36 @@ async function intentarReservaAgl(notaVentaId: number): Promise<ResultadoIntento
 // ofrece el diálogo "¿generar sin reserva?"); `true` crea el Embarque igual,
 // en PENDIENTE. El lock + la transacción completa viven en
 // repo.generarEmbarqueTransaccional (IMP-QA-R1-012).
-export async function generarEmbarque(body: EmbarqueCreateInput, creadoPor: string) {
+// Estimación de contenedores (2026-09-28): total de pallets del Cierre = Σ
+// techo(cajas / cajas por pallet) de sus líneas; contenedores sugeridos =
+// techo(pallets / 20). Es solo una sugerencia editable en el diálogo — el
+// usuario confirma cuántas reservas/embarques generar.
+export const PALLETS_POR_CONTENEDOR = 20
+export async function estimarContenedores(notaVentaId: number) {
+  const notaVenta = await repo.getNotaVenta(notaVentaId)
+  if (!notaVenta) throw new ValidationError('El Cierre Comercial seleccionado no existe')
+  const detalles = await repo.getDetallesCajasCierre(notaVentaId)
+  let totalPallets = 0
+  for (const d of detalles) {
+    if (d.cajasPorPallet > 0) totalPallets += Math.ceil(d.cajas / d.cajasPorPallet)
+  }
+  const contenedoresSugeridos = Math.max(1, Math.ceil(totalPallets / PALLETS_POR_CONTENEDOR))
+  return { totalPallets, contenedoresSugeridos, palletsPorContenedor: PALLETS_POR_CONTENEDOR }
+}
+
+// Genera `cantidad` Embarques para un Cierre (uno por contenedor), cada uno con
+// su propia Solicitud de Reserva. Los folios son correlativos secuenciales por
+// prefijo (Tipo de Embarque): el Cierre 1 puede generar los embarques 1,2,3 y
+// el Cierre 2 los 4,5 (2026-09-28, decisión de negocio Christian). Cada embarque
+// se crea en su propia transacción; si uno falla, los anteriores quedan creados
+// (se informa cuántos se generaron) — mismo criterio de "reintentar el resto".
+export async function generarEmbarquesMultiples(
+  body: EmbarqueCreateInput & { cantidad: number },
+  creadoPor: string,
+) {
   const notaVenta = await repo.getNotaVenta(body.notaVentaId)
   if (!notaVenta) throw new ValidationError('El Cierre Comercial seleccionado no existe')
 
-  // Gestor Logístico (2026-09-07, ventas.md §4.3) — existencia + tipo, mismo
-  // criterio que el consignatario en notas-venta.service.ts.
   const gestor = await repo.getGestorLogistico(body.gestorLogisticoId)
   if (!gestor) throw new ValidationError('El Gestor Logístico seleccionado no existe o está inactivo')
   if (!gestor.tipos.includes('GESTOR_LOGISTICO')) {
@@ -137,30 +169,34 @@ export async function generarEmbarque(body: EmbarqueCreateInput, creadoPor: stri
       'No hay un prefijo configurado para el Tipo de Embarque de este Cierre Comercial. Configúralo en Configuración → Prefijos antes de generar el Embarque.',
     )
   }
-  const numeroInstructivo = prefijosService.formatearConPrefijo(prefijoConfig.prefijo, prefijoConfig.digitos, notaVenta.folio)
 
-  // Pre-check amigable, no autoritativo (mismo patrón que confirmarMovimiento
-  // en materiales/movimientos.service.ts) — la autoridad real vuelve a
-  // revisar esto bajo lock dentro de generarEmbarqueTransaccional; esto solo
-  // evita llamar a AGL360 para un error obvio.
-  const existente = await repo.findByNumeroInstructivo(numeroInstructivo)
-  if (existente) {
-    throw new ValidationError(
-      `Ya existe un Embarque con el número "${numeroInstructivo}" — probablemente ya se generó un Embarque para este Cierre Comercial.`,
-    )
-  }
+  const cantidad = Math.floor(body.cantidad)
+  if (!Number.isFinite(cantidad) || cantidad < 1) throw new ValidationError('La cantidad de contenedores debe ser al menos 1')
+  if (cantidad > 100) throw new ValidationError('La cantidad de contenedores es demasiado alta (máximo 100)')
 
   const modoAutomatico = await resolverModoAutomatico(body.gestorLogisticoId)
+  const base = await repo.getMaxNumeroInstructivo(prefijoConfig.prefijo)
 
-  return repo.generarEmbarqueTransaccional(
-    body.notaVentaId,
-    numeroInstructivo,
-    body.gestorLogisticoId,
-    creadoPor,
-    body.forzarSinReserva ?? false,
-    modoAutomatico,
-    () => intentarReservaAgl(body.notaVentaId),
-  )
+  const embarques = []
+  for (let i = 1; i <= cantidad; i++) {
+    const numeroInstructivo = prefijosService.formatearConPrefijo(prefijoConfig.prefijo, prefijoConfig.digitos, base + i)
+    const embarque = await repo.generarEmbarqueTransaccional(
+      body.notaVentaId,
+      numeroInstructivo,
+      body.gestorLogisticoId,
+      creadoPor,
+      body.forzarSinReserva ?? false,
+      modoAutomatico,
+      () => intentarReservaAgl(body.notaVentaId, referenciaFasDe(numeroInstructivo)),
+    )
+    embarques.push(embarque)
+  }
+  return { embarques, creados: embarques.length }
+}
+
+export async function generarEmbarque(body: EmbarqueCreateInput, creadoPor: string) {
+  const { embarques } = await generarEmbarquesMultiples({ ...body, cantidad: 1 }, creadoPor)
+  return embarques[0]
 }
 
 // Reintento manual (pestaña "Solicitud de Reserva" de un Embarque ya
@@ -193,7 +229,7 @@ export async function solicitarReservaParaEmbarque(embarqueId: number, creadoPor
   return repo.solicitarReservaTransaccional(
     embarqueId,
     creadoPor,
-    () => intentarReservaAgl(embarque.notaVentaId),
+    () => intentarReservaAgl(embarque.notaVentaId, referenciaFasDe(embarque.numeroInstructivo)),
   )
 }
 

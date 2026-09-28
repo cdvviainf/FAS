@@ -29,6 +29,15 @@ export const embarquesService = {
     return api.post('ventas/embarques', { json: data }).json()
   },
 
+  // Generación múltiple: una reserva/Embarque por contenedor (2026-09-28).
+  async estimacionContenedores(notaVentaId: number): Promise<{ data: { totalPallets: number; contenedoresSugeridos: number; palletsPorContenedor: number } }> {
+    return api.get('ventas/embarques/estimacion-contenedores', { searchParams: { notaVentaId: String(notaVentaId) } }).json()
+  },
+
+  async createMultiples(data: EmbarqueCreateInput & { cantidad: number }): Promise<{ data: { embarques: Embarque[]; creados: number } }> {
+    return api.post('ventas/embarques/multiples', { json: data }).json()
+  },
+
   // ─── Seleccionar Pallets ──────────────────────────────────────────────────
 
   async listarPalletsDisponibles(id: number): Promise<{ data: PalletResumen[] }> {

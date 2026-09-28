@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
 import { AlertModal } from '@/components/modal/alert-modal'
@@ -41,6 +42,19 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
   const queryClient = useQueryClient()
   const [confirmarSinReservaOpen, setConfirmarSinReservaOpen] = useState(false)
   const [gestorLogisticoId, setGestorLogisticoId] = useState<number | null>(null)
+  const [cantidad, setCantidad] = useState<number>(1)
+
+  // Sugerencia de contenedores = techo(pallets del Cierre / 20). Editable.
+  const { data: estimacion } = useQuery({
+    queryKey: ['embarque-estimacion-contenedores', notaVentaId],
+    queryFn: () => embarquesService.estimacionContenedores(notaVentaId),
+    enabled: open,
+    staleTime: 30_000,
+  })
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open && estimacion?.data) setCantidad(estimacion.data.contenedoresSugeridos)
+  }, [open, estimacion])
 
   // Gestor Logístico (2026-09-07, ventas.md §4.3) — generaliza AGL360: si el
   // gestor elegido tiene una Integración activa vinculada, se intenta la
@@ -54,14 +68,23 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
   const gestores = gestoresData?.data ?? []
 
   const mutation = useMutation({
-    mutationFn: (forzarSinReserva: boolean) => embarquesService.create({ notaVentaId, gestorLogisticoId: gestorLogisticoId!, forzarSinReserva }),
+    mutationFn: (forzarSinReserva: boolean) =>
+      embarquesService.createMultiples({ notaVentaId, gestorLogisticoId: gestorLogisticoId!, cantidad, forzarSinReserva }),
     onSuccess: (res) => {
-      toast.success(`Embarque generado — Folio ${res.data.numeroInstructivo}`)
+      const embarques = res.data.embarques
+      const folios = embarques.map((e) => e.numeroInstructivo).join(', ')
+      toast.success(
+        embarques.length === 1
+          ? `Embarque generado — Folio ${folios}`
+          : `${embarques.length} Embarques generados — Folios ${folios}`,
+      )
       queryClient.invalidateQueries({ queryKey: embarquesKeys.list({ notaVentaId }) })
       queryClient.invalidateQueries({ queryKey: notasVentaKeys.all })
       setConfirmarSinReservaOpen(false)
       onOpenChange(false)
-      router.push(`/dashboard/ventas/embarques/${res.data.id}`)
+      // Con un solo Embarque se abre su detalle (UX previa); con varios se
+      // vuelve al listado del Cierre para verlos todos.
+      if (embarques.length === 1) router.push(`/dashboard/ventas/embarques/${embarques[0].id}`)
     },
     onError: (e: Error) => {
       if (esFallaIntegracionAgl(e)) {
@@ -77,7 +100,10 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
       <Dialog
         open={open}
         onOpenChange={(v) => {
-          if (!v) setGestorLogisticoId(null)
+          if (!v) {
+            setGestorLogisticoId(null)
+            setCantidad(1)
+          }
           onOpenChange(v)
         }}
       >
@@ -101,6 +127,23 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
               searchPlaceholder='Buscar entidad...'
               options={gestores.map((e) => ({ value: String(e.id), label: e.descripcion }))}
             />
+          </div>
+
+          <div className='space-y-1.5'>
+            <Label>Contenedores (reservas a generar) <span className='text-destructive'>*</span></Label>
+            <Input
+              type='number'
+              min={1}
+              max={100}
+              value={cantidad}
+              onChange={(e) => setCantidad(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+            />
+            {estimacion?.data && (
+              <p className='text-muted-foreground text-xs'>
+                Sugerido: {estimacion.data.contenedoresSugeridos} ({estimacion.data.totalPallets} pallets ÷ {estimacion.data.palletsPorContenedor} por contenedor).
+                Se generará un Embarque con su reserva por cada contenedor.
+              </p>
+            )}
           </div>
 
           <DialogFooter>

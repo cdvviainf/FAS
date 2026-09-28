@@ -406,6 +406,33 @@ export async function getNotaVenta(id: number) {
   })
 }
 
+// Correlativo de Embarque (2026-09-28): los embarques se numeran de forma
+// secuencial por prefijo (Tipo de Embarque), no por el folio del Cierre —
+// mismo criterio que calcularSiguienteCodigo. Se escanea el mayor sufijo
+// numérico entre los numeroInstructivo existentes que empiezan con el prefijo
+// (incluye eliminados, para no reusar un número ya usado). Devuelve 0 si no hay.
+export async function getMaxNumeroInstructivo(prefijo: string): Promise<number> {
+  const registros = await prisma.embarque.findMany({
+    where: { numeroInstructivo: { startsWith: prefijo } },
+    select: { numeroInstructivo: true },
+  })
+  let maximo = 0
+  for (const { numeroInstructivo } of registros) {
+    const n = parseInt(numeroInstructivo.slice(prefijo.length), 10)
+    if (!Number.isNaN(n) && n > maximo) maximo = n
+  }
+  return maximo
+}
+
+// Líneas del Cierre con lo necesario para estimar la cantidad de pallets
+// (cajas y cajas por pallet, ya congeladas en NotaVentaDetalle).
+export async function getDetallesCajasCierre(notaVentaId: number) {
+  return prisma.notaVentaDetalle.findMany({
+    where: { notaVentaId },
+    select: { cajas: true, cajasPorPallet: true },
+  })
+}
+
 // Valida existencia + tipo del Gestor Logístico elegido (ventas.md §4.3,
 // mismo criterio que el consignatario en notas-venta.service.ts).
 export async function getGestorLogistico(id: number) {

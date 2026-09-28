@@ -45,6 +45,7 @@ export async function getArticuloById(id: number) {
       unidad: { select: unidadSelect },
       etiqueta: { select: etiquetaSelect },
       especie: { select: especieSelect },
+      codigosEquivalentes: { select: { id: true, codigo: true, descripcion: true }, orderBy: { id: 'asc' } },
       saldos: {
         include: { bodega: { select: { id: true, codigo: true, descripcion: true } } },
       },
@@ -71,22 +72,52 @@ export async function getEtiquetaActiva(etiquetaId: number) {
   })
 }
 
+const articuloInclude = {
+  unidad: { select: unidadSelect },
+  etiqueta: { select: etiquetaSelect },
+  especie: { select: especieSelect },
+  codigosEquivalentes: { select: { id: true, codigo: true, descripcion: true }, orderBy: { id: 'asc' as const } },
+}
+
+function nestedCodigos(codigos: ArticuloCreateInput['codigosEquivalentes']) {
+  return (codigos ?? []).map((c) => ({ codigo: c.codigo, descripcion: c.descripcion ?? null }))
+}
+
 export async function createArticulo(data: ArticuloCreateInput) {
+  const { codigosEquivalentes, ...scalar } = data
   return prisma.articulo.create({
     // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
     // valor con la empresa activa del contexto — se declara aquí solo para
     // satisfacer el tipo requerido por Prisma.
-    data: { ...data, empresaId: getEmpresaIdActual()! },
-    include: { unidad: { select: unidadSelect }, etiqueta: { select: etiquetaSelect }, especie: { select: especieSelect } },
+    data: {
+      ...scalar,
+      empresaId: getEmpresaIdActual()!,
+      ...(codigosEquivalentes && codigosEquivalentes.length > 0
+        ? { codigosEquivalentes: { create: nestedCodigos(codigosEquivalentes) } }
+        : {}),
+    },
+    include: articuloInclude,
   })
 }
 
 export async function updateArticulo(id: number, data: ArticuloUpdateInput) {
-  return prisma.articulo.update({
-    where: { id },
-    data,
-    include: { unidad: { select: unidadSelect }, etiqueta: { select: etiquetaSelect }, especie: { select: especieSelect } },
-  })
+  const { codigosEquivalentes, ...scalar } = data
+  // Si `codigosEquivalentes` viene definida, reemplaza toda la lista (borra +
+  // recrea) en una transacción; si es undefined, no se toca.
+  if (codigosEquivalentes !== undefined) {
+    return prisma.$transaction(async (tx) => {
+      await tx.articuloCodigoEquivalente.deleteMany({ where: { articuloId: id } })
+      return tx.articulo.update({
+        where: { id },
+        data: {
+          ...scalar,
+          ...(codigosEquivalentes.length > 0 ? { codigosEquivalentes: { create: nestedCodigos(codigosEquivalentes) } } : {}),
+        },
+        include: articuloInclude,
+      })
+    })
+  }
+  return prisma.articulo.update({ where: { id }, data: scalar, include: articuloInclude })
 }
 
 // ─── Documentos adjuntos ─────────────────────────────────────────────────────

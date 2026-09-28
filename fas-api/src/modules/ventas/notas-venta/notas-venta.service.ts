@@ -195,6 +195,26 @@ export async function obtenerNotaVenta(id: number) {
   return notaVenta
 }
 
+// Bloqueo del Cierre (2026-09-28): con la NV cerrada no se edita nada (encabezado,
+// líneas, ni se borra) hasta reabrirla (permiso VENTAS_REABRIR_CIERRE).
+function requireAbierta(nv: { cerradoEn: Date | null }) {
+  if (nv.cerradoEn) {
+    throw new ValidationError('Este Cierre Comercial está cerrado (bloqueado). Reábrelo para poder modificarlo.')
+  }
+}
+
+export async function cerrarNotaVenta(id: number, userId: string) {
+  const nv = await obtenerNotaVenta(id)
+  if (nv.cerradoEn) throw new ValidationError('Este Cierre Comercial ya está cerrado')
+  return repo.cerrarNotaVenta(id, userId)
+}
+
+export async function reabrirNotaVenta(id: number, userId: string) {
+  const nv = await obtenerNotaVenta(id)
+  if (!nv.cerradoEn) throw new ValidationError('Este Cierre Comercial no está cerrado')
+  return repo.reabrirNotaVenta(id, userId)
+}
+
 export async function crearNotaVenta(body: NotaVentaCreateInput, creadoPor: string) {
   await validarReferenciasHeader(body)
   return ejecutarConFkTraducida(() => repo.createNotaVenta(body, creadoPor))
@@ -202,6 +222,7 @@ export async function crearNotaVenta(body: NotaVentaCreateInput, creadoPor: stri
 
 export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput, actualizadoPor: string) {
   const existente = await obtenerNotaVenta(id)
+  requireAbierta(existente)
 
   // Instructivo de Embalaje (compras.md) no bloquea edición/borrado de la
   // Nota de Venta: es un documento independiente, sin relación de herencia
@@ -245,7 +266,8 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
 }
 
 export async function eliminarNotaVenta(id: number, eliminadoPor: string) {
-  await obtenerNotaVenta(id)
+  const nv = await obtenerNotaVenta(id)
+  requireAbierta(nv)
   // R3 (Docs/ventas.md): no se puede eliminar una NV con Embarque asociado.
   const embarques = await repo.countEmbarques(id)
   if (embarques > 0) {
@@ -255,7 +277,8 @@ export async function eliminarNotaVenta(id: number, eliminadoPor: string) {
 }
 
 export async function agregarDetalle(notaVentaId: number, body: NotaVentaDetalleCreateInput) {
-  await obtenerNotaVenta(notaVentaId)
+  const nv = await obtenerNotaVenta(notaVentaId)
+  requireAbierta(nv)
   await validarDetalle(body)
   return repo.addDetalle(notaVentaId, body)
 }
@@ -265,7 +288,8 @@ async function obtenerDetalleDeNotaVenta(notaVentaId: number, detalleId: number)
   // (obtenerNotaVenta) — NotaVentaDetalle no es un modelo tenant, así que sin
   // esto una línea de otra empresa sería alcanzable si el atacante conoce
   // ambos IDs (FAS-EMP-F3-VEN-R1-001).
-  await obtenerNotaVenta(notaVentaId)
+  const nv = await obtenerNotaVenta(notaVentaId)
+  requireAbierta(nv)
   const detalle = await repo.getDetalleById(detalleId)
   if (!detalle || detalle.notaVentaId !== notaVentaId) {
     throw new NotFoundError('Línea de detalle', String(detalleId))

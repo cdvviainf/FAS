@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Icons } from '@/components/icons'
 import { MultiCombobox } from '@/components/shared/multi-combobox'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { formatFechaCorta } from '@/lib/format'
 import { notasCalidadService } from '@/features/notas-calidad/service'
 import { notasCondicionService } from '@/features/notas-condicion/service'
 import { gestionPalletsService } from '../service'
@@ -22,6 +23,8 @@ import type { StockDetalleRow } from '../types'
 
 const ITEM = 'OPERACIONES_GESTION_PALLETS'
 const SIN_NOTA = '__SIN_NOTA__'
+const SIN_FECHA = '__SIN_FECHA__'
+const SIN_PACKING = '__SIN_PACKING__'
 const NINGUNA = '__NINGUNA__'
 
 interface Filters {
@@ -34,11 +37,13 @@ interface Filters {
   notaCalidadIds: string[]
   notaCondicionIds: string[]
   completos: string[]
+  fechaEmbalaje: string[]
+  packingIds: string[]
 }
 
 const FILTROS_VACIOS: Filters = {
   especieIds: [], variedadIds: [], calibreIds: [], categoriaIds: [], estados: [], productorIds: [],
-  notaCalidadIds: [], notaCondicionIds: [], completos: [],
+  notaCalidadIds: [], notaCondicionIds: [], completos: [], fechaEmbalaje: [], packingIds: [],
 }
 
 const FACETS: {
@@ -56,6 +61,8 @@ const FACETS: {
   { key: 'notaCalidadIds', label: 'Nota Calidad', getValue: (r) => r.notaCalidadId != null ? String(r.notaCalidadId) : SIN_NOTA, getLabel: (r) => r.notaCalidad?.descripcion ?? 'Sin nota' },
   { key: 'notaCondicionIds', label: 'Nota Condición', getValue: (r) => r.notaCondicionId != null ? String(r.notaCondicionId) : SIN_NOTA, getLabel: (r) => r.notaCondicion?.descripcion ?? 'Sin nota' },
   { key: 'completos', label: 'Completo', getValue: (r) => String(r.completo), getLabel: (r) => r.completo ? 'Sí' : 'No' },
+  { key: 'fechaEmbalaje', label: 'F. Embalaje', getValue: (r) => (r.fechaEmbalaje ? r.fechaEmbalaje.slice(0, 10) : SIN_FECHA), getLabel: (r) => (r.fechaEmbalaje ? formatFechaCorta(r.fechaEmbalaje) : 'Sin fecha') },
+  { key: 'packingIds', label: 'Packing', getValue: (r) => (r.packingId != null ? String(r.packingId) : SIN_PACKING), getLabel: (r) => r.packing?.descripcion ?? 'Sin packing' },
 ]
 
 function matches(row: StockDetalleRow, filters: Filters, exclude?: keyof Filters): boolean {
@@ -81,8 +88,20 @@ function groupKey(row: StockDetalleRow): string {
 export function GestionPalletsClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)
   const queryClient = useQueryClient()
-  const [filters, setFilters] = useState<Filters>(FILTROS_VACIOS)
+  const [filters, setFiltersRaw] = useState<Filters>(FILTROS_VACIOS)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  // Pallets recién editados en esta sesión: se mantienen visibles aunque su
+  // nuevo valor deje de cumplir el filtro actual (ej. filtrar "Sin condición"
+  // y asignarle una condición) — sin esto la fila desaparecía al guardar y
+  // parecía que el registro se borraba. Se limpia al cambiar los filtros.
+  const [stickyPalletIds, setStickyPalletIds] = useState<Set<number>>(new Set())
+
+  // Cambiar cualquier filtro descarta el "pin" de los editados (el usuario
+  // pidió explícitamente otra vista).
+  function setFilters(updater: (f: Filters) => Filters) {
+    setStickyPalletIds(new Set())
+    setFiltersRaw(updater)
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['gestion-pallets'],
@@ -90,7 +109,10 @@ export function GestionPalletsClient() {
     staleTime: 30_000,
   })
   const rows = useMemo(() => data?.data ?? [], [data])
-  const filteredRows = useMemo(() => rows.filter((r) => matches(r, filters)), [rows, filters])
+  const filteredRows = useMemo(
+    () => rows.filter((r) => matches(r, filters) || stickyPalletIds.has(r.palletId)),
+    [rows, filters, stickyPalletIds],
+  )
 
   // Especie "del pallet" para restringir el selector de Nota Calidad/Condición
   // (compras.md §4.8: se asume 1 especie por pallet, y si llegara a mezclar,
@@ -119,7 +141,10 @@ export function GestionPalletsClient() {
   const updateMutation = useMutation({
     mutationFn: ({ palletId, data: body }: { palletId: number; data: { notaCalidadId?: number | null; notaCondicionId?: number | null; completo?: boolean } }) =>
       gestionPalletsService.update(palletId, body),
-    onSuccess: () => {
+    onSuccess: (_res, variables) => {
+      // Mantener visible el pallet recién editado aunque deje de cumplir el
+      // filtro actual (ver stickyPalletIds).
+      setStickyPalletIds((prev) => new Set(prev).add(variables.palletId))
       queryClient.invalidateQueries({ queryKey: ['gestion-pallets'] })
       queryClient.invalidateQueries({ queryKey: ['stock-fruta'] })
       toast.success('Pallet actualizado')
@@ -227,7 +252,7 @@ export function GestionPalletsClient() {
               </div>
             )
           })}
-          <Button type='button' variant='ghost' size='sm' onClick={() => setFilters(FILTROS_VACIOS)}>
+          <Button type='button' variant='ghost' size='sm' onClick={() => setFilters(() => FILTROS_VACIOS)}>
             <Icons.close className='mr-2 h-4 w-4' /> Limpiar filtros
           </Button>
         </CardContent>
@@ -263,12 +288,14 @@ export function GestionPalletsClient() {
                 <TableHead>Nota Calidad</TableHead>
                 <TableHead>Nota Condición</TableHead>
                 <TableHead>Completo</TableHead>
+                <TableHead>F. Embalaje</TableHead>
+                <TableHead>Packing</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {grupos.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className='text-muted-foreground text-center'>Sin pallets para estos filtros.</TableCell>
+                  <TableCell colSpan={12} className='text-muted-foreground text-center'>Sin pallets para estos filtros.</TableCell>
                 </TableRow>
               )}
               {grupos.map((g) => {
@@ -286,6 +313,8 @@ export function GestionPalletsClient() {
                       <TableCell></TableCell>
                       <TableCell></TableCell>
                       <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
                     </TableRow>
                     {isOpen && (
                       <>
@@ -300,12 +329,18 @@ export function GestionPalletsClient() {
                           <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Nota Calidad</TableCell>
                           <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Nota Condición</TableCell>
                           <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Completo</TableCell>
+                          <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>F. Embalaje</TableCell>
+                          <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Packing</TableCell>
                         </TableRow>
                         {g.rows
                           .slice()
                           .sort((a, b) => b.cajas - a.cajas)
                           .map((row) => {
-                            const dias = diasAntiguedad(row.fechaRecepcion)
+                            // Antigüedad sobre la Fecha de Embalaje (compras.md
+                            // §4.10); cae a la fecha de recepción solo en
+                            // PalletLinea históricas sin fechaEmbalaje. Antes
+                            // usaba fechaRecepcion (= creadoEn) y salía 0 días.
+                            const dias = diasAntiguedad(row.fechaEmbalaje ?? row.fechaRecepcion)
                             const bucket = bucketAntiguedad(dias)
                             const disabled = !puedeEscribir || updateMutation.isPending
                             // Solo la primera fila donde aparece este pallet
@@ -386,6 +421,11 @@ export function GestionPalletsClient() {
                                     </TableCell>
                                   </>
                                 )}
+                                {/* Fecha de Embalaje y Packing son por línea (no por pallet) — siempre visibles. */}
+                                <TableCell className='text-muted-foreground whitespace-nowrap'>
+                                  {row.fechaEmbalaje ? formatFechaCorta(row.fechaEmbalaje) : '—'}
+                                </TableCell>
+                                <TableCell className='text-muted-foreground'>{row.packing?.descripcion ?? '—'}</TableCell>
                               </TableRow>
                             )
                           })}
