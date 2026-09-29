@@ -5,6 +5,7 @@ import { validarYCompletarLineas } from './proforma.service.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
 import { mapFacturaExportacionA110 } from '../../finanzas/facturacion/mappers/factura-exportacion.mapper.js'
+import { factorFob, resolverFleteSeguro, unitarioFob } from './clausula-flete-seguro.js'
 import * as repo from './factura-exportacion.repository.js'
 import type {
   DimensionProforma,
@@ -66,6 +67,15 @@ export async function crearBorradorDesdeProforma(proformaId: number, userId: str
   }))
   const montoTotal = sumarMontos(lineas.map((l) => l.montoLinea))
 
+  // Flete/Seguro se heredan de la Proforma (ya validados al emitirla) como
+  // punto de partida; siguen siendo editables mientras la Factura esté en
+  // BORRADOR. Se revalidan igual contra la cláusula, por si sus flags o el
+  // total cambiaron entre la emisión de la Proforma y la creación de la Factura.
+  const { montoFlete, montoSeguro } = resolverFleteSeguro(embarque.notaVenta.clausulaVenta, montoTotal, {
+    montoFlete: proforma.montoFlete == null ? null : Number(proforma.montoFlete),
+    montoSeguro: proforma.montoSeguro == null ? null : Number(proforma.montoSeguro),
+  })
+
   try {
     return await repo.crearBorrador(
       {
@@ -77,6 +87,8 @@ export async function crearBorradorDesdeProforma(proformaId: number, userId: str
         condicionPagoId: proforma.condicionPagoId,
         dimensiones: proforma.dimensionesAgrupacion,
         montoTotal,
+        montoFlete,
+        montoSeguro,
         lineas,
       },
       userId,
@@ -106,7 +118,24 @@ export async function actualizarBorrador(id: number, body: FacturaExportacionAct
   )
   const montoTotal = sumarMontos(lineas.map((l) => l.montoLinea))
 
-  return repo.actualizarBorrador(id, body.dimensiones as DimensionProforma[], montoTotal, lineas, userId)
+  // Flete/Seguro según la cláusula de venta (flags en la Nota de Venta del
+  // Embarque). Se exigen solo si la cláusula lo indica.
+  const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(factura.embarqueId))
+  const { montoFlete, montoSeguro } = resolverFleteSeguro(embarque.notaVenta.clausulaVenta, montoTotal, {
+    montoFlete: body.montoFlete,
+    montoSeguro: body.montoSeguro,
+  })
+
+  return repo.actualizarBorrador(
+    id,
+    body.dimensiones as DimensionProforma[],
+    montoTotal,
+    montoFlete,
+    montoSeguro,
+    lineas,
+    userId,
+  )
 }
 
 // ─── Generación de Cuotas (CB5/CB6) ──────────────────────────────────────────
@@ -185,6 +214,17 @@ export async function emitir(id: number, userId: string) {
   const nv = embarque.notaVenta
   const monedaAduana = nv.moneda.descripcionExtranjera || nv.moneda.descripcion || nv.moneda.codigo
 
+  // Revalida Flete/Seguro contra la cláusula al emitir (última barrera antes de
+  // timbrar). El total de la factura (montoTotal) NO cambia — es el valor
+  // cláusula/CIF y va como TotClauVenta. Flete/Seguro son un monto cerrado
+  // dentro de él: el detalle de mercadería se timbra a valor FOB.
+  const montoTotalNum = Number(factura.montoTotal)
+  const { montoFlete, montoSeguro } = resolverFleteSeguro(nv.clausulaVenta, montoTotalNum, {
+    montoFlete: factura.montoFlete == null ? null : Number(factura.montoFlete),
+    montoSeguro: factura.montoSeguro == null ? null : Number(factura.montoSeguro),
+  })
+  const factor = factorFob(montoTotalNum, montoFlete, montoSeguro)
+
   const payload = mapFacturaExportacionA110({
     fechaEmision: new Date(),
     monedaAduana,
@@ -205,12 +245,16 @@ export async function emitir(id: number, userId: string) {
     lineas: factura.lineas.map((l) => ({
       descripcion: l.descripcion,
       cantidadCajas: l.cantidadCajas,
-      precioUnitario: Number(l.precioUnitario),
+      // Detalle a valor FOB: el precio unitario cláusula/CIF se lleva a FOB con
+      // el factor (cuando no hay flete/seguro, factor = 1 y no cambia).
+      precioUnitario: unitarioFob(Number(l.precioUnitario), factor),
     })),
     aduana: {
       codModVenta: nv.modalidadVenta?.codigo ?? null,
       codClauVenta: nv.clausulaVenta?.codigo ?? null,
-      totalClausulaVenta: Number(factura.montoTotal),
+      totalClausulaVenta: montoTotalNum,
+      montoFlete,
+      montoSeguro,
       codViaTransp: nv.tipoEmbarque?.codigo ?? null,
       codPtoEmbarque: embarque.puertoZarpe?.codigo ?? null,
       codPtoDesembarque: nv.puertoDestino?.codigo ?? null,

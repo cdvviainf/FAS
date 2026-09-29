@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useAppForm, useFormFields } from '@/components/ui/tanstack-form'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Sheet,
   SheetContent,
@@ -32,7 +33,9 @@ const parametroSchema = z.object({
   codigo: z.string().min(1, 'Requerido').max(50).trim(),
   descripcion: z.string().min(1, 'Requerido').max(200).trim(),
   descripcionExtranjera: z.string().max(200).trim().optional(),
-  tipoParametroId: z.coerce.number().int().min(1, 'Selecciona un tipo de parámetro')
+  tipoParametroId: z.coerce.number().int().min(1, 'Selecciona un tipo de parámetro'),
+  requiereFlete: z.boolean(),
+  requiereSeguro: z.boolean()
 })
 
 type ParametroFormValues = z.infer<typeof parametroSchema>
@@ -40,6 +43,8 @@ type ParametroFormValues = z.infer<typeof parametroSchema>
 interface ParametroItem extends MantenedorSimple {
   tipoParametroId?: number
   tipoParametro?: { id: number; descripcion: string }
+  requiereFlete?: boolean
+  requiereSeguro?: boolean
 }
 
 interface ParametroFormSheetProps {
@@ -84,7 +89,9 @@ export function ParametroFormSheet({ item, open, onOpenChange }: ParametroFormSh
       codigo: item?.codigo ?? '',
       descripcion: item?.descripcion ?? '',
       descripcionExtranjera: item?.descripcionExtranjera ?? '',
-      tipoParametroId: item?.tipoParametroId ?? 0
+      tipoParametroId: item?.tipoParametroId ?? 0,
+      requiereFlete: item?.requiereFlete ?? false,
+      requiereSeguro: item?.requiereSeguro ?? false
     } as ParametroFormValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validators: { onSubmit: parametroSchema as any },
@@ -159,6 +166,40 @@ export function ParametroFormSheet({ item, open, onOpenChange }: ParametroFormSh
                   </div>
                 )}
               </form.Field>
+
+              {/* Solo aplican cuando el parámetro es una CLÁUSULA DE VENTA
+                  (Incoterm). Determinan si al facturar/proformar con esta
+                  cláusula se exige el monto de Flete y/o Seguro. */}
+              <div className='space-y-3 rounded-lg border p-3'>
+                <p className='text-xs text-muted-foreground'>
+                  Solo para cláusulas de venta (Incoterm): exigir estos montos al emitir Proforma/Factura.
+                  Ej: CIF → Flete y Seguro · C+F → solo Flete · FOB → ninguno.
+                </p>
+                <form.Field name='requiereFlete'>
+                  {(field) => (
+                    <div className='flex items-center gap-3'>
+                      <Switch
+                        id='requiereFlete'
+                        checked={!!field.state.value}
+                        onCheckedChange={(v) => field.handleChange(v)}
+                      />
+                      <Label htmlFor='requiereFlete' className='font-medium'>Requiere Flete</Label>
+                    </div>
+                  )}
+                </form.Field>
+                <form.Field name='requiereSeguro'>
+                  {(field) => (
+                    <div className='flex items-center gap-3'>
+                      <Switch
+                        id='requiereSeguro'
+                        checked={!!field.state.value}
+                        onCheckedChange={(v) => field.handleChange(v)}
+                      />
+                      <Label htmlFor='requiereSeguro' className='font-medium'>Requiere Seguro</Label>
+                    </div>
+                  )}
+                </form.Field>
+              </div>
             </form.Form>
           </form.AppForm>
         </div>

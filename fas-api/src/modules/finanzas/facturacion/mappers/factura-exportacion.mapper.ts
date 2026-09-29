@@ -32,7 +32,11 @@ export interface LineaFacturaExportacion {
 export interface AduanaFacturaExportacion {
   codModVenta: string | null // Parametro modalidadVenta.codigo
   codClauVenta: string | null // Parametro clausulaVenta.codigo (incoterm)
-  totalClausulaVenta: number // monto FOB/cláusula = montoTotal de la factura
+  totalClausulaVenta: number // valor cláusula/CIF = montoTotal de la factura
+  // Flete y Seguro de la cláusula (CIF → ambos, C+F/CFR → solo flete, FOB →
+  // ninguno). Monto cerrado dentro de TotClauVenta; el detalle va a valor FOB.
+  montoFlete: number | null
+  montoSeguro: number | null
   codViaTransp: string | null // según tipoEmbarque (marítimo/aéreo/terrestre)
   codPtoEmbarque: string | null // Puerto de zarpe .codigo
   codPtoDesembarque: string | null // Puerto de destino .codigo
@@ -60,6 +64,8 @@ function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
     ...(a.codModVenta ? { CodModVenta: a.codModVenta } : {}),
     ...(a.codClauVenta ? { CodClauVenta: a.codClauVenta } : {}),
     TotClauVenta: a.totalClausulaVenta,
+    ...(a.montoFlete != null ? { MntFlete: a.montoFlete } : {}),
+    ...(a.montoSeguro != null ? { MntSeguro: a.montoSeguro } : {}),
     ...(a.codViaTransp ? { CodViaTransp: a.codViaTransp } : {}),
     ...(a.codPtoEmbarque ? { CodPtoEmbarque: a.codPtoEmbarque } : {}),
     ...(a.codPtoDesembarque ? { CodPtoDesemb: a.codPtoDesembarque } : {}),

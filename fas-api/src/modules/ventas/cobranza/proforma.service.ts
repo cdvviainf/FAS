@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { precioNVParaLineaPallet } from '../embarques/embarques.comparacion.js'
 import { siguienteCodigo } from '../../config/prefijos-codigo/prefijos-codigo.service.js'
+import { resolverFleteSeguro } from './clausula-flete-seguro.js'
 import * as repo from './proforma.repository.js'
 import type { DimensionProforma, ProformaEmitirInput, ProformaLineaInput, ProformasListFilters } from './proforma.types.js'
 
@@ -137,6 +138,17 @@ export async function sugerirLineas(embarqueId: number, dimensiones: DimensionPr
   }))
 }
 
+// Cláusula de venta (Incoterm) del Embarque + sus flags de Flete/Seguro — la
+// usa el formulario de emisión de Proforma para mostrar/exigir esos montos.
+export async function obtenerClausulaEmbarque(embarqueId: number) {
+  const embarque = await repo.getEmbarqueParaProforma(embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
+  const c = embarque.notaVenta.clausulaVenta
+  return c
+    ? { descripcion: c.descripcion, requiereFlete: c.requiereFlete, requiereSeguro: c.requiereSeguro }
+    : null
+}
+
 // FAS-PROF-EXP-001 (QA rondas 1-2, ALTA): re-deriva cada línea contra el
 // grupo canónico recién recalculado — nunca confía en `cantidadCajas` ni en
 // los IDs de especie/variedad/artículo/calibre/categoría/marca que manda el
@@ -214,6 +226,13 @@ export async function emitirProforma(embarqueId: number, body: ProformaEmitirInp
   const lineas = await validarYCompletarLineas(embarqueId, body.dimensiones, body.lineas)
   const montoTotal = sumarMontos(lineas.map((l) => l.montoLinea))
 
+  // Flete/Seguro según la cláusula de venta de la Nota de Venta. Se exigen solo
+  // si la cláusula lo indica; son un monto cerrado dentro de `montoTotal`.
+  const { montoFlete, montoSeguro } = resolverFleteSeguro(embarque.notaVenta.clausulaVenta, montoTotal, {
+    montoFlete: body.montoFlete,
+    montoSeguro: body.montoSeguro,
+  })
+
   try {
     return await repo.crearProforma(
       {
@@ -223,6 +242,8 @@ export async function emitirProforma(embarqueId: number, body: ProformaEmitirInp
         monedaId: embarque.notaVenta.monedaId,
         condicionPagoId: embarque.notaVenta.condicionPagoId,
         montoTotal,
+        montoFlete,
+        montoSeguro,
       },
       { idioma: body.idioma, dimensiones: body.dimensiones, lineas },
       userId,

@@ -46,7 +46,18 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   const [regrupando, setRegrupando] = useState(false)
   const [confirmarEmision, setConfirmarEmision] = useState(false)
 
+  const clausula = factura.embarque.notaVenta?.clausulaVenta ?? null
+  const requiereFlete = clausula?.requiereFlete ?? false
+  const requiereSeguro = clausula?.requiereSeguro ?? false
+  const [montoFlete, setMontoFlete] = useState<string>(factura.montoFlete ?? '')
+  const [montoSeguro, setMontoSeguro] = useState<string>(factura.montoSeguro ?? '')
+
   const montoTotal = lineas.reduce((acc, l) => acc + l.montoLinea, 0)
+  // Valor FOB de la mercadería = total (cláusula/CIF) − flete − seguro. Es lo
+  // que se timbra en el detalle del DTE; el total sigue siendo el valor CIF.
+  const fleteNum = requiereFlete ? Number(montoFlete) || 0 : 0
+  const seguroNum = requiereSeguro ? Number(montoSeguro) || 0 : 0
+  const subtotalFob = Math.round((montoTotal - fleteNum - seguroNum) * 100) / 100
 
   async function toggleDimension(dim: DimensionProforma, marcado: boolean) {
     const nuevas = marcado ? [...dimensiones, dim] : dimensiones.filter((d) => d !== dim)
@@ -90,6 +101,8 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
           cantidadCajas: l.cantidadCajas,
           precioUnitario: l.precioUnitario,
         })),
+        montoFlete: requiereFlete ? Number(montoFlete) || 0 : null,
+        montoSeguro: requiereSeguro ? Number(montoSeguro) || 0 : null,
       }),
     onSuccess: () => {
       toast.success('Factura guardada')
@@ -110,6 +123,22 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
     onError: (e: Error) => toast.error(e.message || 'Error al emitir el DTE'),
     onSettled: () => setConfirmarEmision(false),
   })
+
+  function handleEmitir() {
+    if (requiereFlete && (!montoFlete || Number(montoFlete) <= 0)) {
+      toast.error('La cláusula de venta exige informar el monto de Flete')
+      return
+    }
+    if (requiereSeguro && (!montoSeguro || Number(montoSeguro) <= 0)) {
+      toast.error('La cláusula de venta exige informar el monto de Seguro')
+      return
+    }
+    if ((requiereFlete || requiereSeguro) && subtotalFob <= 0) {
+      toast.error('El Flete y el Seguro no pueden igualar ni superar el valor de venta')
+      return
+    }
+    setConfirmarEmision(true)
+  }
 
   return (
     <div className='max-w-3xl space-y-4'>
@@ -202,12 +231,81 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
         </CardContent>
       </Card>
 
+      {(requiereFlete || requiereSeguro) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className='text-sm'>
+              Cláusula de venta{clausula?.descripcion ? ` — ${clausula.descripcion}` : ''}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className='space-y-3'>
+            <p className='text-muted-foreground text-xs'>
+              El Flete y el Seguro son un monto cerrado dentro del total: restan al valor de venta para obtener el
+              valor FOB de la mercadería (lo que se timbra en el detalle del DTE). El total y las cuotas siguen sobre el
+              valor de la cláusula.
+            </p>
+            <div className='flex flex-wrap gap-4'>
+              {requiereFlete && (
+                <div className='space-y-1.5'>
+                  <label className='text-sm font-medium'>Flete ({factura.moneda.codigo}) *</label>
+                  <Input
+                    type='number'
+                    min={0}
+                    step='0.01'
+                    value={montoFlete}
+                    onChange={(e) => setMontoFlete(e.target.value)}
+                    className='h-8 w-40 text-right'
+                    disabled={!puedeEscribir}
+                  />
+                </div>
+              )}
+              {requiereSeguro && (
+                <div className='space-y-1.5'>
+                  <label className='text-sm font-medium'>Seguro ({factura.moneda.codigo}) *</label>
+                  <Input
+                    type='number'
+                    min={0}
+                    step='0.01'
+                    value={montoSeguro}
+                    onChange={(e) => setMontoSeguro(e.target.value)}
+                    className='h-8 w-40 text-right'
+                    disabled={!puedeEscribir}
+                  />
+                </div>
+              )}
+            </div>
+            <div className='space-y-1 border-t pt-2 text-sm tabular-nums'>
+              <div className='flex justify-between'>
+                <span className='text-muted-foreground'>Valor FOB (mercadería)</span>
+                <span>{factura.moneda.codigo} {formatMonto(subtotalFob)}</span>
+              </div>
+              {requiereFlete && (
+                <div className='flex justify-between'>
+                  <span className='text-muted-foreground'>Flete</span>
+                  <span>{factura.moneda.codigo} {formatMonto(fleteNum)}</span>
+                </div>
+              )}
+              {requiereSeguro && (
+                <div className='flex justify-between'>
+                  <span className='text-muted-foreground'>Seguro</span>
+                  <span>{factura.moneda.codigo} {formatMonto(seguroNum)}</span>
+                </div>
+              )}
+              <div className='flex justify-between font-semibold'>
+                <span>Total (valor cláusula)</span>
+                <span>{factura.moneda.codigo} {formatMonto(montoTotal)}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {puedeEscribir && (
         <div className='flex gap-2'>
           <Button variant='outline' onClick={() => guardar.mutate()} isLoading={guardar.isPending} disabled={regrupando}>
             <Icons.check className='mr-2 h-4 w-4' /> Guardar
           </Button>
-          <Button onClick={() => setConfirmarEmision(true)} disabled={regrupando || lineas.length === 0}>
+          <Button onClick={handleEmitir} disabled={regrupando || lineas.length === 0}>
             <Icons.billing className='mr-2 h-4 w-4' /> Emitir DTE
           </Button>
         </div>

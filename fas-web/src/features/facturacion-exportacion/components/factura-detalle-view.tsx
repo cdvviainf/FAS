@@ -10,6 +10,16 @@ import type { FacturaExportacion } from '../types'
 // Vista de solo lectura de una Factura de Exportación ya emitida (o anulada).
 export function FacturaDetalleView({ factura }: { factura: FacturaExportacion }) {
   const emitida = factura.estado === 'EMITIDA'
+  // Desglose de la cláusula de venta: el flete/seguro restan al valor de venta
+  // para dar el valor FOB de la mercadería (lo que se timbra en el detalle).
+  const montoTotal = Number(factura.montoTotal)
+  const montoFlete = factura.montoFlete == null ? null : Number(factura.montoFlete)
+  const montoSeguro = factura.montoSeguro == null ? null : Number(factura.montoSeguro)
+  const tieneDesglose = montoFlete != null || montoSeguro != null
+  const reduccion = (montoFlete ?? 0) + (montoSeguro ?? 0)
+  const factor = montoTotal > 0 && reduccion > 0 ? (montoTotal - reduccion) / montoTotal : 1
+  const subtotalFob = Math.round((montoTotal - reduccion) * 100) / 100
+  const moneda = factura.moneda.codigo
   return (
     <div className='max-w-3xl space-y-4'>
       <div>
@@ -46,16 +56,34 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
                 <TableRow key={l.id}>
                   <TableCell>{l.descripcion}</TableCell>
                   <TableCell className='text-right tabular-nums'>{formatMonto(l.cantidadCajas, 0)}</TableCell>
-                  <TableCell className='text-right tabular-nums'>{factura.moneda.codigo} {formatMonto(l.precioUnitario)}</TableCell>
-                  <TableCell className='text-right tabular-nums'>{factura.moneda.codigo} {formatMonto(l.montoLinea)}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(Number(l.precioUnitario) * factor, 4)}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(Number(l.montoLinea) * factor)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
             <TableFooter>
               <TableRow>
-                <TableCell colSpan={3}>Total</TableCell>
-                <TableCell className='text-right tabular-nums'>{factura.moneda.codigo} {formatMonto(factura.montoTotal)}</TableCell>
+                <TableCell colSpan={3}>{tieneDesglose ? 'Valor FOB (mercadería)' : 'Total'}</TableCell>
+                <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(tieneDesglose ? subtotalFob : montoTotal)}</TableCell>
               </TableRow>
+              {montoFlete != null && (
+                <TableRow>
+                  <TableCell colSpan={3}>Flete</TableCell>
+                  <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(montoFlete)}</TableCell>
+                </TableRow>
+              )}
+              {montoSeguro != null && (
+                <TableRow>
+                  <TableCell colSpan={3}>Seguro</TableCell>
+                  <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(montoSeguro)}</TableCell>
+                </TableRow>
+              )}
+              {tieneDesglose && (
+                <TableRow>
+                  <TableCell colSpan={3} className='font-semibold'>Total (valor cláusula)</TableCell>
+                  <TableCell className='text-right font-semibold tabular-nums'>{moneda} {formatMonto(montoTotal)}</TableCell>
+                </TableRow>
+              )}
             </TableFooter>
           </Table>
         </CardContent>

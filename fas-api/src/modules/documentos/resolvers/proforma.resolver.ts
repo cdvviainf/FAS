@@ -5,7 +5,12 @@ import {
   getProformaById,
 } from '../../ventas/cobranza/proforma.repository.js'
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
+import { factorFob, unitarioFob } from '../../ventas/cobranza/clausula-flete-seguro.js'
 import type { ProformaPdfPayload } from '../schemas/proforma.schema.js'
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
 
 // Resolver de la Proforma de Exportación (cobranza.md, 2026-09-24). `id` es
 // el id de la Proforma (documento ya emitido, no del Embarque).
@@ -59,6 +64,14 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
     }
   })
 
+  // Desglose de la cláusula de venta. montoTotal es el valor cláusula/CIF; el
+  // flete y el seguro son un monto cerrado dentro de él y el resto es FOB.
+  const montoTotal = Number(proforma.montoTotal)
+  const montoFlete = proforma.montoFlete == null ? null : Number(proforma.montoFlete)
+  const montoSeguro = proforma.montoSeguro == null ? null : Number(proforma.montoSeguro)
+  const factor = factorFob(montoTotal, montoFlete, montoSeguro)
+  const subtotalFob = round2(montoTotal - (montoFlete ?? 0) - (montoSeguro ?? 0))
+
   return {
     empresa: {
       razonSocial: empresa?.razonSocial ?? '—',
@@ -77,13 +90,19 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
     },
     moneda: proforma.moneda.codigo,
     condicionPago: proforma.condicionPago?.descripcion ?? null,
+    // Detalle a valor FOB: si la cláusula exige Flete/Seguro, el precio unitario
+    // cláusula/CIF se lleva a FOB con el factor. Sin flete/seguro el factor es 1
+    // y las líneas quedan idénticas al valor cláusula.
     lineas: proforma.lineas.map((l) => ({
       descripcion: l.descripcion,
       cantidadCajas: l.cantidadCajas,
-      precioUnitario: Number(l.precioUnitario),
-      montoLinea: Number(l.montoLinea),
+      precioUnitario: unitarioFob(Number(l.precioUnitario), factor),
+      montoLinea: round2(Number(l.montoLinea) * factor),
     })),
-    montoTotal: Number(proforma.montoTotal),
+    montoFlete,
+    montoSeguro,
+    subtotalFob,
+    montoTotal,
     vencimientosEstimados,
   }
 }

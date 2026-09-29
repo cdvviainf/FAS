@@ -30,6 +30,9 @@ const L = {
     cantidad: 'Boxes',
     precioUnitario: 'Unit Price',
     monto: 'Amount',
+    subtotalFob: 'FOB Value (goods)',
+    flete: 'Freight',
+    seguro: 'Insurance',
     total: 'Total',
     vencimientos: 'Estimated Payment Schedule',
     cuota: 'Installment',
@@ -58,6 +61,9 @@ const L = {
     cantidad: 'Cajas',
     precioUnitario: 'Precio Unitario',
     monto: 'Monto',
+    subtotalFob: 'Valor FOB (mercadería)',
+    flete: 'Flete',
+    seguro: 'Seguro',
     total: 'Total',
     vencimientos: 'Tabla de Vencimientos Estimada',
     cuota: 'Cuota',
@@ -77,6 +83,9 @@ const L = {
 
 export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPayload; marcaAgua?: 'BORRADOR' | 'COPIA'; marcaAguaFecha?: string }) {
   const t = L[d.idioma]
+  // Solo cuando la cláusula de venta exige Flete y/o Seguro se muestra el
+  // desglose FOB; en FOB puro el documento queda idéntico a antes.
+  const tieneDesgloseClausula = d.montoFlete != null || d.montoSeguro != null
 
   const columnasLineas: ColumnaTabla<Linea>[] = [
     { titulo: t.detalle, render: (l) => l.descripcion },
@@ -133,10 +142,21 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
         titulo={t.detalle}
         filas={d.lineas}
         columnas={columnasLineas}
-        totales={['', '', t.total, fmt.moneda(d.montoTotal, d.moneda)]}
+        totales={['', '', tieneDesgloseClausula ? t.subtotalFob : t.total, fmt.moneda(tieneDesgloseClausula ? d.subtotalFob : d.montoTotal, d.moneda)]}
       />
 
-      <BloqueTotales lineas={[]} neto={{ etiqueta: t.total, valor: fmt.moneda(d.montoTotal, d.moneda) }} />
+      <BloqueTotales
+        lineas={
+          tieneDesgloseClausula
+            ? [
+                { etiqueta: t.subtotalFob, valor: fmt.moneda(d.subtotalFob, d.moneda) },
+                ...(d.montoFlete != null ? [{ etiqueta: t.flete, valor: fmt.moneda(d.montoFlete, d.moneda) }] : []),
+                ...(d.montoSeguro != null ? [{ etiqueta: t.seguro, valor: fmt.moneda(d.montoSeguro, d.moneda) }] : []),
+              ]
+            : []
+        }
+        neto={{ etiqueta: t.total, valor: fmt.moneda(d.montoTotal, d.moneda) }}
+      />
 
       {d.vencimientosEstimados.length > 0 && (
         <TablaLineas titulo={t.vencimientos} filas={d.vencimientosEstimados} columnas={columnasVencimientos} />

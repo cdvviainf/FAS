@@ -26,6 +26,8 @@ const base = {
     codModVenta: '1',
     codClauVenta: '3',
     totalClausulaVenta: 1950,
+    montoFlete: null,
+    montoSeguro: null,
     codViaTransp: '1',
     codPtoEmbarque: '901',
     codPtoDesembarque: '999',
@@ -63,6 +65,23 @@ describe('mapFacturaExportacionA110', () => {
     expect(dte.Detalle).toHaveLength(2)
     expect(dte.Detalle[0]).toMatchObject({ NmbItem: 'Uva de mesa - Thompson', QtyItem: 100, PrcItem: 12.5, IndExe: 1 })
     expect(dte.Detalle[1]).toMatchObject({ QtyItem: 50, PrcItem: 14 })
+  })
+
+  it('incluye MntFlete/MntSeguro cuando la cláusula los informa', () => {
+    const dte = mapFacturaExportacionA110({
+      ...base,
+      aduana: { ...base.aduana, montoFlete: 4000, montoSeguro: 1000 },
+    })
+    const aduana = (dte.Encabezado as Record<string, unknown>).Aduana as Record<string, unknown>
+    expect(aduana.MntFlete).toBe(4000)
+    expect(aduana.MntSeguro).toBe(1000)
+  })
+
+  it('omite MntFlete/MntSeguro cuando son nulos (ej. FOB)', () => {
+    const dte = mapFacturaExportacionA110(base)
+    const aduana = (dte.Encabezado as Record<string, unknown>).Aduana as Record<string, unknown>
+    expect(aduana).not.toHaveProperty('MntFlete')
+    expect(aduana).not.toHaveProperty('MntSeguro')
   })
 
   it('omite los códigos de Aduana nulos en vez de enviarlos vacíos', () => {

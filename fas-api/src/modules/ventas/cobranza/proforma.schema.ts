@@ -34,6 +34,11 @@ export const proformaEmitirSchema = z.object({
   dimensiones: z.array(dimensionSchema).default([]),
   idioma: z.enum(['EN', 'ES']).default('EN'),
   lineas: z.array(lineaSchema).min(1, 'Agrega al menos una línea'),
+  // Flete/Seguro de la cláusula de venta (Incoterm). Solo se exigen si la
+  // cláusula lo indica (validación server-side, no aquí, porque depende de un
+  // dato de la Nota de Venta). No negativos; el service redondea a 2 decimales.
+  montoFlete: z.number().min(0).max(9_999_999_999).optional().nullable(),
+  montoSeguro: z.number().min(0).max(9_999_999_999).optional().nullable(),
 })
 
 export const proformasListQuerySchema = z.object({

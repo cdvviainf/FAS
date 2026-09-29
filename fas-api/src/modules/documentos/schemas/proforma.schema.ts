@@ -22,6 +22,9 @@ export const proformaPdfPayloadSchema = z.object({
   }),
   moneda: z.string(), // código, ej. "USD"
   condicionPago: z.string().nullable(), // descripción de la CondicionPago heredada
+  // precioUnitario/montoLinea van a valor FOB cuando la cláusula exige Flete/
+  // Seguro (unitario × (montoTotal − flete − seguro) / montoTotal); si no,
+  // coinciden con el valor cláusula. montoTotal es siempre el valor cláusula/CIF.
   lineas: z.array(
     z.object({
       descripcion: z.string(),
@@ -30,6 +33,11 @@ export const proformaPdfPayloadSchema = z.object({
       montoLinea: z.number(),
     }),
   ),
+  // Desglose de la cláusula de venta (Incoterm). Null cuando la cláusula no lo
+  // exige (ej. FOB). subtotalFob = montoTotal − flete − seguro (mercadería).
+  montoFlete: z.number().nullable(),
+  montoSeguro: z.number().nullable(),
+  subtotalFob: z.number(),
   montoTotal: z.number(),
   // Tabla de vencimientos estimada (D4: "calculada al vuelo, sin persistir
   // Cuota") — a partir de las cuotas snapshoteadas de la Nota de Venta

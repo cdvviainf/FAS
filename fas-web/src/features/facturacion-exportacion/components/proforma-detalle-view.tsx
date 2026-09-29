@@ -26,6 +26,18 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
   const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
 
+  // Desglose de la cláusula de venta. montoTotal es el valor cláusula/CIF; el
+  // flete y el seguro restan para obtener el valor FOB de la mercadería. Cuando
+  // la cláusula los exige, el detalle se muestra a valor FOB (igual que el PDF).
+  const montoTotal = Number(proforma.montoTotal)
+  const montoFlete = proforma.montoFlete == null ? null : Number(proforma.montoFlete)
+  const montoSeguro = proforma.montoSeguro == null ? null : Number(proforma.montoSeguro)
+  const tieneDesglose = montoFlete != null || montoSeguro != null
+  const reduccion = (montoFlete ?? 0) + (montoSeguro ?? 0)
+  const factor = montoTotal > 0 && reduccion > 0 ? (montoTotal - reduccion) / montoTotal : 1
+  const subtotalFob = Math.round((montoTotal - reduccion) * 100) / 100
+  const moneda = proforma.moneda.codigo
+
   const anular = useMutation({
     mutationFn: () => proformaService.anular(proforma.id),
     onSuccess: () => {
@@ -115,16 +127,34 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
                 <TableRow key={l.id}>
                   <TableCell>{l.descripcion}</TableCell>
                   <TableCell className='text-right tabular-nums'>{formatMonto(l.cantidadCajas, 0)}</TableCell>
-                  <TableCell className='text-right tabular-nums'>{proforma.moneda.codigo} {formatMonto(l.precioUnitario)}</TableCell>
-                  <TableCell className='text-right tabular-nums'>{proforma.moneda.codigo} {formatMonto(l.montoLinea)}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(Number(l.precioUnitario) * factor, 4)}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(Number(l.montoLinea) * factor)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
             <TableFooter>
               <TableRow>
-                <TableCell colSpan={3}>Total</TableCell>
-                <TableCell className='text-right tabular-nums'>{proforma.moneda.codigo} {formatMonto(proforma.montoTotal)}</TableCell>
+                <TableCell colSpan={3}>{tieneDesglose ? 'Valor FOB (mercadería)' : 'Total'}</TableCell>
+                <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(tieneDesglose ? subtotalFob : montoTotal)}</TableCell>
               </TableRow>
+              {montoFlete != null && (
+                <TableRow>
+                  <TableCell colSpan={3}>Flete</TableCell>
+                  <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(montoFlete)}</TableCell>
+                </TableRow>
+              )}
+              {montoSeguro != null && (
+                <TableRow>
+                  <TableCell colSpan={3}>Seguro</TableCell>
+                  <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(montoSeguro)}</TableCell>
+                </TableRow>
+              )}
+              {tieneDesglose && (
+                <TableRow>
+                  <TableCell colSpan={3} className='font-semibold'>Total (valor cláusula)</TableCell>
+                  <TableCell className='text-right font-semibold tabular-nums'>{moneda} {formatMonto(montoTotal)}</TableCell>
+                </TableRow>
+              )}
             </TableFooter>
           </Table>
         </CardContent>

@@ -1129,6 +1129,12 @@ model Parametro {
   tipoParametroId       Int
   // FK compuesta (empresaId, tipoParametroId) -> TipoParametro(empresaId, id).
   tipoParametro         TipoParametro @relation(fields: [empresaId, tipoParametroId], references: [empresaId, id])
+  // Aplican solo cuando el Parametro es una CLÁUSULA DE VENTA (Incoterm).
+  // Determinan si, al facturar/proformar con esta cláusula, se exige informar
+  // el monto de Flete y/o Seguro (ej. CIF → ambos, C+F/CFR → solo flete,
+  // FOB → ninguno). En cualquier otro tipo de Parametro quedan en false.
+  requiereFlete         Boolean       @default(false)
+  requiereSeguro        Boolean       @default(false)
   bloqueado             Boolean       @default(false)
   creadoEn              DateTime      @default(now())
   creadoPor             String
@@ -3281,7 +3287,15 @@ model Proforma {
 
   idioma                String              @default("EN") // selector EN/ES al emitir
   dimensionesAgrupacion DimensionProforma[] // qué se sumó encima de Especie (siempre implícita)
-  montoTotal            Decimal             @db.Decimal(14, 2) // = Σ ProformaLinea.montoLinea
+  montoTotal            Decimal             @db.Decimal(14, 2) // = Σ ProformaLinea.montoLinea (valor cláusula/CIF, NO baja por flete/seguro)
+
+  // Flete y Seguro de la cláusula de venta (Incoterm). Solo se informan cuando
+  // la cláusula lo exige (Parametro.requiereFlete/requiereSeguro). Son un monto
+  // cerrado DENTRO del total: restan al valor de venta para obtener el valor
+  // FOB de la mercadería (unitario FOB = unitario × (montoTotal − flete −
+  // seguro) / montoTotal). El total y las cuotas siguen sobre `montoTotal`.
+  montoFlete            Decimal?            @db.Decimal(14, 2)
+  montoSeguro           Decimal?            @db.Decimal(14, 2)
 
   estado       EstadoProforma @default(EMITIDA)
   fechaEmision DateTime       @default(now())
@@ -3392,7 +3406,15 @@ model FacturaExportacion {
   condicionPago   CondicionPago? @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
 
   dimensionesAgrupacion DimensionProforma[] // reutiliza el enum de agrupación de Proforma
-  montoTotal            Decimal             @db.Decimal(14, 2) // = Σ FacturaExportacionLinea.montoLinea
+  montoTotal            Decimal             @db.Decimal(14, 2) // = Σ FacturaExportacionLinea.montoLinea (valor cláusula/CIF)
+
+  // Flete y Seguro de la cláusula de venta (Incoterm) — mismo criterio que
+  // Proforma: monto cerrado dentro del total que resta al valor de venta para
+  // obtener el valor FOB de la mercadería. Se hereda de la Proforma al crear el
+  // borrador y es editable mientras la Factura esté en BORRADOR. En el DTE 110
+  // van como MntFlete/MntSeguro; TotClauVenta = montoTotal (CIF).
+  montoFlete            Decimal?            @db.Decimal(14, 2)
+  montoSeguro           Decimal?            @db.Decimal(14, 2)
 
   estado       EstadoFacturaExportacion @default(BORRADOR)
   fechaEmision DateTime? // se fija al timbrar el DTE (referencia FACTURA de las cuotas)

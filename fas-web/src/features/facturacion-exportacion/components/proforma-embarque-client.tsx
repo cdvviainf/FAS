@@ -36,6 +36,8 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   const [dimensiones, setDimensiones] = useState<DimensionProforma[]>([])
   const [idioma, setIdioma] = useState<'EN' | 'ES'>('EN')
   const [lineas, setLineas] = useState<ProformaLineaSugerida[]>([])
+  const [montoFlete, setMontoFlete] = useState<string>('')
+  const [montoSeguro, setMontoSeguro] = useState<string>('')
 
   const { data: sugerencia, isPending: cargandoSugerencia } = useQuery({
     queryKey: ['proforma-sugerencia', embarqueId, dimensiones],
@@ -47,6 +49,10 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLineas(sugerencia?.data ?? [])
   }, [sugerencia])
+
+  const clausula = sugerencia?.clausula ?? null
+  const requiereFlete = clausula?.requiereFlete ?? false
+  const requiereSeguro = clausula?.requiereSeguro ?? false
 
   function toggleDimension(dim: DimensionProforma, marcado: boolean) {
     setDimensiones((prev) => (marcado ? [...prev, dim] : prev.filter((d) => d !== dim)))
@@ -65,6 +71,9 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   }
 
   const montoTotal = lineas.reduce((acc, l) => acc + l.montoLinea, 0)
+  const fleteNum = requiereFlete ? Number(montoFlete) || 0 : 0
+  const seguroNum = requiereSeguro ? Number(montoSeguro) || 0 : 0
+  const subtotalFob = Math.round((montoTotal - fleteNum - seguroNum) * 100) / 100
 
   const emitir = useMutation({
     mutationFn: () =>
@@ -82,6 +91,8 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
           cantidadCajas: l.cantidadCajas,
           precioUnitario: l.precioUnitario,
         })),
+        montoFlete: requiereFlete ? Number(montoFlete) || 0 : null,
+        montoSeguro: requiereSeguro ? Number(montoSeguro) || 0 : null,
       }),
     onSuccess: () => {
       toast.success('Proforma emitida')
@@ -94,6 +105,18 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   function handleEmitir() {
     if (lineas.length === 0) {
       toast.error('No hay líneas para emitir — este Embarque no tiene pallets con fruta')
+      return
+    }
+    if (requiereFlete && (!montoFlete || Number(montoFlete) <= 0)) {
+      toast.error('La cláusula de venta exige informar el monto de Flete')
+      return
+    }
+    if (requiereSeguro && (!montoSeguro || Number(montoSeguro) <= 0)) {
+      toast.error('La cláusula de venta exige informar el monto de Seguro')
+      return
+    }
+    if ((requiereFlete || requiereSeguro) && subtotalFob <= 0) {
+      toast.error('El Flete y el Seguro no pueden igualar ni superar el valor de venta')
       return
     }
     emitir.mutate()
@@ -186,6 +209,72 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
           )}
         </CardContent>
       </Card>
+
+      {(requiereFlete || requiereSeguro) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className='text-sm'>
+              Cláusula de venta{clausula?.descripcion ? ` — ${clausula.descripcion}` : ''}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className='space-y-3'>
+            <p className='text-muted-foreground text-xs'>
+              El Flete y el Seguro son un monto cerrado dentro del total: restan al valor de venta para obtener el
+              valor FOB de la mercadería. El total y las cuotas siguen sobre el valor de la cláusula.
+            </p>
+            <div className='flex flex-wrap gap-4'>
+              {requiereFlete && (
+                <div className='space-y-1.5'>
+                  <Label>Flete *</Label>
+                  <Input
+                    type='number'
+                    min={0}
+                    step='0.01'
+                    value={montoFlete}
+                    onChange={(e) => setMontoFlete(e.target.value)}
+                    className='h-8 w-40 text-right'
+                  />
+                </div>
+              )}
+              {requiereSeguro && (
+                <div className='space-y-1.5'>
+                  <Label>Seguro *</Label>
+                  <Input
+                    type='number'
+                    min={0}
+                    step='0.01'
+                    value={montoSeguro}
+                    onChange={(e) => setMontoSeguro(e.target.value)}
+                    className='h-8 w-40 text-right'
+                  />
+                </div>
+              )}
+            </div>
+            <div className='space-y-1 border-t pt-2 text-sm tabular-nums'>
+              <div className='flex justify-between'>
+                <span className='text-muted-foreground'>Valor FOB (mercadería)</span>
+                <span>{formatMonto(subtotalFob)}</span>
+              </div>
+              {requiereFlete && (
+                <div className='flex justify-between'>
+                  <span className='text-muted-foreground'>Flete</span>
+                  <span>{formatMonto(fleteNum)}</span>
+                </div>
+              )}
+              {requiereSeguro && (
+                <div className='flex justify-between'>
+                  <span className='text-muted-foreground'>Seguro</span>
+                  <span>{formatMonto(seguroNum)}</span>
+                </div>
+              )}
+              <div className='flex justify-between font-semibold'>
+                <span>Total (valor cláusula)</span>
+                <span>{formatMonto(montoTotal)}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {puedeEscribir && (
         <Button onClick={handleEmitir} isLoading={emitir.isPending} disabled={lineas.length === 0}>

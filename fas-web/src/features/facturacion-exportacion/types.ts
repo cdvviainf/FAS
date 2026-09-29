@@ -15,6 +15,13 @@ interface MantenedorRef {
   descripcion: string
 }
 
+// Flags de la cláusula de venta (Incoterm) que exigen Flete/Seguro.
+export interface ClausulaVentaFlags {
+  descripcion: string
+  requiereFlete: boolean
+  requiereSeguro: boolean
+}
+
 export interface ProformaLineaSugerida {
   descripcion: string
   especieId: number
@@ -61,6 +68,8 @@ export interface Proforma {
   condicionPago: MantenedorRef | null
   idioma: string
   montoTotal: string
+  montoFlete: string | null
+  montoSeguro: string | null
   estado: EstadoProforma
   fechaEmision: string
   lineas: ProformaLinea[]
@@ -70,6 +79,15 @@ export interface ProformaEmitirInput {
   dimensiones: DimensionProforma[]
   idioma: string
   lineas: ProformaLineaInput[]
+  montoFlete?: number | null
+  montoSeguro?: number | null
+}
+
+// Respuesta del endpoint de sugerencia de líneas: incluye la cláusula de venta
+// del Embarque para decidir si se piden Flete/Seguro.
+export interface ProformaSugerenciaResponse {
+  data: ProformaLineaSugerida[]
+  clausula: ClausulaVentaFlags | null
 }
 
 export interface ProformasListFilters {
@@ -118,7 +136,11 @@ export interface FacturaExportacion {
   id: number
   codigo: string
   embarqueId: number
-  embarque: { id: number; numeroInstructivo: string }
+  embarque: {
+    id: number
+    numeroInstructivo: string
+    notaVenta: { clausulaVenta: ClausulaVentaFlags | null }
+  }
   proformaId: number
   proforma: { id: number; codigo: string } | null
   clienteId: number
@@ -129,6 +151,8 @@ export interface FacturaExportacion {
   condicionPago: MantenedorRef | null
   dimensionesAgrupacion: DimensionProforma[]
   montoTotal: string
+  montoFlete: string | null
+  montoSeguro: string | null
   estado: EstadoFacturaExportacion
   fechaEmision: string | null
   tipoDte: number
@@ -141,6 +165,8 @@ export interface FacturaExportacion {
 export interface FacturaExportacionActualizarInput {
   dimensiones: DimensionProforma[]
   lineas: ProformaLineaInput[]
+  montoFlete?: number | null
+  montoSeguro?: number | null
 }
 
 export interface FacturasExportacionListFilters {

@@ -17,6 +17,10 @@ export interface ProformaEmitirInput {
   dimensiones: DimensionProforma[]
   idioma: string
   lineas: ProformaLineaInput[]
+  // Flete/Seguro de la cláusula de venta — exigidos según los flags de la
+  // cláusula (Parametro.requiereFlete/requiereSeguro). El service los valida.
+  montoFlete?: number | null
+  montoSeguro?: number | null
 }
 
 export interface ProformasListFilters {

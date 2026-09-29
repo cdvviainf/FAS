@@ -32,6 +32,12 @@ export async function getEmbarqueParaProforma(embarqueId: number) {
           monedaId: true,
           moneda: { select: mantenedorSelect },
           condicionPagoId: true,
+          // Cláusula de venta (Incoterm) + flags que determinan si se exige
+          // Flete/Seguro al proformar/facturar (ver Parametro.requiereFlete/
+          // requiereSeguro).
+          clausulaVenta: {
+            select: { descripcion: true, requiereFlete: true, requiereSeguro: true },
+          },
         },
       },
     },
@@ -179,6 +185,8 @@ interface DatosCrearProforma {
   monedaId: number
   condicionPagoId: number | null
   montoTotal: number
+  montoFlete: number | null
+  montoSeguro: number | null
 }
 
 // Línea ya validada y derivada por el service (precioUnitario editado por el
@@ -216,6 +224,8 @@ export async function crearProforma(datos: DatosCrearProforma, meta: MetaCrearPr
       idioma: meta.idioma,
       dimensionesAgrupacion: meta.dimensiones,
       montoTotal: datos.montoTotal,
+      montoFlete: datos.montoFlete,
+      montoSeguro: datos.montoSeguro,
       creadoPorId,
       lineas: {
         create: meta.lineas.map((l) => ({

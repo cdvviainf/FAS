@@ -10,7 +10,21 @@ const facturaInclude = {
   moneda: { select: mantenedorSelect },
   condicionPago: { select: mantenedorSelect },
   proforma: { select: { id: true, codigo: true } },
-  embarque: { select: { id: true, numeroInstructivo: true } },
+  embarque: {
+    select: {
+      id: true,
+      numeroInstructivo: true,
+      // Flags de la cláusula de venta (Incoterm) — el editor los usa para
+      // mostrar/exigir los inputs de Flete/Seguro.
+      notaVenta: {
+        select: {
+          clausulaVenta: {
+            select: { descripcion: true, requiereFlete: true, requiereSeguro: true },
+          },
+        },
+      },
+    },
+  },
   lineas: {
     select: {
       id: true,
@@ -53,6 +67,8 @@ export async function getProformaEmitidaParaFactura(proformaId: number) {
       monedaId: true,
       condicionPagoId: true,
       dimensionesAgrupacion: true,
+      montoFlete: true,
+      montoSeguro: true,
       lineas: {
         select: {
           descripcion: true,
@@ -98,7 +114,7 @@ export async function getEmbarqueParaFacturaDte(embarqueId: number) {
           paisDestino: { select: { codigo: true } },
           puertoDestino: { select: { codigo: true } },
           modalidadVenta: { select: { codigo: true } },
-          clausulaVenta: { select: { codigo: true } },
+          clausulaVenta: { select: { codigo: true, descripcion: true, requiereFlete: true, requiereSeguro: true } },
         },
       },
     },
@@ -158,6 +174,8 @@ interface DatosCrearFactura {
   condicionPagoId: number | null
   dimensiones: DimensionProforma[]
   montoTotal: number
+  montoFlete: number | null
+  montoSeguro: number | null
   lineas: LineaFacturaPersistir[]
 }
 
@@ -174,6 +192,8 @@ export async function crearBorrador(datos: DatosCrearFactura, creadoPorId: strin
       condicionPagoId: datos.condicionPagoId,
       dimensionesAgrupacion: datos.dimensiones,
       montoTotal: datos.montoTotal,
+      montoFlete: datos.montoFlete,
+      montoSeguro: datos.montoSeguro,
       estado: 'BORRADOR',
       creadoPorId,
       lineas: { create: datos.lineas.map(toLineaCreate) },
@@ -203,6 +223,8 @@ export async function actualizarBorrador(
   id: number,
   dimensiones: DimensionProforma[],
   montoTotal: number,
+  montoFlete: number | null,
+  montoSeguro: number | null,
   lineas: LineaFacturaPersistir[],
   actualizadoPor: string,
 ) {
@@ -213,6 +235,8 @@ export async function actualizarBorrador(
       data: {
         dimensionesAgrupacion: dimensiones,
         montoTotal,
+        montoFlete,
+        montoSeguro,
         lineas: { create: lineas.map(toLineaCreate) },
       },
     })

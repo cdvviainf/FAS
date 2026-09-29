@@ -11,8 +11,11 @@ import * as service from './proforma.service.js'
 export async function sugerirLineas(req: FastifyRequest, reply: FastifyReply) {
   const { id } = embarqueParamsSchema.parse(req.params)
   const { dimensiones } = sugerenciaQuerySchema.parse(req.query)
-  const lineas = await service.sugerirLineas(id, dimensiones)
-  return reply.send({ data: lineas })
+  const [lineas, clausula] = await Promise.all([
+    service.sugerirLineas(id, dimensiones),
+    service.obtenerClausulaEmbarque(id),
+  ])
+  return reply.send({ data: lineas, clausula })
 }
 
 export async function emitirProforma(req: FastifyRequest, reply: FastifyReply) {

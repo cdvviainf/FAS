@@ -7,13 +7,13 @@ import type {
   FacturasExportacionListResponse,
   Proforma,
   ProformaEmitirInput,
-  ProformaLineaSugerida,
+  ProformaSugerenciaResponse,
   ProformasListFilters,
   ProformasListResponse,
 } from './types'
 
 export const proformaService = {
-  async sugerirLineas(embarqueId: number, dimensiones: DimensionProforma[]): Promise<{ data: ProformaLineaSugerida[] }> {
+  async sugerirLineas(embarqueId: number, dimensiones: DimensionProforma[]): Promise<ProformaSugerenciaResponse> {
     const searchParams: Record<string, string> = {}
     if (dimensiones.length > 0) searchParams.dimensiones = dimensiones.join(',')
     return api.get(`ventas/cobranza/embarques/${embarqueId}/proforma/sugerencia`, { searchParams }).json()

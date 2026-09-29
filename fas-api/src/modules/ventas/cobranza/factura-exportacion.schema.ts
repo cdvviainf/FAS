@@ -21,6 +21,10 @@ const lineaSchema = z.object({
 export const facturaExportacionActualizarSchema = z.object({
   dimensiones: z.array(dimensionSchema).default([]),
   lineas: z.array(lineaSchema).min(1, 'Agrega al menos una línea'),
+  // Flete/Seguro de la cláusula de venta (Incoterm). Solo se exigen si la
+  // cláusula lo indica (validación server-side). El service redondea a 2 dec.
+  montoFlete: z.number().min(0).max(9_999_999_999).optional().nullable(),
+  montoSeguro: z.number().min(0).max(9_999_999_999).optional().nullable(),
 })
 
 export const facturasExportacionListQuerySchema = z.object({
