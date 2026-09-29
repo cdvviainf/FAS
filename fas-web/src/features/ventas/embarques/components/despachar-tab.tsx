@@ -139,6 +139,15 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
     onError: (e: Error) => toast.error(e.message || 'Error al confirmar el despacho'),
   })
 
+  const eliminarPackingListMutation = useMutation({
+    mutationFn: (packingListId: number) => embarquesService.eliminarPackingList(embarque.id, packingListId),
+    onSuccess: () => {
+      toast.success('Archivo de Packing List eliminado')
+      invalidar()
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al eliminar el archivo'),
+  })
+
   function agregarArchivo(files: FileList | null) {
     if (!files || files.length === 0) return
     const f = files[0]
@@ -166,27 +175,27 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
             </Button>
           )}
         </div>
-        {embarque.packingList && (
-          <div className='flex items-center gap-2 rounded-md border p-3 text-sm'>
+        {embarque.packingLists.map((pl) => (
+          <div key={pl.id} className='flex items-center gap-2 rounded-md border p-3 text-sm'>
             <Icons.paperclip className='text-muted-foreground h-4 w-4 shrink-0' />
             <a
-              href={embarquesService.urlDescargaPackingList(embarque.id)}
+              href={embarquesService.urlDescargaPackingList(embarque.id, pl.id)}
               target='_blank'
               rel='noreferrer'
               className='underline underline-offset-2'
             >
-              {embarque.packingList.nombreArchivo}
+              {pl.nombreArchivo}
             </a>
-            <span className='text-muted-foreground text-xs'>Packing List reconciliado</span>
+            <span className='text-muted-foreground text-xs'>{pl.numerosPallet.length} pallets — reconciliado</span>
           </div>
-        )}
+        ))}
         <AnularDespachoDialog embarque={embarque} open={anulando} onOpenChange={setAnulando} />
       </div>
     )
   }
 
-  const packingList = embarque.packingList
-  const packingListOk = packingList?.estado === 'OK'
+  const cobertura = embarque.packingListCobertura
+  const puedeDespachar = cobertura.completo
 
   return (
     <div className='space-y-4'>
@@ -207,7 +216,9 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
           <div className='space-y-2'>
             <Label>Packing List</Label>
             <p className='text-muted-foreground text-xs'>
-              Sube el Excel de Packing List de la planta para reconciliar los pallets antes de despachar (compras.md §9.3).
+              Sube el/los Excel de Packing List de la planta para reconciliar los pallets antes de despachar. Puedes
+              cargar varios archivos parciales; el despacho se habilita cuando entre todos cubren los pallets reservados
+              (todo o nada, compras.md §9.3).
             </p>
             <div className='flex flex-wrap items-center gap-2'>
               <Select value={templateCargaId} onValueChange={setTemplateCargaId}>
@@ -255,37 +266,68 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
           </div>
         )}
 
-        {packingList && (
-          <div
-            className={`space-y-1.5 rounded-md border p-3 ${packingListOk ? 'border-emerald-600/40 bg-emerald-600/5' : 'border-amber-600/40 bg-amber-600/5'}`}
-          >
-            <div className='flex items-center gap-2'>
-              {packingListOk ? (
-                <Icons.check className='h-4 w-4 shrink-0 text-emerald-600' />
-              ) : (
-                <Icons.alertCircle className='h-4 w-4 shrink-0 text-amber-600' />
-              )}
-              <a
-                href={embarquesService.urlDescargaPackingList(embarque.id)}
-                target='_blank'
-                rel='noreferrer'
-                className='text-sm underline underline-offset-2'
-              >
-                {packingList.nombreArchivo}
-              </a>
-              <span className='text-muted-foreground text-xs'>
-                {new Date(packingList.cargadoEn).toLocaleString('es-CL')} — {packingList.cargadoPor}
+        {embarque.packingLists.length > 0 && (
+          <div className='space-y-2'>
+            <div className='flex items-center justify-between text-xs'>
+              <span className='text-muted-foreground'>
+                Cobertura: {cobertura.cubiertos} / {cobertura.totalReservados} pallets ({embarque.packingLists.length} archivo
+                {embarque.packingLists.length === 1 ? '' : 's'})
               </span>
+              {cobertura.completo ? (
+                <span className='font-medium text-emerald-700'>Completo</span>
+              ) : (
+                <span className='font-medium text-amber-700'>Incompleto</span>
+              )}
             </div>
-            {packingListOk ? (
-              <p className='text-xs text-emerald-700'>Sin discrepancias contra los pallets reservados.</p>
-            ) : (
-              <ul className='list-disc space-y-0.5 pl-4 text-xs text-amber-800'>
-                {packingList.discrepancias.map((d, i) => (
-                  <li key={i}>{d}</li>
-                ))}
-              </ul>
-            )}
+            {embarque.packingLists.map((pl) => {
+              const ok = pl.estado === 'OK'
+              return (
+                <div
+                  key={pl.id}
+                  className={`space-y-1.5 rounded-md border p-3 ${ok ? 'border-emerald-600/40 bg-emerald-600/5' : 'border-amber-600/40 bg-amber-600/5'}`}
+                >
+                  <div className='flex items-center gap-2'>
+                    {ok ? (
+                      <Icons.check className='h-4 w-4 shrink-0 text-emerald-600' />
+                    ) : (
+                      <Icons.alertCircle className='h-4 w-4 shrink-0 text-amber-600' />
+                    )}
+                    <a
+                      href={embarquesService.urlDescargaPackingList(embarque.id, pl.id)}
+                      target='_blank'
+                      rel='noreferrer'
+                      className='text-sm underline underline-offset-2'
+                    >
+                      {pl.nombreArchivo}
+                    </a>
+                    <span className='text-muted-foreground text-xs'>
+                      {pl.numerosPallet.length} pallet{pl.numerosPallet.length === 1 ? '' : 's'} · {new Date(pl.cargadoEn).toLocaleString('es-CL')}
+                    </span>
+                    {puedeEscribir && !despachado && (
+                      <Button
+                        type='button'
+                        variant='ghost'
+                        size='icon'
+                        className='ml-auto h-7 w-7'
+                        onClick={() => eliminarPackingListMutation.mutate(pl.id)}
+                        disabled={eliminarPackingListMutation.isPending}
+                      >
+                        <Icons.trash className='h-4 w-4' />
+                      </Button>
+                    )}
+                  </div>
+                  {ok ? (
+                    <p className='text-xs text-emerald-700'>Sin discrepancias en los pallets de este archivo.</p>
+                  ) : (
+                    <ul className='list-disc space-y-0.5 pl-4 text-xs text-amber-800'>
+                      {pl.discrepancias.map((d, i) => (
+                        <li key={i}>{d}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -294,16 +336,18 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
             <Button
               type='button'
               onClick={() => despacharMutation.mutate()}
-              disabled={embarque.pallets.length === 0 || !packingListOk || despacharMutation.isPending}
+              disabled={embarque.pallets.length === 0 || !puedeDespachar || despacharMutation.isPending}
               isLoading={despacharMutation.isPending}
             >
               <Icons.check className='mr-1 h-4 w-4' /> Confirmar Despacho
             </Button>
           </div>
         )}
-        {!packingListOk && (
+        {!puedeDespachar && (
           <p className='text-muted-foreground text-center text-xs'>
-            Debes reconciliar el Packing List sin discrepancias antes de poder despachar.
+            {cobertura.hayDiscrepancia
+              ? 'Hay archivos con discrepancias — corrígelos antes de despachar.'
+              : 'El Packing List aún no cubre todos los pallets reservados — carga el/los archivo(s) restante(s).'}
           </p>
         )}
       </div>

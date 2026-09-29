@@ -102,6 +102,10 @@ const itemsMenu = [
   // abajo, antes del upsert): mismo reporte, reubicado de Operaciones a su
   // propia sección "Reportes".
   { codigo: 'REPORTES_STOCK_FRUTA', nombre: 'Stock de Fruta', seccion: 'Reportes', ruta: '/dashboard/reportes/stock-fruta', esAccion: false, orden: 90 },
+  // Permiso especial (acción) para editar las características de un lote/pallet
+  // desde la consulta de Stock (2026-09-28): cambiar datos, agregar y eliminar
+  // líneas. Solo pallets libres (no reservados ni despachados).
+  { codigo: 'OPER_STOCK_EDICION', nombre: 'Edición de Stock', seccion: 'Reportes', ruta: null, esAccion: true, orden: 405 },
   { codigo: 'REPORTES_KARDEX_MATERIALES', nombre: 'Kardex de Materiales', seccion: 'Reportes', ruta: '/dashboard/reportes/kardex-materiales', esAccion: false, orden: 91 },
   // Completa el catálogo de Reportes (2026-09-01): estos dos ítems ya tenían
   // pantalla funcional y entrada en nav-config.ts, pero nunca tuvieron fila en
@@ -163,6 +167,16 @@ const tiposParametroVentas = [
       { codigo: 'CFR', descripcion: 'CFR' },
       { codigo: 'CIF', descripcion: 'CIF' },
       { codigo: 'EXW', descripcion: 'EXW' },
+    ],
+  },
+  // Tipo de BL (2026-09-28) — información base de la reserva del Embarque.
+  {
+    codigo: 'TIPO_BL',
+    descripcion: 'Tipo de BL',
+    valores: [
+      { codigo: 'ORIGINAL', descripcion: 'Original' },
+      { codigo: 'TELEX', descripcion: 'Telex Release' },
+      { codigo: 'SEAWAY', descripcion: 'Seaway / Express' },
     ],
   },
 ]

@@ -8,7 +8,7 @@ import * as templatesCargaRepo from '../../config/templates-carga/templates-carg
 import { reconciliarPackingList } from './embarques.packing-list.motor.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ResultadoIntentoReserva } from './embarques.repository.js'
-import type { DatosReservaManualInput, DatosInstructivoInput, InstructivoHijoUpdateInput, EmbarqueCreateInput } from './embarques.types.js'
+import type { DatosReservaManualInput, DatosReservaBaseInput, DatosInstructivoInput, InstructivoHijoUpdateInput, EmbarqueCreateInput } from './embarques.types.js'
 import type { AglWebhookConfirmarBody } from './embarques.schema.js'
 import type { SolicitudAglPayload } from './agl360.adapter.js'
 
@@ -175,27 +175,52 @@ export async function generarEmbarquesMultiples(
   if (cantidad > 100) throw new ValidationError('La cantidad de contenedores es demasiado alta (máximo 100)')
 
   const modoAutomatico = await resolverModoAutomatico(body.gestorLogisticoId)
-  const base = await repo.getMaxNumeroInstructivo(prefijoConfig.prefijo)
 
+  // El correlativo se calcula y reserva DENTRO de cada transacción, bajo el
+  // lock de prefijo (FAS-DEV-QA-R2-006) — no se precalcula acá para no arriesgar
+  // números duplicados entre Cierres concurrentes del mismo prefijo. La
+  // referenciaFas de la reserva se arma con el número ya asignado en la tx.
+  //
+  // Éxito parcial resumible (FAS-DEV-QA-R3-009): si la reserva automática de un
+  // contenedor falla (y no es forzado), se CORTA el loop y se devuelven los ya
+  // creados con `aglFallo: true`, en vez de abortar con 502 ocultando los
+  // éxitos. El caller (frontend) reintenta SOLO los faltantes (N − creados) con
+  // `forzarSinReserva`, así nunca se supera la cantidad pedida.
   const embarques = []
+  let aglFallo = false
   for (let i = 1; i <= cantidad; i++) {
-    const numeroInstructivo = prefijosService.formatearConPrefijo(prefijoConfig.prefijo, prefijoConfig.digitos, base + i)
-    const embarque = await repo.generarEmbarqueTransaccional(
-      body.notaVentaId,
-      numeroInstructivo,
-      body.gestorLogisticoId,
-      creadoPor,
-      body.forzarSinReserva ?? false,
-      modoAutomatico,
-      () => intentarReservaAgl(body.notaVentaId, referenciaFasDe(numeroInstructivo)),
-    )
-    embarques.push(embarque)
+    try {
+      const embarque = await repo.generarEmbarqueTransaccional(
+        body.notaVentaId,
+        prefijoConfig.prefijo,
+        prefijoConfig.digitos,
+        body.gestorLogisticoId,
+        creadoPor,
+        body.forzarSinReserva ?? false,
+        modoAutomatico,
+        (numeroInstructivo) => intentarReservaAgl(body.notaVentaId, referenciaFasDe(numeroInstructivo)),
+      )
+      embarques.push(embarque)
+    } catch (e) {
+      if (e instanceof repo.IntegracionAglFallidaError && !(body.forzarSinReserva ?? false)) {
+        aglFallo = true
+        break
+      }
+      throw e
+    }
   }
-  return { embarques, creados: embarques.length }
+  return { embarques, creados: embarques.length, aglFallo }
 }
 
 export async function generarEmbarque(body: EmbarqueCreateInput, creadoPor: string) {
-  const { embarques } = await generarEmbarquesMultiples({ ...body, cantidad: 1 }, creadoPor)
+  const { embarques, aglFallo } = await generarEmbarquesMultiples({ ...body, cantidad: 1 }, creadoPor)
+  // La ruta singular conserva su contrato original (FAS-DEV-QA-R4-012): si la
+  // reserva automática falló y no se creó el Embarque, relanza la falla de
+  // integración (→ 502) en vez de devolver un recurso inexistente. El flujo
+  // múltiple, en cambio, informa el éxito parcial con `aglFallo`.
+  if (aglFallo || embarques.length === 0) {
+    throw new repo.IntegracionAglFallidaError('No se pudo enviar la Solicitud de Reserva a AGL360')
+  }
   return embarques[0]
 }
 
@@ -245,6 +270,16 @@ export async function dejarReservaManual(embarqueId: number, actualizadoPor: str
 // repo.guardarDatosReservaManual). CONFIRMADA en cuanto se guarda.
 export async function guardarDatosReservaManual(embarqueId: number, datos: DatosReservaManualInput, actualizadoPor: string) {
   return repo.guardarDatosReservaManual(embarqueId, datos, actualizadoPor)
+}
+
+// Información base de la reserva (2026-09-28) — datos propios del Embarque.
+export async function guardarDatosReservaBase(embarqueId: number, datos: DatosReservaBaseInput, actualizadoPor: string) {
+  await obtenerEmbarque(embarqueId)
+  if (datos.tipoBlId != null) {
+    const tipoBl = await repo.getParametroTipoBl(datos.tipoBlId)
+    if (!tipoBl) throw new ValidationError('El Tipo de BL seleccionado no existe o está bloqueado')
+  }
+  return repo.guardarDatosReservaBase(embarqueId, datos, actualizadoPor)
 }
 
 // ─── Instructivo de Embarque (2026-09-21, ventas.md R11) ───────────────────
@@ -411,6 +446,9 @@ export async function confirmarDespacho(embarqueId: number, userId: string) {
   if (resultado === 'PACKING_LIST_CON_DISCREPANCIAS') {
     throw new ValidationError('El Packing List cargado tiene discrepancias contra los pallets reservados — corrígelas y vuelve a subirlo antes de despachar')
   }
+  if (resultado === 'PACKING_LIST_INCOMPLETO') {
+    throw new ValidationError('El Packing List no cubre todos los pallets reservados — falta cargar el/los archivo(s) de los pallets restantes antes de despachar')
+  }
   return resultado
 }
 
@@ -461,6 +499,13 @@ export async function subirPackingList(
   if (embarque.despachadoEn && !embarque.despachoAnuladoEn) {
     throw new ValidationError('Este Embarque ya fue despachado — no admite reconciliar un nuevo Packing List')
   }
+  // 2026-09-28 (decisión de negocio Christian): el Packing List de despacho
+  // solo se puede cargar una vez emitido(s) el/los Instructivo(s) de Embarque
+  // (InstructivoHijo generados por planta).
+  const instructivos = await repo.contarInstructivosHijos(embarqueId)
+  if (instructivos === 0) {
+    throw new ValidationError('Debes generar el/los Instructivo(s) de Embarque antes de cargar el Packing List de despacho')
+  }
   if (!MIMES_EXCEL_PERMITIDOS.has(archivo.mime)) {
     throw new ValidationError('Tipo de archivo no permitido. Se acepta solo Excel (.xlsx)')
   }
@@ -485,13 +530,23 @@ export async function subirPackingList(
     contenido: archivo.datos,
     estado: resultado.estado,
     discrepancias: resultado.discrepancias,
+    numerosPallet: resultado.numerosPallet,
     cargadoPor: userId,
   })
 }
 
-export async function descargarPackingList(embarqueId: number) {
+export async function descargarPackingList(embarqueId: number, packingListId?: number) {
   await obtenerEmbarque(embarqueId)
-  const resultado = await repo.getPackingListParaDescarga(embarqueId)
+  const resultado = await repo.getPackingListParaDescarga(embarqueId, packingListId)
   if (!resultado) throw new NotFoundError('Packing List', String(embarqueId))
   return resultado
+}
+
+export async function eliminarPackingList(embarqueId: number, packingListId: number, userId: string) {
+  const resultado = await repo.eliminarPackingList(embarqueId, packingListId, userId)
+  if (resultado === 'NO_ENCONTRADO') throw new NotFoundError('Packing List', String(packingListId))
+  if (resultado === 'DESPACHADO') {
+    throw new ValidationError('No se puede eliminar un Packing List de un Embarque ya despachado')
+  }
+  return repo.getEmbarqueById(embarqueId)
 }

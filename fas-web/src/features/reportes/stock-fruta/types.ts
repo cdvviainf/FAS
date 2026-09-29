@@ -57,6 +57,52 @@ export interface StockDetalleRow {
   completo: boolean
 }
 
+// Edición de Stock (2026-09-28, OPER_STOCK_EDICION) — lote (pallet + líneas).
+export interface LoteLinea {
+  id: number
+  especieId: number
+  variedadId: number
+  categoriaId: number
+  articuloId: number
+  calibreId: number
+  cajas: number
+  fechaEmbalaje: string | null
+  etiquetaId: number | null
+  packingId: number | null
+}
+
+export interface Lote {
+  id: number
+  numeroPallet: string
+  embarqueId: number | null
+  productorId: number
+  notaCalidadId: number | null
+  notaCondicionId: number | null
+  completo: boolean
+  lineas: LoteLinea[]
+}
+
+export interface LoteLineaInput {
+  id?: number
+  especieId: number
+  variedadId: number
+  categoriaId: number
+  articuloId: number
+  calibreId: number
+  cajas: number
+  fechaEmbalaje?: string | null
+  etiquetaId?: number | null
+  packingId?: number | null
+}
+
+export interface LoteEditarInput {
+  productorId?: number
+  notaCalidadId?: number | null
+  notaCondicionId?: number | null
+  completo?: boolean
+  lineas: LoteLineaInput[]
+}
+
 export type AntiguedadBucket = 'fresh' | 'mid' | 'old'
 
 export const ANTIGUEDAD_LABELS: Record<AntiguedadBucket, string> = {

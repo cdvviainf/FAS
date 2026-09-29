@@ -46,6 +46,21 @@ export const datosReservaManualSchema = z
     message: 'Debes ingresar al menos un dato de la reserva',
   })
 
+// Información base de la reserva (2026-09-28): datos propios del Embarque que
+// se capturan en la pestaña de reserva. Los derivados de la NV (Tipo de
+// Embarque, Puerto Destino, Especie, Consignatario) NO se editan acá — se
+// muestran de la Nota de Venta.
+export const datosReservaBaseSchema = z
+  .object({
+    fechaCompromiso: z.coerce.date().optional().nullable(),
+    temperatura: z.number().int().min(-99).max(99).optional().nullable(),
+    cbm: z.number().int().min(0).max(1_000_000).optional().nullable(),
+    tipoBlId: z.number().int().positive().optional().nullable(),
+  })
+  .refine((d) => Object.values(d).some((v) => v !== undefined), {
+    message: 'Debes ingresar al menos un dato de la reserva',
+  })
+
 // Un rango de stacking (ventas.md R11, 2026-09-22) — el conjunto completo se
 // reemplaza en cada guardado (ver embarques.repository.ts), nunca un rango
 // individual.
@@ -130,6 +145,17 @@ export const packingListUploadQuerySchema = z.object({
   templateCargaId: z.coerce.number().int().positive('El Template de Carga es requerido'),
 })
 
+// Packing parcializado (2026-09-28): N archivos por Embarque — descarga/borrado
+// de uno específico.
+export const packingListDescargaQuerySchema = z.object({
+  packingListId: z.coerce.number().int().positive().optional(),
+})
+
+export const packingListParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  packingListId: z.coerce.number().int().positive(),
+})
+
 // Edición de un Reclamo (IMP-QA-R1-019, reclamos.md §6) — anidado bajo el
 // Embarque: :id es el Embarque, :reclamoId el Reclamo.
 export const embarqueReclamoParamsSchema = z.object({
@@ -157,5 +183,6 @@ export type EmbarqueCreateBody = z.infer<typeof embarqueCreateSchema>
 export type ReservarPalletsBody = z.infer<typeof reservarPalletsSchema>
 export type AglWebhookConfirmarBody = z.infer<typeof aglWebhookConfirmarSchema>
 export type DatosReservaManualBody = z.infer<typeof datosReservaManualSchema>
+export type DatosReservaBaseBody = z.infer<typeof datosReservaBaseSchema>
 export type DatosInstructivoBody = z.infer<typeof datosInstructivoSchema>
 export type InstructivoHijoUpdateBody = z.infer<typeof instructivoHijoUpdateSchema>

@@ -10,10 +10,13 @@ import {
   embarquePalletParamsSchema,
   aglWebhookConfirmarSchema,
   datosReservaManualSchema,
+  datosReservaBaseSchema,
   datosInstructivoSchema,
   instructivoHijoUpdateSchema,
   instructivoHijoParamsSchema,
   packingListUploadQuerySchema,
+  packingListDescargaQuerySchema,
+  packingListParamsSchema,
 } from './embarques.schema.js'
 import * as service from './embarques.service.js'
 import { prisma } from '../../../lib/prisma.js'
@@ -110,12 +113,19 @@ export async function subirPackingList(req: FastifyRequest, reply: FastifyReply)
 
 export async function descargarPackingList(req: FastifyRequest, reply: FastifyReply) {
   const { id } = embarqueParamsSchema.parse(req.params)
-  const { meta, datos } = await service.descargarPackingList(id)
+  const { packingListId } = packingListDescargaQuerySchema.parse(req.query)
+  const { meta, datos } = await service.descargarPackingList(id, packingListId)
   return reply
     .header('Content-Type', meta.mime)
     .header('Content-Disposition', `attachment; filename="${encodeURIComponent(meta.nombreArchivo)}"`)
     .header('Content-Length', String(datos.length))
     .send(datos)
+}
+
+export async function eliminarPackingList(req: FastifyRequest, reply: FastifyReply) {
+  const { id, packingListId } = packingListParamsSchema.parse(req.params)
+  const embarque = await service.eliminarPackingList(id, packingListId, req.fasUserId!)
+  return reply.send({ data: embarque })
 }
 
 // ─── Solicitud de Reserva (ventas.md §4.3) ──────────────────────────────────
@@ -137,6 +147,13 @@ export async function guardarDatosReservaManual(req: FastifyRequest, reply: Fast
   const { id } = embarqueParamsSchema.parse(req.params)
   const body = datosReservaManualSchema.parse(req.body)
   const embarque = await service.guardarDatosReservaManual(id, body, req.fasUserId!)
+  return reply.send({ data: embarque })
+}
+
+export async function guardarDatosReservaBase(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const body = datosReservaBaseSchema.parse(req.body)
+  const embarque = await service.guardarDatosReservaBase(id, body, req.fasUserId!)
   return reply.send({ data: embarque })
 }
 

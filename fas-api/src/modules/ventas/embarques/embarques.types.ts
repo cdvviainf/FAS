@@ -21,6 +21,14 @@ export interface ReservarPalletsInput {
   palletIds: number[]
 }
 
+// Información base de la reserva (2026-09-28) — datos propios del Embarque.
+export interface DatosReservaBaseInput {
+  fechaCompromiso?: Date | null
+  temperatura?: number | null
+  cbm?: number | null
+  tipoBlId?: number | null
+}
+
 // Datos del Instructivo de Embarque compartidos por todo el Embarque
 // (ventas.md R11 + gap analysis contra el Instructivo real del cliente) —
 // independiente de reservaManual, editable siempre desde la pestaña "Generar

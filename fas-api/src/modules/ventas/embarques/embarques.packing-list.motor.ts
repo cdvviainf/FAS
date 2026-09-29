@@ -24,7 +24,7 @@ import * as recepcionesRepo from '../../compras/recepciones/recepciones.reposito
 import { parseFechaEmbalajeTexto, FECHA_INVALIDA } from '../../compras/recepciones/recepciones.motor.js'
 import { cargarPrimeraHoja, resolverMapeoColumnas, leerFilasPackingList, type FilaPackingListCruda } from './embarques.excel.js'
 import {
-  compararNumerosPalletConReserva,
+  compararSubconjuntoConReserva,
   compararDetallePalletsConStock,
   type FilaPackingListParaComparar,
   type PalletStockParaComparar,
@@ -40,6 +40,9 @@ interface TemplateParaLectura {
 export interface ResultadoReconciliacion {
   estado: 'OK' | 'DISCREPANCIA'
   discrepancias: string[]
+  // N° de Pallet que cubre este archivo (subconjunto de los reservados) — se
+  // usa para validar la unión de archivos al despachar (packing parcializado).
+  numerosPallet: string[]
 }
 
 // ─── Etapa 2: filas completas y con datos válidos (sin BD) ────────────────
@@ -189,7 +192,15 @@ export async function reconciliarPackingList(
   // usuario vea exactamente qué no cuadra y pueda reintentar.
   const numerosExcel = [...new Set(filas.map((f) => f.numeroPallet))]
   const numerosReservados = palletsStock.map((p) => p.numeroPallet)
-  const discrepancias = [...compararNumerosPalletConReserva(numerosExcel, numerosReservados)]
+  // Packing parcializado (2026-09-28): el archivo cubre un subconjunto — solo
+  // se rechazan los "ajenos" (no reservados). La cobertura total se valida en
+  // la unión de archivos al despachar (embarques.repository.confirmarDespacho).
+  const discrepancias = [...compararSubconjuntoConReserva(numerosExcel, numerosReservados)]
+
+  // El detalle se compara solo contra los pallets del stock que el archivo
+  // realmente declara (subconjunto), no contra todos los reservados.
+  const declarados = new Set(numerosExcel)
+  const stockDeclarado = palletsStock.filter((p) => declarados.has(p.numeroPallet))
 
   const filasPorPallet = new Map<string, FilaPackingListParaComparar[]>()
   for (const f of filas) {
@@ -197,7 +208,9 @@ export async function reconciliarPackingList(
     arr.push(f)
     filasPorPallet.set(f.numeroPallet, arr)
   }
-  discrepancias.push(...compararDetallePalletsConStock(filasPorPallet, palletsStock))
+  discrepancias.push(...compararDetallePalletsConStock(filasPorPallet, stockDeclarado))
 
-  return discrepancias.length > 0 ? { estado: 'DISCREPANCIA', discrepancias } : { estado: 'OK', discrepancias: [] }
+  return discrepancias.length > 0
+    ? { estado: 'DISCREPANCIA', discrepancias, numerosPallet: numerosExcel }
+    : { estado: 'OK', discrepancias: [], numerosPallet: numerosExcel }
 }

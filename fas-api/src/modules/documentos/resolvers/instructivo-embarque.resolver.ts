@@ -26,16 +26,22 @@ export async function resolverInstructivoEmbarque(id: number, empresaId: number)
   ])
 
   const lineas = pallets.flatMap((p) =>
-    p.lineas.map((l) => ({
-      numeroPallet: p.numeroPallet,
-      especie: l.especie.descripcion,
-      variedad: l.variedad.descripcion,
-      categoria: l.categoria.descripcion,
-      calibre: l.calibre.descripcion,
-      articulo: l.articulo.descripcion,
-      productor: p.productor.razonSocial,
-      cajas: l.cajas,
-    })),
+    p.lineas.map((l) => {
+      const kgNeto = l.articulo.kgNetoEnvase != null ? Number(l.articulo.kgNetoEnvase) : 0
+      const kgBruto = l.articulo.kgBrutoEnvase != null ? Number(l.articulo.kgBrutoEnvase) : 0
+      return {
+        numeroPallet: p.numeroPallet,
+        especie: l.especie.descripcion,
+        variedad: l.variedad.descripcion,
+        categoria: l.categoria.descripcion,
+        calibre: l.calibre.descripcion,
+        articulo: l.articulo.descripcion,
+        productor: p.productor.razonSocial,
+        cajas: l.cajas,
+        pesoNeto: l.cajas * kgNeto,
+        pesoBruto: l.cajas * kgBruto,
+      }
+    }),
   )
 
   return {
@@ -60,6 +66,9 @@ export async function resolverInstructivoEmbarque(id: number, empresaId: number)
     consignatario: consignatario?.razonSocial ?? null,
     notify: notify?.razonSocial ?? null,
     tipoEmbarque: nv.tipoEmbarque?.descripcion ?? null,
+    tipoFlete: nv.tipoFlete?.descripcion ?? null,
+    modalidadVenta: nv.modalidadVenta?.descripcion ?? null,
+    incoterm: nv.clausulaVenta?.descripcion ?? null,
     mercado: nv.mercado?.descripcion ?? null,
     paisDestino: nv.paisDestino?.descripcion ?? null,
     puertoDestino: nv.puertoDestino?.descripcion ?? null,
@@ -93,6 +102,8 @@ export async function resolverInstructivoEmbarque(id: number, empresaId: number)
     totales: {
       pallets: pallets.length,
       cajas: lineas.reduce((acc, l) => acc + l.cajas, 0),
+      pesoNeto: lineas.reduce((acc, l) => acc + l.pesoNeto, 0),
+      pesoBruto: lineas.reduce((acc, l) => acc + l.pesoBruto, 0),
     },
   }
 }

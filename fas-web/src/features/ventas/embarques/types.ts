@@ -3,6 +3,15 @@ export interface EmbarqueNotaVentaRef {
   folio: number
 }
 
+// Detalle enriquecido de la NV (2026-09-28) — para la información base de la
+// reserva. Solo viene en el detalle del Embarque, no en el listado.
+export interface EmbarqueNotaVentaDetalleRef extends EmbarqueNotaVentaRef {
+  tipoEmbarque: MantenedorRef | null
+  puertoDestino: MantenedorRef | null
+  consignatario: { id: number; razonSocial: string } | null
+  detalles: { especie: MantenedorRef }[]
+}
+
 export interface MantenedorRef {
   id: number
   codigo: string
@@ -51,6 +60,7 @@ export interface PalletResumen {
   notaCalidad: MantenedorRef | null
   notaCondicionId: number | null
   notaCondicion: MantenedorRef | null
+  completo: boolean
   recepcion: PalletOrigenRecepcion
   lineas: PalletLineaResumen[]
 }
@@ -186,6 +196,12 @@ export interface Embarque extends DatosReservaManual, DatosInstructivo {
   despachadoPor: string | null
   despachoAnuladoEn: string | null
   despachoAnuladoPor: string | null
+  // Información base de la reserva (2026-09-28).
+  fechaCompromiso: string | null
+  temperatura: number | null
+  cbm: number | null
+  tipoBlId: number | null
+  tipoBl: MantenedorRef | null
   creadoEn: string
   _count: { pallets: number }
 }
@@ -208,16 +224,30 @@ export interface PackingListEmbarque {
   tamano: number
   estado: EstadoPackingList
   discrepancias: string[]
+  numerosPallet: string[]
   cargadoEn: string
   cargadoPor: string
 }
 
-export interface EmbarqueDetalle extends Omit<Embarque, '_count'> {
+// Cobertura del Packing List parcializado (2026-09-28): unión de los archivos
+// activos vs. pallets reservados.
+export interface PackingListCobertura {
+  archivos: number
+  cubiertos: number
+  totalReservados: number
+  completo: boolean
+  hayDiscrepancia: boolean
+}
+
+export interface EmbarqueDetalle extends Omit<Embarque, '_count' | 'notaVenta'> {
+  notaVenta: EmbarqueNotaVentaDetalleRef
   pallets: PalletResumen[]
   solicitudReserva: SolicitudReserva | null
   instructivosHijos: InstructivoHijo[]
   stackingRangos: StackingRango[]
   packingList: PackingListEmbarque | null
+  packingLists: PackingListEmbarque[]
+  packingListCobertura: PackingListCobertura
 }
 
 // numeroInstructivo ya no se ingresa manualmente (2026-08-13, ventas.md R10):

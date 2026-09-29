@@ -17,6 +17,8 @@ const columnas: ColumnaTabla<Linea>[] = [
   { titulo: 'Artículo', render: (l) => l.articulo },
   { titulo: 'Productor', render: (l) => l.productor },
   { titulo: 'Cajas', render: (l) => fmt.entero(l.cajas), numerica: true },
+  { titulo: 'Peso Neto', render: (l) => fmt.kilos(l.pesoNeto), numerica: true },
+  { titulo: 'Peso Bruto', render: (l) => fmt.kilos(l.pesoBruto), numerica: true },
 ]
 
 // v1 — sin control de copia (Etapa 4 §8, ver documentos.types.ts), mismo
@@ -74,6 +76,9 @@ export function InstructivoEmbarqueV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
           titulo='Ruta y destino'
           campos={[
             { label: 'Tipo de embarque', valor: d.tipoEmbarque ?? '—' },
+            { label: 'Tipo de flete', valor: d.tipoFlete ?? '—' },
+            { label: 'Modalidad de venta', valor: d.modalidadVenta ?? '—' },
+            { label: 'Incoterm', valor: d.incoterm ?? '—' },
             { label: 'Mercado', valor: d.mercado ?? '—' },
             { label: 'País destino', valor: d.paisDestino ?? '—' },
             { label: 'Puerto destino', valor: d.puertoDestino ?? '—' },
@@ -137,7 +142,7 @@ export function InstructivoEmbarqueV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
         titulo='Detalle de carga'
         filas={d.lineas}
         columnas={columnas}
-        totales={['', '', '', '', '', '', 'Total:', fmt.entero(d.totales.cajas)]}
+        totales={['', '', '', '', '', '', 'Total:', fmt.entero(d.totales.cajas), fmt.kilos(d.totales.pesoNeto), fmt.kilos(d.totales.pesoBruto)]}
       />
 
       <PieFirma firmantes={['Frutera Agrosan', 'Planta']} />

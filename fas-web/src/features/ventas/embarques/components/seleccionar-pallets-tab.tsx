@@ -38,6 +38,13 @@ function calificacion(pallet: PalletResumen): string {
   return c || '—'
 }
 
+// Calificado (2026-09-28) = Nota Calidad + Nota Condición + Completo. Solo los
+// calificados pueden seleccionarse para el Embarque; los no calificados se
+// muestran deshabilitados.
+function estaCalificado(pallet: PalletResumen): boolean {
+  return pallet.completo && pallet.notaCalidadId != null && pallet.notaCondicionId != null
+}
+
 // Un pallet siempre tiene una única especie en la práctica (todas sus líneas
 // comparten especie, compras.md §4.8) — se toma de la primera línea.
 function especiePallet(pallet: PalletResumen): string {
@@ -137,6 +144,9 @@ export function SeleccionarPalletsTab({ embarque }: { embarque: EmbarqueDetalle 
   })
 
   function toggle(id: number) {
+    // No se puede seleccionar un pallet no calificado.
+    const pallet = disponibles.find((p) => p.id === id)
+    if (pallet && !estaCalificado(pallet)) return
     setSeleccionados((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -290,13 +300,26 @@ export function SeleccionarPalletsTab({ embarque }: { embarque: EmbarqueDetalle 
                       </TableCell>
                     </TableRow>
                   )}
-                  {disponiblesFiltrados.map((p) => (
-                    <TableRow key={p.id} className='cursor-pointer' onClick={() => toggle(p.id)}>
+                  {disponiblesFiltrados.map((p) => {
+                    const calificado = estaCalificado(p)
+                    return (
+                    <TableRow
+                      key={p.id}
+                      className={calificado ? 'cursor-pointer' : 'opacity-60'}
+                      onClick={calificado ? () => toggle(p.id) : undefined}
+                    >
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox checked={seleccionados.has(p.id)} onCheckedChange={() => toggle(p.id)} />
+                        <Checkbox
+                          checked={seleccionados.has(p.id)}
+                          disabled={!calificado}
+                          onCheckedChange={() => toggle(p.id)}
+                        />
                       </TableCell>
                       <TableCell>{p.numeroPallet}</TableCell>
-                      <TableCell>{calificacion(p)}</TableCell>
+                      <TableCell>
+                        {calificacion(p)}
+                        {!calificado && <span className='text-muted-foreground ml-1 text-[10px]'>(sin calificar)</span>}
+                      </TableCell>
                       <TableCell>{p.recepcion.planta.descripcion}</TableCell>
                       <TableCell>{especiePallet(p)}</TableCell>
                       <TableCell>
@@ -307,7 +330,8 @@ export function SeleccionarPalletsTab({ embarque }: { embarque: EmbarqueDetalle 
                       <TableCell>{p.productor.descripcion}</TableCell>
                       <TableCell className='text-muted-foreground text-xs'>{resumenLineas(p)}</TableCell>
                     </TableRow>
-                  ))}
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>

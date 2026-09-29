@@ -88,6 +88,17 @@ export function compararNumerosPalletConReserva(numerosExcel: string[], numerosR
   return errores
 }
 
+// Packing List parcializado (2026-09-28): un archivo puede cubrir SOLO un
+// subconjunto de los pallets reservados, así que NO se exige que estén todos
+// (eso se valida a nivel de la unión, al despachar). Solo son error los
+// "ajenos" (N° de Pallet que no están reservados a este Embarque).
+export function compararSubconjuntoConReserva(numerosExcel: string[], numerosReservados: string[]): string[] {
+  const reservados = new Set(numerosReservados)
+  const ajenos = [...new Set(numerosExcel)].filter((n) => !reservados.has(n))
+  if (ajenos.length === 0) return []
+  return [`N° de Pallet del Packing List que no están reservados a este Embarque: ${ajenos.join(', ')}`]
+}
+
 export interface FilaPackingListParaComparar {
   fila: number
   numeroPallet: string

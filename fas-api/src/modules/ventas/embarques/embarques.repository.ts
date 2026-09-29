@@ -5,9 +5,10 @@ import { BusinessError, ValidationError } from '../../../shared/errors.js'
 import {
   LOCK_NAMESPACE_EMBARQUE_DESPACHO,
   LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA,
+  LOCK_NAMESPACE_EMBARQUE_CORRELATIVO,
 } from '../../../shared/advisory-locks.js'
 import { palletCalzaConDetalleNV } from './embarques.comparacion.js'
-import type { DatosReservaManualInput, DatosInstructivoInput, InstructivoHijoUpdateInput } from './embarques.types.js'
+import type { DatosReservaManualInput, DatosReservaBaseInput, DatosInstructivoInput, InstructivoHijoUpdateInput } from './embarques.types.js'
 
 // 502: la integración externa (no FAS) fue la que falló — distingue este
 // caso de un 422 de validación normal para que el frontend sepa mostrar el
@@ -46,6 +47,7 @@ const packingListSelect = {
   tamano: true,
   estado: true,
   discrepancias: true,
+  numerosPallet: true,
   cargadoEn: true,
   cargadoPor: true,
 } satisfies Prisma.EmbarquePackingListSelect
@@ -110,7 +112,19 @@ export async function getEmbarqueById(id: number) {
   const embarque = await prisma.embarque.findFirst({
     where: { id, eliminadoEn: null },
     include: {
-      notaVenta: { select: notaVentaRefSelect },
+      // Detalle enriquecido (2026-09-28): datos de la NV derivados para la
+      // "información base" de la reserva (Tipo de Embarque, Puerto Destino,
+      // Consignatario, Especies) — el listado sigue usando notaVentaRefSelect.
+      notaVenta: {
+        select: {
+          id: true,
+          folio: true,
+          tipoEmbarque: { select: mantenedorSelect },
+          puertoDestino: { select: mantenedorSelect },
+          consignatario: { select: { id: true, razonSocial: true } },
+          detalles: { select: { especie: { select: mantenedorSelect } } },
+        },
+      },
       pallets: { include: palletInclude, orderBy: { id: 'asc' as const } },
       solicitudReserva: true,
       gestorLogistico: { select: entidadSelect },
@@ -119,6 +133,7 @@ export async function getEmbarqueById(id: number) {
       agenteAduana: { select: entidadSelect },
       embarcador: { select: entidadSelect },
       naviera: { select: entidadSelect },
+      tipoBl: { select: mantenedorSelect },
       instructivosHijos: {
         where: { eliminadoEn: null },
         include: { planta: { select: entidadSelect } },
@@ -128,12 +143,34 @@ export async function getEmbarqueById(id: number) {
       stackingRangos: { orderBy: { orden: 'asc' as const } },
       // Reconciliación de Packing List (compras.md §9.3) — sin `contenido`
       // (el blob se descarga aparte, ver getPackingListContenido).
-      packingLists: { where: { eliminadoEn: null }, select: packingListSelect },
+      packingLists: { where: { eliminadoEn: null }, select: packingListSelect, orderBy: { cargadoEn: 'asc' } },
     },
   })
   if (!embarque) return null
+  // Packing parcializado (2026-09-28): se expone la LISTA de archivos activos
+  // + un resumen de cobertura (cuántos pallets cubren vs. reservados). Se
+  // mantiene `packingList` (el primero) por compatibilidad con lecturas viejas.
   const { packingLists, ...resto } = embarque
-  return { ...resto, packingList: packingLists[0] ?? null }
+  const totalReservados = embarque.pallets.length
+  const numerosReservados = new Set(embarque.pallets.map((p) => p.numeroPallet))
+  const cubiertos = new Set<string>()
+  let hayDiscrepancia = false
+  let haySobrante = false // pallet cubierto que ya no está reservado (FAS-DEV-QA-R2-007)
+  for (const pl of packingLists) {
+    if (pl.estado !== 'OK') hayDiscrepancia = true
+    for (const n of (pl.numerosPallet as string[]) ?? []) {
+      if (numerosReservados.has(n)) cubiertos.add(n)
+      else haySobrante = true
+    }
+  }
+  const packingListCobertura = {
+    archivos: packingLists.length,
+    cubiertos: cubiertos.size,
+    totalReservados,
+    completo: totalReservados > 0 && cubiertos.size === totalReservados && !hayDiscrepancia && !haySobrante,
+    hayDiscrepancia: hayDiscrepancia || haySobrante,
+  }
+  return { ...resto, packingLists, packingList: packingLists[0] ?? null, packingListCobertura }
 }
 
 // Detalle de la NV para el motor de comparación (§7 equivalente de
@@ -152,11 +189,13 @@ export async function getNotaVentaConDetalle(id: number) {
 export async function getPalletsDisponibles(
   detalleNV: NonNullable<Awaited<ReturnType<typeof getNotaVentaConDetalle>>>['detalles'],
 ) {
-  // completo: true (2026-09-02, compras.md §4.8) — solo pallets completos
-  // son elegibles para un Embarque; los incompletos siguen siendo stock
-  // disponible pero no despachable.
+  // 2026-09-28 (decisión de negocio Christian): se muestran TODOS los pallets
+  // sin reservar que calzan con el detalle de la NV, calificados o no — el
+  // frontend deshabilita la selección de los NO calificados (Nota Calidad +
+  // Nota Condición + Completo). Antes se filtraba `completo: true` acá, lo que
+  // ocultaba por completo los incompletos; ahora se muestran deshabilitados.
   const pallets = await prisma.pallet.findMany({
-    where: { embarqueId: null, completo: true },
+    where: { embarqueId: null },
     include: palletInclude,
     orderBy: { creadoEn: 'asc' },
   })
@@ -179,16 +218,22 @@ export async function reservarPalletsEnEmbarque(palletIds: number[], embarqueId:
     // los pallets realmente reservados.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_DESPACHO}::int, ${embarqueId}::int)`
 
-    // completo: true — defensa en profundidad (2026-09-02, compras.md §4.8):
-    // getPalletsDisponibles ya filtra los incompletos, pero esto evita que
-    // un pallet marcado incompleto justo entre el listado y la reserva (o
-    // llamado directo a la API) se cuele.
+    // Calificado (2026-09-28) = Completo + Nota Calidad + Nota Condición.
+    // Defensa en profundidad / anti-carrera: aunque el frontend deshabilita
+    // los no calificados, esto rechaza un pallet que se descalifique justo
+    // entre el listado y la reserva (o un llamado directo a la API).
     const claim = await tx.pallet.updateMany({
-      where: { id: { in: palletIds }, embarqueId: null, completo: true },
+      where: {
+        id: { in: palletIds },
+        embarqueId: null,
+        completo: true,
+        notaCalidadId: { not: null },
+        notaCondicionId: { not: null },
+      },
       data: { embarqueId },
     })
     if (claim.count !== palletIds.length) {
-      throw new ValidationError('Uno o más pallets ya no están disponibles — puede que otro Embarque los haya reservado o que no estén marcados como Completos')
+      throw new ValidationError('Uno o más pallets ya no están disponibles o no están calificados (requieren Nota de Calidad, Nota de Condición y estar Completos)')
     }
   })
 }
@@ -239,17 +284,29 @@ export async function confirmarDespacho(embarqueId: number, despachadoPor: strin
     const embarque = await tx.embarque.findFirst({
       where: { id: embarqueId, eliminadoEn: null },
       include: {
-        _count: { select: { pallets: true } },
-        packingLists: { where: { eliminadoEn: null }, select: { estado: true } },
+        pallets: { select: { numeroPallet: true } },
+        packingLists: { where: { eliminadoEn: null }, select: { estado: true, numerosPallet: true } },
       },
     })
     if (!embarque) return 'NO_ENCONTRADO' as const
     const efectivamenteDespachado = !!embarque.despachadoEn && !embarque.despachoAnuladoEn
     if (efectivamenteDespachado) return 'YA_DESPACHADO' as const
-    if (embarque._count.pallets === 0) return 'SIN_PALLETS' as const
-    const packingList = embarque.packingLists[0]
-    if (!packingList) return 'SIN_PACKING_LIST' as const
-    if (packingList.estado !== 'OK') return 'PACKING_LIST_CON_DISCREPANCIAS' as const
+    if (embarque.pallets.length === 0) return 'SIN_PALLETS' as const
+    if (embarque.packingLists.length === 0) return 'SIN_PACKING_LIST' as const
+    if (embarque.packingLists.some((pl) => pl.estado !== 'OK')) return 'PACKING_LIST_CON_DISCREPANCIAS' as const
+    // Packing parcializado (2026-09-28): la UNIÓN de los archivos OK debe cubrir
+    // EXACTAMENTE los pallets reservados (todo o nada). Se exige igualdad
+    // BIDIRECCIONAL (FAS-DEV-QA-R2-007): faltantes (reservado sin cubrir) Y
+    // sobrantes (cubierto que ya no está reservado — ej. se desvinculó un pallet
+    // tras reconciliar) bloquean el despacho.
+    const numerosReservados = new Set(embarque.pallets.map((p) => p.numeroPallet))
+    const cubiertos = new Set<string>()
+    for (const pl of embarque.packingLists) {
+      for (const n of (pl.numerosPallet as string[]) ?? []) cubiertos.add(n)
+    }
+    const faltantes = [...numerosReservados].filter((n) => !cubiertos.has(n))
+    const sobrantes = [...cubiertos].filter((n) => !numerosReservados.has(n))
+    if (faltantes.length > 0 || sobrantes.length > 0) return 'PACKING_LIST_INCOMPLETO' as const
 
     // Re-despachar tras una anulación pisa la confirmación anterior (no se
     // conserva historial de ciclos completos, ver comentario en el schema).
@@ -347,6 +404,7 @@ export async function guardarPackingList(
     contenido: Buffer
     estado: 'OK' | 'DISCREPANCIA'
     discrepancias: string[]
+    numerosPallet: string[]
     cargadoPor: string
   },
 ) {
@@ -356,14 +414,22 @@ export async function guardarPackingList(
     const embarque = await tx.embarque.findFirst({ where: { id: embarqueId, eliminadoEn: null }, select: { id: true } })
     if (!embarque) throw new ValidationError('El Embarque ya no existe')
 
-    // Soft-delete-then-create (2026-09-22, decisión de negocio Christian):
-    // la activa anterior queda como historial en vez de borrarse — mismo
-    // motivo que anularDespacho. `contenido` (bytes) no se toca: cuelga de
-    // la fila soft-deleted por FK cascade, sigue siendo descargable.
-    await tx.embarquePackingList.updateMany({
+    // Packing parcializado (2026-09-28): los archivos se ACUMULAN (ya no se
+    // reemplaza el anterior). El "todo o nada" se valida por la unión al
+    // despachar. Solape con pallets ya cubiertos: se revisa bajo este mismo
+    // lock para que dos subidas concurrentes no cubran el mismo pallet.
+    const activos = await tx.embarquePackingList.findMany({
       where: { embarqueId, eliminadoEn: null },
-      data: { eliminadoEn: new Date(), eliminadoPor: datos.cargadoPor },
+      select: { numerosPallet: true },
     })
+    const yaCubiertos = new Set(activos.flatMap((a) => (a.numerosPallet as string[]) ?? []))
+    const solapados = datos.numerosPallet.filter((n) => yaCubiertos.has(n))
+    if (solapados.length > 0) {
+      throw new ValidationError(
+        `Estos N° de Pallet ya vienen en otro archivo de Packing List cargado a este Embarque: ${solapados.join(', ')}`,
+      )
+    }
+
     const empresaId = getEmpresaIdActual()!
     const creado = await tx.embarquePackingList.create({
       data: {
@@ -375,6 +441,7 @@ export async function guardarPackingList(
         tamano: datos.tamano,
         estado: datos.estado,
         discrepancias: datos.discrepancias,
+        numerosPallet: datos.numerosPallet,
         cargadoPor: datos.cargadoPor,
         contenido: { create: { datos: datos.contenido } },
       },
@@ -384,15 +451,38 @@ export async function guardarPackingList(
   })
 }
 
-export async function getPackingListParaDescarga(embarqueId: number) {
+// Descarga de un archivo de Packing List. `packingListId` opcional por
+// compatibilidad: sin él baja el primer archivo activo (packing parcializado
+// 2026-09-28 admite N — el frontend pasa el id específico).
+export async function getPackingListParaDescarga(embarqueId: number, packingListId?: number) {
   const meta = await prisma.embarquePackingList.findFirst({
-    where: { embarqueId, eliminadoEn: null },
+    where: { embarqueId, eliminadoEn: null, ...(packingListId ? { id: packingListId } : {}) },
     select: { id: true, nombreArchivo: true, mime: true },
+    orderBy: { cargadoEn: 'asc' },
   })
   if (!meta) return null
   const contenido = await prisma.embarquePackingListContenido.findUnique({ where: { packingListId: meta.id } })
   if (!contenido) return null
   return { meta, datos: contenido.datos }
+}
+
+// Elimina (soft delete) un archivo de Packing List — para corregir una carga
+// parcial equivocada. Bloqueado si el Embarque ya está despachado.
+export async function eliminarPackingList(embarqueId: number, packingListId: number, eliminadoPor: string) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_DESPACHO}::int, ${embarqueId}::int)`
+    const embarque = await tx.embarque.findFirst({
+      where: { id: embarqueId, eliminadoEn: null },
+      select: { despachadoEn: true, despachoAnuladoEn: true },
+    })
+    if (!embarque) return 'NO_ENCONTRADO' as const
+    if (embarque.despachadoEn && !embarque.despachoAnuladoEn) return 'DESPACHADO' as const
+    const claim = await tx.embarquePackingList.updateMany({
+      where: { id: packingListId, embarqueId, eliminadoEn: null },
+      data: { eliminadoEn: new Date(), eliminadoPor },
+    })
+    return claim.count === 0 ? ('NO_ENCONTRADO' as const) : ('OK' as const)
+  })
 }
 
 export async function findByNumeroInstructivo(numeroInstructivo: string) {
@@ -404,24 +494,6 @@ export async function getNotaVenta(id: number) {
     where: { id, eliminadoEn: null },
     select: { id: true, folio: true, tipoEmbarqueId: true },
   })
-}
-
-// Correlativo de Embarque (2026-09-28): los embarques se numeran de forma
-// secuencial por prefijo (Tipo de Embarque), no por el folio del Cierre —
-// mismo criterio que calcularSiguienteCodigo. Se escanea el mayor sufijo
-// numérico entre los numeroInstructivo existentes que empiezan con el prefijo
-// (incluye eliminados, para no reusar un número ya usado). Devuelve 0 si no hay.
-export async function getMaxNumeroInstructivo(prefijo: string): Promise<number> {
-  const registros = await prisma.embarque.findMany({
-    where: { numeroInstructivo: { startsWith: prefijo } },
-    select: { numeroInstructivo: true },
-  })
-  let maximo = 0
-  for (const { numeroInstructivo } of registros) {
-    const n = parseInt(numeroInstructivo.slice(prefijo.length), 10)
-    if (!Number.isNaN(n) && n > maximo) maximo = n
-  }
-  return maximo
 }
 
 // Líneas del Cierre con lo necesario para estimar la cantidad de pallets
@@ -500,24 +572,35 @@ export async function createEmbarque(notaVentaId: number, numeroInstructivo: str
 // si `forzarSinReserva` es false).
 export async function generarEmbarqueTransaccional(
   notaVentaId: number,
-  numeroInstructivo: string,
+  prefijo: string,
+  digitos: number,
   gestorLogisticoId: number,
   creadoPor: string,
   forzarSinReserva: boolean,
   modoAutomatico: boolean,
-  procesarReserva: () => Promise<ResultadoIntentoReserva>,
+  procesarReserva: (numeroInstructivo: string) => Promise<ResultadoIntentoReserva>,
 ) {
   return prisma.$transaction(async (tx) => {
+    const empresaId = getEmpresaIdActual()!
+    // Correlativo atómico por prefijo (FAS-DEV-QA-R2-006): el lock de prefijo
+    // cubre el cálculo del máximo + la creación, así dos Cierres distintos con
+    // el mismo prefijo no generan el mismo número. Se toma ANTES del lock por
+    // notaVenta (orden estable para evitar deadlock).
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_CORRELATIVO}::int, hashtext(${`${empresaId}:${prefijo}`}))`
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA}::int, ${notaVentaId}::int)`
 
-    const existente = await tx.embarque.findFirst({ where: { numeroInstructivo, eliminadoEn: null } })
-    if (existente) {
-      throw new ValidationError(
-        `Ya existe un Embarque con el número "${numeroInstructivo}" — probablemente ya se generó un Embarque para este Cierre Comercial.`,
-      )
+    // Máximo sufijo numérico existente para el prefijo (incluye eliminados: un
+    // número usado nunca se reutiliza) — calculado DENTRO de la tx bajo el lock.
+    const registros = await tx.embarque.findMany({
+      where: { numeroInstructivo: { startsWith: prefijo } },
+      select: { numeroInstructivo: true },
+    })
+    let maximo = 0
+    for (const { numeroInstructivo: n } of registros) {
+      const num = parseInt(n.slice(prefijo.length), 10)
+      if (!Number.isNaN(num) && num > maximo) maximo = num
     }
-
-    const empresaId = getEmpresaIdActual()!
+    const numeroInstructivo = `${prefijo}${String(maximo + 1).padStart(digitos, '0')}`
 
     if (!modoAutomatico) {
       return tx.embarque.create({
@@ -526,7 +609,7 @@ export async function generarEmbarqueTransaccional(
       })
     }
 
-    const resultado = await procesarReserva()
+    const resultado = await procesarReserva(numeroInstructivo)
     if (!resultado.ok && !forzarSinReserva) {
       throw new IntegracionAglFallidaError(resultado.error ?? 'No se pudo conectar con AGL360')
     }
@@ -668,6 +751,31 @@ export async function guardarDatosReservaManual(embarqueId: number, datos: Datos
   })
 }
 
+// Valida que el tipoBlId sea un Parametro de tipo TIPO_BL vigente (2026-09-28).
+export async function getParametroTipoBl(id: number) {
+  return prisma.parametro.findFirst({
+    where: { id, eliminadoEn: null, bloqueado: false, tipoParametro: { codigo: 'TIPO_BL' } },
+    select: { id: true },
+  })
+}
+
+// Información base de la reserva (2026-09-28) — datos escalares propios del
+// Embarque, editables siempre (independiente de reservaManual).
+export async function guardarDatosReservaBase(embarqueId: number, datos: DatosReservaBaseInput, actualizadoPor: string) {
+  const claim = await prisma.embarque.updateMany({
+    where: { id: embarqueId, eliminadoEn: null },
+    data: {
+      fechaCompromiso: datos.fechaCompromiso,
+      temperatura: datos.temperatura,
+      cbm: datos.cbm,
+      tipoBlId: datos.tipoBlId,
+      actualizadoPor,
+    },
+  })
+  if (claim.count === 0) throw new ValidationError('El Embarque ya no existe')
+  return getEmbarqueById(embarqueId)
+}
+
 // ─── Instructivo de Embarque (2026-09-21, ventas.md R11) ───────────────────
 
 // Existencia + tipos de una Entidad genérica — usado para validar
@@ -708,6 +816,10 @@ export async function guardarDatosInstructivo(embarqueId: number, datos: DatosIn
     }
   })
   return getEmbarqueById(embarqueId)
+}
+
+export async function contarInstructivosHijos(embarqueId: number) {
+  return prisma.instructivoHijo.count({ where: { embarqueId, eliminadoEn: null } })
 }
 
 export async function listInstructivosHijos(embarqueId: number) {
@@ -820,6 +932,11 @@ export async function getInstructivoHijoConDetalle(instructivoHijoId: number) {
               mercado: { select: mantenedorSelect },
               paisDestino: { select: { descripcion: true } },
               puertoDestino: { select: mantenedorSelect },
+              // 2026-09-28: al PDF del Instructivo se agregan Tipo de Flete,
+              // Modalidad de Venta e Incoterm (Cláusula de Venta), todos Parametro.
+              tipoFlete: { select: mantenedorSelect },
+              modalidadVenta: { select: mantenedorSelect },
+              clausulaVenta: { select: mantenedorSelect },
             },
           },
           puertoZarpe: { select: mantenedorSelect },
@@ -847,7 +964,8 @@ export async function getInstructivoHijoConDetalle(instructivoHijoId: number) {
           variedad: { select: mantenedorSelect },
           categoria: { select: mantenedorSelect },
           calibre: { select: mantenedorSelect },
-          articulo: { select: mantenedorSelect },
+          // kgNeto/kgBruto del envase para Peso Neto/Bruto por línea (2026-09-28).
+          articulo: { select: { ...mantenedorSelect, kgNetoEnvase: true, kgBrutoEnvase: true } },
           cajas: true,
         },
       },

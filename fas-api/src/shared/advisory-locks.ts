@@ -102,6 +102,17 @@ export const LOCK_NAMESPACE_RECLAMO_PALLET_LINEA = 490249
 // combina origenTipo+origenId con hashtext(), igual criterio que ese lock.
 export const LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION = 490250
 
+// Serializa la asignación del correlativo de numeroInstructivo del Embarque
+// (2026-09-28, FAS-DEV-QA-R2-006): desde que el número es un correlativo
+// secuencial por prefijo (Tipo de Embarque) — ya no el folio de la NV —, dos
+// generaciones concurrentes de cierres DISTINTOS que comparten prefijo podrían
+// leer el mismo máximo y crear el mismo número. Este lock (clave:
+// hashtext(empresaId || ':' || prefijo)) cubre cálculo del máximo + creación
+// dentro de la MISMA transacción. Distinto de EMBARQUE_SOLICITUD_RESERVA (por
+// notaVentaId/embarqueId): aquel serializa el llamado a AGL por Cierre; este,
+// la unicidad del correlativo por prefijo entre Cierres.
+export const LOCK_NAMESPACE_EMBARQUE_CORRELATIVO = 490252
+
 // 490251 se usó brevemente para "Generar Instructivos" y se retiró
 // (2026-09-21, FAS-IE-QA-005, QA ronda 4): esa operación ahora comparte
 // LOCK_NAMESPACE_EMBARQUE_DESPACHO con reservarPalletsEnEmbarque/

@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { isHTTPError } from 'ky'
 import {
   Dialog,
   DialogContent,
@@ -28,13 +27,6 @@ interface GenerarEmbarqueDialogProps {
   notaVentaId: number
   open: boolean
   onOpenChange: (open: boolean) => void
-}
-
-// 502 = AGL_INTEGRACION_FALLIDA (embarques.service.ts, ventas.md §4.3) — la
-// integración con AGL360 falló, no un error de validación normal. Distingue
-// este caso para ofrecer "Generar Embarque sin reserva" en vez de un toast.
-function esFallaIntegracionAgl(e: unknown): boolean {
-  return isHTTPError(e) && e.response.status === 502
 }
 
 export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: GenerarEmbarqueDialogProps) {
@@ -67,32 +59,45 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
   })
   const gestores = gestoresData?.data ?? []
 
+  // Cuántos contenedores faltan por generar tras un éxito parcial (la reserva
+  // automática falló a mitad) — el reintento "sin reserva" cubre solo estos.
+  const [faltantes, setFaltantes] = useState(0)
+
+  function cerrarYRefrescar(navegarA?: number) {
+    queryClient.invalidateQueries({ queryKey: embarquesKeys.list({ notaVentaId }) })
+    queryClient.invalidateQueries({ queryKey: notasVentaKeys.all })
+    setConfirmarSinReservaOpen(false)
+    onOpenChange(false)
+    if (navegarA != null) router.push(`/dashboard/ventas/embarques/${navegarA}`)
+  }
+
   const mutation = useMutation({
-    mutationFn: (forzarSinReserva: boolean) =>
-      embarquesService.createMultiples({ notaVentaId, gestorLogisticoId: gestorLogisticoId!, cantidad, forzarSinReserva }),
+    mutationFn: (vars: { cantidad: number; forzar: boolean }) =>
+      embarquesService.createMultiples({ notaVentaId, gestorLogisticoId: gestorLogisticoId!, cantidad: vars.cantidad, forzarSinReserva: vars.forzar }),
     onSuccess: (res) => {
       const embarques = res.data.embarques
+      if (res.data.aglFallo) {
+        // Éxito parcial: se crearon `creados`, la reserva del siguiente falló.
+        // Se ofrece generar los restantes sin reserva (reintento acotado).
+        setFaltantes(cantidad - res.data.creados)
+        if (res.data.creados > 0) {
+          toast.warning(`Se generaron ${res.data.creados} de ${cantidad} — la reserva automática falló en el siguiente`)
+          queryClient.invalidateQueries({ queryKey: embarquesKeys.list({ notaVentaId }) })
+          queryClient.invalidateQueries({ queryKey: notasVentaKeys.all })
+        }
+        setConfirmarSinReservaOpen(true)
+        return
+      }
       const folios = embarques.map((e) => e.numeroInstructivo).join(', ')
       toast.success(
         embarques.length === 1
           ? `Embarque generado — Folio ${folios}`
-          : `${embarques.length} Embarques generados — Folios ${folios}`,
+          : `${embarques.length} Embarque(s) generado(s) — Folios ${folios}`,
       )
-      queryClient.invalidateQueries({ queryKey: embarquesKeys.list({ notaVentaId }) })
-      queryClient.invalidateQueries({ queryKey: notasVentaKeys.all })
-      setConfirmarSinReservaOpen(false)
-      onOpenChange(false)
-      // Con un solo Embarque se abre su detalle (UX previa); con varios se
-      // vuelve al listado del Cierre para verlos todos.
-      if (embarques.length === 1) router.push(`/dashboard/ventas/embarques/${embarques[0].id}`)
+      // Con un solo Embarque se abre su detalle; con varios se vuelve al listado.
+      cerrarYRefrescar(embarques.length === 1 ? embarques[0].id : undefined)
     },
-    onError: (e: Error) => {
-      if (esFallaIntegracionAgl(e)) {
-        setConfirmarSinReservaOpen(true)
-        return
-      }
-      toast.error(e.message || 'Error al generar el Embarque')
-    },
+    onError: (e: Error) => toast.error(e.message || 'Error al generar el Embarque'),
   })
 
   return (
@@ -111,10 +116,10 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
           <DialogHeader>
             <DialogTitle>Solicitar Reserva</DialogTitle>
             <DialogDescription>
-              El número de instructivo (Folio) se asigna automáticamente a partir del folio de este Cierre Comercial y
-              el prefijo configurado para su Tipo de Embarque. Si el Gestor Logístico elegido tiene una integración
-              activa, se intentará reservar espacio automáticamente — si no, el Embarque quedará listo para ingresar
-              los datos de la reserva a mano.
+              El número de instructivo se asigna automáticamente como un correlativo secuencial por Tipo de Embarque
+              (con su prefijo configurado). Si el Gestor Logístico elegido tiene una integración activa, se intentará
+              reservar espacio automáticamente — si no, el Embarque quedará listo para ingresar los datos de la reserva
+              a mano.
             </DialogDescription>
           </DialogHeader>
 
@@ -141,7 +146,7 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
             {estimacion?.data && (
               <p className='text-muted-foreground text-xs'>
                 Sugerido: {estimacion.data.contenedoresSugeridos} ({estimacion.data.totalPallets} pallets ÷ {estimacion.data.palletsPorContenedor} por contenedor).
-                Se generará un Embarque con su reserva por cada contenedor.
+                Se genera un Embarque con su reserva por cada contenedor; su N° de instructivo es un correlativo secuencial por Tipo de Embarque.
               </p>
             )}
           </div>
@@ -150,7 +155,7 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
             <Button type='button' variant='outline' onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
               Cancelar
             </Button>
-            <Button onClick={() => mutation.mutate(false)} isLoading={mutation.isPending} disabled={!gestorLogisticoId}>
+            <Button onClick={() => mutation.mutate({ cantidad, forzar: false })} isLoading={mutation.isPending} disabled={!gestorLogisticoId}>
               <Icons.check className='mr-1 h-4 w-4' />
               Solicitar Reserva
             </Button>
@@ -160,11 +165,11 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
 
       <AlertModal
         isOpen={confirmarSinReservaOpen}
-        onClose={() => setConfirmarSinReservaOpen(false)}
-        onConfirm={() => mutation.mutate(true)}
+        onClose={() => cerrarYRefrescar()}
+        onConfirm={() => mutation.mutate({ cantidad: faltantes, forzar: true })}
         loading={mutation.isPending}
         title='No se pudo conectar con AGL360'
-        description='No se pudo enviar la Solicitud de Reserva. ¿Generar el Embarque de todas formas, sin reserva? Podrás reintentar la solicitud después desde el propio Embarque.'
+        description={`No se pudo enviar la Solicitud de Reserva${faltantes > 0 ? ` de ${faltantes} contenedor(es) restante(s)` : ''}. ¿Generar ese/esos Embarque(s) de todas formas, sin reserva? Podrás reintentar la solicitud después desde cada Embarque.`}
       />
     </>
   )

@@ -15,6 +15,7 @@ import { entidadesService } from '@/features/entidades/service'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { embarquesService } from '../service'
 import { embarquesKeys } from '../queries'
+import { ReservaInfoBaseCard } from './reserva-info-base-card'
 import { ESTADO_RESERVA_LABELS } from '../types'
 import type { DatosInstructivoInput, DatosReservaManualInput, EmbarqueDetalle, StackingRangoInput } from '../types'
 
@@ -241,6 +242,8 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
   })
 
   return (
+    <div className='space-y-4'>
+    <ReservaInfoBaseCard embarque={embarque} />
     <div className='space-y-4 rounded-md border p-6'>
       <div className='flex items-center gap-2'>
         <Badge variant={embarque.estadoReserva === 'CONFIRMADA' ? 'default' : embarque.estadoReserva === 'SOLICITADA' ? 'secondary' : 'destructive'}>
@@ -417,6 +420,7 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
           </Button>
         </div>
       )}
+    </div>
     </div>
   )
 }

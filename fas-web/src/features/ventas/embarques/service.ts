@@ -34,7 +34,7 @@ export const embarquesService = {
     return api.get('ventas/embarques/estimacion-contenedores', { searchParams: { notaVentaId: String(notaVentaId) } }).json()
   },
 
-  async createMultiples(data: EmbarqueCreateInput & { cantidad: number }): Promise<{ data: { embarques: Embarque[]; creados: number } }> {
+  async createMultiples(data: EmbarqueCreateInput & { cantidad: number }): Promise<{ data: { embarques: Embarque[]; creados: number; aglFallo: boolean } }> {
     return api.post('ventas/embarques/multiples', { json: data }).json()
   },
 
@@ -72,8 +72,14 @@ export const embarquesService = {
       .json()
   },
 
-  urlDescargaPackingList(id: number): string {
-    return `/api/ventas/embarques/${id}/packing-list/descarga`
+  urlDescargaPackingList(id: number, packingListId?: number): string {
+    const base = `/api/ventas/embarques/${id}/packing-list/descarga`
+    return packingListId ? `${base}?packingListId=${packingListId}` : base
+  },
+
+  // Packing parcializado (2026-09-28): eliminar un archivo de la carga.
+  async eliminarPackingList(id: number, packingListId: number): Promise<{ data: EmbarqueDetalle }> {
+    return api.delete(`ventas/embarques/${id}/packing-list/${packingListId}`).json()
   },
 
   // ─── Solicitud de Reserva (ventas.md §4.3) ────────────────────────────────
@@ -88,6 +94,15 @@ export const embarquesService = {
 
   async guardarDatosReservaManual(id: number, data: DatosReservaManualInput): Promise<{ data: EmbarqueDetalle }> {
     return api.patch(`ventas/embarques/${id}/datos-reserva`, { json: data }).json()
+  },
+
+  // Información base de la reserva (2026-09-28): fecha compromiso, temperatura,
+  // CBM, tipo de BL.
+  async guardarDatosReservaBase(
+    id: number,
+    data: { fechaCompromiso?: string | null; temperatura?: number | null; cbm?: number | null; tipoBlId?: number | null },
+  ): Promise<{ data: EmbarqueDetalle }> {
+    return api.patch(`ventas/embarques/${id}/datos-reserva-base`, { json: data }).json()
   },
 
   // ─── Instructivo de Embarque (2026-09-21, ventas.md R11) ──────────────────

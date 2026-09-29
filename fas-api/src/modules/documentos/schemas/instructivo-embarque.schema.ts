@@ -27,6 +27,9 @@ export const instructivoEmbarquePdfPayloadSchema = z.object({
   consignatario: z.string().nullable(),
   notify: z.string().nullable(),
   tipoEmbarque: z.string().nullable(),
+  tipoFlete: z.string().nullable(),
+  modalidadVenta: z.string().nullable(),
+  incoterm: z.string().nullable(),
   mercado: z.string().nullable(),
   paisDestino: z.string().nullable(),
   puertoDestino: z.string().nullable(),
@@ -61,10 +64,14 @@ export const instructivoEmbarquePdfPayloadSchema = z.object({
     articulo: z.string(),
     productor: z.string(),
     cajas: z.number().int(),
+    pesoNeto: z.number(),
+    pesoBruto: z.number(),
   })),
   totales: z.object({
     pallets: z.number().int(),
     cajas: z.number().int(),
+    pesoNeto: z.number(),
+    pesoBruto: z.number(),
   }),
 })
 

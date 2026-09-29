@@ -1140,6 +1140,7 @@ model Parametro {
   notasVentaModalidad   NotaVenta[]   @relation("NotaVentaModalidadVenta")
   notasVentaClausula    NotaVenta[]   @relation("NotaVentaClausulaVenta")
   notasVentaTipoFlete   NotaVenta[]   @relation("NotaVentaTipoFlete")
+  embarquesTipoBl       Embarque[]    @relation("EmbarqueTipoBl")
   ordenesCompraIncoterm OrdenCompra[] @relation("OrdenCompraIncoterm")
 
   @@unique([empresaId, id])
@@ -2835,6 +2836,15 @@ model Embarque {
   // `InstructivoHijo.observaciones` (por Planta/punto de retiro).
   observacionesInstructivo String?
 
+  // Información base de la reserva (2026-09-28, decisión de negocio Christian):
+  // datos propios de cada Embarque/reserva. La Semana (ISO) de la Fecha de
+  // Compromiso se calcula en la presentación, no se persiste.
+  fechaCompromiso DateTime?
+  temperatura     Int? // °C, entero
+  cbm             Int? // metros cúbicos, entero
+  tipoBlId        Int? // Parametro tipo TIPO_BL
+  tipoBl          Parametro? @relation("EmbarqueTipoBl", fields: [empresaId, tipoBlId], references: [empresaId, id])
+
   instructivosHijos InstructivoHijo[]
 
   // Ventana(s) de stacking del contenedor en el puerto (2026-09-22, decisión
@@ -3034,6 +3044,11 @@ model EmbarquePackingList {
   // ValidationError.details.diferencias del motor de Recepción) — vacío
   // cuando estado = OK.
   discrepancias Json
+  // Packing List parcializado (2026-09-28): N° de Pallet que cubre ESTE archivo
+  // (subconjunto de los reservados). El despacho se habilita solo cuando la
+  // unión de los archivos OK activos cubre exactamente los reservados, sin
+  // faltantes ni solapes. Array de strings (N° de Pallet).
+  numerosPallet Json              @default("[]")
 
   cargadoEn    DateTime  @default(now())
   cargadoPor   String

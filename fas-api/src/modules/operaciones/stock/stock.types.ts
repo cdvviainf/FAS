@@ -67,3 +67,25 @@ export interface PalletUpdateInput {
   notaCondicionId?: number | null
   completo?: boolean
 }
+
+// Edición de Stock (2026-09-28) — lote completo (pallet + líneas).
+export interface LoteLineaInput {
+  id?: number
+  especieId: number
+  variedadId: number
+  categoriaId: number
+  articuloId: number
+  calibreId: number
+  cajas: number
+  fechaEmbalaje?: Date | null
+  etiquetaId?: number | null
+  packingId?: number | null
+}
+
+export interface LoteEditarInput {
+  productorId?: number
+  notaCalidadId?: number | null
+  notaCondicionId?: number | null
+  completo?: boolean
+  lineas: LoteLineaInput[]
+}

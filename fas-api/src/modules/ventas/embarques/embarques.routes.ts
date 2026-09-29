@@ -38,6 +38,11 @@ export async function embarquesRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
     ctrl.guardarDatosReservaManual,
   )
+  app.patch(
+    '/embarques/:id/datos-reserva-base',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.guardarDatosReservaBase,
+  )
 
   // ─── Instructivo de Embarque (2026-09-21, ventas.md R11) ─────────────────
   app.patch(
@@ -100,6 +105,11 @@ export async function embarquesRoutes(app: FastifyInstance) {
     '/embarques/:id/packing-list/descarga',
     { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
     ctrl.descargarPackingList,
+  )
+  app.delete(
+    '/embarques/:id/packing-list/:packingListId',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.eliminarPackingList,
   )
 
   // ─── Reclamos (2026-09-08, reclamos.md) — se crean desde acá ───────────────
