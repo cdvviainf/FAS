@@ -134,7 +134,11 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-h-[90vh] max-w-4xl overflow-auto'>
+      {/* sm:max-w-* con prefijo: sin el prefijo, el sm:max-w-lg de la base de
+          DialogContent gana en sm+ (tailwind-merge no los deduplica por ser
+          variantes distintas) y capaba el modal en ~512px — con 9 columnas
+          quedaba ilegible. 6xl da ~128px por columna. */}
+      <DialogContent className='max-h-[90vh] w-[95vw] overflow-auto sm:max-w-6xl'>
         <DialogHeader>
           <DialogTitle>Editar lote {loteData?.data?.numeroPallet ? `— Pallet ${loteData.data.numeroPallet}` : ''}</DialogTitle>
           <DialogDescription>Modifica las características del lote, agrega o elimina líneas.</DialogDescription>
