@@ -6,6 +6,7 @@ import {
 } from '../../ventas/cobranza/proforma.repository.js'
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
 import { factorFob, unitarioFob } from '../../ventas/cobranza/clausula-flete-seguro.js'
+import { descripcionLinea } from '../../ventas/cobranza/descripcion-idioma.js'
 import type { ProformaPdfPayload } from '../schemas/proforma.schema.js'
 
 function round2(n: number): number {
@@ -81,7 +82,8 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
     },
     codigo: proforma.codigo,
     numeroInstructivo: embarque.numeroInstructivo,
-    fechaEmision: proforma.fechaEmision.toISOString(),
+    // Fecha del documento (editable) — cae a la fecha de emisión si no se fijó.
+    fechaEmision: (proforma.fechaDocumento ?? proforma.fechaEmision).toISOString(),
     idioma: proforma.idioma as 'EN' | 'ES',
     cliente: {
       razonSocial: cliente?.razonSocial ?? '—',
@@ -94,7 +96,8 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
     // cláusula/CIF se lleva a FOB con el factor. Sin flete/seguro el factor es 1
     // y las líneas quedan idénticas al valor cláusula.
     lineas: proforma.lineas.map((l) => ({
-      descripcion: l.descripcion,
+      // Descripción reconstruida en el idioma del documento (ES/EN).
+      descripcion: descripcionLinea(l, proforma.idioma === 'EN' ? 'EN' : 'ES'),
       cantidadCajas: l.cantidadCajas,
       precioUnitario: unitarioFob(Number(l.precioUnitario), factor),
       montoLinea: round2(Number(l.montoLinea) * factor),

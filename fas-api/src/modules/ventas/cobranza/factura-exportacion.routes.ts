@@ -11,10 +11,16 @@ export async function facturaExportacionRoutes(app: FastifyInstance) {
   app.post('/proformas/:id/factura-exportacion', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.crearDesdeProforma)
 
   app.patch('/facturas-exportacion/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.actualizar)
-  app.post('/facturas-exportacion/:id/emitir', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.emitir)
+  // Firma SII en dos pasos manuales: enviar borrador (temporal) y firmar (timbrar).
+  app.post('/facturas-exportacion/:id/enviar-sii', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.enviarSii)
+  app.post('/facturas-exportacion/:id/firmar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.firmar)
+  app.post('/facturas-exportacion/:id/reabrir', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.reabrir)
   app.post('/facturas-exportacion/:id/anular', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.anular)
 
   app.get('/facturas-exportacion', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listar)
+  // Landing embarque-céntrica: embarques despachados + estado Proforma/Factura.
+  app.get('/exportacion/embarques-despachados', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listarEmbarques)
   app.get('/facturas-exportacion/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.obtener)
+  app.get('/facturas-exportacion/:id/xml', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarXml)
   app.get('/embarques/:id/factura-exportacion', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.obtenerDelEmbarque)
 }

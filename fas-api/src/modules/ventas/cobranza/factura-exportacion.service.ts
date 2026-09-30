@@ -6,6 +6,7 @@ import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
 import { mapFacturaExportacionA110 } from '../../finanzas/facturacion/mappers/factura-exportacion.mapper.js'
 import { factorFob, resolverFleteSeguro, unitarioFob } from './clausula-flete-seguro.js'
+import { descripcionLinea, faltantesDescripcionExtranjera, type Idioma, type LineaConMantenedores } from './descripcion-idioma.js'
 import * as repo from './factura-exportacion.repository.js'
 import type {
   DimensionProforma,
@@ -27,6 +28,44 @@ function sumarMontos(montos: number[]): number {
 function requireEmbarqueDespachado(embarque: { despachadoEn: Date | null; despachoAnuladoEn: Date | null }) {
   const despachado = !!embarque.despachadoEn && !embarque.despachoAnuladoEn
   if (!despachado) throw new ValidationError('Este Embarque debe estar despachado antes de facturar')
+}
+
+// Idioma normalizado (ES/EN); cualquier otro valor cae a ES.
+function normalizarIdioma(idioma: string | null | undefined): Idioma {
+  return idioma === 'EN' ? 'EN' : 'ES'
+}
+
+// Adapta las líneas (con relaciones de mantenedores) al shape del builder de
+// descripción por idioma.
+type LineaConRelaciones = {
+  especie: { descripcion: string; descripcionExtranjera: string | null }
+  variedad: { descripcion: string; descripcionExtranjera: string | null } | null
+  articulo: { descripcion: string; descripcionExtranjera: string | null } | null
+  calibre: { descripcion: string; descripcionExtranjera: string | null } | null
+  categoria: { descripcion: string; descripcionExtranjera: string | null } | null
+  etiqueta: { descripcion: string; descripcionExtranjera: string | null } | null
+}
+function aLineasMantenedores(lineas: LineaConRelaciones[]): LineaConMantenedores[] {
+  return lineas.map((l) => ({
+    especie: l.especie,
+    variedad: l.variedad,
+    articulo: l.articulo,
+    calibre: l.calibre,
+    categoria: l.categoria,
+    etiqueta: l.etiqueta,
+  }))
+}
+
+// Barrera de idioma: si es EN, exige que todos los mantenedores referenciados
+// tengan descripcionExtranjera; si falta alguno, bloquea y los lista.
+function requireIdiomaEmitible(idioma: Idioma, lineas: LineaConRelaciones[]) {
+  if (idioma !== 'EN') return
+  const faltan = faltantesDescripcionExtranjera(aLineasMantenedores(lineas))
+  if (faltan.length > 0) {
+    throw new ValidationError(
+      `No se puede emitir en inglés: falta la descripción extranjera de — ${faltan.join(' · ')}. Complétala en el mantenedor o cambia el idioma a español.`,
+    )
+  }
 }
 
 // ─── Crear borrador desde una Proforma emitida ───────────────────────────────
@@ -86,6 +125,10 @@ export async function crearBorradorDesdeProforma(proformaId: number, userId: str
         monedaId: proforma.monedaId,
         condicionPagoId: proforma.condicionPagoId,
         dimensiones: proforma.dimensionesAgrupacion,
+        // Idioma y fecha del documento se heredan de la Proforma; ambos son
+        // editables mientras la Factura esté en BORRADOR.
+        idioma: proforma.idioma,
+        fechaDocumento: proforma.fechaDocumento ?? null,
         montoTotal,
         montoFlete,
         montoSeguro,
@@ -127,13 +170,20 @@ export async function actualizarBorrador(id: number, body: FacturaExportacionAct
     montoSeguro: body.montoSeguro,
   })
 
+  // El repo actualiza el borrador y descarta el DTE temporal descartable en una
+  // sola transacción bajo el advisory lock del origen (FAS-COB-F1-001), para que
+  // "Firmar" nunca timbre un payload viejo.
   return repo.actualizarBorrador(
     id,
-    body.dimensiones as DimensionProforma[],
-    montoTotal,
-    montoFlete,
-    montoSeguro,
-    lineas,
+    {
+      dimensiones: body.dimensiones as DimensionProforma[],
+      idioma: normalizarIdioma(body.idioma),
+      fechaDocumento: body.fechaDocumento ? new Date(body.fechaDocumento) : null,
+      montoTotal,
+      montoFlete,
+      montoSeguro,
+      lineas,
+    },
     userId,
   )
 }
@@ -192,49 +242,30 @@ async function construirCuotas(
   return cuotas
 }
 
-// ─── Emitir (timbrar el DTE 110 + generar cuotas) ────────────────────────────
-export async function emitir(id: number, userId: string) {
-  const factura = await repo.getFacturaActivaById(id)
-  if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
-  if (factura.estado !== 'BORRADOR') {
-    throw new ValidationError('Esta Factura ya fue emitida o está anulada')
-  }
-  if (factura.lineas.length === 0) throw new ValidationError('La Factura no tiene líneas para emitir')
-
-  const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
-  if (!embarque) throw new NotFoundError('Embarque', String(factura.embarqueId))
-  requireEmbarqueDespachado(embarque)
-
-  const empresaId = factura.empresaId
-  const emisor = await dteRepo.getEmpresaParaDte(empresaId)
-  if (!emisor?.rut) {
-    throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas antes de facturar')
-  }
-
+// Arma el payload del DTE 110 desde la Factura + Embarque + emisor, en el idioma
+// de la Factura (descripción reconstruida por idioma; detalle a valor FOB).
+function construirPayloadDte(
+  factura: NonNullable<Awaited<ReturnType<typeof repo.getFacturaActivaById>>>,
+  embarque: NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>,
+  emisor: { rut: string; razonSocial: string; giro: string | null; direccion: string | null; comuna: string | null },
+  idioma: Idioma,
+) {
   const nv = embarque.notaVenta
   const monedaAduana = nv.moneda.descripcionExtranjera || nv.moneda.descripcion || nv.moneda.codigo
-
-  // Revalida Flete/Seguro contra la cláusula al emitir (última barrera antes de
-  // timbrar). El total de la factura (montoTotal) NO cambia — es el valor
-  // cláusula/CIF y va como TotClauVenta. Flete/Seguro son un monto cerrado
-  // dentro de él: el detalle de mercadería se timbra a valor FOB.
   const montoTotalNum = Number(factura.montoTotal)
+  // Revalida Flete/Seguro (última barrera). El total (CIF) NO cambia — va como
+  // TotClauVenta; el detalle se timbra a valor FOB.
   const { montoFlete, montoSeguro } = resolverFleteSeguro(nv.clausulaVenta, montoTotalNum, {
     montoFlete: factura.montoFlete == null ? null : Number(factura.montoFlete),
     montoSeguro: factura.montoSeguro == null ? null : Number(factura.montoSeguro),
   })
   const factor = factorFob(montoTotalNum, montoFlete, montoSeguro)
+  const fechaDocumento = factura.fechaDocumento ?? new Date()
 
-  const payload = mapFacturaExportacionA110({
-    fechaEmision: new Date(),
+  return mapFacturaExportacionA110({
+    fechaEmision: fechaDocumento,
     monedaAduana,
-    emisor: {
-      rut: emisor.rut,
-      razonSocial: emisor.razonSocial,
-      giro: emisor.giro,
-      direccion: emisor.direccion,
-      comuna: emisor.comuna,
-    },
+    emisor,
     receptor: {
       razonSocial: nv.cliente.razonSocial,
       identificador: nv.cliente.identificador,
@@ -243,10 +274,8 @@ export async function emitir(id: number, userId: string) {
       nacionalidadCodigo: nv.paisDestino?.codigo ?? null,
     },
     lineas: factura.lineas.map((l) => ({
-      descripcion: l.descripcion,
+      descripcion: descripcionLinea(l, idioma),
       cantidadCajas: l.cantidadCajas,
-      // Detalle a valor FOB: el precio unitario cláusula/CIF se lleva a FOB con
-      // el factor (cuando no hay flete/seguro, factor = 1 y no cambia).
       precioUnitario: unitarioFob(Number(l.precioUnitario), factor),
     })),
     aduana: {
@@ -261,8 +290,40 @@ export async function emitir(id: number, userId: string) {
       paisDestinoCodigo: nv.paisDestino?.codigo ?? null,
     },
   })
+}
 
-  // Paso 1 — DTE temporal (borrador en LibreDTE).
+// ─── Paso 1: Enviar borrador al SII (crea el DTE temporal en LibreDTE) ────────
+export async function enviarBorradorSii(id: number, userId: string) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
+  if (factura.estado !== 'BORRADOR') {
+    throw new ValidationError('Solo se puede enviar al SII una Factura en estado Borrador')
+  }
+  if (factura.lineas.length === 0) throw new ValidationError('La Factura no tiene líneas para enviar')
+
+  const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(factura.embarqueId))
+  requireEmbarqueDespachado(embarque)
+
+  const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
+  if (!emisor?.rut) {
+    throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas antes de facturar')
+  }
+
+  const idioma = normalizarIdioma(factura.idioma)
+  requireIdiomaEmitible(idioma, factura.lineas)
+
+  // Versión de la factura con la que se arma el payload — se re-verifica bajo el
+  // advisory lock antes de crear el temporal (FAS-COB-F1-001).
+  const versionAlLeer = factura.actualizadoEn?.getTime() ?? null
+
+  const payload = construirPayloadDte(
+    factura,
+    embarque,
+    { rut: emisor.rut, razonSocial: emisor.razonSocial, giro: emisor.giro, direccion: emisor.direccion, comuna: emisor.comuna },
+    idioma,
+  )
+
   const temporal = await dteService.emitirDteTemporal({
     origenTipo: ORIGEN_TIPO,
     origenId: factura.id,
@@ -271,38 +332,91 @@ export async function emitir(id: number, userId: string) {
     rutEmisor: emisor.rut,
     rutReceptor: RUT_RECEPTOR_EXTRANJERO,
     creadoPor: userId,
+    // Bajo el lock: aborta si la factura cambió (otra edición guardó una versión
+    // nueva) o dejó de estar en BORRADOR entre la lectura inicial y este punto,
+    // para no persistir un temporal con un payload viejo.
+    verificarVigencia: async (tx) => {
+      const actual = await tx.facturaExportacion.findFirst({
+        where: { id: factura.id },
+        select: { estado: true, actualizadoEn: true, eliminadoEn: true },
+      })
+      if (!actual || actual.eliminadoEn || actual.estado !== 'BORRADOR') {
+        throw new ValidationError('La Factura ya no está en Borrador. Recarga la página.')
+      }
+      if ((actual.actualizadoEn?.getTime() ?? null) !== versionAlLeer) {
+        throw new ValidationError('La Factura fue modificada mientras se enviaba al SII. Recarga e inténtalo de nuevo.')
+      }
+    },
   })
   if (temporal.estado !== 'TEMPORAL_CREADO') {
     throw new ValidationError(temporal.errorMensaje ?? 'No se pudo crear el DTE temporal en LibreDTE')
   }
+  // La Factura sigue en BORRADOR; el "borrador enviado" se refleja por el estado
+  // del DocumentoDte (TEMPORAL_CREADO), que habilita "Firmar".
+  return repo.getFacturaActivaById(id)
+}
 
-  // Paso 2 — timbrado real (folio + envío SII).
-  const generado = await dteService.generarDteReal({
-    origenTipo: ORIGEN_TIPO,
-    origenId: factura.id,
-    tipoDte: TIPO_DTE_FACTURA_EXPORTACION,
-    rutEmisor: emisor.rut,
-    rutReceptor: RUT_RECEPTOR_EXTRANJERO,
-    creadoPor: userId,
-  })
-  if (generado.estado !== 'GENERADO') {
-    // La Factura queda en BORRADOR; se puede reintentar. El temporal sigue vivo.
-    throw new ValidationError(generado.errorMensaje ?? 'No se pudo timbrar el DTE en LibreDTE')
+// ─── Paso 2: Firmar (timbrado real: folio + envío SII, genera cuotas) ─────────
+export async function firmar(id: number, userId: string) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
+  if (factura.estado !== 'BORRADOR' && factura.estado !== 'RECHAZADA') {
+    throw new ValidationError('Esta Factura no está en estado para firmar')
+  }
+
+  const dte = await dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id)
+  if (!dte || (dte.estado !== 'TEMPORAL_CREADO' && dte.estado !== 'GENERADO')) {
+    throw new ValidationError('Primero envía el borrador al SII antes de firmar')
+  }
+
+  const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(factura.embarqueId))
+  requireEmbarqueDespachado(embarque)
+
+  // Reconciliación idempotente (FAS-COB-F1-005): si el DTE YA está GENERADO
+  // (timbrado en un intento previo que no alcanzó a aprobar la factura), NO se
+  // vuelve a timbrar — solo se reconcilia la factura con el folio existente.
+  let folio: number | null
+  let trackIdSii: string | null
+  if (dte.estado === 'GENERADO') {
+    folio = dte.folio
+    trackIdSii = dte.libredteCodigoTemporal
+  } else {
+    const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
+    if (!emisor?.rut) {
+      throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas antes de facturar')
+    }
+    const generado = await dteService.generarDteReal({
+      origenTipo: ORIGEN_TIPO,
+      origenId: factura.id,
+      tipoDte: TIPO_DTE_FACTURA_EXPORTACION,
+      rutEmisor: emisor.rut,
+      rutReceptor: RUT_RECEPTOR_EXTRANJERO,
+      creadoPor: userId,
+    })
+    if (generado.estado === 'GENERANDO') {
+      // Otra firma del mismo origen está timbrando (advisory lock liberado antes
+      // de la llamada externa). NO es un rechazo: no se toca la factura — el
+      // usuario reintenta/recarga cuando termine (FAS-COB-F1-006).
+      throw new ValidationError('El timbrado de esta Factura ya está en curso — espera unos segundos y recarga')
+    }
+    if (generado.estado !== 'GENERADO') {
+      // Rechazo real del SII/LibreDTE: se marca RECHAZADA con el motivo. El
+      // DocumentoDte vuelve a TEMPORAL_CREADO, así que se puede reintentar
+      // "Firmar" sobre el mismo temporal (política F1-A03: reusar temporal).
+      await repo.marcarRechazada(factura.id, generado.errorMensaje ?? 'No se pudo timbrar el DTE en LibreDTE')
+      throw new ValidationError(generado.errorMensaje ?? 'No se pudo timbrar el DTE en LibreDTE')
+    }
+    folio = generado.folio ?? null
+    trackIdSii = generado.libredteCodigoTemporal ?? null
   }
 
   const fechaEmision = new Date()
-  const cuotas = await construirCuotas(embarque.notaVentaId, Number(factura.montoTotal), fechaEmision, embarque)
+  const fechaDocumento = factura.fechaDocumento ?? fechaEmision
+  // La referencia FACTURA de las cuotas usa la fecha del documento.
+  const cuotas = await construirCuotas(embarque.notaVentaId, Number(factura.montoTotal), fechaDocumento, embarque)
 
-  return repo.marcarEmitida(
-    factura.id,
-    {
-      folio: generado.folio ?? null,
-      trackIdSii: generado.libredteCodigoTemporal ?? null,
-      fechaEmision,
-      cuotas,
-    },
-    userId,
-  )
+  return repo.marcarFirmada(factura.id, { folio, trackIdSii, fechaEmision, fechaDocumento, cuotas }, userId)
 }
 
 // ─── Lecturas / anulación ────────────────────────────────────────────────────
@@ -313,7 +427,22 @@ export async function obtenerPorEmbarque(embarqueId: number) {
 export async function obtenerFactura(id: number) {
   const factura = await repo.getFacturaByIdConHistorial(id)
   if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
-  return factura
+  // Adjunta el estado del DocumentoDte (para habilitar Enviar/Firmar/Descargar
+  // XML en el frontend sin exponer el XML completo).
+  const dte = await dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id)
+  return {
+    ...factura,
+    dte: dte ? { estado: dte.estado, folio: dte.folio, tieneXml: !!dte.xml } : null,
+  }
+}
+
+// XML timbrado del DTE (para descarga). Solo si ya fue generado.
+export async function obtenerXmlFactura(id: number) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
+  const dte = await dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id)
+  if (!dte?.xml) throw new ValidationError('Esta Factura aún no tiene XML timbrado disponible')
+  return { xml: dte.xml, folio: dte.folio, codigo: factura.codigo }
 }
 
 export async function listarFacturas(filters: FacturasExportacionListFilters) {
@@ -322,11 +451,30 @@ export async function listarFacturas(filters: FacturasExportacionListFilters) {
   return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
+// Listado embarque-céntrico: embarques despachados + estado Proforma/Factura.
+export async function listarEmbarquesDespachados(filters: repo.EmbarquesExportacionFilters) {
+  const { page = 1, limit = 20 } = filters
+  const { data, total } = await repo.listEmbarquesDespachados(filters)
+  return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
+}
+
+// Vuelve una Factura RECHAZADA a BORRADOR para poder editarla y reintentar.
+export async function reabrirFactura(id: number) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
+  if (factura.estado !== 'RECHAZADA') {
+    throw new ValidationError('Solo se puede reabrir una Factura rechazada')
+  }
+  return repo.reabrirBorrador(id)
+}
+
 export async function anularFactura(id: number, userId: string) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
-  if (factura.estado === 'EMITIDA') {
-    throw new ValidationError('No se puede anular una Factura ya emitida (timbrada ante el SII) — corrige con una Nota de Crédito')
+  if (factura.estado === 'APROBADA') {
+    throw new ValidationError(
+      'No se puede anular una Factura ya aprobada (timbrada ante el SII) — requiere una Nota de Crédito de anulación (próxima fase)',
+    )
   }
   return repo.anularFactura(id, userId)
 }

@@ -84,6 +84,11 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
           </p>
         </div>
         <div className='flex gap-2'>
+          {proforma.embarque.notaVentaId != null && (
+            <Button variant='outline' onClick={() => router.push(`/dashboard/ventas/cierre/${proforma.embarque.notaVentaId}`)}>
+              <Icons.externalLink className='mr-2 h-4 w-4' /> Ver Cierre Comercial
+            </Button>
+          )}
           {proforma.estado === 'EMITIDA' && (
             <Button variant='outline' onClick={() => documentosService.abrirPdf('proforma', proforma.id)}>
               <Icons.download className='mr-2 h-4 w-4' /> Ver PDF

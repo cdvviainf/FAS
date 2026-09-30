@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client'
 import { env } from '../../../config/env.js'
 import { ValidationError } from '../../../shared/errors.js'
 import * as repo from './dte-emitidos.repository.js'
@@ -12,6 +13,9 @@ export interface EmitirDteTemporalInput {
   rutEmisor: string
   rutReceptor: string
   creadoPor: string
+  // Verificación de vigencia del origen ejecutada bajo el advisory lock antes de
+  // crear el temporal — aborta si el borrador cambió (FAS-COB-F1-001).
+  verificarVigencia?: (tx: Prisma.TransactionClient) => Promise<void>
 }
 
 // Orquesta la emisión del DTE temporal de un origen (hoy solo 'movimiento').
@@ -38,6 +42,7 @@ export async function emitirDteTemporal(input: EmitirDteTemporalInput) {
     rutReceptor: input.rutReceptor,
     payloadEnviado: input.payload,
     creadoPor: input.creadoPor,
+    verificarVigencia: input.verificarVigencia,
   })
 
   if (!debeEmitir) return doc
@@ -116,11 +121,26 @@ export async function generarDteReal(input: GenerarDteRealInput) {
       emisor: rutSinDv(input.rutEmisor),
       receptor: rutSinDv(input.rutReceptor),
     },
-    { getXML: '0' },
+    // getXML='1' para poder ofrecer la descarga del XML timbrado del documento.
+    { getXML: '1' },
   )
   if (!resultado.ok) {
     return repo.marcarErrorGenerar(doc.id, resultado.error ?? 'LibreDTE no pudo timbrar el DTE', input.creadoPor)
   }
   const folio = extraerFolio(resultado.data)
-  return repo.marcarGenerado(doc.id, folio, resultado.data ?? null, input.creadoPor)
+  const xml = extraerXml(resultado.data)
+  return repo.marcarGenerado(doc.id, folio, resultado.data ?? null, input.creadoPor, xml)
+}
+
+// Extrae el XML timbrado de la respuesta de generar (getXML=1). LibreDTE suele
+// devolverlo en `xml` (texto o base64); se guarda tal cual para diagnóstico y
+// descarga. La forma exacta se valida contra la respuesta real.
+function extraerXml(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null
+  const d = data as Record<string, unknown>
+  const candidatos = [d.xml, (d.dte as Record<string, unknown> | undefined)?.xml]
+  for (const c of candidatos) {
+    if (typeof c === 'string' && c.trim().length > 0) return c
+  }
+  return null
 }

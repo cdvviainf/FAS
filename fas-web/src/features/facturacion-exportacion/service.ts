@@ -1,6 +1,7 @@
 import { api } from '@/lib/api'
 import type {
   DimensionProforma,
+  EmbarquesExportacionListResponse,
   FacturaExportacion,
   FacturaExportacionActualizarInput,
   FacturasExportacionListFilters,
@@ -55,11 +56,30 @@ export const facturaExportacionService = {
   async actualizar(id: number, body: FacturaExportacionActualizarInput): Promise<{ data: FacturaExportacion }> {
     return api.patch(`ventas/cobranza/facturas-exportacion/${id}`, { json: body }).json()
   },
-  async emitir(id: number): Promise<{ data: FacturaExportacion }> {
-    return api.post(`ventas/cobranza/facturas-exportacion/${id}/emitir`).json()
+  async enviarSii(id: number): Promise<{ data: FacturaExportacion }> {
+    return api.post(`ventas/cobranza/facturas-exportacion/${id}/enviar-sii`).json()
+  },
+  async firmar(id: number): Promise<{ data: FacturaExportacion }> {
+    return api.post(`ventas/cobranza/facturas-exportacion/${id}/firmar`).json()
+  },
+  async reabrir(id: number): Promise<{ data: FacturaExportacion }> {
+    return api.post(`ventas/cobranza/facturas-exportacion/${id}/reabrir`).json()
   },
   async anular(id: number): Promise<{ data: FacturaExportacion }> {
     return api.post(`ventas/cobranza/facturas-exportacion/${id}/anular`).json()
+  },
+  // Descarga el XML timbrado (vía ky para adjuntar el contexto de empresa),
+  // disparando la descarga en el navegador.
+  async descargarXml(id: number, nombreArchivo: string): Promise<void> {
+    const blob = await api.get(`ventas/cobranza/facturas-exportacion/${id}/xml`).blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombreArchivo
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
   },
   async list(filters: FacturasExportacionListFilters = {}): Promise<FacturasExportacionListResponse> {
     const sp: Record<string, string> = {}
@@ -70,5 +90,13 @@ export const facturaExportacionService = {
     if (filters.estado) sp.estado = filters.estado
     if (filters.folio) sp.folio = filters.folio
     return api.get('ventas/cobranza/facturas-exportacion', { searchParams: sp }).json()
+  },
+  async listEmbarques(filters: { page?: number; limit?: number; folio?: string; clienteId?: number } = {}): Promise<EmbarquesExportacionListResponse> {
+    const sp: Record<string, string> = {}
+    if (filters.page) sp.page = String(filters.page)
+    if (filters.limit) sp.limit = String(filters.limit)
+    if (filters.folio) sp.folio = filters.folio
+    if (filters.clienteId) sp.clienteId = String(filters.clienteId)
+    return api.get('ventas/cobranza/exportacion/embarques-despachados', { searchParams: sp }).json()
   },
 }

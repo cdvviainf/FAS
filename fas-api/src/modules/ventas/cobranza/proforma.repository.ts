@@ -4,6 +4,9 @@ import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { DimensionProforma, ProformasListFilters } from './proforma.types.js'
 
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
+// Descripciones ES/EN de un mantenedor referenciado por una línea — para
+// construir la descripción según idioma (descripcion-idioma.ts).
+const descSelect = { select: { descripcion: true, descripcionExtranjera: true } }
 
 // Datos del Embarque que necesita el módulo de Proforma — cliente/moneda/
 // condiciónPago se heredan de la Nota de Venta (cobranza.md, D1/RC-D4-like).
@@ -116,7 +119,7 @@ const proformaInclude = {
   cliente: { select: mantenedorSelect },
   moneda: { select: mantenedorSelect },
   condicionPago: { select: mantenedorSelect },
-  embarque: { select: { id: true, numeroInstructivo: true } },
+  embarque: { select: { id: true, numeroInstructivo: true, notaVentaId: true } },
   lineas: {
     select: {
       id: true,
@@ -130,6 +133,13 @@ const proformaInclude = {
       cantidadCajas: true,
       precioUnitario: true,
       montoLinea: true,
+      // Relaciones para reconstruir la descripción por idioma (ES/EN).
+      especie: descSelect,
+      variedad: descSelect,
+      articulo: descSelect,
+      calibre: descSelect,
+      categoria: descSelect,
+      etiqueta: descSelect,
     },
   },
 } satisfies Prisma.ProformaInclude
@@ -184,9 +194,53 @@ interface DatosCrearProforma {
   clienteId: number
   monedaId: number
   condicionPagoId: number | null
+  fechaDocumento: Date | null
   montoTotal: number
   montoFlete: number | null
   montoSeguro: number | null
+}
+
+// Descripciones ES/EN de los mantenedores referenciados por las líneas — para
+// validar/armar la descripción por idioma antes de que exista la Proforma.
+interface LineaIds {
+  especieId: number
+  variedadId: number | null
+  articuloId: number | null
+  calibreId: number | null
+  categoriaId: number | null
+  etiquetaId: number | null
+}
+export async function getDescripcionesMantenedores(lineas: LineaIds[]) {
+  const uniq = (arr: (number | null)[]) => [...new Set(arr.filter((x): x is number => x != null))]
+  const sel = { id: true, descripcion: true, descripcionExtranjera: true }
+  const [esp, vari, art, cal, cat, eti] = await Promise.all([
+    prisma.especie.findMany({ where: { id: { in: uniq(lineas.map((l) => l.especieId)) } }, select: sel }),
+    prisma.variedad.findMany({ where: { id: { in: uniq(lineas.map((l) => l.variedadId)) } }, select: sel }),
+    prisma.articulo.findMany({ where: { id: { in: uniq(lineas.map((l) => l.articuloId)) } }, select: sel }),
+    prisma.calibre.findMany({ where: { id: { in: uniq(lineas.map((l) => l.calibreId)) } }, select: sel }),
+    prisma.categoria.findMany({ where: { id: { in: uniq(lineas.map((l) => l.categoriaId)) } }, select: sel }),
+    prisma.etiqueta.findMany({ where: { id: { in: uniq(lineas.map((l) => l.etiquetaId)) } }, select: sel }),
+  ])
+  type Row = { id: number; descripcion: string; descripcionExtranjera: string | null }
+  const mapa = (rows: Row[]) => new Map(rows.map((r) => [r.id, { descripcion: r.descripcion, descripcionExtranjera: r.descripcionExtranjera }]))
+  const [me, mv, ma, mc, mca, met] = [mapa(esp), mapa(vari), mapa(art), mapa(cal), mapa(cat), mapa(eti)]
+  return lineas.map((l) => ({
+    especie: me.get(l.especieId) ?? { descripcion: '', descripcionExtranjera: null },
+    variedad: l.variedadId != null ? mv.get(l.variedadId) ?? null : null,
+    articulo: l.articuloId != null ? ma.get(l.articuloId) ?? null : null,
+    calibre: l.calibreId != null ? mc.get(l.calibreId) ?? null : null,
+    categoria: l.categoriaId != null ? mca.get(l.categoriaId) ?? null : null,
+    etiqueta: l.etiquetaId != null ? met.get(l.etiquetaId) ?? null : null,
+  }))
+}
+
+// Factura de Exportación ACTIVA del Embarque (para bloquear la anulación de la
+// Proforma mientras exista una Factura) — null si no hay.
+export async function getFacturaActivaEmbarque(embarqueId: number) {
+  return prisma.facturaExportacion.findFirst({
+    where: { embarqueId, eliminadoEn: null },
+    select: { id: true, codigo: true, estado: true },
+  })
 }
 
 // Línea ya validada y derivada por el service (precioUnitario editado por el
@@ -223,6 +277,7 @@ export async function crearProforma(datos: DatosCrearProforma, meta: MetaCrearPr
       condicionPagoId: datos.condicionPagoId,
       idioma: meta.idioma,
       dimensionesAgrupacion: meta.dimensiones,
+      fechaDocumento: datos.fechaDocumento,
       montoTotal: datos.montoTotal,
       montoFlete: datos.montoFlete,
       montoSeguro: datos.montoSeguro,

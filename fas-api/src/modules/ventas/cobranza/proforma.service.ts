@@ -3,6 +3,7 @@ import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { precioNVParaLineaPallet } from '../embarques/embarques.comparacion.js'
 import { siguienteCodigo } from '../../config/prefijos-codigo/prefijos-codigo.service.js'
 import { resolverFleteSeguro } from './clausula-flete-seguro.js'
+import { faltantesDescripcionExtranjera } from './descripcion-idioma.js'
 import * as repo from './proforma.repository.js'
 import type { DimensionProforma, ProformaEmitirInput, ProformaLineaInput, ProformasListFilters } from './proforma.types.js'
 
@@ -138,15 +139,35 @@ export async function sugerirLineas(embarqueId: number, dimensiones: DimensionPr
   }))
 }
 
-// Cláusula de venta (Incoterm) del Embarque + sus flags de Flete/Seguro — la
-// usa el formulario de emisión de Proforma para mostrar/exigir esos montos.
-export async function obtenerClausulaEmbarque(embarqueId: number) {
+// Cláusula de venta (Incoterm) del Embarque + sus flags de Flete/Seguro y el id
+// de la Nota de Venta (para el link al Cierre Comercial). La usa el formulario
+// de emisión de Proforma.
+export async function obtenerContextoEmbarque(embarqueId: number) {
   const embarque = await repo.getEmbarqueParaProforma(embarqueId)
   if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
   const c = embarque.notaVenta.clausulaVenta
-  return c
-    ? { descripcion: c.descripcion, requiereFlete: c.requiereFlete, requiereSeguro: c.requiereSeguro }
-    : null
+  return {
+    notaVentaId: embarque.notaVentaId,
+    clausula: c ? { descripcion: c.descripcion, requiereFlete: c.requiereFlete, requiereSeguro: c.requiereSeguro } : null,
+  }
+}
+
+// Mantenedores sin descripción extranjera referenciados por estas líneas — para
+// que el frontend advierta/bloquee el idioma inglés (mismo criterio que la
+// barrera server-side en emitirProforma).
+export async function faltantesExtranjeraDeLineas(
+  lineas: {
+    especieId: number
+    variedadId: number | null
+    articuloId: number | null
+    calibreId: number | null
+    categoriaId: number | null
+    etiquetaId: number | null
+  }[],
+) {
+  if (lineas.length === 0) return []
+  const conMantenedores = await repo.getDescripcionesMantenedores(lineas)
+  return faltantesDescripcionExtranjera(conMantenedores)
 }
 
 // FAS-PROF-EXP-001 (QA rondas 1-2, ALTA): re-deriva cada línea contra el
@@ -226,6 +247,18 @@ export async function emitirProforma(embarqueId: number, body: ProformaEmitirInp
   const lineas = await validarYCompletarLineas(embarqueId, body.dimensiones, body.lineas)
   const montoTotal = sumarMontos(lineas.map((l) => l.montoLinea))
 
+  // Barrera de idioma: si el PDF es en inglés, todos los mantenedores
+  // referenciados deben tener descripcionExtranjera (se listan los faltantes).
+  if (body.idioma === 'EN') {
+    const conMantenedores = await repo.getDescripcionesMantenedores(lineas)
+    const faltan = faltantesDescripcionExtranjera(conMantenedores)
+    if (faltan.length > 0) {
+      throw new ValidationError(
+        `No se puede emitir en inglés: falta la descripción extranjera de — ${faltan.join(' · ')}. Complétala en el mantenedor o cambia el idioma a español.`,
+      )
+    }
+  }
+
   // Flete/Seguro según la cláusula de venta de la Nota de Venta. Se exigen solo
   // si la cláusula lo indica; son un monto cerrado dentro de `montoTotal`.
   const { montoFlete, montoSeguro } = resolverFleteSeguro(embarque.notaVenta.clausulaVenta, montoTotal, {
@@ -241,6 +274,7 @@ export async function emitirProforma(embarqueId: number, body: ProformaEmitirInp
         clienteId: embarque.notaVenta.clienteId,
         monedaId: embarque.notaVenta.monedaId,
         condicionPagoId: embarque.notaVenta.condicionPagoId,
+        fechaDocumento: body.fechaDocumento ? new Date(body.fechaDocumento) : null,
         montoTotal,
         montoFlete,
         montoSeguro,
@@ -283,5 +317,13 @@ export async function anularProforma(id: number, userId: string) {
   const proforma = await repo.getProformaByIdConHistorial(id)
   if (!proforma) throw new NotFoundError('Proforma', String(id))
   if (proforma.estado === 'ANULADA') throw new ValidationError('Esta Proforma ya está anulada')
+  // Primero se anula la Factura: no se puede anular una Proforma con Factura
+  // activa (BORRADOR/APROBADA/RECHAZADA) porque la Factura nace de ella.
+  const factura = await repo.getFacturaActivaEmbarque(proforma.embarqueId)
+  if (factura) {
+    throw new ValidationError(
+      `Este Embarque tiene una Factura activa (${factura.codigo}) — anúlala primero antes de anular la Proforma`,
+    )
+  }
   return repo.anularProforma(id, userId)
 }

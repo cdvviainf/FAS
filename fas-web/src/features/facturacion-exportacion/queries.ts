@@ -57,6 +57,21 @@ export function facturasListOptions(filters: FacturasExportacionListFilters = {}
   })
 }
 
+// ─── Landing embarque-céntrica ───────────────────────────────────────────────
+
+export const embarquesExportacionKeys = {
+  all: ['exportacion-embarques'] as const,
+  list: (filters: object) => ['exportacion-embarques', 'list', filters] as const,
+}
+
+export function embarquesExportacionListOptions(filters: { page?: number; limit?: number; folio?: string; clienteId?: number } = {}) {
+  return queryOptions({
+    queryKey: embarquesExportacionKeys.list(filters),
+    queryFn: () => facturaExportacionService.listEmbarques(filters),
+    staleTime: 10_000,
+  })
+}
+
 export function facturaPorIdOptions(id: number) {
   return queryOptions({
     queryKey: facturasKeys.detalle(id),

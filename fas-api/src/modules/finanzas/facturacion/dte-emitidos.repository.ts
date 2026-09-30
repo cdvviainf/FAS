@@ -74,6 +74,12 @@ interface DatosNuevoDocumentoDte {
   rutReceptor: string
   payloadEnviado: unknown
   creadoPor: string
+  // Verificación de vigencia OPCIONAL ejecutada DENTRO de la sección crítica
+  // (bajo el advisory lock, antes de crear/actualizar el DocumentoDte). El caller
+  // la usa para abortar si el documento origen cambió entre que armó el payload
+  // y este momento — así el temporal persistido siempre corresponde al origen
+  // vigente (FAS-COB-F1-001). Si lanza, la transacción se revierte sin escribir.
+  verificarVigencia?: (tx: Prisma.TransactionClient) => Promise<void>
 }
 
 export interface DocumentoDteTomado {
@@ -96,10 +102,16 @@ export async function tomarDocumentoDteParaEmitir(data: DatosNuevoDocumentoDte):
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION}::int, hashtext(${`${data.origenTipo}:${data.origenId}`}))`
 
+    // Vigencia del origen bajo el lock, antes de tocar nada (FAS-COB-F1-001).
+    if (data.verificarVigencia) await data.verificarVigencia(tx)
+
     const existente = await tx.documentoDte.findFirst({ where: { origenTipo: data.origenTipo, origenId: data.origenId } })
 
     if (existente) {
-      if (existente.estado === 'TEMPORAL_CREADO' || existente.estado === 'EMITIENDO') {
+      // Estados terminales o en curso: no se re-emite. GENERADO es terminal
+      // (timbrado real, folio consumido) — reenviar NUNCA debe devolverlo a
+      // EMITIENDO ni disparar un segundo timbrado (FAS-COB-F1-005).
+      if (existente.estado === 'TEMPORAL_CREADO' || existente.estado === 'EMITIENDO' || existente.estado === 'GENERADO' || existente.estado === 'GENERANDO') {
         return { doc: existente, debeEmitir: false }
       }
       // PENDIENTE (no debería persistir, ver abajo) o ERROR — reintento: este
@@ -192,13 +204,20 @@ export async function tomarDocumentoDteParaGenerar(
   })
 }
 
-export async function marcarGenerado(id: number, folio: number | null, respuesta: unknown, actualizadoPor: string) {
+export async function marcarGenerado(
+  id: number,
+  folio: number | null,
+  respuesta: unknown,
+  actualizadoPor: string,
+  xml: string | null = null,
+) {
   return prisma.documentoDte.update({
     where: { id },
     data: {
       estado: 'GENERADO',
       folio,
       respuestaGenerar: respuesta as never,
+      xml,
       generadoEn: new Date(),
       errorMensaje: null,
       actualizadoPor,

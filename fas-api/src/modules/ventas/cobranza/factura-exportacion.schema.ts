@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { fechaDocumentoSchema } from './fecha-documento.schema.js'
 
 const dimensionSchema = z.enum(['VARIEDAD', 'ARTICULO', 'CALIBRE', 'CATEGORIA', 'MARCA'])
 
@@ -21,10 +22,21 @@ const lineaSchema = z.object({
 export const facturaExportacionActualizarSchema = z.object({
   dimensiones: z.array(dimensionSchema).default([]),
   lineas: z.array(lineaSchema).min(1, 'Agrega al menos una línea'),
+  // Idioma del documento (ES/EN) y fecha del documento — editables en BORRADOR.
+  idioma: z.enum(['ES', 'EN']).default('EN'),
+  // Fecha del documento como "YYYY-MM-DD" (input date) o ISO — validada estricta.
+  fechaDocumento: fechaDocumentoSchema,
   // Flete/Seguro de la cláusula de venta (Incoterm). Solo se exigen si la
   // cláusula lo indica (validación server-side). El service redondea a 2 dec.
   montoFlete: z.number().min(0).max(9_999_999_999).optional().nullable(),
   montoSeguro: z.number().min(0).max(9_999_999_999).optional().nullable(),
+})
+
+export const embarquesDespachadosQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(200).default(20),
+  folio: z.string().trim().min(1).optional(),
+  clienteId: z.coerce.number().int().positive().optional(),
 })
 
 export const facturasExportacionListQuerySchema = z.object({
@@ -32,7 +44,7 @@ export const facturasExportacionListQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).default(20),
   embarqueId: z.coerce.number().int().positive().optional(),
   clienteId: z.coerce.number().int().positive().optional(),
-  estado: z.enum(['BORRADOR', 'EMITIDA', 'ANULADA']).optional(),
+  estado: z.enum(['BORRADOR', 'APROBADA', 'RECHAZADA', 'ANULADA']).optional(),
   folio: z.string().trim().min(1).optional(),
 })
 

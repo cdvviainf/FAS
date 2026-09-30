@@ -1,9 +1,18 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
+import { LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION } from '../../../shared/advisory-locks.js'
+import { ValidationError } from '../../../shared/errors.js'
 import type { DimensionProforma, FacturasExportacionListFilters } from './factura-exportacion.types.js'
 
+// origenTipo del DocumentoDte de una Factura de Exportación (debe calzar con el
+// del service que emite/timbra) — para invalidar su temporal al editar.
+const ORIGEN_TIPO_DTE = 'factura-exportacion'
+
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
+// Descripciones ES/EN de un mantenedor referenciado por una línea — base para
+// construir la descripción según idioma (ver descripcion-idioma.ts).
+const descSelect = { select: { descripcion: true, descripcionExtranjera: true } }
 
 const facturaInclude = {
   cliente: { select: mantenedorSelect },
@@ -14,6 +23,7 @@ const facturaInclude = {
     select: {
       id: true,
       numeroInstructivo: true,
+      notaVentaId: true,
       // Flags de la cláusula de venta (Incoterm) — el editor los usa para
       // mostrar/exigir los inputs de Flete/Seguro.
       notaVenta: {
@@ -38,6 +48,13 @@ const facturaInclude = {
       cantidadCajas: true,
       precioUnitario: true,
       montoLinea: true,
+      // Relaciones para reconstruir la descripción por idioma (ES/EN).
+      especie: descSelect,
+      variedad: descSelect,
+      articulo: descSelect,
+      calibre: descSelect,
+      categoria: descSelect,
+      etiqueta: descSelect,
     },
   },
   cuotas: {
@@ -67,6 +84,8 @@ export async function getProformaEmitidaParaFactura(proformaId: number) {
       monedaId: true,
       condicionPagoId: true,
       dimensionesAgrupacion: true,
+      idioma: true,
+      fechaDocumento: true,
       montoFlete: true,
       montoSeguro: true,
       lineas: {
@@ -81,6 +100,12 @@ export async function getProformaEmitidaParaFactura(proformaId: number) {
           cantidadCajas: true,
           precioUnitario: true,
           montoLinea: true,
+          especie: descSelect,
+          variedad: descSelect,
+          articulo: descSelect,
+          calibre: descSelect,
+          categoria: descSelect,
+          etiqueta: descSelect,
         },
       },
     },
@@ -173,6 +198,8 @@ interface DatosCrearFactura {
   monedaId: number
   condicionPagoId: number | null
   dimensiones: DimensionProforma[]
+  idioma: string
+  fechaDocumento: Date | null
   montoTotal: number
   montoFlete: number | null
   montoSeguro: number | null
@@ -191,6 +218,8 @@ export async function crearBorrador(datos: DatosCrearFactura, creadoPorId: strin
       monedaId: datos.monedaId,
       condicionPagoId: datos.condicionPagoId,
       dimensionesAgrupacion: datos.dimensiones,
+      idioma: datos.idioma,
+      fechaDocumento: datos.fechaDocumento,
       montoTotal: datos.montoTotal,
       montoFlete: datos.montoFlete,
       montoSeguro: datos.montoSeguro,
@@ -221,24 +250,56 @@ function toLineaCreate(l: LineaFacturaPersistir) {
 // recrea) en una transacción.
 export async function actualizarBorrador(
   id: number,
-  dimensiones: DimensionProforma[],
-  montoTotal: number,
-  montoFlete: number | null,
-  montoSeguro: number | null,
-  lineas: LineaFacturaPersistir[],
+  datos: {
+    dimensiones: DimensionProforma[]
+    idioma: string
+    fechaDocumento: Date | null
+    montoTotal: number
+    montoFlete: number | null
+    montoSeguro: number | null
+    lineas: LineaFacturaPersistir[]
+  },
   actualizadoPor: string,
 ) {
   return prisma.$transaction(async (tx) => {
+    // Bajo el MISMO advisory lock por origen que emitir/firmar: la actualización
+    // del borrador y la invalidación de su DTE temporal descartable ocurren como
+    // una sola transición atómica, sin ventana con otra firma (FAS-COB-F1-001).
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION}::int, hashtext(${`${ORIGEN_TIPO_DTE}:${id}`}))`
+
+    // Re-verificación DENTRO del lock (FAS-COB-F1-001): aborta sin escribir si hay
+    // un timbrado en curso/terminal o la factura ya no es editable — evita editar
+    // una factura mientras LibreDTE timbra el payload anterior (firmar libera el
+    // lock durante la llamada externa) y aprobar luego datos que no calzan con el DTE.
+    const dteEnCurso = await tx.documentoDte.findFirst({
+      where: { origenTipo: ORIGEN_TIPO_DTE, origenId: id, estado: { in: ['EMITIENDO', 'GENERANDO', 'GENERADO'] } },
+      select: { estado: true },
+    })
+    if (dteEnCurso) {
+      throw new ValidationError('No se puede editar la Factura: su timbrado ante el SII está en curso o ya fue emitido. Recarga la página.')
+    }
+    const estadoActual = await tx.facturaExportacion.findFirst({ where: { id }, select: { estado: true, eliminadoEn: true } })
+    if (!estadoActual || estadoActual.eliminadoEn || (estadoActual.estado !== 'BORRADOR' && estadoActual.estado !== 'RECHAZADA')) {
+      throw new ValidationError('La Factura ya no está en un estado editable. Recarga la página.')
+    }
+
     await tx.facturaExportacionLinea.deleteMany({ where: { facturaExportacionId: id } })
     await tx.facturaExportacion.update({
       where: { id },
       data: {
-        dimensionesAgrupacion: dimensiones,
-        montoTotal,
-        montoFlete,
-        montoSeguro,
-        lineas: { create: lineas.map(toLineaCreate) },
+        dimensionesAgrupacion: datos.dimensiones,
+        idioma: datos.idioma,
+        fechaDocumento: datos.fechaDocumento,
+        montoTotal: datos.montoTotal,
+        montoFlete: datos.montoFlete,
+        montoSeguro: datos.montoSeguro,
+        lineas: { create: datos.lineas.map(toLineaCreate) },
       },
+    })
+    // Descarta el temporal descartable (nunca en vuelo/timbrado) — el borrador
+    // cambió, así que "Enviar borrador al SII" reconstruirá uno fresco.
+    await tx.documentoDte.deleteMany({
+      where: { origenTipo: ORIGEN_TIPO_DTE, origenId: id, estado: { in: ['TEMPORAL_CREADO', 'ERROR', 'PENDIENTE'] } },
     })
     return tx.facturaExportacion.findFirst({ where: { id }, include: facturaInclude })
   })
@@ -252,22 +313,28 @@ export interface CuotaPersistir {
   fechaVencimiento: Date | null
 }
 
-// Marca la Factura como EMITIDA con el folio/trackId del DTE y crea sus Cuotas,
-// todo en una transacción (los efectos de negocio son atómicos; la llamada a
-// LibreDTE ya ocurrió antes, fuera de la transacción).
-export async function marcarEmitida(
+// Marca la Factura como APROBADA (timbrada) con el folio/trackId del DTE y crea
+// sus Cuotas, todo en una transacción (los efectos de negocio son atómicos; la
+// llamada a LibreDTE ya ocurrió antes, fuera de la transacción). Limpia un
+// posible errorMensajeSii de un intento previo rechazado.
+export async function marcarFirmada(
   id: number,
-  datos: { folio: number | null; trackIdSii: string | null; fechaEmision: Date; cuotas: CuotaPersistir[] },
+  datos: { folio: number | null; trackIdSii: string | null; fechaEmision: Date; fechaDocumento: Date; cuotas: CuotaPersistir[] },
   emitidoPorId: string,
 ) {
   return prisma.$transaction(async (tx) => {
+    // Idempotente: si la firma se reconcilia tras un éxito parcial, borra las
+    // cuotas previas antes de recrearlas para no duplicarlas (FAS-COB-F1-005).
+    await tx.facturaExportacionCuota.deleteMany({ where: { facturaExportacionId: id } })
     await tx.facturaExportacion.update({
       where: { id },
       data: {
-        estado: 'EMITIDA',
+        estado: 'APROBADA',
         folio: datos.folio,
         trackIdSii: datos.trackIdSii,
         fechaEmision: datos.fechaEmision,
+        fechaDocumento: datos.fechaDocumento,
+        errorMensajeSii: null,
         emitidoPorId,
         emitidoEn: new Date(),
         cuotas: {
@@ -285,12 +352,79 @@ export async function marcarEmitida(
   })
 }
 
+// Marca la Factura como RECHAZADA guardando el motivo del SII/LibreDTE. Sigue
+// siendo recuperable: el usuario puede volver a "Enviar borrador"/"Firmar".
+export async function marcarRechazada(id: number, errorMensajeSii: string) {
+  return prisma.facturaExportacion.update({
+    where: { id },
+    data: { estado: 'RECHAZADA', errorMensajeSii },
+    include: facturaInclude,
+  })
+}
+
+// Vuelve una Factura RECHAZADA a BORRADOR para reintentar el flujo SII.
+export async function reabrirBorrador(id: number) {
+  return prisma.facturaExportacion.update({
+    where: { id },
+    data: { estado: 'BORRADOR', errorMensajeSii: null },
+    include: facturaInclude,
+  })
+}
+
 export async function anularFactura(id: number, eliminadoPor: string) {
   return prisma.facturaExportacion.update({
     where: { id },
     data: { estado: 'ANULADA', eliminadoEn: new Date(), eliminadoPor },
     include: facturaInclude,
   })
+}
+
+// ─── Listado embarque-céntrico (landing de Exportación) ──────────────────────
+// Embarques EFECTIVAMENTE despachados (despachadoEn != null && despachoAnuladoEn
+// == null) con el estado de su Proforma y Factura activas (a lo más una de cada
+// una por Embarque). Filtros: folio (numeroInstructivo) y cliente.
+export interface EmbarquesExportacionFilters {
+  page?: number
+  limit?: number
+  folio?: string
+  clienteId?: number
+}
+
+export async function listEmbarquesDespachados(filters: EmbarquesExportacionFilters) {
+  const { page = 1, limit = 20, folio, clienteId } = filters
+  const where: Prisma.EmbarqueWhereInput = {
+    eliminadoEn: null,
+    despachadoEn: { not: null },
+    despachoAnuladoEn: null,
+    ...(folio ? { numeroInstructivo: { contains: folio, mode: 'insensitive' as const } } : {}),
+    ...(clienteId ? { notaVenta: { clienteId } } : {}),
+  }
+  const [data, total] = await Promise.all([
+    prisma.embarque.findMany({
+      where,
+      select: {
+        id: true,
+        numeroInstructivo: true,
+        despachadoEn: true,
+        notaVenta: { select: { clienteId: true, cliente: { select: { id: true, razonSocial: true } } } },
+        proformas: {
+          where: { eliminadoEn: null },
+          select: { id: true, codigo: true, estado: true },
+          take: 1,
+        },
+        facturasExportacion: {
+          where: { eliminadoEn: null },
+          select: { id: true, codigo: true, estado: true, folio: true },
+          take: 1,
+        },
+      },
+      orderBy: { despachadoEn: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.embarque.count({ where }),
+  ])
+  return { data, total }
 }
 
 export async function listFacturas(filters: FacturasExportacionListFilters) {

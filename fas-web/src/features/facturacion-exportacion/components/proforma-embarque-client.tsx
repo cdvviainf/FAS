@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -33,8 +34,10 @@ export function ProformaEmbarqueClient({ embarqueId }: { embarqueId: number }) {
 function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   const queryClient = useQueryClient()
   const puedeEscribir = usePuedeEscribir(ITEM)
+  const router = useRouter()
   const [dimensiones, setDimensiones] = useState<DimensionProforma[]>([])
   const [idioma, setIdioma] = useState<'EN' | 'ES'>('EN')
+  const [fechaDocumento, setFechaDocumento] = useState<string>('')
   const [lineas, setLineas] = useState<ProformaLineaSugerida[]>([])
   const [montoFlete, setMontoFlete] = useState<string>('')
   const [montoSeguro, setMontoSeguro] = useState<string>('')
@@ -53,6 +56,9 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   const clausula = sugerencia?.clausula ?? null
   const requiereFlete = clausula?.requiereFlete ?? false
   const requiereSeguro = clausula?.requiereSeguro ?? false
+  const faltantesExtranjera = sugerencia?.faltantesExtranjera ?? []
+  const notaVentaId = sugerencia?.notaVentaId ?? null
+  const enBloqueadoPorFaltantes = idioma === 'EN' && faltantesExtranjera.length > 0
 
   function toggleDimension(dim: DimensionProforma, marcado: boolean) {
     setDimensiones((prev) => (marcado ? [...prev, dim] : prev.filter((d) => d !== dim)))
@@ -80,6 +86,7 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
       proformaService.emitir(embarqueId, {
         dimensiones,
         idioma,
+        fechaDocumento: fechaDocumento || null,
         lineas: lineas.map((l) => ({
           descripcion: l.descripcion,
           especieId: l.especieId,
@@ -119,6 +126,10 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
       toast.error('El Flete y el Seguro no pueden igualar ni superar el valor de venta')
       return
     }
+    if (enBloqueadoPorFaltantes) {
+      toast.error(`No se puede emitir en inglés: faltan descripciones extranjeras (${faltantesExtranjera.join(' · ')})`)
+      return
+    }
     emitir.mutate()
   }
 
@@ -140,16 +151,33 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
               </label>
             ))}
           </div>
-          <div className='max-w-[200px] space-y-1.5'>
-            <Label>Idioma del PDF</Label>
-            <Select value={idioma} onValueChange={(v) => setIdioma(v as 'EN' | 'ES')}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value='EN'>Inglés</SelectItem>
-                <SelectItem value='ES'>Español</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className='flex flex-wrap items-end gap-4'>
+            <div className='w-[180px] space-y-1.5'>
+              <Label>Idioma del PDF</Label>
+              <Select value={idioma} onValueChange={(v) => setIdioma(v as 'EN' | 'ES')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='EN'>Inglés</SelectItem>
+                  <SelectItem value='ES'>Español</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='w-[180px] space-y-1.5'>
+              <Label>Fecha del documento</Label>
+              <Input type='date' value={fechaDocumento} onChange={(e) => setFechaDocumento(e.target.value)} className='h-9' />
+            </div>
+            {notaVentaId != null && (
+              <Button variant='outline' size='sm' onClick={() => router.push(`/dashboard/ventas/cierre/${notaVentaId}`)}>
+                <Icons.externalLink className='mr-2 h-4 w-4' /> Ver Cierre Comercial
+              </Button>
+            )}
           </div>
+          {enBloqueadoPorFaltantes && (
+            <p className='text-xs text-destructive'>
+              No se puede emitir en inglés: falta la descripción extranjera de — {faltantesExtranjera.join(' · ')}.
+              Complétala en el mantenedor o usa español.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -175,13 +203,9 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
               <TableBody>
                 {lineas.map((l, i) => (
                   <TableRow key={i}>
-                    <TableCell>
-                      <Input
-                        value={l.descripcion}
-                        onChange={(e) => actualizarLinea(i, { descripcion: e.target.value })}
-                        className='h-8'
-                      />
-                    </TableCell>
+                    {/* Descripción derivada de los mantenedores según idioma
+                        (se arma en el PDF); no es texto libre. */}
+                    <TableCell className='text-sm'>{l.descripcion}</TableCell>
                     <TableCell className='text-right tabular-nums'>{formatMonto(l.cantidadCajas, 0)}</TableCell>
                     <TableCell>
                       <Input

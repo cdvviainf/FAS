@@ -3299,6 +3299,8 @@ model Proforma {
 
   estado       EstadoProforma @default(EMITIDA)
   fechaEmision DateTime       @default(now())
+  // Fecha del documento (editable al emitir) — si null, se muestra fechaEmision.
+  fechaDocumento DateTime?
 
   lineas ProformaLinea[]
 
@@ -3362,10 +3364,16 @@ model ProformaLinea {
 // Cuotas desde el snapshot NotaVentaCuotaPago (CB5/CB6). Comparte con la
 // Proforma solo Cliente/Monto/Condición de Pago/Fecha (D1) — no es la misma
 // entidad. `codigo` vía PrefijoCodigo (modelo='facturaExportacion', prefijo FEX).
+// Firma SII en dos pasos (2026-09-29): BORRADOR (editable; opcionalmente ya
+// enviada como borrador temporal a LibreDTE, lo cual se sabe por el DocumentoDte
+// TEMPORAL_CREADO) → APROBADA (timbrada, folio real) o RECHAZADA (el SII/LibreDTE
+// rechazó el timbrado; se puede reintentar). ANULADA = soft delete (solo desde
+// BORRADOR en esta fase; anular una APROBADA exige Nota de Crédito — fase 2).
 enum EstadoFacturaExportacion {
-  BORRADOR // creada, editable, sin efectos tributarios
-  EMITIDA // DTE timbrado (folio asignado)
-  ANULADA // soft delete
+  BORRADOR
+  APROBADA
+  RECHAZADA
+  ANULADA
 }
 
 // Estado de cada Cuota. Pagos/NC/ND están fuera del alcance de esta etapa
@@ -3416,8 +3424,20 @@ model FacturaExportacion {
   montoFlete            Decimal?            @db.Decimal(14, 2)
   montoSeguro           Decimal?            @db.Decimal(14, 2)
 
-  estado       EstadoFacturaExportacion @default(BORRADOR)
-  fechaEmision DateTime? // se fija al timbrar el DTE (referencia FACTURA de las cuotas)
+  // Idioma del documento (ES/EN) — heredado de la Proforma, editable en
+  // BORRADOR. Afecta las descripciones (descripcion vs descripcionExtranjera)
+  // en pantalla, PDF y en el NmbItem del DTE. EN exige que todos los
+  // mantenedores referenciados tengan descripcionExtranjera (validado al emitir).
+  idioma String @default("EN")
+
+  estado EstadoFacturaExportacion @default(BORRADOR)
+  // Fecha del documento (FchEmis del DTE) — editable en BORRADOR; si queda null
+  // al firmar, se usa la fecha de firma. También es la referencia FACTURA de las
+  // cuotas.
+  fechaDocumento DateTime?
+  fechaEmision   DateTime? // se fija al timbrar el DTE (firma real)
+  // Motivo de rechazo del SII/LibreDTE cuando estado = RECHAZADA.
+  errorMensajeSii String?
 
   // DTE de exportación (110) — se completan al timbrar (generarReal).
   tipoDte    Int     @default(110)
@@ -4197,6 +4217,7 @@ model DocumentoDte {
   // generarReal() (timbrado real, 2026-09-24 — firma electrónica ya configurada):
   folio            Int? // folio real asignado por el SII vía LibreDTE
   respuestaGenerar Json? // snapshot de la respuesta de POST /api/dte/documentos/generar
+  xml              String? // XML timbrado (getXML=1) — para descarga del documento
   generadoEn       DateTime?
 
   creadoEn       DateTime  @default(now())

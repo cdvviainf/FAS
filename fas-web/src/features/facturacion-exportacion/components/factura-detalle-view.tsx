@@ -1,15 +1,35 @@
 'use client'
 
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Icons } from '@/components/icons'
 import { formatMonto, formatFechaCorta } from '@/lib/format'
+import { facturaExportacionService } from '../service'
 import { FECHA_REFERENCIA_LABELS } from '../types'
-import type { FacturaExportacion } from '../types'
+import type { EstadoFacturaExportacion, FacturaExportacion } from '../types'
 
-// Vista de solo lectura de una Factura de Exportación ya emitida (o anulada).
+const ESTADO_BADGE: Record<EstadoFacturaExportacion, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+  BORRADOR: { label: 'Borrador', variant: 'outline' },
+  APROBADA: { label: 'Aprobada', variant: 'default' },
+  RECHAZADA: { label: 'Rechazada', variant: 'destructive' },
+  ANULADA: { label: 'Anulada', variant: 'secondary' },
+}
+
+// Vista de solo lectura de una Factura de Exportación (aprobada o anulada).
 export function FacturaDetalleView({ factura }: { factura: FacturaExportacion }) {
-  const emitida = factura.estado === 'EMITIDA'
+  const badge = ESTADO_BADGE[factura.estado]
+  const puedeDescargarXml = factura.estado === 'APROBADA' && (factura.dte?.tieneXml ?? false)
+
+  async function descargarXml() {
+    try {
+      await facturaExportacionService.descargarXml(factura.id, `${factura.codigo}${factura.folio ? `-folio-${factura.folio}` : ''}.xml`)
+    } catch (e) {
+      toast.error((e as Error).message || 'No se pudo descargar el XML')
+    }
+  }
   // Desglose de la cláusula de venta: el flete/seguro restan al valor de venta
   // para dar el valor FOB de la mercadería (lo que se timbra en el detalle).
   const montoTotal = Number(factura.montoTotal)
@@ -22,21 +42,28 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
   const moneda = factura.moneda.codigo
   return (
     <div className='max-w-3xl space-y-4'>
-      <div>
-        <h2 className='flex items-center gap-2 text-xl font-semibold'>
-          Factura {factura.codigo}
-          <Badge variant={emitida ? 'default' : 'secondary'}>{emitida ? 'Emitida' : 'Anulada'}</Badge>
-        </h2>
-        <p className='text-muted-foreground text-sm'>
-          Embarque {factura.embarque.numeroInstructivo} · {factura.cliente.descripcion} · {factura.moneda.codigo}
-          {factura.condicionPago && <> · {factura.condicionPago.descripcion}</>}
-        </p>
-        <p className='text-muted-foreground text-sm'>
-          DTE {factura.tipoDte}
-          {factura.folio != null && <> · Folio {factura.folio}</>}
-          {factura.fechaEmision && <> · Emitida {formatFechaCorta(factura.fechaEmision)}</>}
-          {factura.proforma && <> · desde Proforma {factura.proforma.codigo}</>}
-        </p>
+      <div className='flex items-start justify-between'>
+        <div>
+          <h2 className='flex items-center gap-2 text-xl font-semibold'>
+            Factura {factura.codigo}
+            <Badge variant={badge.variant}>{badge.label}</Badge>
+          </h2>
+          <p className='text-muted-foreground text-sm'>
+            Embarque {factura.embarque.numeroInstructivo} · {factura.cliente.descripcion} · {factura.moneda.codigo}
+            {factura.condicionPago && <> · {factura.condicionPago.descripcion}</>}
+          </p>
+          <p className='text-muted-foreground text-sm'>
+            DTE {factura.tipoDte}
+            {factura.folio != null && <> · Folio {factura.folio}</>}
+            {(factura.fechaDocumento ?? factura.fechaEmision) && <> · Fecha {formatFechaCorta((factura.fechaDocumento ?? factura.fechaEmision)!)}</>}
+            {factura.proforma && <> · desde Proforma {factura.proforma.codigo}</>}
+          </p>
+        </div>
+        {puedeDescargarXml && (
+          <Button variant='outline' onClick={descargarXml}>
+            <Icons.download className='mr-2 h-4 w-4' /> Descargar XML
+          </Button>
+        )}
       </div>
 
       <Card>

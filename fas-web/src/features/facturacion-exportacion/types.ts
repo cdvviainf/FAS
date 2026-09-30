@@ -59,7 +59,7 @@ export interface Proforma {
   id: number
   codigo: string
   embarqueId: number
-  embarque: { id: number; numeroInstructivo: string }
+  embarque: { id: number; numeroInstructivo: string; notaVentaId?: number }
   clienteId: number
   cliente: MantenedorRef
   monedaId: number
@@ -70,6 +70,7 @@ export interface Proforma {
   montoTotal: string
   montoFlete: string | null
   montoSeguro: string | null
+  fechaDocumento: string | null
   estado: EstadoProforma
   fechaEmision: string
   lineas: ProformaLinea[]
@@ -78,16 +79,20 @@ export interface Proforma {
 export interface ProformaEmitirInput {
   dimensiones: DimensionProforma[]
   idioma: string
+  fechaDocumento?: string | null
   lineas: ProformaLineaInput[]
   montoFlete?: number | null
   montoSeguro?: number | null
 }
 
 // Respuesta del endpoint de sugerencia de líneas: incluye la cláusula de venta
-// del Embarque para decidir si se piden Flete/Seguro.
+// del Embarque para decidir si se piden Flete/Seguro, la nota de venta (para el
+// link al Cierre Comercial) y los mantenedores sin descripción extranjera.
 export interface ProformaSugerenciaResponse {
   data: ProformaLineaSugerida[]
   clausula: ClausulaVentaFlags | null
+  notaVentaId: number | null
+  faltantesExtranjera: string[]
 }
 
 export interface ProformasListFilters {
@@ -106,7 +111,7 @@ export interface ProformasListResponse {
 
 // ─── Factura de Exportación (DTE 110) ────────────────────────────────────────
 
-export type EstadoFacturaExportacion = 'BORRADOR' | 'EMITIDA' | 'ANULADA'
+export type EstadoFacturaExportacion = 'BORRADOR' | 'APROBADA' | 'RECHAZADA' | 'ANULADA'
 
 export interface FacturaExportacionLinea {
   id: number
@@ -150,21 +155,43 @@ export interface FacturaExportacion {
   condicionPagoId: number | null
   condicionPago: MantenedorRef | null
   dimensionesAgrupacion: DimensionProforma[]
+  idioma: string
+  fechaDocumento: string | null
   montoTotal: string
   montoFlete: string | null
   montoSeguro: string | null
   estado: EstadoFacturaExportacion
+  errorMensajeSii: string | null
   fechaEmision: string | null
   tipoDte: number
   folio: number | null
   trackIdSii: string | null
   lineas: FacturaExportacionLinea[]
   cuotas: FacturaExportacionCuota[]
+  // Estado del DocumentoDte (solo en el detalle) — habilita Enviar/Firmar/XML.
+  dte?: { estado: string; folio: number | null; tieneXml: boolean } | null
+}
+
+// Fila del listado embarque-céntrico (landing de Exportación).
+export interface EmbarqueExportacionRow {
+  id: number
+  numeroInstructivo: string
+  despachadoEn: string | null
+  notaVenta: { clienteId: number; cliente: { id: number; razonSocial: string } } | null
+  proformas: { id: number; codigo: string; estado: EstadoProforma }[]
+  facturasExportacion: { id: number; codigo: string; estado: EstadoFacturaExportacion; folio: number | null }[]
+}
+
+export interface EmbarquesExportacionListResponse {
+  data: EmbarqueExportacionRow[]
+  meta: { total: number; page: number; limit: number; totalPages: number }
 }
 
 export interface FacturaExportacionActualizarInput {
   dimensiones: DimensionProforma[]
   lineas: ProformaLineaInput[]
+  idioma?: 'ES' | 'EN'
+  fechaDocumento?: string | null
   montoFlete?: number | null
   montoSeguro?: number | null
 }
