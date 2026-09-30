@@ -63,6 +63,19 @@ export function InstructivoEmbarqueV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
         />
       </div>
 
+      {/* Tipo de venta: sección propia en la columna izquierda, sobre Planta de
+          retiro (Tipo de flete / Modalidad de venta / Incoterm). */}
+      <div className='doc-fila-grupos'>
+        <GrupoCampos
+          titulo='Tipo de venta'
+          campos={[
+            { label: 'Tipo de flete', valor: d.tipoFlete ?? '—' },
+            { label: 'Modalidad de venta', valor: d.modalidadVenta ?? '—' },
+            { label: 'Incoterm', valor: d.incoterm ?? '—' },
+          ]}
+        />
+      </div>
+
       <div className='doc-fila-grupos'>
         <GrupoCampos
           titulo='Planta de retiro'
@@ -76,9 +89,6 @@ export function InstructivoEmbarqueV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
           titulo='Ruta y destino'
           campos={[
             { label: 'Tipo de embarque', valor: d.tipoEmbarque ?? '—' },
-            { label: 'Tipo de flete', valor: d.tipoFlete ?? '—' },
-            { label: 'Modalidad de venta', valor: d.modalidadVenta ?? '—' },
-            { label: 'Incoterm', valor: d.incoterm ?? '—' },
             { label: 'Mercado', valor: d.mercado ?? '—' },
             { label: 'País destino', valor: d.paisDestino ?? '—' },
             { label: 'Puerto destino', valor: d.puertoDestino ?? '—' },

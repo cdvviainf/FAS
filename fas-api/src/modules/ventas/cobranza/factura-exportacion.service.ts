@@ -300,6 +300,7 @@ export async function enviarBorradorSii(id: number, userId: string) {
     throw new ValidationError('Solo se puede enviar al SII una Factura en estado Borrador')
   }
   if (factura.lineas.length === 0) throw new ValidationError('La Factura no tiene líneas para enviar')
+  if (!factura.fechaDocumento) throw new ValidationError('Indica la fecha del documento antes de enviar al SII')
 
   const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
   if (!embarque) throw new NotFoundError('Embarque', String(factura.embarqueId))

@@ -16,7 +16,7 @@ import { AlertModal } from '@/components/modal/alert-modal'
 import { formatMonto } from '@/lib/format'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { facturasKeys } from '../queries'
-import { facturaExportacionService, proformaService } from '../service'
+import { facturaExportacionService, hoyFecha, proformaService } from '../service'
 import { DIMENSION_LABELS } from '../types'
 import type { DimensionProforma, FacturaExportacion, ProformaLineaSugerida } from '../types'
 
@@ -58,7 +58,8 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   const [dirty, setDirty] = useState(false)
 
   const [idioma, setIdioma] = useState<'ES' | 'EN'>(factura.idioma === 'EN' ? 'EN' : 'ES')
-  const [fechaDocumento, setFechaDocumento] = useState<string>(aFechaInput(factura.fechaDocumento))
+  // Sugerir hoy si la Factura aún no tiene fecha (la fecha es obligatoria).
+  const [fechaDocumento, setFechaDocumento] = useState<string>(aFechaInput(factura.fechaDocumento) || hoyFecha())
 
   const clausula = factura.embarque.notaVenta?.clausulaVenta ?? null
   const requiereFlete = clausula?.requiereFlete ?? false
@@ -183,6 +184,10 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
 
   // Validaciones comunes antes de tocar el SII.
   function validarPrevio(): boolean {
+    if (!fechaDocumento) {
+      toast.error('La fecha del documento es obligatoria')
+      return false
+    }
     if (requiereFlete && (!montoFlete || Number(montoFlete) <= 0)) {
       toast.error('La cláusula de venta exige informar el monto de Flete')
       return false
@@ -229,10 +234,21 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
               {esRechazada ? 'Rechazada' : borradorEnviado ? 'Borrador enviado al SII' : 'Borrador'}
             </Badge>
           </h2>
-          <p className='text-muted-foreground text-sm'>
-            Embarque {factura.embarque.numeroInstructivo} · {factura.cliente.descripcion} · {factura.moneda.codigo}
-            {factura.proforma && <> · desde Proforma {factura.proforma.codigo}</>}
-          </p>
+          <dl className='text-muted-foreground mt-1 grid gap-x-2 text-sm sm:grid-cols-[auto_1fr]'>
+            <dt className='font-medium'>Embarque:</dt><dd>{factura.embarque.numeroInstructivo}</dd>
+            <dt className='font-medium'>Cliente:</dt><dd>{factura.cliente.descripcion}</dd>
+            <dt className='font-medium'>Moneda:</dt><dd>{factura.moneda.codigo}</dd>
+            {factura.condicionPago && (
+              <>
+                <dt className='font-medium'>Condición de pago:</dt><dd>{factura.condicionPago.descripcion}</dd>
+              </>
+            )}
+            {factura.proforma && (
+              <>
+                <dt className='font-medium'>Proforma:</dt><dd>{factura.proforma.codigo}</dd>
+              </>
+            )}
+          </dl>
         </div>
       </div>
 

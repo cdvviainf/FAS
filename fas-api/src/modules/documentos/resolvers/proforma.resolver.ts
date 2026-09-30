@@ -92,6 +92,9 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
     },
     moneda: proforma.moneda.codigo,
     condicionPago: proforma.condicionPago?.descripcion ?? null,
+    variante: 'PROFORMA',
+    folio: null,
+    tipoDte: null,
     // Detalle a valor FOB: si la cláusula exige Flete/Seguro, el precio unitario
     // cláusula/CIF se lleva a FOB con el factor. Sin flete/seguro el factor es 1
     // y las líneas quedan idénticas al valor cláusula.

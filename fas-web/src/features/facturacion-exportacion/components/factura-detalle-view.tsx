@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -7,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Icons } from '@/components/icons'
 import { formatMonto, formatFechaCorta } from '@/lib/format'
-import { facturaExportacionService } from '../service'
+import { documentosService } from '@/features/documentos/service'
+import { abrirCierreComercial, facturaExportacionService } from '../service'
 import { FECHA_REFERENCIA_LABELS } from '../types'
 import type { EstadoFacturaExportacion, FacturaExportacion } from '../types'
 
@@ -20,8 +22,10 @@ const ESTADO_BADGE: Record<EstadoFacturaExportacion, { label: string; variant: '
 
 // Vista de solo lectura de una Factura de Exportación (aprobada o anulada).
 export function FacturaDetalleView({ factura }: { factura: FacturaExportacion }) {
+  const router = useRouter()
   const badge = ESTADO_BADGE[factura.estado]
   const puedeDescargarXml = factura.estado === 'APROBADA' && (factura.dte?.tieneXml ?? false)
+  const puedeVerPdf = factura.estado === 'APROBADA'
 
   async function descargarXml() {
     try {
@@ -42,28 +46,51 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
   const moneda = factura.moneda.codigo
   return (
     <div className='max-w-3xl space-y-4'>
-      <div className='flex items-start justify-between'>
+      <div className='flex items-start justify-between gap-3'>
         <div>
           <h2 className='flex items-center gap-2 text-xl font-semibold'>
             Factura {factura.codigo}
             <Badge variant={badge.variant}>{badge.label}</Badge>
           </h2>
-          <p className='text-muted-foreground text-sm'>
-            Embarque {factura.embarque.numeroInstructivo} · {factura.cliente.descripcion} · {factura.moneda.codigo}
-            {factura.condicionPago && <> · {factura.condicionPago.descripcion}</>}
-          </p>
-          <p className='text-muted-foreground text-sm'>
+          <dl className='text-muted-foreground mt-1 grid gap-x-2 text-sm sm:grid-cols-[auto_1fr]'>
+            <dt className='font-medium'>Embarque:</dt><dd>{factura.embarque.numeroInstructivo}</dd>
+            <dt className='font-medium'>Cliente:</dt><dd>{factura.cliente.descripcion}</dd>
+            <dt className='font-medium'>Moneda:</dt><dd>{factura.moneda.codigo}</dd>
+            {factura.condicionPago && (
+              <>
+                <dt className='font-medium'>Condición de pago:</dt><dd>{factura.condicionPago.descripcion}</dd>
+              </>
+            )}
+          </dl>
+          <p className='text-muted-foreground mt-1 text-sm'>
             DTE {factura.tipoDte}
             {factura.folio != null && <> · Folio {factura.folio}</>}
             {(factura.fechaDocumento ?? factura.fechaEmision) && <> · Fecha {formatFechaCorta((factura.fechaDocumento ?? factura.fechaEmision)!)}</>}
             {factura.proforma && <> · desde Proforma {factura.proforma.codigo}</>}
           </p>
         </div>
-        {puedeDescargarXml && (
-          <Button variant='outline' onClick={descargarXml}>
-            <Icons.download className='mr-2 h-4 w-4' /> Descargar XML
-          </Button>
-        )}
+        <div className='flex flex-wrap justify-end gap-2'>
+          {factura.embarque.notaVentaId != null && (
+            <Button variant='outline' onClick={() => abrirCierreComercial(factura.embarque.notaVentaId!)}>
+              <Icons.externalLink className='mr-2 h-4 w-4' /> Ver Cierre Comercial
+            </Button>
+          )}
+          {factura.proforma && (
+            <Button variant='outline' onClick={() => router.push(`/dashboard/facturacion/exportacion/proforma/${factura.proforma!.id}`)}>
+              <Icons.billing className='mr-2 h-4 w-4' /> Ver Proforma {factura.proforma.codigo}
+            </Button>
+          )}
+          {puedeVerPdf && (
+            <Button variant='outline' onClick={() => documentosService.abrirPdf('factura-exportacion', factura.id)}>
+              <Icons.download className='mr-2 h-4 w-4' /> Ver PDF
+            </Button>
+          )}
+          {puedeDescargarXml && (
+            <Button variant='outline' onClick={descargarXml}>
+              <Icons.download className='mr-2 h-4 w-4' /> Descargar XML
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>

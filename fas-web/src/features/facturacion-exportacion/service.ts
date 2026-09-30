@@ -1,4 +1,18 @@
 import { api } from '@/lib/api'
+
+// Abre el Cierre Comercial de una Nota de Venta en una ventana emergente
+// (popup), sin reemplazar la pantalla actual de Facturación.
+export function abrirCierreComercial(notaVentaId: number) {
+  window.open(`/dashboard/ventas/cierre/${notaVentaId}`, '_blank', 'width=1200,height=850,noopener,noreferrer')
+}
+
+// Fecha de HOY como "YYYY-MM-DD" en hora local (para sugerir la fecha del
+// documento) — no usa UTC para no adelantar/atrasar el día de noche.
+export function hoyFecha(): string {
+  const d = new Date()
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 10)
+}
 import type {
   DimensionProforma,
   EmbarquesExportacionListResponse,

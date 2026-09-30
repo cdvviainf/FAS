@@ -19,3 +19,10 @@ export const fechaDocumentoSchema = z
   .refine(esFechaCalendarioValida, 'Fecha inválida — usa el formato AAAA-MM-DD')
   .optional()
   .nullable()
+
+// Variante OBLIGATORIA — para la emisión (no se puede emitir sin fecha).
+export const fechaDocumentoRequeridaSchema = z
+  .string()
+  .trim()
+  .min(1, 'La fecha del documento es obligatoria')
+  .refine(esFechaCalendarioValida, 'Fecha inválida — usa el formato AAAA-MM-DD')

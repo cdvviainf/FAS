@@ -22,6 +22,12 @@ export const proformaPdfPayloadSchema = z.object({
   }),
   moneda: z.string(), // código, ej. "USD"
   condicionPago: z.string().nullable(), // descripción de la CondicionPago heredada
+  // La misma plantilla sirve para la Proforma y para la Factura de Exportación
+  // (DTE 110): `variante` cambia el título y `folio`/`tipoDte` se muestran solo
+  // en la Factura ya timbrada.
+  variante: z.enum(['PROFORMA', 'FACTURA']).default('PROFORMA'),
+  folio: z.number().int().nullable().default(null),
+  tipoDte: z.number().int().nullable().default(null),
   // precioUnitario/montoLinea van a valor FOB cuando la cláusula exige Flete/
   // Seguro (unitario × (montoTotal − flete − seguro) / montoTotal); si no,
   // coinciden con el valor cláusula. montoTotal es siempre el valor cláusula/CIF.

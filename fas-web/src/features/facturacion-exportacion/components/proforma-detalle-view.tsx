@@ -12,7 +12,7 @@ import { formatMonto } from '@/lib/format'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { documentosService } from '@/features/documentos/service'
 import { facturasKeys, proformasKeys } from '../queries'
-import { facturaExportacionService, proformaService } from '../service'
+import { abrirCierreComercial, facturaExportacionService, proformaService } from '../service'
 import type { Proforma } from '../types'
 
 const ITEM = 'FACT_EXPORTACION'
@@ -78,14 +78,20 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
               {proforma.estado === 'EMITIDA' ? 'Emitida' : 'Anulada'}
             </Badge>
           </h2>
-          <p className='text-muted-foreground text-sm'>
-            Embarque {proforma.embarque.numeroInstructivo} · {proforma.cliente.descripcion} · {proforma.moneda.codigo}
-            {proforma.condicionPago && <> · {proforma.condicionPago.descripcion}</>}
-          </p>
+          <dl className='text-muted-foreground mt-1 grid gap-x-2 text-sm sm:grid-cols-[auto_1fr]'>
+            <dt className='font-medium'>Embarque:</dt><dd>{proforma.embarque.numeroInstructivo}</dd>
+            <dt className='font-medium'>Cliente:</dt><dd>{proforma.cliente.descripcion}</dd>
+            <dt className='font-medium'>Moneda:</dt><dd>{proforma.moneda.codigo}</dd>
+            {proforma.condicionPago && (
+              <>
+                <dt className='font-medium'>Condición de pago:</dt><dd>{proforma.condicionPago.descripcion}</dd>
+              </>
+            )}
+          </dl>
         </div>
-        <div className='flex gap-2'>
+        <div className='flex flex-wrap gap-2'>
           {proforma.embarque.notaVentaId != null && (
-            <Button variant='outline' onClick={() => router.push(`/dashboard/ventas/cierre/${proforma.embarque.notaVentaId}`)}>
+            <Button variant='outline' onClick={() => abrirCierreComercial(proforma.embarque.notaVentaId!)}>
               <Icons.externalLink className='mr-2 h-4 w-4' /> Ver Cierre Comercial
             </Button>
           )}

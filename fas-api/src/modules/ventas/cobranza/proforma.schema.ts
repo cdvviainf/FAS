@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { fechaDocumentoSchema } from './fecha-documento.schema.js'
+import { fechaDocumentoRequeridaSchema } from './fecha-documento.schema.js'
 
 const dimensionSchema = z.enum(['VARIEDAD', 'ARTICULO', 'CALIBRE', 'CATEGORIA', 'MARCA'])
 
@@ -34,8 +34,8 @@ const lineaSchema = z.object({
 export const proformaEmitirSchema = z.object({
   dimensiones: z.array(dimensionSchema).default([]),
   idioma: z.enum(['EN', 'ES']).default('EN'),
-  // Fecha del documento como "YYYY-MM-DD" (input date) o ISO — validada estricta.
-  fechaDocumento: fechaDocumentoSchema,
+  // Fecha del documento "YYYY-MM-DD" — OBLIGATORIA (no se emite sin fecha).
+  fechaDocumento: fechaDocumentoRequeridaSchema,
   lineas: z.array(lineaSchema).min(1, 'Agrega al menos una línea'),
   // Flete/Seguro de la cláusula de venta (Incoterm). Solo se exigen si la
   // cláusula lo indica (validación server-side, no aquí, porque depende de un

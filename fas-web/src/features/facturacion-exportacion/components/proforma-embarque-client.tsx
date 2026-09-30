@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -15,7 +14,7 @@ import { Icons } from '@/components/icons'
 import { formatMonto } from '@/lib/format'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { proformaPorEmbarqueOptions, proformasKeys } from '../queries'
-import { proformaService } from '../service'
+import { abrirCierreComercial, hoyFecha, proformaService } from '../service'
 import { DIMENSION_LABELS } from '../types'
 import type { DimensionProforma, ProformaLineaSugerida } from '../types'
 import { ProformaDetalleView } from './proforma-detalle-view'
@@ -34,10 +33,9 @@ export function ProformaEmbarqueClient({ embarqueId }: { embarqueId: number }) {
 function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   const queryClient = useQueryClient()
   const puedeEscribir = usePuedeEscribir(ITEM)
-  const router = useRouter()
   const [dimensiones, setDimensiones] = useState<DimensionProforma[]>([])
   const [idioma, setIdioma] = useState<'EN' | 'ES'>('EN')
-  const [fechaDocumento, setFechaDocumento] = useState<string>('')
+  const [fechaDocumento, setFechaDocumento] = useState<string>(hoyFecha())
   const [lineas, setLineas] = useState<ProformaLineaSugerida[]>([])
   const [montoFlete, setMontoFlete] = useState<string>('')
   const [montoSeguro, setMontoSeguro] = useState<string>('')
@@ -130,6 +128,10 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
       toast.error(`No se puede emitir en inglés: faltan descripciones extranjeras (${faltantesExtranjera.join(' · ')})`)
       return
     }
+    if (!fechaDocumento) {
+      toast.error('La fecha del documento es obligatoria')
+      return
+    }
     emitir.mutate()
   }
 
@@ -167,7 +169,7 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
               <Input type='date' value={fechaDocumento} onChange={(e) => setFechaDocumento(e.target.value)} className='h-9' />
             </div>
             {notaVentaId != null && (
-              <Button variant='outline' size='sm' onClick={() => router.push(`/dashboard/ventas/cierre/${notaVentaId}`)}>
+              <Button variant='outline' size='sm' onClick={() => abrirCierreComercial(notaVentaId)}>
                 <Icons.externalLink className='mr-2 h-4 w-4' /> Ver Cierre Comercial
               </Button>
             )}

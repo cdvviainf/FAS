@@ -21,6 +21,7 @@ import { resolverInstructivoEmbarque } from './resolvers/instructivo-embarque.re
 import { instructivoEmbarquePdfPayloadSchema } from './schemas/instructivo-embarque.schema.js'
 import { InstructivoEmbarqueV1 } from './templates/instructivo-embarque/v1/index.js'
 import { resolverProforma } from './resolvers/proforma.resolver.js'
+import { resolverFacturaExportacion } from './resolvers/factura-exportacion.resolver.js'
 import { proformaPdfPayloadSchema } from './schemas/proforma.schema.js'
 import { ProformaV1 } from './templates/proforma/v1/index.js'
 import type { DocumentRegistry } from './documentos.types.js'
@@ -150,6 +151,18 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     // segundo paso de "oficializar" (D12: documento interno, sin folio SII).
     controlCopia: false,
     nombreArchivo: (p) => `Proforma_${p.codigo}.pdf`,
+    folio: (p) => p.codigo,
+  },
+  'factura-exportacion': {
+    titulo: 'Factura de Exportación',
+    resolver: resolverFacturaExportacion,
+    schema: proformaPdfPayloadSchema, // misma forma de payload que la Proforma
+    plantillaActual: 'v1',
+    plantillas: { v1: ProformaV1 }, // reusa la plantilla (variante='FACTURA')
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    itemMenu: 'FACT_EXPORTACION',
+    controlCopia: false,
+    nombreArchivo: (p) => `Factura_${p.codigo}.pdf`,
     folio: (p) => p.codigo,
   },
 }

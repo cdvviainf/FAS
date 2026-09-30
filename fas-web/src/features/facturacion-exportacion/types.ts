@@ -144,6 +144,7 @@ export interface FacturaExportacion {
   embarque: {
     id: number
     numeroInstructivo: string
+    notaVentaId?: number
     notaVenta: { clausulaVenta: ClausulaVentaFlags | null }
   }
   proformaId: number

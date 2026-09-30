@@ -19,6 +19,8 @@ type Vencimiento = ProformaPdfPayload['vencimientosEstimados'][number]
 const L = {
   EN: {
     titulo: 'PROFORMA INVOICE',
+    tituloFactura: 'EXPORT INVOICE',
+    folio: 'Folio',
     exportador: 'Exporter',
     cliente: 'Client',
     razonSocial: 'Company Name',
@@ -50,6 +52,8 @@ const L = {
   },
   ES: {
     titulo: 'FACTURA PROFORMA',
+    tituloFactura: 'FACTURA DE EXPORTACIÓN',
+    folio: 'Folio',
     exportador: 'Exportador',
     cliente: 'Cliente',
     razonSocial: 'Razón social',
@@ -83,6 +87,9 @@ const L = {
 
 export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPayload; marcaAgua?: 'BORRADOR' | 'COPIA'; marcaAguaFecha?: string }) {
   const t = L[d.idioma]
+  // Título según variante: la misma plantilla sirve para la Proforma y para la
+  // Factura de Exportación (DTE 110).
+  const titulo = d.variante === 'FACTURA' ? t.tituloFactura : t.titulo
   // Solo cuando la cláusula de venta exige Flete y/o Seguro se muestra el
   // desglose FOB; en FOB puro el documento queda idéntico a antes.
   const tieneDesgloseClausula = d.montoFlete != null || d.montoSeguro != null
@@ -104,7 +111,7 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
 
   return (
     <Documento
-      titulo={`${t.titulo} ${d.codigo}`}
+      titulo={`${titulo} ${d.codigo}`}
       paginaOpts={{ formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' }}
       marcaAgua={marcaAgua}
       marcaAguaFecha={marcaAguaFecha}
@@ -112,7 +119,7 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
     >
       <Encabezado
         logoDataUri={d.empresa.logoDataUri ?? undefined}
-        tituloDocumento={t.titulo}
+        tituloDocumento={d.variante === 'FACTURA' && d.folio != null ? `${titulo} · ${t.folio} ${d.folio}` : titulo}
         numero={d.codigo}
         fecha={fmt.fecha(d.fechaEmision)}
       />
