@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
+import { semanaISO } from '@/lib/format'
 import { embarquesService } from '../service'
 import { embarquesKeys } from '../queries'
 import type { EmbarqueDetalle } from '../types'
@@ -19,19 +20,6 @@ const ITEM = 'VENTAS_EMBARQUES'
 const NINGUNO = '__NINGUNO__'
 const tiposParametroService = createMantenedorService('tipos-parametro')
 const parametrosService = createMantenedorService('parametros')
-
-// Semana ISO 8601 de una fecha `YYYY-MM-DD` (parseada en hora local).
-function semanaISO(fechaYmd: string): number | null {
-  if (!fechaYmd) return null
-  const d = new Date(`${fechaYmd}T00:00:00`)
-  if (Number.isNaN(d.getTime())) return null
-  const target = new Date(d.getTime())
-  const dayNr = (d.getDay() + 6) % 7
-  target.setDate(target.getDate() - dayNr + 3)
-  const firstThursday = new Date(target.getFullYear(), 0, 4)
-  const diff = target.getTime() - firstThursday.getTime()
-  return 1 + Math.round(diff / (7 * 86_400_000))
-}
 
 function especiesDistintas(embarque: EmbarqueDetalle): string {
   const set = new Set(embarque.notaVenta.detalles.map((d) => d.especie.descripcion))

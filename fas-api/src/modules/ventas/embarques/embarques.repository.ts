@@ -8,7 +8,7 @@ import {
   LOCK_NAMESPACE_EMBARQUE_CORRELATIVO,
 } from '../../../shared/advisory-locks.js'
 import { palletCalzaConDetalleNV } from './embarques.comparacion.js'
-import type { DatosReservaManualInput, DatosReservaBaseInput, DatosInstructivoInput, InstructivoHijoUpdateInput } from './embarques.types.js'
+import type { DatosReservaManualInput, DatosReservaBaseInput, DatosInstructivoInput, InstructivoHijoUpdateInput, DatosContenedorInput } from './embarques.types.js'
 
 // 502: la integración externa (no FAS) fue la que falló — distingue este
 // caso de un 422 de validación normal para que el frontend sepa mostrar el
@@ -89,13 +89,78 @@ const palletInclude = {
   },
 } satisfies Prisma.PalletInclude
 
-export async function listEmbarques(page: number, limit: number, notaVentaId?: number) {
-  const where = { eliminadoEn: null, ...(notaVentaId ? { notaVentaId } : {}) }
+// Select ampliado del listado (2026-09-30): Cliente/Mercado/Puerto destino —
+// solo para esta pantalla, no se agranda `notaVentaRefSelect` (compartido por
+// el resto del módulo) para no abultar el resto de las respuestas.
+const notaVentaListaSelect = {
+  id: true,
+  folio: true,
+  cliente: { select: { id: true, codigo: true, descripcion: true, razonSocial: true } },
+  mercado: { select: { id: true, codigo: true, descripcion: true } },
+  puertoDestino: { select: { id: true, codigo: true, descripcion: true } },
+} satisfies Prisma.NotaVentaSelect
+
+// Estado combinado (2026-09-30, ver embarques.schema.ts ESTADOS_EMBARQUE_LISTADO):
+// where-clause por valor filtrable — "efectivamente despachado" siempre pisa
+// al estado de reserva, igual que el resto del sistema (ver
+// requireEmbarqueDespachado en cobranza/facturación).
+function whereEstadoListado(estado?: string): Prisma.EmbarqueWhereInput {
+  switch (estado) {
+    case 'DESPACHADO':
+      return { despachadoEn: { not: null }, despachoAnuladoEn: null }
+    case 'DESPACHO_ANULADO':
+      return { despachadoEn: { not: null }, despachoAnuladoEn: { not: null } }
+    case 'PENDIENTE':
+    case 'SOLICITADA':
+    case 'CONFIRMADA':
+      return { estadoReserva: estado, despachadoEn: null }
+    default:
+      return {}
+  }
+}
+
+// Orden explícito pedido por el usuario (header clicable) — mismo patrón que
+// config.repository.ts:resolveOrderBy. Solo columnas con un orderBy simple o
+// de relación a-uno tienen sentido acá; Estado es combinado (no se ordena).
+function resolveOrderByEmbarque(sort?: string): Prisma.EmbarqueOrderByWithRelationInput[] {
+  if (sort) {
+    try {
+      const arr = JSON.parse(sort) as Array<{ id: string; desc: boolean }>
+      const first = Array.isArray(arr) ? arr[0] : null
+      if (first?.id) {
+        const dir = first.desc ? 'desc' : 'asc'
+        switch (first.id) {
+          case 'numeroInstructivo': return [{ numeroInstructivo: dir }]
+          case 'creadoEn': return [{ creadoEn: dir }]
+          case 'cliente': return [{ notaVenta: { cliente: { descripcion: dir } } }]
+          case 'mercado': return [{ notaVenta: { mercado: { descripcion: dir } } }]
+          case 'puertoDestino': return [{ notaVenta: { puertoDestino: { descripcion: dir } } }]
+        }
+      }
+    } catch {
+      /* sort inválido: orden por defecto */
+    }
+  }
+  return [{ creadoEn: 'desc' }]
+}
+
+export async function listEmbarques(
+  page: number,
+  limit: number,
+  notaVentaId?: number,
+  estado?: string,
+  sort?: string,
+) {
+  const where: Prisma.EmbarqueWhereInput = {
+    eliminadoEn: null,
+    ...(notaVentaId ? { notaVentaId } : {}),
+    ...whereEstadoListado(estado),
+  }
   const [data, total] = await Promise.all([
     prisma.embarque.findMany({
       where,
-      include: { notaVenta: { select: notaVentaRefSelect }, _count: { select: { pallets: true } } },
-      orderBy: { creadoEn: 'desc' },
+      include: { notaVenta: { select: notaVentaListaSelect }, _count: { select: { pallets: true } } },
+      orderBy: resolveOrderByEmbarque(sort),
       skip: (page - 1) * limit,
       take: limit,
     }),
@@ -579,7 +644,16 @@ export async function generarEmbarqueTransaccional(
   forzarSinReserva: boolean,
   modoAutomatico: boolean,
   procesarReserva: (numeroInstructivo: string) => Promise<ResultadoIntentoReserva>,
+  // Información base del contenedor (2026-09-30) — se persiste en el Embarque
+  // desde su creación (en vez de requerir la edición posterior vía
+  // guardarDatosReservaBase).
+  datosContenedor?: DatosContenedorInput,
 ) {
+  const datosBase = {
+    temperatura: datosContenedor?.temperatura ?? undefined,
+    cbm: datosContenedor?.cbm ?? undefined,
+    tipoBlId: datosContenedor?.tipoBlId ?? undefined,
+  }
   return prisma.$transaction(async (tx) => {
     const empresaId = getEmpresaIdActual()!
     // Correlativo atómico por prefijo (FAS-DEV-QA-R2-006): el lock de prefijo
@@ -604,7 +678,7 @@ export async function generarEmbarqueTransaccional(
 
     if (!modoAutomatico) {
       return tx.embarque.create({
-        data: { empresaId, notaVentaId, numeroInstructivo, gestorLogisticoId, creadoPor, reservaManual: true },
+        data: { empresaId, notaVentaId, numeroInstructivo, gestorLogisticoId, creadoPor, reservaManual: true, ...datosBase },
         include: { notaVenta: { select: notaVentaRefSelect } },
       })
     }
@@ -622,6 +696,7 @@ export async function generarEmbarqueTransaccional(
         gestorLogisticoId,
         creadoPor,
         estadoReserva: resultado.ok ? 'SOLICITADA' : 'PENDIENTE',
+        ...datosBase,
       },
     })
     if (resultado.ok) {

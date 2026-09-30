@@ -21,6 +21,7 @@ const includeDetalle = {
   modalidadVenta: { select: { id: true, codigo: true, descripcion: true } },
   clausulaVenta: { select: { id: true, codigo: true, descripcion: true } },
   tipoFlete: { select: { id: true, codigo: true, descripcion: true } },
+  tipoBl: { select: { id: true, codigo: true, descripcion: true } },
   condicionPago: { select: { id: true, codigo: true, descripcion: true } },
   cuotasPago: {
     include: {
@@ -525,11 +526,20 @@ export async function getCondicionPago(id: number) {
 }
 
 // Valida que el Parametro exista, esté vigente y pertenezca al TipoParametro
-// esperado (ej. 'INCOTERM', 'TIPO_FLETE', 'MODALIDAD_VENTA') — evita que se
-// seleccione un valor de un catálogo genérico distinto al del campo.
+// esperado (ej. 'TIPO_FLETE', 'MODALIDAD_VENTA') — evita que se seleccione un
+// valor de un catálogo genérico distinto al del campo.
 export async function getParametro(id: number, tipoParametroCodigo: string) {
   return prisma.parametro.findFirst({
     where: { id, eliminadoEn: null, bloqueado: false, tipoParametro: { codigo: tipoParametroCodigo } },
+    select: { id: true },
+  })
+}
+
+// Valida que la Cláusula de Venta (Incoterm) exista y esté vigente (2026-09-30:
+// mantenedor propio ClausulaVenta, antes catálogo genérico Parametro).
+export async function getClausulaVenta(id: number) {
+  return prisma.clausulaVenta.findFirst({
+    where: { id, eliminadoEn: null, bloqueado: false },
     select: { id: true },
   })
 }

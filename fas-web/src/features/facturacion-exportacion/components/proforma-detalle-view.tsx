@@ -12,7 +12,7 @@ import { formatMonto } from '@/lib/format'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { documentosService } from '@/features/documentos/service'
 import { facturasKeys, proformasKeys } from '../queries'
-import { abrirCierreComercial, facturaExportacionService, proformaService } from '../service'
+import { facturaExportacionService, proformaService } from '../service'
 import type { Proforma } from '../types'
 
 const ITEM = 'FACT_EXPORTACION'
@@ -37,6 +37,24 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
   const factor = montoTotal > 0 && reduccion > 0 ? (montoTotal - reduccion) / montoTotal : 1
   const subtotalFob = Math.round((montoTotal - reduccion) * 100) / 100
   const moneda = proforma.moneda.codigo
+
+  // "Ver Cierre Comercial"/"Ver Factura" abren directamente su PDF (2026-09-30)
+  // — antes navegaban a la pantalla. Si el PDF no está disponible (ej. Factura
+  // sin aprobar aún), se avisa con un toast en vez de fallar en silencio.
+  async function abrirPdfCierre(notaVentaId: number) {
+    try {
+      await documentosService.abrirPdf('cierre-comercial', notaVentaId)
+    } catch (e) {
+      toast.error((e as Error).message || 'No se pudo abrir el PDF del Cierre Comercial')
+    }
+  }
+  async function abrirPdfFactura(facturaId: number) {
+    try {
+      await documentosService.abrirPdf('factura-exportacion', facturaId)
+    } catch (e) {
+      toast.error((e as Error).message || 'La Factura Comercial (PDF) aún no está disponible')
+    }
+  }
 
   const anular = useMutation({
     mutationFn: () => proformaService.anular(proforma.id),
@@ -91,7 +109,7 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
         </div>
         <div className='flex flex-wrap gap-2'>
           {proforma.embarque.notaVentaId != null && (
-            <Button variant='outline' onClick={() => abrirCierreComercial(proforma.embarque.notaVentaId!)}>
+            <Button variant='outline' onClick={() => abrirPdfCierre(proforma.embarque.notaVentaId!)}>
               <Icons.externalLink className='mr-2 h-4 w-4' /> Ver Cierre Comercial
             </Button>
           )}
@@ -100,11 +118,14 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
               <Icons.download className='mr-2 h-4 w-4' /> Ver PDF
             </Button>
           )}
+          {/* Deshabilitado en pausa hasta afinar el formato del PDF (2026-09-30) */}
+          {proforma.estado === 'EMITIDA' && (
+            <Button variant='outline' disabled title='Próximamente'>
+              <Icons.download className='mr-2 h-4 w-4' /> Exportar a Excel
+            </Button>
+          )}
           {proforma.estado === 'EMITIDA' && facturaExistente && (
-            <Button
-              variant='outline'
-              onClick={() => router.push(`/dashboard/facturacion/exportacion/factura/${facturaExistente.id}`)}
-            >
+            <Button variant='outline' onClick={() => abrirPdfFactura(facturaExistente.id)}>
               <Icons.billing className='mr-2 h-4 w-4' /> Ver Factura {facturaExistente.codigo}
             </Button>
           )}

@@ -13,6 +13,7 @@ export interface NotaVentaCreateInput {
   modalidadVentaId?: number | null
   clausulaVentaId?: number | null
   tipoFleteId?: number | null
+  tipoBlId?: number | null
   condicionPagoId?: number | null
   monedaId: number
   observaciones?: string | null

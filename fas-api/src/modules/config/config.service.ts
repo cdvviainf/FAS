@@ -43,6 +43,8 @@ type ExternalReferenceDef = {
     | 'solicitudInspeccionCategoria'
     | 'solicitudInspeccionEmbalaje'
     | 'articulo'
+    | 'notaVenta'
+    | 'ordenCompra'
   parentField: string
   label: string
   usesSoftDelete?: boolean
@@ -86,6 +88,12 @@ const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceD
   ],
   etiqueta: [
     { delegateName: 'articulo', parentField: 'etiquetaId', label: 'artículos', usesSoftDelete: false },
+  ],
+  // CVD-QA-004: NotaVenta/OrdenCompra no son mantenedores genéricos, no
+  // encajan en childrenMap — se referencian vía Prisma delegate directo.
+  clausulaVenta: [
+    { delegateName: 'notaVenta', parentField: 'clausulaVentaId', label: 'notas de venta' },
+    { delegateName: 'ordenCompra', parentField: 'incotermId', label: 'órdenes de compra' },
   ],
 }
 

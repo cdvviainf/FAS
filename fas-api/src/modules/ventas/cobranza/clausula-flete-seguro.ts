@@ -1,8 +1,8 @@
 import { ValidationError } from '../../../shared/errors.js'
 
 // Cláusula de venta (Incoterm) y sus exigencias de Flete/Seguro. Los flags
-// viven en el Parametro de la cláusula (Parametro.requiereFlete/requiereSeguro)
-// y llegan aquí vía la Nota de Venta del Embarque.
+// viven en ClausulaVenta.requiereFlete/requiereSeguro y llegan aquí vía la
+// Nota de Venta del Embarque.
 export interface ClausulaFlags {
   descripcion?: string | null
   requiereFlete: boolean

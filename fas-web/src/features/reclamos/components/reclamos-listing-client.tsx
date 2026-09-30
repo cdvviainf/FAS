@@ -58,7 +58,7 @@ export function ReclamosListingClient({ basePath = '/dashboard/calidad/reclamos'
     <div className='space-y-3'>
       <div className='flex flex-wrap items-end gap-3'>
         <div className='min-w-[160px] space-y-1.5'>
-          <Label className='text-[10.5px] tracking-wide uppercase'>Folio Embarque</Label>
+          <Label className='text-[10.5px] tracking-wide uppercase'>Instructivo</Label>
           <Input
             value={folio}
             onChange={(e) => { setFolio(e.target.value); setPage(1) }}

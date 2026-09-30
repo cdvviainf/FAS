@@ -167,7 +167,7 @@ async function validarReferenciasHeader(data: {
     if (!responsable) throw new ValidationError('El responsable seleccionado no existe o no está marcado como Responsable de Venta')
   }
   if (data.incotermId != null) {
-    const incoterm = await repo.getParametro(data.incotermId, 'INCOTERM')
+    const incoterm = await repo.getClausulaVenta(data.incotermId)
     if (!incoterm) throw new ValidationError('El Incoterm seleccionado no existe o está bloqueado')
   }
 }

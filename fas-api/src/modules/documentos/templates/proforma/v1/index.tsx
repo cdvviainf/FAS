@@ -19,7 +19,7 @@ type Vencimiento = ProformaPdfPayload['vencimientosEstimados'][number]
 const L = {
   EN: {
     titulo: 'PROFORMA INVOICE',
-    tituloFactura: 'EXPORT INVOICE',
+    tituloFactura: 'COMMERCIAL EXPORT INVOICE',
     folio: 'Folio',
     exportador: 'Exporter',
     cliente: 'Client',
@@ -52,7 +52,7 @@ const L = {
   },
   ES: {
     titulo: 'FACTURA PROFORMA',
-    tituloFactura: 'FACTURA DE EXPORTACIÓN',
+    tituloFactura: 'FACTURA COMERCIAL DE EXPORTACIÓN',
     folio: 'Folio',
     exportador: 'Exportador',
     cliente: 'Cliente',

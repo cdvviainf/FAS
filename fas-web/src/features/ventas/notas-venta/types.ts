@@ -118,6 +118,8 @@ export interface NotaVentaDetalle extends NotaVentaListItem {
   clausulaVenta: MantenedorRef | null
   tipoFleteId: number | null
   tipoFlete: MantenedorRef | null
+  tipoBlId: number | null
+  tipoBl: MantenedorRef | null
   condicionPagoId: number | null
   condicionPago: CondicionPagoRef | null
   cuotasPago: NotaVentaCuotaPagoRef[]
@@ -146,6 +148,7 @@ export interface NotaVentaCreateInput {
   modalidadVentaId?: number | null
   clausulaVentaId?: number | null
   tipoFleteId?: number | null
+  tipoBlId?: number | null
   condicionPagoId?: number | null
   observaciones?: string | null
 }

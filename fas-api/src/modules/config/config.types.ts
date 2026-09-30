@@ -21,6 +21,9 @@ export type MantenedorModelo =
   | 'categoria'
   | 'calibre'
   | 'parametro'
+  // Extraído de Parametro (2026-09-30): Cláusula de Venta / Incoterm, con
+  // requiereFlete/requiereSeguro propios.
+  | 'clausulaVenta'
   | 'mercado'
   // Lote 3
   | 'puerto'

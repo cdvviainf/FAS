@@ -8,7 +8,7 @@ import * as templatesCargaRepo from '../../config/templates-carga/templates-carg
 import { reconciliarPackingList } from './embarques.packing-list.motor.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ResultadoIntentoReserva } from './embarques.repository.js'
-import type { DatosReservaManualInput, DatosReservaBaseInput, DatosInstructivoInput, InstructivoHijoUpdateInput, EmbarqueCreateInput } from './embarques.types.js'
+import type { DatosReservaManualInput, DatosReservaBaseInput, DatosInstructivoInput, InstructivoHijoUpdateInput, EmbarqueCreateInput, DatosContenedorInput } from './embarques.types.js'
 import type { AglWebhookConfirmarBody } from './embarques.schema.js'
 import type { SolicitudAglPayload } from './agl360.adapter.js'
 
@@ -26,9 +26,18 @@ async function resolverModoAutomatico(gestorLogisticoId: number): Promise<boolea
   return integracion?.codigo === CODIGO_INTEGRACION_AGL
 }
 
-export async function listarEmbarques(page: number, limit: number, notaVentaId?: number) {
-  const { data, total } = await repo.listEmbarques(page, limit, notaVentaId)
-  return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
+// Estado combinado del listado (2026-09-30): "efectivamente despachado" pisa
+// al estado de reserva, mismo criterio que requireEmbarqueDespachado en
+// cobranza/facturación (despachadoEn != null && despachoAnuladoEn == null).
+function resolverEstadoListado(e: { estadoReserva: string; despachadoEn: Date | null; despachoAnuladoEn: Date | null }): string {
+  if (e.despachadoEn != null) return e.despachoAnuladoEn != null ? 'DESPACHO_ANULADO' : 'DESPACHADO'
+  return e.estadoReserva
+}
+
+export async function listarEmbarques(page: number, limit: number, notaVentaId?: number, estado?: string, sort?: string) {
+  const { data, total } = await repo.listEmbarques(page, limit, notaVentaId, estado, sort)
+  const conEstado = data.map((e) => ({ ...e, estadoListado: resolverEstadoListado(e) }))
+  return { data: conEstado, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
 export async function obtenerEmbarque(id: number) {
@@ -62,7 +71,11 @@ function referenciaFasDe(numeroInstructivo: string): string {
   return `AGL-${getEmpresaIdActual()!}-${numeroInstructivo}`
 }
 
-async function intentarReservaAgl(notaVentaId: number, referenciaFas: string): Promise<ResultadoIntentoReserva> {
+async function intentarReservaAgl(
+  notaVentaId: number,
+  referenciaFas: string,
+  datosContenedor?: DatosContenedorInput,
+): Promise<ResultadoIntentoReserva> {
   const nv = await repo.getNotaVentaParaReserva(notaVentaId)
   if (!nv) return { ok: false, error: 'El Cierre Comercial ya no existe' }
 
@@ -107,6 +120,8 @@ async function intentarReservaAgl(notaVentaId: number, referenciaFas: string): P
     ...(idPod ? { idPod: Number(idPod) } : {}),
     ...(idProducto ? { idProducto: Number(idProducto) } : {}),
     ...(nv.direccionDetalle ? { direccionRetiro: nv.direccionDetalle } : {}),
+    ...(datosContenedor?.temperatura != null ? { temperatura: datosContenedor.temperatura } : {}),
+    ...(datosContenedor?.cbm != null ? { cbm: datosContenedor.cbm } : {}),
     observaciones: `Cierre Comercial folio ${nv.folio} — generado desde FAS`,
   }
 
@@ -174,6 +189,19 @@ export async function generarEmbarquesMultiples(
   if (!Number.isFinite(cantidad) || cantidad < 1) throw new ValidationError('La cantidad de contenedores debe ser al menos 1')
   if (cantidad > 100) throw new ValidationError('La cantidad de contenedores es demasiado alta (máximo 100)')
 
+  // Información base por contenedor (2026-09-30): si viene, debe traer
+  // exactamente un elemento por contenedor a crear — el frontend ya resolvió
+  // la opción "mismo valor para todos" replicando el mismo objeto.
+  if (body.contenedores && body.contenedores.length !== cantidad) {
+    throw new ValidationError(`Los datos por contenedor (${body.contenedores.length}) no calzan con la cantidad de contenedores (${cantidad})`)
+  }
+  const tipoBlIds = [...new Set((body.contenedores ?? []).map((c) => c.tipoBlId).filter((v): v is number => v != null))]
+  if (tipoBlIds.length > 0) {
+    const validos = await Promise.all(tipoBlIds.map((id) => repo.getParametroTipoBl(id)))
+    const invalido = tipoBlIds.find((_, i) => !validos[i])
+    if (invalido != null) throw new ValidationError('El Tipo de BL seleccionado no existe o está bloqueado')
+  }
+
   const modoAutomatico = await resolverModoAutomatico(body.gestorLogisticoId)
 
   // El correlativo se calcula y reserva DENTRO de cada transacción, bajo el
@@ -189,6 +217,7 @@ export async function generarEmbarquesMultiples(
   const embarques = []
   let aglFallo = false
   for (let i = 1; i <= cantidad; i++) {
+    const datosContenedor: DatosContenedorInput | undefined = body.contenedores?.[i - 1]
     try {
       const embarque = await repo.generarEmbarqueTransaccional(
         body.notaVentaId,
@@ -198,7 +227,8 @@ export async function generarEmbarquesMultiples(
         creadoPor,
         body.forzarSinReserva ?? false,
         modoAutomatico,
-        (numeroInstructivo) => intentarReservaAgl(body.notaVentaId, referenciaFasDe(numeroInstructivo)),
+        (numeroInstructivo) => intentarReservaAgl(body.notaVentaId, referenciaFasDe(numeroInstructivo), datosContenedor),
+        datosContenedor,
       )
       embarques.push(embarque)
     } catch (e) {

@@ -39,8 +39,6 @@ export const ordenCompraCreateSchema = z.object({
   monedaId: z.number().int().positive('La moneda es requerida'),
   destinoMercadoId: z.number().int().positive().optional().nullable(),
   responsableId: z.string().min(1).optional().nullable(),
-  // Catálogo genérico Parametro (TipoParametro INCOTERM), mismo mecanismo
-  // que NotaVenta.clausulaVentaId — reintroducido 2026-08-12.
   incotermId: z.number().int().positive().optional().nullable(),
   observaciones: z.string().max(2000).trim().optional().nullable(),
 })

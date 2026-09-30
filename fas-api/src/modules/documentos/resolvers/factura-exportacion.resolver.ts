@@ -1,4 +1,4 @@
-import { NotFoundError } from '../../../shared/errors.js'
+import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { getFacturaActivaById } from '../../ventas/cobranza/factura-exportacion.repository.js'
 import { factorFob, unitarioFob } from '../../ventas/cobranza/clausula-flete-seguro.js'
 import { descripcionLinea } from '../../ventas/cobranza/descripcion-idioma.js'
@@ -15,6 +15,12 @@ function round2(n: number): number {
 export async function resolverFacturaExportacion(id: number, empresaId: number): Promise<ProformaPdfPayload> {
   const factura = await getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
+  // Gate de estado (FAS-EXP-IE-QA-002): la Factura Comercial solo se genera para
+  // una Factura APROBADA (timbrada, con folio) — no en BORRADOR/RECHAZADA, ni
+  // siquiera por acceso directo al endpoint.
+  if (factura.estado !== 'APROBADA' || factura.folio == null) {
+    throw new ValidationError('La Factura Comercial solo está disponible para una Factura aprobada (timbrada)')
+  }
 
   const [empresa, cliente] = await Promise.all([
     getEmpresaParaDocumento(empresaId),

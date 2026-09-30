@@ -27,6 +27,11 @@ export interface SolicitudAglPayload {
   idProducto?: number
   direccionRetiro?: string
   observaciones?: string
+  // Temperatura (°C) y CBM del contenedor (2026-09-30, decisión de negocio:
+  // se envían aunque no figuren en Docs/api-solicitudes.md — a confirmar con
+  // el proveedor si AGL360 los reconoce bajo estos nombres).
+  temperatura?: number
+  cbm?: number
 }
 
 export interface SolicitudAglResultado {

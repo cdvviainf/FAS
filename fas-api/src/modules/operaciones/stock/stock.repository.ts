@@ -30,7 +30,9 @@ export async function listPalletsConLineas() {
           // orden: para graficar la distribución de calibres respetando el
           // orden del maestro (por especie), no el orden alfabético.
           calibre: { select: { ...mantenedorSelect, orden: true } },
-          articulo: { select: { kgNetoEnvase: true } },
+          // id/codigo/descripcion (2026-09-30): nivel de agrupador "Artículo"
+          // (Embalaje) en el reporte de Stock, entre Especie y Variedad.
+          articulo: { select: { ...mantenedorSelect, kgNetoEnvase: true } },
           packing: { select: entidadSelect },
         },
       },

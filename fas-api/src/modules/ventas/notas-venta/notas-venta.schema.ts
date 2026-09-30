@@ -15,6 +15,8 @@ export const notaVentaCreateSchema = z.object({
   modalidadVentaId: z.number().int().positive().optional().nullable(),
   clausulaVentaId: z.number().int().positive().optional().nullable(),
   tipoFleteId: z.number().int().positive().optional().nullable(),
+  // Se propone como valor por defecto al generar cada Embarque (editable ahí).
+  tipoBlId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
   monedaId: z.number().int().positive('La moneda es requerida'),
   observaciones: z.string().max(1000).trim().optional().nullable(),

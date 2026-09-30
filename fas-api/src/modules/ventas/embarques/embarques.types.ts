@@ -8,6 +8,19 @@ export interface EmbarqueCreateInput {
   // generar el Embarque igual, sin reintentar la Solicitud de Reserva
   // (ventas.md §4.3) — el Embarque nace `estadoReserva=PENDIENTE`.
   forzarSinReserva?: boolean
+  // Información base por contenedor (2026-09-30) — uno por Embarque a crear,
+  // en el mismo orden. Ver DatosContenedorInput.
+  contenedores?: DatosContenedorInput[]
+}
+
+// Temperatura/CBM/Tipo de BL de UN contenedor, capturados al solicitar la
+// reserva (en vez de solo después, vía guardarDatosReservaBase) — para poder
+// incluirlos en el envío a AGL360 (temperatura/cbm) y persistirlos en el
+// Embarque desde su creación.
+export interface DatosContenedorInput {
+  temperatura?: number | null
+  cbm?: number | null
+  tipoBlId?: number | null
 }
 
 export interface DatosReservaManualInput {

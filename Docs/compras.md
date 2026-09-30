@@ -104,7 +104,7 @@ Especificación de la compra.
 - `formaPagoId` (FK → FormaPago, nullable) **(nuevo, 2026-07-26)** — mantenedor propio (`Docs/mantenedores-generales.md`); reemplaza el texto libre original
 - `condicionPagoId` (FK → CondicionPago, nullable) **(nuevo, 2026-07-26)** — reemplaza `condicionPagoTexto`; ver §4.2.1
 - `monedaId` (FK → Moneda) **(nuevo)**
-- `incotermId` (FK → Parametro, `TipoParametro` codigo `INCOTERM`, nullable) **(reintroducido 2026-08-12)** — supersede el `~~incotermId~~` **eliminado 2026-08-07** por falta de catálogo (`OC-002`, `Docs/Hallazgos/orden-de-compra.md`). El catálogo genérico `Parametro`/`INCOTERM` ya existía (sembrado para Cierre Comercial — `NotaVenta.clausulaVentaId`, mismo mecanismo); se reutiliza en vez de crear un mantenedor propio.
+- `incotermId` (FK → `ClausulaVenta`, nullable) **(reintroducido 2026-08-12, supersedido 2026-09-30)** — supersede el `~~incotermId~~` **eliminado 2026-08-07** por falta de catálogo (`OC-002`, `Docs/Hallazgos/orden-de-compra.md`). Originalmente reutilizaba el catálogo genérico `Parametro`/`INCOTERM` (mismo mecanismo que `NotaVenta.clausulaVentaId`); **⚠️ Supersesión (2026-09-30):** por decisión de Christian, pasa a apuntar al mantenedor dedicado `ClausulaVenta` (`config/clausulas-venta`) — el catch-all `Parametro` no exponía `requiereFlete`/`requiereSeguro` en su listado. Migración `clausula_venta_dedicada` preserva los `id` originales, sin reescribir esta FK.
 - ~~`facturarAId`~~ **(eliminado 2026-07-26)** — decisión de negocio: la OC no factura a una entidad distinta del productor
 - `observaciones` **(nuevo)**
 - `estado` (ver §8)

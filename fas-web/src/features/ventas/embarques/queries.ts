@@ -8,7 +8,7 @@ export const embarquesKeys = {
   palletsDisponibles: (id: number) => ['embarques', 'pallets-disponibles', id] as const,
 }
 
-export function embarquesListOptions(filters: { notaVentaId?: number; page?: number; limit?: number } = {}) {
+export function embarquesListOptions(filters: { notaVentaId?: number; page?: number; limit?: number; estado?: string; sort?: string } = {}) {
   return queryOptions({
     queryKey: embarquesKeys.list(filters),
     queryFn: () => embarquesService.list(filters),

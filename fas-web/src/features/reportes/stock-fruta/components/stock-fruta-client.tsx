@@ -32,6 +32,7 @@ function fechaAntiguedad(row: StockDetalleRow): string {
 
 interface Filters {
   especieIds: string[]
+  articuloIds: string[]
   variedadIds: string[]
   calibreIds: string[]
   categoriaIds: string[]
@@ -45,7 +46,7 @@ interface Filters {
 }
 
 const FILTROS_VACIOS: Filters = {
-  especieIds: [], variedadIds: [], calibreIds: [], categoriaIds: [], estados: [], productorIds: [],
+  especieIds: [], articuloIds: [], variedadIds: [], calibreIds: [], categoriaIds: [], estados: [], productorIds: [],
   plantaIds: [], packingIds: [],
   notaCalidadIds: [], notaCondicionIds: [], completos: [],
 }
@@ -58,6 +59,10 @@ const FACETS: {
   getLabel: (row: StockDetalleRow) => string
 }[] = [
   { key: 'especieIds', label: 'Especie', getValue: (r) => String(r.especieId), getLabel: (r) => r.especie.descripcion },
+  // Artículo (Embalaje, 2026-09-30) — nivel de agrupador entre Especie y
+  // Variedad, igual que Calibre. Usa el código (no la descripción) como pidió
+  // el usuario para el agrupador; el filtro (MultiCombobox) ya trae buscador.
+  { key: 'articuloIds', label: 'Embalaje', getValue: (r) => String(r.articuloId), getLabel: (r) => r.articulo.codigo },
   { key: 'variedadIds', label: 'Variedad', getValue: (r) => String(r.variedadId), getLabel: (r) => r.variedad.descripcion },
   { key: 'calibreIds', label: 'Calibre', getValue: (r) => String(r.calibreId), getLabel: (r) => r.calibre.descripcion },
   { key: 'categoriaIds', label: 'Categoría', getValue: (r) => String(r.categoriaId), getLabel: (r) => r.categoria.descripcion },
@@ -96,7 +101,7 @@ const CALIBRE_CHART_CONFIG = {
 } satisfies ChartConfig
 
 function groupKey(row: StockDetalleRow): string {
-  return `${row.especieId}-${row.variedadId}-${row.calibreId}-${row.categoriaId}`
+  return `${row.especieId}-${row.articuloId}-${row.variedadId}-${row.calibreId}-${row.categoriaId}`
 }
 
 export function StockFrutaClient() {
@@ -170,17 +175,17 @@ export function StockFrutaClient() {
   const totalCajas = filteredRows.reduce((acc, r) => acc + r.cajas, 0)
   const totalKg = filteredRows.reduce((acc, r) => acc + r.kg, 0)
 
-  // ---- Grilla: grupo Especie/Variedad/Calibre/Categoría -> detalle por pallet ----
+  // ---- Grilla: grupo Especie/Artículo/Variedad/Calibre/Categoría -> detalle por pallet ----
   const grupos = useMemo(() => {
     const map = new Map<string, {
-      key: string; especie: string; variedad: string; calibre: string; categoria: string
+      key: string; especie: string; articulo: string; variedad: string; calibre: string; categoria: string
       cajas: number; kg: number; rows: StockDetalleRow[]
     }>()
     filteredRows.forEach((row) => {
       const key = groupKey(row)
       let g = map.get(key)
       if (!g) {
-        g = { key, especie: row.especie.descripcion, variedad: row.variedad.descripcion, calibre: row.calibre.descripcion,
+        g = { key, especie: row.especie.descripcion, articulo: row.articulo.codigo, variedad: row.variedad.descripcion, calibre: row.calibre.descripcion,
           categoria: row.categoria.descripcion, cajas: 0, kg: 0, rows: [] }
         map.set(key, g)
       }
@@ -189,7 +194,7 @@ export function StockFrutaClient() {
       g.rows.push(row)
     })
     return [...map.values()].sort((a, b) =>
-      a.especie.localeCompare(b.especie) || a.variedad.localeCompare(b.variedad))
+      a.especie.localeCompare(b.especie) || a.articulo.localeCompare(b.articulo) || a.variedad.localeCompare(b.variedad))
   }, [filteredRows])
 
   if (isLoading) {
@@ -354,7 +359,7 @@ export function StockFrutaClient() {
       <section className='space-y-3'>
         <div className='flex items-baseline justify-between'>
           <h2 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-            Detalle por especie, variedad, calibre y categoría
+            Detalle por especie, artículo, variedad, calibre y categoría
           </h2>
           <div className='flex gap-2 text-xs'>
             <button type='button' className='text-primary hover:underline' onClick={() => setExpandedGroups(new Set(grupos.map((g) => g.key)))}>
@@ -372,6 +377,7 @@ export function StockFrutaClient() {
               <TableRow className='[&>th]:text-foreground [&>th]:font-semibold'>
                 <TableHead className='w-8'></TableHead>
                 <TableHead>Especie</TableHead>
+                <TableHead>Artículo</TableHead>
                 <TableHead>Variedad</TableHead>
                 <TableHead>Calibre</TableHead>
                 <TableHead>Categoría</TableHead>
@@ -396,7 +402,7 @@ export function StockFrutaClient() {
             <TableBody>
               {grupos.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={13} className='text-muted-foreground text-center'>Sin combinaciones para estos filtros.</TableCell>
+                  <TableCell colSpan={14} className='text-muted-foreground text-center'>Sin combinaciones para estos filtros.</TableCell>
                 </TableRow>
               )}
               {grupos.map((g) => {
@@ -416,6 +422,7 @@ export function StockFrutaClient() {
                     >
                       <TableCell>{isOpen ? <Icons.chevronDown className='h-4 w-4' /> : <Icons.chevronRight className='h-4 w-4' />}</TableCell>
                       <TableCell>{g.especie}</TableCell>
+                      <TableCell>{g.articulo}</TableCell>
                       <TableCell>{g.variedad}</TableCell>
                       <TableCell>{g.calibre}</TableCell>
                       <TableCell>{g.categoria}</TableCell>
@@ -431,6 +438,9 @@ export function StockFrutaClient() {
                     {isOpen && (
                       <>
                         <TableRow className='bg-muted/20 hover:bg-muted/20'>
+                          <TableCell></TableCell>
+                          {/* Alinea bajo la columna "Artículo" del grupo — por
+                              línea no aporta nada nuevo (ya se ve en el grupo). */}
                           <TableCell></TableCell>
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Folio</TableCell>
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Productor</TableCell>
@@ -466,6 +476,7 @@ export function StockFrutaClient() {
                                     </Button>
                                   )}
                                 </TableCell>
+                                <TableCell></TableCell>
                                 <TableCell>{row.numeroPallet}</TableCell>
                                 <TableCell>{row.productor.descripcion}</TableCell>
                                 <TableCell>

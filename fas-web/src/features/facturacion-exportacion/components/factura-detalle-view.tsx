@@ -1,6 +1,5 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,7 +8,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Icons } from '@/components/icons'
 import { formatMonto, formatFechaCorta } from '@/lib/format'
 import { documentosService } from '@/features/documentos/service'
-import { abrirCierreComercial, facturaExportacionService } from '../service'
+import { facturaExportacionService } from '../service'
 import { FECHA_REFERENCIA_LABELS } from '../types'
 import type { EstadoFacturaExportacion, FacturaExportacion } from '../types'
 
@@ -22,16 +21,41 @@ const ESTADO_BADGE: Record<EstadoFacturaExportacion, { label: string; variant: '
 
 // Vista de solo lectura de una Factura de Exportación (aprobada o anulada).
 export function FacturaDetalleView({ factura }: { factura: FacturaExportacion }) {
-  const router = useRouter()
   const badge = ESTADO_BADGE[factura.estado]
   const puedeDescargarXml = factura.estado === 'APROBADA' && (factura.dte?.tieneXml ?? false)
-  const puedeVerPdf = factura.estado === 'APROBADA'
+  // Defensa extra (FAS-EXP-IE-QA-003): el backend ya no debería dejar una
+  // Factura APROBADA sin folio, pero se exige explícitamente igual.
+  const puedeVerPdf = factura.estado === 'APROBADA' && factura.folio != null
+  const puedeExportarExcel = puedeVerPdf
 
   async function descargarXml() {
     try {
       await facturaExportacionService.descargarXml(factura.id, `${factura.codigo}${factura.folio ? `-folio-${factura.folio}` : ''}.xml`)
     } catch (e) {
       toast.error((e as Error).message || 'No se pudo descargar el XML')
+    }
+  }
+  async function descargarExcel() {
+    try {
+      await facturaExportacionService.descargarExcel(factura.id, `${factura.codigo}${factura.folio ? `-folio-${factura.folio}` : ''}.xlsx`)
+    } catch (e) {
+      toast.error((e as Error).message || 'No se pudo descargar el Excel')
+    }
+  }
+  // "Ver Cierre Comercial"/"Ver Proforma" abren directamente su PDF
+  // (2026-09-30) — antes navegaban a la pantalla.
+  async function abrirPdfCierre(notaVentaId: number) {
+    try {
+      await documentosService.abrirPdf('cierre-comercial', notaVentaId)
+    } catch (e) {
+      toast.error((e as Error).message || 'No se pudo abrir el PDF del Cierre Comercial')
+    }
+  }
+  async function abrirPdfProforma(proformaId: number) {
+    try {
+      await documentosService.abrirPdf('proforma', proformaId)
+    } catch (e) {
+      toast.error((e as Error).message || 'No se pudo abrir el PDF de la Proforma')
     }
   }
   // Desglose de la cláusula de venta: el flete/seguro restan al valor de venta
@@ -71,18 +95,23 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
         </div>
         <div className='flex flex-wrap justify-end gap-2'>
           {factura.embarque.notaVentaId != null && (
-            <Button variant='outline' onClick={() => abrirCierreComercial(factura.embarque.notaVentaId!)}>
+            <Button variant='outline' onClick={() => abrirPdfCierre(factura.embarque.notaVentaId!)}>
               <Icons.externalLink className='mr-2 h-4 w-4' /> Ver Cierre Comercial
             </Button>
           )}
           {factura.proforma && (
-            <Button variant='outline' onClick={() => router.push(`/dashboard/facturacion/exportacion/proforma/${factura.proforma!.id}`)}>
+            <Button variant='outline' onClick={() => abrirPdfProforma(factura.proforma!.id)}>
               <Icons.billing className='mr-2 h-4 w-4' /> Ver Proforma {factura.proforma.codigo}
             </Button>
           )}
           {puedeVerPdf && (
             <Button variant='outline' onClick={() => documentosService.abrirPdf('factura-exportacion', factura.id)}>
-              <Icons.download className='mr-2 h-4 w-4' /> Ver PDF
+              <Icons.download className='mr-2 h-4 w-4' /> Ver Factura Comercial (PDF)
+            </Button>
+          )}
+          {puedeExportarExcel && (
+            <Button variant='outline' onClick={descargarExcel}>
+              <Icons.download className='mr-2 h-4 w-4' /> Exportar a Excel
             </Button>
           )}
           {puedeDescargarXml && (

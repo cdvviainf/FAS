@@ -95,6 +95,18 @@ export const facturaExportacionService = {
     a.remove()
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
   },
+  // Excel de la Factura Comercial (mismo contenido que su PDF).
+  async descargarExcel(id: number, nombreArchivo: string): Promise<void> {
+    const blob = await api.get(`ventas/cobranza/facturas-exportacion/${id}/excel`).blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombreArchivo
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  },
   async list(filters: FacturasExportacionListFilters = {}): Promise<FacturasExportacionListResponse> {
     const sp: Record<string, string> = {}
     if (filters.page) sp.page = String(filters.page)

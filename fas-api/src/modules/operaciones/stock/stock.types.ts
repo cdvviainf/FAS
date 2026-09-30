@@ -23,6 +23,10 @@ export interface StockDetalleRow {
   numeroPallet: string
   especieId: number
   especie: Mantenedor
+  // Nivel de agrupador "Artículo" (Embalaje, 2026-09-30) — entre Especie y
+  // Variedad, igual que Calibre.
+  articuloId: number
+  articulo: Mantenedor
   variedadId: number
   variedad: Mantenedor
   categoriaId: number

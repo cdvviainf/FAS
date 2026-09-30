@@ -88,6 +88,9 @@ const MODELOS_TENANT = new Set([
   // cuotas cuelgan de la Factura (empresaId indirecto vía cascade), pero la
   // raíz sí lleva empresaId — mismo criterio que Proforma/ProformaLinea.
   'FacturaExportacion',
+  // Cláusula de Venta / Incoterm (2026-09-30) — extraída de Parametro a su
+  // propio mantenedor, mismo criterio de aislamiento que este ya tenía.
+  'ClausulaVenta',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

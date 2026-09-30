@@ -22,6 +22,7 @@ const CAMPOS_HEREDADOS_R4: { campo: keyof NotaVentaUpdateInput; label: string }[
   { campo: 'tipoFleteId', label: 'Tipo de Flete' },
   { campo: 'clausulaVentaId', label: 'Cláusula de Venta' },
   { campo: 'monedaId', label: 'Moneda' },
+  { campo: 'tipoBlId', label: 'Tipo de BL' },
 ]
 
 interface ReferenciasHeader {
@@ -38,6 +39,7 @@ interface ReferenciasHeader {
   modalidadVentaId?: number | null
   clausulaVentaId?: number | null
   tipoFleteId?: number | null
+  tipoBlId?: number | null
   condicionPagoId?: number | null
 }
 
@@ -116,13 +118,18 @@ async function validarReferenciasHeader(r: ReferenciasHeader) {
   }
 
   if (r.clausulaVentaId != null) {
-    const clausulaVenta = await repo.getParametro(r.clausulaVentaId, 'INCOTERM')
+    const clausulaVenta = await repo.getClausulaVenta(r.clausulaVentaId)
     if (!clausulaVenta) throw new ValidationError('La cláusula de venta (Incoterm) seleccionada no existe o está bloqueada')
   }
 
   if (r.tipoFleteId != null) {
     const tipoFlete = await repo.getParametro(r.tipoFleteId, 'TIPO_FLETE')
     if (!tipoFlete) throw new ValidationError('El tipo de flete seleccionado no existe o está bloqueado')
+  }
+
+  if (r.tipoBlId != null) {
+    const tipoBl = await repo.getParametro(r.tipoBlId, 'TIPO_BL')
+    if (!tipoBl) throw new ValidationError('El tipo de BL seleccionado no existe o está bloqueado')
   }
 
   if (r.condicionPagoId != null) {
@@ -258,6 +265,7 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
     modalidadVentaId: body.modalidadVentaId !== undefined ? body.modalidadVentaId : existente.modalidadVentaId,
     clausulaVentaId: body.clausulaVentaId !== undefined ? body.clausulaVentaId : existente.clausulaVentaId,
     tipoFleteId: body.tipoFleteId !== undefined ? body.tipoFleteId : existente.tipoFleteId,
+    tipoBlId: body.tipoBlId !== undefined ? body.tipoBlId : existente.tipoBlId,
     condicionPagoId: body.condicionPagoId !== undefined ? body.condicionPagoId : existente.condicionPagoId,
   }
   await validarReferenciasHeader(efectivo)

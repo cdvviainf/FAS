@@ -135,15 +135,25 @@ export const calibreUpdateSchema = calibreBodySchema
 
 export const parametroBodySchema = mantenedorBaseSchema.extend({
   tipoParametroId: z.number().int().positive({ message: 'Selecciona un tipo de parámetro' }),
-  // Solo relevantes cuando el Parametro es una cláusula de venta (Incoterm):
-  // si al facturar/proformar con esta cláusula se exige Flete y/o Seguro.
-  // z.boolean().default(false) — nunca z.coerce.boolean() (convertiría "false"
-  // string a true, bug sistémico ya documentado en el proyecto).
+})
+
+export const parametroUpdateSchema = parametroBodySchema
+  .omit({ codigo: true })
+  .partial()
+
+// ─── Cláusula de Venta (Incoterm) ────────────────────────────────────────────
+// Extraída de Parametro (2026-09-30) — mantenedor propio, sin tipoParametroId.
+
+export const clausulaVentaBodySchema = mantenedorBaseSchema.extend({
+  // Si al facturar/proformar con esta cláusula se exige Flete y/o Seguro (ej.
+  // CIF → ambos, C+F/CFR → solo flete, FOB → ninguno). z.boolean().default(false)
+  // — nunca z.coerce.boolean() (convertiría "false" string a true, bug
+  // sistémico ya documentado en el proyecto).
   requiereFlete: z.boolean().default(false),
   requiereSeguro: z.boolean().default(false),
 })
 
-export const parametroUpdateSchema = parametroBodySchema
+export const clausulaVentaUpdateSchema = clausulaVentaBodySchema
   .omit({ codigo: true })
   .partial()
 

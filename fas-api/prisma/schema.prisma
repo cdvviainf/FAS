@@ -213,6 +213,7 @@ model Empresa {
   categorias             Categoria[]
   calibres               Calibre[]
   parametros             Parametro[]
+  clausulasVenta         ClausulaVenta[]
   entidades              Entidad[]
   solicitudesInspeccion  SolicitudInspeccion[]
   articulos              Articulo[]
@@ -1129,12 +1130,6 @@ model Parametro {
   tipoParametroId       Int
   // FK compuesta (empresaId, tipoParametroId) -> TipoParametro(empresaId, id).
   tipoParametro         TipoParametro @relation(fields: [empresaId, tipoParametroId], references: [empresaId, id])
-  // Aplican solo cuando el Parametro es una CLÁUSULA DE VENTA (Incoterm).
-  // Determinan si, al facturar/proformar con esta cláusula, se exige informar
-  // el monto de Flete y/o Seguro (ej. CIF → ambos, C+F/CFR → solo flete,
-  // FOB → ninguno). En cualquier otro tipo de Parametro quedan en false.
-  requiereFlete         Boolean       @default(false)
-  requiereSeguro        Boolean       @default(false)
   bloqueado             Boolean       @default(false)
   creadoEn              DateTime      @default(now())
   creadoPor             String
@@ -1144,14 +1139,48 @@ model Parametro {
   eliminadoPor          String?
 
   notasVentaModalidad   NotaVenta[]   @relation("NotaVentaModalidadVenta")
-  notasVentaClausula    NotaVenta[]   @relation("NotaVentaClausulaVenta")
   notasVentaTipoFlete   NotaVenta[]   @relation("NotaVentaTipoFlete")
+  notasVentaTipoBl      NotaVenta[]   @relation("NotaVentaTipoBl")
   embarquesTipoBl       Embarque[]    @relation("EmbarqueTipoBl")
-  ordenesCompraIncoterm OrdenCompra[] @relation("OrdenCompraIncoterm")
 
   @@unique([empresaId, id])
   @@index([empresaId])
   @@map("parametros")
+}
+
+// Cláusula de Venta (Incoterm) — extraída del catálogo genérico Parametro
+// (2026-09-30, decisión de negocio Christian) a su propio mantenedor, porque
+// requiereFlete/requiereSeguro solo tienen sentido acá y el catch-all
+// Parametro no la hacía descubrible en su listado. Mismo motor de mantenedores
+// genérico (config.*) que Moneda/Puerto/Etiqueta — no un módulo aparte.
+// Migración preserva el mismo `id` que tenían como Parametro tipo INCOTERM,
+// para no reescribir las FKs ya existentes en NotaVenta/OrdenCompra.
+model ClausulaVenta {
+  id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  // Determinan si, al facturar/proformar con esta cláusula, se exige informar
+  // el monto de Flete y/o Seguro (ej. CIF → ambos, C+F/CFR → solo flete,
+  // FOB → ninguno).
+  requiereFlete         Boolean   @default(false)
+  requiereSeguro        Boolean   @default(false)
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  notasVenta    NotaVenta[]   @relation("NotaVentaClausulaVenta")
+  ordenesCompra OrdenCompra[] @relation("OrdenCompraIncoterm")
+
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  @@map("clausulas_venta")
 }
 
 model Mercado {
@@ -2615,9 +2644,14 @@ model NotaVenta {
   modalidadVentaId Int?
   modalidadVenta   Parametro? @relation("NotaVentaModalidadVenta", fields: [empresaId, modalidadVentaId], references: [empresaId, id])
   clausulaVentaId  Int?
-  clausulaVenta    Parametro? @relation("NotaVentaClausulaVenta", fields: [empresaId, clausulaVentaId], references: [empresaId, id])
+  clausulaVenta    ClausulaVenta? @relation("NotaVentaClausulaVenta", fields: [empresaId, clausulaVentaId], references: [empresaId, id])
   tipoFleteId      Int?
   tipoFlete        Parametro? @relation("NotaVentaTipoFlete", fields: [empresaId, tipoFleteId], references: [empresaId, id])
+  // Tipo de BL (2026-09-30): se propone al generar cada Embarque (Solicitud de
+  // Reserva) como valor por defecto — editable por contenedor, ver
+  // Embarque.tipoBlId ("EmbarqueTipoBl").
+  tipoBlId         Int?
+  tipoBl           Parametro? @relation("NotaVentaTipoBl", fields: [empresaId, tipoBlId], references: [empresaId, id])
 
   // Forma de pago: condición de pago con cuotas (% + plazo en días), mismo
   // modelo que Compras (CondicionPago). No existe un campo de "saldo pago"
@@ -3647,12 +3681,11 @@ model OrdenCompra {
   destinoMercado   Mercado?          @relation(fields: [empresaId, destinoMercadoId], references: [empresaId, id])
   responsableId    String?
   responsable      Usuario?          @relation(fields: [responsableId], references: [id])
-  // Incoterm (2026-08-12) — reintroducido: catálogo genérico Parametro
-  // (TipoParametro codigo=INCOTERM, mismo mecanismo ya usado por
-  // NotaVenta.clausulaVentaId). Reemplaza el incotermId eliminado el
-  // 2026-08-07 por falta de catálogo — el catálogo ya existe.
+  // Incoterm (2026-08-12) — desde 2026-09-30 apunta al mantenedor dedicado
+  // ClausulaVenta (antes: catálogo genérico Parametro, TipoParametro
+  // codigo=INCOTERM).
   incotermId       Int?
-  incoterm         Parametro?        @relation("OrdenCompraIncoterm", fields: [empresaId, incotermId], references: [empresaId, id])
+  incoterm         ClausulaVenta?    @relation("OrdenCompraIncoterm", fields: [empresaId, incotermId], references: [empresaId, id])
   observaciones    String?
   estado           EstadoOrdenCompra @default(BORRADOR)
 

@@ -10,6 +10,23 @@ export function formatFechaCorta(value: string): string {
   return new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString('es-CL')
 }
 
+// Semana ISO 8601 de una fecha — acepta "YYYY-MM-DD" o un ISO datetime
+// completo (usa solo la parte de fecha, en hora local — mismo criterio que
+// formatFechaCorta). Helper compartido (antes duplicado en
+// reserva-info-base-card.tsx) — usado también por la columna "Semana de
+// creación" del listado de Embarques.
+export function semanaISO(fechaYmd: string): number | null {
+  if (!fechaYmd) return null
+  const d = new Date(`${fechaYmd.slice(0, 10)}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return null
+  const target = new Date(d.getTime())
+  const dayNr = (d.getDay() + 6) % 7
+  target.setDate(target.getDate() - dayNr + 3)
+  const firstThursday = new Date(target.getFullYear(), 0, 4)
+  const diff = target.getTime() - firstThursday.getTime()
+  return 1 + Math.round(diff / (7 * 86_400_000))
+}
+
 // Monto con separador de miles (es-CL: miles con '.', decimales con ',').
 // Acepta el string decimal que llega del backend (Decimal de Prisma) o un
 // number ya calculado en el cliente. Devuelve '—' si no es un número finito.

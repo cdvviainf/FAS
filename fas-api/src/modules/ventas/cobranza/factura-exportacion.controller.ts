@@ -50,6 +50,16 @@ export async function descargarXml(req: FastifyRequest, reply: FastifyReply) {
     .send(xml)
 }
 
+export async function descargarExcel(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = facturaParamsSchema.parse(req.params)
+  const { buffer, codigo, folio } = await service.obtenerExcelFactura(id)
+  const nombre = `${codigo}${folio ? `-folio-${folio}` : ''}.xlsx`
+  return reply
+    .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    .header('Content-Disposition', `attachment; filename="${nombre}"`)
+    .send(buffer)
+}
+
 export async function listarEmbarques(req: FastifyRequest, reply: FastifyReply) {
   const query = embarquesDespachadosQuerySchema.parse(req.query)
   const resultado = await service.listarEmbarquesDespachados(query)

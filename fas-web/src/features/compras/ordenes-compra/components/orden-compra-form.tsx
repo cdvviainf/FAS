@@ -53,8 +53,7 @@ const calibresService = createMantenedorService('calibres')
 const tiposPalletService = createMantenedorService('tipos-pallet')
 const formasPagoService = createMantenedorService('formas-pago')
 const mercadosService = createMantenedorService('mercados')
-const tiposParametroService = createMantenedorService('tipos-parametro')
-const parametrosService = createMantenedorService('parametros')
+const clausulasVentaService = createMantenedorService('clausulas-venta')
 
 // Cajas por pallet aún no tiene mantenedor propio (pendiente de desarrollar).
 // Mientras tanto se asume un valor fijo, usado para precalcular "Cantidad de
@@ -192,11 +191,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const { data: calibresData } = useQuery({ queryKey: ['calibres-options', linea.especieId], queryFn: () => calibresService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
   const { data: tiposPalletData } = useQuery({ queryKey: ['tipos-pallet-options'], queryFn: () => tiposPalletService.list({ limit: 200 }), staleTime: 5 * 60_000 })
 
-  // Incoterm: catálogo genérico Parametro (TipoParametro INCOTERM), mismo
-  // mecanismo ya usado por Cierre Comercial (nota-venta-form.tsx).
-  const { data: tiposParametroData } = useQuery({ queryKey: ['tipos-parametro-options'], queryFn: () => tiposParametroService.list({ limit: 200 }), staleTime: 5 * 60_000 })
-  const incotermTipoId = tiposParametroData?.data.find((t) => t.codigo === 'INCOTERM')?.id
-  const { data: incotermsData } = useQuery({ queryKey: ['parametros-options', incotermTipoId], queryFn: () => parametrosService.list({ limit: 200, tipoParametroId: incotermTipoId }), staleTime: 5 * 60_000, enabled: !!incotermTipoId })
+  const { data: incotermsData } = useQuery({ queryKey: ['clausulas-venta-options'], queryFn: () => clausulasVentaService.list({ limit: 200, soloActivos: true }), staleTime: 5 * 60_000 })
 
   const productores = productoresData?.data ?? []
   const responsables = responsablesData?.data ?? []

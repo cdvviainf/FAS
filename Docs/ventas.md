@@ -63,6 +63,8 @@ Sistematizar el ciclo comercial de exportación de Frutera Agrosan, desde el com
 > **⚠️ Supersesión (2026-07-30).** Por decisión de Christian, se **revierte** el punto de calibre de la supersesión anterior: `NotaVentaDetalle` vuelve a usar **multiselect** (`calibres NotaVentaDetalleCalibre[]`, tabla intermedia, mismo patrón que `SolicitudInspeccionCalibre`) en vez del rango `calibreInicioId`/`calibreFinId`. Válido: cada `calibreId` debe existir, no estar bloqueado, y pertenecer a la misma especie de la línea (ya no aplica la comparación de `orden` entre inicio/fin). Además, se implementa una **versión mínima** del bloque Embarque (§4.2): solo el encabezado ancla (`id`, `notaVentaId`, `numeroInstructivo`/Folio, auditoría), suficiente para la acción "Generar Embarque" desde el Cierre Comercial y para navegar a una página con las 4 pestañas del workflow (Solicitud de Espacio, Seleccionar Pallets, Generar Instructivos, Despachar) — **sin contenido ni lógica de negocio todavía**. Las tablas hijas del spec (`EmbarqueContenedor`, `AsignacionContenedor`, `InstructivoHijo`, `SolicitudReserva`) y la herencia de campos R4 se agregan cuando se implemente cada pestaña. R3 (bloquear borrado de NV con Embarque asociado) sí se implementó ya, dado que no depende de esos campos.
 >
 > **⚠️ Supersesión (2026-07-30, segunda decisión del día).** Por decisión de Christian: (a) `compradorId` (FK a `Entidad`, rol "Comprador" independiente) se **reemplaza** por `compradorContactoId` (FK a `EntidadContacto`) — el Comprador pasa a ser un contacto de la propia Entidad Cliente, mismo patrón que `SolicitudInspeccion.contactoId`; se elimina "Comprador" como rol/tipo de `Entidad` en la lista de roles (§2, línea 35) y de R4 (línea 349, ya no aplica herencia porque el contacto depende del cliente, no se hereda como Entidad suelta). No hay backfill posible (un id de Entidad no corresponde a ningún id de EntidadContacto): los Cierres Comerciales existentes pierden el Comprador asignado. (b) `clienteId` sigue siendo `Int` obligatorio, pero ahora existe una Entidad placeholder sembrada ("Cliente Sin Definir", código fijo `CLIENTE-SD`) que se preselecciona automáticamente al crear un Cierre Comercial nuevo cuando el cliente real todavía no se conoce — editable en cualquier momento, incluso después de guardado.
+>
+> **⚠️ Supersesión (2026-09-30) — Cláusula de Venta (Incoterm) sale de `Parametro`.** Por decisión de Christian: `clausulaVentaId` deja de ser FK al catálogo genérico `Parametro` (`TipoParametro` `INCOTERM`) y pasa a ser FK al mantenedor dedicado **`ClausulaVenta`** (`config/clausulas-venta`, mismo patrón tenant-scoped que el resto de mantenedores, ver `Docs/mantenedores-generales.md`). Motivo: el catch-all `Parametro` no exponía `requiereFlete`/`requiereSeguro` en su listado — el mantenedor dedicado sí (columnas propias). Migración `clausula_venta_dedicada` (2026-09-30) preserva los `id` que las filas tenían como `Parametro` tipo `INCOTERM`, así que las FK existentes en `NotaVenta`/`OrdenCompra` no se reescriben. `modalidadVentaId`/`tipoFleteId` **no** se ven afectados — siguen siendo `Parametro` genérico.
 
 ```prisma
 model NotaVenta {
@@ -89,7 +91,7 @@ model NotaVenta {
 
   // --- Condiciones de venta ---
   modalidadVentaId Int?      // FK → Parametro (TipoParametro MODALIDAD_VENTA)
-  clausulaVentaId  Int?      // FK → Parametro (TipoParametro INCOTERM)
+  clausulaVentaId  Int?      // FK → ClausulaVenta (ver supersesión 2026-09-30, antes Parametro/INCOTERM)
   tipoFleteId      Int?      // FK → Parametro (TipoParametro TIPO_FLETE)
   condicionPagoId  Int?      // FK → CondicionPago ("Forma de Pago" en UI; snapshot en NotaVentaCuotaPago, ver R12)
   monedaId         Int
@@ -509,7 +511,7 @@ Basadas en el sistema legado (screenshots):
 
 ## 8. Mantenedores y catálogos requeridos
 
-**Ya implementados (Cierre Comercial v1, ver supersesión §4.1):** Modalidad de Venta, Cláusula de Venta (Incoterm) y Tipo Flete como `Parametro` genérico (mantenedores-generales.md) bajo sus `TipoParametro` `MODALIDAD_VENTA`/`INCOTERM`/`TIPO_FLETE`. Forma de Pago reemplazada por `CondicionPago` (`config/condiciones-pago`, compartido con Compras — no se crea un mantenedor "Saldo Pago" separado, ver R12).
+**Ya implementados (Cierre Comercial v1, ver supersesión §4.1):** Modalidad de Venta y Tipo Flete como `Parametro` genérico (mantenedores-generales.md) bajo sus `TipoParametro` `MODALIDAD_VENTA`/`TIPO_FLETE`. Cláusula de Venta (Incoterm) como mantenedor dedicado `ClausulaVenta` (`config/clausulas-venta`, ver supersesión 2026-09-30 en §4.1). Forma de Pago reemplazada por `CondicionPago` (`config/condiciones-pago`, compartido con Compras — no se crea un mantenedor "Saldo Pago" separado, ver R12).
 
 **Mantenedores nuevos/confirmar (Embarque/Instructivo, aún sin implementar):** Tipo Embarque, **Vía de Embarque**, Ruta, Tipo BL, Tipo Contenedor, Tipo Tratamiento, Tipo Atmósfera, Bodega, Categoría, Tipo Pallet, Puerto (Embarque/Destino), Destino Final, Tipo Inspección.
 

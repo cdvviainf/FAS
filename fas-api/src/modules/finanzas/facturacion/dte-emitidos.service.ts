@@ -128,6 +128,17 @@ export async function generarDteReal(input: GenerarDteRealInput) {
     return repo.marcarErrorGenerar(doc.id, resultado.error ?? 'LibreDTE no pudo timbrar el DTE', input.creadoPor)
   }
   const folio = extraerFolio(resultado.data)
+  if (folio == null) {
+    // LibreDTE respondió OK pero no se pudo extraer un folio válido de la forma
+    // esperada — se trata como error de integración (NUNCA GENERADO sin folio,
+    // FAS-EXP-IE-QA-003): el temporal sigue vigente para reintentar, y la
+    // respuesta cruda queda en errorMensaje/logs para diagnóstico del formato.
+    return repo.marcarErrorGenerar(
+      doc.id,
+      `LibreDTE timbró el documento pero no se pudo extraer el folio de la respuesta (revisar formato — respuesta: ${JSON.stringify(resultado.data).slice(0, 500)})`,
+      input.creadoPor,
+    )
+  }
   const xml = extraerXml(resultado.data)
   return repo.marcarGenerado(doc.id, folio, resultado.data ?? null, input.creadoPor, xml)
 }

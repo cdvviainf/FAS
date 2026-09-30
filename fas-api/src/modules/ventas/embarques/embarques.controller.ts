@@ -26,8 +26,8 @@ import * as reclamosService from '../../calidad/reclamos/reclamos.service.js'
 import { reclamoCreateSchema, reclamoUpdateSchema } from '../../calidad/reclamos/reclamos.schema.js'
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
-  const { page, limit, notaVentaId } = embarqueListQuerySchema.parse(req.query)
-  const result = await service.listarEmbarques(page, limit, notaVentaId)
+  const { page, limit, notaVentaId, estado, sort } = embarqueListQuerySchema.parse(req.query)
+  const result = await service.listarEmbarques(page, limit, notaVentaId, estado, sort)
   return reply.send(result)
 }
 

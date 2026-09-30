@@ -1,6 +1,10 @@
 export interface EmbarqueNotaVentaRef {
   id: number
   folio: number
+  // Solo en el listado (2026-09-30) — Cliente/Mercado/Puerto destino.
+  cliente?: { id: number; codigo: string; descripcion: string; razonSocial: string }
+  mercado?: { id: number; codigo: string; descripcion: string }
+  puertoDestino?: { id: number; codigo: string; descripcion: string } | null
 }
 
 // Detalle enriquecido de la NV (2026-09-28) — para la información base de la
@@ -204,6 +208,19 @@ export interface Embarque extends DatosReservaManual, DatosInstructivo {
   tipoBl: MantenedorRef | null
   creadoEn: string
   _count: { pallets: number }
+  // Estado combinado del listado (2026-09-30, solo en la respuesta de
+  // list()) — Reserva hasta que se despacha, ahí refleja el despacho.
+  estadoListado?: EstadoEmbarqueListado
+}
+
+export type EstadoEmbarqueListado = 'PENDIENTE' | 'SOLICITADA' | 'CONFIRMADA' | 'DESPACHADO' | 'DESPACHO_ANULADO'
+
+export const ESTADO_EMBARQUE_LISTADO_LABELS: Record<EstadoEmbarqueListado, string> = {
+  PENDIENTE: 'Pendiente',
+  SOLICITADA: 'Solicitada',
+  CONFIRMADA: 'Confirmada',
+  DESPACHADO: 'Despachado',
+  DESPACHO_ANULADO: 'Despacho Anulado',
 }
 
 // Único punto de verdad para "¿está despachado ahora mismo?" — no leer
@@ -259,6 +276,14 @@ export interface EmbarqueCreateInput {
   notaVentaId: number
   gestorLogisticoId: number
   forzarSinReserva?: boolean
+  contenedores?: DatosContenedorInput[]
+}
+
+// Información base por contenedor (2026-09-30) — uno por Embarque a generar.
+export interface DatosContenedorInput {
+  temperatura?: number | null
+  cbm?: number | null
+  tipoBlId?: number | null
 }
 
 export interface EmbarqueListResponse {

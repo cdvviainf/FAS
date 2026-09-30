@@ -7,6 +7,9 @@ import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
 import { mapFacturaExportacionA110 } from '../../finanzas/facturacion/mappers/factura-exportacion.mapper.js'
 import { factorFob, resolverFleteSeguro, unitarioFob } from './clausula-flete-seguro.js'
 import { descripcionLinea, faltantesDescripcionExtranjera, type Idioma, type LineaConMantenedores } from './descripcion-idioma.js'
+import { resolverFacturaExportacion } from '../../documentos/resolvers/factura-exportacion.resolver.js'
+import { generarExcelFacturaExportacion } from './factura-exportacion.excel.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import * as repo from './factura-exportacion.repository.js'
 import type {
   DimensionProforma,
@@ -377,9 +380,15 @@ export async function firmar(id: number, userId: string) {
   // Reconciliación idempotente (FAS-COB-F1-005): si el DTE YA está GENERADO
   // (timbrado en un intento previo que no alcanzó a aprobar la factura), NO se
   // vuelve a timbrar — solo se reconcilia la factura con el folio existente.
-  let folio: number | null
+  let folio: number
   let trackIdSii: string | null
   if (dte.estado === 'GENERADO') {
+    // Invariante: un DocumentoDte GENERADO siempre debe tener folio (el motor DTE
+    // ya no persiste GENERADO sin folio — FAS-EXP-IE-QA-003). Si igual apareciera
+    // uno sin folio, no se aprueba la factura: es un error de datos a corregir.
+    if (dte.folio == null) {
+      throw new ValidationError('El DTE quedó timbrado sin folio (dato inconsistente) — contacta a soporte antes de continuar')
+    }
     folio = dte.folio
     trackIdSii = dte.libredteCodigoTemporal
   } else {
@@ -408,7 +417,12 @@ export async function firmar(id: number, userId: string) {
       await repo.marcarRechazada(factura.id, generado.errorMensaje ?? 'No se pudo timbrar el DTE en LibreDTE')
       throw new ValidationError(generado.errorMensaje ?? 'No se pudo timbrar el DTE en LibreDTE')
     }
-    folio = generado.folio ?? null
+    // Invariante reforzada en generarDteReal (FAS-EXP-IE-QA-003): un resultado
+    // GENERADO siempre trae folio — si no, es un error de datos a corregir.
+    if (generado.folio == null) {
+      throw new ValidationError('El DTE se timbró sin folio (dato inconsistente) — contacta a soporte antes de continuar')
+    }
+    folio = generado.folio
     trackIdSii = generado.libredteCodigoTemporal ?? null
   }
 
@@ -444,6 +458,15 @@ export async function obtenerXmlFactura(id: number) {
   const dte = await dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id)
   if (!dte?.xml) throw new ValidationError('Esta Factura aún no tiene XML timbrado disponible')
   return { xml: dte.xml, folio: dte.folio, codigo: factura.codigo }
+}
+
+// Excel de la Factura Comercial — mismo contenido que su PDF (reusa el mismo
+// payload de resolverFacturaExportacion, que ya exige APROBADA + folio).
+export async function obtenerExcelFactura(id: number) {
+  const empresaId = getEmpresaIdActual()!
+  const payload = await resolverFacturaExportacion(id, empresaId)
+  const buffer = await generarExcelFacturaExportacion(payload)
+  return { buffer, codigo: payload.codigo, folio: payload.folio }
 }
 
 export async function listarFacturas(filters: FacturasExportacionListFilters) {

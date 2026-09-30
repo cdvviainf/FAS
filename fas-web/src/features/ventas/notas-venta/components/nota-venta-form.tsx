@@ -46,6 +46,9 @@ const calibresService = createMantenedorService('calibres')
 const tiposPalletService = createMantenedorService('tipos-pallet')
 const tiposParametroService = createMantenedorService('tipos-parametro')
 const parametrosService = createMantenedorService('parametros')
+// Cláusula de Venta (Incoterm) — mantenedor propio (2026-09-30, extraído de
+// Parametro): no lleva tipoParametroId, se lista directo.
+const clausulasVentaService = createMantenedorService('clausulas-venta')
 
 interface HeaderFields {
   fecha: string
@@ -63,6 +66,7 @@ interface HeaderFields {
   modalidadVentaId: number | null
   clausulaVentaId: number | null
   tipoFleteId: number | null
+  tipoBlId: number | null
   condicionPagoId: number | null
   observaciones: string
 }
@@ -83,6 +87,7 @@ const HEADER_EMPTY: HeaderFields = {
   modalidadVentaId: null,
   clausulaVentaId: null,
   tipoFleteId: null,
+  tipoBlId: null,
   condicionPagoId: null,
   observaciones: '',
 }
@@ -179,10 +184,11 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   const { data: tiposParametroData } = useQuery({ queryKey: ['tipos-parametro-options'], queryFn: () => tiposParametroService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const tipoFleteTipoId = tiposParametroData?.data.find((t) => t.codigo === 'TIPO_FLETE')?.id
   const modalidadVentaTipoId = tiposParametroData?.data.find((t) => t.codigo === 'MODALIDAD_VENTA')?.id
-  const incotermTipoId = tiposParametroData?.data.find((t) => t.codigo === 'INCOTERM')?.id
+  const tipoBlTipoId = tiposParametroData?.data.find((t) => t.codigo === 'TIPO_BL')?.id
   const { data: tiposFleteData } = useQuery({ queryKey: ['parametros-options', tipoFleteTipoId], queryFn: () => parametrosService.list({ limit: 200, tipoParametroId: tipoFleteTipoId }), staleTime: 5 * 60_000, enabled: !!tipoFleteTipoId })
   const { data: modalidadesVentaData } = useQuery({ queryKey: ['parametros-options', modalidadVentaTipoId], queryFn: () => parametrosService.list({ limit: 200, tipoParametroId: modalidadVentaTipoId }), staleTime: 5 * 60_000, enabled: !!modalidadVentaTipoId })
-  const { data: incotermsData } = useQuery({ queryKey: ['parametros-options', incotermTipoId], queryFn: () => parametrosService.list({ limit: 200, tipoParametroId: incotermTipoId }), staleTime: 5 * 60_000, enabled: !!incotermTipoId })
+  const { data: incotermsData } = useQuery({ queryKey: ['clausulas-venta-options'], queryFn: () => clausulasVentaService.list({ limit: 200, soloActivos: true }), staleTime: 5 * 60_000 })
+  const { data: tiposBlData } = useQuery({ queryKey: ['parametros-options', tipoBlTipoId], queryFn: () => parametrosService.list({ limit: 200, tipoParametroId: tipoBlTipoId }), staleTime: 5 * 60_000, enabled: !!tipoBlTipoId })
 
   const condicionPagoSeleccionada = (condicionesPagoData?.data ?? []).find((c) => c.id === fields.condicionPagoId)
   // "Sin definir" (condicionPagoId null) oculta el preview. Si la selección
@@ -223,11 +229,24 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
         modalidadVentaId: d.modalidadVentaId,
         clausulaVentaId: d.clausulaVentaId,
         tipoFleteId: d.tipoFleteId,
+        tipoBlId: d.tipoBlId,
         condicionPagoId: d.condicionPagoId,
         observaciones: d.observaciones ?? '',
       })
     }
   }, [notaVenta])
+
+  // Dirección por defecto (2026-09-30): al cargar las direcciones del Cliente
+  // elegido, si aún no hay una Dirección seleccionada, se propone la marcada
+  // `esPorDefecto` (el form de Entidades exige que exista exactamente una).
+  useEffect(() => {
+    if (fields.direccionId != null) return
+    const porDefecto = clienteDetalle?.direcciones.find((d) => d.esPorDefecto)
+    if (porDefecto) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFields((f) => (f.direccionId != null ? f : { ...f, direccionId: porDefecto.id }))
+    }
+  }, [clienteDetalle, fields.direccionId])
 
   // Al crear un Cierre Comercial nuevo, si aún no se eligió cliente, se
   // preselecciona la Entidad placeholder "Cliente Sin Definir" — editable
@@ -268,6 +287,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       modalidadVentaId: fields.modalidadVentaId,
       clausulaVentaId: fields.clausulaVentaId,
       tipoFleteId: fields.tipoFleteId,
+      tipoBlId: fields.tipoBlId,
       condicionPagoId: fields.condicionPagoId,
       observaciones: fields.observaciones.trim() || undefined,
     }
@@ -455,12 +475,15 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
           <CardTitle>{isEdit ? `Cierre Comercial — Folio ${notaVenta?.data.folio}` : 'Nuevo Cierre Comercial'}</CardTitle>
         </CardHeader>
         <CardContent className='space-y-4'>
-          <div className='grid gap-4 sm:grid-cols-2'>
-            <div className='space-y-1.5'>
-              <Label>Fecha <span className='text-destructive'>*</span></Label>
-              <Input type='date' value={fields.fecha} onChange={(e) => setFields((f) => ({ ...f, fecha: e.target.value }))} />
-              {errors.fecha && <p className='text-xs text-destructive'>{errors.fecha}</p>}
-            </div>
+          {/* Línea 1: Fecha sola. */}
+          <div className='max-w-xs space-y-1.5'>
+            <Label>Fecha <span className='text-destructive'>*</span></Label>
+            <Input type='date' value={fields.fecha} onChange={(e) => setFields((f) => ({ ...f, fecha: e.target.value }))} />
+            {errors.fecha && <p className='text-xs text-destructive'>{errors.fecha}</p>}
+          </div>
+
+          {/* Línea 2: Cliente + Dirección + Detalle de Dirección. */}
+          <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label className='flex items-center gap-2'>
                 Cliente <span className='text-destructive'>*</span>
@@ -477,7 +500,24 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               />
               {errors.clienteId && <p className='text-xs text-destructive'>{errors.clienteId}</p>}
             </div>
+            <div className='space-y-1.5'>
+              <Label>Dirección</Label>
+              <Select value={fields.direccionId ? String(fields.direccionId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, direccionId: v ? Number(v) : null }))} disabled={!fields.clienteId}>
+                <SelectTrigger className='w-full'><SelectValue placeholder={fields.clienteId ? 'Sin dirección' : 'Elige un cliente primero'} /></SelectTrigger>
+                <SelectContent>
+                  {direccionesCliente.map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>{d.descripcion} — {d.direccion}{d.esPorDefecto ? ' (por defecto)' : ''}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Detalle de Dirección</Label>
+              <Input value={fields.direccionDetalle} onChange={(e) => setFields((f) => ({ ...f, direccionDetalle: e.target.value }))} />
+            </div>
+          </div>
 
+          <div className='grid gap-4 sm:grid-cols-2'>
             <div className='space-y-1.5'>
               <Label>Comprador (Contacto del Cliente)</Label>
               <Select
@@ -563,23 +603,6 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 </SelectContent>
               </Select>
             </div>
-
-            <div className='space-y-1.5'>
-              <Label>Dirección</Label>
-              <Select value={fields.direccionId ? String(fields.direccionId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, direccionId: v ? Number(v) : null }))} disabled={!fields.clienteId}>
-                <SelectTrigger className='w-full'><SelectValue placeholder={fields.clienteId ? 'Sin dirección' : 'Elige un cliente primero'} /></SelectTrigger>
-                <SelectContent>
-                  {direccionesCliente.map((d) => (
-                    <SelectItem key={d.id} value={String(d.id)}>{d.descripcion} — {d.direccion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Detalle de Dirección</Label>
-              <Input value={fields.direccionDetalle} onChange={(e) => setFields((f) => ({ ...f, direccionDetalle: e.target.value }))} />
-            </div>
-
             <div className='space-y-1.5'>
               <Label>Moneda <span className='text-destructive'>*</span></Label>
               <Select value={fields.monedaId ? String(fields.monedaId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, monedaId: Number(v) }))}>
@@ -640,6 +663,19 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Tipo de BL</Label>
+              <Select value={fields.tipoBlId ? String(fields.tipoBlId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, tipoBlId: v === 'none' ? null : Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none'>Sin definir</SelectItem>
+                  {(tiposBlData?.data ?? []).map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className='text-muted-foreground text-xs'>Se propone como valor por defecto al generar cada Embarque.</p>
             </div>
           </div>
 

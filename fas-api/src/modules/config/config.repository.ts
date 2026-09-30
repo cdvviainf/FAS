@@ -26,6 +26,7 @@ const modelMap: Record<MantenedorModelo, string> = {
   categoria: 'categoria',
   calibre: 'calibre',
   parametro: 'parametro',
+  clausulaVenta: 'clausulaVenta',
   mercado: 'mercado',
   // Lote 3
   puerto: 'puerto',
@@ -353,7 +354,9 @@ export async function countActiveReferences(
     | 'solicitudInspeccionCalibre'
     | 'solicitudInspeccionCategoria'
     | 'solicitudInspeccionEmbalaje'
-    | 'articulo',
+    | 'articulo'
+    | 'notaVenta'
+    | 'ordenCompra',
   parentId: number,
   parentField: string,
   usesSoftDelete = true,

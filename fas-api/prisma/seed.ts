@@ -159,16 +159,9 @@ const tiposParametroVentas = [
       { codigo: 'CONSIGNACION', descripcion: 'Consignación' },
     ],
   },
-  {
-    codigo: 'INCOTERM',
-    descripcion: 'Incoterm / Cláusula de Venta',
-    valores: [
-      { codigo: 'FOB', descripcion: 'FOB' },
-      { codigo: 'CFR', descripcion: 'CFR' },
-      { codigo: 'CIF', descripcion: 'CIF' },
-      { codigo: 'EXW', descripcion: 'EXW' },
-    ],
-  },
+  // INCOTERM salió de este catálogo genérico (2026-09-30): ahora es el
+  // mantenedor dedicado ClausulaVenta (ver migración clausula_venta_dedicada),
+  // que expone requiereFlete/requiereSeguro en su propio listado.
   // Tipo de BL (2026-09-28) — información base de la reserva del Embarque.
   {
     codigo: 'TIPO_BL',
@@ -325,6 +318,27 @@ async function main() {
     }
   }
   console.log(`TipoParametro: ${tiposParametroVentas.length} tipos verificados. Parametro: ${parametrosCreados} valores nuevos creados.`)
+
+  console.log('Seeding ClausulaVenta (Incoterm)...')
+  const clausulasVentaBase = [
+    { codigo: 'FOB', descripcion: 'FOB', requiereFlete: false, requiereSeguro: false },
+    { codigo: 'CFR', descripcion: 'CFR', requiereFlete: true, requiereSeguro: false },
+    { codigo: 'CIF', descripcion: 'CIF', requiereFlete: true, requiereSeguro: true },
+    { codigo: 'EXW', descripcion: 'EXW', requiereFlete: false, requiereSeguro: false },
+  ]
+  let clausulasVentaCreadas = 0
+  for (const clausula of clausulasVentaBase) {
+    const existente = await prisma.clausulaVenta.findFirst({
+      where: { empresaId: agrosanParaParametros.id, codigo: clausula.codigo, eliminadoEn: null },
+    })
+    if (!existente) {
+      await prisma.clausulaVenta.create({
+        data: { ...clausula, empresaId: agrosanParaParametros.id, creadoPor: SISTEMA_USER },
+      })
+      clausulasVentaCreadas++
+    }
+  }
+  console.log(`ClausulaVenta: ${clausulasVentaCreadas} valores nuevos creados.`)
 
   console.log('Seeding UnidadMedida (Caja/Kilo para cuota unitaria de Condición de Pago)...')
   const unidadesBase = [

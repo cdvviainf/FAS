@@ -153,8 +153,11 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     nombreArchivo: (p) => `Proforma_${p.codigo}.pdf`,
     folio: (p) => p.codigo,
   },
+  // Factura COMERCIAL (documento interno, formato propio) — NO es la
+  // representación tributaria del DTE 110 (esa la entrega LibreDTE, pendiente de
+  // integrar). El XML timbrado sí es el artefacto oficial (descarga aparte).
   'factura-exportacion': {
-    titulo: 'Factura de Exportación',
+    titulo: 'Factura Comercial de Exportación',
     resolver: resolverFacturaExportacion,
     schema: proformaPdfPayloadSchema, // misma forma de payload que la Proforma
     plantillaActual: 'v1',
@@ -162,7 +165,7 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'FACT_EXPORTACION',
     controlCopia: false,
-    nombreArchivo: (p) => `Factura_${p.codigo}.pdf`,
+    nombreArchivo: (p) => `FacturaComercial_${p.codigo}.pdf`,
     folio: (p) => p.codigo,
   },
 }

@@ -14,6 +14,8 @@ export async function obtenerStock(): Promise<StockDetalleRow[]> {
         numeroPallet: pallet.numeroPallet,
         especieId: linea.especieId,
         especie: linea.especie,
+        articuloId: linea.articuloId,
+        articulo: linea.articulo,
         variedadId: linea.variedadId,
         variedad: linea.variedad,
         categoriaId: linea.categoriaId,

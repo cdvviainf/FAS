@@ -13,11 +13,13 @@ import type {
 } from './types'
 
 export const embarquesService = {
-  async list(params: { notaVentaId?: number; page?: number; limit?: number } = {}): Promise<EmbarqueListResponse> {
+  async list(params: { notaVentaId?: number; page?: number; limit?: number; estado?: string; sort?: string } = {}): Promise<EmbarqueListResponse> {
     const sp: Record<string, string> = {}
     if (params.notaVentaId) sp.notaVentaId = String(params.notaVentaId)
     if (params.page) sp.page = String(params.page)
     if (params.limit) sp.limit = String(params.limit)
+    if (params.estado) sp.estado = params.estado
+    if (params.sort) sp.sort = params.sort
     return api.get('ventas/embarques', { searchParams: sp }).json()
   },
 

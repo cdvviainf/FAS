@@ -14,9 +14,22 @@ export const embarqueCreateSchema = z.object({
   forzarSinReserva: z.boolean().optional(),
 })
 
+// Datos de "Información base de la reserva" por contenedor (2026-09-30): el
+// frontend ya resuelve la opción "mismo valor para todos" — si el usuario la
+// marca, manda el mismo objeto replicado `cantidad` veces, así el backend no
+// necesita distinguir los dos casos.
+const datosContenedorSchema = z.object({
+  temperatura: z.number().int().min(-99).max(99).optional().nullable(),
+  cbm: z.number().int().min(0).max(1_000_000).optional().nullable(),
+  tipoBlId: z.number().int().positive().optional().nullable(),
+})
+
 // Generación múltiple (2026-09-28): una reserva/Embarque por contenedor.
 export const embarquesMultiplesSchema = embarqueCreateSchema.extend({
   cantidad: z.number().int().min(1).max(100),
+  // Si viene, debe tener exactamente `cantidad` elementos (uno por contenedor
+  // a crear, en orden) — se valida en el service (depende de `cantidad`).
+  contenedores: z.array(datosContenedorSchema).optional(),
 })
 
 export const estimacionContenedoresQuerySchema = z.object({
@@ -163,10 +176,18 @@ export const embarqueReclamoParamsSchema = z.object({
   reclamoId: z.coerce.number().int().positive(),
 })
 
+// Estado combinado del listado (2026-09-30): Reserva (Pendiente/Solicitada/
+// Confirmada) hasta que se despacha, momento en que pasa a reflejar el
+// despacho en vez de la reserva — ver resolverEstadoEmbarque en el service.
+export const ESTADOS_EMBARQUE_LISTADO = ['PENDIENTE', 'SOLICITADA', 'CONFIRMADA', 'DESPACHADO', 'DESPACHO_ANULADO'] as const
+
 export const embarqueListQuerySchema = z.object({
   notaVentaId: z.coerce.number().int().positive().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(500).default(20),
+  estado: z.enum(ESTADOS_EMBARQUE_LISTADO).optional(),
+  // JSON [{ id, desc }] (formato TanStack) — mismo patrón que los mantenedores.
+  sort: z.string().optional(),
 })
 
 // Selección de Pallets (ventas.md R8/R9) — reserva en bloque.

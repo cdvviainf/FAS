@@ -553,12 +553,11 @@ export async function getMercado(id: number) {
   return prisma.mercado.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
 }
 
-// Valida que el Parametro exista, esté vigente y pertenezca al TipoParametro
-// esperado — mismo patrón que notas-venta.repository.ts (catálogo genérico
-// Parametro compartido, ej. 'INCOTERM').
-export async function getParametro(id: number, tipoParametroCodigo: string) {
-  return prisma.parametro.findFirst({
-    where: { id, eliminadoEn: null, bloqueado: false, tipoParametro: { codigo: tipoParametroCodigo } },
+// Valida que la Cláusula de Venta (Incoterm) exista y esté vigente (2026-09-30:
+// mantenedor propio ClausulaVenta, antes catálogo genérico Parametro).
+export async function getClausulaVenta(id: number) {
+  return prisma.clausulaVenta.findFirst({
+    where: { id, eliminadoEn: null, bloqueado: false },
     select: { id: true },
   })
 }
