@@ -16,7 +16,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
+import { cn } from '@/lib/utils'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { articulosService } from '@/features/materiales/articulos/service'
 import { entidadesService } from '@/features/entidades/service'
@@ -40,6 +42,20 @@ interface Props {
 
 function lineaVacia(): LoteLineaInput {
   return { especieId: 0, variedadId: 0, categoriaId: 0, articuloId: 0, calibreId: 0, cajas: 1, fechaEmbalaje: null, etiquetaId: null, packingId: null }
+}
+
+// Los mantenedores dependientes (variedad/categoría/calibre) traen `especieId`
+// en el payload de la API aunque el tipo MantenedorSimple no lo declare.
+type ItemMantenedor = { id: number; descripcion: string; especieId?: number }
+
+function toOptions(arr: { id: number; descripcion: string }[] | undefined) {
+  return (arr ?? []).map((o) => ({ value: String(o.id), label: o.descripcion }))
+}
+
+// Solo los ítems de la especie de la línea; sin especie elegida, ninguno.
+function porEspecie(arr: ItemMantenedor[] | undefined, especieId: number): ItemMantenedor[] {
+  if (!especieId) return []
+  return (arr ?? []).filter((o) => o.especieId === especieId)
 }
 
 export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
@@ -151,12 +167,15 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
         ) : (
           <div className='space-y-4'>
             <div className='grid grid-cols-2 gap-3 sm:grid-cols-4'>
-              <div className='space-y-1.5'>
+              <div className='min-w-0 space-y-1.5'>
                 <Label>Productor</Label>
-                <Select value={productorId} onValueChange={setProductorId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{optSelect(productores?.data)}</SelectContent>
-                </Select>
+                <Combobox
+                  options={toOptions(productores?.data)}
+                  value={productorId !== NINGUNO ? productorId : null}
+                  onChange={setProductorId}
+                  placeholder='Seleccionar productor...'
+                  searchPlaceholder='Buscar productor...'
+                />
               </div>
               <div className='space-y-1.5'>
                 <Label>Nota Calidad</Label>
@@ -186,25 +205,62 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
                 </Button>
               </div>
               {lineas.map((l, i) => (
-                <div key={i} className='grid grid-cols-2 items-end gap-2 rounded-md border p-2 sm:grid-cols-4 lg:grid-cols-9'>
-                  <SelectField label='Especie' value={l.especieId} onChange={(v) => setLinea(i, { especieId: v })} items={especies?.data} />
-                  <SelectField label='Variedad' value={l.variedadId} onChange={(v) => setLinea(i, { variedadId: v })} items={variedades?.data} />
-                  <SelectField label='Categoría' value={l.categoriaId} onChange={(v) => setLinea(i, { categoriaId: v })} items={categorias?.data} />
-                  <SelectField label='Calibre' value={l.calibreId} onChange={(v) => setLinea(i, { calibreId: v })} items={calibres?.data} />
-                  <SelectField label='Artículo' value={l.articuloId} onChange={(v) => setLinea(i, { articuloId: v })} items={articulos?.data} />
-                  <div className='space-y-1'>
-                    <Label className='text-[10px] uppercase'>Cajas</Label>
-                    <Input type='number' min={1} value={l.cajas} onChange={(e) => setLinea(i, { cajas: Math.max(1, Math.trunc(Number(e.target.value) || 0)) })} className='h-8' />
-                  </div>
-                  <div className='space-y-1'>
+                <div key={i} className='grid grid-cols-2 items-end gap-2 rounded-md border p-2 sm:grid-cols-3 lg:grid-cols-6'>
+                  {/* Fila 1: identificación de la fruta (Variedad/Categoría/
+                      Calibre dependen de la Especie de la línea) */}
+                  <SelectField
+                    label='Especie'
+                    value={l.especieId}
+                    // Cambiar especie limpia los dependientes (variedad/categoría/
+                    // calibre) para no dejar combinaciones inválidas.
+                    onChange={(v) => setLinea(i, { especieId: v, variedadId: 0, categoriaId: 0, calibreId: 0 })}
+                    items={especies?.data}
+                  />
+                  <SelectField
+                    label='Variedad'
+                    value={l.variedadId}
+                    onChange={(v) => setLinea(i, { variedadId: v })}
+                    items={porEspecie(variedades?.data as ItemMantenedor[] | undefined, l.especieId)}
+                    disabled={!l.especieId}
+                  />
+                  <SelectField
+                    label='Categoría'
+                    value={l.categoriaId}
+                    onChange={(v) => setLinea(i, { categoriaId: v })}
+                    items={porEspecie(categorias?.data as ItemMantenedor[] | undefined, l.especieId)}
+                    disabled={!l.especieId}
+                  />
+                  <SelectField
+                    label='Calibre'
+                    value={l.calibreId}
+                    onChange={(v) => setLinea(i, { calibreId: v })}
+                    items={porEspecie(calibres?.data as ItemMantenedor[] | undefined, l.especieId)}
+                    disabled={!l.especieId}
+                  />
+                  <div className='min-w-0 space-y-1'>
                     <Label className='text-[10px] uppercase'>F. Embalaje</Label>
-                    <Input type='date' value={l.fechaEmbalaje ?? ''} onChange={(e) => setLinea(i, { fechaEmbalaje: e.target.value || null })} className='h-8' />
+                    <Input type='date' value={l.fechaEmbalaje ?? ''} onChange={(e) => setLinea(i, { fechaEmbalaje: e.target.value || null })} className='h-8 w-full' />
                   </div>
                   <SelectField label='Etiqueta' value={l.etiquetaId ?? 0} onChange={(v) => setLinea(i, { etiquetaId: v || null })} items={etiquetas?.data} nullable />
-                  <div className='flex items-end gap-1'>
-                    <div className='flex-1'>
-                      <SelectField label='Packing' value={l.packingId ?? 0} onChange={(v) => setLinea(i, { packingId: v || null })} items={packings?.data} nullable />
-                    </div>
+
+                  {/* Fila 2: Artículo (2 col) · Packing (2 col) · Cajas · eliminar */}
+                  <div className='min-w-0 space-y-1 sm:col-span-2'>
+                    <Label className='text-[10px] uppercase'>Artículo</Label>
+                    <Combobox
+                      options={toOptions(articulos?.data)}
+                      value={l.articuloId ? String(l.articuloId) : null}
+                      onChange={(v) => setLinea(i, { articuloId: Number(v) })}
+                      placeholder='—'
+                      searchPlaceholder='Buscar artículo...'
+                      className='h-8'
+                    />
+                  </div>
+                  <SelectField label='Packing' value={l.packingId ?? 0} onChange={(v) => setLinea(i, { packingId: v || null })} items={packings?.data} nullable className='sm:col-span-2' />
+                  <div className='min-w-0 space-y-1'>
+                    <Label className='text-[10px] uppercase'>Cajas</Label>
+                    <Input type='number' min={1} value={l.cajas} onChange={(e) => setLinea(i, { cajas: Math.max(1, Math.trunc(Number(e.target.value) || 0)) })} className='h-8 w-full' />
+                  </div>
+                  <div className='flex items-end justify-end'>
                     <Button type='button' variant='ghost' size='icon' className='h-8 w-8 shrink-0' onClick={() => setLineas((prev) => prev.filter((_, j) => j !== i))}>
                       <Icons.trash className='h-4 w-4' />
                     </Button>
@@ -233,19 +289,25 @@ function SelectField({
   onChange,
   items,
   nullable,
+  disabled,
+  className,
 }: {
   label: string
   value: number
   onChange: (v: number) => void
   items: { id: number; descripcion: string }[] | undefined
   nullable?: boolean
+  disabled?: boolean
+  className?: string
 }) {
   const NADA = '__NADA__'
   return (
-    <div className='space-y-1'>
+    <div className={cn('min-w-0 space-y-1', className)}>
       <Label className='text-[10px] uppercase'>{label}</Label>
-      <Select value={value ? String(value) : NADA} onValueChange={(v) => onChange(v === NADA ? 0 : Number(v))}>
-        <SelectTrigger className='h-8'><SelectValue placeholder='—' /></SelectTrigger>
+      <Select value={value ? String(value) : NADA} onValueChange={(v) => onChange(v === NADA ? 0 : Number(v))} disabled={disabled}>
+        {/* w-full min-w-0: la base del SelectTrigger usa w-fit y desbordaba la
+            celda tapando el campo siguiente; con esto se ajusta y trunca. */}
+        <SelectTrigger className='h-8 w-full min-w-0'><SelectValue placeholder='—' /></SelectTrigger>
         <SelectContent>
           {nullable && <SelectItem value={NADA}>—</SelectItem>}
           {(items ?? []).map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.descripcion}</SelectItem>)}
