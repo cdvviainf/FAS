@@ -38,6 +38,10 @@ export function ArticuloListingClient() {
     q: parseAsString,
     tipo: parseAsStringEnum<TipoArticulo>(['EMBALAJE', 'ENVASE', 'MATERIAL_EMBALAJE', 'SERVICIO']),
     estado: parseAsStringEnum<'activo' | 'inactivo'>(['activo', 'inactivo']),
+    // Mismo nombre/formato de clave que useDataTable (SORT_KEY='sort', JSON
+    // [{id,desc}]) — se lee acá como string crudo para pasárselo tal cual al
+    // backend, sin duplicar el parser de sorting de la tabla.
+    sort: parseAsString.withDefault(''),
   })
 
   const [editItem, setEditItem] = useState<Articulo | undefined>()
@@ -49,6 +53,7 @@ export function ArticuloListingClient() {
     ...(params.q ? { q: params.q } : {}),
     ...(params.tipo ? { tipo: params.tipo } : {}),
     ...(params.estado ? { activo: params.estado === 'activo' } : {}),
+    ...(params.sort ? { sort: params.sort } : {}),
   }
 
   const { data, isPending } = useQuery(articulosListOptions(filters))
@@ -61,26 +66,32 @@ export function ArticuloListingClient() {
     },
     {
       accessorKey: 'descripcion',
-      header: 'Descripción',
+      header: ({ column }) => <DataTableColumnHeader column={column} title='Descripción' />,
     },
     {
       id: 'tipo',
-      header: 'Tipo',
+      header: ({ column }) => <DataTableColumnHeader column={column} title='Tipo' />,
       cell: ({ row }) => <Badge variant='outline'>{TIPO_ARTICULO_LABELS[row.original.tipo]}</Badge>,
     },
     {
       id: 'unidad',
-      header: 'Unidad',
+      header: ({ column }) => <DataTableColumnHeader column={column} title='Unidad' />,
       cell: ({ row }) => row.original.unidad.descripcion,
+    },
+    {
+      id: 'especie',
+      header: ({ column }) => <DataTableColumnHeader column={column} title='Especie' />,
+      cell: ({ row }) => row.original.especie?.descripcion ?? '',
     },
     {
       id: 'costeo',
       header: 'Costeo',
+      enableSorting: false,
       cell: ({ row }) => row.original.tipoCosteo === 'ESTANDAR' ? `Estándar (${row.original.valorEstandar})` : 'Promedio Ponderado',
     },
     {
       id: 'activo',
-      header: 'Estado',
+      header: ({ column }) => <DataTableColumnHeader column={column} title='Estado' />,
       cell: ({ row }) => (
         <Badge variant={row.original.activo ? 'default' : 'secondary'}>
           {row.original.activo ? 'Activo' : 'Inactivo'}

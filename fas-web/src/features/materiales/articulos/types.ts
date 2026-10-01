@@ -85,6 +85,7 @@ export interface ArticuloListFilters {
   activo?: boolean
   page?: number
   limit?: number
+  sort?: string
 }
 
 export interface DocumentoArticulo {

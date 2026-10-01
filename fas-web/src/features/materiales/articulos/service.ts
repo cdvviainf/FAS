@@ -16,6 +16,7 @@ export const articulosService = {
     if (filters.activo !== undefined) sp.activo = String(filters.activo)
     if (filters.page) sp.page = String(filters.page)
     if (filters.limit) sp.limit = String(filters.limit)
+    if (filters.sort) sp.sort = filters.sort
     return api.get('materiales/articulos', { searchParams: sp }).json()
   },
 

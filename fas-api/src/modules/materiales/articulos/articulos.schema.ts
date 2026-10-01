@@ -45,6 +45,7 @@ export const articuloListQuerySchema = z.object({
   activo: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(500).default(20),
+  sort: z.string().optional(),
 })
 
 export type ArticuloCreateBody = z.infer<typeof articuloCreateSchema>

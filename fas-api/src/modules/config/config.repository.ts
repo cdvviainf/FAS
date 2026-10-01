@@ -231,7 +231,7 @@ function aplanarMercado<T extends { mercadoPaises: { mercadoId: number; mercado:
 }
 
 async function listPaises(filters: MantenedorListFilters) {
-  const { q, page = 1, limit = 20, soloActivos, mercadoId } = filters
+  const { q, page = 1, limit = 20, soloActivos, mercadoId, sort } = filters
   const empresaId = getEmpresaIdActual() ?? -1
 
   const where = {
@@ -258,7 +258,7 @@ async function listPaises(filters: MantenedorListFilters) {
   const [rows, total] = await Promise.all([
     prisma.pais.findMany({
       where,
-      orderBy: { codigo: 'asc' },
+      orderBy: resolveOrderBy('pais', sort),
       skip: (page - 1) * limit,
       take: limit,
       include: includeMercadoActivo,

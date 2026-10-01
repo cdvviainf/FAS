@@ -22,6 +22,31 @@ function buildWhere(filters: ArticuloListFilters): Prisma.ArticuloWhereInput {
   }
 }
 
+// Orden explícito pedido por el usuario (header clicable) — mismo patrón que
+// embarques.repository.ts:resolveOrderByEmbarque.
+function resolveOrderByArticulo(sort?: string): Prisma.ArticuloOrderByWithRelationInput[] {
+  if (sort) {
+    try {
+      const arr = JSON.parse(sort) as Array<{ id: string; desc: boolean }>
+      const first = Array.isArray(arr) ? arr[0] : null
+      if (first?.id) {
+        const dir = first.desc ? 'desc' : 'asc'
+        switch (first.id) {
+          case 'codigo': return [{ codigo: dir }]
+          case 'descripcion': return [{ descripcion: dir }]
+          case 'tipo': return [{ tipo: dir }]
+          case 'unidad': return [{ unidad: { descripcion: dir } }]
+          case 'especie': return [{ especie: { descripcion: dir } }]
+          case 'activo': return [{ activo: dir }]
+        }
+      }
+    } catch {
+      /* sort inválido: orden por defecto */
+    }
+  }
+  return [{ codigo: 'asc' }]
+}
+
 export async function listArticulos(filters: ArticuloListFilters) {
   const { page = 1, limit = 20 } = filters
   const where = buildWhere(filters)
@@ -29,7 +54,7 @@ export async function listArticulos(filters: ArticuloListFilters) {
     prisma.articulo.findMany({
       where,
       include: { unidad: { select: unidadSelect }, etiqueta: { select: etiquetaSelect }, especie: { select: especieSelect } },
-      orderBy: { codigo: 'asc' },
+      orderBy: resolveOrderByArticulo(filters.sort),
       skip: (page - 1) * limit,
       take: limit,
     }),

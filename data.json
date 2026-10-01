@@ -814,7 +814,7 @@
         "duracionDias": 6,
         "horasEstimadas": 30,
         "horasUtilizadas": 5,
-        "progreso": 70
+        "progreso": 100
       },
       {
         "id": 21,
@@ -828,7 +828,7 @@
         "duracionDias": 3,
         "horasEstimadas": 15,
         "horasUtilizadas": 0,
-        "progreso": 30
+        "progreso": 100
       },
       {
         "id": 66,
@@ -994,7 +994,7 @@
         "inicioFecha": "2026-09-05",
         "terminoFecha": "2026-09-05",
         "duracionDias": 3,
-        "horasEstimadas": 0,
+        "horasEstimadas": 5,
         "horasUtilizadas": 5,
         "progreso": 100
       },
@@ -1036,9 +1036,9 @@
         "inicioFecha": "2026-09-08",
         "terminoFecha": "2026-09-08",
         "duracionDias": 3,
-        "horasEstimadas": 5,
+        "horasEstimadas": 10,
         "horasUtilizadas": 0,
-        "progreso": 0
+        "progreso": 100
       },
       {
         "id": 71,
@@ -1075,12 +1075,12 @@
         "moduloId": 31,
         "tipo": "subEtapa",
         "etapa": 1,
-        "inicioFecha": "2026-08-27",
-        "terminoFecha": "2026-08-31",
+        "inicioFecha": "2026-09-27",
+        "terminoFecha": "2026-09-30",
         "duracionDias": 3,
         "horasEstimadas": 15,
         "horasUtilizadas": 0,
-        "progreso": 0
+        "progreso": 100
       },
       {
         "id": 34,
