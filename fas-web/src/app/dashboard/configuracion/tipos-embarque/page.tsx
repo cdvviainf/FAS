@@ -20,9 +20,9 @@ export default async function Page(props: PageProps) {
     <PageContainer
       pageTitle='Tipo de Embarque'
       pageDescription='Tipos de embarque disponibles para exportación'
-      pageHeaderAction={<MantenedorFormSheetTrigger recurso='tipos-embarque' titulo='Tipo de Embarque' />}
+      pageHeaderAction={<MantenedorFormSheetTrigger recurso='tipos-embarque' titulo='Tipo de Embarque' mostrarCodigoAduana />}
     >
-      <MantenedorListing recurso='tipos-embarque' titulo='Tipo de Embarque' />
+      <MantenedorListing recurso='tipos-embarque' titulo='Tipo de Embarque' mostrarCodigoAduana />
     </PageContainer>
   )
 }

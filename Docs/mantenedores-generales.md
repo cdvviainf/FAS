@@ -290,6 +290,8 @@ model TipoCuentaCorriente {
 > Auth + acceso por perfil al ítem del mantenedor (`LECTURA` lectura / `TOTAL` escritura). Patrón **CRUD genérico** por mantenedor en `/{recurso}` (recurso en kebab/plural):
 > `temporadas`, `paises`, `tipos-embarque`, `zonas`, `regiones`, `provincias`, `comunas`, `puertos`, `grupos-mercado`, `mercados`, `monedas`, `bodegas`, `tipos-parametro`, `parametros`, `especies`, `grupos-variedad`, `variedades`, `categorias`, `calibres`, `alturas`, `tipos-pallet`, `etiquetas`, `tipos-produccion`, `unidades-medida`, `tipos-cuenta-corriente`.
 
+> **Campo especial `codigoAduana` (SII, DTE 110 — 2026-10-01):** las tablas `ClausulaVenta`, `TipoEmbarque` (vía de transporte), `Puerto`, `Pais` y `Parametro` (Modalidad de Venta) llevan una columna `codigoAduana String?` con el código de la **tabla de Aduana del SII**. Alimenta el bloque Aduana del DTE 110 (ver `Docs/cobranza.md`): el adaptador de facturación manda `codigoAduana` (no el `codigo` de negocio, que LibreDTE descarta), y la emisión se bloquea si falta. Editable en el CRUD genérico (campo "Código Aduana (SII)"). El resto de los mantenedores no tiene esta columna; el CRUD la descarta si llegara. Normalización de los estándar vía migración+seed; Puerto/País se cargan con los datos del cliente.
+
 | Método | Ruta | Notas |
 |---|---|---|
 | GET | `/{recurso}` | Lista (filtra `eliminadoEn IS NULL`), `q?`, paginado. Acepta filtros de FK (ver abajo). |

@@ -30,6 +30,10 @@ export const mantenedorBaseSchema = z.object({
   codigo: z.string().min(1).max(50).trim(),
   descripcion: z.string().min(1).max(200).trim(),
   descripcionExtranjera: z.string().max(200).trim().optional(),
+  // Código de la tabla de Aduana del SII para el DTE 110 de exportación. Solo
+  // aplica a ClausulaVenta, TipoEmbarque (vía), Puerto, Pais y el Parámetro de
+  // Modalidad de Venta; el resto de mantenedores simplemente no lo usan.
+  codigoAduana: z.string().max(20).trim().optional().nullable(),
 })
 
 export const mantenedorUpdateSchema = mantenedorBaseSchema

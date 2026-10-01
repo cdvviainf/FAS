@@ -32,6 +32,7 @@ interface PaisItem extends MantenedorSimple {
   esPaisNacional?: boolean
   puedeSerOrigen?: boolean
   mercadoId?: number | null
+  codigoAduana?: string | null
 }
 
 interface PaisFormSheetProps {
@@ -76,6 +77,7 @@ export function PaisFormSheet({ item, open, onOpenChange }: PaisFormSheetProps) 
       codigo: item?.codigo ?? '',
       descripcion: item?.descripcion ?? '',
       descripcionExtranjera: item?.descripcionExtranjera ?? '',
+      codigoAduana: item?.codigoAduana ?? '',
       esPaisNacional: item?.esPaisNacional ?? false,
       puedeSerOrigen: item?.puedeSerOrigen ?? false,
       bloqueado: item?.bloqueado ?? false,
@@ -137,6 +139,11 @@ export function PaisFormSheet({ item, open, onOpenChange }: PaisFormSheetProps) 
                 name='descripcionExtranjera'
                 label='Descripción extranjera'
                 placeholder='Ej: Chile'
+              />
+              <FormTextField
+                name='codigoAduana'
+                label='Código Aduana (SII)'
+                placeholder='Código de país de la tabla de Aduana del SII'
               />
               <FormSwitchField
                 name='esPaisNacional'

@@ -32,6 +32,7 @@ const parametroSchema = z.object({
   codigo: z.string().min(1, 'Requerido').max(50).trim(),
   descripcion: z.string().min(1, 'Requerido').max(200).trim(),
   descripcionExtranjera: z.string().max(200).trim().optional(),
+  codigoAduana: z.string().max(20).trim().optional(),
   tipoParametroId: z.coerce.number().int().min(1, 'Selecciona un tipo de parámetro')
 })
 
@@ -40,6 +41,7 @@ type ParametroFormValues = z.infer<typeof parametroSchema>
 interface ParametroItem extends MantenedorSimple {
   tipoParametroId?: number
   tipoParametro?: { id: number; descripcion: string }
+  codigoAduana?: string | null
 }
 
 interface ParametroFormSheetProps {
@@ -84,6 +86,7 @@ export function ParametroFormSheet({ item, open, onOpenChange }: ParametroFormSh
       codigo: item?.codigo ?? '',
       descripcion: item?.descripcion ?? '',
       descripcionExtranjera: item?.descripcionExtranjera ?? '',
+      codigoAduana: item?.codigoAduana ?? '',
       tipoParametroId: item?.tipoParametroId ?? 0
     } as ParametroFormValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -128,6 +131,7 @@ export function ParametroFormSheet({ item, open, onOpenChange }: ParametroFormSh
               <FormTextField name='codigo' label='Código' required placeholder='Ej: BRIX-01' disabled={isEdit} />
               <FormTextField name='descripcion' label='Descripción' required placeholder='Ej: Brix alto' />
               <FormTextField name='descripcionExtranjera' label='Descripción extranjera' placeholder='Ej: High Brix' />
+              <FormTextField name='codigoAduana' label='Código Aduana (SII)' placeholder='Solo Modalidad de Venta — ej: 1 (A firme)' />
 
               <form.Field name='tipoParametroId'>
                 {(field) => (

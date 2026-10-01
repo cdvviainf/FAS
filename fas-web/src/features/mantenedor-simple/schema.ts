@@ -4,6 +4,9 @@ export const mantenedorSimpleSchema = z.object({
   codigo: z.string().min(1, 'Requerido').max(50).trim(),
   descripcion: z.string().min(1, 'Requerido').max(200).trim(),
   descripcionExtranjera: z.string().max(200).trim().optional(),
+  // Código de la tabla de Aduana del SII (DTE 110). Solo lo usan algunos
+  // mantenedores (País, Tipo de Embarque/vía); el resto lo ignora.
+  codigoAduana: z.string().max(20).trim().optional(),
   bloqueado: z.boolean(),
 })
 

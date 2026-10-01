@@ -36,6 +36,7 @@ const puertoSchema = z.object({
   codigo: z.string().min(1, 'Requerido').max(50).trim(),
   descripcion: z.string().min(1, 'Requerido').max(200).trim(),
   descripcionExtranjera: z.string().max(200).trim().optional(),
+  codigoAduana: z.string().max(20).trim().optional(),
   paisId: z.number().int().min(1, 'Selecciona un país'),
   tipoEmbarqueId: z.number().int().min(1, 'Selecciona un tipo de embarque'),
   latitud: z.number().min(-90).max(90).optional().nullable(),
@@ -45,6 +46,7 @@ const puertoSchema = z.object({
 type PuertoFormValues = z.infer<typeof puertoSchema>
 
 interface PuertoItem extends MantenedorSimple {
+  codigoAduana?: string | null
   paisId?: number
   tipoEmbarqueId?: number
   latitud?: number | null
@@ -79,6 +81,7 @@ export function PuertoFormSheet({ item, open, onOpenChange }: PuertoFormSheetPro
       codigo: item?.codigo ?? '',
       descripcion: item?.descripcion ?? '',
       descripcionExtranjera: item?.descripcionExtranjera ?? '',
+      codigoAduana: item?.codigoAduana ?? '',
       paisId: item?.paisId ?? 0,
       tipoEmbarqueId: item?.tipoEmbarqueId ?? 0,
       latitud: item?.latitud ?? null,
@@ -143,6 +146,7 @@ export function PuertoFormSheet({ item, open, onOpenChange }: PuertoFormSheetPro
               <FormTextField name='codigo' label='Código' required placeholder='Ej: SAN' disabled={isEdit} validators={isEdit ? undefined : codigoValidator} />
               <FormTextField name='descripcion' label='Descripción' required placeholder='Ej: San Antonio' />
               <FormTextField name='descripcionExtranjera' label='Descripción extranjera' placeholder='Ej: Port of San Antonio' />
+              <FormTextField name='codigoAduana' label='Código Aduana (SII)' placeholder='Código de puerto de la tabla de Aduana del SII' />
 
               <form.Field name='paisId'>
                 {(field) => (

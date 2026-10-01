@@ -17,12 +17,13 @@ interface MantenedorTableProps {
   titulo: string
   extraColumns?: ColumnDef<MantenedorSimple>[]
   renderEditSheet?: (props: { item: MantenedorSimple; open: boolean; onOpenChange: (v: boolean) => void }) => React.ReactNode
+  mostrarCodigoAduana?: boolean
 }
 
-export function MantenedorTable({ recurso, titulo, extraColumns, renderEditSheet }: MantenedorTableProps) {
+export function MantenedorTable({ recurso, titulo, extraColumns, renderEditSheet, mostrarCodigoAduana }: MantenedorTableProps) {
   const { listOptions } = createMantenedorQueries(recurso)
 
-  const columns = createMantenedorColumns(recurso, titulo, extraColumns, renderEditSheet)
+  const columns = createMantenedorColumns(recurso, titulo, extraColumns, renderEditSheet, mostrarCodigoAduana)
   const columnIds = columns.map((c) => c.id).filter(Boolean) as string[]
 
   const [params] = useQueryStates({

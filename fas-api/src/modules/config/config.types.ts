@@ -91,6 +91,8 @@ export interface MantenedorCreateInput {
   requiereSeguro?: boolean
   // TipoReclamo
   generaAnalisisCalidad?: boolean
+  // Código de Aduana del SII (ClausulaVenta, TipoEmbarque, Puerto, Pais, Modalidad).
+  codigoAduana?: string | null
   // Moneda
   esMonedaBase?: boolean
   decimales?: number

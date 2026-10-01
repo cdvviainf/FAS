@@ -32,6 +32,9 @@ interface MantenedorFormSheetProps {
   onOpenChange: (open: boolean) => void
   extraFields?: React.ReactNode
   onCreated?: (item: MantenedorSimple) => void
+  // Muestra el campo "Código Aduana (SII)" (DTE 110) — solo los mantenedores que
+  // alimentan el bloque Aduana lo activan (ej. Tipo de Embarque / vía).
+  mostrarCodigoAduana?: boolean
 }
 
 export function MantenedorFormSheet({
@@ -41,7 +44,8 @@ export function MantenedorFormSheet({
   open,
   onOpenChange,
   extraFields,
-  onCreated
+  onCreated,
+  mostrarCodigoAduana
 }: MantenedorFormSheetProps) {
   const isEdit = !!item
   const queryClient = useQueryClient()
@@ -86,14 +90,20 @@ export function MantenedorFormSheet({
       codigo: item?.codigo ?? '',
       descripcion: item?.descripcion ?? '',
       descripcionExtranjera: item?.descripcionExtranjera ?? '',
+      codigoAduana: item?.codigoAduana ?? '',
       bloqueado: item?.bloqueado ?? false,
     } as MantenedorSimpleFormValues,
     validators: { onSubmit: mantenedorSimpleSchema },
     onSubmit: async ({ value }: { value: MantenedorSimpleFormValues }) => {
+      // Solo los mantenedores que activan `mostrarCodigoAduana` tienen la columna
+      // codigoAduana; para el resto NO se envía (si no, Prisma rechaza el campo
+      // desconocido en modelos como Zona/Altura/Etiqueta). COD-ADU-SII-001.
+      const payload = { ...value }
+      if (!mostrarCodigoAduana) delete (payload as { codigoAduana?: string }).codigoAduana
       if (isEdit) {
-        await updateMutation.mutateAsync({ id: item.id, values: value })
+        await updateMutation.mutateAsync({ id: item.id, values: payload })
       } else {
-        await createMutation.mutateAsync(value)
+        await createMutation.mutateAsync(payload)
       }
     }
   })
@@ -151,6 +161,13 @@ export function MantenedorFormSheet({
                 label='Descripción extranjera'
                 placeholder='Foreign description'
               />
+              {mostrarCodigoAduana && (
+                <FormTextField
+                  name='codigoAduana'
+                  label='Código Aduana (SII)'
+                  placeholder='Código de la tabla de Aduana del SII (ej. vía: 1 marítima, 4 aérea)'
+                />
+              )}
               {extraFields}
               {isEdit && (
                 <FormSwitchField
@@ -181,12 +198,14 @@ interface MantenedorFormSheetTriggerProps {
   recurso: string
   titulo: string
   extraFields?: React.ReactNode
+  mostrarCodigoAduana?: boolean
 }
 
 export function MantenedorFormSheetTrigger({
   recurso,
   titulo,
-  extraFields
+  extraFields,
+  mostrarCodigoAduana
 }: MantenedorFormSheetTriggerProps) {
   const [open, setOpen] = React.useState(false)
   return (
@@ -201,6 +220,7 @@ export function MantenedorFormSheetTrigger({
         open={open}
         onOpenChange={setOpen}
         extraFields={extraFields}
+        mostrarCodigoAduana={mostrarCodigoAduana}
       />
     </>
   )

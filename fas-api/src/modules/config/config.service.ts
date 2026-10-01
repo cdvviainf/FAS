@@ -7,6 +7,18 @@ type AnyRecord = Record<string, any>
 
 const SISTEMA_USER = 'sistema' // temporal hasta tener auth real
 
+// Mantenedores que tienen la columna codigoAduana (bloque Aduana del DTE 110).
+// El resto NO la tiene; si llegara el campo (schema base lo acepta), se descarta
+// antes de persistir para no romper Prisma con un argumento desconocido
+// (COD-ADU-SII-001, defensa server-side además del filtro en el form).
+const MODELOS_CODIGO_ADUANA = new Set<MantenedorModelo>(['clausulaVenta', 'tipoEmbarque', 'puerto', 'pais', 'parametro'])
+
+function descartarCodigoAduanaSiNoAplica(modelo: MantenedorModelo, data: AnyRecord) {
+  if (!MODELOS_CODIGO_ADUANA.has(modelo) && 'codigoAduana' in data) {
+    delete data.codigoAduana
+  }
+}
+
 // Models with child relations for R8 (softdelete parent check)
 type ChildDef = { childModelo: MantenedorModelo; parentField: string; label: string }
 const childrenMap: Partial<Record<MantenedorModelo, ChildDef[]>> = {
@@ -247,6 +259,7 @@ export async function crearMantenedor(
   const { contactos, mercadoId, ...coreData } = data as MantenedorCreateInput & {
     contactos?: import('./config.types.js').BodegaContactoInput[]
   }
+  descartarCodigoAduanaSiNoAplica(modelo, coreData as AnyRecord)
 
   // Temporada: convertir strings YYYY-MM-DD a Date para Prisma DateTime
   if (modelo === 'temporada') {
@@ -424,6 +437,7 @@ export async function actualizarMantenedor(
   const { contactos, mercadoId, ...coreData } = data as Partial<MantenedorCreateInput> & {
     contactos?: import('./config.types.js').BodegaContactoInput[]
   }
+  descartarCodigoAduanaSiNoAplica(modelo, coreData as AnyRecord)
 
   // Temporada: convertir strings YYYY-MM-DD a Date para Prisma DateTime
   if (modelo === 'temporada') {

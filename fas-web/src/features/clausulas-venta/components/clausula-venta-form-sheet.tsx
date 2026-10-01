@@ -28,6 +28,7 @@ const clausulaVentaSchema = z.object({
   codigo: z.string().min(1, 'Requerido').max(50).trim(),
   descripcion: z.string().min(1, 'Requerido').max(200).trim(),
   descripcionExtranjera: z.string().max(200).trim().optional(),
+  codigoAduana: z.string().max(20).trim().optional(),
   requiereFlete: z.boolean(),
   requiereSeguro: z.boolean()
 })
@@ -37,6 +38,7 @@ type ClausulaVentaFormValues = z.infer<typeof clausulaVentaSchema>
 interface ClausulaVentaItem extends MantenedorSimple {
   requiereFlete?: boolean
   requiereSeguro?: boolean
+  codigoAduana?: string | null
 }
 
 interface ClausulaVentaFormSheetProps {
@@ -77,6 +79,7 @@ export function ClausulaVentaFormSheet({ item, open, onOpenChange }: ClausulaVen
       codigo: item?.codigo ?? '',
       descripcion: item?.descripcion ?? '',
       descripcionExtranjera: item?.descripcionExtranjera ?? '',
+      codigoAduana: item?.codigoAduana ?? '',
       requiereFlete: item?.requiereFlete ?? false,
       requiereSeguro: item?.requiereSeguro ?? false
     } as ClausulaVentaFormValues,
@@ -118,6 +121,7 @@ export function ClausulaVentaFormSheet({ item, open, onOpenChange }: ClausulaVen
               <FormTextField name='codigo' label='Código' required placeholder='Ej: CIF' disabled={isEdit} />
               <FormTextField name='descripcion' label='Descripción' required placeholder='Ej: Costo, Seguro y Flete' />
               <FormTextField name='descripcionExtranjera' label='Descripción extranjera' placeholder='Ej: Cost, Insurance and Freight' />
+              <FormTextField name='codigoAduana' label='Código Aduana (SII)' placeholder='Ej: 3 (FOB), 1 (CIF), 2 (CFR), 5 (EXW)' />
 
               <div className='space-y-3 rounded-lg border p-3'>
                 <p className='text-xs text-muted-foreground'>

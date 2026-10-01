@@ -320,11 +320,13 @@ async function main() {
   console.log(`TipoParametro: ${tiposParametroVentas.length} tipos verificados. Parametro: ${parametrosCreados} valores nuevos creados.`)
 
   console.log('Seeding ClausulaVenta (Incoterm)...')
+  // codigoAduana = código de la tabla "Cláusula de Venta" del SII (DTE 110):
+  // 1=CIF, 2=C&F(CFR), 3=FOB, 5=EX-WORKS. Normaliza nuestros códigos de negocio.
   const clausulasVentaBase = [
-    { codigo: 'FOB', descripcion: 'FOB', requiereFlete: false, requiereSeguro: false },
-    { codigo: 'CFR', descripcion: 'CFR', requiereFlete: true, requiereSeguro: false },
-    { codigo: 'CIF', descripcion: 'CIF', requiereFlete: true, requiereSeguro: true },
-    { codigo: 'EXW', descripcion: 'EXW', requiereFlete: false, requiereSeguro: false },
+    { codigo: 'FOB', descripcion: 'FOB', requiereFlete: false, requiereSeguro: false, codigoAduana: '3' },
+    { codigo: 'CFR', descripcion: 'CFR', requiereFlete: true, requiereSeguro: false, codigoAduana: '2' },
+    { codigo: 'CIF', descripcion: 'CIF', requiereFlete: true, requiereSeguro: true, codigoAduana: '1' },
+    { codigo: 'EXW', descripcion: 'EXW', requiereFlete: false, requiereSeguro: false, codigoAduana: '5' },
   ]
   let clausulasVentaCreadas = 0
   for (const clausula of clausulasVentaBase) {
@@ -336,6 +338,9 @@ async function main() {
         data: { ...clausula, empresaId: agrosanParaParametros.id, creadoPor: SISTEMA_USER },
       })
       clausulasVentaCreadas++
+    } else if (!existente.codigoAduana) {
+      // Normaliza registros previos: completa el código de Aduana si faltaba.
+      await prisma.clausulaVenta.update({ where: { id: existente.id }, data: { codigoAduana: clausula.codigoAduana } })
     }
   }
   console.log(`ClausulaVenta: ${clausulasVentaCreadas} valores nuevos creados.`)
@@ -498,6 +503,30 @@ async function main() {
     }
   }
   console.log(`Maestros externos: ${externosCreados} creados.`)
+
+  // Normalización de códigos de Aduana del SII (2026-10-01) para los mantenedores
+  // estándar del bloque Aduana del DTE 110. Puertos y Países se cargan con los
+  // datos del cliente (la validación al enviar al SII obliga a completarlos).
+  console.log('Normalizando códigos de Aduana (SII): vía de transporte y modalidad de venta...')
+  // Vía de transporte (tabla SII): 1=Marítima, 4=Aéreo, 7=Carretero/Terrestre.
+  const viaAduana: Record<string, string> = { MARITIMO: '1', AEREO: '4', TERRESTRE: '7' }
+  for (const [codigo, codigoAduana] of Object.entries(viaAduana)) {
+    await prisma.tipoEmbarque.updateMany({
+      where: { empresaId: agrosanParaParametros.id, codigo, codigoAduana: null, eliminadoEn: null },
+      data: { codigoAduana },
+    })
+  }
+  // Modalidad de Venta "A firme" (Parametro bajo MODALIDAD_VENTA) → código SII 1.
+  await prisma.parametro.updateMany({
+    where: {
+      empresaId: agrosanParaParametros.id,
+      codigo: 'FIRME',
+      codigoAduana: null,
+      eliminadoEn: null,
+      tipoParametro: { codigo: 'MODALIDAD_VENTA' },
+    },
+    data: { codigoAduana: '1' },
+  })
 
   // Notas de Calidad/Condición del Pallet (2026-09-02, compras.md §4.8):
   // catálogo inicial de ejemplo (A-D / 1-4), habilitado desde ya para todas

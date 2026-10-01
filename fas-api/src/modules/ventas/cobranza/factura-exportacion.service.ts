@@ -279,6 +279,37 @@ async function construirCuotas(
 
 // Arma el payload del DTE 110 desde la Factura + Embarque + emisor, en el idioma
 // de la Factura (descripción reconstruida por idioma; detalle a valor FOB).
+// Valida que cada mantenedor que alimenta el bloque Aduana del DTE 110 esté
+// presente en la Nota de Venta/Embarque y tenga su código de Aduana del SII
+// (codigoAduana) cargado. Junta todos los faltantes en un solo error accionable
+// en vez de fallar de a uno. (Decisión 2026-10-01: normalizar a códigos SII.)
+function validarCodigosAduana(
+  embarque: NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>,
+) {
+  const nv = embarque.notaVenta
+  const requeridos: Array<{ etiqueta: string; registro: { descripcion: string; codigoAduana: string | null } | null }> = [
+    { etiqueta: 'Cláusula de Venta (Incoterm)', registro: nv.clausulaVenta },
+    { etiqueta: 'Modalidad de Venta', registro: nv.modalidadVenta },
+    { etiqueta: 'Vía de transporte (Tipo de Embarque)', registro: nv.tipoEmbarque },
+    { etiqueta: 'Puerto de Embarque (zarpe)', registro: embarque.puertoZarpe },
+    { etiqueta: 'Puerto de Desembarque (destino)', registro: nv.puertoDestino },
+    { etiqueta: 'País de destino', registro: nv.paisDestino },
+  ]
+  const faltantes = requeridos
+    .filter((r) => !r.registro || !r.registro.codigoAduana?.trim())
+    .map((r) =>
+      r.registro
+        ? `${r.etiqueta} ("${r.registro.descripcion}") no tiene Código de Aduana (SII)`
+        : `Falta ${r.etiqueta} en la Nota de Venta/Embarque`,
+    )
+  if (faltantes.length > 0) {
+    throw new ValidationError(
+      `No se puede enviar al SII hasta completar los códigos de Aduana del SII: ${faltantes.join('; ')}. ` +
+        'Cárgalos en Configuración (campo "Código Aduana (SII)" de cada mantenedor).',
+    )
+  }
+}
+
 function construirPayloadDte(
   factura: NonNullable<Awaited<ReturnType<typeof repo.getFacturaActivaById>>>,
   embarque: NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>,
@@ -307,23 +338,27 @@ function construirPayloadDte(
       identificador: nv.cliente.identificador,
       giro: nv.cliente.giro,
       direccion: null,
-      nacionalidadCodigo: nv.paisDestino?.codigo ?? null,
+      // SII espera el código de país de SU tabla de Aduana (no "COL").
+      nacionalidadCodigo: nv.paisDestino?.codigoAduana ?? null,
     },
     lineas: factura.lineas.map((l) => ({
       descripcion: descripcionLinea(l, idioma),
       cantidadCajas: l.cantidadCajas,
       precioUnitario: unitarioFob(Number(l.precioUnitario), factor),
     })),
+    // Se mandan los códigos de la tabla de Aduana del SII (codigoAduana), no el
+    // `codigo` de negocio — LibreDTE descarta los que no son de su tabla. El
+    // service valida que estén presentes antes de enviar (validarCodigosAduana).
     aduana: {
-      codModVenta: nv.modalidadVenta?.codigo ?? null,
-      codClauVenta: nv.clausulaVenta?.codigo ?? null,
+      codModVenta: nv.modalidadVenta?.codigoAduana ?? null,
+      codClauVenta: nv.clausulaVenta?.codigoAduana ?? null,
       totalClausulaVenta: montoTotalNum,
       montoFlete,
       montoSeguro,
-      codViaTransp: nv.tipoEmbarque?.codigo ?? null,
-      codPtoEmbarque: embarque.puertoZarpe?.codigo ?? null,
-      codPtoDesembarque: nv.puertoDestino?.codigo ?? null,
-      paisDestinoCodigo: nv.paisDestino?.codigo ?? null,
+      codViaTransp: nv.tipoEmbarque?.codigoAduana ?? null,
+      codPtoEmbarque: embarque.puertoZarpe?.codigoAduana ?? null,
+      codPtoDesembarque: nv.puertoDestino?.codigoAduana ?? null,
+      paisDestinoCodigo: nv.paisDestino?.codigoAduana ?? null,
     },
   })
 }
@@ -347,6 +382,11 @@ export async function enviarBorradorSii(id: number, userId: string) {
   if (!embarque.notaVenta.moneda.esMonedaBase && (factura.tipoCambio == null || Number(factura.tipoCambio) <= 0)) {
     throw new ValidationError('Indica el tipo de cambio antes de enviar al SII (el SII lo exige para facturar en moneda extranjera)')
   }
+
+  // El bloque Aduana del DTE 110 exige los códigos de las tablas del SII; se
+  // validan ANTES de mandar a simpleDTE (si no, LibreDTE los descarta en
+  // silencio y el documento sale sin la info de exportación).
+  validarCodigosAduana(embarque)
 
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
   if (!emisor?.rut) {

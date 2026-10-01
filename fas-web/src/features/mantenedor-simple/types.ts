@@ -3,6 +3,8 @@ export interface MantenedorSimple {
   codigo: string
   descripcion: string
   descripcionExtranjera?: string | null
+  // Código de la tabla de Aduana del SII (DTE 110) — solo algunos mantenedores.
+  codigoAduana?: string | null
   bloqueado?: boolean
   creadoEn: string
   creadoPor: string
@@ -37,6 +39,7 @@ export interface MantenedorSimpleCreateInput {
   codigo: string
   descripcion: string
   descripcionExtranjera?: string
+  codigoAduana?: string | null
   bloqueado?: boolean
   // FK fields (optional, used when creating FK models)
   regionId?: number

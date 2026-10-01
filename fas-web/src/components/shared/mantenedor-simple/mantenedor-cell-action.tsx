@@ -24,9 +24,10 @@ interface MantenedorCellActionProps {
   recurso: string
   titulo: string
   renderEditSheet?: (props: { item: MantenedorSimple; open: boolean; onOpenChange: (v: boolean) => void }) => React.ReactNode
+  mostrarCodigoAduana?: boolean
 }
 
-export function MantenedorCellAction({ data, recurso, titulo, renderEditSheet }: MantenedorCellActionProps) {
+export function MantenedorCellAction({ data, recurso, titulo, renderEditSheet, mostrarCodigoAduana }: MantenedorCellActionProps) {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const queryClient = useQueryClient()
@@ -60,6 +61,7 @@ export function MantenedorCellAction({ data, recurso, titulo, renderEditSheet }:
             item={data}
             open={editOpen}
             onOpenChange={setEditOpen}
+            mostrarCodigoAduana={mostrarCodigoAduana}
           />
         )
       }

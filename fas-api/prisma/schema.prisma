@@ -502,6 +502,8 @@ model Pais {
   codigo                String
   descripcion           String
   descripcionExtranjera String?
+  // Código de la tabla de Aduana del SII (país) para el DTE 110 de exportación.
+  codigoAduana          String?
   // Semánticas independientes (antes un único esPaisOrigen sobrecargado):
   // esPaisNacional = "es Chile" (único, exige RUT/comunas chilenas).
   // puedeSerOrigen = filtro de puertos R9 (multi-país, un puerto puede
@@ -613,6 +615,8 @@ model TipoEmbarque {
   codigo                String
   descripcion           String
   descripcionExtranjera String?
+  // Código de la tabla de Aduana del SII (vía de transporte) para el DTE 110.
+  codigoAduana          String?
   bloqueado             Boolean   @default(false)
   creadoEn              DateTime  @default(now())
   creadoPor             String
@@ -1128,6 +1132,8 @@ model Parametro {
   codigo                String
   descripcion           String
   descripcionExtranjera String?
+  // Código de la tabla de Aduana del SII (ej. Modalidad de Venta) para el DTE 110.
+  codigoAduana          String?
   tipoParametroId       Int
   // FK compuesta (empresaId, tipoParametroId) -> TipoParametro(empresaId, id).
   tipoParametro         TipoParametro @relation(fields: [empresaId, tipoParametroId], references: [empresaId, id])
@@ -1163,6 +1169,8 @@ model ClausulaVenta {
   codigo                String
   descripcion           String
   descripcionExtranjera String?
+  // Código de la tabla de Aduana del SII (cláusula de venta / Incoterm) para el DTE 110.
+  codigoAduana          String?
   // Determinan si, al facturar/proformar con esta cláusula, se exige informar
   // el monto de Flete y/o Seguro (ej. CIF → ambos, C+F/CFR → solo flete,
   // FOB → ninguno).
@@ -1254,6 +1262,8 @@ model Puerto {
   codigo                String
   descripcion           String
   descripcionExtranjera String?
+  // Código de la tabla de Aduana del SII (puerto) para el DTE 110 de exportación.
+  codigoAduana          String?
   paisId                Int
   pais                  Pais         @relation(fields: [paisId], references: [id])
   tipoEmbarqueId        Int

@@ -26,9 +26,11 @@ export interface LineaFacturaExportacion {
   precioUnitario: number
 }
 
-// Datos de Aduana — todos opcionales; se toman de los mantenedores (Parametro/
-// Puerto/Pais) donde el `codigo` debe corresponder a la tabla de Aduana del SII
-// (a validar con el cliente). Lo que no venga, se omite y LibreDTE normaliza.
+// Datos de Aduana — todos opcionales acá, pero el service los valida como
+// obligatorios antes de enviar al SII (validarCodigosAduana). Los códigos salen
+// del campo `codigoAduana` de cada mantenedor (ClausulaVenta/TipoEmbarque/Puerto/
+// Pais/Parametro), que es el código de la tabla de Aduana del SII — no el
+// `codigo` de negocio. Lo que no venga, se omite y LibreDTE normaliza.
 export interface AduanaFacturaExportacion {
   codModVenta: string | null // Parametro modalidadVenta.codigo
   codClauVenta: string | null // Parametro clausulaVenta.codigo (incoterm)

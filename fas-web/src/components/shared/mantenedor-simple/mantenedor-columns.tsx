@@ -11,7 +11,8 @@ export function createMantenedorColumns(
   recurso: string,
   titulo: string,
   extraColumns?: ColumnDef<MantenedorSimple>[],
-  renderEditSheet?: (props: { item: MantenedorSimple; open: boolean; onOpenChange: (v: boolean) => void }) => React.ReactNode
+  renderEditSheet?: (props: { item: MantenedorSimple; open: boolean; onOpenChange: (v: boolean) => void }) => React.ReactNode,
+  mostrarCodigoAduana?: boolean
 ): ColumnDef<MantenedorSimple>[] {
   return [
     {
@@ -70,7 +71,7 @@ export function createMantenedorColumns(
     {
       id: 'actions',
       cell: ({ row }) => (
-        <MantenedorCellAction data={row.original} recurso={recurso} titulo={titulo} renderEditSheet={renderEditSheet} />
+        <MantenedorCellAction data={row.original} recurso={recurso} titulo={titulo} renderEditSheet={renderEditSheet} mostrarCodigoAduana={mostrarCodigoAduana} />
       )
     }
   ]

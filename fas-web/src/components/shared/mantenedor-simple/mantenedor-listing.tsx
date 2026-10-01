@@ -10,13 +10,15 @@ interface MantenedorListingProps {
   titulo: string
   extraColumns?: ColumnDef<MantenedorSimple>[]
   renderEditSheet?: (props: { item: MantenedorSimple; open: boolean; onOpenChange: (v: boolean) => void }) => React.ReactNode
+  mostrarCodigoAduana?: boolean
 }
 
 export default function MantenedorListing({
   recurso,
   titulo,
   extraColumns,
-  renderEditSheet
+  renderEditSheet,
+  mostrarCodigoAduana
 }: MantenedorListingProps) {
-  return <MantenedorTable recurso={recurso} titulo={titulo} extraColumns={extraColumns} renderEditSheet={renderEditSheet} />
+  return <MantenedorTable recurso={recurso} titulo={titulo} extraColumns={extraColumns} renderEditSheet={renderEditSheet} mostrarCodigoAduana={mostrarCodigoAduana} />
 }
