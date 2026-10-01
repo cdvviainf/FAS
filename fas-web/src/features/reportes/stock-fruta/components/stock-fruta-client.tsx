@@ -113,6 +113,7 @@ export function StockFrutaClient() {
   // selección como el resto de los filtros de arriba.
   const [antiguedadDesde, setAntiguedadDesde] = useState('')
   const [antiguedadHasta, setAntiguedadHasta] = useState('')
+  const [numeroPallet, setNumeroPallet] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['stock-fruta'],
@@ -123,15 +124,17 @@ export function StockFrutaClient() {
   const filteredRows = useMemo(() => {
     const desde = antiguedadDesde.trim() ? Number(antiguedadDesde) : null
     const hasta = antiguedadHasta.trim() ? Number(antiguedadHasta) : null
+    const pallet = numeroPallet.trim().toLowerCase()
     return rows.filter((r) => {
       if (!matches(r, filters)) return false
+      if (pallet && !r.numeroPallet.toLowerCase().includes(pallet)) return false
       if (desde == null && hasta == null) return true
       const dias = diasAntiguedad(fechaAntiguedad(r))
       if (desde != null && dias < desde) return false
       if (hasta != null && dias > hasta) return false
       return true
     })
-  }, [rows, filters, antiguedadDesde, antiguedadHasta]);
+  }, [rows, filters, antiguedadDesde, antiguedadHasta, numeroPallet]);
 
   function toggleGroup(key: string) {
     setExpandedGroups((prev) => {
@@ -316,6 +319,16 @@ export function StockFrutaClient() {
               </div>
             )
           })}
+          <div className='min-w-[140px] space-y-1'>
+            <Label className='text-[10.5px] tracking-wide uppercase'>N° Pallet</Label>
+            <Input
+              type='text'
+              placeholder='Buscar...'
+              value={numeroPallet}
+              onChange={(e) => setNumeroPallet(e.target.value)}
+              className='h-8'
+            />
+          </div>
           <div className='min-w-[110px] space-y-1'>
             <Label className='text-[10.5px] tracking-wide uppercase'>Antigüedad desde</Label>
             <Input
@@ -348,6 +361,7 @@ export function StockFrutaClient() {
               setFilters(FILTROS_VACIOS)
               setAntiguedadDesde('')
               setAntiguedadHasta('')
+              setNumeroPallet('')
             }}
           >
             <Icons.close className='mr-2 h-4 w-4' /> Limpiar filtros

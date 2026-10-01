@@ -200,7 +200,20 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
             <div className='space-y-2'>
               <div className='flex items-center justify-between'>
                 <Label>Líneas</Label>
-                <Button type='button' variant='ghost' size='sm' onClick={() => setLineas((prev) => [...prev, lineaVacia()])}>
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='sm'
+                  onClick={() => setLineas((prev) => {
+                    // Replica los datos de la última línea (salvo el `id`, que
+                    // identifica la fila existente en BD — sin esto, guardar
+                    // duplicaría la edición sobre la línea original en vez de
+                    // crear una nueva).
+                    const ultima = prev[prev.length - 1]
+                    const nueva: LoteLineaInput = ultima ? { ...ultima, id: undefined } : lineaVacia()
+                    return [...prev, nueva]
+                  })}
+                >
                   <Icons.add className='mr-1 h-4 w-4' /> Agregar línea
                 </Button>
               </div>
@@ -241,7 +254,17 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
                     <Label className='text-[10px] uppercase'>F. Embalaje</Label>
                     <Input type='date' value={l.fechaEmbalaje ?? ''} onChange={(e) => setLinea(i, { fechaEmbalaje: e.target.value || null })} className='h-8 w-full' />
                   </div>
-                  <SelectField label='Etiqueta' value={l.etiquetaId ?? 0} onChange={(v) => setLinea(i, { etiquetaId: v || null })} items={etiquetas?.data} nullable />
+                  <div className='min-w-0 space-y-1'>
+                    <Label className='text-[10px] uppercase'>Etiqueta</Label>
+                    <Combobox
+                      options={[{ value: NINGUNO, label: '—' }, ...toOptions(etiquetas?.data)]}
+                      value={l.etiquetaId ? String(l.etiquetaId) : NINGUNO}
+                      onChange={(v) => setLinea(i, { etiquetaId: v === NINGUNO ? null : Number(v) })}
+                      placeholder='—'
+                      searchPlaceholder='Buscar etiqueta...'
+                      className='h-8'
+                    />
+                  </div>
 
                   {/* Fila 2: Artículo (2 col) · Packing (2 col) · Cajas · eliminar */}
                   <div className='min-w-0 space-y-1 sm:col-span-2'>
