@@ -157,6 +157,18 @@ export const clausulaVentaUpdateSchema = clausulaVentaBodySchema
   .omit({ codigo: true })
   .partial()
 
+// ─── Tipo de Reclamo (2026-10-01) ─────────────────────────────────────────────
+
+export const tipoReclamoBodySchema = mantenedorBaseSchema.extend({
+  // Si un reclamo de este tipo requiere análisis de Calidad (ej. "Calidad" sí,
+  // "Comercial" no). z.boolean().default(false) — nunca z.coerce.boolean().
+  generaAnalisisCalidad: z.boolean().default(false),
+})
+
+export const tipoReclamoUpdateSchema = tipoReclamoBodySchema
+  .omit({ codigo: true })
+  .partial()
+
 // ─── Mercado ────────────────────────────────────────────────────────────────
 
 export const mercadoBodySchema = mantenedorBaseSchema.extend({

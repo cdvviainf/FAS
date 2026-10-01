@@ -24,6 +24,7 @@ export type MantenedorModelo =
   // Extraído de Parametro (2026-09-30): Cláusula de Venta / Incoterm, con
   // requiereFlete/requiereSeguro propios.
   | 'clausulaVenta'
+  | 'tipoReclamo'
   | 'mercado'
   // Lote 3
   | 'puerto'
@@ -85,6 +86,11 @@ export interface MantenedorCreateInput {
   orden?: number             // Categoria, Calibre
   control?: string[]         // Categoria, Calibre
   calibreEquivalenteId?: number | null  // Calibre (auto-referencial, misma especie)
+  // ClausulaVenta
+  requiereFlete?: boolean
+  requiereSeguro?: boolean
+  // TipoReclamo
+  generaAnalisisCalidad?: boolean
   // Moneda
   esMonedaBase?: boolean
   decimales?: number

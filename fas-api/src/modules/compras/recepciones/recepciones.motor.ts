@@ -52,7 +52,7 @@ interface FilaResuelta {
 
 interface RecepcionParaMotor {
   id: number
-  origen: 'COMPRA' | 'CONSIGNACION' | 'PROCESO'
+  origen: 'COMPRA' | 'PROCESO'
   ordenCompraId: number | null
   // Instructivos de Embalaje seleccionados (modo PROCESO, 2026-09-01).
   instructivoIds: number[]
@@ -442,9 +442,8 @@ export async function procesarCargaExcel(
   }
 
   // El origen se lee del valor ya persistido en la Recepción (fijado al
-  // crearla, ver recepciones.repository.ts createRecepcion) — no se
-  // re-deriva acá, porque sin OC ni CONSIGNACION ni PROCESO son
-  // distinguibles solo por ordenCompraId (Etapa 3, 2026-08-23).
+  // crearla, ver recepciones.repository.ts createRecepcion). COMPRA = con OC,
+  // PROCESO = sin OC (2026-10-01: se eliminó CONSIGNACION).
   const origen = recepcion.origen
 
   if (origen === 'COMPRA' && recepcion.ordenCompraId) {

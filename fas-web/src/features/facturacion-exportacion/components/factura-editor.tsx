@@ -67,6 +67,12 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   const [montoFlete, setMontoFlete] = useState<string>(factura.montoFlete ?? '')
   const [montoSeguro, setMontoSeguro] = useState<string>(factura.montoSeguro ?? '')
 
+  // Tipo de cambio: solo aplica si la moneda no es la base (CLP). Lo exige el SII
+  // para emitir el DTE 110 en moneda extranjera.
+  const esMonedaExtranjera = factura.moneda.codigo !== 'CLP'
+  const [tipoCambio, setTipoCambio] = useState<string>(factura.tipoCambio ?? '')
+  const [fechaTipoCambio, setFechaTipoCambio] = useState<string | null>(factura.fechaTipoCambio)
+
   // Faltantes de descripción extranjera para las dimensiones actuales — para
   // advertir/bloquear el idioma inglés (misma fuente que el backend).
   const { data: sugerencia } = useQuery({
@@ -136,6 +142,11 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
         fechaDocumento: fechaDocumento || null,
         montoFlete: requiereFlete ? Number(montoFlete) || 0 : null,
         montoSeguro: requiereSeguro ? Number(montoSeguro) || 0 : null,
+        tipoCambio: esMonedaExtranjera ? Number(tipoCambio) || null : null,
+        // Fecha de la paridad observada (la real del Banco Central cuando viene
+        // de "Obtener"); null en ingreso manual → el backend sella con la fecha
+        // de edición. BRT-R1-003.
+        fechaTipoCambio: esMonedaExtranjera ? (fechaTipoCambio ? fechaTipoCambio.slice(0, 10) : null) : null,
       }),
     onSuccess: () => {
       setDirty(false)
@@ -176,6 +187,17 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
     onSettled: () => { setConfirmarFirma(false); invalidarTodo() },
   })
 
+  const obtenerTc = useMutation({
+    mutationFn: () => facturaExportacionService.obtenerTipoCambio(factura.id),
+    onSuccess: ({ data }) => {
+      setTipoCambio(String(data.valor))
+      setFechaTipoCambio(data.fecha)
+      setDirty(true)
+      toast.success(`Tipo de cambio ${data.valor} CLP/${data.moneda} (${data.fecha})`)
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo obtener el tipo de cambio'),
+  })
+
   const reabrir = useMutation({
     mutationFn: () => facturaExportacionService.reabrir(factura.id),
     onSuccess: () => { toast.success('Factura reabierta como borrador'); invalidarTodo() },
@@ -198,6 +220,10 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
     }
     if ((requiereFlete || requiereSeguro) && subtotalFob <= 0) {
       toast.error('El Flete y el Seguro no pueden igualar ni superar el valor de venta')
+      return false
+    }
+    if (esMonedaExtranjera && (!tipoCambio || Number(tipoCambio) <= 0)) {
+      toast.error('Indica el tipo de cambio (el SII lo exige para facturar en moneda extranjera)')
       return false
     }
     if (enBloqueadoPorFaltantes) {
@@ -276,6 +302,30 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
             <Label>Fecha del documento</Label>
             <Input type='date' value={fechaDocumento} onChange={(e) => { setFechaDocumento(e.target.value); setDirty(true) }} className='h-9 w-44' disabled={!puedeEscribir} />
           </div>
+          {esMonedaExtranjera && (
+            <div className='space-y-1.5'>
+              <Label>Tipo de cambio (CLP/{factura.moneda.codigo})</Label>
+              <div className='flex items-center gap-2'>
+                <Input
+                  type='number'
+                  min={0}
+                  step='0.0001'
+                  value={tipoCambio}
+                  onChange={(e) => { setTipoCambio(e.target.value); setFechaTipoCambio(null); setDirty(true) }}
+                  className='h-9 w-32 text-right'
+                  disabled={!puedeEscribir}
+                />
+                <Button type='button' variant='outline' size='sm' onClick={() => obtenerTc.mutate()} isLoading={obtenerTc.isPending} disabled={!puedeEscribir}>
+                  <Icons.download className='mr-2 h-4 w-4' /> Obtener
+                </Button>
+              </div>
+              <p className='text-muted-foreground text-xs'>
+                {fechaTipoCambio
+                  ? `Dólar/euro observado del Banco Central · ${fechaTipoCambio.slice(0, 10)}`
+                  : 'El SII lo exige para facturar en moneda extranjera.'}
+              </p>
+            </div>
+          )}
           {enBloqueadoPorFaltantes && (
             <p className='w-full text-xs text-destructive'>
               No se puede emitir en inglés: falta la descripción extranjera de — {faltantesExtranjera.join(' · ')}.

@@ -30,6 +30,14 @@ export const facturaExportacionActualizarSchema = z.object({
   // cláusula lo indica (validación server-side). El service redondea a 2 dec.
   montoFlete: z.number().min(0).max(9_999_999_999).optional().nullable(),
   montoSeguro: z.number().min(0).max(9_999_999_999).optional().nullable(),
+  // Tipo de cambio (pesos por unidad de la moneda extranjera) — editable en
+  // BORRADOR; se sugiere desde el Banco Central al crear la factura. Lo exige el
+  // SII para emitir en moneda extranjera (validación server-side al enviar al SII).
+  tipoCambio: z.number().positive().max(999_999.9999).optional().nullable(),
+  // Fecha de la paridad observada (trazabilidad). La envía el frontend cuando el
+  // valor viene de "Obtener" (fecha real del Banco Central); en ingreso manual
+  // llega null y el service sella con la fecha de edición. BRT-R1-003.
+  fechaTipoCambio: z.string().date().optional().nullable(),
 })
 
 export const embarquesDespachadosQuerySchema = z.object({

@@ -16,8 +16,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { reclamosService } from '../service'
 import { reclamosKeys } from '../queries'
 import { LineasSelector, type SeleccionLineas } from './lineas-selector'
@@ -35,6 +37,8 @@ interface ReclamoFormDialogProps {
 
 const PROVISION_VACIA: ProvisionInput = { tipoCalculo: 'POR_UNIDAD_CAJA' }
 
+const tiposReclamoService = createMantenedorService('tipos-reclamo')
+
 export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaEditar }: ReclamoFormDialogProps) {
   const queryClient = useQueryClient()
   const esEdicion = !!reclamoParaEditar
@@ -42,6 +46,7 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
   // que el endpoint dedicado — si no lo tiene, ni se le ofrece la opción.
   const puedeProvisionar = usePuedeEscribir('RECLAMO_PROVISION')
   const [fechaReclamo, setFechaReclamo] = useState('')
+  const [tipoReclamoId, setTipoReclamoId] = useState<number | null>(null)
   const [resumenCliente, setResumenCliente] = useState('')
   const [seleccion, setSeleccion] = useState<SeleccionLineas>(new Map())
   const [conProvision, setConProvision] = useState(false)
@@ -53,6 +58,14 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
     enabled: open,
     staleTime: 10_000,
   })
+
+  const { data: tiposReclamoData } = useQuery({
+    queryKey: ['tipos-reclamo-options'],
+    queryFn: () => tiposReclamoService.list({ limit: 200, soloActivos: true }),
+    enabled: open,
+    staleTime: 5 * 60_000,
+  })
+  const tiposReclamo = tiposReclamoData?.data ?? []
 
   // IMP-QA-R1-019: al editar, "disponible" viene calculado excluyendo TODOS
   // los reclamos (incluido este) — hay que devolverle a este reclamo sus
@@ -72,6 +85,7 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
     if (!open) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFechaReclamo(reclamoParaEditar?.fechaReclamo ?? '')
+    setTipoReclamoId(reclamoParaEditar?.tipoReclamoId ?? null)
     setResumenCliente(reclamoParaEditar?.resumenCliente ?? '')
     setSeleccion(new Map(reclamoParaEditar?.lineas.map((l) => [l.palletLineaId, l.cantidadCajas]) ?? []))
     setConProvision(false)
@@ -87,12 +101,14 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
       if (esEdicion) {
         return reclamosService.actualizar(embarqueId, reclamoParaEditar!.id, {
           fechaReclamo,
+          tipoReclamoId: tipoReclamoId!,
           resumenCliente: resumenCliente.trim() || null,
           lineas,
         })
       }
       return reclamosService.crear(embarqueId, {
         fechaReclamo,
+        tipoReclamoId: tipoReclamoId!,
         resumenCliente: resumenCliente.trim() || null,
         lineas,
         provision: conProvision ? provision : null,
@@ -110,6 +126,10 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
   function handleSubmit() {
     if (!fechaReclamo) {
       toast.error('La fecha del reclamo es obligatoria')
+      return
+    }
+    if (!tipoReclamoId) {
+      toast.error('El tipo de reclamo es obligatorio')
       return
     }
     if (totalCajas === 0) {
@@ -142,6 +162,20 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
             <div className='space-y-1.5'>
               <Label>Fecha del reclamo del cliente *</Label>
               <Input type='date' required value={fechaReclamo} onChange={(e) => setFechaReclamo(e.target.value)} />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Tipo de reclamo *</Label>
+              <Select
+                value={tipoReclamoId ? String(tipoReclamoId) : ''}
+                onValueChange={(v) => setTipoReclamoId(Number(v))}
+              >
+                <SelectTrigger><SelectValue placeholder='Selecciona...' /></SelectTrigger>
+                <SelectContent>
+                  {tiposReclamo.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>{t.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className='space-y-1.5'>

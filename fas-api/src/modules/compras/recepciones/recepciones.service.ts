@@ -9,10 +9,9 @@ import type { RecepcionCreateInput, RecepcionUpdateInput } from './recepciones.t
 // reintenta). VALIDADA es terminal — ya generó pallets a Stock.
 const ESTADOS_MODIFICABLES = new Set(['CARGADA', 'RECHAZADA'])
 
-// QA-RCV-002: el estado por sí solo no basta — en modo consignación
-// (compras.md §8) el estado se queda en CARGADA aunque ya haya generado
-// pallets y esos pallets ya sean Stock real. "Modificable" exige además que
-// no existan pallets todavía.
+// QA-RCV-002: defensa adicional — "modificable" exige además que no existan
+// pallets todavía (una Recepción que ya generó Stock no se toca aunque, por un
+// estado inconsistente, siguiera en CARGADA).
 async function puedeModificarse(recepcion: { id: number; estado: string }): Promise<boolean> {
   if (!ESTADOS_MODIFICABLES.has(recepcion.estado)) return false
   return !(await repo.tienePallets(recepcion.id))
@@ -73,9 +72,8 @@ async function validarTemplateCarga(templateCargaId?: number | null) {
 }
 
 // QA-RCV-002 (ronda 1): expone al frontend, por cada Recepción, si ya generó
-// pallets y si por lo tanto sigue siendo editable — el estado por sí solo
-// (CARGADA) no alcanza en consignación, ver puedeModificarse() arriba. El
-// frontend usa estos dos campos en vez de reimplementar la regla.
+// pallets y si por lo tanto sigue siendo editable (ver puedeModificarse()
+// arriba). El frontend usa estos dos campos en vez de reimplementar la regla.
 function shapeRecepcion<T extends { estado: string; _count: { pallets: number } }>(recepcion: T) {
   const { _count, ...resto } = recepcion
   const tienePallets = _count.pallets > 0
@@ -107,6 +105,9 @@ export async function crearRecepcion(body: RecepcionCreateInput, creadoPor: stri
   // (IMP-QA-R3-009: antes solo se replicaba el primero de los tres).
   if (body.ordenCompraId != null && body.esProceso) {
     throw new ValidationError('Una Recepción con Orden de Compra no puede marcarse como Proceso')
+  }
+  if (body.ordenCompraId == null && !body.esProceso) {
+    throw new ValidationError('Una Recepción debe tener una Orden de Compra o ser de Proceso')
   }
   if (body.esProceso && (!body.instructivoIds || body.instructivoIds.length === 0)) {
     throw new ValidationError('Debes seleccionar al menos un Instructivo de Embalaje para una Recepción de Proceso')
@@ -173,8 +174,7 @@ export async function subirAdjunto(
   userId: string,
 ) {
   const recepcion = await obtenerRecepcion(recepcionId)
-  // puedeModificarse ya cubre "sin pallets todavía" (relevante para
-  // consignación, que se queda en CARGADA aunque ya haya generado stock).
+  // puedeModificarse ya cubre "sin pallets todavía".
   if (!(await puedeModificarse(recepcion))) {
     throw new ValidationError('La Recepción ya fue procesada y no admite nuevos adjuntos')
   }

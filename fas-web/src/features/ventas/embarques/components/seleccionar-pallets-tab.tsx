@@ -79,19 +79,31 @@ interface Filtros {
   plantaIds: string[]
   calificaciones: string[]
   especieIds: string[]
+  variedadIds: string[]
 }
 
-const FILTROS_VACIOS: Filtros = { plantaIds: [], calificaciones: [], especieIds: [] }
+const FILTROS_VACIOS: Filtros = { plantaIds: [], calificaciones: [], especieIds: [], variedadIds: [] }
 
+// Cada faceta entrega uno o más pares valor/etiqueta por pallet. La mayoría son
+// de valor único (Planta, Calificación, Especie), pero Variedad es por línea:
+// un pallet puede aportar varias variedades, por eso `getPairs` devuelve lista.
 const FACETS: {
   key: keyof Filtros
   label: string
-  getValue: (p: PalletResumen) => string
-  getLabel: (p: PalletResumen) => string
+  getPairs: (p: PalletResumen) => { value: string; label: string }[]
 }[] = [
-  { key: 'plantaIds', label: 'Planta', getValue: (p) => String(p.recepcion.planta.id), getLabel: (p) => p.recepcion.planta.descripcion },
-  { key: 'calificaciones', label: 'Calificación', getValue: calificacion, getLabel: calificacion },
-  { key: 'especieIds', label: 'Especie', getValue: (p) => String(p.lineas[0]?.especieId ?? ''), getLabel: especiePallet },
+  { key: 'plantaIds', label: 'Planta', getPairs: (p) => [{ value: String(p.recepcion.planta.id), label: p.recepcion.planta.descripcion }] },
+  { key: 'calificaciones', label: 'Calificación', getPairs: (p) => [{ value: calificacion(p), label: calificacion(p) }] },
+  { key: 'especieIds', label: 'Especie', getPairs: (p) => [{ value: String(p.lineas[0]?.especieId ?? ''), label: especiePallet(p) }] },
+  {
+    key: 'variedadIds',
+    label: 'Variedad',
+    getPairs: (p) => {
+      const m = new Map<string, string>()
+      p.lineas.forEach((l) => m.set(String(l.variedadId), l.variedad.descripcion))
+      return [...m.entries()].map(([value, label]) => ({ value, label }))
+    },
+  },
 ]
 
 function coincide(pallet: PalletResumen, filtros: Filtros, exclude?: keyof Filtros): boolean {
@@ -99,7 +111,8 @@ function coincide(pallet: PalletResumen, filtros: Filtros, exclude?: keyof Filtr
     if (facet.key === exclude) continue
     const sel = filtros[facet.key]
     if (sel.length === 0) continue
-    if (!sel.includes(facet.getValue(pallet))) return false
+    const vals = facet.getPairs(pallet).map((x) => x.value)
+    if (!vals.some((v) => sel.includes(v))) return false
   }
   return true
 }
@@ -190,14 +203,14 @@ export function SeleccionarPalletsTab({ embarque }: { embarque: EmbarqueDetalle 
                 <TableRow key={p.id}>
                   <TableCell>{p.numeroPallet}</TableCell>
                   <TableCell>{calificacion(p)}</TableCell>
-                  <TableCell>{p.recepcion.planta.descripcion}</TableCell>
+                  <TableCell className='max-w-[140px] truncate' title={p.recepcion.planta.descripcion}>{p.recepcion.planta.descripcion}</TableCell>
                   <TableCell>{especiePallet(p)}</TableCell>
                   <TableCell>
                     <Badge variant='outline'>{antiguedadPalletDias(p)} d</Badge>
                   </TableCell>
                   <TableCell className='text-right tabular-nums'>{cajasTotales(p).toLocaleString('es-CL')}</TableCell>
                   <TableCell className='text-right tabular-nums'>{Math.round(kilosTotales(p)).toLocaleString('es-CL')}</TableCell>
-                  <TableCell>{p.productor.descripcion}</TableCell>
+                  <TableCell className='max-w-[140px] truncate' title={p.productor.descripcion}>{p.productor.descripcion}</TableCell>
                   <TableCell className='text-muted-foreground text-xs'>{resumenLineas(p)}</TableCell>
                   <TableCell>
                     {puedeEscribir && !yaDespachado && (
@@ -244,13 +257,20 @@ export function SeleccionarPalletsTab({ embarque }: { embarque: EmbarqueDetalle 
               const scoped = disponibles.filter((p) => coincide(p, filtros, facet.key))
               const counts = new Map<string, number>()
               scoped.forEach((p) => {
-                const v = facet.getValue(p)
-                counts.set(v, (counts.get(v) ?? 0) + 1)
+                // Un pallet cuenta una vez por valor distinto (relevante para
+                // facetas multi-valor como Variedad, que aporta varios por pallet).
+                const vistos = new Set<string>()
+                facet.getPairs(p).forEach(({ value }) => {
+                  if (vistos.has(value)) return
+                  vistos.add(value)
+                  counts.set(value, (counts.get(value) ?? 0) + 1)
+                })
               })
               const labels = new Map<string, string>()
               disponibles.forEach((p) => {
-                const v = facet.getValue(p)
-                if (!labels.has(v)) labels.set(v, facet.getLabel(p))
+                facet.getPairs(p).forEach(({ value, label }) => {
+                  if (!labels.has(value)) labels.set(value, label)
+                })
               })
               const options = [...labels.entries()]
                 .map(([value, label]) => ({ value, label, count: counts.get(value) ?? 0 }))

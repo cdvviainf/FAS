@@ -159,7 +159,12 @@ export async function listEmbarques(
   const [data, total] = await Promise.all([
     prisma.embarque.findMany({
       where,
-      include: { notaVenta: { select: notaVentaListaSelect }, _count: { select: { pallets: true } } },
+      include: {
+        notaVenta: { select: notaVentaListaSelect },
+        // reclamos activos (soft-delete excluido) — solo para el flag Sí/No de la
+        // columna "Reclamo" del listado.
+        _count: { select: { pallets: true, reclamos: { where: { eliminadoEn: null } } } },
+      },
       orderBy: resolveOrderByEmbarque(sort),
       skip: (page - 1) * limit,
       take: limit,

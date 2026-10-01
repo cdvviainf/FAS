@@ -56,6 +56,9 @@ const fechaReclamoSchema = z.string().date('La fecha del reclamo debe ser una fe
 
 export const reclamoCreateSchema = z.object({
   fechaReclamo: fechaReclamoSchema,
+  // Tipo de Reclamo (2026-10-01) — obligatorio al crear; decide si el reclamo
+  // llega a Calidad (tipoReclamo.generaAnalisisCalidad).
+  tipoReclamoId: z.number().int().positive('Selecciona el tipo de reclamo'),
   resumenCliente: z.string().trim().max(2000).optional().nullable(),
   temporadaId: z.number().int().positive().optional().nullable(),
   lineas: lineasSchema('Selecciona al menos una línea de pallet'),
@@ -68,6 +71,7 @@ export const reclamoCreateSchema = z.object({
 // ya no admite null (obligatoria) — solo se omite si no se está editando.
 export const reclamoUpdateSchema = z.object({
   fechaReclamo: fechaReclamoSchema.optional(),
+  tipoReclamoId: z.number().int().positive().optional(),
   resumenCliente: z.string().trim().max(2000).optional().nullable(),
   temporadaId: z.number().int().positive().optional().nullable(),
   lineas: lineasSchema('Selecciona al menos una línea de pallet').optional(),
@@ -93,6 +97,9 @@ export const reclamosListQuerySchema = z.object({
   clienteId: z.coerce.number().int().positive().optional(),
   // IMP-QA-R1-022: búsqueda por folio (numeroInstructivo) del Embarque.
   folio: z.string().trim().min(1).optional(),
+  // Pantalla de Calidad (2026-10-01): solo reclamos cuyo tipo genera análisis.
+  // enum explícito, nunca z.coerce.boolean() (bug sistémico).
+  soloConAnalisis: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
 })
 
 export const reclamoParamsSchema = z.object({ id: z.coerce.number().int().positive() })

@@ -20,7 +20,15 @@ import type { EstadoReclamo } from '../types'
 // estado), más paginación real (antes solo mostraba los primeros 20).
 // `basePath` (2026-09-23, split Ventas/Calidad): la tabla es la misma para
 // ambas pantallas, solo cambia a qué detalle navega cada fila.
-export function ReclamosListingClient({ basePath = '/dashboard/calidad/reclamos' }: { basePath?: string }) {
+// `soloConAnalisis` (2026-10-01): la pantalla de Calidad solo lista los
+// reclamos cuyo tipo genera análisis de Calidad; Ventas los ve todos.
+export function ReclamosListingClient({
+  basePath = '/dashboard/calidad/reclamos',
+  soloConAnalisis = false,
+}: {
+  basePath?: string
+  soloConAnalisis?: boolean
+}) {
   const router = useRouter()
   const [estado, setEstado] = useState<EstadoReclamo | 'TODOS'>('TODOS')
   const [folio, setFolio] = useState('')
@@ -40,6 +48,7 @@ export function ReclamosListingClient({ basePath = '/dashboard/calidad/reclamos'
       ...(estado !== 'TODOS' ? { estado } : {}),
       ...(folio.trim() ? { folio: folio.trim() } : {}),
       ...(clienteId ? { clienteId } : {}),
+      ...(soloConAnalisis ? { soloConAnalisis: true } : {}),
       page,
       limit,
     }),
@@ -105,6 +114,7 @@ export function ReclamosListingClient({ basePath = '/dashboard/calidad/reclamos'
                 <TableRow>
                   <TableHead>Embarque</TableHead>
                   <TableHead>Cliente</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Resumen</TableHead>
                   <TableHead>Estado</TableHead>
@@ -116,6 +126,7 @@ export function ReclamosListingClient({ basePath = '/dashboard/calidad/reclamos'
                   <TableRow key={r.id} className='cursor-pointer' onClick={() => router.push(`${basePath}/${r.id}`)}>
                     <TableCell className='font-medium'>{r.embarque.numeroInstructivo}</TableCell>
                     <TableCell>{r.cliente.descripcion}</TableCell>
+                    <TableCell>{r.tipoReclamo?.descripcion ?? '—'}</TableCell>
                     <TableCell className='text-muted-foreground'>{r.fechaReclamo ?? '—'}</TableCell>
                     <TableCell className='max-w-xs truncate'>{r.resumenCliente ?? '—'}</TableCell>
                     <TableCell><Badge variant='outline'>{ESTADO_RECLAMO_LABELS[r.estado]}</Badge></TableCell>

@@ -340,6 +340,25 @@ async function main() {
   }
   console.log(`ClausulaVenta: ${clausulasVentaCreadas} valores nuevos creados.`)
 
+  console.log('Seeding TipoReclamo (Comercial / Calidad)...')
+  const tiposReclamoBase = [
+    { codigo: 'COMERCIAL', descripcion: 'Comercial', generaAnalisisCalidad: false },
+    { codigo: 'CALIDAD', descripcion: 'Calidad', generaAnalisisCalidad: true },
+  ]
+  let tiposReclamoCreados = 0
+  for (const tipo of tiposReclamoBase) {
+    const existente = await prisma.tipoReclamo.findFirst({
+      where: { empresaId: agrosanParaParametros.id, codigo: tipo.codigo, eliminadoEn: null },
+    })
+    if (!existente) {
+      await prisma.tipoReclamo.create({
+        data: { ...tipo, empresaId: agrosanParaParametros.id, creadoPor: SISTEMA_USER },
+      })
+      tiposReclamoCreados++
+    }
+  }
+  console.log(`TipoReclamo: ${tiposReclamoCreados} valores nuevos creados.`)
+
   console.log('Seeding UnidadMedida (Caja/Kilo para cuota unitaria de Condición de Pago)...')
   const unidadesBase = [
     { codigo: 'CAJA', descripcion: 'Caja' },

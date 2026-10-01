@@ -43,15 +43,17 @@
 
 ## 1. Contexto
 
-Tras exportar la fruta, el **cliente en destino** puede reclamar por la calidad recibida. El reclamo llega a **Comercial**, que lo registra directamente sobre el **Embarque** correspondiente: identifica qué pallets/líneas de lo despachado están afectados y, si corresponde, deja una **Provisión** (estimación de monto). **Calidad** completa después el análisis (comentario + documentación del cliente). Más adelante, **Comercial confirma la Valorización** (monto final) y, cuando corresponde, **cierra** el reclamo con un veredicto.
+Tras exportar la fruta, el **cliente en destino** puede reclamar por la calidad recibida. El reclamo llega a **Comercial**, que lo registra directamente sobre el **Embarque** correspondiente: identifica qué pallets/líneas de lo despachado están afectados, clasifica el reclamo por **Tipo de Reclamo** y, si corresponde, deja una **Provisión** (estimación de monto). Si el tipo **genera análisis de Calidad**, **Calidad** completa después el análisis (comentario + documentación del cliente); si no (p. ej. reclamos puramente comerciales), el reclamo no pasa por Calidad. **Comercial confirma la Valorización** (monto final, `RECLAMO_VALORIZACION`) y, finalmente, **Calidad emite el Veredicto Final** (`RECLAMO_CIERRE`), que cierra el reclamo. El ciclo de vida es `INGRESADO` → `VALORIZADO` (Comercial) → `CERRADO` (Veredicto Final de Calidad); solo se puede cerrar desde `VALORIZADO` (R5).
+
+> **Responsabilidad del cierre (reconciliación 2026-10-01):** el **Veredicto Final / Cierre** (`RECLAMO_CIERRE`, ítem de menú sección **Calidad**) lo emite **Calidad** desde `Calidad › Reclamos`, no Comercial. Comercial (`Ventas › Reclamos`) hace Provisión + Valorización y ve el veredicto en solo lectura. Esto ya está así en rutas, seed y ambas pantallas; se corrige aquí la única referencia que atribuía el cierre a Comercial.
 
 ---
 
 ## 2. Alcance
 
 **Construye:**
-1. **Reclamo** — creación por Comercial desde el detalle del Embarque: selección de `PalletLinea`(s) afectadas con cantidad de cajas reclamada, resumen del cliente, Provisión inicial opcional.
-2. **Análisis de Calidad** — pantalla propia (`Calidad › Reclamos`) que lista todos los reclamos creados (por folio de Embarque); al abrir uno, Calidad agrega `comentarioCalidad` y adjunta documentación.
+1. **Reclamo** — creación por Comercial desde el detalle del Embarque: selección de `PalletLinea`(s) afectadas con cantidad de cajas reclamada, **Tipo de Reclamo** (obligatorio), resumen del cliente, Provisión inicial opcional.
+2. **Análisis de Calidad** — pantalla propia (`Calidad › Reclamos`) que lista los reclamos **cuyo tipo genera análisis de Calidad** (`TipoReclamo.generaAnalisisCalidad = true`), por folio de Embarque; al abrir uno, Calidad agrega `comentarioCalidad` y adjunta documentación. Los reclamos cuyo tipo no genera análisis (p. ej. "Comercial") no aparecen en esta pantalla y el endpoint de análisis los rechaza. *(Comercial sigue viendo todos los reclamos en `Ventas › Reclamos`, sin filtrar por tipo.)*
 3. **Valorización** — Comercial confirma un monto final (`valorConfirmado`), independiente de la Provisión.
 4. **Cierre** — veredicto (`procedencia`), bloquea edición posterior salvo reapertura con permiso.
 5. **Provisión** — reserva de monto asociada al reclamo (por caja, por kilo o monto fijo/"cerrado"), en la moneda heredada del Embarque, con reversa e historial (nunca se elimina).
@@ -79,6 +81,7 @@ Tras exportar la fruta, el **cliente en destino** puede reclamar por la calidad 
 | RC-D12 | Granularidad del reclamo | Por `PalletLinea` (no por Pallet completo), con cantidad de cajas reclamada (puede ser parcial). La especie/variedad/calibre/categoría del reclamo se derivan de las líneas marcadas — sin campo único de especie en la cabecera. |
 | RC-D13 | Datos de Calidad | Simplificado: un campo de texto (`comentarioCalidad`) + documentos adjuntos (selector de archivo simple, no drag&drop) — sin mantenedor dinámico de características ni checklist de cumplimiento. |
 | RC-D14 | API externa de documentos | `/api/externo/reclamos/...`, autenticada por `RECLAMOS_API_KEY` (secreto compartido fijo, sin sesión FAS) — ver §6. |
+| RC-D15 | Tipo de Reclamo *(2026-10-01)* | Mantenedor propio por empresa (`TipoReclamo`, patrón `ClausulaVenta`) con flag `generaAnalisisCalidad`. Obligatorio al crear (`tipoReclamoId`). Decide si el reclamo pasa a Calidad: `true` → aparece en `Calidad › Reclamos` y admite análisis; `false` (p. ej. "Comercial") → solo Comercial. Seed base: `COMERCIAL` (false) y `CALIDAD` (true). Backfill: reclamos previos (`tipoReclamoId` null) migran a `CALIDAD` para seguir siendo analizables. |
 
 ---
 
@@ -103,6 +106,9 @@ model Reclamo {
   cliente       Entidad  @relation("ReclamoCliente", fields: [empresaId, clienteId], references: [empresaId, id])
   monedaId      Int                                  // heredado del Embarque al crear (RC-D4)
   moneda        Moneda   @relation(fields: [monedaId], references: [id])
+
+  tipoReclamoId Int?                                 // RC-D15 — obligatorio al crear; nullable en BD por backfill
+  tipoReclamo   TipoReclamo? @relation(fields: [empresaId, tipoReclamoId], references: [empresaId, id])
 
   fechaReclamo   DateTime  @db.Date                  // fecha en que el cliente reclamó (obligatoria, 2026-09-23)
   resumenCliente String?                             // resumen breve de lo reclamado
@@ -131,6 +137,31 @@ model Reclamo {
 
   @@index([empresaId, embarqueId])
   @@index([estado])
+}
+
+// RC-D15 (2026-10-01) — mantenedor propio por empresa, patrón ClausulaVenta.
+model TipoReclamo {
+  id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  generaAnalisisCalidad Boolean   @default(false)    // true → pasa a Calidad
+  bloqueado             Boolean   @default(false)
+
+  reclamos Reclamo[]
+
+  creadoEn      DateTime  @default(now())
+  creadoPor     String
+  actualizadoEn DateTime? @updatedAt
+  actualizadoPor String?
+  eliminadoEn   DateTime?
+  eliminadoPor  String?
+
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  // Unicidad de código entre activos (índice parcial WHERE eliminadoEn IS NULL).
 }
 
 // Qué se reclama exactamente (RC-D12) — join a la línea real del pallet ya
@@ -192,7 +223,7 @@ model Provision {
 - **R2 — Documentación.** Se aceptan archivos de cualquier tipo (imagen, PDF, correo, otro).
 - **R-NEW1 — Cantidad reclamada acotada, acumulada entre reclamos.** La suma de `cantidadCajas` reclamadas contra una misma `PalletLinea`, **sumando entre todos los reclamos no eliminados** (no solo dentro del mismo reclamo), no puede superar `PalletLinea.cajas` → 422. Evita que dos reclamos distintos reclamen la misma caja dos veces. La misma `palletLineaId` **no puede repetirse dos veces dentro del mismo body** (`lineas`) → 422 (evita una violación de índice único al persistir).
 - **R-NEW2 — Líneas del mismo embarque.** Toda `PalletLinea` marcada en `ReclamoPalletLinea` debe pertenecer a un `Pallet` con `embarqueId` igual al del Reclamo → 422 si no.
-- **R5 — Flujo.** `INGRESADO` (Comercial crea) → `VALORIZADO` (Comercial confirma monto) → `CERRADO`. El paso de Calidad (comentario + documentos) no es una transición de estado — editable mientras el reclamo no esté `CERRADO`. **Cerrar exige estar `VALORIZADO` primero** — cerrar directo desde `INGRESADO` → 422 (no se puede saltar la valorización). **R5b:** antes de cerrar debe registrarse la `procedencia`.
+- **R5 — Flujo.** `INGRESADO` (Comercial crea) → `VALORIZADO` (Comercial confirma monto) → `CERRADO` (Calidad emite el **Veredicto Final**, `RECLAMO_CIERRE`). El paso de Calidad (comentario + documentos) no es una transición de estado — editable mientras el reclamo no esté `CERRADO`. **Cerrar exige estar `VALORIZADO` primero** — cerrar directo desde `INGRESADO` → 422 (no se puede saltar la valorización). **R5b:** antes de cerrar debe registrarse la `procedencia`.
 - **R6 — Valorización.** `valorConfirmado ≥ 0`. Solo usuarios con el **permiso específico de valorización** (`RECLAMO_VALORIZACION`) — no basta el acceso general a reclamos. **Efecto colateral (2026-09-08):** al valorizar, cualquier Provisión `VIGENTE` del mismo reclamo se **reversa automáticamente** (marcada `reversadaPorValorizacion = true`) — es un efecto de sistema (la estimación inicial ya no aplica una vez que existe el monto confirmado), no pasa por el chequeo "no la reversa quien la creó" de PR3 (eso rige solo para la reversa manual).
 - **R6b — Anular Valorización (2026-09-23).** Mismo permiso (`RECLAMO_VALORIZACION`), solo si `estado = VALORIZADO` (422 si no; 403 si ya `CERRADO`, R9). Vuelve a `INGRESADO`, limpia `valorConfirmado`/`valorizadoPor`/`fechaValorizacion`, y restaura a `VIGENTE` **únicamente** las Provisiones con `reversadaPorValorizacion = true` (limpiando el flag y `fechaReversa`/`reversadoPorId`) — una reversa manual previa (PR3) no se toca.
 - **R9 — Bloqueo por cierre.** Un reclamo `CERRADO` no admite modificaciones (líneas, documentos, comentario, valorización, provisiones) → **403** (no 422 — el bloqueo por estado es un caso de permiso/autorización, no de validación de datos). Reabrir requiere permiso específico (`RECLAMO_CIERRE`, misma acción cubre cerrar/reabrir). El chequeo de estado y la escritura van en la misma operación atómica — un cierre concurrente no puede colarse en la ventana entre "revisar estado" y "escribir".
@@ -223,10 +254,12 @@ model Provision {
 
 Las lecturas (`listar`/`obtener`/`provisiones`) aceptan `CAL_RECLAMOS` **o** `VENTAS_RECLAMOS` (nivel LECTURA, `requireAnyLevel`) — ninguna de las dos pantallas depende del permiso de la otra para poder leer el Reclamo. Las escrituras mantienen su ítem específico.
 
+> **Alcance por permiso (RC-D15, BRT-R2-004):** el servidor **no** confía en el query param para separar Calidad de Comercial. Un usuario **sin** `VENTAS_RECLAMOS` (solo Calidad) solo puede leer/operar reclamos cuyo tipo **genera análisis** — el backend fuerza `soloConAnalisis` en el listado e ignora/404 los reclamos comerciales en detalle, provisiones y documentos, aunque el cliente omita el filtro. Quien tenga `VENTAS_RECLAMOS` (Comercial) ve todos.
+
 | Método | Ruta | Permiso | Notas |
 |---|---|---|---|
-| GET | `/api/calidad/reclamos` | `CAL_RECLAMOS` o `VENTAS_RECLAMOS` | Lista todos los reclamos (todos los Embarques), filtrable por `folio` (busca sobre `embarque.numeroInstructivo`, contains/insensitive), `estado` y `clienteId`. Paginado (`page`/`limit`). |
-| GET | `/api/calidad/reclamos/:id` | `CAL_RECLAMOS` o `VENTAS_RECLAMOS` | Detalle completo (líneas, documentos, provisiones). |
+| GET | `/api/calidad/reclamos` | `CAL_RECLAMOS` o `VENTAS_RECLAMOS` | Lista reclamos (todos los Embarques), filtrable por `folio` (busca sobre `embarque.numeroInstructivo`, contains/insensitive), `estado`, `clienteId` y `soloConAnalisis`. Un usuario solo-Calidad queda forzado a `soloConAnalisis=true` (ver recuadro). Paginado (`page`/`limit`). |
+| GET | `/api/calidad/reclamos/:id` | `CAL_RECLAMOS` o `VENTAS_RECLAMOS` | Detalle completo (líneas, documentos, provisiones). Un usuario solo-Calidad recibe 404 si el reclamo no genera análisis. |
 | PATCH | `/api/calidad/reclamos/:id/analisis` | `CAL_RECLAMOS` (TOTAL) | `{ comentarioCalidad }` — sin cambio de estado. |
 | POST | `/api/calidad/reclamos/:id/documentos` | `CAL_RECLAMOS` (TOTAL) | Sube documentación. |
 | POST | `/api/calidad/reclamos/:id/valorizar` | `RECLAMO_VALORIZACION` | `{ valorConfirmado }` → `VALORIZADO` (R6). |
@@ -269,7 +302,7 @@ Consultas externas a la documentación de un reclamo — sistema externo con su 
 - Listado (mismo componente que Calidad, filtrable por folio/cliente/estado) + detalle: fruta reclamada (solo lectura), **Provisiones** (crear/reversar, permiso `RECLAMO_PROVISION`), **Valorización** (permiso `RECLAMO_VALORIZACION`, incluye botón "Anular Valorización" cuando `estado = VALORIZADO`), y un panel de solo lectura "Veredicto de Calidad" (muestra `procedencia` una vez `CERRADO`). Sin comentario ni documentos de Calidad.
 
 **Calidad → Reclamos (`/dashboard/calidad/reclamos`, ítem `CAL_RECLAMOS`):**
-- Tabla de todos los reclamos, identificados por **folio del Embarque** (no tienen número propio) + fecha + cliente + estado, filtrable por folio/cliente/estado y paginada.
+- Tabla de reclamos (en Calidad, solo los que generan análisis; en Comercial, todos), identificados por **folio del Embarque** (no tienen número propio) + tipo + fecha + cliente + estado, filtrable por folio/cliente/estado y paginada.
 - Detalle: fruta reclamada (solo lectura), comentario de Calidad (texto), documentos adjuntos (**selector de archivo simple** — no drag&drop, decisión de negocio: es funcionalmente equivalente y no vale la pena el trabajo de UI extra), tarjeta **"Veredicto Final"** (antes "Cierre" — mismo permiso `RECLAMO_CIERRE`; el campo `procedencia` se etiqueta "Estado" en el formulario), y un panel de solo lectura con la Provisión vigente/Valorización de Comercial.
 
 ---
@@ -314,7 +347,7 @@ Consultas externas a la documentación de un reclamo — sistema externo con su 
 ## 10. Definition of Done
 
 - [ ] Reclamo creable desde el detalle del Embarque, con líneas marcadas y Provisión opcional.
-- [ ] Pantalla de Calidad lista todos los reclamos por folio de Embarque; comentario + documentos completables sin bloquear por estado.
+- [ ] Pantalla de Calidad lista los reclamos **que generan análisis** por folio de Embarque; comentario + documentos completables sin bloquear por estado.
 - [ ] Valorización y Cierre con permisos separados (`RECLAMO_VALORIZACION`/`RECLAMO_CIERRE`), veredicto `procedencia` requerido para cerrar.
 - [ ] R-NEW1 (acumulado entre reclamos) y R-NEW2 (línea del mismo embarque) validados.
 - [ ] Provisión con reversa-nunca-borrado (PR1-PR3) funcionando.

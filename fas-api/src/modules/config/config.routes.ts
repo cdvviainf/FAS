@@ -44,6 +44,7 @@ const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'parametro', prefixRuta: 'parametros', label: 'Parámetro', schemaKey: 'parametro' },
   // Extraído de Parametro (2026-09-30): Cláusula de Venta / Incoterm.
   { modelo: 'clausulaVenta', prefixRuta: 'clausulas-venta', label: 'Cláusula de Venta', schemaKey: 'clausulaVenta' },
+  { modelo: 'tipoReclamo', prefixRuta: 'tipos-reclamo', label: 'Tipo de Reclamo', schemaKey: 'tipoReclamo' },
   { modelo: 'mercado', prefixRuta: 'mercados', label: 'Mercado', schemaKey: 'mercado' },
   // Lote 3
   { modelo: 'puerto', prefixRuta: 'puertos', label: 'Puerto', schemaKey: 'puerto' },

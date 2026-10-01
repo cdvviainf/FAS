@@ -81,6 +81,16 @@ export const embarqueColumns: ColumnDef<Embarque>[] = [
     size: 130,
   },
   {
+    id: 'reclamo',
+    header: 'Reclamo',
+    enableSorting: false,
+    cell: ({ row }) => {
+      const tieneReclamo = (row.original._count?.reclamos ?? 0) > 0
+      return tieneReclamo ? <Badge variant='destructive'>Sí</Badge> : <span className='text-muted-foreground text-sm'>No</span>
+    },
+    size: 90,
+  },
+  {
     id: 'actions',
     size: 50,
     cell: ({ row }) => (

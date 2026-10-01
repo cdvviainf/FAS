@@ -27,6 +27,7 @@ const modelMap: Record<MantenedorModelo, string> = {
   calibre: 'calibre',
   parametro: 'parametro',
   clausulaVenta: 'clausulaVenta',
+  tipoReclamo: 'tipoReclamo',
   mercado: 'mercado',
   // Lote 3
   puerto: 'puerto',

@@ -18,12 +18,11 @@ export interface MantenedorRef {
   descripcion: string
 }
 
-export type OrigenRecepcion = 'COMPRA' | 'CONSIGNACION' | 'PROCESO'
+export type OrigenRecepcion = 'COMPRA' | 'PROCESO'
 export type EstadoRecepcion = 'CARGADA' | 'VALIDADA' | 'RECHAZADA'
 
 export const ORIGEN_RECEPCION_LABELS: Record<OrigenRecepcion, string> = {
   COMPRA: 'Compra',
-  CONSIGNACION: 'Consignación',
   PROCESO: 'Proceso',
 }
 
@@ -36,9 +35,7 @@ export const ESTADO_RECEPCION_LABELS: Record<EstadoRecepcion, string> = {
 // Editable/eliminable/re-cargable — replica ESTADOS_MODIFICABLES +
 // puedeModificarse() en recepciones.service.ts (backend): CARGADA (recién
 // creada) o RECHAZADA (un intento anterior no cuadró; se corrige y se
-// reintenta), pero solo si todavía no generó pallets. En consignación
-// (compras.md §8) el estado se queda en CARGADA aunque ya haya generado
-// pallets/Stock — por eso el estado por sí solo no basta (QA-RCV-002).
+// reintenta), pero solo si todavía no generó pallets (QA-RCV-002).
 // El backend ya manda `editable` calculado (recepciones.service.ts,
 // shapeRecepcion); esta función es el mismo criterio para el caso en que
 // solo se tenga estado/tienePallets a mano.

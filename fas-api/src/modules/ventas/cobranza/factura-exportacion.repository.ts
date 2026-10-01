@@ -133,7 +133,7 @@ export async function getEmbarqueParaFacturaDte(embarqueId: number) {
           clienteId: true,
           cliente: { select: { id: true, razonSocial: true, identificador: true, giro: true } },
           monedaId: true,
-          moneda: { select: { codigo: true, descripcion: true, descripcionExtranjera: true } },
+          moneda: { select: { codigo: true, descripcion: true, descripcionExtranjera: true, esMonedaBase: true } },
           condicionPagoId: true,
           tipoEmbarque: { select: { codigo: true } },
           paisDestino: { select: { codigo: true } },
@@ -203,6 +203,8 @@ interface DatosCrearFactura {
   montoTotal: number
   montoFlete: number | null
   montoSeguro: number | null
+  tipoCambio: number | null
+  fechaTipoCambio: Date | null
   lineas: LineaFacturaPersistir[]
 }
 
@@ -223,6 +225,8 @@ export async function crearBorrador(datos: DatosCrearFactura, creadoPorId: strin
       montoTotal: datos.montoTotal,
       montoFlete: datos.montoFlete,
       montoSeguro: datos.montoSeguro,
+      tipoCambio: datos.tipoCambio,
+      fechaTipoCambio: datos.fechaTipoCambio,
       estado: 'BORRADOR',
       creadoPorId,
       lineas: { create: datos.lineas.map(toLineaCreate) },
@@ -257,6 +261,8 @@ export async function actualizarBorrador(
     montoTotal: number
     montoFlete: number | null
     montoSeguro: number | null
+    tipoCambio: number | null
+    fechaTipoCambio: Date | null
     lineas: LineaFacturaPersistir[]
   },
   actualizadoPor: string,
@@ -293,6 +299,8 @@ export async function actualizarBorrador(
         montoTotal: datos.montoTotal,
         montoFlete: datos.montoFlete,
         montoSeguro: datos.montoSeguro,
+        tipoCambio: datos.tipoCambio,
+        fechaTipoCambio: datos.fechaTipoCambio,
         lineas: { create: datos.lineas.map(toLineaCreate) },
       },
     })

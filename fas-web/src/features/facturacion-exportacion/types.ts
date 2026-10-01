@@ -161,6 +161,10 @@ export interface FacturaExportacion {
   montoTotal: string
   montoFlete: string | null
   montoSeguro: string | null
+  // Tipo de cambio (pesos por unidad de la moneda extranjera) y fecha de la
+  // paridad observada. Null cuando la moneda es la base (CLP) o no se capturó.
+  tipoCambio: string | null
+  fechaTipoCambio: string | null
   estado: EstadoFacturaExportacion
   errorMensajeSii: string | null
   fechaEmision: string | null
@@ -195,6 +199,17 @@ export interface FacturaExportacionActualizarInput {
   fechaDocumento?: string | null
   montoFlete?: number | null
   montoSeguro?: number | null
+  tipoCambio?: number | null
+  // Fecha de la paridad observada (ISO YYYY-MM-DD) cuando viene de "Obtener";
+  // null en ingreso manual. BRT-R1-003.
+  fechaTipoCambio?: string | null
+}
+
+// Respuesta del endpoint de tipo de cambio sugerido (dólar/euro observado).
+export interface TipoCambioSugerido {
+  valor: number
+  fecha: string
+  moneda: string
 }
 
 export interface FacturasExportacionListFilters {

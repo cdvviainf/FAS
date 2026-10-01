@@ -3,9 +3,8 @@ import { z } from 'zod'
 export const recepcionCreateSchema = z
   .object({
     ordenCompraId: z.number().int().positive().optional().nullable(),
-    // Solo tiene sentido sin OC: distingue CONSIGNACION (false/omitido) de
-    // PROCESO (true) — Etapa 3, compras.md §7. Con OC el origen siempre es
-    // COMPRA, sin importar este campo.
+    // Sin OC, el origen es siempre PROCESO (2026-10-01: se eliminó CONSIGNACION).
+    // Con OC el origen es COMPRA, sin importar este campo.
     esProceso: z.boolean().optional(),
     // Instructivos de Embalaje seleccionados para esta Recepción (2026-09-01)
     // — solo tiene sentido en modo PROCESO. La comparación de características
@@ -20,6 +19,12 @@ export const recepcionCreateSchema = z
   .refine((data) => !(data.ordenCompraId != null && data.esProceso), {
     message: 'Una Recepción con Orden de Compra no puede marcarse como Proceso',
     path: ['esProceso'],
+  })
+  // Toda Recepción debe tener Orden de Compra o ser de Proceso (ya no existe
+  // Consignación / carga libre sin OC).
+  .refine((data) => data.ordenCompraId != null || data.esProceso, {
+    message: 'Una Recepción debe tener una Orden de Compra o ser de Proceso',
+    path: ['ordenCompraId'],
   })
   .refine((data) => !data.esProceso || (data.instructivoIds && data.instructivoIds.length > 0), {
     message: 'Debes seleccionar al menos un Instructivo de Embalaje para una Recepción de Proceso',
@@ -50,7 +55,7 @@ export const recepcionListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
   plantaId: z.coerce.number().int().positive().optional(),
-  origen: z.enum(['COMPRA', 'CONSIGNACION', 'PROCESO']).optional(),
+  origen: z.enum(['COMPRA', 'PROCESO']).optional(),
   estado: z.enum(['CARGADA', 'VALIDADA', 'RECHAZADA']).optional(),
 })
 

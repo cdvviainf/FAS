@@ -4,6 +4,7 @@ import { mapFacturaExportacionA110 } from '../src/modules/finanzas/facturacion/m
 const base = {
   fechaEmision: new Date('2026-09-24T12:00:00Z'),
   monedaAduana: 'DOLAR USA',
+  tipoCambio: null,
   emisor: {
     rut: '77089369-0',
     razonSocial: 'Frutera Agrosan Export SpA',
@@ -82,6 +83,20 @@ describe('mapFacturaExportacionA110', () => {
     const aduana = (dte.Encabezado as Record<string, unknown>).Aduana as Record<string, unknown>
     expect(aduana).not.toHaveProperty('MntFlete')
     expect(aduana).not.toHaveProperty('MntSeguro')
+  })
+
+  it('emite Encabezado.OtraMoneda (PESO CL + TpoCambio) cuando hay tipo de cambio', () => {
+    const dte = mapFacturaExportacionA110({ ...base, tipoCambio: 972.6 })
+    const otraMoneda = (dte.Encabezado as Record<string, unknown>).OtraMoneda as Record<string, unknown>
+    expect(otraMoneda).toMatchObject({ TpoMoneda: 'PESO CL', TpoCambio: 972.6 })
+    // La moneda extranjera de la operación sigue en Totales.
+    const totales = (dte.Encabezado as Record<string, unknown>).Totales as Record<string, unknown>
+    expect(totales.TpoMoneda).toBe('DOLAR USA')
+  })
+
+  it('omite OtraMoneda cuando no hay tipo de cambio (ej. moneda base CLP)', () => {
+    const dte = mapFacturaExportacionA110(base)
+    expect(dte.Encabezado as Record<string, unknown>).not.toHaveProperty('OtraMoneda')
   })
 
   it('omite los códigos de Aduana nulos en vez de enviarlos vacíos', () => {

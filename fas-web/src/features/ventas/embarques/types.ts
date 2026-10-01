@@ -57,7 +57,7 @@ export interface PalletLineaResumen {
 export interface PalletResumen {
   id: number
   numeroPallet: string
-  origen: 'COMPRA' | 'CONSIGNACION' | 'PROCESO'
+  origen: 'COMPRA' | 'PROCESO'
   creadoEn: string
   productor: EntidadRef
   notaCalidadId: number | null
@@ -207,7 +207,9 @@ export interface Embarque extends DatosReservaManual, DatosInstructivo {
   tipoBlId: number | null
   tipoBl: MantenedorRef | null
   creadoEn: string
-  _count: { pallets: number }
+  // `reclamos` = cantidad de reclamos activos del Embarque (solo en list()) —
+  // alimenta la columna "Reclamo" Sí/No.
+  _count: { pallets: number; reclamos?: number }
   // Estado combinado del listado (2026-09-30, solo en la respuesta de
   // list()) — Reserva hasta que se despacha, ahí refleja el despacho.
   estadoListado?: EstadoEmbarqueListado

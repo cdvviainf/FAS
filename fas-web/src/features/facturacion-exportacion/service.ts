@@ -25,6 +25,7 @@ import type {
   ProformaSugerenciaResponse,
   ProformasListFilters,
   ProformasListResponse,
+  TipoCambioSugerido,
 } from './types'
 
 export const proformaService = {
@@ -95,17 +96,10 @@ export const facturaExportacionService = {
     a.remove()
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
   },
-  // Excel de la Factura Comercial (mismo contenido que su PDF).
-  async descargarExcel(id: number, nombreArchivo: string): Promise<void> {
-    const blob = await api.get(`ventas/cobranza/facturas-exportacion/${id}/excel`).blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = nombreArchivo
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  // Tipo de cambio sugerido (dólar/euro observado del Banco Central) para la
+  // moneda de la factura. No persiste: el valor se guarda al editar la factura.
+  async obtenerTipoCambio(id: number): Promise<{ data: TipoCambioSugerido }> {
+    return api.get(`ventas/cobranza/facturas-exportacion/${id}/tipo-cambio`).json()
   },
   async list(filters: FacturasExportacionListFilters = {}): Promise<FacturasExportacionListResponse> {
     const sp: Record<string, string> = {}

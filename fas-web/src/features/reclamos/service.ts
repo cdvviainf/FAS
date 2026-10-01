@@ -39,6 +39,7 @@ export const reclamosService = {
     if (filters.embarqueId) sp.embarqueId = String(filters.embarqueId)
     if (filters.clienteId) sp.clienteId = String(filters.clienteId)
     if (filters.folio) sp.folio = filters.folio
+    if (filters.soloConAnalisis) sp.soloConAnalisis = 'true'
     return api.get('calidad/reclamos', { searchParams: sp }).json()
   },
   async getById(id: number): Promise<{ data: Reclamo }> {

@@ -10,7 +10,7 @@ export interface CalibreRef extends MantenedorRef {
   orden: number
 }
 
-export type OrigenStock = 'COMPRA' | 'CONSIGNACION' | 'PROCESO'
+export type OrigenStock = 'COMPRA' | 'PROCESO'
 export type EstadoStock = 'CARGADA' | 'VALIDADA'
 
 export const ESTADO_STOCK_LABELS: Record<EstadoStock, string> = {

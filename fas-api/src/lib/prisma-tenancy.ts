@@ -91,6 +91,8 @@ const MODELOS_TENANT = new Set([
   // Cláusula de Venta / Incoterm (2026-09-30) — extraída de Parametro a su
   // propio mantenedor, mismo criterio de aislamiento que este ya tenía.
   'ClausulaVenta',
+  // Tipo de Reclamo (2026-10-01) — mantenedor por empresa, mismo aislamiento.
+  'TipoReclamo',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

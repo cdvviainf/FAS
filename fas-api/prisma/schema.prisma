@@ -214,6 +214,7 @@ model Empresa {
   calibres               Calibre[]
   parametros             Parametro[]
   clausulasVenta         ClausulaVenta[]
+  tiposReclamo           TipoReclamo[]
   entidades              Entidad[]
   solicitudesInspeccion  SolicitudInspeccion[]
   articulos              Articulo[]
@@ -1181,6 +1182,36 @@ model ClausulaVenta {
   @@unique([empresaId, id])
   @@index([empresaId])
   @@map("clausulas_venta")
+}
+
+// Tipo de Reclamo (2026-10-01) — mantenedor propio con el flag
+// generaAnalisisCalidad: los reclamos de un tipo que SÍ genera análisis
+// aparecen en la pantalla de Calidad (y admiten análisis); los que no (ej.
+// "Comercial") son exclusivos de Ventas. Mismo motor de mantenedores genérico
+// (config.*) que ClausulaVenta.
+model TipoReclamo {
+  id                    Int       @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa   @relation(fields: [empresaId], references: [id])
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  // Si un reclamo de este tipo requiere análisis de Calidad. false (ej.
+  // Comercial) = el reclamo no aparece en la pantalla de Calidad.
+  generaAnalisisCalidad Boolean   @default(false)
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  reclamos Reclamo[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  @@map("tipos_reclamo")
 }
 
 model Mercado {
@@ -3168,6 +3199,13 @@ model Reclamo {
   // Moneda no es tenant (mantenedor global) — FK simple.
   moneda    Moneda  @relation(fields: [monedaId], references: [id])
 
+  // Tipo de Reclamo (2026-10-01) — elegido al crear desde el Embarque; su flag
+  // generaAnalisisCalidad decide si el reclamo llega a Calidad. Nullable para
+  // reclamos previos al mantenedor; requerido al crear uno nuevo (schema Zod).
+  tipoReclamoId Int?
+  // FK compuesta (empresaId, tipoReclamoId) -> TipoReclamo(empresaId, id).
+  tipoReclamo   TipoReclamo? @relation(fields: [empresaId, tipoReclamoId], references: [empresaId, id])
+
   fechaReclamo   DateTime @db.Date // fecha en que el cliente reclamó (obligatoria)
   resumenCliente String?
 
@@ -3463,6 +3501,14 @@ model FacturaExportacion {
   // en pantalla, PDF y en el NmbItem del DTE. EN exige que todos los
   // mantenedores referenciados tengan descripcionExtranjera (validado al emitir).
   idioma String @default("EN")
+
+  // Tipo de cambio (paridad peso chileno / moneda extranjera) exigido por el SII
+  // en el DTE 110 de exportación para expresar el equivalente en pesos
+  // (Encabezado.OtraMoneda). Se trae del dólar/euro observado del Banco Central
+  // (vía mindicador.cl) al crear el borrador y es editable mientras la Factura
+  // esté en BORRADOR. fechaTipoCambio = fecha de la paridad observada (trazabilidad).
+  tipoCambio      Decimal?  @db.Decimal(14, 4)
+  fechaTipoCambio DateTime?
 
   estado EstadoFacturaExportacion @default(BORRADOR)
   // Fecha del documento (FchEmis del DTE) — editable en BORRADOR; si queda null
@@ -3904,20 +3950,20 @@ model OrdenCompraLineaCalibre {
 
 enum OrigenRecepcion {
   COMPRA
-  CONSIGNACION
-  // Fruta de proceso: sin OC, como CONSIGNACION, pero se seleccionan uno o
-  // más Instructivos de Embalaje (RecepcionInstructivoEmbalaje) y cada fila
-  // del Excel se compara contra su detalle (especie/variedad/categoría/
-  // artículo/calibre). Supersesión (2026-09-02): esa comparación es una
-  // ADVERTENCIA aceptable/rechazable por el usuario (todo o nada), no un
-  // bloqueo — Calidad ya no emite veredicto ni aprueba folios (compras.md
-  // §4.4, calidad.md).
+  // Fruta de proceso: sin OC; se seleccionan uno o más Instructivos de Embalaje
+  // (RecepcionInstructivoEmbalaje) y cada fila del Excel se compara contra su
+  // detalle (especie/variedad/categoría/artículo/calibre). Supersesión
+  // (2026-09-02): esa comparación es una ADVERTENCIA aceptable/rechazable por el
+  // usuario (todo o nada), no un bloqueo — Calidad ya no emite veredicto ni
+  // aprueba folios (compras.md §4.4, calidad.md).
+  // CONSIGNACION se eliminó (2026-10-01): una Recepción es siempre COMPRA (con
+  // OC) o PROCESO.
   PROCESO
 }
 
 enum EstadoRecepcion {
-  CARGADA // archivo subido sin procesar todavía; también el estado final de una carga libre en consignación que ya generó pallets (compras.md §8 — no existe transición propia para ese modo)
-  VALIDADA // cuadró contra la OC (modo compra) y generó pallets
+  CARGADA // archivo subido sin procesar todavía
+  VALIDADA // cuadró contra la OC (modo compra) / Instructivos (proceso) y generó pallets
   RECHAZADA // no cuadró contra la OC — no genera pallets
 }
 
@@ -3933,7 +3979,7 @@ model Recepcion {
   // eliminar (soft-delete) una Recepción CARGADA la OC quede libre para una
   // Recepción nueva (QAR-RCT-004), sin perder protección contra duplicados
   // concurrentes.
-  ordenCompraId Int? // nullable = modo CONSIGNACION
+  ordenCompraId Int? // nullable = modo PROCESO (sin OC)
   // FK compuesta (empresaId, ordenCompraId) -> OrdenCompra(empresaId, id).
   ordenCompra   OrdenCompra?    @relation(fields: [empresaId, ordenCompraId], references: [empresaId, id])
   // Derivado server-side de ordenCompraId (no se acepta como input) — se

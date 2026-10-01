@@ -27,6 +27,15 @@ interface MantenedorRef {
   descripcion: string
 }
 
+// Tipo de Reclamo (2026-10-01): clasifica el reclamo y decide, vía
+// `generaAnalisisCalidad`, si pasa a la pantalla de Calidad.
+export interface TipoReclamoRef {
+  id: number
+  codigo: string
+  descripcion: string
+  generaAnalisisCalidad: boolean
+}
+
 // Línea de pallet candidata para marcar en un Reclamo — trae cuánto ya está
 // reclamado (entre TODOS los reclamos, R-NEW1) y cuánto queda disponible.
 export interface LineaReclamable {
@@ -96,6 +105,8 @@ export interface Reclamo {
   cliente: MantenedorRef
   monedaId: number
   moneda: MantenedorRef
+  tipoReclamoId: number | null
+  tipoReclamo: TipoReclamoRef | null
   fechaReclamo: string
   resumenCliente: string | null
   estado: EstadoReclamo
@@ -121,6 +132,7 @@ export interface ProvisionInput {
 
 export interface ReclamoCreateInput {
   fechaReclamo: string
+  tipoReclamoId: number
   resumenCliente?: string | null
   temporadaId?: number | null
   lineas: { palletLineaId: number; cantidadCajas: number }[]
@@ -130,6 +142,7 @@ export interface ReclamoCreateInput {
 // IMP-QA-R1-019: edición — sin `provision` (tiene su propio endpoint).
 export interface ReclamoUpdateInput {
   fechaReclamo?: string
+  tipoReclamoId?: number
   resumenCliente?: string | null
   temporadaId?: number | null
   lineas?: { palletLineaId: number; cantidadCajas: number }[]
@@ -143,6 +156,8 @@ export interface ReclamosListFilters {
   clienteId?: number
   // IMP-QA-R1-022: búsqueda por folio del Embarque.
   folio?: string
+  // Pantalla de Calidad (2026-10-01): solo reclamos cuyo tipo genera análisis.
+  soloConAnalisis?: boolean
 }
 
 export interface ReclamosListResponse {

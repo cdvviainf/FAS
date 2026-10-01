@@ -26,20 +26,12 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
   // Defensa extra (FAS-EXP-IE-QA-003): el backend ya no debería dejar una
   // Factura APROBADA sin folio, pero se exige explícitamente igual.
   const puedeVerPdf = factura.estado === 'APROBADA' && factura.folio != null
-  const puedeExportarExcel = puedeVerPdf
 
   async function descargarXml() {
     try {
       await facturaExportacionService.descargarXml(factura.id, `${factura.codigo}${factura.folio ? `-folio-${factura.folio}` : ''}.xml`)
     } catch (e) {
       toast.error((e as Error).message || 'No se pudo descargar el XML')
-    }
-  }
-  async function descargarExcel() {
-    try {
-      await facturaExportacionService.descargarExcel(factura.id, `${factura.codigo}${factura.folio ? `-folio-${factura.folio}` : ''}.xlsx`)
-    } catch (e) {
-      toast.error((e as Error).message || 'No se pudo descargar el Excel')
     }
   }
   // "Ver Cierre Comercial"/"Ver Proforma" abren directamente su PDF
@@ -80,6 +72,15 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
             <dt className='font-medium'>Embarque:</dt><dd>{factura.embarque.numeroInstructivo}</dd>
             <dt className='font-medium'>Cliente:</dt><dd>{factura.cliente.descripcion}</dd>
             <dt className='font-medium'>Moneda:</dt><dd>{factura.moneda.codigo}</dd>
+            {factura.tipoCambio != null && (
+              <>
+                <dt className='font-medium'>Tipo de cambio:</dt>
+                <dd>
+                  {formatMonto(Number(factura.tipoCambio), 2)} CLP/{factura.moneda.codigo}
+                  {factura.fechaTipoCambio && <> · {formatFechaCorta(factura.fechaTipoCambio)}</>}
+                </dd>
+              </>
+            )}
             {factura.condicionPago && (
               <>
                 <dt className='font-medium'>Condición de pago:</dt><dd>{factura.condicionPago.descripcion}</dd>
@@ -107,11 +108,6 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
           {puedeVerPdf && (
             <Button variant='outline' onClick={() => documentosService.abrirPdf('factura-exportacion', factura.id)}>
               <Icons.download className='mr-2 h-4 w-4' /> Ver Factura Comercial (PDF)
-            </Button>
-          )}
-          {puedeExportarExcel && (
-            <Button variant='outline' onClick={descargarExcel}>
-              <Icons.download className='mr-2 h-4 w-4' /> Exportar a Excel
             </Button>
           )}
           {puedeDescargarXml && (

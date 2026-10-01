@@ -15,6 +15,14 @@ import {
 } from './reclamos.schema.js'
 import * as service from './reclamos.service.js'
 
+// BRT-R2-004: el alcance Calidad/Comercial se deriva del permiso efectivo, no
+// de un query param controlado por el cliente. Un usuario SIN el ítem de
+// Comercial (VENTAS_RECLAMOS) solo puede ver/operar reclamos cuyo tipo genera
+// análisis — ver reclamos.service (soloAnalizables).
+function soloAnalizables(req: FastifyRequest) {
+  return (req.fasAccesos?.get('VENTAS_RECLAMOS') ?? 'SIN_ACCESO') === 'SIN_ACCESO'
+}
+
 // ─── Creación/listado por Embarque (Ventas — embarques.routes.ts) ──────────
 
 export async function listarLineasReclamables(req: FastifyRequest, reply: FastifyReply) {
@@ -40,13 +48,16 @@ export async function listarReclamosEmbarque(req: FastifyRequest, reply: Fastify
 
 export async function listar(req: FastifyRequest, reply: FastifyReply) {
   const query = reclamosListQuerySchema.parse(req.query)
+  // Floor server-side: quien no es Comercial nunca ve reclamos sin análisis,
+  // aunque omita el param. BRT-R2-004.
+  if (soloAnalizables(req)) query.soloConAnalisis = true
   const resultado = await service.listarReclamos(query)
   return reply.send(resultado)
 }
 
 export async function obtener(req: FastifyRequest, reply: FastifyReply) {
   const { id } = reclamoParamsSchema.parse(req.params)
-  const reclamo = await service.obtenerReclamo(id)
+  const reclamo = await service.obtenerReclamo(id, soloAnalizables(req))
   return reply.send({ data: reclamo })
 }
 
@@ -60,26 +71,26 @@ export async function actualizarAnalisis(req: FastifyRequest, reply: FastifyRepl
 export async function valorizar(req: FastifyRequest, reply: FastifyReply) {
   const { id } = reclamoParamsSchema.parse(req.params)
   const body = valorizarSchema.parse(req.body)
-  const reclamo = await service.valorizarReclamo(id, body, req.fasUserId!)
+  const reclamo = await service.valorizarReclamo(id, body, req.fasUserId!, soloAnalizables(req))
   return reply.send({ data: reclamo })
 }
 
 export async function cerrar(req: FastifyRequest, reply: FastifyReply) {
   const { id } = reclamoParamsSchema.parse(req.params)
   const body = cerrarSchema.parse(req.body)
-  const reclamo = await service.cerrarReclamo(id, body, req.fasUserId!)
+  const reclamo = await service.cerrarReclamo(id, body, req.fasUserId!, soloAnalizables(req))
   return reply.send({ data: reclamo })
 }
 
 export async function reabrir(req: FastifyRequest, reply: FastifyReply) {
   const { id } = reclamoParamsSchema.parse(req.params)
-  const reclamo = await service.reabrirReclamo(id, req.fasUserId!)
+  const reclamo = await service.reabrirReclamo(id, req.fasUserId!, soloAnalizables(req))
   return reply.send({ data: reclamo })
 }
 
 export async function anularValorizacion(req: FastifyRequest, reply: FastifyReply) {
   const { id } = reclamoParamsSchema.parse(req.params)
-  const reclamo = await service.anularValorizacion(id, req.fasUserId!)
+  const reclamo = await service.anularValorizacion(id, req.fasUserId!, soloAnalizables(req))
   return reply.send({ data: reclamo })
 }
 
@@ -96,7 +107,7 @@ export async function subirDocumento(req: FastifyRequest, reply: FastifyReply) {
 
 export async function descargarDocumento(req: FastifyRequest, reply: FastifyReply) {
   const { id, documentoId } = reclamoDocumentoParamsSchema.parse(req.params)
-  const { meta, datos } = await service.descargarDocumento(id, documentoId)
+  const { meta, datos } = await service.descargarDocumento(id, documentoId, soloAnalizables(req))
   reply.header('Content-Type', meta.mime)
   reply.header('Content-Disposition', `attachment; filename="${meta.nombre}"`)
   return reply.send(datos)
@@ -138,18 +149,18 @@ export async function descargarDocumentoExterno(req: FastifyRequest, reply: Fast
 export async function crearProvision(req: FastifyRequest, reply: FastifyReply) {
   const { id } = reclamoParamsSchema.parse(req.params)
   const body = provisionCreateSchema.parse(req.body)
-  const provision = await service.crearProvision(id, body, req.fasUserId!)
+  const provision = await service.crearProvision(id, body, req.fasUserId!, soloAnalizables(req))
   return reply.status(201).send({ data: provision })
 }
 
 export async function listarProvisiones(req: FastifyRequest, reply: FastifyReply) {
   const { id } = reclamoParamsSchema.parse(req.params)
-  const provisiones = await service.listarProvisiones(id)
+  const provisiones = await service.listarProvisiones(id, soloAnalizables(req))
   return reply.send({ data: provisiones })
 }
 
 export async function reversarProvision(req: FastifyRequest, reply: FastifyReply) {
   const { id } = provisionParamsSchema.parse(req.params)
-  const provision = await service.reversarProvision(id, req.fasUserId!)
+  const provision = await service.reversarProvision(id, req.fasUserId!, soloAnalizables(req))
   return reply.send({ data: provision })
 }

@@ -17,6 +17,7 @@ export interface ProvisionInput {
 
 export interface ReclamoCreateInput {
   fechaReclamo: Date
+  tipoReclamoId: number
   resumenCliente?: string | null
   temporadaId?: number | null
   lineas: ReclamoLineaInput[]
@@ -27,6 +28,7 @@ export interface ReclamoCreateInput {
 // propio endpoint crear/reversar, no se edita acá).
 export interface ReclamoUpdateInput {
   fechaReclamo?: Date
+  tipoReclamoId?: number
   resumenCliente?: string | null
   temporadaId?: number | null
   lineas?: ReclamoLineaInput[]
@@ -40,6 +42,8 @@ export interface ReclamoListFilters {
   clienteId?: number
   // IMP-QA-R1-022: búsqueda por folio (numeroInstructivo) del Embarque.
   folio?: string
+  // Pantalla de Calidad: solo reclamos cuyo tipo genera análisis de calidad.
+  soloConAnalisis?: boolean
 }
 
 export interface AnalisisCalidadInput {

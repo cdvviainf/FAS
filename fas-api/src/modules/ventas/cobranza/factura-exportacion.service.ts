@@ -5,11 +5,9 @@ import { validarYCompletarLineas } from './proforma.service.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
 import { mapFacturaExportacionA110 } from '../../finanzas/facturacion/mappers/factura-exportacion.mapper.js'
+import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
 import { factorFob, resolverFleteSeguro, unitarioFob } from './clausula-flete-seguro.js'
 import { descripcionLinea, faltantesDescripcionExtranjera, type Idioma, type LineaConMantenedores } from './descripcion-idioma.js'
-import { resolverFacturaExportacion } from '../../documentos/resolvers/factura-exportacion.resolver.js'
-import { generarExcelFacturaExportacion } from './factura-exportacion.excel.js'
-import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import * as repo from './factura-exportacion.repository.js'
 import type {
   DimensionProforma,
@@ -118,6 +116,20 @@ export async function crearBorradorDesdeProforma(proformaId: number, userId: str
     montoSeguro: proforma.montoSeguro == null ? null : Number(proforma.montoSeguro),
   })
 
+  // Tipo de cambio: se sugiere automáticamente desde el Banco Central (dólar/euro
+  // observado) al crear el borrador, salvo que la moneda sea la base (CLP). Si la
+  // fuente falla o la moneda no tiene serie, queda null — el usuario lo obtiene o
+  // ingresa manualmente en el editor antes de enviar al SII.
+  let tipoCambio: number | null = null
+  let fechaTipoCambio: Date | null = null
+  if (!embarque.notaVenta.moneda.esMonedaBase) {
+    const tc = await obtenerTipoCambio(embarque.notaVenta.moneda.codigo)
+    if ('valor' in tc) {
+      tipoCambio = tc.valor
+      fechaTipoCambio = tc.fecha ? new Date(tc.fecha) : null
+    }
+  }
+
   try {
     return await repo.crearBorrador(
       {
@@ -135,6 +147,8 @@ export async function crearBorradorDesdeProforma(proformaId: number, userId: str
         montoTotal,
         montoFlete,
         montoSeguro,
+        tipoCambio,
+        fechaTipoCambio,
         lineas,
       },
       userId,
@@ -173,6 +187,22 @@ export async function actualizarBorrador(id: number, body: FacturaExportacionAct
     montoSeguro: body.montoSeguro,
   })
 
+  // Tipo de cambio: se conserva la fecha de la paridad observada mientras el
+  // valor no cambie. Si el usuario lo edita, se sella con la fecha de la paridad
+  // informada por el frontend (la real del Banco Central cuando viene de
+  // "Obtener"); en ingreso manual —sin fecha— se cae a la fecha de edición. Si
+  // borra el valor, queda null. BRT-R1-003 (antes siempre sellaba new Date()).
+  const tipoCambio = body.tipoCambio ?? null
+  const tipoCambioPrevio = factura.tipoCambio == null ? null : Number(factura.tipoCambio)
+  const tipoCambioCambio = tipoCambio !== tipoCambioPrevio
+  const fechaTipoCambio = tipoCambioCambio
+    ? tipoCambio != null
+      ? body.fechaTipoCambio
+        ? new Date(body.fechaTipoCambio)
+        : new Date()
+      : null
+    : factura.fechaTipoCambio
+
   // El repo actualiza el borrador y descarta el DTE temporal descartable en una
   // sola transacción bajo el advisory lock del origen (FAS-COB-F1-001), para que
   // "Firmar" nunca timbre un payload viejo.
@@ -185,6 +215,8 @@ export async function actualizarBorrador(id: number, body: FacturaExportacionAct
       montoTotal,
       montoFlete,
       montoSeguro,
+      tipoCambio,
+      fechaTipoCambio,
       lineas,
     },
     userId,
@@ -268,6 +300,7 @@ function construirPayloadDte(
   return mapFacturaExportacionA110({
     fechaEmision: fechaDocumento,
     monedaAduana,
+    tipoCambio: factura.tipoCambio == null ? null : Number(factura.tipoCambio),
     emisor,
     receptor: {
       razonSocial: nv.cliente.razonSocial,
@@ -308,6 +341,12 @@ export async function enviarBorradorSii(id: number, userId: string) {
   const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
   if (!embarque) throw new NotFoundError('Embarque', String(factura.embarqueId))
   requireEmbarqueDespachado(embarque)
+
+  // El SII exige el tipo de cambio para emitir en moneda extranjera (DTE 110).
+  // Solo se omite si la moneda es la base (CLP).
+  if (!embarque.notaVenta.moneda.esMonedaBase && (factura.tipoCambio == null || Number(factura.tipoCambio) <= 0)) {
+    throw new ValidationError('Indica el tipo de cambio antes de enviar al SII (el SII lo exige para facturar en moneda extranjera)')
+  }
 
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
   if (!emisor?.rut) {
@@ -460,13 +499,21 @@ export async function obtenerXmlFactura(id: number) {
   return { xml: dte.xml, folio: dte.folio, codigo: factura.codigo }
 }
 
-// Excel de la Factura Comercial — mismo contenido que su PDF (reusa el mismo
-// payload de resolverFacturaExportacion, que ya exige APROBADA + folio).
-export async function obtenerExcelFactura(id: number) {
-  const empresaId = getEmpresaIdActual()!
-  const payload = await resolverFacturaExportacion(id, empresaId)
-  const buffer = await generarExcelFacturaExportacion(payload)
-  return { buffer, codigo: payload.codigo, folio: payload.folio }
+// Sugiere el tipo de cambio vigente (dólar/euro observado del Banco Central) para
+// la moneda de la Factura — para el botón "Obtener" del editor. No persiste: el
+// valor se guarda al editar la Factura (actualizarBorrador), que invalida el DTE
+// temporal. Lanza error si la moneda es la base (no aplica) o la fuente falla.
+export async function obtenerTipoCambioSugerido(id: number) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
+  const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(factura.embarqueId))
+  if (embarque.notaVenta.moneda.esMonedaBase) {
+    throw new ValidationError('La factura está en pesos (moneda base) — no requiere tipo de cambio')
+  }
+  const tc = await obtenerTipoCambio(embarque.notaVenta.moneda.codigo)
+  if ('error' in tc) throw new ValidationError(tc.error)
+  return { valor: tc.valor, fecha: tc.fecha, moneda: embarque.notaVenta.moneda.codigo }
 }
 
 export async function listarFacturas(filters: FacturasExportacionListFilters) {

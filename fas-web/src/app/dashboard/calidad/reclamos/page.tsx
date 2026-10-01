@@ -11,7 +11,7 @@ export default function Page() {
       pageTitle='Reclamos'
       pageDescription='Reclamos ingresados desde Ventas — análisis de calidad y veredicto final.'
     >
-      <ReclamosListingClient />
+      <ReclamosListingClient soloConAnalisis />
     </PageContainer>
   )
 }

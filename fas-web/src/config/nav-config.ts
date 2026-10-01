@@ -216,7 +216,8 @@ export const navGroups: NavGroup[] = [
           { title: 'Tipos de Embarque', url: '/dashboard/configuracion/tipos-embarque', icon: 'page'    },
           { title: 'Puertos',           url: '/dashboard/configuracion/puertos',         icon: 'page'    },
           { title: 'Formas de Pago',    url: '/dashboard/configuracion/formas-pago',    icon: 'billing' },
-          { title: 'Condiciones de Pago', url: '/dashboard/configuracion/condiciones-pago', icon: 'billing' }
+          { title: 'Condiciones de Pago', url: '/dashboard/configuracion/condiciones-pago', icon: 'billing' },
+          { title: 'Cláusulas de Venta (Incoterm)', url: '/dashboard/configuracion/clausulas-venta', icon: 'adjustments' }
         ]
       },
 
@@ -275,7 +276,8 @@ export const navGroups: NavGroup[] = [
           { title: 'Defectos',               url: '/dashboard/configuracion/defectos',                 icon: 'page', disabled: true  },
           { title: 'Características Madurez',url: '/dashboard/configuracion/caracteristicas-madurez',  icon: 'forms', disabled: true },
           { title: 'Notas de Calidad',       url: '/dashboard/configuracion/notas-calidad',            icon: 'page'  },
-          { title: 'Notas de Condición',     url: '/dashboard/configuracion/notas-condicion',          icon: 'page'  }
+          { title: 'Notas de Condición',     url: '/dashboard/configuracion/notas-condicion',          icon: 'page'  },
+          { title: 'Tipos de Reclamo',       url: '/dashboard/configuracion/tipos-reclamo',            icon: 'page'  }
         ]
       },
 
@@ -354,7 +356,6 @@ export const navGroups: NavGroup[] = [
           { title: 'Monedas',               url: '/dashboard/configuracion/monedas',           icon: 'billing'         },
           { title: 'Tipos de Parámetro',    url: '/dashboard/configuracion/tipos-parametro',   icon: 'page'            },
           { title: 'Parámetros',            url: '/dashboard/configuracion/parametros',        icon: 'adjustments'     },
-          { title: 'Cláusulas de Venta (Incoterm)', url: '/dashboard/configuracion/clausulas-venta', icon: 'adjustments' },
           { title: 'Prefijos de Código',    url: '/dashboard/configuracion/prefijos-codigo',   icon: 'adjustments'     },
           { title: 'Templates de Carga',    url: '/dashboard/configuracion/templates-carga',   icon: 'forms'           },
           { title: 'Integraciones',         url: '/dashboard/configuracion/integraciones',     icon: 'externalLink'    },

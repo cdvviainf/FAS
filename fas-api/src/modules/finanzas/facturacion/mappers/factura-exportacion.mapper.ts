@@ -46,6 +46,11 @@ export interface AduanaFacturaExportacion {
 export interface FacturaExportacionMapeo {
   fechaEmision: Date
   monedaAduana: string // nombre de la moneda según tabla de Aduana (ej. "DOLAR USA")
+  // Tipo de cambio (pesos por unidad de la moneda extranjera). Si viene, se
+  // emite Encabezado.OtraMoneda (PESO CL + TpoCambio) — el SII lo exige en el
+  // DTE 110 para expresar el equivalente en pesos. Null cuando la moneda ya es
+  // CLP o no se capturó.
+  tipoCambio: number | null
   emisor: EmisorFacturaExportacion
   receptor: ReceptorFacturaExportacion
   lineas: LineaFacturaExportacion[]
@@ -99,6 +104,12 @@ export function mapFacturaExportacionA110(data: FacturaExportacionMapeo): Libred
       },
       // Sección de Aduana (obligatoria en la 110).
       Aduana: buildAduana(data.aduana),
+      // Equivalente en pesos: el SII exige el tipo de cambio cuando el documento
+      // se emite en moneda extranjera. Con normalizar=1, LibreDTE deriva los
+      // montos en pesos a partir de TpoCambio. Se omite si la moneda ya es CLP.
+      ...(data.tipoCambio != null && data.tipoCambio > 0
+        ? { OtraMoneda: { TpoMoneda: 'PESO CL', TpoCambio: data.tipoCambio } }
+        : {}),
       // Moneda extranjera de la operación (tabla de Aduana del SII).
       Totales: { TpoMoneda: data.monedaAduana },
     },

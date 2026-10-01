@@ -33,11 +33,14 @@ export async function crearReclamo(embarqueId: number, body: ReclamoCreateInput,
   const embarque = await repo.getEmbarqueParaReclamo(embarqueId)
   if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
 
+  await validarTipoReclamo(body.tipoReclamoId)
+
   return repo.crearReclamoTransaccional(
     {
       embarqueId,
       clienteId: embarque.notaVenta.clienteId,
       monedaId: embarque.notaVenta.monedaId,
+      tipoReclamoId: body.tipoReclamoId,
       fechaReclamo: body.fechaReclamo,
       resumenCliente: body.resumenCliente,
       temporadaId: body.temporadaId,
@@ -48,10 +51,18 @@ export async function crearReclamo(embarqueId: number, body: ReclamoCreateInput,
   )
 }
 
+// Valida que el tipo de reclamo exista (tenant) y no esté bloqueado.
+async function validarTipoReclamo(tipoReclamoId: number) {
+  const tipo = await repo.getTipoReclamoActivo(tipoReclamoId)
+  if (!tipo) throw new ValidationError('El tipo de reclamo seleccionado no existe')
+  if (tipo.bloqueado) throw new ValidationError('El tipo de reclamo seleccionado está bloqueado')
+}
+
 // IMP-QA-R1-019: edición de cabecera/líneas mientras no esté CERRADO — el
 // claim atómico (existe + no cerrado) y la revalidación R-NEW1/R-NEW2 viven
 // en el repository (misma transacción que la escritura).
 export async function actualizarReclamo(id: number, embarqueId: number, body: ReclamoUpdateInput, userId: string) {
+  if (body.tipoReclamoId != null) await validarTipoReclamo(body.tipoReclamoId)
   return repo.actualizarReclamoTransaccional(id, embarqueId, body, userId)
 }
 
@@ -65,38 +76,55 @@ export async function listarReclamos(filters: ReclamoListFilters) {
   return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
-export async function obtenerReclamo(id: number) {
+// BRT-R2-004: la separación Calidad/Comercial no puede depender de que el
+// cliente mande `soloConAnalisis`. Un usuario SIN el ítem de Comercial
+// (VENTAS_RECLAMOS) solo puede ver/operar reclamos cuyo tipo genera análisis;
+// `soloAnalizables` lo deriva el controller del permiso efectivo, no del query.
+function reclamoNoAnalizableEsInvisible(reclamo: { tipoReclamo: { generaAnalisisCalidad: boolean } | null }) {
+  return !reclamo.tipoReclamo?.generaAnalisisCalidad
+}
+
+export async function obtenerReclamo(id: number, soloAnalizables = false) {
   const reclamo = await repo.getReclamoById(id)
   if (!reclamo) throw new NotFoundError('Reclamo', String(id))
+  // Para un usuario solo-Calidad, un reclamo comercial es como si no existiera
+  // (404, no 403 — no revela su existencia).
+  if (soloAnalizables && reclamoNoAnalizableEsInvisible(reclamo)) {
+    throw new NotFoundError('Reclamo', String(id))
+  }
   return reclamo
 }
 
 // El claim (existe + no CERRADO -> 403, R9/CA10) vive en el repository,
 // atómico en la misma escritura — IMP-QA-R1-021 (antes no chequeaba estado).
 export async function actualizarAnalisisCalidad(id: number, body: AnalisisCalidadInput, userId: string) {
+  // BRT-R2-004: el requisito "el tipo genera análisis" lo impone el repo DENTRO
+  // del claim atómico (no un SELECT previo) — así Comercial no puede reclasificar
+  // el tipo entre chequeo y escritura. Análisis es acción exclusiva de Calidad.
   return repo.updateAnalisisCalidad(id, body.comentarioCalidad, userId)
 }
 
 // R6: valorConfirmado >= 0 (validado en el schema). Reversa solas las
 // Provisiones VIGENTE del reclamo (ver repo — efecto de sistema, no manual).
-export async function valorizarReclamo(id: number, body: ValorizarInput, userId: string) {
-  return repo.valorizarReclamoTransaccional(id, body.valorConfirmado, userId)
+// `soloAnalizables` (usuario sin VENTAS_RECLAMOS) viaja al claim atómico del repo.
+export async function valorizarReclamo(id: number, body: ValorizarInput, userId: string, soloAnalizables = false) {
+  return repo.valorizarReclamoTransaccional(id, body.valorConfirmado, userId, soloAnalizables)
 }
 
 // R5b/R5 (IMP-QA-R1-020): solo se puede cerrar desde VALORIZADO — el
 // repository distingue "ya cerrado" (403) de "todavía no valorizado" (422).
-export async function cerrarReclamo(id: number, body: CerrarInput, userId: string) {
-  return repo.cerrarReclamo(id, body.procedencia, userId)
+export async function cerrarReclamo(id: number, body: CerrarInput, userId: string, soloAnalizables = false) {
+  return repo.cerrarReclamo(id, body.procedencia, userId, soloAnalizables)
 }
 
-export async function reabrirReclamo(id: number, userId: string) {
-  return repo.reabrirReclamo(id, userId)
+export async function reabrirReclamo(id: number, userId: string, soloAnalizables = false) {
+  return repo.reabrirReclamo(id, userId, soloAnalizables)
 }
 
 // Anular Valorización (2026-09-23): vuelve el Reclamo a INGRESADO y restaura
 // las Provisiones que la valorización había reversado automáticamente.
-export async function anularValorizacion(id: number, userId: string) {
-  return repo.anularValorizacionTransaccional(id, userId)
+export async function anularValorizacion(id: number, userId: string, soloAnalizables = false) {
+  return repo.anularValorizacionTransaccional(id, userId, soloAnalizables)
 }
 
 // ─── Documentos ─────────────────────────────────────────────────────────────
@@ -105,6 +133,8 @@ export async function subirDocumento(reclamoId: number, archivo: DocumentoArchiv
   if (archivo.datos.length > MAX_DOCUMENTO_BYTES) {
     throw new ValidationError('El archivo supera el tamaño máximo de 10 MB')
   }
+  // BRT-R2-004: adjuntar documentación es una acción de Calidad; el requisito de
+  // tipo analizable se impone atómicamente en el claim del repo.
   return repo.createDocumento(
     reclamoId,
     { nombre: archivo.nombre, mime: archivo.mime, tamano: archivo.datos.length },
@@ -113,7 +143,8 @@ export async function subirDocumento(reclamoId: number, archivo: DocumentoArchiv
   )
 }
 
-export async function descargarDocumento(reclamoId: number, documentoId: number) {
+export async function descargarDocumento(reclamoId: number, documentoId: number, soloAnalizables = false) {
+  if (soloAnalizables) await asegurarReclamoAnalizable(reclamoId)
   const meta = await repo.getDocumentoMeta(reclamoId, documentoId)
   if (!meta) throw new NotFoundError('Documento', String(documentoId))
   const contenido = await repo.getDocumentoContenido(documentoId)
@@ -124,7 +155,20 @@ export async function descargarDocumento(reclamoId: number, documentoId: number)
 export async function eliminarDocumento(reclamoId: number, documentoId: number, userId: string) {
   const meta = await repo.getDocumentoMeta(reclamoId, documentoId)
   if (!meta) throw new NotFoundError('Documento', String(documentoId))
+  // BRT-R2-004: el requisito de tipo analizable se impone atómicamente en el
+  // claim del repo (deleteDocumento), no en un chequeo previo.
   await repo.deleteDocumento(reclamoId, documentoId, userId)
+}
+
+// Carga el reclamo y exige que su tipo genere análisis de Calidad — comparte el
+// criterio con actualizarAnalisisCalidad (reclamos comerciales no admiten
+// trabajo de Calidad). BRT-R2-004.
+async function asegurarReclamoAnalizable(reclamoId: number) {
+  const reclamo = await repo.getReclamoById(reclamoId)
+  if (!reclamo) throw new NotFoundError('Reclamo', String(reclamoId))
+  if (reclamoNoAnalizableEsInvisible(reclamo)) {
+    throw new ValidationError('Este tipo de reclamo no admite trabajo de Calidad')
+  }
 }
 
 // ─── API externa (sin sesión FAS, 2026-09-08) ──────────────────────────────
@@ -150,12 +194,15 @@ export const descargarDocumentoExterno = descargarDocumento
 
 // ─── Provisiones ────────────────────────────────────────────────────────────
 
-export async function crearProvision(reclamoId: number, body: ProvisionInput, userId: string) {
-  return repo.crearProvision(reclamoId, body, userId)
+export async function crearProvision(reclamoId: number, body: ProvisionInput, userId: string, soloAnalizables = false) {
+  // BRT-R2-004: el scope viaja al claim atómico del repo (crearProvision).
+  return repo.crearProvision(reclamoId, body, userId, soloAnalizables)
 }
 
-export async function listarProvisiones(reclamoId: number) {
-  await obtenerReclamo(reclamoId)
+export async function listarProvisiones(reclamoId: number, soloAnalizables = false) {
+  // Reusa el scope de obtenerReclamo: un usuario solo-Calidad no lee provisiones
+  // de un reclamo comercial (404). BRT-R2-004.
+  await obtenerReclamo(reclamoId, soloAnalizables)
   return repo.listProvisiones(reclamoId)
 }
 
@@ -163,12 +210,14 @@ export async function listarProvisiones(reclamoId: number) {
 // (chequeo manual — la reversa automática al valorizar no pasa por acá, ver
 // repo.valorizarReclamoTransaccional). R9 (IMP-QA-R1-021): también exige que
 // el Reclamo padre no esté CERRADO — lo valida atómicamente el repository.
-export async function reversarProvision(id: number, userId: string) {
+export async function reversarProvision(id: number, userId: string, soloAnalizables = false) {
   const provision = await repo.getProvisionById(id)
   if (!provision) throw new NotFoundError('Provisión', String(id))
   if (provision.estado === 'REVERSADA') throw new ValidationError('La Provisión ya está reversada')
   if (provision.creadoPorId === userId) {
     throw new ValidationError('No puedes reversar una Provisión que tú mismo creaste (PR3)')
   }
-  return repo.reversarProvision(id, provision.reclamoId, userId)
+  // BRT-R2-004: el scope (tipo analizable para usuarios solo-Calidad) se impone
+  // atómicamente en el claim del repo (reversarProvision), no en un SELECT previo.
+  return repo.reversarProvision(id, provision.reclamoId, userId, soloAnalizables)
 }

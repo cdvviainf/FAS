@@ -77,6 +77,7 @@ export function ReclamoVentasDetailClient({ id }: { id: number }) {
           <h2 className='flex items-center gap-2 text-xl font-semibold'>
             Reclamo — Embarque {reclamo.embarque.numeroInstructivo}
             <Badge variant='outline'>{ESTADO_RECLAMO_LABELS[reclamo.estado]}</Badge>
+            {reclamo.tipoReclamo && <Badge variant='outline'>{reclamo.tipoReclamo.descripcion}</Badge>}
           </h2>
           <p className='text-muted-foreground text-sm'>
             {reclamo.cliente.descripcion} · {reclamo.moneda.codigo} · {reclamo.fechaReclamo}

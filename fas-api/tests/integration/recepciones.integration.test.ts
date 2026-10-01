@@ -535,29 +535,16 @@ describe('Motor de validación de Recepción contra PostgreSQL (compras.md §7)'
     })
   })
 
-  it('modo CONSIGNACION: carga libre sin OC, genera pallets y el estado se queda en CARGADA', async () => {
+  it('rechaza una Recepción sin OC y sin Proceso (ya no existe Consignación, 2026-10-01)', async () => {
     const f = await crearFixtures()
     const template = await crearTemplateCarga(f.empresa.id)
-    const recepcion = await crearRecepcion(f.empresa.id, {
-      ordenCompraId: null,
-      plantaId: f.planta.id,
-      direccionPlantaId: f.direccionPlanta.id,
-      templateCargaId: template.id,
-    }, 'test')
-    expect(recepcion.origen).toBe('CONSIGNACION')
-
-    // En consignación no hay OC contra qué comparar: cualquier combinación pasa.
-    const excel = await armarExcel([filaBase(f, { calibre: 'XXL', cajas: 999 })])
-    const resultado = await subirAdjunto(f.empresa.id, recepcion.id, { nombre: 'recepcion.xlsx', mime: MIME_XLSX, datos: excel }, 'test')
-
-    expect(resultado.recepcion.estado).toBe('CARGADA') // compras.md §8: consignación no tiene transición a VALIDADA
-    const pallets = await prisma.pallet.findMany({ where: { recepcionId: recepcion.id } })
-    expect(pallets).toHaveLength(1)
-    expect(pallets[0].origen).toBe('CONSIGNACION')
-
-    // Con pallets ya generados, un segundo Excel debe rechazarse (evita duplicar).
     await expect(
-      subirAdjunto(f.empresa.id, recepcion.id, { nombre: 'otro.xlsx', mime: MIME_XLSX, datos: excel }, 'test'),
+      crearRecepcion(f.empresa.id, {
+        ordenCompraId: null,
+        plantaId: f.planta.id,
+        direccionPlantaId: f.direccionPlanta.id,
+        templateCargaId: template.id,
+      }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
   })
 

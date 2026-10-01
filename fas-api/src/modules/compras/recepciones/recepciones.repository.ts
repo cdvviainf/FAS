@@ -56,7 +56,7 @@ export async function listRecepciones(page: number, limit: number, plantaId?: nu
   const where = {
     eliminadoEn: null,
     ...(plantaId ? { plantaId } : {}),
-    ...(origen ? { origen: origen as 'COMPRA' | 'CONSIGNACION' | 'PROCESO' } : {}),
+    ...(origen ? { origen: origen as 'COMPRA' | 'PROCESO' } : {}),
     ...(estado ? { estado: estado as 'CARGADA' | 'VALIDADA' | 'RECHAZADA' } : {}),
   }
 
@@ -104,10 +104,9 @@ export async function createRecepcion(data: RecepcionCreateInput, creadoPor: str
         empresaId: getEmpresaIdActual()!,
         ...resto,
         ordenCompraId: ordenCompraId ?? null,
-        // Etapa 3: sin OC, esProceso distingue CONSIGNACION de PROCESO — con
-        // OC siempre es COMPRA sin importar esProceso (ya rechazado antes en
-        // el service/schema si vinieran ambos).
-        origen: ordenCompraId ? 'COMPRA' : esProceso ? 'PROCESO' : 'CONSIGNACION',
+        // Con OC → COMPRA; sin OC → PROCESO (2026-10-01: ya no existe
+        // CONSIGNACION). El service/schema garantiza que venga exactamente uno.
+        origen: ordenCompraId ? 'COMPRA' : 'PROCESO',
         numero,
         creadoPor,
         instructivos: {
@@ -393,7 +392,7 @@ async function getDetalleInstructivosTx(tx: Prisma.TransactionClient, instructiv
 // concurrente de la OC entre ese chequeo y la creación de pallets.
 export async function crearPalletsYValidar(
   recepcionId: number,
-  origen: 'COMPRA' | 'CONSIGNACION' | 'PROCESO',
+  origen: 'COMPRA' | 'PROCESO',
   ordenCompraId: number | null,
   instructivoIds: number[],
   templateCargaIdUsado: number | null,
@@ -418,10 +417,9 @@ export async function crearPalletsYValidar(
   }>,
   opciones: { aceptarAdvertencias: boolean; userId: string },
 ) {
-  // Etapa 3: PROCESO también valida (contra folios), así que queda VALIDADA
-  // igual que COMPRA — solo CONSIGNACION (sin ningún chequeo) se queda en
-  // CARGADA (compras.md §8).
-  const estadoFinal = origen === 'COMPRA' || origen === 'PROCESO' ? ('VALIDADA' as const) : ('CARGADA' as const)
+  // COMPRA valida contra la OC y PROCESO contra los folios/Instructivos: ambos
+  // quedan VALIDADA al generar pallets (ya no existe CONSIGNACION).
+  const estadoFinal = 'VALIDADA' as const
   return prisma.$transaction(async (tx) => {
     // Lock + re-chequeo DENTRO de la transacción (QA-RCV-003): el pre-check
     // del service (estado/tienePallets) no es atómico con esta escritura —

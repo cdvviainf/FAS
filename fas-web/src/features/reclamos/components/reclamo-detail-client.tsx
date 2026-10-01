@@ -91,6 +91,7 @@ export function ReclamoDetailClient({ id }: { id: number }) {
             Reclamo — Embarque {reclamo.embarque.numeroInstructivo}
             <Badge variant='outline'>{ESTADO_RECLAMO_LABELS[reclamo.estado]}</Badge>
             {reclamo.procedencia && <Badge variant='secondary'>{PROCEDENCIA_LABELS[reclamo.procedencia]}</Badge>}
+            {reclamo.tipoReclamo && <Badge variant='outline'>{reclamo.tipoReclamo.descripcion}</Badge>}
           </h2>
           <p className='text-muted-foreground text-sm'>
             {reclamo.cliente.descripcion} · {reclamo.moneda.codigo} · {reclamo.fechaReclamo}

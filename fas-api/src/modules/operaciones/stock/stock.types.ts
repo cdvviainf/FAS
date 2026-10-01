@@ -1,4 +1,4 @@
-export type OrigenStock = 'COMPRA' | 'CONSIGNACION' | 'PROCESO'
+export type OrigenStock = 'COMPRA' | 'PROCESO'
 export type EstadoStock = 'CARGADA' | 'VALIDADA'
 
 interface Mantenedor {

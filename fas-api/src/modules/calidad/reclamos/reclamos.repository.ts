@@ -22,6 +22,7 @@ const reclamoInclude = {
   embarque: { select: { id: true, numeroInstructivo: true } },
   cliente: { select: mantenedorSelect },
   moneda: { select: mantenedorSelect },
+  tipoReclamo: { select: { id: true, codigo: true, descripcion: true, generaAnalisisCalidad: true } },
   lineas: { include: { palletLinea: { include: palletLineaInclude } } },
   documentos: { select: { id: true, nombre: true, mime: true, tamano: true, subidoEn: true, subidoPor: true } },
   provisiones: { orderBy: { fechaCreacion: 'desc' as const } },
@@ -93,14 +94,35 @@ async function getCantidadReclamadaPorLinea(
 // entre "chequear estado" y "escribir" (a diferencia de un SELECT + UPDATE
 // separados). 403 (ForbiddenError) si está cerrado, 404 si no existe —
 // exigido por R9/CA10 (antes devolvía 422).
-async function claimReclamoNoCerrado(tx: Tx, id: number, actualizadoPor: string): Promise<void> {
+// `requiereAnalizable` (BRT-R2-004): mete la condición "el tipo genera análisis
+// de Calidad" DENTRO del mismo claim (updateMany row-locked), no en un SELECT
+// previo — así Comercial no puede reclasificar el tipo en la ventana entre
+// chequear y escribir. Se usa para las acciones exclusivas de Calidad y para
+// el aislamiento de usuarios sin VENTAS_RECLAMOS.
+async function claimReclamoNoCerrado(
+  tx: Tx,
+  id: number,
+  actualizadoPor: string,
+  opts: { requiereAnalizable?: boolean } = {},
+): Promise<void> {
   const claim = await tx.reclamo.updateMany({
-    where: { id, eliminadoEn: null, estado: { not: 'CERRADO' } },
+    where: {
+      id,
+      eliminadoEn: null,
+      estado: { not: 'CERRADO' },
+      ...(opts.requiereAnalizable ? { tipoReclamo: { is: { generaAnalisisCalidad: true } } } : {}),
+    },
     data: { actualizadoPor },
   })
   if (claim.count > 0) return
-  const existe = await tx.reclamo.findFirst({ where: { id, eliminadoEn: null }, select: { id: true } })
+  const existe = await tx.reclamo.findFirst({
+    where: { id, eliminadoEn: null },
+    select: { id: true, estado: true, tipoReclamo: { select: { generaAnalisisCalidad: true } } },
+  })
   if (!existe) throw new NotFoundError('Reclamo', String(id))
+  if (opts.requiereAnalizable && !existe.tipoReclamo?.generaAnalisisCalidad) {
+    throw new ValidationError('Este tipo de reclamo no admite trabajo de Calidad')
+  }
   throw new ForbiddenError('El Reclamo está cerrado — no admite modificaciones (R9)')
 }
 
@@ -128,6 +150,7 @@ interface DatosReclamo {
   embarqueId: number
   clienteId: number
   monedaId: number
+  tipoReclamoId: number
   fechaReclamo: Date
   resumenCliente?: string | null
   temporadaId?: number | null
@@ -212,6 +235,7 @@ export async function crearReclamoTransaccional(
         embarqueId: datos.embarqueId,
         clienteId: datos.clienteId,
         monedaId: datos.monedaId,
+        tipoReclamoId: datos.tipoReclamoId,
         fechaReclamo: datos.fechaReclamo,
         resumenCliente: datos.resumenCliente ?? undefined,
         temporadaId: datos.temporadaId ?? undefined,
@@ -247,6 +271,7 @@ export async function crearReclamoTransaccional(
 
 interface DatosReclamoUpdate {
   fechaReclamo?: Date
+  tipoReclamoId?: number
   resumenCliente?: string | null
   temporadaId?: number | null
   lineas?: ReclamoLineaInput[]
@@ -337,6 +362,7 @@ export async function actualizarReclamoTransaccional(
       where: { id },
       data: {
         ...(datos.fechaReclamo !== undefined ? { fechaReclamo: datos.fechaReclamo } : {}),
+        ...(datos.tipoReclamoId !== undefined ? { tipoReclamoId: datos.tipoReclamoId } : {}),
         ...(datos.resumenCliente !== undefined ? { resumenCliente: datos.resumenCliente } : {}),
         ...(datos.temporadaId !== undefined ? { temporadaId: datos.temporadaId } : {}),
         actualizadoPor,
@@ -356,7 +382,7 @@ export async function listReclamosPorEmbarque(embarqueId: number) {
 }
 
 export async function listReclamos(filters: ReclamoListFilters) {
-  const { page = 1, limit = 20, estado, embarqueId, clienteId, folio } = filters
+  const { page = 1, limit = 20, estado, embarqueId, clienteId, folio, soloConAnalisis } = filters
   const where: Prisma.ReclamoWhereInput = {
     eliminadoEn: null,
     ...(estado ? { estado } : {}),
@@ -365,6 +391,10 @@ export async function listReclamos(filters: ReclamoListFilters) {
     // IMP-QA-R1-022: búsqueda por folio (numeroInstructivo) del Embarque —
     // el Reclamo no tiene número propio (RC-D11), se busca por el del padre.
     ...(folio ? { embarque: { numeroInstructivo: { contains: folio, mode: 'insensitive' } } } : {}),
+    // Pantalla de Calidad (2026-10-01): solo los reclamos cuyo tipo genera
+    // análisis. Los reclamos sin tipo (previos al mantenedor) o de un tipo que
+    // no genera análisis (ej. Comercial) no aparecen en Calidad.
+    ...(soloConAnalisis ? { tipoReclamo: { generaAnalisisCalidad: true } } : {}),
   }
   const [data, total] = await Promise.all([
     prisma.reclamo.findMany({
@@ -383,11 +413,20 @@ export async function getReclamoById(id: number) {
   return prisma.reclamo.findFirst({ where: { id, eliminadoEn: null }, include: reclamoInclude })
 }
 
+// Tipo de Reclamo activo (no eliminado) del tenant — para validar al crear/editar.
+export async function getTipoReclamoActivo(id: number) {
+  return prisma.tipoReclamo.findFirst({
+    where: { id, eliminadoEn: null },
+    select: { id: true, generaAnalisisCalidad: true, bloqueado: true },
+  })
+}
+
 // IMP-QA-R1-021: claim atómico (existe + no CERRADO) en la misma escritura
 // — antes hacía update directo sin chequear estado en absoluto.
 export async function updateAnalisisCalidad(id: number, comentarioCalidad: string, actualizadoPor: string) {
   return prisma.$transaction(async (tx) => {
-    await claimReclamoNoCerrado(tx, id, actualizadoPor)
+    // Análisis es acción de Calidad: el tipo debe generar análisis (atómico).
+    await claimReclamoNoCerrado(tx, id, actualizadoPor, { requiereAnalizable: true })
     await tx.reclamo.update({ where: { id }, data: { comentarioCalidad, actualizadoPor } })
     return tx.reclamo.findUniqueOrThrow({ where: { id }, include: reclamoInclude })
   })
@@ -399,10 +438,13 @@ export async function updateAnalisisCalidad(id: number, comentarioCalidad: strin
 // IMP-QA-R1-021: el claim (existe + no CERRADO) y la escritura de
 // valorización van en el MISMO `updateMany` — cierra la ventana de carrera
 // que un SELECT+UPDATE separados dejaban abierta.
-export async function valorizarReclamoTransaccional(id: number, valorConfirmado: number, userId: string) {
+export async function valorizarReclamoTransaccional(id: number, valorConfirmado: number, userId: string, soloAnalizables = false) {
   return prisma.$transaction(async (tx) => {
     const claim = await tx.reclamo.updateMany({
-      where: { id, eliminadoEn: null, estado: { not: 'CERRADO' } },
+      where: {
+        id, eliminadoEn: null, estado: { not: 'CERRADO' },
+        ...(soloAnalizables ? { tipoReclamo: { is: { generaAnalisisCalidad: true } } } : {}),
+      },
       data: {
         valorConfirmado,
         valorizadoPor: userId,
@@ -412,8 +454,12 @@ export async function valorizarReclamoTransaccional(id: number, valorConfirmado:
       },
     })
     if (claim.count === 0) {
-      const existe = await tx.reclamo.findFirst({ where: { id, eliminadoEn: null }, select: { id: true } })
+      const existe = await tx.reclamo.findFirst({
+        where: { id, eliminadoEn: null },
+        select: { estado: true, tipoReclamo: { select: { generaAnalisisCalidad: true } } },
+      })
       if (!existe) throw new NotFoundError('Reclamo', String(id))
+      if (soloAnalizables && !existe.tipoReclamo?.generaAnalisisCalidad) throw new NotFoundError('Reclamo', String(id))
       throw new ForbiddenError('El Reclamo está cerrado — no admite modificaciones (R9)')
     }
 
@@ -431,10 +477,13 @@ export async function valorizarReclamoTransaccional(id: number, valorConfirmado:
 // (permiso RECLAMO_PROVISION) no se toca. Mismo patrón de claim atómico
 // (updateMany con `estado: 'VALORIZADO'` en el where) que el resto del ciclo
 // de vida: 0 filas afectadas distingue "no existe" de "no está valorizado".
-export async function anularValorizacionTransaccional(id: number, userId: string) {
+export async function anularValorizacionTransaccional(id: number, userId: string, soloAnalizables = false) {
   return prisma.$transaction(async (tx) => {
     const claim = await tx.reclamo.updateMany({
-      where: { id, eliminadoEn: null, estado: 'VALORIZADO' },
+      where: {
+        id, eliminadoEn: null, estado: 'VALORIZADO',
+        ...(soloAnalizables ? { tipoReclamo: { is: { generaAnalisisCalidad: true } } } : {}),
+      },
       data: {
         estado: 'INGRESADO',
         valorConfirmado: null,
@@ -444,8 +493,12 @@ export async function anularValorizacionTransaccional(id: number, userId: string
       },
     })
     if (claim.count === 0) {
-      const actual = await tx.reclamo.findFirst({ where: { id, eliminadoEn: null }, select: { estado: true } })
+      const actual = await tx.reclamo.findFirst({
+        where: { id, eliminadoEn: null },
+        select: { estado: true, tipoReclamo: { select: { generaAnalisisCalidad: true } } },
+      })
       if (!actual) throw new NotFoundError('Reclamo', String(id))
+      if (soloAnalizables && !actual.tipoReclamo?.generaAnalisisCalidad) throw new NotFoundError('Reclamo', String(id))
       if (actual.estado === 'CERRADO') throw new ForbiddenError('El Reclamo está cerrado — no admite modificaciones (R9)')
       throw new ValidationError('El Reclamo no está valorizado')
     }
@@ -463,28 +516,44 @@ export async function anularValorizacionTransaccional(id: number, userId: string
 // R5/CA8). El claim distingue el motivo del rechazo: ya CERRADO -> 403
 // (R9/CA10); todavía INGRESADO -> 422 (regla de flujo, no bloqueo por
 // cierre).
-export async function cerrarReclamo(id: number, procedencia: Procedencia, userId: string) {
+export async function cerrarReclamo(id: number, procedencia: Procedencia, userId: string, soloAnalizables = false) {
   const claim = await prisma.reclamo.updateMany({
-    where: { id, eliminadoEn: null, estado: 'VALORIZADO' },
+    where: {
+      id, eliminadoEn: null, estado: 'VALORIZADO',
+      ...(soloAnalizables ? { tipoReclamo: { is: { generaAnalisisCalidad: true } } } : {}),
+    },
     data: { estado: 'CERRADO', procedencia, actualizadoPor: userId },
   })
   if (claim.count === 0) {
-    const actual = await prisma.reclamo.findFirst({ where: { id, eliminadoEn: null }, select: { estado: true } })
+    const actual = await prisma.reclamo.findFirst({
+      where: { id, eliminadoEn: null },
+      select: { estado: true, tipoReclamo: { select: { generaAnalisisCalidad: true } } },
+    })
     if (!actual) throw new NotFoundError('Reclamo', String(id))
+    // Para un usuario solo-Calidad, el reclamo comercial es invisible (404),
+    // verificado atómicamente contra el tipo vigente (BRT-R2-004).
+    if (soloAnalizables && !actual.tipoReclamo?.generaAnalisisCalidad) throw new NotFoundError('Reclamo', String(id))
     if (actual.estado === 'CERRADO') throw new ForbiddenError('El Reclamo ya está cerrado')
     throw new ValidationError('El Reclamo debe estar Valorizado antes de cerrarse (R5)')
   }
   return getReclamoById(id)
 }
 
-export async function reabrirReclamo(id: number, userId: string) {
+export async function reabrirReclamo(id: number, userId: string, soloAnalizables = false) {
   const claim = await prisma.reclamo.updateMany({
-    where: { id, eliminadoEn: null, estado: 'CERRADO' },
+    where: {
+      id, eliminadoEn: null, estado: 'CERRADO',
+      ...(soloAnalizables ? { tipoReclamo: { is: { generaAnalisisCalidad: true } } } : {}),
+    },
     data: { estado: 'VALORIZADO', actualizadoPor: userId },
   })
   if (claim.count === 0) {
-    const existe = await prisma.reclamo.findFirst({ where: { id, eliminadoEn: null }, select: { id: true } })
+    const existe = await prisma.reclamo.findFirst({
+      where: { id, eliminadoEn: null },
+      select: { estado: true, tipoReclamo: { select: { generaAnalisisCalidad: true } } },
+    })
     if (!existe) throw new NotFoundError('Reclamo', String(id))
+    if (soloAnalizables && !existe.tipoReclamo?.generaAnalisisCalidad) throw new NotFoundError('Reclamo', String(id))
     throw new ValidationError('El Reclamo no está cerrado')
   }
   return getReclamoById(id)
@@ -504,7 +573,8 @@ export async function createDocumento(
   subidoPor: string,
 ) {
   return prisma.$transaction(async (tx) => {
-    await claimReclamoNoCerrado(tx, reclamoId, subidoPor)
+    // Documentación es parte del trabajo de Calidad: tipo analizable (atómico).
+    await claimReclamoNoCerrado(tx, reclamoId, subidoPor, { requiereAnalizable: true })
     return tx.reclamoDocumento.create({
       data: {
         reclamoId,
@@ -532,7 +602,7 @@ export async function getDocumentoContenido(documentoId: number) {
 
 export async function deleteDocumento(reclamoId: number, documentoId: number, actualizadoPor: string) {
   await prisma.$transaction(async (tx) => {
-    await claimReclamoNoCerrado(tx, reclamoId, actualizadoPor)
+    await claimReclamoNoCerrado(tx, reclamoId, actualizadoPor, { requiereAnalizable: true })
     await tx.reclamoDocumento.delete({ where: { id: documentoId } })
   })
 }
@@ -541,9 +611,9 @@ export async function deleteDocumento(reclamoId: number, documentoId: number, ac
 
 // IMP-QA-R1-021: crear una Provisión también respeta R9 ahora (mismo
 // `claimReclamoNoCerrado` transaccional que documentos).
-export async function crearProvision(reclamoId: number, input: ProvisionInput, creadoPorId: string) {
+export async function crearProvision(reclamoId: number, input: ProvisionInput, creadoPorId: string, soloAnalizables = false) {
   return prisma.$transaction(async (tx) => {
-    await claimReclamoNoCerrado(tx, reclamoId, creadoPorId)
+    await claimReclamoNoCerrado(tx, reclamoId, creadoPorId, { requiereAnalizable: soloAnalizables })
     const empresaId = getEmpresaIdActual()!
     const lineas = await tx.reclamoPalletLinea.findMany({
       where: { reclamoId },
@@ -579,9 +649,9 @@ export async function getProvisionById(id: number) {
 // IMP-QA-R1-021 (persistía en ronda 2): la reversa manual no chequeaba que
 // el Reclamo padre siguiera sin cerrar — mismo `claimReclamoNoCerrado`
 // transaccional que documentos/análisis/provisión-crear.
-export async function reversarProvision(id: number, reclamoId: number, reversadoPorId: string) {
+export async function reversarProvision(id: number, reclamoId: number, reversadoPorId: string, soloAnalizables = false) {
   await prisma.$transaction(async (tx) => {
-    await claimReclamoNoCerrado(tx, reclamoId, reversadoPorId)
+    await claimReclamoNoCerrado(tx, reclamoId, reversadoPorId, { requiereAnalizable: soloAnalizables })
     await tx.provision.update({
       where: { id },
       data: { estado: 'REVERSADA', fechaReversa: new Date(), reversadoPorId },

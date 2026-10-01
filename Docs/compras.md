@@ -9,7 +9,9 @@
 
 ## 1. Propósito y Alcance
 
-El módulo Compras cubre el ciclo completo de adquisición y recepción de fruta, desde la instrucción de embalaje hasta la incorporación de la fruta al stock disponible para embarque. Contempla dos vías de origen —**compra directa** (con Orden de Compra) y **consignación** (sin Orden de Compra)— que convergen en un único módulo de Recepción de Stock.
+El módulo Compras cubre el ciclo completo de adquisición y recepción de fruta, desde la instrucción de embalaje hasta la incorporación de la fruta al stock disponible para embarque. Contempla dos vías de origen —**compra directa** (con Orden de Compra) y **proceso** (sin Orden de Compra)— que convergen en un único módulo de Recepción de Stock.
+
+> **Supersesión 2026-10-01 (decisión de negocio):** la antigua tercera vía de **consignación** se eliminó. La recepción sin OC es siempre **Proceso**. El enum `OrigenRecepcion` pasa de `{ COMPRA, CONSIGNACION, PROCESO }` a `{ COMPRA, PROCESO }`. No había data histórica en `CONSIGNACION` (la migración aborta si la hubiera). El disparador de Liquidación a Productor por consignación queda **pendiente de redefinición** (§6.3).
 
 **Dentro de alcance:** Instructivo de Embalaje, Orden de Compra (OC), Recepción de Stock (modos con/sin OC), motor de validación OC↔carga, generación de Stock y Pallets, **captura de documentos de compra (facturas y notas de crédito) desde fuente externa** y su cuadre contra las OC.
 
@@ -153,11 +155,11 @@ La OC es **multilínea**. Cada línea es una combinación completa de caracterí
 > se preservan (decisión aceptada, sistema en desarrollo).
 
 ### 4.4 Recepcion
-Módulo único, tres modos según origen. Una Recepción se valida contra **una** OC, contra **el/los Instructivo(s) de Embalaje seleccionados**, o contra **nada** (nunca varias fuentes a la vez).
+Módulo único, dos modos según origen. Una Recepción se valida contra **una** OC, contra **el/los Instructivo(s) de Embalaje seleccionados**, o contra **nada** (nunca varias fuentes a la vez).
 
 - `id` (PK)
-- `ordenCompraId` (FK → OrdenCompra, **nullable**) — presente = modo compra; null = modo consignación o proceso
-- `origen` (`OrigenRecepcion { COMPRA CONSIGNACION PROCESO }`) — fijado **al crear** y persistido (no derivado en cada lectura): `COMPRA` si hay OC; si no hay OC, `PROCESO` o `CONSIGNACION` según lo que elija el usuario (input `esProceso`, mutuamente excluyente con `ordenCompraId`)
+- `ordenCompraId` (FK → OrdenCompra, **nullable**) — presente = modo compra; null = modo proceso
+- `origen` (`OrigenRecepcion { COMPRA PROCESO }`) — fijado **al crear** y persistido (no derivado en cada lectura): `COMPRA` si hay OC; `PROCESO` si no hay OC *(2026-10-01: se eliminó `CONSIGNACION`; sin OC el origen es siempre `PROCESO`)*
 - `instructivos` (`RecepcionInstructivoEmbalaje`, N:M → InstructivoEmbalaje, **2026-09-01**) — solo en modo `PROCESO`; uno o más Instructivos que respaldan esta Recepción, fijados al crear (sin condición de estado — el Instructivo ya no tiene veredicto, ver §4.1 y supersesión abajo)
 - `advertenciasAceptadas` (Boolean, default `false`), `advertenciasDetalle` (Json?, snapshot de las diferencias), `advertenciasAceptadasEn` (DateTime?), `advertenciasAceptadasPor` (String?) — auditoría de la confirmación con advertencias en modo `PROCESO` (**nuevo, 2026-09-02**, ver supersesión abajo)
 - `plantaOrigenId` / mantenedor de formato aplicado (ver §9.2)
@@ -175,7 +177,7 @@ Unidad mínima **indivisible** de inventario. Generado por la Recepción. Compue
 - `id` (PK)
 - `recepcionId` (FK → Recepcion)
 - `numeroPallet` (identificador del pallet según origen; usado en la reconciliación con Packing List)
-- `origen` (`COMPRA` | `CONSIGNACION` | `PROCESO`, heredado de la Recepción)
+- `origen` (`COMPRA` | `PROCESO`, heredado de la Recepción)
 - `embarqueId` (FK → Embarque, **nullable**) — se puebla al reservar el pallet a un embarque (Ventas); un pallet pertenece a **un solo** Embarque a la vez
 - `productorId` (FK → Productor)
 - `notaCalidadId` (FK → NotaCalidad, **nullable**), `notaCondicionId` (FK → NotaCondicion, **nullable**), `completo` (Boolean, default `false`) **(nuevo, 2026-09-02 — ver §4.8)**
@@ -299,7 +301,7 @@ A diferencia de Nota de Calidad/Condición/Completo (§4.8, a nivel de **Pallet 
 
 > **Obligatorios en la carga, nullable en la columna (IMP-QA-R1-032, QA ronda 1).** Los 3 campos son obligatorios en el flujo de carga por Excel (Etapa 2 del motor los rechaza si vienen vacíos), pero las columnas en sí son `nullable` a nivel de base de datos — un `NOT NULL` duro habría roto la migración sobre cualquier `PalletLinea` histórica ya existente, sin un backfill real posible (no hay forma de reconstruir con qué Packing/Etiqueta/fecha se embaló una carga pasada). Toda `PalletLinea` creada a partir de esta fecha vía el motor de carga sí trae los 3 valores siempre.
 
-**Captura — Excel de Recepción (los tres orígenes: COMPRA, CONSIGNACION y PROCESO — el motor no distingue origen para estos 3 campos).** El Template de Carga gana 3 columnas nuevas **obligatorias** de mapear (no entran en `CAMPOS_OPCIONALES_POR_TIPO` — a diferencia de §4.8, un Template de Carga existente que no las mapee queda inválido y debe editarse antes de poder procesar un nuevo Excel): `FECHA_EMBALAJE`, `ETIQUETA`, `PACKING`. Reglas del motor (`recepciones.motor.ts`):
+**Captura — Excel de Recepción (ambos orígenes: COMPRA y PROCESO — el motor no distingue origen para estos 3 campos).** El Template de Carga gana 3 columnas nuevas **obligatorias** de mapear (no entran en `CAMPOS_OPCIONALES_POR_TIPO` — a diferencia de §4.8, un Template de Carga existente que no las mapee queda inválido y debe editarse antes de poder procesar un nuevo Excel): `FECHA_EMBALAJE`, `ETIQUETA`, `PACKING`. Reglas del motor (`recepciones.motor.ts`):
 - Celda vacía en cualquiera de las 3 es error de Etapa 2 (falta el dato), igual que Especie/Variedad/Cajas/Productor — no hay caso "vacío = sin definir" acá.
 - `FECHA_EMBALAJE` acepta ISO (una celda Excel con formato Fecha real) o texto `dd-mm-aaaa`/`dd/mm/aaaa` — cualquier otro formato es error de Etapa 3.
 - `ETIQUETA` y `PACKING` se resuelven contra sus maestros por `codigo`/`descripcion` (Etiqueta) o `codigo`/`descripcion`/`razonSocial` (Packing, vía Entidad tipo `PACKING`) — mismo matching que Especie/Productor. Texto que no matchea ningún registro es error de Etapa 3.
@@ -325,11 +327,13 @@ A diferencia de Nota de Calidad/Condición/Completo (§4.8, a nivel de **Pallet 
 4. Se genera la **OC** de lo efectivamente embalado y aprobado (opcionalmente asociada a un Cierre de Negocio), con el informe de calidad adjunto (PDF + `informeCalidadId`).
 5. La fruta se **recepciona con OC** → validación (§7) → si cuadra, entra a Stock como `COMPRA`.
 
-### 5.2 Vía 2 — Consignación
+### 5.2 Vía 2 — Proceso (sin OC)
+
+> *(2026-10-01: antes "Consignación". La vía de consignación se eliminó; la recepción sin OC es siempre **Proceso**.)*
 
 1. Se confecciona el **Instructivo de Embalaje**.
 2. **No se genera OC.**
-3. La fruta se **recepciona sin OC** (carga libre) a partir del reporte de stock de la planta → entra a Stock como `CONSIGNACION`.
+3. La fruta se **recepciona sin OC** (carga libre) a partir del reporte de stock de la planta → entra a Stock como `PROCESO`.
 
 ### 5.3 Proceso unificado (converge desde ambas vías)
 
@@ -351,7 +355,7 @@ Como las cantidades son validación dura (§7), la OC debe poder editarse hasta 
 
 ### 6.3 Destino de liquidación según origen
 - **Fruta `COMPRA` (con OC):** precio fijo pactado en la línea de OC → es **costo de compra** → alimenta **Costos**. **No aplica Liquidación a Productor.**
-- **Fruta `CONSIGNACION` (sin OC):** **sí** aplica **Liquidación a Productor** (precio variable, resultado de la venta menos costos/comisiones).
+- **Fruta `PROCESO` (sin OC):** *(2026-10-01)* con la eliminación de la vía de consignación, el disparador de **Liquidación a Productor** por origen de recepción queda **pendiente de redefinición**. La Liquidación a Productor como flujo aún no está implementada (existen los mantenedores `ConceptoLiquidacion` y los movimientos de Cuenta Corriente); su modelo de disparo se definirá en el spec de Liquidaciones.
 
 ### 6.4 Pallet indivisible y exclusivo
 El pallet es la unidad mínima; no se divide. Pertenece a **un solo** Embarque a la vez. Debe existir la función de **desvincular/eliminar** el pallet de un embarque **mientras el despacho no esté confirmado**; una vez confirmado, se bloquea.
@@ -371,7 +375,7 @@ El maestro de Calibres tiene un campo de **orden/secuencia**, definido **por esp
 
 ## 7. Motor de Validación de Recepción (con OC)
 
-Aplica **solo en modo compra** (Recepción con OC). En modo consignación no hay validación contra documento previo (carga libre).
+Aplica **solo en modo compra** (Recepción con OC). En modo proceso (sin OC) no hay validación contra documento previo (carga libre).
 
 **Principio:** validación **por totales de cada línea de OC** (por combinación completa), **no** por pallet ni por característica marginal. La distribución de calibres/características dentro de cada pallet es irrelevante. **Todo o nada.**
 
@@ -401,7 +405,7 @@ Para cada línea de OC, contra el grupo correspondiente del Excel:
 
 - **InstructivoEmbalaje:** sin máquina de estados (documento emitido).
 - **OrdenCompra:** `Borrador → Emitida → Recepcionada` (editable hasta recepcionar; ver §6.2). *(Detalle fino de estados a afinar en implementación.)*
-- **Recepcion:** `Cargada → Validada` (modo OC) · `Cargada` (modo consignación). Carga es todo-o-nada; una carga rechazada no genera pallets.
+- **Recepcion:** `Cargada → Validada` (modo OC) · `Cargada → Validada` (modo proceso — valida contra Instructivos, §4.4/§5.2). Carga es todo-o-nada; una carga rechazada no genera pallets.
 - **"Standby" de despacho (Packing List):** no es un estado formal nuevo; es la condición de **no poder avanzar los pasos siguientes ni facturar** mientras haya discrepancia PL↔reserva. Se modela como bloqueo sobre el Embarque/Despacho (`ventas.md`), no como un estado propio de Compras.
 
 ---
@@ -417,7 +421,7 @@ AGL360 es un sistema propio de Agrosan (no una `Entidad` del mantenedor, todaví
 Si la llamada saliente a AGL360 falla (el sistema todavía no existe o está caído), el usuario decide si generar el Embarque igual sin reserva (`PENDIENTE`, reintentable después) — no bloquea el flujo de Ventas. Adapter mockeable (`AGL_PROVIDER=mock|agl360`, mismo patrón que el proveedor DTE) mientras AGL360 no tenga un ambiente real.
 
 ### 9.2 Mantenedor de formatos de carga (columnas por planta/origen)
-Patrón único reutilizado tanto para el **reporte de stock de consignación** como para el **Packing List**: un mantenedor que mapea, por planta/origen, cada dato requerido por la aplicación a su **columna del Excel** y **fila de inicio**. Si más adelante alguna planta envía PDF, se amplía con lectura IA (§10).
+Patrón único reutilizado tanto para el **reporte de stock de la planta** (recepción en modo proceso) como para el **Packing List**: un mantenedor que mapea, por planta/origen, cada dato requerido por la aplicación a su **columna del Excel** y **fila de inicio**. Si más adelante alguna planta envía PDF, se amplía con lectura IA (§10).
 
 > **Formato de archivo aceptado (decisión, 2026-08-17 — QA-RCV-001):** el lector de Recepción solo admite `.xlsx` (OOXML) — ExcelJS no soporta el formato binario legado BIFF (`.xls`). El enunciado de este párrafo y de §4.4 ("Excel u otro cargado") es genérico, pero la implementación v0.1 exige `.xlsx`; si una planta entrega `.xls`, debe convertirse a `.xlsx` antes de subirlo. Soporte nativo de `.xls` queda diferido — ver §10.
 
@@ -461,10 +465,10 @@ Tras capturar, FAS imputa el documento a una o varias OC por montos (CO1) y refl
 **Deudas cross-módulo (a aplicar):**
 - **`ventas.md` — corrección del modelo de Embarque/Instructivo** (parche listo, resumen abajo).
 - **`reclamos.md` — FK** `instructivo` (texto libre) → FK al **Embarque**. Desbloqueada al cerrar Ventas.
-- **Costos / Liquidación** — el `precioUsdCaja` de la línea de OC alimenta **Costos** (fruta comprada); la fruta de consignación alimenta **Liquidación a Productor**.
+- **Costos / Liquidación** — el `precioUsdCaja` de la línea de OC alimenta **Costos** (fruta comprada). *(2026-10-01: con la eliminación de la vía de consignación, el disparador de Liquidación a Productor para fruta sin OC queda pendiente de redefinición — ver §6.3.)*
 
 **Supuestos asumidos (confirmar si difieren):**
-- El flag `COMPRA/CONSIGNACION` vive a nivel de Recepción y se propaga a los pallets.
+- El flag de origen (`COMPRA`/`PROCESO`) vive a nivel de Recepción y se propaga a los pallets.
 - `cajasPorPallet` en la OC sirve solo para el total esperado, no como tope por pallet.
 
 ---
@@ -487,7 +491,7 @@ Pantalla de consulta **solo lectura** del stock de fruta ya recepcionada **y aú
 
 - `especie`/`variedad`/`categoria`/`calibre` (id + `{id, codigo, descripcion}`)
 - `productor` (`{id, codigo, descripcion}`)
-- `origen` (`COMPRA`|`CONSIGNACION`|`PROCESO`)
+- `origen` (`COMPRA`|`PROCESO`)
 - `estado` — `Recepcion.estado` del Pallet padre (`CARGADA`|`VALIDADA`; `RECHAZADA` nunca llega acá porque esa Recepción no genera Pallets)
 - `fechaRecepcion` — `Pallet.creadoEn`
 - `numeroPallet`, `palletId`, `palletLineaId`

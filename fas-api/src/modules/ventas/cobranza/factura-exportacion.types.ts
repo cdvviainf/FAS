@@ -13,6 +13,11 @@ export interface FacturaExportacionActualizarInput {
   // cláusula (Parametro.requiereFlete/requiereSeguro). El service los valida.
   montoFlete?: number | null
   montoSeguro?: number | null
+  // Tipo de cambio (pesos por unidad de la moneda extranjera) — editable en BORRADOR.
+  tipoCambio?: number | null
+  // Fecha de la paridad observada (ISO YYYY-MM-DD) cuando el valor viene de
+  // "Obtener"; null en ingreso manual. BRT-R1-003.
+  fechaTipoCambio?: string | null
 }
 
 export interface FacturasExportacionListFilters {

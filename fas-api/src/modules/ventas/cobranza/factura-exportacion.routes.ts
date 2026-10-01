@@ -22,6 +22,7 @@ export async function facturaExportacionRoutes(app: FastifyInstance) {
   app.get('/exportacion/embarques-despachados', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listarEmbarques)
   app.get('/facturas-exportacion/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.obtener)
   app.get('/facturas-exportacion/:id/xml', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarXml)
-  app.get('/facturas-exportacion/:id/excel', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarExcel)
+  // Tipo de cambio sugerido (dólar/euro observado del Banco Central) para el editor.
+  app.get('/facturas-exportacion/:id/tipo-cambio', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.obtenerTipoCambio)
   app.get('/embarques/:id/factura-exportacion', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.obtenerDelEmbarque)
 }

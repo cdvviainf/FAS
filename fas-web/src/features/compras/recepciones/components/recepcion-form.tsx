@@ -73,11 +73,11 @@ function formatoBytes(b: number): string {
   return `${(b / (1024 * 1024)).toFixed(1)} MB`
 }
 
-// Etapa 3 (2026-08-23): reemplaza el binario tieneOc por 3 modos — sin OC,
-// CONSIGNACION y PROCESO no son distinguibles solo con un booleano (ambos
-// dejan ordenCompraId en null; PROCESO valida contra folios de Calidad en
-// vez de contra líneas de OC).
-type ModoRecepcion = 'OC' | 'CONSIGNACION' | 'PROCESO'
+// Modos de Recepción (2026-10-01): solo Orden de Compra o Proceso. La
+// Consignación se eliminó por decisión de negocio (ya no es un modo válido).
+// OC valida contra las líneas de la OC; PROCESO valida contra folios de Calidad
+// de los Instructivos.
+type ModoRecepcion = 'OC' | 'PROCESO'
 
 interface HeaderFields {
   modo: ModoRecepcion
@@ -90,7 +90,7 @@ interface HeaderFields {
 }
 
 const HEADER_EMPTY: HeaderFields = {
-  modo: 'CONSIGNACION',
+  modo: 'OC',
   ordenCompraId: null,
   instructivoIds: [],
   plantaId: 0,
@@ -128,7 +128,9 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   })
   const { data: ordenesCompraData } = useQuery({
     queryKey: ['ordenes-compra-emitidas-options'],
-    queryFn: () => ordenesCompraService.list({ estado: 'EMITIDA', limit: 200 }),
+    // limit 100 = tope del contrato del listado de OC (ordenes-compra.schema.ts
+    // .max(100)); pedir más devuelve 400 y dejaba el combo vacío.
+    queryFn: () => ordenesCompraService.list({ estado: 'EMITIDA', limit: 100 }),
     staleTime: 60_000,
     enabled: fields.modo === 'OC',
   })
@@ -172,7 +174,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
       const d = recepcion.data
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFields({
-        modo: d.ordenCompraId ? 'OC' : d.origen === 'PROCESO' ? 'PROCESO' : 'CONSIGNACION',
+        modo: d.ordenCompraId ? 'OC' : 'PROCESO',
         ordenCompraId: d.ordenCompraId,
         instructivoIds: d.instructivos.map((i) => i.instructivo.id),
         plantaId: d.plantaId,
@@ -368,10 +370,6 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
                 <div className='flex items-center gap-1.5'>
                   <RadioGroupItem value='OC' id='modo-oc' />
                   <Label htmlFor='modo-oc' className='font-normal'>Con Orden de Compra</Label>
-                </div>
-                <div className='flex items-center gap-1.5'>
-                  <RadioGroupItem value='CONSIGNACION' id='modo-consignacion' />
-                  <Label htmlFor='modo-consignacion' className='font-normal'>Consignación</Label>
                 </div>
                 <div className='flex items-center gap-1.5'>
                   <RadioGroupItem value='PROCESO' id='modo-proceso' />
