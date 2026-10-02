@@ -320,13 +320,14 @@ async function main() {
   console.log(`TipoParametro: ${tiposParametroVentas.length} tipos verificados. Parametro: ${parametrosCreados} valores nuevos creados.`)
 
   console.log('Seeding ClausulaVenta (Incoterm)...')
-  // codigoAduana = código de la tabla "Cláusula de Venta" del SII (DTE 110):
-  // 1=CIF, 2=C&F(CFR), 3=FOB, 5=EX-WORKS. Normaliza nuestros códigos de negocio.
+  // codigoAduana = código de la tabla "Cláusula de Venta" de Aduana del SII
+  // (DTE 110), según LibreDTE: 1=CIF, 2=CFR, 3=EXW, 5=FOB. Normaliza nuestros
+  // códigos de negocio.
   const clausulasVentaBase = [
-    { codigo: 'FOB', descripcion: 'FOB', requiereFlete: false, requiereSeguro: false, codigoAduana: '3' },
+    { codigo: 'FOB', descripcion: 'FOB', requiereFlete: false, requiereSeguro: false, codigoAduana: '5' },
     { codigo: 'CFR', descripcion: 'CFR', requiereFlete: true, requiereSeguro: false, codigoAduana: '2' },
     { codigo: 'CIF', descripcion: 'CIF', requiereFlete: true, requiereSeguro: true, codigoAduana: '1' },
-    { codigo: 'EXW', descripcion: 'EXW', requiereFlete: false, requiereSeguro: false, codigoAduana: '5' },
+    { codigo: 'EXW', descripcion: 'EXW', requiereFlete: false, requiereSeguro: false, codigoAduana: '3' },
   ]
   let clausulasVentaCreadas = 0
   for (const clausula of clausulasVentaBase) {
@@ -527,6 +528,18 @@ async function main() {
     },
     data: { codigoAduana: '1' },
   })
+  // País: código de la tabla de Aduana del SII por ISO alfa-3 (nuestro `codigo`).
+  // Set de mercados de exportación habituales; el resto se carga manual. (Países
+  // es global: no se scopea por empresa.) Solo escribe donde falta.
+  const paisAduana: Record<string, string> = {
+    CHL: '997', COL: '202', USA: '225', CHN: '336', PER: '219', BRA: '220',
+    NLD: '515', GBR: '510', ESP: '517', DEU: '563', CAN: '226', MEX: '216',
+    ECU: '218', ARG: '224', RUS: '562', IND: '317', KOR: '333', JPN: '331',
+    TWN: '330', HKG: '342', ARE: '341', SAU: '302',
+  }
+  for (const [codigo, codigoAduana] of Object.entries(paisAduana)) {
+    await prisma.pais.updateMany({ where: { codigo, codigoAduana: null, eliminadoEn: null }, data: { codigoAduana } })
+  }
 
   // Notas de Calidad/Condición del Pallet (2026-09-02, compras.md §4.8):
   // catálogo inicial de ejemplo (A-D / 1-4), habilitado desde ya para todas
