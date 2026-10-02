@@ -51,9 +51,7 @@ const facturaInclude = {
       // Relaciones para reconstruir la descripción por idioma (ES/EN).
       especie: descSelect,
       variedad: descSelect,
-      // Artículo (EMBALAJE): además de la descripción, los pesos por caja para
-      // el peso neto/bruto del bloque Aduana del DTE 110.
-      articulo: { select: { descripcion: true, descripcionExtranjera: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+      articulo: descSelect,
       calibre: descSelect,
       categoria: descSelect,
       etiqueta: descSelect,
@@ -152,6 +150,17 @@ export async function getEmbarqueParaFacturaDte(embarqueId: number) {
         },
       },
     },
+  })
+}
+
+// Peso del embarque para el DTE 110: cada PalletLinea tiene su embalaje
+// (Articulo, kgNeto/BrutoEnvase) y cajas. Se calcula desde los pallets físicos,
+// no desde las líneas de la Factura (que pueden estar agrupadas SIN artículo →
+// sin peso). Devuelve cajas + pesos por línea; el service suma.
+export async function getLineasPalletParaPeso(embarqueId: number) {
+  return prisma.palletLinea.findMany({
+    where: { pallet: { embarqueId } },
+    select: { cajas: true, articulo: { select: { kgNetoEnvase: true, kgBrutoEnvase: true } } },
   })
 }
 

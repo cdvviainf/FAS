@@ -341,7 +341,7 @@ async function conManejoPayloadDte<T>(facturaId: number, accion: string, fn: () 
 // (FAS-EXP-ADU-QA-001). El contenedor va aparte en IdContainer.
 const COD_TIPO_BULTO_CAJA = '22'
 
-function construirPayloadDte(
+async function construirPayloadDte(
   factura: NonNullable<Awaited<ReturnType<typeof repo.getFacturaActivaById>>>,
   embarque: NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>,
   emisor: { rut: string; razonSocial: string; giro: string | null; direccion: string | null; comuna: string | null },
@@ -366,16 +366,18 @@ function construirPayloadDte(
   const booking = embarque.reservaManual ? embarque.numeroBookingManual : (embarque.solicitudReserva?.numeroBooking ?? null)
   const contenedor = embarque.reservaManual ? embarque.numeroContenedorManual : (embarque.solicitudReserva?.numeroContenedor ?? null)
 
-  // Pesos (kilos) y total de bultos, derivados de las líneas y el envase (Artículo).
+  // TotBultos = total de cajas facturadas (líneas de la Factura).
+  const totBultos = factura.lineas.reduce((s, l) => s + Number(l.cantidadCajas), 0)
+  // Peso: desde los PALLETS físicos del embarque (cada PalletLinea tiene su
+  // embalaje con kgNeto/Bruto), NO desde las líneas de la Factura — que agrupadas
+  // sin la dimensión ARTICULO quedan con articuloId null y por ende sin peso.
   const redondea = (n: number) => Math.round(n * 100) / 100
+  const lineasPallet = await repo.getLineasPalletParaPeso(embarque.id)
   let pesoNetoAcum = 0
   let pesoBrutoAcum = 0
-  let totBultos = 0
-  for (const l of factura.lineas) {
-    const cajas = Number(l.cantidadCajas)
-    totBultos += cajas
-    if (l.articulo?.kgNetoEnvase != null) pesoNetoAcum += cajas * Number(l.articulo.kgNetoEnvase)
-    if (l.articulo?.kgBrutoEnvase != null) pesoBrutoAcum += cajas * Number(l.articulo.kgBrutoEnvase)
+  for (const pl of lineasPallet) {
+    if (pl.articulo?.kgNetoEnvase != null) pesoNetoAcum += pl.cajas * Number(pl.articulo.kgNetoEnvase)
+    if (pl.articulo?.kgBrutoEnvase != null) pesoBrutoAcum += pl.cajas * Number(pl.articulo.kgBrutoEnvase)
   }
   const pesoNeto = pesoNetoAcum > 0 ? redondea(pesoNetoAcum) : null
   const pesoBruto = pesoBrutoAcum > 0 ? redondea(pesoBrutoAcum) : null
@@ -453,7 +455,7 @@ async function armarPreviewPayloadDte(id: number) {
   if (!emisor?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
 
   const idioma = normalizarIdioma(factura.idioma)
-  const payload = construirPayloadDte(
+  const payload = await construirPayloadDte(
     factura,
     embarque,
     { rut: emisor.rut, razonSocial: emisor.razonSocial, giro: emisor.giro, direccion: emisor.direccion, comuna: emisor.comuna },
@@ -519,7 +521,7 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
   // advisory lock antes de crear el temporal (FAS-COB-F1-001).
   const versionAlLeer = factura.actualizadoEn?.getTime() ?? null
 
-  const payload = construirPayloadDte(
+  const payload = await construirPayloadDte(
     factura,
     embarque,
     { rut: emisor.rut, razonSocial: emisor.razonSocial, giro: emisor.giro, direccion: emisor.direccion, comuna: emisor.comuna },
