@@ -43,6 +43,27 @@ export interface AduanaFacturaExportacion {
   codPtoEmbarque: string | null // Puerto de zarpe .codigo
   codPtoDesembarque: string | null // Puerto de destino .codigo
   paisDestinoCodigo: string | null // Pais destino .codigo (Aduana)
+  // Transporte (todos opcionales): compañía (naviera), nave, booking.
+  nombreCiaTransp: string | null
+  rutCiaTransp: string | null
+  nombreTransp: string | null
+  booking: string | null
+  // Pesos (kilos) y bultos del embarque, derivados de las líneas y el envase.
+  pesoNeto: number | null
+  pesoBruto: number | null
+  totItems: number | null
+  totBultos: number | null
+  // Tipo de bulto (SII): código, cantidad y, si hay, el contenedor.
+  tipoBulto: { codTpoBultos: string; cantBultos: number; idContainer: string | null } | null
+}
+
+// Referencia del DTE (OC/DUS/BL). TpoDocRef = código SII (808=B/L, 807=DUS,
+// 801=Orden de Compra). FchRef obligatoria.
+export interface ReferenciaFacturaExportacion {
+  tpoDocRef: string
+  folioRef: string
+  fecha: string // YYYY-MM-DD
+  razonRef?: string
 }
 
 export interface FacturaExportacionMapeo {
@@ -57,6 +78,7 @@ export interface FacturaExportacionMapeo {
   receptor: ReceptorFacturaExportacion
   lineas: LineaFacturaExportacion[]
   aduana: AduanaFacturaExportacion
+  referencias?: ReferenciaFacturaExportacion[]
 }
 
 // RUT genérico de receptor extranjero para DTE de exportación (norma SII).
@@ -66,16 +88,38 @@ function fmtFecha(d: Date): string {
   return d.toISOString().slice(0, 10) // YYYY-MM-DD
 }
 
+// Unidad de peso de la tabla de Aduana del SII: KN = kilos.
+const COD_UNID_PESO = 'KN'
+
 function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
   return {
     ...(a.codModVenta ? { CodModVenta: a.codModVenta } : {}),
     ...(a.codClauVenta ? { CodClauVenta: a.codClauVenta } : {}),
     TotClauVenta: a.totalClausulaVenta,
-    ...(a.montoFlete != null ? { MntFlete: a.montoFlete } : {}),
-    ...(a.montoSeguro != null ? { MntSeguro: a.montoSeguro } : {}),
+    ...(a.nombreTransp ? { NombreTransp: a.nombreTransp } : {}),
+    ...(a.rutCiaTransp ? { RUTCiaTransp: a.rutCiaTransp } : {}),
+    ...(a.nombreCiaTransp ? { NombreCiaTransp: a.nombreCiaTransp } : {}),
+    ...(a.booking ? { Booking: a.booking } : {}),
     ...(a.codViaTransp ? { CodViaTransp: a.codViaTransp } : {}),
     ...(a.codPtoEmbarque ? { CodPtoEmbarque: a.codPtoEmbarque } : {}),
     ...(a.codPtoDesembarque ? { CodPtoDesemb: a.codPtoDesembarque } : {}),
+    ...(a.pesoBruto != null ? { PesoBruto: a.pesoBruto, CodUnidPesoBruto: COD_UNID_PESO } : {}),
+    ...(a.pesoNeto != null ? { PesoNeto: a.pesoNeto, CodUnidPesoNeto: COD_UNID_PESO } : {}),
+    ...(a.totItems != null ? { TotItems: a.totItems } : {}),
+    ...(a.totBultos != null ? { TotBultos: a.totBultos } : {}),
+    ...(a.tipoBulto
+      ? {
+          TipoBultos: [
+            {
+              CodTpoBultos: a.tipoBulto.codTpoBultos,
+              CantBultos: a.tipoBulto.cantBultos,
+              ...(a.tipoBulto.idContainer ? { IdContainer: a.tipoBulto.idContainer } : {}),
+            },
+          ],
+        }
+      : {}),
+    ...(a.montoFlete != null ? { MntFlete: a.montoFlete } : {}),
+    ...(a.montoSeguro != null ? { MntSeguro: a.montoSeguro } : {}),
     ...(a.paisDestinoCodigo ? { CodPaisRecep: a.paisDestinoCodigo } : {}),
   }
 }
@@ -123,5 +167,17 @@ export function mapFacturaExportacionA110(data: FacturaExportacionMapeo): Libred
       // Exportación: ítems no afectos a IVA.
       IndExe: 1,
     })),
+    // Referencias (B/L, DUS, OC…) — solo si hay. TpoDocRef = código SII.
+    ...((data.referencias ?? []).length > 0
+      ? {
+          Referencia: (data.referencias ?? []).map((r, i) => ({
+            NroLinRef: i + 1,
+            TpoDocRef: r.tpoDocRef,
+            FolioRef: r.folioRef,
+            FchRef: r.fecha,
+            ...(r.razonRef ? { RazonRef: r.razonRef } : {}),
+          })),
+        }
+      : {}),
   }
 }

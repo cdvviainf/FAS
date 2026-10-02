@@ -111,4 +111,32 @@ describe('mapFacturaExportacionA110', () => {
     // El total de la cláusula siempre va.
     expect(aduana.TotClauVenta).toBe(1950)
   })
+
+  it('emite transporte, pesos, bultos y Referencia cuando vienen', () => {
+    const dte = mapFacturaExportacionA110({
+      ...base,
+      aduana: {
+        ...base.aduana,
+        nombreCiaTransp: 'MEDITERRANEAN SHIPPING COMPANY',
+        nombreTransp: 'MSC EUGENIA',
+        booking: 'EBKG16677344',
+        pesoNeto: 18696,
+        pesoBruto: 20976,
+        totItems: 2,
+        totBultos: 2280,
+        tipoBulto: { codTpoBultos: '22', cantBultos: 2280, idContainer: 'MSDU9653670' },
+      },
+      referencias: [{ tpoDocRef: '808', folioRef: 'MEDUW9324551', fecha: '2026-05-09', razonRef: 'B/L' }],
+    })
+    const aduana = (dte.Encabezado as Record<string, unknown>).Aduana as Record<string, unknown>
+    expect(aduana.NombreCiaTransp).toBe('MEDITERRANEAN SHIPPING COMPANY')
+    expect(aduana.NombreTransp).toBe('MSC EUGENIA')
+    expect(aduana.Booking).toBe('EBKG16677344')
+    expect(aduana).toMatchObject({ PesoNeto: 18696, CodUnidPesoNeto: 'KN', PesoBruto: 20976, CodUnidPesoBruto: 'KN' })
+    expect(aduana.TotBultos).toBe(2280)
+    const bultos = aduana.TipoBultos as Array<Record<string, unknown>>
+    expect(bultos[0]).toMatchObject({ CodTpoBultos: '22', CantBultos: 2280, IdContainer: 'MSDU9653670' })
+    const refs = (dte as Record<string, unknown>).Referencia as Array<Record<string, unknown>>
+    expect(refs[0]).toMatchObject({ NroLinRef: 1, TpoDocRef: '808', FolioRef: 'MEDUW9324551', FchRef: '2026-05-09' })
+  })
 })

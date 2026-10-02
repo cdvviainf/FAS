@@ -51,7 +51,9 @@ const facturaInclude = {
       // Relaciones para reconstruir la descripción por idioma (ES/EN).
       especie: descSelect,
       variedad: descSelect,
-      articulo: descSelect,
+      // Artículo (EMBALAJE): además de la descripción, los pesos por caja para
+      // el peso neto/bruto del bloque Aduana del DTE 110.
+      articulo: { select: { descripcion: true, descripcionExtranjera: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
       calibre: descSelect,
       categoria: descSelect,
       etiqueta: descSelect,
@@ -126,7 +128,15 @@ export async function getEmbarqueParaFacturaDte(embarqueId: number) {
       reservaManual: true,
       fechaZarpeManual: true,
       fechaArribo: true,
-      solicitudReserva: { select: { fechaZarpe: true } },
+      // Transporte/booking del DTE 110: según `reservaManual` (arriba) se toman
+      // los campos *Manual del Embarque o los de la SolicitudReserva (AGL360).
+      naveManual: true,
+      numeroBookingManual: true,
+      numeroContenedorManual: true,
+      tipoBultos: true,
+      awbBl: true,
+      naviera: { select: { razonSocial: true, rut: true } },
+      solicitudReserva: { select: { fechaZarpe: true, nave: true, numeroBooking: true, numeroContenedor: true } },
       puertoZarpe: { select: { codigo: true, descripcion: true, codigoAduana: true } },
       notaVenta: {
         select: {

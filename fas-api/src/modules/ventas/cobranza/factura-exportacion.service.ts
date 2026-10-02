@@ -316,6 +316,18 @@ function validarCodigosAduana(
   }
 }
 
+// Mapea el texto libre de `tipoBultos` del Embarque a un código de la tabla de
+// Tipo de Bulto del SII. Para fruta el bulto es la caja (default 22 = CAJA DE
+// CARTON). Reefer/pallet/contenedor si el texto lo indica.
+function mapCodTipoBultos(texto: string | null): string {
+  const t = (texto ?? '').toLowerCase()
+  if (/pallet/.test(t)) return '80'
+  if (/reefer|refrigerad/.test(t)) return '75'
+  if (/cont.*40|40.*(hc|rf|dc)?/.test(t) && /cont/.test(t)) return '74'
+  if (/cont.*20/.test(t)) return '73'
+  return '22' // CAJA DE CARTON (default fruta)
+}
+
 function construirPayloadDte(
   factura: NonNullable<Awaited<ReturnType<typeof repo.getFacturaActivaById>>>,
   embarque: NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>,
@@ -333,6 +345,33 @@ function construirPayloadDte(
   })
   const factor = factorFob(montoTotalNum, montoFlete, montoSeguro)
   const fechaDocumento = factura.fechaDocumento ?? new Date()
+  const fechaRef = fechaDocumento.toISOString().slice(0, 10)
+
+  // Transporte/booking: según reservaManual, de los campos manuales del Embarque
+  // o de la SolicitudReserva (AGL360) — mismo criterio que el PDF del Instructivo.
+  const nave = embarque.reservaManual ? embarque.naveManual : (embarque.solicitudReserva?.nave ?? null)
+  const booking = embarque.reservaManual ? embarque.numeroBookingManual : (embarque.solicitudReserva?.numeroBooking ?? null)
+  const contenedor = embarque.reservaManual ? embarque.numeroContenedorManual : (embarque.solicitudReserva?.numeroContenedor ?? null)
+
+  // Pesos (kilos) y total de bultos, derivados de las líneas y el envase (Artículo).
+  const redondea = (n: number) => Math.round(n * 100) / 100
+  let pesoNetoAcum = 0
+  let pesoBrutoAcum = 0
+  let totBultos = 0
+  for (const l of factura.lineas) {
+    const cajas = Number(l.cantidadCajas)
+    totBultos += cajas
+    if (l.articulo?.kgNetoEnvase != null) pesoNetoAcum += cajas * Number(l.articulo.kgNetoEnvase)
+    if (l.articulo?.kgBrutoEnvase != null) pesoBrutoAcum += cajas * Number(l.articulo.kgBrutoEnvase)
+  }
+  const pesoNeto = pesoNetoAcum > 0 ? redondea(pesoNetoAcum) : null
+  const pesoBruto = pesoBrutoAcum > 0 ? redondea(pesoBrutoAcum) : null
+
+  // Referencias: B/L (código SII 808) si el Embarque lo tiene.
+  const referencias: Array<{ tpoDocRef: string; folioRef: string; fecha: string; razonRef?: string }> = []
+  if (embarque.awbBl?.trim()) {
+    referencias.push({ tpoDocRef: '808', folioRef: embarque.awbBl.trim(), fecha: fechaRef, razonRef: 'B/L' })
+  }
 
   return mapFacturaExportacionA110({
     fechaEmision: fechaDocumento,
@@ -365,7 +404,22 @@ function construirPayloadDte(
       codPtoEmbarque: embarque.puertoZarpe?.codigoAduana ?? null,
       codPtoDesembarque: nv.puertoDestino?.codigoAduana ?? null,
       paisDestinoCodigo: nv.paisDestino?.codigoAduana ?? null,
+      // Transporte. RUTCiaTransp se omite: la naviera suele ser extranjera (sin
+      // RUT chileno) y un RUT inválido haría rechazar el DTE.
+      nombreCiaTransp: embarque.naviera?.razonSocial ?? null,
+      rutCiaTransp: null,
+      nombreTransp: nave,
+      booking,
+      pesoNeto,
+      pesoBruto,
+      totItems: factura.lineas.length,
+      totBultos: totBultos > 0 ? totBultos : null,
+      // El bulto es la caja (CantBultos = total de cajas); el contenedor va aparte.
+      tipoBulto: totBultos > 0
+        ? { codTpoBultos: mapCodTipoBultos(embarque.tipoBultos), cantBultos: totBultos, idContainer: contenedor }
+        : null,
     },
+    referencias,
   })
 }
 
