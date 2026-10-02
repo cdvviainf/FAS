@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
-import { NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { BusinessError, NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { logger } from '../../../lib/logger.js'
 import { siguienteCodigo } from '../../config/prefijos-codigo/prefijos-codigo.service.js'
 import { validarYCompletarLineas } from './proforma.service.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
@@ -316,6 +317,23 @@ function validarCodigosAduana(
   }
 }
 
+// Ejecuta el armado/envío del DTE 110 con manejo de errores: los de negocio
+// (BusinessError) pasan tal cual (ya tienen mensaje claro); cualquier otro
+// (campo mal armado, Prisma, etc.) se loguea con detalle y se devuelve un
+// mensaje accionable en vez de un 500 opaco "Error interno del servidor".
+async function conManejoPayloadDte<T>(facturaId: number, accion: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn()
+  } catch (e) {
+    if (e instanceof BusinessError) throw e
+    logger.error({ err: e, facturaId, accion }, 'Error inesperado al armar/enviar el DTE 110 de exportación')
+    throw new ValidationError(
+      'No se pudo armar el documento para el SII. Revisa los datos del Embarque y la Factura; ' +
+        'el detalle del error quedó en los logs del servidor.',
+    )
+  }
+}
+
 // Mapea el texto libre de `tipoBultos` del Embarque a un código de la tabla de
 // Tipo de Bulto del SII. Para fruta el bulto es la caja (default 22 = CAJA DE
 // CARTON). Reefer/pallet/contenedor si el texto lo indica.
@@ -427,6 +445,10 @@ function construirPayloadDte(
 // simpleDTE (mismo construirPayloadDte), SIN enviarlo ni validar. Sirve para ver
 // si el bloque Aduana sale completo cuando el PDF del borrador se ve reducido.
 export async function obtenerPayloadDtePreview(id: number) {
+  return conManejoPayloadDte(id, 'preview', () => armarPreviewPayloadDte(id))
+}
+
+async function armarPreviewPayloadDte(id: number) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
   const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
@@ -462,6 +484,10 @@ export async function obtenerPayloadDtePreview(id: number) {
 
 // ─── Paso 1: Enviar borrador al SII (crea el DTE temporal en LibreDTE) ────────
 export async function enviarBorradorSii(id: number, userId: string) {
+  return conManejoPayloadDte(id, 'enviar-sii', () => enviarBorradorSiiInterno(id, userId))
+}
+
+async function enviarBorradorSiiInterno(id: number, userId: string) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
   if (factura.estado !== 'BORRADOR') {
