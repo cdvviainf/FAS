@@ -42,6 +42,8 @@ export const proformaEmitirSchema = z.object({
   // dato de la Nota de Venta). No negativos; el service redondea a 2 decimales.
   montoFlete: z.number().min(0).max(9_999_999_999).optional().nullable(),
   montoSeguro: z.number().min(0).max(9_999_999_999).optional().nullable(),
+  // Observaciones libres del documento (se muestran en el PDF).
+  observaciones: z.string().trim().max(2000).optional().nullable(),
 })
 
 export const proformasListQuerySchema = z.object({

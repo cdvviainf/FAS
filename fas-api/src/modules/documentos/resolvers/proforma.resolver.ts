@@ -92,6 +92,7 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
     },
     moneda: proforma.moneda.codigo,
     condicionPago: proforma.condicionPago?.descripcion ?? null,
+    observaciones: proforma.observaciones ?? null,
     variante: 'PROFORMA',
     folio: null,
     tipoDte: null,

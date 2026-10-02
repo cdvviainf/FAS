@@ -22,6 +22,7 @@ export const proformaPdfPayloadSchema = z.object({
   }),
   moneda: z.string(), // código, ej. "USD"
   condicionPago: z.string().nullable(), // descripción de la CondicionPago heredada
+  observaciones: z.string().nullable().default(null), // observaciones libres del documento
   // La misma plantilla sirve para la Proforma y para la Factura de Exportación
   // (DTE 110): `variante` cambia el título y `folio`/`tipoDte` se muestran solo
   // en la Factura ya timbrada.

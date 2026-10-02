@@ -18,6 +18,7 @@ export interface FacturaExportacionActualizarInput {
   // Fecha de la paridad observada (ISO YYYY-MM-DD) cuando el valor viene de
   // "Obtener"; null en ingreso manual. BRT-R1-003.
   fechaTipoCambio?: string | null
+  observaciones?: string | null
 }
 
 export interface FacturasExportacionListFilters {

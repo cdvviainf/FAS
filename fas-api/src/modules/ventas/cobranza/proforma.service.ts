@@ -278,6 +278,7 @@ export async function emitirProforma(embarqueId: number, body: ProformaEmitirInp
         montoTotal,
         montoFlete,
         montoSeguro,
+        observaciones: body.observaciones ?? null,
       },
       { idioma: body.idioma, dimensiones: body.dimensiones, lineas },
       userId,

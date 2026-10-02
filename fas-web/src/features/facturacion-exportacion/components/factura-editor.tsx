@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -72,6 +73,7 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   const esMonedaExtranjera = factura.moneda.codigo !== 'CLP'
   const [tipoCambio, setTipoCambio] = useState<string>(factura.tipoCambio ?? '')
   const [fechaTipoCambio, setFechaTipoCambio] = useState<string | null>(factura.fechaTipoCambio)
+  const [observaciones, setObservaciones] = useState<string>(factura.observaciones ?? '')
 
   // Faltantes de descripción extranjera para las dimensiones actuales — para
   // advertir/bloquear el idioma inglés (misma fuente que el backend).
@@ -147,6 +149,7 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
         // de "Obtener"); null en ingreso manual → el backend sella con la fecha
         // de edición. BRT-R1-003.
         fechaTipoCambio: esMonedaExtranjera ? (fechaTipoCambio ? fechaTipoCambio.slice(0, 10) : null) : null,
+        observaciones: observaciones.trim() || null,
       }),
     onSuccess: () => {
       setDirty(false)
@@ -349,6 +352,16 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
               Complétala en el mantenedor o usa español.
             </p>
           )}
+          <div className='w-full space-y-1.5'>
+            <Label>Observaciones</Label>
+            <Textarea
+              value={observaciones}
+              onChange={(e) => { setObservaciones(e.target.value); setDirty(true) }}
+              rows={3}
+              placeholder='Observaciones libres del documento'
+              disabled={!puedeEscribir}
+            />
+          </div>
         </CardContent>
       </Card>
 

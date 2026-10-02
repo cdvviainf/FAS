@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -39,6 +40,7 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   const [lineas, setLineas] = useState<ProformaLineaSugerida[]>([])
   const [montoFlete, setMontoFlete] = useState<string>('')
   const [montoSeguro, setMontoSeguro] = useState<string>('')
+  const [observaciones, setObservaciones] = useState<string>('')
 
   const { data: sugerencia, isPending: cargandoSugerencia } = useQuery({
     queryKey: ['proforma-sugerencia', embarqueId, dimensiones],
@@ -98,6 +100,7 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
         })),
         montoFlete: requiereFlete ? Number(montoFlete) || 0 : null,
         montoSeguro: requiereSeguro ? Number(montoSeguro) || 0 : null,
+        observaciones: observaciones.trim() || null,
       }),
     onSuccess: () => {
       toast.success('Proforma emitida')
@@ -173,6 +176,15 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
                 <Icons.externalLink className='mr-2 h-4 w-4' /> Ver Cierre Comercial
               </Button>
             )}
+          </div>
+          <div className='space-y-1.5'>
+            <Label>Observaciones</Label>
+            <Textarea
+              value={observaciones}
+              onChange={(e) => setObservaciones(e.target.value)}
+              rows={3}
+              placeholder='Observaciones libres del documento (se muestran en el PDF)'
+            />
           </div>
           {enBloqueadoPorFaltantes && (
             <p className='text-xs text-destructive'>

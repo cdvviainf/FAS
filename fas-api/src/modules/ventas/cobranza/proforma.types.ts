@@ -22,6 +22,7 @@ export interface ProformaEmitirInput {
   // cláusula (Parametro.requiereFlete/requiereSeguro). El service los valida.
   montoFlete?: number | null
   montoSeguro?: number | null
+  observaciones?: string | null
 }
 
 export interface ProformasListFilters {

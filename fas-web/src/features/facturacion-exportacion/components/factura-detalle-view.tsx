@@ -86,6 +86,11 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
                 <dt className='font-medium'>Condición de pago:</dt><dd>{factura.condicionPago.descripcion}</dd>
               </>
             )}
+            {factura.observaciones && (
+              <>
+                <dt className='font-medium'>Observaciones:</dt><dd className='whitespace-pre-wrap'>{factura.observaciones}</dd>
+              </>
+            )}
           </dl>
           <p className='text-muted-foreground mt-1 text-sm'>
             DTE {factura.tipoDte}

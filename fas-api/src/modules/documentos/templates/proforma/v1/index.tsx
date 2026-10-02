@@ -42,6 +42,7 @@ const L = {
     plazo: 'Days',
     fechaEstimada: 'Estimated Date',
     pendiente: 'Pending',
+    observaciones: 'Remarks',
     pie: 'Frutera Agrosan · Electronically generated document',
     fechaReferencia: {
       FACTURA: 'Invoice Date',
@@ -75,6 +76,7 @@ const L = {
     plazo: 'Días',
     fechaEstimada: 'Fecha Estimada',
     pendiente: 'Pendiente',
+    observaciones: 'Observaciones',
     pie: 'Frutera Agrosan · Documento generado electrónicamente',
     fechaReferencia: {
       FACTURA: 'Fecha de Factura',
@@ -167,6 +169,13 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
 
       {d.vencimientosEstimados.length > 0 && (
         <TablaLineas titulo={t.vencimientos} filas={d.vencimientosEstimados} columnas={columnasVencimientos} />
+      )}
+
+      {d.observaciones && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, marginBottom: 3 }}>{t.observaciones}</div>
+          <div style={{ fontSize: 9, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{d.observaciones}</div>
+        </div>
       )}
 
       <PieFirma firmantes={['Frutera Agrosan', t.cliente]} />

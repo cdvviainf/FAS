@@ -88,6 +88,7 @@ export async function getProformaEmitidaParaFactura(proformaId: number) {
       fechaDocumento: true,
       montoFlete: true,
       montoSeguro: true,
+      observaciones: true,
       lineas: {
         select: {
           descripcion: true,
@@ -223,6 +224,7 @@ interface DatosCrearFactura {
   montoSeguro: number | null
   tipoCambio: number | null
   fechaTipoCambio: Date | null
+  observaciones: string | null
   lineas: LineaFacturaPersistir[]
 }
 
@@ -245,6 +247,7 @@ export async function crearBorrador(datos: DatosCrearFactura, creadoPorId: strin
       montoSeguro: datos.montoSeguro,
       tipoCambio: datos.tipoCambio,
       fechaTipoCambio: datos.fechaTipoCambio,
+      observaciones: datos.observaciones,
       estado: 'BORRADOR',
       creadoPorId,
       lineas: { create: datos.lineas.map(toLineaCreate) },
@@ -281,6 +284,7 @@ export async function actualizarBorrador(
     montoSeguro: number | null
     tipoCambio: number | null
     fechaTipoCambio: Date | null
+    observaciones: string | null
     lineas: LineaFacturaPersistir[]
   },
   actualizadoPor: string,
@@ -319,6 +323,7 @@ export async function actualizarBorrador(
         montoSeguro: datos.montoSeguro,
         tipoCambio: datos.tipoCambio,
         fechaTipoCambio: datos.fechaTipoCambio,
+        observaciones: datos.observaciones,
         lineas: { create: datos.lineas.map(toLineaCreate) },
       },
     })

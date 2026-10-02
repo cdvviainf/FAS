@@ -198,6 +198,7 @@ interface DatosCrearProforma {
   montoTotal: number
   montoFlete: number | null
   montoSeguro: number | null
+  observaciones: string | null
 }
 
 // Descripciones ES/EN de los mantenedores referenciados por las líneas — para
@@ -281,6 +282,7 @@ export async function crearProforma(datos: DatosCrearProforma, meta: MetaCrearPr
       montoTotal: datos.montoTotal,
       montoFlete: datos.montoFlete,
       montoSeguro: datos.montoSeguro,
+      observaciones: datos.observaciones,
       creadoPorId,
       lineas: {
         create: meta.lineas.map((l) => ({

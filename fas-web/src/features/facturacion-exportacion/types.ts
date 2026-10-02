@@ -71,6 +71,7 @@ export interface Proforma {
   montoFlete: string | null
   montoSeguro: string | null
   fechaDocumento: string | null
+  observaciones: string | null
   estado: EstadoProforma
   fechaEmision: string
   lineas: ProformaLinea[]
@@ -83,6 +84,7 @@ export interface ProformaEmitirInput {
   lineas: ProformaLineaInput[]
   montoFlete?: number | null
   montoSeguro?: number | null
+  observaciones?: string | null
 }
 
 // Respuesta del endpoint de sugerencia de líneas: incluye la cláusula de venta
@@ -165,6 +167,7 @@ export interface FacturaExportacion {
   // paridad observada. Null cuando la moneda es la base (CLP) o no se capturó.
   tipoCambio: string | null
   fechaTipoCambio: string | null
+  observaciones: string | null
   estado: EstadoFacturaExportacion
   errorMensajeSii: string | null
   fechaEmision: string | null
@@ -203,6 +206,7 @@ export interface FacturaExportacionActualizarInput {
   // Fecha de la paridad observada (ISO YYYY-MM-DD) cuando viene de "Obtener";
   // null en ingreso manual. BRT-R1-003.
   fechaTipoCambio?: string | null
+  observaciones?: string | null
 }
 
 // Respuesta del endpoint de tipo de cambio sugerido (dólar/euro observado).

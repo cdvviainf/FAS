@@ -3383,6 +3383,8 @@ model Proforma {
   fechaEmision DateTime       @default(now())
   // Fecha del documento (editable al emitir) — si null, se muestra fechaEmision.
   fechaDocumento DateTime?
+  // Observaciones libres del documento (editable al emitir; se muestran en el PDF).
+  observaciones  String?
 
   lineas ProformaLinea[]
 
@@ -3526,6 +3528,8 @@ model FacturaExportacion {
   // cuotas.
   fechaDocumento DateTime?
   fechaEmision   DateTime? // se fija al timbrar el DTE (firma real)
+  // Observaciones libres del documento (editable en BORRADOR; se muestran en el PDF/detalle).
+  observaciones   String?
   // Motivo de rechazo del SII/LibreDTE cuando estado = RECHAZADA.
   errorMensajeSii String?
 

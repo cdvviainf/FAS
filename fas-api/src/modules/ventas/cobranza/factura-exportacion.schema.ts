@@ -38,6 +38,8 @@ export const facturaExportacionActualizarSchema = z.object({
   // valor viene de "Obtener" (fecha real del Banco Central); en ingreso manual
   // llega null y el service sella con la fecha de edición. BRT-R1-003.
   fechaTipoCambio: z.string().date().optional().nullable(),
+  // Observaciones libres del documento (se muestran en el PDF/detalle).
+  observaciones: z.string().trim().max(2000).optional().nullable(),
 })
 
 export const embarquesDespachadosQuerySchema = z.object({

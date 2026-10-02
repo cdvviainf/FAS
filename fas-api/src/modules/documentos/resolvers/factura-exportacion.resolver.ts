@@ -63,6 +63,7 @@ export async function resolverFacturaExportacion(id: number, empresaId: number):
     },
     moneda: factura.moneda.codigo,
     condicionPago: factura.condicionPago?.descripcion ?? null,
+    observaciones: factura.observaciones ?? null,
     variante: 'FACTURA',
     folio: factura.folio,
     tipoDte: factura.tipoDte,
