@@ -74,6 +74,11 @@ export const facturaExportacionService = {
   async enviarSii(id: number): Promise<{ data: FacturaExportacion }> {
     return api.post(`ventas/cobranza/facturas-exportacion/${id}/enviar-sii`).json()
   },
+  // Diagnóstico: payload exacto que se manda a simpleDTE + resumen de códigos
+  // Aduana. No envía nada; sirve para ver por qué el PDF sale reducido.
+  async previsualizarPayloadDte(id: number): Promise<{ data: { endpoint: string; aduanaResumen: Record<string, unknown>; payload: unknown } }> {
+    return api.get(`ventas/cobranza/facturas-exportacion/${id}/payload-dte`).json()
+  },
   async firmar(id: number): Promise<{ data: FacturaExportacion }> {
     return api.post(`ventas/cobranza/facturas-exportacion/${id}/firmar`).json()
   },

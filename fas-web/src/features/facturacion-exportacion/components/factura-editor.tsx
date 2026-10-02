@@ -233,6 +233,17 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
     return true
   }
 
+  // Diagnóstico: abre en una pestaña nueva el payload exacto que se manda a
+  // simpleDTE (+ resumen de códigos Aduana), sin enviar nada.
+  const verPayload = useMutation({
+    mutationFn: () => facturaExportacionService.previsualizarPayloadDte(factura.id),
+    onSuccess: ({ data }) => {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer')
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo obtener el payload'),
+  })
+
   function handleEnviarSii() {
     if (!validarPrevio()) return
     enviarSii.mutate()
@@ -479,6 +490,9 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
         <div className='flex flex-wrap gap-2'>
           <Button variant='outline' onClick={() => guardar.mutate()} isLoading={guardar.isPending} disabled={regrupando}>
             <Icons.check className='mr-2 h-4 w-4' /> Guardar
+          </Button>
+          <Button variant='ghost' size='sm' onClick={() => verPayload.mutate()} isLoading={verPayload.isPending} title='Ver el JSON exacto que se manda al SII (diagnóstico)'>
+            <Icons.page className='mr-2 h-4 w-4' /> Ver payload SII
           </Button>
           {esRechazada && (
             <Button variant='outline' onClick={() => reabrir.mutate()} isLoading={reabrir.isPending}>

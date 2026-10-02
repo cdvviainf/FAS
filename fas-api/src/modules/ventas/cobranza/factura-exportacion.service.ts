@@ -369,6 +369,43 @@ function construirPayloadDte(
   })
 }
 
+// Diagnóstico: arma y devuelve EXACTAMENTE el payload que se manda a LibreDTE/
+// simpleDTE (mismo construirPayloadDte), SIN enviarlo ni validar. Sirve para ver
+// si el bloque Aduana sale completo cuando el PDF del borrador se ve reducido.
+export async function obtenerPayloadDtePreview(id: number) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
+  const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(factura.embarqueId))
+  const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
+  if (!emisor?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
+
+  const idioma = normalizarIdioma(factura.idioma)
+  const payload = construirPayloadDte(
+    factura,
+    embarque,
+    { rut: emisor.rut, razonSocial: emisor.razonSocial, giro: emisor.giro, direccion: emisor.direccion, comuna: emisor.comuna },
+    idioma,
+  )
+  const nv = embarque.notaVenta
+  // Resumen rápido: qué dato va con qué código de Aduana (null = falta).
+  const aduanaResumen = {
+    clausulaVenta: { descripcion: nv.clausulaVenta?.descripcion ?? null, codigoAduana: nv.clausulaVenta?.codigoAduana ?? null },
+    modalidadVenta: { descripcion: nv.modalidadVenta?.descripcion ?? null, codigoAduana: nv.modalidadVenta?.codigoAduana ?? null },
+    viaTransporte: { descripcion: nv.tipoEmbarque?.descripcion ?? null, codigoAduana: nv.tipoEmbarque?.codigoAduana ?? null },
+    puertoEmbarque: { descripcion: embarque.puertoZarpe?.descripcion ?? null, codigoAduana: embarque.puertoZarpe?.codigoAduana ?? null },
+    puertoDesembarque: { descripcion: nv.puertoDestino?.descripcion ?? null, codigoAduana: nv.puertoDestino?.codigoAduana ?? null },
+    paisDestino: { descripcion: nv.paisDestino?.descripcion ?? null, codigoAduana: nv.paisDestino?.codigoAduana ?? null },
+    moneda: nv.moneda?.descripcionExtranjera || nv.moneda?.descripcion || nv.moneda?.codigo || null,
+    tipoCambio: factura.tipoCambio == null ? null : Number(factura.tipoCambio),
+  }
+  return {
+    endpoint: 'POST /api/dte/documentos/emitir?normalizar=1 (simpleDTE/LibreDTE)',
+    aduanaResumen,
+    payload,
+  }
+}
+
 // ─── Paso 1: Enviar borrador al SII (crea el DTE temporal en LibreDTE) ────────
 export async function enviarBorradorSii(id: number, userId: string) {
   const factura = await repo.getFacturaActivaById(id)

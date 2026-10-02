@@ -50,6 +50,12 @@ export async function descargarXml(req: FastifyRequest, reply: FastifyReply) {
     .send(xml)
 }
 
+export async function previsualizarPayloadDte(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = facturaParamsSchema.parse(req.params)
+  const data = await service.obtenerPayloadDtePreview(id)
+  return reply.send({ data })
+}
+
 export async function obtenerTipoCambio(req: FastifyRequest, reply: FastifyReply) {
   const { id } = facturaParamsSchema.parse(req.params)
   const data = await service.obtenerTipoCambioSugerido(id)
