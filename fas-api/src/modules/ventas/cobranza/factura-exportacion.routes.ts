@@ -25,6 +25,8 @@ export async function facturaExportacionRoutes(app: FastifyInstance) {
   // Diagnóstico: devuelve el payload exacto que se manda a simpleDTE (+ resumen
   // de códigos Aduana) sin enviarlo. Para ver por qué el PDF sale reducido.
   app.get('/facturas-exportacion/:id/payload-dte', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.previsualizarPayloadDte)
+  // Rescata el PDF del borrador (DTE temporal) desde LibreDTE vía API.
+  app.get('/facturas-exportacion/:id/pdf-borrador', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.descargarPdfBorrador)
   // Tipo de cambio sugerido (dólar/euro observado del Banco Central) para el editor.
   app.get('/facturas-exportacion/:id/tipo-cambio', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.obtenerTipoCambio)
   app.get('/embarques/:id/factura-exportacion', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.obtenerDelEmbarque)

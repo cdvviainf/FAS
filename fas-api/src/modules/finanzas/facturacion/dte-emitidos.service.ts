@@ -63,6 +63,30 @@ export async function obtenerDocumentoDte(origenTipo: string, origenId: number) 
   return repo.getDocumentoDte(origenTipo, origenId)
 }
 
+// Rescata el PDF del DTE temporal (borrador) desde LibreDTE a partir del `codigo`
+// guardado. En modo mock no hay documento real en LibreDTE.
+export async function obtenerPdfTemporal(input: {
+  tipoDte: number
+  codigo: string
+  rutEmisor: string
+  rutReceptor: string
+}): Promise<{ ok: true; pdf: Buffer } | { ok: false; error: string }> {
+  if (env.DTE_PROVIDER !== 'libredte') {
+    return {
+      ok: false,
+      error: 'El PDF del borrador solo está disponible con el proveedor real (DTE_PROVIDER=libredte); en modo mock no hay documento en LibreDTE.',
+    }
+  }
+  const r = await libredte.obtenerPdfTemporal({
+    dte: input.tipoDte,
+    codigo: input.codigo,
+    emisorSinDv: rutSinDv(input.rutEmisor),
+    receptorSinDv: rutSinDv(input.rutReceptor),
+  })
+  if (!r.ok || !r.data) return { ok: false, error: r.error ?? 'LibreDTE no devolvió el PDF del borrador' }
+  return { ok: true, pdf: r.data }
+}
+
 // RUT sin dígito verificador, numérico (ej. "77089369-0" → 77089369) — formato
 // que exige generarReal() de LibreDTE en `emisor`/`receptor`.
 export function rutSinDv(rut: string): number {

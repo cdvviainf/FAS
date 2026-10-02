@@ -244,6 +244,12 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
     onError: (e: Error) => toast.error(e.message || 'No se pudo obtener el payload'),
   })
 
+  // Rescata el PDF del borrador (DTE temporal) desde LibreDTE y lo abre.
+  const verBorrador = useMutation({
+    mutationFn: () => facturaExportacionService.verPdfBorrador(factura.id),
+    onError: (e: Error) => toast.error(e.message || 'No se pudo obtener el PDF del borrador'),
+  })
+
   function handleEnviarSii() {
     if (!validarPrevio()) return
     enviarSii.mutate()
@@ -494,6 +500,11 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
           <Button variant='ghost' size='sm' onClick={() => verPayload.mutate()} isLoading={verPayload.isPending} title='Ver el JSON exacto que se manda al SII (diagnóstico)'>
             <Icons.page className='mr-2 h-4 w-4' /> Ver payload SII
           </Button>
+          {borradorEnviado && (
+            <Button variant='ghost' size='sm' onClick={() => verBorrador.mutate()} isLoading={verBorrador.isPending} title='Rescata el PDF del borrador desde LibreDTE'>
+              <Icons.page className='mr-2 h-4 w-4' /> Ver borrador (PDF)
+            </Button>
+          )}
           {esRechazada && (
             <Button variant='outline' onClick={() => reabrir.mutate()} isLoading={reabrir.isPending}>
               <Icons.edit className='mr-2 h-4 w-4' /> Reabrir para editar

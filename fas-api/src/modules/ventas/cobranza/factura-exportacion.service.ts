@@ -660,6 +660,27 @@ export async function obtenerXmlFactura(id: number) {
   return { xml: dte.xml, folio: dte.folio, codigo: factura.codigo }
 }
 
+// Rescata desde LibreDTE el PDF del DTE temporal (borrador) ya enviado al SII,
+// usando el `codigo` guardado. Requiere haber enviado el borrador (enviar-sii).
+export async function obtenerPdfBorrador(id: number) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
+  const dte = await dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id)
+  if (!dte?.libredteCodigoTemporal) {
+    throw new ValidationError('La Factura no tiene un borrador en el SII — envíala al SII primero (botón "Enviar borrador al SII")')
+  }
+  const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
+  if (!emisor?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
+  const r = await dteService.obtenerPdfTemporal({
+    tipoDte: TIPO_DTE_FACTURA_EXPORTACION,
+    codigo: dte.libredteCodigoTemporal,
+    rutEmisor: emisor.rut,
+    rutReceptor: RUT_RECEPTOR_EXTRANJERO,
+  })
+  if (!r.ok) throw new ValidationError(r.error)
+  return { pdf: r.pdf, codigo: factura.codigo }
+}
+
 // Sugiere el tipo de cambio vigente (dólar/euro observado del Banco Central) para
 // la moneda de la Factura — para el botón "Obtener" del editor. No persiste: el
 // valor se guarda al editar la Factura (actualizarBorrador), que invalida el DTE

@@ -50,6 +50,15 @@ export async function descargarXml(req: FastifyRequest, reply: FastifyReply) {
     .send(xml)
 }
 
+export async function descargarPdfBorrador(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = facturaParamsSchema.parse(req.params)
+  const { pdf, codigo } = await service.obtenerPdfBorrador(id)
+  return reply
+    .header('Content-Type', 'application/pdf')
+    .header('Content-Disposition', `inline; filename="borrador-${codigo}.pdf"`)
+    .send(pdf)
+}
+
 export async function previsualizarPayloadDte(req: FastifyRequest, reply: FastifyReply) {
   const { id } = facturaParamsSchema.parse(req.params)
   const data = await service.obtenerPayloadDtePreview(id)
