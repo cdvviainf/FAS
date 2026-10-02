@@ -1,9 +1,8 @@
 import PageContainer from '@/components/layout/page-container'
 import { searchParamsCache } from '@/lib/searchparams'
 import { SearchParams } from 'nuqs/server'
-import MantenedorListing from '@/components/shared/mantenedor-simple/mantenedor-listing'
 import { ParametroFormSheetTrigger } from '@/features/parametros/components/parametro-form-sheet'
-import { parametroExtraColumns } from '@/features/parametros/components/parametro-columns'
+import { ParametroListingClient } from '@/features/parametros/components/parametro-listing-client'
 
 export const metadata = {
   title: 'FAS — Parámetros'
@@ -23,7 +22,7 @@ export default async function Page(props: PageProps) {
       pageDescription='Parámetros de calidad agrupados por tipo (ej: Brix, Firmeza, Coloración).'
       pageHeaderAction={<ParametroFormSheetTrigger />}
     >
-      <MantenedorListing recurso='parametros' titulo='Parámetro' extraColumns={parametroExtraColumns} />
+      <ParametroListingClient />
     </PageContainer>
   )
 }
