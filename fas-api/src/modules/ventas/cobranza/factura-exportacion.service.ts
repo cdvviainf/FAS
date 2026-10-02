@@ -334,17 +334,12 @@ async function conManejoPayloadDte<T>(facturaId: number, accion: string, fn: () 
   }
 }
 
-// Mapea el texto libre de `tipoBultos` del Embarque a un código de la tabla de
-// Tipo de Bulto del SII. Para fruta el bulto es la caja (default 22 = CAJA DE
-// CARTON). Reefer/pallet/contenedor si el texto lo indica.
-function mapCodTipoBultos(texto: string | null): string {
-  const t = (texto ?? '').toLowerCase()
-  if (/pallet/.test(t)) return '80'
-  if (/reefer|refrigerad/.test(t)) return '75'
-  if (/cont.*40|40.*(hc|rf|dc)?/.test(t) && /cont/.test(t)) return '74'
-  if (/cont.*20/.test(t)) return '73'
-  return '22' // CAJA DE CARTON (default fruta)
-}
+// Código de Tipo de Bulto del SII. `CantBultos` del DTE es la suma de CAJAS, así
+// que el bulto es la caja → siempre 22 (CAJA DE CARTON). NO se deriva de
+// `tipoBultos` (texto libre): mapearlo a pallet/reefer/contenedor declararía esa
+// cantidad de cajas como pallets/contenedores — dato aduanero incorrecto
+// (FAS-EXP-ADU-QA-001). El contenedor va aparte en IdContainer.
+const COD_TIPO_BULTO_CAJA = '22'
 
 function construirPayloadDte(
   factura: NonNullable<Awaited<ReturnType<typeof repo.getFacturaActivaById>>>,
@@ -432,9 +427,10 @@ function construirPayloadDte(
       pesoBruto,
       totItems: factura.lineas.length,
       totBultos: totBultos > 0 ? totBultos : null,
-      // El bulto es la caja (CantBultos = total de cajas); el contenedor va aparte.
+      // El bulto es la caja (CantBultos = total de cajas → CodTpoBultos=22
+      // siempre); el contenedor va aparte en IdContainer.
       tipoBulto: totBultos > 0
-        ? { codTpoBultos: mapCodTipoBultos(embarque.tipoBultos), cantBultos: totBultos, idContainer: contenedor }
+        ? { codTpoBultos: COD_TIPO_BULTO_CAJA, cantBultos: totBultos, idContainer: contenedor }
         : null,
     },
     referencias,

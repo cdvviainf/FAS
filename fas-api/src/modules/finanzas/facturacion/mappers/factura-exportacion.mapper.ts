@@ -88,8 +88,10 @@ function fmtFecha(d: Date): string {
   return d.toISOString().slice(0, 10) // YYYY-MM-DD
 }
 
-// Unidad de peso de la tabla de Aduana del SII: KN = kilos.
-const COD_UNID_PESO = 'KN'
+// Unidades de peso de la tabla de Aduana del SII: KN = kilos netos, KB = kilos
+// brutos (cada peso lleva la suya — FAS-EXP-ADU-QA-003).
+const COD_UNID_PESO_NETO = 'KN'
+const COD_UNID_PESO_BRUTO = 'KB'
 
 function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
   return {
@@ -103,8 +105,8 @@ function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
     ...(a.codViaTransp ? { CodViaTransp: a.codViaTransp } : {}),
     ...(a.codPtoEmbarque ? { CodPtoEmbarque: a.codPtoEmbarque } : {}),
     ...(a.codPtoDesembarque ? { CodPtoDesemb: a.codPtoDesembarque } : {}),
-    ...(a.pesoBruto != null ? { PesoBruto: a.pesoBruto, CodUnidPesoBruto: COD_UNID_PESO } : {}),
-    ...(a.pesoNeto != null ? { PesoNeto: a.pesoNeto, CodUnidPesoNeto: COD_UNID_PESO } : {}),
+    ...(a.pesoBruto != null ? { PesoBruto: a.pesoBruto, CodUnidPesoBruto: COD_UNID_PESO_BRUTO } : {}),
+    ...(a.pesoNeto != null ? { PesoNeto: a.pesoNeto, CodUnidPesoNeto: COD_UNID_PESO_NETO } : {}),
     ...(a.totItems != null ? { TotItems: a.totItems } : {}),
     ...(a.totBultos != null ? { TotBultos: a.totBultos } : {}),
     ...(a.tipoBulto

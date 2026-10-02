@@ -132,7 +132,7 @@ describe('mapFacturaExportacionA110', () => {
     expect(aduana.NombreCiaTransp).toBe('MEDITERRANEAN SHIPPING COMPANY')
     expect(aduana.NombreTransp).toBe('MSC EUGENIA')
     expect(aduana.Booking).toBe('EBKG16677344')
-    expect(aduana).toMatchObject({ PesoNeto: 18696, CodUnidPesoNeto: 'KN', PesoBruto: 20976, CodUnidPesoBruto: 'KN' })
+    expect(aduana).toMatchObject({ PesoNeto: 18696, CodUnidPesoNeto: 'KN', PesoBruto: 20976, CodUnidPesoBruto: 'KB' })
     expect(aduana.TotBultos).toBe(2280)
     const bultos = aduana.TipoBultos as Array<Record<string, unknown>>
     expect(bultos[0]).toMatchObject({ CodTpoBultos: '22', CantBultos: 2280, IdContainer: 'MSDU9653670' })
