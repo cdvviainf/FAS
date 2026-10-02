@@ -128,9 +128,11 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
     onError: (e: Error) => toast.error(e.message || 'No se pudo pasar a modo manual'),
   })
 
+  // Puerto de Embarque (zarpe) = contexto ORIGEN: solo puertos de países con
+  // puedeSerOrigen=true (R9, mantenedores-generales.md). Antes traía todos.
   const { data: puertosData } = useQuery({
-    queryKey: ['puertos-options-instructivo'],
-    queryFn: () => puertosService.list({ limit: 200 }),
+    queryKey: ['puertos-options-instructivo', 'origen'],
+    queryFn: () => puertosService.list({ limit: 200, contexto: 'origen' }),
     staleTime: 60_000,
   })
   const { data: agentesData } = useQuery({

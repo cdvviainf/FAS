@@ -287,25 +287,31 @@ function validarCodigosAduana(
   embarque: NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>,
 ) {
   const nv = embarque.notaVenta
-  const requeridos: Array<{ etiqueta: string; registro: { descripcion: string; codigoAduana: string | null } | null }> = [
-    { etiqueta: 'Cláusula de Venta (Incoterm)', registro: nv.clausulaVenta },
-    { etiqueta: 'Modalidad de Venta', registro: nv.modalidadVenta },
-    { etiqueta: 'Vía de transporte (Tipo de Embarque)', registro: nv.tipoEmbarque },
-    { etiqueta: 'Puerto de Embarque (zarpe)', registro: embarque.puertoZarpe },
-    { etiqueta: 'Puerto de Desembarque (destino)', registro: nv.puertoDestino },
-    { etiqueta: 'País de destino', registro: nv.paisDestino },
+  // `donde` dice dónde completar cada dato cuando FALTA el registro en sí (no el
+  // código): casi todos vienen del Cierre Comercial (Nota de Venta); el Puerto de
+  // Embarque se carga en el Embarque → pestaña "Solicitud de Reserva".
+  const requeridos: Array<{
+    etiqueta: string
+    registro: { descripcion: string; codigoAduana: string | null } | null
+    donde: string
+  }> = [
+    { etiqueta: 'Cláusula de Venta (Incoterm)', registro: nv.clausulaVenta, donde: 'el Cierre Comercial / Nota de Venta' },
+    { etiqueta: 'Modalidad de Venta', registro: nv.modalidadVenta, donde: 'el Cierre Comercial / Nota de Venta' },
+    { etiqueta: 'Vía de transporte (Tipo de Embarque)', registro: nv.tipoEmbarque, donde: 'el Cierre Comercial / Nota de Venta' },
+    { etiqueta: 'Puerto de Embarque (zarpe)', registro: embarque.puertoZarpe, donde: 'el Embarque, pestaña "Solicitud de Reserva" → "Puerto Embarque"' },
+    { etiqueta: 'Puerto de Desembarque (destino)', registro: nv.puertoDestino, donde: 'el Cierre Comercial / Nota de Venta' },
+    { etiqueta: 'País de destino', registro: nv.paisDestino, donde: 'el Cierre Comercial / Nota de Venta' },
   ]
   const faltantes = requeridos
     .filter((r) => !r.registro || !r.registro.codigoAduana?.trim())
     .map((r) =>
       r.registro
-        ? `${r.etiqueta} ("${r.registro.descripcion}") no tiene Código de Aduana (SII)`
-        : `Falta ${r.etiqueta} en la Nota de Venta/Embarque`,
+        ? `${r.etiqueta} ("${r.registro.descripcion}") no tiene Código de Aduana (SII) — cárgalo en Configuración`
+        : `Falta seleccionar ${r.etiqueta} en ${r.donde}`,
     )
   if (faltantes.length > 0) {
     throw new ValidationError(
-      `No se puede enviar al SII hasta completar los códigos de Aduana del SII: ${faltantes.join('; ')}. ` +
-        'Cárgalos en Configuración (campo "Código Aduana (SII)" de cada mantenedor).',
+      `No se puede enviar al SII hasta completar: ${faltantes.join('; ')}.`,
     )
   }
 }
