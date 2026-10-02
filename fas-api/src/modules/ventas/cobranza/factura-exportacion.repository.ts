@@ -135,7 +135,7 @@ export async function getEmbarqueParaFacturaDte(embarqueId: number) {
       numeroContenedorManual: true,
       tipoBultos: true,
       awbBl: true,
-      naviera: { select: { razonSocial: true, rut: true } },
+      naviera: { select: { razonSocial: true } },
       solicitudReserva: { select: { fechaZarpe: true, nave: true, numeroBooking: true, numeroContenedor: true } },
       puertoZarpe: { select: { codigo: true, descripcion: true, codigoAduana: true } },
       notaVenta: {
