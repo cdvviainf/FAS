@@ -29,8 +29,10 @@ const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'etiqueta', prefixRuta: 'etiquetas', label: 'Etiqueta' },
   { modelo: 'altura', prefixRuta: 'alturas', label: 'Altura' },
   { modelo: 'tipoProduccion', prefixRuta: 'tipos-produccion', label: 'Tipo de Producción' },
-  { modelo: 'tipoDefecto', prefixRuta: 'tipos-defecto', label: 'Tipo de Defecto' },
   { modelo: 'tipoParametro', prefixRuta: 'tipos-parametro', label: 'Tipo de Parámetro' },
+  // Catálogo de defectos (2026-10-06): 2 niveles GrupoDefecto -> Defecto.
+  // GrupoDefecto es mantenedor plano (sin FK); Defecto tiene FK + especies N:M.
+  { modelo: 'grupoDefecto', prefixRuta: 'grupos-defecto', label: 'Grupo de Defecto' },
   // Sin FK
   { modelo: 'region', prefixRuta: 'regiones', label: 'Región' },
   { modelo: 'especie', prefixRuta: 'especies', label: 'Especie', schemaKey: 'especie' },
@@ -39,8 +41,6 @@ const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'comuna', prefixRuta: 'comunas', label: 'Comuna', schemaKey: 'comuna' },
   { modelo: 'grupoVariedad', prefixRuta: 'grupos-variedad', label: 'Grupo de Variedad', schemaKey: 'grupoVariedad' },
   { modelo: 'variedad', prefixRuta: 'variedades', label: 'Variedad', schemaKey: 'variedad' },
-  // Catálogo de defectos (2026-10-06): jerarquía TipoDefecto -> Grupo -> Defecto.
-  { modelo: 'grupoDefecto', prefixRuta: 'grupos-defecto', label: 'Grupo de Defecto', schemaKey: 'grupoDefecto' },
   { modelo: 'defecto', prefixRuta: 'defectos', label: 'Defecto', schemaKey: 'defecto' },
   { modelo: 'categoria', prefixRuta: 'categorias', label: 'Categoría', schemaKey: 'categoria' },
   { modelo: 'calibre', prefixRuta: 'calibres', label: 'Calibre', schemaKey: 'calibre' },

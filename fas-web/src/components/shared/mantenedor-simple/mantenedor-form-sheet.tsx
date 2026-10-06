@@ -22,6 +22,7 @@ import {
 } from '@/features/mantenedor-simple/schema'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 import { prefijosCodigoService } from '@/features/prefijos-codigo/service'
+import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { RECURSO_A_MODELO } from '@/features/prefijos-codigo/types'
 
 interface MantenedorFormSheetProps {
@@ -208,6 +209,11 @@ export function MantenedorFormSheetTrigger({
   mostrarCodigoAduana
 }: MantenedorFormSheetTriggerProps) {
   const [open, setOpen] = React.useState(false)
+  // Los mantenedores simples viven todos bajo CONFIG_MANTENEDORES: ocultar el
+  // botón "Nuevo" a perfiles de solo lectura (IMP-QA-R1-042, 2026-10-06). El
+  // backend igual exige nivel TOTAL; esto evita ofrecer una acción no permitida.
+  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
+  if (!puedeEscribir) return null
   return (
     <>
       <Button onClick={() => setOpen(true)}>

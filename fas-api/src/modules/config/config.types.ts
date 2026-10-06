@@ -9,12 +9,11 @@ export type MantenedorModelo =
   | 'etiqueta'
   | 'altura'
   | 'tipoProduccion'
-  | 'tipoDefecto'
   | 'tipoParametro'
+  // Catálogo de defectos (2026-10-06): 2 niveles GrupoDefecto -> Defecto
+  | 'grupoDefecto'
   // Con FK
   | 'region'
-  // Catálogo de defectos (2026-10-06): jerarquía TipoDefecto -> Grupo -> Defecto
-  | 'grupoDefecto'
   | 'defecto'
   | 'provincia'
   | 'comuna'
@@ -52,7 +51,6 @@ export interface MantenedorListFilters {
   mercadoId?: number
   tipoEmbarqueId?: number
   // Catálogo de defectos (2026-10-06)
-  tipoDefectoId?: number
   grupoDefectoId?: number
   // Puerto R9
   contexto?: 'origen' | 'destino'
@@ -90,7 +88,6 @@ export interface MantenedorCreateInput {
   mercadoIds?: number[]  // Pais (N:M, 2026-10-05)
   tipoEmbarqueId?: number
   // Catálogo de defectos (2026-10-06)
-  tipoDefectoId?: number   // GrupoDefecto
   grupoDefectoId?: number  // Defecto
   especieIds?: number[]    // Defecto (N:M, validez por especie)
   orden?: number             // Categoria, Calibre

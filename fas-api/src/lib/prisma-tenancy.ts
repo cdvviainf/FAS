@@ -18,7 +18,6 @@ const MODELOS_TENANT = new Set([
   'TipoPallet',
   'Altura',
   'TipoProduccion',
-  'TipoDefecto',
   'TipoParametro',
   'Puerto',
   'Temporada',
@@ -30,7 +29,7 @@ const MODELOS_TENANT = new Set([
   'Categoria',
   'Calibre',
   'Parametro',
-  // Catálogo de defectos (2026-10-06): jerarquía TipoDefecto -> Grupo -> Defecto.
+  // Catálogo de defectos (2026-10-06): 2 niveles GrupoDefecto -> Defecto.
   'GrupoDefecto',
   'Defecto',
   // Mantenedor Etiquetas (agosto 2026):

@@ -208,7 +208,7 @@ fas-web/
 | `empresas.md` | Empresa, EmpresaDireccion, EmpresaContacto, UsuarioEmpresa (multi-empresa/tenant; `empresaId` en tablas raíz — ver spec) |
 | `materiales.md` | Articulo, Receta(+Detalle), TipoMovimiento, Movimiento(+Detalle), SaldoArticulo, ProformaMaterial(+Linea/CuotaPago), OrdenCompraMaterial(+Linea/CuotaPago) |
 | `productores.md` | Predio, ProductorContrato, MovimientoCuentaCorriente, ConceptoLiquidacion(+Especie) |
-| `calidad.md` | TipoDefecto/GrupoDefecto/Defecto, CaracteristicaMadurez, SolicitudInspeccion, InspeccionCaja(+Defecto/Madurez), InspeccionFoto |
+| `calidad.md` | GrupoDefecto/Defecto(+DefectoEspecie), CaracteristicaMadurez, SolicitudInspeccion, InspeccionCaja(+Defecto/Madurez), InspeccionFoto |
 | `reclamos.md` | CaracteristicaReclamoCliente, CriterioCumplimiento, Reclamo(+Documento/DatoCliente/Cumplimiento) |
 | Compras · Ventas · Operaciones · Finanzas · Liquidaciones | Pendientes de spec |
 

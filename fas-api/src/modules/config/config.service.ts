@@ -31,7 +31,6 @@ const childrenMap: Partial<Record<MantenedorModelo, ChildDef[]>> = {
     { childModelo: 'calibre', parentField: 'especieId', label: 'calibres' },
   ],
   grupoVariedad: [{ childModelo: 'variedad', parentField: 'grupoVariedadId', label: 'variedades' }],
-  tipoDefecto: [{ childModelo: 'grupoDefecto', parentField: 'tipoDefectoId', label: 'grupos de defecto' }],
   grupoDefecto: [{ childModelo: 'defecto', parentField: 'grupoDefectoId', label: 'defectos' }],
   tipoParametro: [{ childModelo: 'parametro', parentField: 'tipoParametroId', label: 'parámetros' }],
   grupoMercado: [{ childModelo: 'mercado', parentField: 'grupoMercadoId', label: 'mercados' }],
@@ -204,13 +203,9 @@ export async function crearMantenedor(
     }
   }
 
-  // Catálogo de defectos (2026-10-06): GrupoDefecto.tipoDefectoId, Defecto.
-  // grupoDefectoId y Defecto.especieIds deben pertenecer al tenant activo
-  // (getMantenedorById ya queda tenant-scoped por la extensión de Prisma).
-  if (modelo === 'grupoDefecto' && data.tipoDefectoId) {
-    const tipo = await repo.getMantenedorById('tipoDefecto', data.tipoDefectoId)
-    if (!tipo) throw new ValidationError('El tipo de defecto seleccionado no existe o no pertenece a esta empresa')
-  }
+  // Catálogo de defectos (2026-10-06): Defecto.grupoDefectoId y Defecto.
+  // especieIds deben pertenecer al tenant activo (getMantenedorById ya queda
+  // tenant-scoped por la extensión de Prisma). GrupoDefecto es plano (sin FK).
   if (modelo === 'defecto') {
     if (data.grupoDefectoId) {
       const grupo = await repo.getMantenedorById('grupoDefecto', data.grupoDefectoId)
@@ -400,11 +395,8 @@ export async function actualizarMantenedor(
     }
   }
 
-  // Catálogo de defectos (2026-10-06): FK/especies deben pertenecer al tenant (on update)
-  if (modelo === 'grupoDefecto' && data.tipoDefectoId !== undefined) {
-    const tipo = await repo.getMantenedorById('tipoDefecto', data.tipoDefectoId)
-    if (!tipo) throw new ValidationError('El tipo de defecto seleccionado no existe o no pertenece a esta empresa')
-  }
+  // Catálogo de defectos (2026-10-06): FK/especies de Defecto deben pertenecer
+  // al tenant (on update). GrupoDefecto es plano (sin FK a validar).
   if (modelo === 'defecto') {
     if (data.grupoDefectoId !== undefined) {
       const grupo = await repo.getMantenedorById('grupoDefecto', data.grupoDefectoId)

@@ -201,7 +201,6 @@ model Empresa {
   etiquetas              Etiqueta[]
   alturas                Altura[]
   tiposProduccion        TipoProduccion[]
-  tiposDefecto           TipoDefecto[]
   gruposDefecto          GrupoDefecto[]
   defectos               Defecto[]
   tiposParametro         TipoParametro[]
@@ -808,7 +807,13 @@ model TipoProduccion {
   @@map("tipos_produccion")
 }
 
-model TipoDefecto {
+// Jerarquía de defectos de Calidad (2026-10-06, simplificada a 2 niveles el
+// 2026-10-06): GrupoDefecto -> Defecto, con asociación por especie
+// (DefectoEspecie). Se eliminó el nivel TipoDefecto por confusión con el Grupo
+// (decisión de negocio, Christian). Grupo de Defecto es la clasificación
+// "Calidad/Condición" que el cliente configura y que usan el Reclamo
+// (clasificación) y sus líneas de defecto.
+model GrupoDefecto {
   id                    Int       @id @default(autoincrement())
   empresaId             Int
   empresa               Empresa   @relation(fields: [empresaId], references: [id])
@@ -823,44 +828,13 @@ model TipoDefecto {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  grupos GrupoDefecto[]
-
-  // @@unique necesario para la FK compuesta (empresaId, tipoDefectoId) de
-  // GrupoDefecto (2026-10-06, mismo patrón que Especie↔GrupoVariedad).
-  @@unique([empresaId, id])
-  @@index([empresaId])
-  @@map("tipos_defecto")
-}
-
-// Jerarquía de defectos de Calidad (calidad.md §4.1/R2): TipoDefecto -> Grupo
-// -> Defecto, con asociación por especie (DefectoEspecie). Grupo de Defecto es
-// además la clasificación "Calidad/Condición" que el cliente configura y que
-// usan el Reclamo (clasificación) y sus líneas de defecto (2026-10-06).
-model GrupoDefecto {
-  id                    Int         @id @default(autoincrement())
-  empresaId             Int
-  empresa               Empresa     @relation(fields: [empresaId], references: [id])
-  codigo                String
-  descripcion           String
-  descripcionExtranjera String?
-  tipoDefectoId         Int
-  // FK compuesta (empresaId, tipoDefectoId) -> TipoDefecto(empresaId, id).
-  tipoDefecto           TipoDefecto @relation(fields: [empresaId, tipoDefectoId], references: [empresaId, id])
-  bloqueado             Boolean     @default(false)
-  creadoEn              DateTime    @default(now())
-  creadoPor             String
-  actualizadoEn         DateTime?   @updatedAt
-  actualizadoPor        String?
-  eliminadoEn           DateTime?
-  eliminadoPor          String?
-
   defectos        Defecto[]
   reclamos        Reclamo[]        @relation("ReclamoClasificacionGrupo")
   reclamoDefectos ReclamoDefecto[]
 
+  // @@unique necesario para la FK compuesta (empresaId, grupoDefectoId) de Defecto.
   @@unique([empresaId, id])
   @@index([empresaId])
-  @@index([tipoDefectoId])
   @@map("grupos_defecto")
 }
 

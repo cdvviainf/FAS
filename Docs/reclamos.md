@@ -48,7 +48,7 @@
 > - **Resumen con "…más":** la columna Resumen de las tablas usa el nuevo componente compartido `ExpandableText` (truncado + toggle "…más/menos") en vez de `truncate` seco.
 > - **Clasificación del reclamo (`grupoDefectoId`, opcional):** un select a nivel cabecera que lista **Grupos de Defecto** (Calidad/Condición son grupos del mantenedor). Lo asigna Calidad en el análisis. Independiente de las líneas.
 > - **Líneas de defecto (`ReclamoDefecto`):** detalle del análisis — cada línea = **Grupo de Defecto** (Calidad/Condición) + **Defecto** (de ese grupo, filtrado además por la(s) especie(s) de la fruta reclamada + genéricos) + **porcentaje** (0–100). Las líneas pueden mezclar grupos. Se editan en la pantalla de Calidad (`CAL_RECLAMOS`) junto al comentario, y se envían en el mismo `PATCH /analisis` (reemplazo total del set). El backend valida que cada defecto pertenezca a su grupo (filtro por especie = blando, solo conveniencia del selector).
-> - Habilita el catálogo de defectos completo: `TipoDefecto → GrupoDefecto → Defecto` + `DefectoEspecie` (ver `calidad.md`).
+> - Habilita el catálogo de defectos: `GrupoDefecto → Defecto` + `DefectoEspecie` (2 niveles, sin `TipoDefecto` — ver `calidad.md`).
 
 ---
 

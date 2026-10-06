@@ -29,7 +29,6 @@ export interface MantenedorSimpleFilters {
   paisId?: number
   mercadoId?: number
   tipoEmbarqueId?: number
-  tipoDefectoId?: number
   grupoDefectoId?: number
   contexto?: 'origen' | 'destino'
   soloActivos?: boolean
@@ -54,7 +53,6 @@ export interface MantenedorSimpleCreateInput {
   mercadoId?: number
   tipoEmbarqueId?: number
   // Catálogo de defectos (2026-10-06)
-  tipoDefectoId?: number   // GrupoDefecto
   grupoDefectoId?: number  // Defecto
   especieIds?: number[]    // Defecto (N:M, validez por especie)
   orden?: number

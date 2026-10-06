@@ -30,7 +30,7 @@ Permitir: (a) configurar la norma de calidad por especie (defectos y madurez); (
 ## 2. Alcance
 
 **Construye:**
-1. Mantenedores (WEB): `Tipo de defecto → Grupo de defecto → Defecto`; `Característica de madurez`; y su **asociación por especie**.
+1. Mantenedores (WEB): `Grupo de defecto → Defecto` (2 niveles desde 2026-10-06, sin Tipo de Defecto); `Característica de madurez`; y su **asociación por especie**.
 2. Solicitudes de inspección (WEB).
 3. Registro de inspección por caja (WEB + Móvil/PWA offline).
 4. Fotos + resultado (Aprobado/Objetado/Rechazado).
@@ -105,22 +105,16 @@ Permitir: (a) configurar la norma de calidad por especie (defectos y madurez); (
 >
 > **⚠️ Supersesión (2026-10-06) — Notas de Calidad/Condición pasan a multiselección, con validez dura por especie.** Por decisión de Christian, los campos singulares `notaCalidadId?`/`notaCondicionId?` de `SolicitudInspeccion` se reemplazan por **multiselección** (varias notas por solicitud): tablas puente `SolicitudInspeccionNotaCalidad { solicitudId, notaCalidadId }` y `SolicitudInspeccionNotaCondicion { solicitudId, notaCondicionId }` (ambas `@@unique([solicitudId, notaXId])`, `onDelete: Cascade` por la solicitud; FK a la nota por id plano, mismo patrón que `SolicitudInspeccionEmbalaje`). La API pasa de `notaCalidadId?`/`notaCondicionId?` a `notaCalidadIds?`/`notaCondicionIds?` (arreglos opcionales). Además, el filtro por especie deja de ser solo del selector: el backend **sí valida duro** que cada nota seleccionada pertenezca a la `especieId` efectiva cuando ésta está definida (consistente con variedad/calibre/categoría; una nota sin especie asociada solo es válida cuando no hay especie). Al editar, las notas vigentes se revalidan contra la especie efectiva aunque el PATCH no las toque (IMP-QA-R1-038). Migración con backfill (el valor singular previo, si existía, se copia como una fila en la tabla puente) antes de dropear las columnas. En la UI ambos campos son multiselect (chips), restringidos por la especie. La eliminación de un mantenedor de Nota se bloquea contando solicitudes activas que lo referencian vía la tabla puente.
 
-> **⚠️ Implementado (2026-10-06) — catálogo de defectos `TipoDefecto → GrupoDefecto → Defecto` + `DefectoEspecie`.** Antes solo existía `TipoDefecto` (el resto era spec). Ahora `GrupoDefecto` y `Defecto` se implementan como **mantenedores genéricos** (`/api/config/grupos-defecto`, `/api/config/defectos`), con sus pantallas en Configuración (ya no `disabled` en el menú). Refinamientos vs. el bloque de abajo: las FK a modelos tenant son **compuestas** `(empresaId, tipoDefectoId)` / `(empresaId, grupoDefectoId)` (coherencia de tenant, mismo patrón que `Especie↔GrupoVariedad`), y `TipoDefecto`/`GrupoDefecto`/`Defecto` llevan `@@unique([empresaId, id])`. `Defecto.especieIds` (vía `DefectoEspecie`, N:M) es **opcional** — sin especies = defecto genérico. El **GrupoDefecto es la clasificación "Calidad/Condición"** que consume el módulo de Reclamos (clasificación del reclamo + líneas de defecto — ver `reclamos.md` §0.c). `CaracteristicaMadurez` sigue pendiente (solo spec).
+> **⚠️ Implementado y SIMPLIFICADO a 2 niveles (2026-10-06) — catálogo de defectos `GrupoDefecto → Defecto` + `DefectoEspecie`.** Se **eliminó el nivel `TipoDefecto`** (y su tabla/mantenedor/menú): generaba confusión con `GrupoDefecto`, ya que la clasificación "Calidad/Condición" vive en el **Grupo**, y el Tipo por encima no tenía significado claro (decisión de negocio, Christian). Jerarquía final: `GrupoDefecto` (raíz, mantenedor **plano** sin FK) → `Defecto` (FK compuesta `(empresaId, grupoDefectoId)`) + `DefectoEspecie` (N:M por especie, opcional — sin especies = defecto genérico). Ambos son **mantenedores genéricos** (`/api/config/grupos-defecto`, `/api/config/defectos`), con `@@unique([empresaId, id])` para la coherencia de tenant. El **GrupoDefecto es la clasificación "Calidad/Condición"** que consume Reclamos (clasificación del reclamo + líneas de defecto — ver `reclamos.md` §0.c). `CaracteristicaMadurez` sigue pendiente (solo spec).
 
 ```prisma
 // ───── Mantenedores (solo WEB) ─────
 enum TipoDatoMadurez { DECIMAL PORCENTAJE ENTERO TEXTO LISTA }
 
-model TipoDefecto {
-  // + base (§4.1 mantenedores-generales.md)
-  grupos GrupoDefecto[]
-}
-
+// 2 niveles (2026-10-06): GrupoDefecto (raíz) -> Defecto. Sin TipoDefecto.
 model GrupoDefecto {
-  // + base
-  tipoDefectoId Int
-  tipoDefecto   TipoDefecto @relation(fields: [tipoDefectoId], references: [id])
-  defectos      Defecto[]
+  // + base (§4.1 mantenedores-generales.md) — plano, sin FK
+  defectos Defecto[]
 }
 
 model Defecto {
@@ -324,7 +318,7 @@ model InspeccionFoto {
 **Configuración (WEB)**
 | Método | Ruta | Notas |
 |---|---|---|
-| CRUD | `/tipos-defecto`, `/grupos-defecto`, `/defectos` | Jerarquía (R2). |
+| CRUD | `/grupos-defecto`, `/defectos` | Jerarquía 2 niveles (2026-10-06, sin `/tipos-defecto`). |
 | CRUD | `/caracteristicas-madurez` (+ `/:id/opciones`) | LISTA exige opciones (R3). |
 | PUT | `/defectos/:id/especies` · `/caracteristicas-madurez/:id/especies` | Asociación por especie (R1). |
 | GET | `/especies/:id/norma` | Defectos + características de la especie (para descargar al móvil). |

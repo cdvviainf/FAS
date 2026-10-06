@@ -14,8 +14,8 @@ const modelMap: Record<MantenedorModelo, string> = {
   etiqueta: 'etiqueta',
   altura: 'altura',
   tipoProduccion: 'tipoProduccion',
-  tipoDefecto: 'tipoDefecto',
   tipoParametro: 'tipoParametro',
+  grupoDefecto: 'grupoDefecto',
   // Con FK
   region: 'region',
   provincia: 'provincia',
@@ -23,7 +23,6 @@ const modelMap: Record<MantenedorModelo, string> = {
   especie: 'especie',
   grupoVariedad: 'grupoVariedad',
   variedad: 'variedad',
-  grupoDefecto: 'grupoDefecto',
   defecto: 'defecto',
   categoria: 'categoria',
   calibre: 'calibre',
@@ -52,7 +51,6 @@ const includeMap: Partial<Record<MantenedorModelo, object>> = {
   },
   categoria: { especie: { select: { id: true, descripcion: true } } },
   calibre: { especie: { select: { id: true, descripcion: true } } },
-  grupoDefecto: { tipoDefecto: { select: { id: true, descripcion: true } } },
   defecto: {
     grupoDefecto: { select: { id: true, descripcion: true } },
     especies: { select: { especieId: true, especie: { select: { id: true, descripcion: true } } } },
@@ -84,7 +82,7 @@ const includeMap: Partial<Record<MantenedorModelo, object>> = {
 }
 
 // FK filter fields per model
-type FkFilterKey = 'regionId' | 'provinciaId' | 'especieId' | 'grupoVariedadId' | 'tipoParametroId' | 'grupoMercadoId' | 'paisId' | 'tipoEmbarqueId' | 'comunaId' | 'mercadoId' | 'tipoDefectoId' | 'grupoDefectoId'
+type FkFilterKey = 'regionId' | 'provinciaId' | 'especieId' | 'grupoVariedadId' | 'tipoParametroId' | 'grupoMercadoId' | 'paisId' | 'tipoEmbarqueId' | 'comunaId' | 'mercadoId' | 'grupoDefectoId'
 
 const fkFilterMap: Partial<Record<MantenedorModelo, FkFilterKey[]>> = {
   provincia: ['regionId'],
@@ -93,7 +91,6 @@ const fkFilterMap: Partial<Record<MantenedorModelo, FkFilterKey[]>> = {
   variedad: ['especieId', 'grupoVariedadId'],
   categoria: ['especieId'],
   calibre: ['especieId'],
-  grupoDefecto: ['tipoDefectoId'],
   defecto: ['grupoDefectoId'],
   parametro: ['tipoParametroId'],
   mercado: ['grupoMercadoId'],

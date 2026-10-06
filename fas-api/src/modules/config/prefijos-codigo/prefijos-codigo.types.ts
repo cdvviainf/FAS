@@ -5,7 +5,7 @@
 export const MODELOS_CON_CODIGO = [
   // Mantenedores genéricos (config.routes.ts MANTENEDORES)
   'pais', 'zona', 'grupoMercado', 'tipoEmbarque', 'formaPago', 'unidadMedida',
-  'tipoPallet', 'etiqueta', 'altura', 'tipoProduccion', 'tipoDefecto', 'tipoParametro',
+  'tipoPallet', 'etiqueta', 'altura', 'tipoProduccion', 'tipoParametro',
   'region', 'provincia', 'comuna', 'especie', 'grupoVariedad', 'variedad',
   'categoria', 'calibre', 'parametro', 'mercado', 'puerto', 'moneda',
   'temporada', 'bodega', 'conceptoCtaCte',

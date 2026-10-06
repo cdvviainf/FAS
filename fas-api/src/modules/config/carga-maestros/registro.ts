@@ -34,7 +34,7 @@ export const ENUM_TIPO_ENTIDAD = [
 export const ENUM_TIPO_BODEGA = ['MATERIALES', 'EMBARQUE', 'DESPACHO']
 export const ENUM_MODELO_PREFIJO = [
   'pais', 'zona', 'grupoMercado', 'tipoEmbarque', 'formaPago', 'unidadMedida',
-  'tipoPallet', 'etiqueta', 'altura', 'tipoProduccion', 'tipoDefecto',
+  'tipoPallet', 'etiqueta', 'altura', 'tipoProduccion',
   'tipoParametro', 'especie', 'grupoVariedad', 'variedad', 'categoria',
   'calibre', 'parametro', 'mercado', 'puerto', 'moneda', 'temporada', 'bodega',
   'entidad', 'entidadDireccion', 'entidadContacto', 'articulo', 'receta', 'embarque',

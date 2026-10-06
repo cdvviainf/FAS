@@ -17,7 +17,6 @@ export const mantenedorListQuerySchema = z.object({
   paisId: z.coerce.number().int().positive().optional(),
   mercadoId: z.coerce.number().int().positive().optional(),
   tipoEmbarqueId: z.coerce.number().int().positive().optional(),
-  tipoDefectoId: z.coerce.number().int().positive().optional(),
   grupoDefectoId: z.coerce.number().int().positive().optional(),
   contexto: z.enum(['origen', 'destino']).optional(),
   // z.coerce.boolean() convertiría "false" (string) a true; enum explícito lo evita
@@ -101,13 +100,8 @@ export const variedadUpdateSchema = variedadBodySchema
   .omit({ codigo: true })
   .partial()
 
-// ─── Grupo de Defecto / Defecto (catálogo de defectos, 2026-10-06) ───────────
-
-export const grupoDefectoBodySchema = mantenedorBaseSchema.extend({
-  tipoDefectoId: z.number().int().positive({ message: 'Selecciona un tipo de defecto' }),
-})
-
-export const grupoDefectoUpdateSchema = grupoDefectoBodySchema.omit({ codigo: true }).partial()
+// ─── Defecto (catálogo de defectos, 2026-10-06) ──────────────────────────────
+// GrupoDefecto es mantenedor plano (usa el schema base, sin schemaKey).
 
 export const defectoBodySchema = mantenedorBaseSchema.extend({
   grupoDefectoId: z.number().int().positive({ message: 'Selecciona un grupo de defecto' }),
