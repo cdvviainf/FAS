@@ -72,6 +72,15 @@ export interface ReclamoLinea {
   }
 }
 
+// Línea de defecto del análisis de Calidad (2026-10-06): grupo (Calidad/
+// Condición) + defecto + porcentaje.
+export interface ReclamoDefecto {
+  id: number
+  porcentaje: string
+  grupoDefecto: MantenedorRef
+  defecto: MantenedorRef
+}
+
 export interface ReclamoDocumento {
   id: number
   nombre: string
@@ -99,8 +108,17 @@ export interface Provision {
 
 export interface Reclamo {
   id: number
+  // Correlativo propio (2026-10-06).
+  codigo: string
   embarqueId: number
-  embarque: { id: number; numeroInstructivo: string }
+  // numeroContenedorManual + solicitudReserva.numeroContenedor: el contenedor
+  // del Embarque (derivado, solo lectura en el Reclamo).
+  embarque: {
+    id: number
+    numeroInstructivo: string
+    numeroContenedorManual: string | null
+    solicitudReserva: { numeroContenedor: string | null } | null
+  }
   clienteId: number
   cliente: MantenedorRef
   monedaId: number
@@ -112,6 +130,10 @@ export interface Reclamo {
   estado: EstadoReclamo
   procedencia: Procedencia | null
   comentarioCalidad: string | null
+  // Clasificación del reclamo (GrupoDefecto, Calidad/Condición) — 2026-10-06.
+  grupoDefectoId: number | null
+  grupoDefecto: MantenedorRef | null
+  defectos: ReclamoDefecto[]
   valorConfirmado: string | null
   valorizadoPor: string | null
   fechaValorizacion: string | null
@@ -121,6 +143,25 @@ export interface Reclamo {
   provisiones: Provision[]
   creadoEn: string
   creadoPor: string
+}
+
+// Helper: el contenedor a mostrar en el Reclamo (derivado del Embarque).
+export function numeroContenedorDeReclamo(r: Reclamo): string | null {
+  return r.embarque.numeroContenedorManual ?? r.embarque.solicitudReserva?.numeroContenedor ?? null
+}
+
+// Payload del análisis de Calidad (2026-10-06): comentario + clasificación +
+// líneas de defecto.
+export interface ReclamoDefectoInput {
+  grupoDefectoId: number
+  defectoId: number
+  porcentaje: number
+}
+
+export interface AnalisisCalidadInput {
+  comentarioCalidad: string
+  grupoDefectoId?: number | null
+  defectos?: ReclamoDefectoInput[]
 }
 
 export interface ProvisionInput {

@@ -16,6 +16,8 @@ export interface InstructivoEmbalajeDetalleItem {
   instructivoId: number
   articuloId: number
   articulo: MantenedorRef & { etiqueta: MantenedorRef | null }
+  grupoMercadoId: number
+  grupoMercado: MantenedorRef
   especieId: number
   especie: MantenedorRef
   variedadId: number
@@ -29,9 +31,12 @@ export interface InstructivoEmbalajeDetalleItem {
   tipoPallet: MantenedorRef | null
   alturaId: number
   altura: MantenedorRef
+  etiquetaId: number | null
+  etiqueta: MantenedorRef | null
   cantidadPallets: number
   cajasPorPallet: number
   cajas: number
+  observaciones: string | null
 }
 
 export interface InstructivoEmbalajeListItem {
@@ -39,12 +44,12 @@ export interface InstructivoEmbalajeListItem {
   numero: number
   entidadProductorId: number
   entidadProductor: EntidadRef
+  exportadorId: number | null
+  exportador: EntidadRef | null
   creadoEn: string
 }
 
 export interface InstructivoEmbalajeDetalle extends InstructivoEmbalajeListItem {
-  grupoMercadoId: number
-  grupoMercado: MantenedorRef
   fechaInicioPrograma: string
   observaciones: string | null
   detalle: InstructivoEmbalajeDetalleItem[]
@@ -58,6 +63,7 @@ export interface InstructivoEmbalajeListResponse {
 
 export interface InstructivoEmbalajeDetalleInput {
   articuloId: number
+  grupoMercadoId: number
   especieId: number
   variedadId: number
   variedadRotuladaId: number | null
@@ -65,14 +71,16 @@ export interface InstructivoEmbalajeDetalleInput {
   calibreIds: number[]
   tipoPalletId: number | null
   alturaId: number
+  etiquetaId: number | null
   cantidadPallets: number
   cajasPorPallet: number
   cajas: number
+  observaciones: string | null
 }
 
 export interface InstructivoEmbalajeCreateInput {
   entidadProductorId: number
-  grupoMercadoId: number
+  exportadorId?: number | null
   fechaInicioPrograma: string
   observaciones?: string | null
   detalle: InstructivoEmbalajeDetalleInput[]
@@ -86,7 +94,7 @@ export interface InstructivoEmbalajeListFilters {
 
 export interface InstructivoEmbalajeUpdateInput {
   entidadProductorId?: number
-  grupoMercadoId?: number
+  exportadorId?: number | null
   fechaInicioPrograma?: string
   observaciones?: string | null
   detalle?: InstructivoEmbalajeDetalleInput[]

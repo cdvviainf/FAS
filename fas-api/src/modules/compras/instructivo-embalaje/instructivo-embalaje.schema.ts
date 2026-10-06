@@ -2,6 +2,8 @@ import { z } from 'zod'
 
 const instructivoEmbalajeDetalleSchema = z.object({
   articuloId: z.number().int().positive('El artículo de embalaje es requerido'),
+  // Grupo de mercado a nivel de línea (2026-10-05, supersede el de cabecera).
+  grupoMercadoId: z.number().int().positive('El grupo de mercado es requerido'),
   especieId: z.number().int().positive('La especie es requerida'),
   variedadId: z.number().int().positive('La variedad es requerida'),
   variedadRotuladaId: z.number().int().positive().optional().nullable(),
@@ -9,14 +11,18 @@ const instructivoEmbalajeDetalleSchema = z.object({
   calibreIds: z.array(z.number().int().positive()).min(1, 'Selecciona al menos un calibre'),
   tipoPalletId: z.number().int().positive().optional().nullable(),
   alturaId: z.number().int().positive('La altura de pallet es requerida'),
+  // Marca (Etiqueta) editable por línea (2026-10-05).
+  etiquetaId: z.number().int().positive().optional().nullable(),
   cantidadPallets: z.number().int().positive('La cantidad de pallets debe ser mayor a 0'),
   cajasPorPallet: z.number().int().positive('Las cajas por pallet deben ser mayor a 0'),
   cajas: z.number().int().positive('Las cajas deben ser mayor a 0'),
+  observaciones: z.string().max(5000).trim().optional().nullable(),
 })
 
 export const instructivoEmbalajeCreateSchema = z.object({
   entidadProductorId: z.number().int().positive('El productor es requerido'),
-  grupoMercadoId: z.number().int().positive('El grupo de mercado es requerido'),
+  // Exportador (2026-10-05) — Entidad tipo EXPORTADORA, opcional.
+  exportadorId: z.number().int().positive().optional().nullable(),
   fechaInicioPrograma: z.coerce.date({ message: 'La fecha de inicio de programa es requerida' }),
   observaciones: z.string().max(5000).trim().optional().nullable(),
   detalle: z.array(instructivoEmbalajeDetalleSchema).min(1, 'El instructivo debe tener al menos una línea'),
@@ -28,7 +34,7 @@ export const instructivoEmbalajeCreateSchema = z.object({
 export const instructivoEmbalajeUpdateSchema = z
   .object({
     entidadProductorId: z.number().int().positive('El productor es requerido').optional(),
-    grupoMercadoId: z.number().int().positive('El grupo de mercado es requerido').optional(),
+    exportadorId: z.number().int().positive().optional().nullable(),
     fechaInicioPrograma: z.coerce.date().optional(),
     observaciones: z.string().max(5000).trim().optional().nullable(),
     detalle: z.array(instructivoEmbalajeDetalleSchema).min(1, 'El instructivo debe tener al menos una línea').optional(),
@@ -36,7 +42,7 @@ export const instructivoEmbalajeUpdateSchema = z
   .refine(
     (data) =>
       data.entidadProductorId !== undefined ||
-      data.grupoMercadoId !== undefined ||
+      data.exportadorId !== undefined ||
       data.fechaInicioPrograma !== undefined ||
       data.observaciones !== undefined ||
       data.detalle !== undefined,

@@ -113,6 +113,11 @@ export const LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION = 490250
 // la unicidad del correlativo por prefijo entre Cierres.
 export const LOCK_NAMESPACE_EMBARQUE_CORRELATIVO = 490252
 
+// Correlativo del Reclamo (2026-10-06): lock por (empresaId:prefijo) que cubre
+// el cálculo del máximo sufijo + la creación dentro de la misma transacción,
+// para que dos reclamos del mismo prefijo no generen el mismo `codigo`.
+export const LOCK_NAMESPACE_RECLAMO_CORRELATIVO = 490253
+
 // 490251 se usó brevemente para "Generar Instructivos" y se retiró
 // (2026-09-21, FAS-IE-QA-005, QA ronda 4): esa operación ahora comparte
 // LOCK_NAMESPACE_EMBARQUE_DESPACHO con reservarPalletsEnEmbarque/

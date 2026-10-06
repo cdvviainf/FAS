@@ -2,8 +2,8 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ForbiddenError, NotFoundError, ValidationError } from '../../../shared/errors.js'
-import { LOCK_NAMESPACE_RECLAMO_PALLET_LINEA } from '../../../shared/advisory-locks.js'
-import type { Procedencia, ProvisionInput, ReclamoLineaInput, ReclamoListFilters } from './reclamos.types.js'
+import { LOCK_NAMESPACE_RECLAMO_PALLET_LINEA, LOCK_NAMESPACE_RECLAMO_CORRELATIVO } from '../../../shared/advisory-locks.js'
+import type { Procedencia, ProvisionInput, ReclamoDefectoInput, ReclamoLineaInput, ReclamoListFilters } from './reclamos.types.js'
 
 type Tx = Prisma.TransactionClient
 
@@ -19,11 +19,33 @@ const palletLineaInclude = {
 } satisfies Prisma.PalletLineaInclude
 
 const reclamoInclude = {
-  embarque: { select: { id: true, numeroInstructivo: true } },
+  // numeroContenedorManual + solicitudReserva.numeroContenedor: el contenedor
+  // se muestra en el Reclamo derivado del Embarque (2026-10-06, coalesce en el
+  // service — no se copia al Reclamo).
+  embarque: {
+    select: {
+      id: true,
+      numeroInstructivo: true,
+      numeroContenedorManual: true,
+      solicitudReserva: { select: { numeroContenedor: true } },
+    },
+  },
   cliente: { select: mantenedorSelect },
   moneda: { select: mantenedorSelect },
   tipoReclamo: { select: { id: true, codigo: true, descripcion: true, generaAnalisisCalidad: true } },
+  // Clasificación del reclamo (GrupoDefecto, Calidad/Condición) — 2026-10-06.
+  grupoDefecto: { select: mantenedorSelect },
   lineas: { include: { palletLinea: { include: palletLineaInclude } } },
+  // Líneas de defecto del análisis (2026-10-06): grupo + defecto + porcentaje.
+  defectos: {
+    select: {
+      id: true,
+      porcentaje: true,
+      grupoDefecto: { select: mantenedorSelect },
+      defecto: { select: mantenedorSelect },
+    },
+    orderBy: { id: 'asc' as const },
+  },
   documentos: { select: { id: true, nombre: true, mime: true, tamano: true, subidoEn: true, subidoPor: true } },
   provisiones: { orderBy: { fechaCreacion: 'desc' as const } },
 } satisfies Prisma.ReclamoInclude
@@ -190,9 +212,27 @@ export async function crearReclamoTransaccional(
   datos: DatosReclamo,
   provisionInput: ProvisionInput | null | undefined,
   creadoPor: string,
+  prefijo: string,
+  digitos: number,
 ) {
   return prisma.$transaction(async (tx) => {
     const empresaId = getEmpresaIdActual()!
+
+    // Correlativo atómico por prefijo (mismo patrón que Embarque): el lock por
+    // (empresaId:prefijo) cubre el cálculo del máximo + la creación. La query a
+    // `reclamo` es tenant-scoped, así que el máximo ya es por empresa.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_RECLAMO_CORRELATIVO}::int, hashtext(${`${empresaId}:${prefijo}`}))`
+    const conPrefijo = await tx.reclamo.findMany({
+      where: { codigo: { startsWith: prefijo } },
+      select: { codigo: true },
+    })
+    let maximo = 0
+    for (const { codigo } of conPrefijo) {
+      const num = parseInt(codigo.slice(prefijo.length), 10)
+      if (!Number.isNaN(num) && num > maximo) maximo = num
+    }
+    const codigo = `${prefijo}${String(maximo + 1).padStart(digitos, '0')}`
+
     const palletLineaIds = [...new Set(datos.lineas.map((l) => l.palletLineaId))].sort((a, b) => a - b)
 
     for (const id of palletLineaIds) {
@@ -232,6 +272,7 @@ export async function crearReclamoTransaccional(
     const reclamo = await tx.reclamo.create({
       data: {
         empresaId,
+        codigo,
         embarqueId: datos.embarqueId,
         clienteId: datos.clienteId,
         monedaId: datos.monedaId,
@@ -423,12 +464,54 @@ export async function getTipoReclamoActivo(id: number) {
 
 // IMP-QA-R1-021: claim atómico (existe + no CERRADO) en la misma escritura
 // — antes hacía update directo sin chequear estado en absoluto.
-export async function updateAnalisisCalidad(id: number, comentarioCalidad: string, actualizadoPor: string) {
+export async function updateAnalisisCalidad(
+  id: number,
+  comentarioCalidad: string,
+  actualizadoPor: string,
+  grupoDefectoId: number | null | undefined,
+  defectos: ReclamoDefectoInput[] | undefined,
+) {
   return prisma.$transaction(async (tx) => {
     // Análisis es acción de Calidad: el tipo debe generar análisis (atómico).
     await claimReclamoNoCerrado(tx, id, actualizadoPor, { requiereAnalizable: true })
-    await tx.reclamo.update({ where: { id }, data: { comentarioCalidad, actualizadoPor } })
+    await tx.reclamo.update({
+      where: { id },
+      data: {
+        comentarioCalidad,
+        actualizadoPor,
+        // grupoDefectoId solo se toca si vino en el body (undefined = no cambiar;
+        // null = limpiar la clasificación).
+        ...(grupoDefectoId !== undefined ? { grupoDefectoId } : {}),
+      },
+    })
+    // Líneas de defecto: si vino el array, se reemplaza el set completo.
+    if (defectos !== undefined) {
+      await tx.reclamoDefecto.deleteMany({ where: { reclamoId: id } })
+      if (defectos.length > 0) {
+        await tx.reclamoDefecto.createMany({
+          data: defectos.map((d) => ({
+            reclamoId: id,
+            grupoDefectoId: d.grupoDefectoId,
+            defectoId: d.defectoId,
+            porcentaje: new Prisma.Decimal(d.porcentaje),
+          })),
+        })
+      }
+    }
     return tx.reclamo.findUniqueOrThrow({ where: { id }, include: reclamoInclude })
+  })
+}
+
+// Validación de defectos del análisis (tenant-scoped por la extensión Prisma):
+// grupo existe/activo, y el defecto existe/activo y pertenece a ese grupo.
+export async function getGrupoDefectoActivo(id: number) {
+  return prisma.grupoDefecto.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getDefectoActivo(id: number) {
+  return prisma.defecto.findFirst({
+    where: { id, eliminadoEn: null, bloqueado: false },
+    select: { id: true, grupoDefectoId: true },
   })
 }
 

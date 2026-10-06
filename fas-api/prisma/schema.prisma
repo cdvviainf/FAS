@@ -202,6 +202,8 @@ model Empresa {
   alturas                Altura[]
   tiposProduccion        TipoProduccion[]
   tiposDefecto           TipoDefecto[]
+  gruposDefecto          GrupoDefecto[]
+  defectos               Defecto[]
   tiposParametro         TipoParametro[]
   puertos                Puerto[]
   temporadas             Temporada[]
@@ -535,12 +537,13 @@ model Pais {
 }
 
 // ─── País ↔ Mercado (Fase 2b) ────────────────────────────────────────────────
-// Cada empresa mapea sus países a sus mercados. Un país pertenece a lo sumo un
-// mercado POR EMPRESA (decisión de negocio 2026-08-01) — no es N:M real: la
-// misma fila de País puede mapear a mercados distintos en empresas distintas,
-// pero dentro de una empresa el mapeo es 1:1 (@@unique([empresaId, paisId])).
-// Sin soft-delete: cambiar el mercado de un país es un UPDATE de esta misma
-// fila, no un alta/baja.
+// Cada empresa mapea sus países a sus mercados. Desde 2026-10-05 es un N:M real
+// POR EMPRESA: un país puede pertenecer a varios mercados (y por lo tanto a
+// varios grupos de mercado) dentro de la misma empresa — supersede el
+// @@unique([empresaId, paisId]) singular (antes 1:1). La unicidad ahora es por
+// combinación (@@unique([empresaId, mercadoId, paisId])): no se duplica la
+// misma arista país↔mercado. Sin soft-delete: sincronizar los mercados de un
+// país es alta/baja de estas filas.
 model MercadoPais {
   id             Int       @id @default(autoincrement())
   empresaId      Int
@@ -554,8 +557,9 @@ model MercadoPais {
   actualizadoEn  DateTime? @updatedAt
   actualizadoPor String?
 
-  @@unique([empresaId, paisId])
+  @@unique([empresaId, mercadoId, paisId])
   @@index([empresaId, mercadoId])
+  @@index([empresaId, paisId])
   @@map("mercado_paises")
 }
 
@@ -596,8 +600,8 @@ model GrupoMercado {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  mercados             Mercado[]
-  instructivosEmbalaje InstructivoEmbalaje[]
+  mercados                    Mercado[]
+  instructivosEmbalajeDetalle InstructivoEmbalajeDetalle[]
 
   // Target de la FK compuesta de Mercado (empresaId, grupoMercadoId) — hace
   // estructuralmente imposible que un Mercado y su GrupoMercado pertenezcan a
@@ -750,10 +754,11 @@ model Etiqueta {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  articulos                Articulo[]
-  palletLineas             PalletLinea[]
-  proformaLineas           ProformaLinea[]
-  facturaExportacionLineas FacturaExportacionLinea[]
+  articulos                   Articulo[]
+  palletLineas                PalletLinea[]
+  proformaLineas              ProformaLinea[]
+  facturaExportacionLineas    FacturaExportacionLinea[]
+  instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -818,8 +823,85 @@ model TipoDefecto {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
+  grupos GrupoDefecto[]
+
+  // @@unique necesario para la FK compuesta (empresaId, tipoDefectoId) de
+  // GrupoDefecto (2026-10-06, mismo patrón que Especie↔GrupoVariedad).
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@map("tipos_defecto")
+}
+
+// Jerarquía de defectos de Calidad (calidad.md §4.1/R2): TipoDefecto -> Grupo
+// -> Defecto, con asociación por especie (DefectoEspecie). Grupo de Defecto es
+// además la clasificación "Calidad/Condición" que el cliente configura y que
+// usan el Reclamo (clasificación) y sus líneas de defecto (2026-10-06).
+model GrupoDefecto {
+  id                    Int         @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa     @relation(fields: [empresaId], references: [id])
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  tipoDefectoId         Int
+  // FK compuesta (empresaId, tipoDefectoId) -> TipoDefecto(empresaId, id).
+  tipoDefecto           TipoDefecto @relation(fields: [empresaId, tipoDefectoId], references: [empresaId, id])
+  bloqueado             Boolean     @default(false)
+  creadoEn              DateTime    @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?   @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  defectos        Defecto[]
+  reclamos        Reclamo[]        @relation("ReclamoClasificacionGrupo")
+  reclamoDefectos ReclamoDefecto[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  @@index([tipoDefectoId])
+  @@map("grupos_defecto")
+}
+
+model Defecto {
+  id                    Int          @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa      @relation(fields: [empresaId], references: [id])
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  grupoDefectoId        Int
+  // FK compuesta (empresaId, grupoDefectoId) -> GrupoDefecto(empresaId, id).
+  grupoDefecto          GrupoDefecto @relation(fields: [empresaId, grupoDefectoId], references: [empresaId, id])
+  bloqueado             Boolean      @default(false)
+  creadoEn              DateTime     @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?    @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  especies        DefectoEspecie[]
+  reclamoDefectos ReclamoDefecto[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  @@index([grupoDefectoId])
+  @@map("defectos")
+}
+
+// Validez por especie del Defecto (mismo patrón que NotaCalidadEspecie).
+model DefectoEspecie {
+  id        Int     @id @default(autoincrement())
+  defectoId Int
+  defecto   Defecto @relation(fields: [defectoId], references: [id], onDelete: Cascade)
+  especieId Int
+  especie   Especie @relation(fields: [especieId], references: [id])
+
+  @@unique([defectoId, especieId])
+  @@index([defectoId])
+  @@map("defectos_especie")
 }
 
 // Configura, por cada mantenedor/módulo que use campo `codigo`, un prefijo
@@ -982,6 +1064,7 @@ model Especie {
   palletLineas                PalletLinea[]
   notasCalidad                NotaCalidadEspecie[]
   notasCondicion              NotaCondicionEspecie[]
+  defectos                    DefectoEspecie[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1491,6 +1574,7 @@ model Entidad {
   ordenesCompraMaterialProveedor OrdenCompraMaterial[]       @relation("OrdenCompraMaterialProveedor")
   proformasMaterialCliente       ProformaMaterial[]          @relation("ProformaMaterialCliente")
   instructivosEmbalajeProductor  InstructivoEmbalaje[]       @relation("InstructivoEmbalajeProductor")
+  instructivosEmbalajeExportador InstructivoEmbalaje[]       @relation("InstructivoEmbalajeExportador")
   recepcionesPlanta              Recepcion[]                 @relation("RecepcionPlanta")
   palletsProductor               Pallet[]                    @relation("PalletProductor")
   palletLineasPacking            PalletLinea[]               @relation("PalletLineaPacking")
@@ -1616,13 +1700,6 @@ model SolicitudInspeccion {
   cliente               Entidad?                  @relation("SolicitudInspeccionCliente", fields: [empresaId, clienteId], references: [empresaId, id])
   fechaDespacho         DateTime?                 @db.Date
   cantidadPallets       Int?
-  // Nota de Calidad / Condición (2026-09-02, calidad.md — supersede
-  // Calificacion): mismos mantenedores que Pallet (compras.md §4.8),
-  // restringidos por `especieId` de esta Solicitud cuando está definido.
-  notaCalidadId         Int?
-  notaCalidad           NotaCalidad?              @relation(fields: [empresaId, notaCalidadId], references: [empresaId, id])
-  notaCondicionId       Int?
-  notaCondicion         NotaCondicion?            @relation(fields: [empresaId, notaCondicionId], references: [empresaId, id])
   observaciones         String?
   // Solicitante de negocio (2026-08-14): distinto de `creadoPor` (auditoría
   // pura, "quién hizo el request"). Por defecto es el usuario de sesión al
@@ -1651,6 +1728,12 @@ model SolicitudInspeccion {
   calibres   SolicitudInspeccionCalibre[]
   categorias SolicitudInspeccionCategoria[]
   embalajes  SolicitudInspeccionEmbalaje[]
+  // Nota(s) de Calidad / Condición (multiselección, 2026-10-05 — supersede el
+  // notaCalidadId/notaCondicionId singular, calidad.md): varios valores por
+  // solicitud, mismos mantenedores que Pallet (compras.md §4.8), restringidos
+  // por `especieId` de esta Solicitud cuando está definido.
+  notasCalidad   SolicitudInspeccionNotaCalidad[]
+  notasCondicion SolicitudInspeccionNotaCondicion[]
 
   ordenesCompra OrdenCompraSolicitudInspeccion[]
 
@@ -1716,6 +1799,28 @@ model SolicitudInspeccionEmbalaje {
 
   @@unique([solicitudId, articuloId])
   @@map("solicitud_inspeccion_embalajes")
+}
+
+model SolicitudInspeccionNotaCalidad {
+  id            Int                 @id @default(autoincrement())
+  solicitudId   Int
+  solicitud     SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  notaCalidadId Int
+  notaCalidad   NotaCalidad         @relation(fields: [notaCalidadId], references: [id])
+
+  @@unique([solicitudId, notaCalidadId])
+  @@map("solicitud_inspeccion_notas_calidad")
+}
+
+model SolicitudInspeccionNotaCondicion {
+  id              Int                 @id @default(autoincrement())
+  solicitudId     Int
+  solicitud       SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  notaCondicionId Int
+  notaCondicion   NotaCondicion       @relation(fields: [notaCondicionId], references: [id])
+
+  @@unique([solicitudId, notaCondicionId])
+  @@map("solicitud_inspeccion_notas_condicion")
 }
 
 model SolicitudInspeccionAsignado {
@@ -2585,7 +2690,7 @@ model NotaCalidad {
 
   especies              NotaCalidadEspecie[]
   pallets               Pallet[]
-  solicitudesInspeccion SolicitudInspeccion[]
+  solicitudesInspeccion SolicitudInspeccionNotaCalidad[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -2621,7 +2726,7 @@ model NotaCondicion {
 
   especies              NotaCondicionEspecie[]
   pallets               Pallet[]
-  solicitudesInspeccion SolicitudInspeccion[]
+  solicitudesInspeccion SolicitudInspeccionNotaCondicion[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -3196,6 +3301,12 @@ model Reclamo {
   empresaId Int
   empresa   Empresa @relation(fields: [empresaId], references: [id])
 
+  // Correlativo propio (2026-10-06, supersede RC-D11 "sin número propio"):
+  // generado al crear vía PrefijoCodigo (modelo='reclamo', prefijo p.ej. "REC").
+  // Unicidad real por índice parcial (empresaId, codigo) WHERE eliminadoEn IS
+  // NULL (ver migration.sql — no representable en el DSL de Prisma).
+  codigo     String
+
   embarqueId Int
   // FK compuesta (empresaId, embarqueId) -> Embarque(empresaId, id).
   embarque   Embarque @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
@@ -3224,6 +3335,12 @@ model Reclamo {
 
   comentarioCalidad String? // análisis de Calidad — simplificado (RC-D13)
 
+  // Clasificación del reclamo (2026-10-06): GrupoDefecto (Calidad/Condición),
+  // seleccionada por Calidad en el análisis. Independiente del grupo de cada
+  // línea de defecto (una etiqueta general del reclamo). Nullable.
+  grupoDefectoId Int?
+  grupoDefecto   GrupoDefecto? @relation("ReclamoClasificacionGrupo", fields: [empresaId, grupoDefectoId], references: [empresaId, id])
+
   valorConfirmado   Decimal?  @db.Decimal(14, 4) // Valorización — monto final (RC-D7), >= 0
   valorizadoPor     String?
   fechaValorizacion DateTime?
@@ -3231,6 +3348,7 @@ model Reclamo {
   temporadaId Int?
 
   lineas      ReclamoPalletLinea[]
+  defectos    ReclamoDefecto[]
   documentos  ReclamoDocumento[]
   provisiones Provision[]
 
@@ -3243,7 +3361,28 @@ model Reclamo {
 
   @@index([empresaId, embarqueId])
   @@index([estado])
+  @@index([grupoDefectoId])
   @@map("reclamos")
+}
+
+// Líneas de defecto del Reclamo (2026-10-06): cada línea fija un Grupo de
+// Defecto (Calidad/Condición), un Defecto de ese grupo y un porcentaje. Child
+// table sin empresaId (el aislamiento lo da el Reclamo padre, mismo criterio
+// que ReclamoPalletLinea); FKs por id plano, validadas en el service.
+model ReclamoDefecto {
+  id             Int          @id @default(autoincrement())
+  reclamoId      Int
+  reclamo        Reclamo      @relation(fields: [reclamoId], references: [id], onDelete: Cascade)
+  grupoDefectoId Int
+  grupoDefecto   GrupoDefecto @relation(fields: [grupoDefectoId], references: [id])
+  defectoId      Int
+  defecto        Defecto      @relation(fields: [defectoId], references: [id])
+  porcentaje     Decimal      @db.Decimal(5, 2) // 0..100
+
+  @@index([reclamoId])
+  @@index([grupoDefectoId])
+  @@index([defectoId])
+  @@map("reclamo_defectos")
 }
 
 // Qué se reclama exactamente (RC-D12) — join a la línea real de un pallet ya
@@ -3623,8 +3762,13 @@ model InstructivoEmbalaje {
   // vez de a la venta.
   entidadProductorId  Int
   entidadProductor    Entidad      @relation("InstructivoEmbalajeProductor", fields: [empresaId, entidadProductorId], references: [empresaId, id])
-  grupoMercadoId      Int
-  grupoMercado        GrupoMercado @relation(fields: [empresaId, grupoMercadoId], references: [empresaId, id])
+  // Exportador (2026-10-05) — Entidad tipo EXPORTADORA. FK compuesta
+  // (empresaId, exportadorId) -> Entidad(empresaId, id).
+  exportadorId        Int?
+  exportador          Entidad?     @relation("InstructivoEmbalajeExportador", fields: [empresaId, exportadorId], references: [empresaId, id])
+  // El Grupo de Mercado pasó a nivel de línea (2026-10-05, supersede el
+  // grupoMercadoId de cabecera): cada línea del instructivo puede destinarse a
+  // un grupo de mercado distinto — ver InstructivoEmbalajeDetalle.grupoMercadoId.
   fechaInicioPrograma DateTime
   observaciones       String?
 
@@ -3641,7 +3785,7 @@ model InstructivoEmbalaje {
 
   @@unique([empresaId, id])
   @@index([entidadProductorId])
-  @@index([grupoMercadoId])
+  @@index([exportadorId])
   @@index([empresaId])
   @@map("instructivos_embalaje")
 }
@@ -3653,6 +3797,9 @@ model InstructivoEmbalajeDetalle {
 
   articuloId         Int // FK → Artículo tipo EMBALAJE
   articulo           Articulo    @relation(fields: [articuloId], references: [id])
+  // Grupo de Mercado a nivel de línea (2026-10-05, supersede el de cabecera).
+  grupoMercadoId     Int
+  grupoMercado       GrupoMercado @relation(fields: [grupoMercadoId], references: [id])
   especieId          Int
   especie            Especie     @relation(fields: [especieId], references: [id])
   variedadId         Int
@@ -3666,16 +3813,24 @@ model InstructivoEmbalajeDetalle {
   tipoPallet         TipoPallet? @relation(fields: [tipoPalletId], references: [id])
   alturaId           Int
   altura             Altura      @relation(fields: [alturaId], references: [id])
+  // Marca (Etiqueta) editable a nivel de línea (2026-10-05): por defecto se
+  // sugiere la etiqueta del artículo, pero se puede sobrescribir por línea.
+  etiquetaId         Int?
+  etiqueta           Etiqueta?   @relation(fields: [etiquetaId], references: [id])
 
   cantidadPallets Int
   cajasPorPallet  Int
   cajas           Int
+  // Observaciones a nivel de línea (2026-10-05).
+  observaciones   String?
 
   // Multiselect de calibres (antes: rango calibreMinId/calibreMaxId — ver
   // supersesión 2026-08-15, mismo patrón que NotaVentaDetalleCalibre).
   calibres InstructivoEmbalajeDetalleCalibre[]
 
   @@index([instructivoId])
+  @@index([grupoMercadoId])
+  @@index([etiquetaId])
   @@index([variedadRotuladaId])
   @@index([alturaId])
   @@map("instructivo_embalaje_detalle")

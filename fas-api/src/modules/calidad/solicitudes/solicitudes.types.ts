@@ -20,8 +20,8 @@ export interface SolicitudCreateInput {
   clienteId?: number | null
   fechaDespacho?: string | null
   cantidadPallets?: number | null
-  notaCalidadId?: number | null
-  notaCondicionId?: number | null
+  notaCalidadIds?: number[]
+  notaCondicionIds?: number[]
   variedadIds?: number[]
   calibreIds?: number[]
   categoriaIds?: number[]
@@ -42,8 +42,8 @@ export interface SolicitudUpdateInput {
   clienteId?: number | null
   fechaDespacho?: string | null
   cantidadPallets?: number | null
-  notaCalidadId?: number | null
-  notaCondicionId?: number | null
+  notaCalidadIds?: number[]
+  notaCondicionIds?: number[]
   variedadIds?: number[]
   calibreIds?: number[]
   categoriaIds?: number[]

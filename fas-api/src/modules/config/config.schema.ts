@@ -17,6 +17,8 @@ export const mantenedorListQuerySchema = z.object({
   paisId: z.coerce.number().int().positive().optional(),
   mercadoId: z.coerce.number().int().positive().optional(),
   tipoEmbarqueId: z.coerce.number().int().positive().optional(),
+  tipoDefectoId: z.coerce.number().int().positive().optional(),
+  grupoDefectoId: z.coerce.number().int().positive().optional(),
   contexto: z.enum(['origen', 'destino']).optional(),
   // z.coerce.boolean() convertiría "false" (string) a true; enum explícito lo evita
   soloActivos: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
@@ -50,7 +52,10 @@ export const paisBodySchema = mantenedorBaseSchema.extend({
     .trim(),
   esPaisNacional: z.boolean().default(false),
   puedeSerOrigen: z.boolean().default(false),
-  mercadoId: z.number().int().positive({ message: 'Selecciona un mercado' }),
+  // N:M (2026-10-05, supersede mercadoId singular): un país puede mapear a
+  // varios mercados por empresa — así distintos grupos de mercado pueden
+  // compartir el mismo país.
+  mercadoIds: z.array(z.number().int().positive()).min(1, 'Selecciona al menos un mercado'),
 })
 
 export const paisUpdateSchema = paisBodySchema.omit({ codigo: true }).partial()
@@ -95,6 +100,22 @@ export const variedadBodySchema = mantenedorBaseSchema.extend({
 export const variedadUpdateSchema = variedadBodySchema
   .omit({ codigo: true })
   .partial()
+
+// ─── Grupo de Defecto / Defecto (catálogo de defectos, 2026-10-06) ───────────
+
+export const grupoDefectoBodySchema = mantenedorBaseSchema.extend({
+  tipoDefectoId: z.number().int().positive({ message: 'Selecciona un tipo de defecto' }),
+})
+
+export const grupoDefectoUpdateSchema = grupoDefectoBodySchema.omit({ codigo: true }).partial()
+
+export const defectoBodySchema = mantenedorBaseSchema.extend({
+  grupoDefectoId: z.number().int().positive({ message: 'Selecciona un grupo de defecto' }),
+  // Validez por especie (opcional, N:M). Sin especies = defecto genérico.
+  especieIds: z.array(z.number().int().positive()).optional(),
+})
+
+export const defectoUpdateSchema = defectoBodySchema.omit({ codigo: true }).partial()
 
 // ─── Especie ─────────────────────────────────────────────────────────────────
 

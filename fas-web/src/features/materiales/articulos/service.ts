@@ -13,6 +13,7 @@ export const articulosService = {
     const sp: Record<string, string> = {}
     if (filters.q) sp.q = filters.q
     if (filters.tipo) sp.tipo = filters.tipo
+    if (filters.especieId != null) sp.especieId = String(filters.especieId)
     if (filters.activo !== undefined) sp.activo = String(filters.activo)
     if (filters.page) sp.page = String(filters.page)
     if (filters.limit) sp.limit = String(filters.limit)

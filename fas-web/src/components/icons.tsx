@@ -17,6 +17,7 @@ import {
   IconCalendar,
   IconCheck,
   IconChecks,
+  IconCopy,
   IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
@@ -176,6 +177,7 @@ export const Icons = {
 
   // Actions
   add: IconPlus,
+  copy: IconCopy,
   edit: IconEdit,
   upload: IconUpload,
   share: IconShare,

@@ -39,6 +39,17 @@
 > - **Anular Valorización** (nuevo): revierte `VALORIZADO → INGRESADO`, limpia `valorConfirmado`/`valorizadoPor`/`fechaValorizacion`, y restaura automáticamente las Provisiones que ESA valorización había reversado (nuevo flag `Provision.reversadaPorValorizacion`, distingue de una reversa manual previa que no debe restaurarse). Mismo permiso que valorizar (`RECLAMO_VALORIZACION`), solo si `estado = VALORIZADO`.
 > - **Selector de líneas** (`LineasSelector`, usado al crear/editar el Reclamo): cada fila (por Pallet y por Características) suma un checkbox que marca la línea/grupo completo con el total disponible (editable después), más un control "Seleccionar todos" por vista.
 
+## 0.c Supersesión (2026-10-06) — correlativo, contenedor, clasificación y líneas de defecto
+
+> Por decisión de Christian, el Reclamo (lado Calidad) gana:
+> - **Correlativo propio `codigo`** (supersede RC-D11/RC-26 "sin correlativo"): se genera al crear vía `PrefijoCodigo` (modelo `reclamo`, prefijo por defecto `REC`, 4 dígitos; configurable por empresa en el mantenedor de Prefijos). Atómico por `(empresaId, prefijo)` bajo advisory lock (mismo patrón que el folio del Embarque). Unicidad real por índice parcial `(empresaId, codigo) WHERE eliminadoEn IS NULL`. Se muestra como "N° Reclamo" en las tablas (Calidad, Ventas y el tab del Embarque) y en el detalle. Migración con backfill (`REC` + correlativo por empresa) de reclamos existentes.
+> - **Número de contenedor (derivado, solo lectura):** se muestra el del Embarque — `embarque.numeroContenedorManual ?? embarque.solicitudReserva.numeroContenedor` (helper `numeroContenedorDeReclamo`). No se persiste en el Reclamo.
+> - **Fecha sin hora:** `fechaReclamo` ya era `@db.Date`; se corrige el frontend para mostrarla/editarla date-only (formateo `formatFechaCorta` en vistas; `slice(0,10)` al precargar el input `type=date` en edición).
+> - **Resumen con "…más":** la columna Resumen de las tablas usa el nuevo componente compartido `ExpandableText` (truncado + toggle "…más/menos") en vez de `truncate` seco.
+> - **Clasificación del reclamo (`grupoDefectoId`, opcional):** un select a nivel cabecera que lista **Grupos de Defecto** (Calidad/Condición son grupos del mantenedor). Lo asigna Calidad en el análisis. Independiente de las líneas.
+> - **Líneas de defecto (`ReclamoDefecto`):** detalle del análisis — cada línea = **Grupo de Defecto** (Calidad/Condición) + **Defecto** (de ese grupo, filtrado además por la(s) especie(s) de la fruta reclamada + genéricos) + **porcentaje** (0–100). Las líneas pueden mezclar grupos. Se editan en la pantalla de Calidad (`CAL_RECLAMOS`) junto al comentario, y se envían en el mismo `PATCH /analisis` (reemplazo total del set). El backend valida que cada defecto pertenezca a su grupo (filtro por especie = blando, solo conveniencia del selector).
+> - Habilita el catálogo de defectos completo: `TipoDefecto → GrupoDefecto → Defecto` + `DefectoEspecie` (ver `calidad.md`).
+
 ---
 
 ## 1. Contexto

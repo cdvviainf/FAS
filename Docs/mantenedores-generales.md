@@ -109,9 +109,23 @@ model Pais {
   esPaisNacional Boolean  @default(false)
   puedeSerOrigen Boolean  @default(false)
   puertos      Puerto[]
-  mercadoId    Int?
-  mercado      Mercado?  @relation(fields: [mercadoId], references: [id])
-  // Un Mercado agrupa varios Países (ej. Mercado "Europa" contiene España/Francia/Alemania)
+  // ⚠️ Supersesión (Fase 2b, formalizada 2026-10-06): Pais ya NO tiene
+  // `mercadoId` directo. País es geografía global; el mapeo país↔mercado es
+  // por empresa vía la tabla puente `MercadoPais`. Desde 2026-10-06 es N:M
+  // real: un país puede pertenecer a VARIOS mercados (y por lo tanto a varios
+  // grupos de mercado) dentro de una misma empresa — así distintos grupos de
+  // mercado comparten el mismo país. Antes era 1:1 por empresa.
+  mercadoPaises MercadoPais[]
+}
+
+// Tabla puente País ↔ Mercado (por empresa). N:M desde 2026-10-06.
+model MercadoPais {
+  empresaId Int
+  mercadoId Int
+  paisId    Int
+  // Unicidad por combinación: no se duplica la misma arista país↔mercado.
+  // (antes @@unique([empresaId, paisId]) — un país mapeaba a 1 mercado/empresa)
+  // @@unique([empresaId, mercadoId, paisId])
 }
 
 model TipoEmbarque {
@@ -318,7 +332,7 @@ model TipoCuentaCorriente {
 - **Pantalla genérica de mantenedor** reutilizable: tabla con búsqueda + alta/edición en dialog + acción eliminar (softdelete con confirmación). Recibe la definición de columnas/campos por configuración.
 - Campos especiales por mantenedor:
   - Temporada: dos date pickers (inicio/término).
-  - País: switch "Es país de origen"; select Mercado (opcional).
+  - País: switch "Es país de origen"; **multiselect Mercados** (al menos uno — N:M, 2026-10-06; antes era un select único). El form de alta/edición y el quick-create inline envían `mercadoIds: number[]`; el listado/GET devuelve `mercadoIds`/`mercados` reconstruidos desde `MercadoPais`. La carga masiva (hoja `PaisMercado`) agrega aristas de forma idempotente (no borra las demás del país).
   - Provincia/Comuna/País/Variedad/Categoría/Calibre/Parámetro: selects dependientes (cascada).
   - Moneda: switch "Es moneda base" + input decimales.
   - Bodega: dirección, select Comuna, multiselect tipos, lat/long.

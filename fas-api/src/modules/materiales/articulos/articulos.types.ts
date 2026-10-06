@@ -31,6 +31,7 @@ export type ArticuloUpdateInput = Partial<ArticuloCreateInput>
 export interface ArticuloListFilters {
   q?: string
   tipo?: TipoArticulo
+  especieId?: number
   activo?: boolean
   page?: number
   limit?: number

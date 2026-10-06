@@ -23,6 +23,8 @@ const modelMap: Record<MantenedorModelo, string> = {
   especie: 'especie',
   grupoVariedad: 'grupoVariedad',
   variedad: 'variedad',
+  grupoDefecto: 'grupoDefecto',
+  defecto: 'defecto',
   categoria: 'categoria',
   calibre: 'calibre',
   parametro: 'parametro',
@@ -50,6 +52,11 @@ const includeMap: Partial<Record<MantenedorModelo, object>> = {
   },
   categoria: { especie: { select: { id: true, descripcion: true } } },
   calibre: { especie: { select: { id: true, descripcion: true } } },
+  grupoDefecto: { tipoDefecto: { select: { id: true, descripcion: true } } },
+  defecto: {
+    grupoDefecto: { select: { id: true, descripcion: true } },
+    especies: { select: { especieId: true, especie: { select: { id: true, descripcion: true } } } },
+  },
   parametro: { tipoParametro: { select: { id: true, descripcion: true } } },
   mercado: {
     grupoMercado: { select: { id: true, descripcion: true } },
@@ -77,7 +84,7 @@ const includeMap: Partial<Record<MantenedorModelo, object>> = {
 }
 
 // FK filter fields per model
-type FkFilterKey = 'regionId' | 'provinciaId' | 'especieId' | 'grupoVariedadId' | 'tipoParametroId' | 'grupoMercadoId' | 'paisId' | 'tipoEmbarqueId' | 'comunaId' | 'mercadoId'
+type FkFilterKey = 'regionId' | 'provinciaId' | 'especieId' | 'grupoVariedadId' | 'tipoParametroId' | 'grupoMercadoId' | 'paisId' | 'tipoEmbarqueId' | 'comunaId' | 'mercadoId' | 'tipoDefectoId' | 'grupoDefectoId'
 
 const fkFilterMap: Partial<Record<MantenedorModelo, FkFilterKey[]>> = {
   provincia: ['regionId'],
@@ -86,6 +93,8 @@ const fkFilterMap: Partial<Record<MantenedorModelo, FkFilterKey[]>> = {
   variedad: ['especieId', 'grupoVariedadId'],
   categoria: ['especieId'],
   calibre: ['especieId'],
+  grupoDefecto: ['tipoDefectoId'],
+  defecto: ['grupoDefectoId'],
   parametro: ['tipoParametroId'],
   mercado: ['grupoMercadoId'],
   puerto: ['paisId', 'tipoEmbarqueId'],
@@ -213,22 +222,27 @@ export async function getMantenedorById(modelo: MantenedorModelo, id: number) {
   })
 }
 
-// ─── Pais ↔ Mercado (Fase 2b) ────────────────────────────────────────────────
-// Pais ya no tiene mercadoId propio (ver MercadoPais). Los reads anidados NO
-// pasan por la extensión de tenancy (riesgo residual documentado en
-// Docs/empresas.md §2.c) — el filtro por empresa activa se agrega a mano acá,
-// con -1 como centinela cuando no hay empresa resuelta (sin coincidencias,
-// en vez de reventar la consulta).
-// mercadoId se reconstruye además de `mercado` porque el form de edición del
-// frontend (pais-form-sheet.tsx) precarga el select leyendo `item.mercadoId`
-// directamente — mismo contrato que cuando era una columna propia.
-type PaisConMercado = { mercadoId: number | null; mercado: { id: number; descripcion: string } | null }
+// ─── Pais ↔ Mercado (Fase 2b · N:M desde 2026-10-05) ─────────────────────────
+// Pais ya no tiene mercadoId propio (ver MercadoPais). Desde 2026-10-05 un país
+// puede mapear a VARIOS mercados por empresa — distintos grupos de mercado
+// comparten el mismo país. Los reads anidados NO pasan por la extensión de
+// tenancy (riesgo residual documentado en Docs/empresas.md §2.c) — el filtro
+// por empresa activa se agrega a mano acá, con -1 como centinela cuando no hay
+// empresa resuelta (sin coincidencias, en vez de reventar la consulta).
+// mercadoIds/mercados (plural) se reconstruyen porque el form de edición del
+// frontend (pais-form-sheet.tsx) precarga el multiselect leyendo
+// `item.mercadoIds` directamente.
+type PaisConMercados = { mercadoIds: number[]; mercados: { id: number; descripcion: string }[] }
 
-function aplanarMercado<T extends { mercadoPaises: { mercadoId: number; mercado: { id: number; descripcion: string } }[] }>(
+function aplanarMercados<T extends { mercadoPaises: { mercadoId: number; mercado: { id: number; descripcion: string } }[] }>(
   pais: T,
-): Omit<T, 'mercadoPaises'> & PaisConMercado {
+): Omit<T, 'mercadoPaises'> & PaisConMercados {
   const { mercadoPaises, ...resto } = pais
-  return { ...resto, mercadoId: mercadoPaises[0]?.mercadoId ?? null, mercado: mercadoPaises[0]?.mercado ?? null }
+  return {
+    ...resto,
+    mercadoIds: mercadoPaises.map((m) => m.mercadoId),
+    mercados: mercadoPaises.map((m) => m.mercado),
+  }
 }
 
 async function listPaises(filters: MantenedorListFilters) {
@@ -249,9 +263,10 @@ async function listPaises(filters: MantenedorListFilters) {
       : {}),
   }
 
-  const includeMercadoActivo = {
+  const includeMercadosActivos = {
     mercadoPaises: {
       where: { empresaId },
+      orderBy: { mercadoId: 'asc' as const },
       select: { mercadoId: true, mercado: { select: { id: true, descripcion: true } } },
     },
   }
@@ -262,12 +277,12 @@ async function listPaises(filters: MantenedorListFilters) {
       orderBy: resolveOrderBy('pais', sort),
       skip: (page - 1) * limit,
       take: limit,
-      include: includeMercadoActivo,
+      include: includeMercadosActivos,
     }),
     prisma.pais.count({ where }),
   ])
 
-  return { data: rows.map(aplanarMercado), total }
+  return { data: rows.map(aplanarMercados), total }
 }
 
 async function getPaisById(id: number) {
@@ -277,22 +292,79 @@ async function getPaisById(id: number) {
     include: {
       mercadoPaises: {
         where: { empresaId },
+        orderBy: { mercadoId: 'asc' as const },
         select: { mercadoId: true, mercado: { select: { id: true, descripcion: true } } },
       },
     },
   })
-  return row ? aplanarMercado(row) : null
+  return row ? aplanarMercados(row) : null
 }
 
-export async function upsertMercadoPais(paisId: number, mercadoId: number, userId: string) {
-  // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
-  // valor con el resuelto en el request (o lanza EMPRESA_REQUERIDA si no hay
-  // ninguno) — el valor acá solo satisface el tipo generado por Prisma.
+/**
+ * Sincroniza los mercados de un país para la empresa activa (N:M): borra las
+ * aristas país↔mercado que ya no están y crea las nuevas, dejando intactas las
+ * que se conservan (para preservar su auditoría). Todo en una transacción.
+ */
+export async function sincronizarMercadosPais(paisId: number, mercadoIds: number[], userId: string) {
+  // empresaId: la extensión de tenancy (prisma-tenancy.ts) lo sobrescribe/valida
+  // en cada operación — el valor acá solo satisface el tipo generado por Prisma.
+  const empresaId = getEmpresaIdActual()!
+  const deseados = [...new Set(mercadoIds)]
+  return prisma.$transaction(async (tx) => {
+    const actuales = await tx.mercadoPais.findMany({
+      where: { empresaId, paisId },
+      select: { mercadoId: true },
+    })
+    const actualesSet = new Set(actuales.map((m) => m.mercadoId))
+    const deseadosSet = new Set(deseados)
+
+    const aBorrar = actuales.map((m) => m.mercadoId).filter((m) => !deseadosSet.has(m))
+    const aCrear = deseados.filter((m) => !actualesSet.has(m))
+
+    if (aBorrar.length > 0) {
+      await tx.mercadoPais.deleteMany({ where: { empresaId, paisId, mercadoId: { in: aBorrar } } })
+    }
+    if (aCrear.length > 0) {
+      await tx.mercadoPais.createMany({
+        data: aCrear.map((mercadoId) => ({ empresaId, paisId, mercadoId, creadoPor: userId })),
+      })
+    }
+  })
+}
+
+/**
+ * Agrega (idempotente, "no duplica") una sola arista país↔mercado para la
+ * empresa activa — usado por la carga masiva, que sube una fila por arista y NO
+ * debe borrar las otras aristas del país (a diferencia de sincronizarMercadosPais).
+ */
+export async function agregarMercadoPais(paisId: number, mercadoId: number, userId: string) {
   const empresaId = getEmpresaIdActual()!
   return prisma.mercadoPais.upsert({
-    where: { empresaId_paisId: { empresaId, paisId } },
+    where: { empresaId_mercadoId_paisId: { empresaId, mercadoId, paisId } },
     create: { empresaId, paisId, mercadoId, creadoPor: userId },
-    update: { mercadoId, actualizadoPor: userId },
+    update: { actualizadoPor: userId },
+  })
+}
+
+/**
+ * Sincroniza la validez por especie de un Defecto (N:M, 2026-10-06): borra las
+ * asociaciones que ya no están y crea las nuevas. DefectoEspecie es child sin
+ * empresaId (FKs por id plano) — el aislamiento lo da el Defecto padre.
+ */
+export async function sincronizarDefectoEspecies(defectoId: number, especieIds: number[]) {
+  const deseados = [...new Set(especieIds)]
+  return prisma.$transaction(async (tx) => {
+    const actuales = await tx.defectoEspecie.findMany({ where: { defectoId }, select: { especieId: true } })
+    const actualesSet = new Set(actuales.map((a) => a.especieId))
+    const deseadosSet = new Set(deseados)
+    const aBorrar = actuales.map((a) => a.especieId).filter((e) => !deseadosSet.has(e))
+    const aCrear = deseados.filter((e) => !actualesSet.has(e))
+    if (aBorrar.length > 0) {
+      await tx.defectoEspecie.deleteMany({ where: { defectoId, especieId: { in: aBorrar } } })
+    }
+    if (aCrear.length > 0) {
+      await tx.defectoEspecie.createMany({ data: aCrear.map((especieId) => ({ defectoId, especieId })) })
+    }
   })
 }
 

@@ -5,6 +5,9 @@ import type { InstructivoEmbalajeCreateInput, InstructivoEmbalajeDetalleInput, I
 async function validarLinea(linea: InstructivoEmbalajeDetalleInput, index: number) {
   const prefijo = `Línea ${index + 1}:`
 
+  const grupoMercado = await repo.getGrupoMercado(linea.grupoMercadoId)
+  if (!grupoMercado) throw new ValidationError(`${prefijo} el grupo de mercado seleccionado no existe o está bloqueado`)
+
   const especie = await repo.getEspecie(linea.especieId)
   if (!especie) throw new ValidationError(`${prefijo} la especie seleccionada no existe o está bloqueada`)
 
@@ -50,9 +53,14 @@ async function validarLinea(linea: InstructivoEmbalajeDetalleInput, index: numbe
 
   const altura = await repo.getAltura(linea.alturaId)
   if (!altura) throw new ValidationError(`${prefijo} la altura de pallet seleccionada no existe o está bloqueada`)
+
+  if (linea.etiquetaId != null) {
+    const etiqueta = await repo.getEtiqueta(linea.etiquetaId)
+    if (!etiqueta) throw new ValidationError(`${prefijo} la marca (etiqueta) seleccionada no existe o está bloqueada`)
+  }
 }
 
-async function validarReferenciasHeader(data: { entidadProductorId?: number; grupoMercadoId?: number }) {
+async function validarReferenciasHeader(data: { entidadProductorId?: number; exportadorId?: number | null }) {
   if (data.entidadProductorId != null) {
     const productor = await repo.getEntidadProductor(data.entidadProductorId)
     if (!productor) throw new ValidationError('El productor seleccionado no existe o está inactivo')
@@ -60,9 +68,12 @@ async function validarReferenciasHeader(data: { entidadProductorId?: number; gru
       throw new ValidationError('La entidad seleccionada no tiene tipo Productor')
     }
   }
-  if (data.grupoMercadoId != null) {
-    const grupoMercado = await repo.getGrupoMercado(data.grupoMercadoId)
-    if (!grupoMercado) throw new ValidationError('El grupo de mercado seleccionado no existe o está bloqueado')
+  if (data.exportadorId != null) {
+    const exportador = await repo.getExportador(data.exportadorId)
+    if (!exportador) throw new ValidationError('El exportador seleccionado no existe o está inactivo')
+    if (!exportador.tipos.includes('EXPORTADORA')) {
+      throw new ValidationError('La entidad seleccionada no tiene tipo Exportador')
+    }
   }
 }
 

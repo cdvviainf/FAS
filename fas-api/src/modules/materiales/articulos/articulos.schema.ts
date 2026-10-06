@@ -40,6 +40,8 @@ export const articuloParamsSchema = z.object({
 export const articuloListQuerySchema = z.object({
   q: z.string().max(200).optional(),
   tipo: z.enum(['EMBALAJE', 'ENVASE', 'MATERIAL_EMBALAJE', 'SERVICIO']).optional(),
+  // Filtra embalajes por especie (incluye los genéricos sin especie) — 2026-10-05.
+  especieId: z.coerce.number().int().positive().optional(),
   // z.coerce.boolean() convierte cualquier string no vacío (incluido "false") a true;
   // se usa un enum explícito para que ?activo=false realmente filtre por false.
   activo: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),

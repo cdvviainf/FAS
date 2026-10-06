@@ -83,8 +83,9 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
 
   useEffect(() => {
     if (!open) return
+    // `fechaReclamo` viaja como ISO; el input type=date necesita solo YYYY-MM-DD.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setFechaReclamo(reclamoParaEditar?.fechaReclamo ?? '')
+    setFechaReclamo(reclamoParaEditar?.fechaReclamo?.slice(0, 10) ?? '')
     setTipoReclamoId(reclamoParaEditar?.tipoReclamoId ?? null)
     setResumenCliente(reclamoParaEditar?.resumenCliente ?? '')
     setSeleccion(new Map(reclamoParaEditar?.lineas.map((l) => [l.palletLineaId, l.cantidadCajas]) ?? []))

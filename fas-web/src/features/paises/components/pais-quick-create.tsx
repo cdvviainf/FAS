@@ -12,13 +12,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select';
+import { SelectMultiple } from '@/components/shared/select-multiple';
 import { Icons } from '@/components/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -66,7 +60,7 @@ function PaisQuickDialog({
       descripcionExtranjera: '',
       esPaisNacional: false,
       puedeSerOrigen: false,
-      mercadoId: 0
+      mercadoIds: []
     } as PaisFormValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validators: { onSubmit: paisSchema as any },
@@ -112,27 +106,18 @@ function PaisQuickDialog({
               name='puedeSerOrigen'
               label='Puede ser país de origen'
             />
-            <form.Field name='mercadoId'>
+            <form.Field name='mercadoIds'>
               {(field) => (
                 <div className='space-y-1.5'>
                   <Label className='text-sm font-medium'>
-                    Mercado <span className='text-destructive'>*</span>
+                    Mercados <span className='text-destructive'>*</span>
                   </Label>
-                  <Select
-                    value={field.state.value ? String(field.state.value) : ''}
-                    onValueChange={(v) => field.handleChange(Number(v))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder='Seleccionar mercado...' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {mercados.map((m) => (
-                        <SelectItem key={m.id} value={String(m.id)}>
-                          {m.descripcion}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SelectMultiple
+                    options={mercados.map((m) => ({ id: m.id, label: m.descripcion }))}
+                    selectedIds={(field.state.value as number[]) ?? []}
+                    onChange={(ids) => field.handleChange(ids)}
+                    placeholder='Agregar mercado...'
+                  />
                   {field.state.meta.errors.length > 0 && (
                     <p className='text-sm text-destructive'>
                       {String(field.state.meta.errors[0])}

@@ -60,14 +60,24 @@ Instrucción de qué embalar. **Sin FK a OC** (la relación es inexistente; ver 
 > **Supersesión — ancla a Productor, no a NV (2026-08-12).** `notaVentaId` se **elimina** del modelo. El instructivo se emite **antes** de que exista un Cierre Comercial asociado — el flujo real (§5.1/§5.2) nunca lo condicionó a una NV, solo a la fruta que va a llegar de un productor. Se reemplaza por `entidadProductorId` (FK → Entidad tipo PRODUCTOR, obligatorio, mismo patrón que la OC) + `grupoMercadoId` (FK → GrupoMercado, obligatorio) + `fechaInicioPrograma` (fecha, obligatoria — la UI muestra la semana ISO calculada como label, no se persiste) + `observaciones` (texto libre, opcional). Migración destructiva (no hay forma de derivar un productor desde la NV existente; sistema en desarrollo, sin datos transaccionales reales).
 >
 > **Detalle — variedad rotulada y altura (2026-08-12).** Cada línea gana `variedadRotuladaId` (FK → Variedad, opcional, filtrada por la misma especie de la línea — una segunda variedad) y `alturaId` (FK → Altura, obligatoria — "altura de pallet"). La grilla de detalle muestra columnas separadas: Especie, Variedad, Variedad Rotulada, Artículo, Categoría, Calibre, Altura, Cantidad (antes "Especie / Variedad" iba combinado en una celda).
+>
+> **⚠️ Supersesión (2026-10-06) — Exportador en cabecera, Grupo de Mercado baja a línea, Marca/Observaciones por línea, duplicar línea.** Por decisión de Christian:
+> - **`grupoMercadoId` deja de estar en la cabecera y pasa al detalle** (obligatorio por línea): una misma emisión puede destinar líneas a grupos de mercado distintos. El ancla del documento queda Productor + `fechaInicioPrograma` (el Grupo de Mercado ya no forma parte de la cabecera). Migración con backfill: cada línea existente hereda el `grupoMercadoId` que tenía su cabecera, antes de dropear la columna del encabezado.
+> - **Nuevo `exportadorId?` en cabecera** (FK → Entidad tipo `EXPORTADORA`, opcional; FK compuesta `(empresaId, exportadorId)`).
+> - **Nuevo `etiquetaId?` por línea** (FK → Etiqueta, opcional): la "Marca" de la línea. Por defecto se sugiere la etiqueta del artículo, pero se puede sobrescribir por línea; en el PDF manda la de la línea y cae a la del artículo si no se fijó.
+> - **Nuevo `observaciones?` por línea** (texto libre, opcional).
+> - **Duplicar línea**: la UI permite clonar una línea del detalle como nueva (para ajustarla y agregarla).
+> - El selector de Embalaje se **filtra por la especie de la línea** (incluye los embalajes genéricos sin especie asignada) — ver §4.3.
+> - El PDF del Instructivo refleja estos cambios: Exportador en el bloque de Programa (cabecera), y columnas Grupo Mercado / Marca / Observaciones en el detalle.
 
 - `id` (PK)
 - `numero` (correlativo propio)
 - `entidadProductorId` (FK → Entidad tipo PRODUCTOR, obligatorio) **(supersede a `notaVentaId`, 2026-08-12 — ver nota arriba)**
-- `grupoMercadoId` (FK → GrupoMercado, obligatorio) **(nuevo, 2026-08-12)**
+- `exportadorId` (FK → Entidad tipo EXPORTADORA, opcional) **(nuevo, 2026-10-06)**
+- ~~`grupoMercadoId` (FK → GrupoMercado, obligatorio)~~ **(movido al detalle, 2026-10-06 — ver nota arriba)**
 - `fechaInicioPrograma` (fecha, obligatoria) **(nuevo, 2026-08-12)**
 - `observaciones` (texto libre, opcional) **(nuevo, 2026-08-12)**
-- Detalle (1..N líneas): `articuloId` (FK → Artículo/Embalaje), `especieId`, `variedadId`, `variedadRotuladaId` (FK → Variedad, opcional, misma especie) **(nuevo, 2026-08-12)**, `categoriaId`, lista de calibres (`InstructivoEmbalajeDetalleCalibre`, multiselect — ver nota de supersesión en §4.3), `tipoPalletId` (FK → TipoPallet, nullable) **(nuevo, 2026-08-07)**, `alturaId` (FK → Altura, obligatorio) **(nuevo, 2026-08-12)**, `cantidadPallets`, `cajasPorPallet`, `cajas` **(nuevo, 2026-08-07 — ver nota en §4.3, mismo criterio)**
+- Detalle (1..N líneas): `articuloId` (FK → Artículo/Embalaje, filtrado por especie de la línea), `grupoMercadoId` (FK → GrupoMercado, obligatorio) **(movido desde cabecera, 2026-10-06)**, `especieId`, `variedadId`, `variedadRotuladaId` (FK → Variedad, opcional, misma especie) **(nuevo, 2026-08-12)**, `categoriaId`, lista de calibres (`InstructivoEmbalajeDetalleCalibre`, multiselect — ver nota de supersesión en §4.3), `tipoPalletId` (FK → TipoPallet, nullable) **(nuevo, 2026-08-07)**, `alturaId` (FK → Altura, obligatorio) **(nuevo, 2026-08-12)**, `etiquetaId` (FK → Etiqueta/Marca, opcional) **(nuevo, 2026-10-06)**, `cantidadPallets`, `cajasPorPallet`, `cajas` **(nuevo, 2026-08-07 — ver nota en §4.3, mismo criterio)**, `observaciones` (texto libre, opcional) **(nuevo, 2026-10-06)**
 - `createdAt`, `createdBy`
 
 > El detalle usa **artículos maestros** (ej. `UV0001103 — CAJA MARCA AGROSAN ETIQUETA TAIWAN PLÁSTICO`), no descripciones libres.
@@ -130,6 +140,7 @@ La OC es **multilínea**. Cada línea es una combinación completa de caracterí
 - `id` (PK)
 - `ordenCompraId` (FK → OrdenCompra)
 - `especieId`, `variedadId`, `categoriaId`, `articuloId` (embalaje)
+  > **Embalaje filtrado por especie (2026-10-06).** El selector de Embalaje de la línea se filtra por la `especieId` de la línea: muestra los artículos `EMBALAJE` activos **de esa especie más los genéricos** (sin `especieId` asignado, para no ocultar embalajes que hoy no tienen especie). El backend de `GET /api/materiales/articulos` acepta `especieId` y aplica ese criterio (`especieId = X OR especieId IS NULL`). Es un filtro de **conveniencia del selector** (compartido con Cierre Comercial/Nota de Venta e Instructivo de Embalaje); los servicios **no** rechazan un embalaje por no corresponder a la especie (`Articulo.especieId` es opcional — ver `materiales.md`). Cambiar la especie de la línea limpia el embalaje elegido.
 - `calibres` (`OrdenCompraLineaCalibre`, N:M contra Calibre) — **lista** de calibres puntuales, no un rango. **(Supersesión, 2026-08-15)**: reemplaza los antiguos `calibreMinId`/`calibreMaxId` (FK → Calibre). Motivo: la UI debía mostrar/quitar cada calibre individualmente (igual que `NotaVentaDetalleCalibre`, `ventas.md`) en vez de un rango colapsado; el formulario sigue ofreciendo Desde/Hasta como atajo de captura (usa `Calibre.orden` de la especie para expandir el rango en el momento de agregar), pero lo que persiste es la lista resultante, editable calibre a calibre. Mismo patrón replicado en `InstructivoEmbalajeDetalle` (§4.1). Impacta la validación de Recepción: ver nota en §7.2.
 - `tipoPalletId` (FK → TipoPallet, nullable) **(nuevo, 2026-08-07)**
 - `cantidadPallets` (Int)
@@ -405,6 +416,7 @@ Para cada línea de OC, contra el grupo correspondiente del Excel:
 
 - **InstructivoEmbalaje:** sin máquina de estados (documento emitido).
 - **OrdenCompra:** `Borrador → Emitida → Recepcionada` (editable hasta recepcionar; ver §6.2). *(Detalle fino de estados a afinar en implementación.)*
+  > **Disparador de `Emitida` (2026-10-06).** La transición `Borrador → Emitida` la dispara **emitir el documento oficial de la OC** (motor de Documentos, `POST /api/documentos/orden-compra/:id/emitir`): al congelar el PDF oficial, el estado pasa a `EMITIDA`. Es idempotente (compare-and-swap `estado=BORRADOR` en el `where`): reemitir no la "re-emite", y una OC ya `EMITIDA`/`RECEPCIONADA` no se toca. El snapshot del documento y la transición de estado **no comparten transacción**, pero la idempotencia lo cubre: si la transición no alcanzara a aplicarse, reemitir (operación idempotente del motor) la corrige. El `<Select>` manual de estado en el formulario se conserva como vía alternativa.
 - **Recepcion:** `Cargada → Validada` (modo OC) · `Cargada → Validada` (modo proceso — valida contra Instructivos, §4.4/§5.2). Carga es todo-o-nada; una carga rechazada no genera pallets.
 - **"Standby" de despacho (Packing List):** no es un estado formal nuevo; es la condición de **no poder avanzar los pasos siguientes ni facturar** mientras haya discrepancia PL↔reserva. Se modela como bloqueo sobre el Embarque/Despacho (`ventas.md`), no como un estado propio de Compras.
 

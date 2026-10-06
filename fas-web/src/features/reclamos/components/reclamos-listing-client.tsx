@@ -12,8 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
 import { entidadesService } from '@/features/entidades/service'
+import { ExpandableText } from '@/components/shared/expandable-text'
+import { formatFechaCorta } from '@/lib/format'
 import { reclamosListOptions } from '../queries'
-import { ESTADO_RECLAMO_LABELS } from '../types'
+import { ESTADO_RECLAMO_LABELS, numeroContenedorDeReclamo } from '../types'
 import type { EstadoReclamo } from '../types'
 
 // IMP-QA-R1-022: filtros por folio de Embarque y cliente (antes solo
@@ -112,11 +114,13 @@ export function ReclamosListingClient({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>N° Reclamo</TableHead>
                   <TableHead>Embarque</TableHead>
+                  <TableHead>Contenedor</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Fecha</TableHead>
-                  <TableHead>Resumen</TableHead>
+                  <TableHead className='min-w-[16rem]'>Resumen</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Análisis Calidad</TableHead>
                 </TableRow>
@@ -124,11 +128,13 @@ export function ReclamosListingClient({
               <TableBody>
                 {reclamos.map((r) => (
                   <TableRow key={r.id} className='cursor-pointer' onClick={() => router.push(`${basePath}/${r.id}`)}>
-                    <TableCell className='font-medium'>{r.embarque.numeroInstructivo}</TableCell>
+                    <TableCell className='font-mono text-sm font-medium'>{r.codigo}</TableCell>
+                    <TableCell>{r.embarque.numeroInstructivo}</TableCell>
+                    <TableCell className='text-muted-foreground'>{numeroContenedorDeReclamo(r) ?? '—'}</TableCell>
                     <TableCell>{r.cliente.descripcion}</TableCell>
                     <TableCell>{r.tipoReclamo?.descripcion ?? '—'}</TableCell>
-                    <TableCell className='text-muted-foreground'>{r.fechaReclamo ?? '—'}</TableCell>
-                    <TableCell className='max-w-xs truncate'>{r.resumenCliente ?? '—'}</TableCell>
+                    <TableCell className='text-muted-foreground whitespace-nowrap'>{r.fechaReclamo ? formatFechaCorta(r.fechaReclamo) : '—'}</TableCell>
+                    <TableCell className='max-w-sm'><ExpandableText text={r.resumenCliente} max={90} /></TableCell>
                     <TableCell><Badge variant='outline'>{ESTADO_RECLAMO_LABELS[r.estado]}</Badge></TableCell>
                     <TableCell>
                       {r.comentarioCalidad ? (

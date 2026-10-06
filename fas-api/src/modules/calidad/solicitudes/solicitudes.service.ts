@@ -68,15 +68,15 @@ async function validarReferencias(data: {
   especieId?: number | null
   mercadoId?: number | null
   clienteId?: number | null
-  notaCalidadId?: number | null
-  notaCondicionId?: number | null
+  notaCalidadIds?: number[]
+  notaCondicionIds?: number[]
   paisIds?: number[]
   variedadIds?: number[]
   calibreIds?: number[]
   categoriaIds?: number[]
   articuloIds?: number[]
   asignados?: { usuarioId: string; funcion: string }[]
-}, entidadIdParaDireccion?: number, especieIdVigente?: number | null, mercadoIdVigente?: number | null, paisIdsVigente?: number[]) {
+}, entidadIdParaDireccion?: number, especieIdVigente?: number | null, mercadoIdVigente?: number | null, paisIdsVigente?: number[], notaCalidadIdsVigente?: number[], notaCondicionIdsVigente?: number[]) {
   if (data.usuarioSolicitanteId !== undefined) {
     const solicitante = await repo.getUsuarioById(data.usuarioSolicitanteId)
     if (!solicitante) throw new ValidationError('El solicitante seleccionado no existe o fue eliminado')
@@ -108,15 +108,6 @@ async function validarReferencias(data: {
     const cliente = await repo.getClienteExtranjero(data.clienteId)
     if (!cliente) throw new ValidationError('El cliente seleccionado no existe, está inactivo o no es de tipo Cliente Extranjero')
   }
-  if (data.notaCalidadId != null) {
-    const notaCalidad = await repo.getNotaCalidadActiva(data.notaCalidadId)
-    if (!notaCalidad) throw new ValidationError('La Nota de Calidad seleccionada no existe o está bloqueada')
-  }
-  if (data.notaCondicionId != null) {
-    const notaCondicion = await repo.getNotaCondicionActiva(data.notaCondicionId)
-    if (!notaCondicion) throw new ValidationError('La Nota de Condición seleccionada no existe o está bloqueada')
-  }
-
   // especieId/mercadoId efectivos (valor nuevo si viene en el body, si no el vigente)
   // para validar pertenencia de variedad/calibre/categoría/país aunque solo uno
   // de los dos campos relacionados cambie (QAS-SI-020). paisIds efectivo: si el
@@ -125,6 +116,11 @@ async function validarReferencias(data: {
   const especieId = data.especieId !== undefined ? data.especieId : especieIdVigente
   const mercadoId = data.mercadoId !== undefined ? data.mercadoId : mercadoIdVigente
   const paisIdsEfectivos = data.paisIds !== undefined ? data.paisIds : paisIdsVigente
+  // IMP-QA-R1-038: las notas vigentes también se revalidan contra la especie
+  // efectiva aunque el PATCH no las toque — si no, cambiar solo la especie
+  // dejaría notas incompatibles que el propio backend rechazaría al reenviarlas.
+  const notaCalidadIdsEfectivos = data.notaCalidadIds !== undefined ? data.notaCalidadIds : notaCalidadIdsVigente
+  const notaCondicionIdsEfectivos = data.notaCondicionIds !== undefined ? data.notaCondicionIds : notaCondicionIdsVigente
 
   if (paisIdsEfectivos && paisIdsEfectivos.length > 0) {
     if (mercadoId == null) {
@@ -165,6 +161,27 @@ async function validarReferencias(data: {
     }
     if (especieId != null && categorias.some((c) => c.especieId !== especieId)) {
       throw new ValidationError('Una o más categorías no pertenecen a la especie seleccionada')
+    }
+  }
+  if (notaCalidadIdsEfectivos && notaCalidadIdsEfectivos.length > 0) {
+    const notas = await repo.getNotasCalidadActivas(notaCalidadIdsEfectivos)
+    if (notas.length !== new Set(notaCalidadIdsEfectivos).size) {
+      throw new ValidationError('Una o más Notas de Calidad seleccionadas no existen o están bloqueadas')
+    }
+    // Validez por especie (igual que variedad/calibre/categoría): si la especie
+    // está definida, cada nota debe tener asociación con ella. Las notas sin
+    // ninguna especie asociada solo son válidas cuando no hay especie definida.
+    if (especieId != null && notas.some((n) => !n.especies.some((e) => e.especieId === especieId))) {
+      throw new ValidationError('Una o más Notas de Calidad no pertenecen a la especie seleccionada')
+    }
+  }
+  if (notaCondicionIdsEfectivos && notaCondicionIdsEfectivos.length > 0) {
+    const notas = await repo.getNotasCondicionActivas(notaCondicionIdsEfectivos)
+    if (notas.length !== new Set(notaCondicionIdsEfectivos).size) {
+      throw new ValidationError('Una o más Notas de Condición seleccionadas no existen o están bloqueadas')
+    }
+    if (especieId != null && notas.some((n) => !n.especies.some((e) => e.especieId === especieId))) {
+      throw new ValidationError('Una o más Notas de Condición no pertenecen a la especie seleccionada')
     }
   }
   if (data.articuloIds && data.articuloIds.length > 0) {
@@ -219,13 +236,14 @@ export async function crearSolicitud(body: SolicitudCreateBody, userId: string) 
   const {
     temporadaId, asignados, fechaHora,
     paisIds = [], variedadIds = [], calibreIds = [], categoriaIds = [], articuloIds = [],
+    notaCalidadIds = [], notaCondicionIds = [],
     ...core
   } = body
   return repo.createSolicitud(
     temporadaId,
     temporada.codigo,
     { ...core, usuarioSolicitanteId, fechaHora: new Date(fechaHora), fechaDespacho: core.fechaDespacho ? new Date(core.fechaDespacho) : null },
-    { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds },
+    { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, notaCalidadIds, notaCondicionIds },
     asignados,
     userId,
   )
@@ -243,6 +261,8 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
     actual.especieId,
     actual.mercadoId,
     actual.paises.map((p) => p.pais.id),
+    actual.notasCalidad.map((n) => n.notaCalidad.id),
+    actual.notasCondicion.map((n) => n.notaCondicion.id),
   )
 
   // Si cambia la entidad, la dirección debe venir también (y ya se validó contra la nueva entidad)
@@ -259,7 +279,7 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
   // también a los asignados que puedan ser removidos en esta edición.
   const destinatariosPrevios = actual.estado === 'NOTIFICADA' ? await destinatariosDe(actual) : []
 
-  const { asignados, fechaHora, fechaDespacho, paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, ...core } = body
+  const { asignados, fechaHora, fechaDespacho, paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, notaCalidadIds, notaCondicionIds, ...core } = body
   const actualizada = await repo.updateSolicitud(
     id,
     {
@@ -268,7 +288,7 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
       ...(fechaDespacho !== undefined ? { fechaDespacho: fechaDespacho ? new Date(fechaDespacho) : null } : {}),
     },
     asignados,
-    { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds },
+    { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, notaCalidadIds, notaCondicionIds },
     userId,
   )
 

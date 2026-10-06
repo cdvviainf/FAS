@@ -13,14 +13,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { formatFechaCorta } from '@/lib/format'
+import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { reclamoDetailOptions, reclamosKeys } from '../queries'
 import { reclamosService } from '../service'
 import {
   ESTADO_RECLAMO_LABELS,
   PROCEDENCIA_LABELS,
   TIPO_CALCULO_PROVISION_LABELS,
+  numeroContenedorDeReclamo,
 } from '../types'
-import type { Procedencia } from '../types'
+import type { Procedencia, ReclamoDefectoInput } from '../types'
+
+const gruposDefectoService = createMantenedorService('grupos-defecto')
+const defectosService = createMantenedorService('defectos')
+
+// Fila del catálogo de defectos (el service genérico devuelve grupoDefecto +
+// especies en la fila de 'defectos').
+interface DefectoOption {
+  id: number
+  descripcion: string
+  grupoDefecto?: { id: number } | null
+  especies?: { especieId: number }[]
+}
 
 const ITEM_ANALISIS = 'CAL_RECLAMOS'
 const ITEM_CIERRE = 'RECLAMO_CIERRE'
@@ -41,14 +56,44 @@ export function ReclamoDetailClient({ id }: { id: number }) {
   const [comentarioTocado, setComentarioTocado] = useState(false)
   const [procedencia, setProcedencia] = useState<Procedencia | ''>('')
 
+  // Clasificación (GrupoDefecto) y líneas de defecto — patrón "tocado" (sin
+  // useEffect, consistente con el comentario): mientras no se edita, se derivan
+  // del reclamo cargado; al editar, mandan los estados locales.
+  const [clasifState, setClasifState] = useState<number | null>(null)
+  const [defectosState, setDefectosState] = useState<ReclamoDefectoInput[]>([])
+  const [analisisTocado, setAnalisisTocado] = useState(false)
+  // Editor de una línea de defecto nueva.
+  const [lineaGrupoId, setLineaGrupoId] = useState<number | null>(null)
+  const [lineaDefectoId, setLineaDefectoId] = useState<number | null>(null)
+  const [lineaPorcentaje, setLineaPorcentaje] = useState('')
+
+  const { data: gruposData } = useQuery({
+    queryKey: ['grupos-defecto-options'],
+    queryFn: () => gruposDefectoService.list({ soloActivos: true, limit: 300 }),
+    staleTime: 5 * 60_000,
+  })
+  const { data: defectosData } = useQuery({
+    queryKey: ['defectos-options'],
+    queryFn: () => defectosService.list({ soloActivos: true, limit: 500 }),
+    staleTime: 5 * 60_000,
+  })
+  const grupos = (gruposData?.data ?? []) as { id: number; descripcion: string }[]
+  const defectos = (defectosData?.data ?? []) as unknown as DefectoOption[]
+
   function invalidar() {
     queryClient.invalidateQueries({ queryKey: reclamosKeys.detail(id) })
     queryClient.invalidateQueries({ queryKey: reclamosKeys.all })
   }
 
   const guardarAnalisis = useMutation({
-    mutationFn: () => reclamosService.actualizarAnalisis(id, comentario),
-    onSuccess: () => { toast.success('Análisis guardado'); setComentarioTocado(false); invalidar() },
+    mutationFn: (payload: { comentarioCalidad: string; grupoDefectoId: number | null; defectos: ReclamoDefectoInput[] }) =>
+      reclamosService.actualizarAnalisis(id, payload),
+    onSuccess: () => {
+      toast.success('Análisis guardado')
+      setComentarioTocado(false)
+      setAnalisisTocado(false)
+      invalidar()
+    },
     onError: (e: Error) => toast.error(e.message || 'Error al guardar'),
   })
 
@@ -82,19 +127,65 @@ export function ReclamoDetailClient({ id }: { id: number }) {
   const noCerrado = reclamo.estado !== 'CERRADO'
   const comentarioActual = comentarioTocado ? comentario : reclamo.comentarioCalidad ?? ''
   const provisionVigente = reclamo.provisiones.find((p) => p.estado === 'VIGENTE')
+  const contenedor = numeroContenedorDeReclamo(reclamo)
+
+  // Clasificación y líneas de defecto efectivas (derivadas del reclamo mientras
+  // no se editó; de los estados locales una vez tocado).
+  const clasifActual = analisisTocado ? clasifState : reclamo.grupoDefectoId
+  const defectosActuales: ReclamoDefectoInput[] = analisisTocado
+    ? defectosState
+    : reclamo.defectos.map((d) => ({ grupoDefectoId: d.grupoDefecto.id, defectoId: d.defecto.id, porcentaje: Number(d.porcentaje) }))
+
+  // Especies de la fruta reclamada (para filtrar el catálogo de Defecto por
+  // especie — incluye los defectos genéricos sin especie asignada).
+  const reclamoEspecieIds = new Set(reclamo.lineas.map((l) => l.palletLinea.especie.id))
+  const defectosDelGrupo = defectos.filter((d) => {
+    if (lineaGrupoId == null || d.grupoDefecto?.id !== lineaGrupoId) return false
+    const esp = d.especies ?? []
+    return esp.length === 0 || esp.some((e) => reclamoEspecieIds.has(e.especieId))
+  })
+
+  function nombreGrupo(gid: number) { return grupos.find((g) => g.id === gid)?.descripcion ?? String(gid) }
+  function nombreDefecto(did: number) { return defectos.find((d) => d.id === did)?.descripcion ?? String(did) }
+
+  function setAnalisis(fn: (prev: { clasif: number | null; defectos: ReclamoDefectoInput[] }) => { clasif: number | null; defectos: ReclamoDefectoInput[] }) {
+    const base = { clasif: clasifActual, defectos: defectosActuales }
+    const next = fn(base)
+    setClasifState(next.clasif)
+    setDefectosState(next.defectos)
+    setAnalisisTocado(true)
+  }
+
+  function agregarLineaDefecto() {
+    if (lineaGrupoId == null || lineaDefectoId == null || lineaPorcentaje === '') return
+    const pct = Number(lineaPorcentaje)
+    if (Number.isNaN(pct) || pct < 0 || pct > 100) { toast.error('El porcentaje debe estar entre 0 y 100'); return }
+    if (defectosActuales.some((d) => d.grupoDefectoId === lineaGrupoId && d.defectoId === lineaDefectoId)) {
+      toast.error('Ese defecto ya está en el detalle'); return
+    }
+    setAnalisis((p) => ({ ...p, defectos: [...p.defectos, { grupoDefectoId: lineaGrupoId, defectoId: lineaDefectoId, porcentaje: pct }] }))
+    setLineaGrupoId(null); setLineaDefectoId(null); setLineaPorcentaje('')
+  }
+
+  function quitarLineaDefecto(idx: number) {
+    setAnalisis((p) => ({ ...p, defectos: p.defectos.filter((_, i) => i !== idx) }))
+  }
 
   return (
     <div className='max-w-4xl space-y-4'>
       <div className='flex items-start justify-between'>
         <div>
           <h2 className='flex items-center gap-2 text-xl font-semibold'>
-            Reclamo — Embarque {reclamo.embarque.numeroInstructivo}
+            Reclamo <span className='font-mono'>{reclamo.codigo}</span>
             <Badge variant='outline'>{ESTADO_RECLAMO_LABELS[reclamo.estado]}</Badge>
             {reclamo.procedencia && <Badge variant='secondary'>{PROCEDENCIA_LABELS[reclamo.procedencia]}</Badge>}
             {reclamo.tipoReclamo && <Badge variant='outline'>{reclamo.tipoReclamo.descripcion}</Badge>}
+            {reclamo.grupoDefecto && <Badge variant='secondary'>{reclamo.grupoDefecto.descripcion}</Badge>}
           </h2>
           <p className='text-muted-foreground text-sm'>
-            {reclamo.cliente.descripcion} · {reclamo.moneda.codigo} · {reclamo.fechaReclamo}
+            Embarque {reclamo.embarque.numeroInstructivo}
+            {contenedor && <> · Contenedor {contenedor}</>}
+            {' '}· {reclamo.cliente.descripcion} · {reclamo.moneda.codigo} · {formatFechaCorta(reclamo.fechaReclamo)}
           </p>
           {reclamo.resumenCliente && <p className='mt-1 text-sm'>{reclamo.resumenCliente}</p>}
         </div>
@@ -143,12 +234,98 @@ export function ReclamoDetailClient({ id }: { id: number }) {
               disabled={!puedeAnalizar || !noCerrado}
               onChange={(e) => { setComentario(e.target.value); setComentarioTocado(true) }}
             />
+          </div>
+
+          {/* Clasificación del reclamo (GrupoDefecto: Calidad/Condición) */}
+          <div className='space-y-1.5'>
+            <Label>Clasificación (Calidad / Condición)</Label>
+            <Select
+              value={clasifActual ? String(clasifActual) : '__none__'}
+              disabled={!puedeAnalizar || !noCerrado}
+              onValueChange={(v) => setAnalisis((p) => ({ ...p, clasif: v === '__none__' ? null : Number(v) }))}
+            >
+              <SelectTrigger><SelectValue placeholder='Sin clasificar' /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value='__none__'>Sin clasificar</SelectItem>
+                {grupos.map((g) => (
+                  <SelectItem key={g.id} value={String(g.id)}>{g.descripcion}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Líneas de defecto: Grupo (Calidad/Condición) + Defecto + % */}
+          <div className='space-y-2'>
+            <Label>Defectos</Label>
+            {defectosActuales.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Defecto</TableHead>
+                    <TableHead className='text-right'>%</TableHead>
+                    {puedeAnalizar && noCerrado && <TableHead className='w-10' />}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {defectosActuales.map((d, i) => (
+                    <TableRow key={`${d.grupoDefectoId}:${d.defectoId}`}>
+                      <TableCell>{nombreGrupo(d.grupoDefectoId)}</TableCell>
+                      <TableCell>{nombreDefecto(d.defectoId)}</TableCell>
+                      <TableCell className='text-right tabular-nums'>{d.porcentaje}%</TableCell>
+                      {puedeAnalizar && noCerrado && (
+                        <TableCell>
+                          <Button variant='ghost' size='icon' className='h-6 w-6' onClick={() => quitarLineaDefecto(i)}>
+                            <Icons.trash className='h-3.5 w-3.5' />
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
             {puedeAnalizar && noCerrado && (
-              <Button size='sm' onClick={() => guardarAnalisis.mutate()} isLoading={guardarAnalisis.isPending}>
-                Guardar comentario
-              </Button>
+              <div className='grid gap-2 sm:grid-cols-[1fr_1fr_6rem_auto] sm:items-end'>
+                <div className='space-y-1'>
+                  <Label className='text-xs'>Tipo</Label>
+                  <Select value={lineaGrupoId ? String(lineaGrupoId) : ''} onValueChange={(v) => { setLineaGrupoId(Number(v)); setLineaDefectoId(null) }}>
+                    <SelectTrigger><SelectValue placeholder='Grupo...' /></SelectTrigger>
+                    <SelectContent>
+                      {grupos.map((g) => (<SelectItem key={g.id} value={String(g.id)}>{g.descripcion}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className='space-y-1'>
+                  <Label className='text-xs'>Defecto</Label>
+                  <Select value={lineaDefectoId ? String(lineaDefectoId) : ''} onValueChange={(v) => setLineaDefectoId(Number(v))} disabled={lineaGrupoId == null}>
+                    <SelectTrigger><SelectValue placeholder={lineaGrupoId == null ? 'Elige grupo' : 'Defecto...'} /></SelectTrigger>
+                    <SelectContent>
+                      {defectosDelGrupo.map((d) => (<SelectItem key={d.id} value={String(d.id)}>{d.descripcion}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className='space-y-1'>
+                  <Label className='text-xs'>%</Label>
+                  <Input type='number' min={0} max={100} value={lineaPorcentaje} onChange={(e) => setLineaPorcentaje(e.target.value)} />
+                </div>
+                <Button type='button' variant='secondary' onClick={agregarLineaDefecto} disabled={lineaGrupoId == null || lineaDefectoId == null || lineaPorcentaje === ''}>
+                  <Icons.add className='mr-1 h-4 w-4' /> Agregar
+                </Button>
+              </div>
             )}
           </div>
+
+          {puedeAnalizar && noCerrado && (
+            <Button
+              size='sm'
+              onClick={() => guardarAnalisis.mutate({ comentarioCalidad: comentarioActual, grupoDefectoId: clasifActual, defectos: defectosActuales })}
+              isLoading={guardarAnalisis.isPending}
+              disabled={comentarioActual.trim() === ''}
+            >
+              Guardar análisis
+            </Button>
+          )}
 
           <div className='space-y-1.5'>
             <Label>Documentos</Label>

@@ -82,6 +82,8 @@ export interface ArticuloListResponse {
 export interface ArticuloListFilters {
   q?: string
   tipo?: TipoArticulo
+  // Filtra embalajes por especie (incluye los genéricos sin especie) — 2026-10-05.
+  especieId?: number
   activo?: boolean
   page?: number
   limit?: number

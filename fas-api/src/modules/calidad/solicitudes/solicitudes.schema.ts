@@ -21,19 +21,21 @@ export const solicitudCreateSchema = z.object({
   clienteId: z.number().int().positive().nullable().optional(),
   fechaDespacho: z.string().date().nullable().optional(),
   cantidadPallets: z.number().int().positive().nullable().optional(),
-  notaCalidadId: z.number().int().positive().nullable().optional(),
-  notaCondicionId: z.number().int().positive().nullable().optional(),
+  // Multiselección (2026-10-05, supersede notaCalidadId/notaCondicionId
+  // singular): varias notas de calidad/condición por solicitud.
+  notaCalidadIds: z.array(z.number().int().positive()).optional(),
+  notaCondicionIds: z.array(z.number().int().positive()).optional(),
   variedadIds: z.array(z.number().int().positive()).optional(),
   calibreIds: z.array(z.number().int().positive()).optional(),
   categoriaIds: z.array(z.number().int().positive()).optional(),
   articuloIds: z.array(z.number().int().positive()).optional(),
   observaciones: z.string().max(5000).nullable().optional(),
+  // 2026-10-05: ya no se exige un asignado con función ACUDIR — basta con al
+  // menos un asignado (puede ser solo NOTIFICAR). El refine de ACUDIR obligatorio
+  // fue retirado por decisión de negocio.
   asignados: z
     .array(asignadoSchema)
     .min(1, 'Debe asignar al menos un usuario')
-    .refine((a) => a.some((x) => x.funcion === 'ACUDIR'), {
-      message: 'Debe haber al menos un asignado con función Acudir',
-    })
     .refine((a) => new Set(a.map((x) => x.usuarioId)).size === a.length, {
       message: 'Hay usuarios repetidos en los asignados',
     }),

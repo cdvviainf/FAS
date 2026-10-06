@@ -7,15 +7,20 @@ const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: 
 
 const includeDetalle = {
   entidadProductor: { select: entidadSelect },
-  grupoMercado: { select: mantenedorSelect },
+  // Exportador (2026-10-05) — Entidad tipo EXPORTADORA, opcional.
+  exportador: { select: entidadSelect },
   detalle: {
     include: {
-      // etiqueta: agregada al detalle (2026-08-17) — el usuario necesita ver
-      // qué Etiqueta trae cada Artículo de embalaje sin ir a Materiales.
+      // Grupo de mercado a nivel de línea (2026-10-05, supersede el de cabecera).
+      grupoMercado: { select: mantenedorSelect },
+      // articulo.etiqueta: la Etiqueta del Artículo (sugerencia por defecto).
       // kgNetoEnvase: agregado (2026-08-19) — lo usa el PDF del Instructivo
       // (documentos/resolvers/instructivo-embalaje.resolver.ts), mismo campo
       // que ya expone ordenes-compra.repository.ts para su propio PDF.
       articulo: { select: { ...mantenedorSelect, etiqueta: { select: mantenedorSelect }, kgNetoEnvase: true } },
+      // etiqueta (Marca) elegida por línea (2026-10-05) — puede diferir de la
+      // etiqueta del artículo.
+      etiqueta: { select: mantenedorSelect },
       especie: { select: mantenedorSelect },
       variedad: { select: mantenedorSelect },
       variedadRotulada: { select: mantenedorSelect },
@@ -38,7 +43,7 @@ export async function listInstructivos(page: number, limit: number, entidadProdu
       where,
       include: {
         entidadProductor: { select: entidadSelect },
-        grupoMercado: { select: mantenedorSelect },
+        exportador: { select: entidadSelect },
       },
       orderBy: { numero: 'desc' },
       skip: (page - 1) * limit,
@@ -137,6 +142,17 @@ export async function getEntidadProductor(id: number) {
 
 export async function getGrupoMercado(id: number) {
   return prisma.grupoMercado.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getExportador(id: number) {
+  return prisma.entidad.findFirst({
+    where: { id, eliminadoEn: null, activo: true },
+    select: { id: true, tipos: true },
+  })
+}
+
+export async function getEtiqueta(id: number) {
+  return prisma.etiqueta.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
 }
 
 export async function getArticuloTipo(articuloId: number) {

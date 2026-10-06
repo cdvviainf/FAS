@@ -18,11 +18,14 @@ export const instructivoEmbalajePdfPayloadSchema = z.object({
     direccion: z.string().nullable(),
     contacto: z.string().nullable(),
   }),
-  grupoMercado: z.string(),
+  // Exportador (Entidad EXPORTADORA, 2026-10-05) — opcional, nivel cabecera.
+  exportador: z.string().nullable(),
   fechaInicioPrograma: z.string(), // ISO
   semana: z.number().int(), // ISO — mismo cálculo que instructivo-form.tsx
   observaciones: z.string().nullable(),
   detalle: z.array(z.object({
+    // Grupo de mercado a nivel de línea (2026-10-05, supersede el de cabecera).
+    grupoMercado: z.string(),
     especie: z.string(),
     variedad: z.string(),
     variedadRotulada: z.string().nullable(),
@@ -36,6 +39,7 @@ export const instructivoEmbalajePdfPayloadSchema = z.object({
     cantidadPallets: z.number().int(),
     cajasPorPallet: z.number().int(),
     cajas: z.number().int(),
+    observaciones: z.string().nullable(),
   })),
   totales: z.object({
     pallets: z.number().int(),

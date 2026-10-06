@@ -29,6 +29,12 @@ Flujo de **visita de inspección a terreno**:
 | SI-9 | Adjuntos: ventana habilitada (corrección 2026-07-23) | **Corrige SI-4.** Adjuntar archivos solo tiene sentido una vez la solicitud está **NOTIFICADA** — antes (PENDIENTE) no aplica, y una vez **CERRADA** queda congelada. Se eliminó la posibilidad de adjuntar al crear; el botón "Agregar archivos" en el formulario solo aparece al editar una solicitud NOTIFICADA. El backend rechaza (`409`) subir/eliminar adjuntos fuera de ese estado. |
 | SI-10 | Nav Compras (2026-07-23) | ~~El módulo Compras aún no tiene implementación... apuntando a la misma pantalla `/dashboard/calidad/solicitudes`~~ — **Supersedido (2026-08-10), ver §7**: Compras ya tiene su propia vista con gestión completa; Calidad queda como revisor (ver+cerrar). |
 
+> **⚠️ Supersesión (2026-10-06) — asignado `ACUDIR` deja de ser obligatorio; cierre; multiselección de notas; cierre del formulario al grabar.** Por decisión de Christian:
+> - **`ACUDIR` ya no es obligatorio.** Una solicitud necesita **al menos un asignado** (de cualquier función), pero puede tener solo asignados `NOTIFICAR`. Se retira la validación "al menos uno con ACUDIR" tanto del schema backend como del formulario. El punto 5 del flujo (arriba) deja de implicar que siempre existe un inspector `ACUDIR`.
+> - **Cierre sin inspector `ACUDIR`.** El cierre no cambia: lo ejecuta **un asignado con función `ACUDIR` o cualquier usuario con nivel `TOTAL`** en el ítem. Por lo tanto, una solicitud que quedó solo con `NOTIFICAR` (sin inspector) **la cierra un usuario con nivel `TOTAL`** — ése es el mecanismo válido y aceptado (decisión de negocio, Christian, 2026-10-06). No se amplía el cierre a los asignados `NOTIFICAR`.
+> - **Notas de Calidad/Condición → multiselección** con validez dura por especie — ver `calidad.md` (supersesión 2026-10-06). El contrato pasa de `notaCalidadId?`/`notaCondicionId?` a `notaCalidadIds?`/`notaCondicionIds?`; al editar, las notas vigentes se revalidan contra la especie efectiva.
+> - **Al grabar (crear o editar) el formulario se cierra** y vuelve al listado (`/dashboard/compras/solicitudes`). Antes, al editar quedaba abierto y al crear navegaba al detalle.
+
 ## 2. Contratos API (`/api/calidad/solicitudes`)
 
 > **Nivel reconciliado con §7 (2026-08-10):** "LECTURA"/"TOTAL" abajo se

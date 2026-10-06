@@ -1,5 +1,6 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './reclamos.repository.js'
+import { findPrefijoCodigoByModelo } from '../../config/prefijos-codigo/prefijos-codigo.repository.js'
 import type {
   AnalisisCalidadInput,
   CerrarInput,
@@ -35,6 +36,13 @@ export async function crearReclamo(embarqueId: number, body: ReclamoCreateInput,
 
   await validarTipoReclamo(body.tipoReclamoId)
 
+  // Correlativo propio (2026-10-06) vía PrefijoCodigo (modelo='reclamo'). Si la
+  // empresa no configuró su prefijo, se usa el default REC + 4 dígitos (mismo
+  // criterio que el backfill de la migración).
+  const prefijoConfig = await findPrefijoCodigoByModelo('reclamo')
+  const prefijo = prefijoConfig?.prefijo ?? 'REC'
+  const digitos = prefijoConfig?.digitos ?? 4
+
   return repo.crearReclamoTransaccional(
     {
       embarqueId,
@@ -48,6 +56,8 @@ export async function crearReclamo(embarqueId: number, body: ReclamoCreateInput,
     },
     body.provision,
     creadoPor,
+    prefijo,
+    digitos,
   )
 }
 
@@ -98,10 +108,28 @@ export async function obtenerReclamo(id: number, soloAnalizables = false) {
 // El claim (existe + no CERRADO -> 403, R9/CA10) vive en el repository,
 // atómico en la misma escritura — IMP-QA-R1-021 (antes no chequeaba estado).
 export async function actualizarAnalisisCalidad(id: number, body: AnalisisCalidadInput, userId: string) {
+  // Clasificación (GrupoDefecto) y líneas de defecto (2026-10-06): validar que
+  // grupo/defecto existan (tenant) y que cada defecto pertenezca a su grupo.
+  if (body.grupoDefectoId != null) {
+    const grupo = await repo.getGrupoDefectoActivo(body.grupoDefectoId)
+    if (!grupo) throw new ValidationError('El grupo de defecto (clasificación) seleccionado no existe o está bloqueado')
+  }
+  if (body.defectos !== undefined) {
+    for (const [i, linea] of body.defectos.entries()) {
+      const prefijo = `Defecto ${i + 1}:`
+      const grupo = await repo.getGrupoDefectoActivo(linea.grupoDefectoId)
+      if (!grupo) throw new ValidationError(`${prefijo} el grupo seleccionado no existe o está bloqueado`)
+      const defecto = await repo.getDefectoActivo(linea.defectoId)
+      if (!defecto) throw new ValidationError(`${prefijo} el defecto seleccionado no existe o está bloqueado`)
+      if (defecto.grupoDefectoId !== linea.grupoDefectoId) {
+        throw new ValidationError(`${prefijo} el defecto no pertenece al grupo seleccionado`)
+      }
+    }
+  }
   // BRT-R2-004: el requisito "el tipo genera análisis" lo impone el repo DENTRO
   // del claim atómico (no un SELECT previo) — así Comercial no puede reclasificar
   // el tipo entre chequeo y escritura. Análisis es acción exclusiva de Calidad.
-  return repo.updateAnalisisCalidad(id, body.comentarioCalidad, userId)
+  return repo.updateAnalisisCalidad(id, body.comentarioCalidad, userId, body.grupoDefectoId, body.defectos)
 }
 
 // R6: valorConfirmado >= 0 (validado en el schema). Reversa solas las

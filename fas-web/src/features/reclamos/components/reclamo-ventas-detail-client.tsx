@@ -11,9 +11,10 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { formatFechaCorta } from '@/lib/format'
 import { reclamoDetailOptions, reclamosKeys } from '../queries'
 import { reclamosService } from '../service'
-import { ESTADO_RECLAMO_LABELS, PROCEDENCIA_LABELS, TIPO_CALCULO_PROVISION_LABELS } from '../types'
+import { ESTADO_RECLAMO_LABELS, PROCEDENCIA_LABELS, TIPO_CALCULO_PROVISION_LABELS, numeroContenedorDeReclamo } from '../types'
 import { ProvisionForm } from './provision-form'
 import type { ProvisionInput } from '../types'
 
@@ -75,12 +76,14 @@ export function ReclamoVentasDetailClient({ id }: { id: number }) {
       <div className='flex items-start justify-between'>
         <div>
           <h2 className='flex items-center gap-2 text-xl font-semibold'>
-            Reclamo — Embarque {reclamo.embarque.numeroInstructivo}
+            Reclamo <span className='font-mono'>{reclamo.codigo}</span>
             <Badge variant='outline'>{ESTADO_RECLAMO_LABELS[reclamo.estado]}</Badge>
             {reclamo.tipoReclamo && <Badge variant='outline'>{reclamo.tipoReclamo.descripcion}</Badge>}
           </h2>
           <p className='text-muted-foreground text-sm'>
-            {reclamo.cliente.descripcion} · {reclamo.moneda.codigo} · {reclamo.fechaReclamo}
+            Embarque {reclamo.embarque.numeroInstructivo}
+            {numeroContenedorDeReclamo(reclamo) && <> · Contenedor {numeroContenedorDeReclamo(reclamo)}</>}
+            {' '}· {reclamo.cliente.descripcion} · {reclamo.moneda.codigo} · {formatFechaCorta(reclamo.fechaReclamo)}
           </p>
           {reclamo.resumenCliente && <p className='mt-1 text-sm'>{reclamo.resumenCliente}</p>}
         </div>

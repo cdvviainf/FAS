@@ -21,12 +21,15 @@ export async function resolverInstructivoEmbalaje(id: number, empresaId: number)
   ])
 
   const detalle = instructivo.detalle.map((d) => ({
+    grupoMercado: d.grupoMercado.descripcion,
     especie: d.especie.descripcion,
     variedad: d.variedad.descripcion,
     variedadRotulada: d.variedadRotulada?.descripcion ?? null,
     categoria: d.categoria.descripcion,
     articulo: d.articulo.descripcion,
-    etiqueta: d.articulo.etiqueta?.descripcion ?? null,
+    // Marca (Etiqueta) por línea (2026-10-05): si la línea fijó una, manda;
+    // si no, cae a la etiqueta del artículo (comportamiento previo).
+    etiqueta: d.etiqueta?.descripcion ?? d.articulo.etiqueta?.descripcion ?? null,
     // Descripción, no código (feedback Christian, 2026-08-19) — en las 3
     // plantillas del motor, no solo acá.
     calibres: d.calibres.map((c) => c.calibre.descripcion).join(', '),
@@ -39,6 +42,7 @@ export async function resolverInstructivoEmbalaje(id: number, empresaId: number)
     cantidadPallets: d.cantidadPallets,
     cajasPorPallet: d.cajasPorPallet,
     cajas: d.cajas,
+    observaciones: d.observaciones ?? null,
   }))
 
   const totales = detalle.reduce(
@@ -61,7 +65,7 @@ export async function resolverInstructivoEmbalaje(id: number, empresaId: number)
       direccion: productor?.direcciones[0]?.direccion ?? null,
       contacto: productor?.contactos[0]?.nombre ?? null,
     },
-    grupoMercado: instructivo.grupoMercado.descripcion,
+    exportador: instructivo.exportador?.razonSocial ?? null,
     fechaInicioPrograma: instructivo.fechaInicioPrograma.toISOString(),
     // Semana ISO (feedback Christian, 2026-08-19) — mismo cálculo que ya usa
     // el formulario en pantalla (fas-web/instructivo-form.tsx, getISOWeek de

@@ -89,8 +89,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const [calibreDesdeId, setCalibreDesdeId] = useState<number | null>(null)
   const [calibreHastaId, setCalibreHastaId] = useState<number | null>(null)
   const [categoriaIds, setCategoriaIds] = useState<number[]>([])
-  const [notaCalidadId, setNotaCalidadId] = useState<number | null>(null)
-  const [notaCondicionId, setNotaCondicionId] = useState<number | null>(null)
+  const [notaCalidadIds, setNotaCalidadIds] = useState<number[]>([])
+  const [notaCondicionIds, setNotaCondicionIds] = useState<number[]>([])
   const [cantidadPallets, setCantidadPallets] = useState('')
   const [asignados, setAsignados] = useState<AsignadoInput[]>([])
   const [observaciones, setObservaciones] = useState('')
@@ -217,8 +217,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       setVariedadIds(d.variedades.map((v) => v.variedad.id))
       setCalibreIds(d.calibres.map((c) => c.calibre.id))
       setCategoriaIds(d.categorias.map((c) => c.categoria.id))
-      setNotaCalidadId(d.notaCalidadId)
-      setNotaCondicionId(d.notaCondicionId)
+      setNotaCalidadIds(d.notasCalidad.map((n) => n.notaCalidad.id))
+      setNotaCondicionIds(d.notasCondicion.map((n) => n.notaCondicion.id))
       setCantidadPallets(d.cantidadPallets != null ? String(d.cantidadPallets) : '')
       setAsignados(d.asignados.map((a) => ({ usuarioId: a.usuarioId, funcion: a.funcion })))
       setObservaciones(d.observaciones ?? '')
@@ -268,8 +268,9 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     if (!productorId) e.productor = 'El productor es requerido'
     if (!direccionId) e.direccion = 'La dirección es requerida'
     if (!fechaHora) e.fechaHora = 'La fecha y hora son requeridas'
+    // 2026-10-05: ya no se exige un asignado con función Acudir — basta con al
+    // menos un asignado (puede ser solo Notificar).
     if (asignados.length === 0) e.asignados = 'Debe asignar al menos un usuario'
-    else if (!asignados.some((a) => a.funcion === 'ACUDIR')) e.asignados = 'Al menos un asignado debe tener función Acudir'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -291,8 +292,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       variedadIds,
       calibreIds,
       categoriaIds,
-      notaCalidadId,
-      notaCondicionId,
+      notaCalidadIds,
+      notaCondicionIds,
       cantidadPallets: cantidadPallets ? Number(cantidadPallets) : null,
       observaciones: observaciones.trim() || null,
       asignados,
@@ -311,7 +312,9 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       if (isEdit && solicitud?.data.estado === 'NOTIFICADA') {
         toast.info('Se notificó automáticamente a los asignados por el cambio')
       }
-      if (!isEdit) router.push(`/dashboard/compras/solicitudes/${res.data.id}`)
+      // 2026-10-05: al grabar (crear o editar) se cierra el formulario y se
+      // vuelve al listado.
+      router.push('/dashboard/compras/solicitudes')
     },
     onError: (e: Error) => toast.error(e.message || 'Error al guardar la solicitud'),
   })
@@ -504,7 +507,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
                   const nuevo = v === 'none' ? null : Number(v)
                   setEspecieId(nuevo)
                   setVariedadIds([]); setCalibreIds([]); setCategoriaIds([])
-                  setNotaCalidadId(null); setNotaCondicionId(null)
+                  setNotaCalidadIds([]); setNotaCondicionIds([])
                   resetCalibreRango()
                 }}
               >
@@ -608,28 +611,22 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
               />
             </div>
             <div className='space-y-1.5'>
-              <Label>Nota de Calidad</Label>
-              <Select value={notaCalidadId ? String(notaCalidadId) : 'none'} onValueChange={(v) => setNotaCalidadId(v === 'none' ? null : Number(v))}>
-                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='none'>Sin definir</SelectItem>
-                  {notasCalidadValidas.map((n) => (
-                    <SelectItem key={n.id} value={String(n.id)}>{n.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Notas de Calidad</Label>
+              <SelectMultiple
+                options={notasCalidadValidas.map((n) => ({ id: n.id, label: n.descripcion }))}
+                selectedIds={notaCalidadIds}
+                onChange={setNotaCalidadIds}
+                placeholder='Agregar nota de calidad...'
+              />
             </div>
             <div className='space-y-1.5'>
-              <Label>Nota de Condición</Label>
-              <Select value={notaCondicionId ? String(notaCondicionId) : 'none'} onValueChange={(v) => setNotaCondicionId(v === 'none' ? null : Number(v))}>
-                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='none'>Sin definir</SelectItem>
-                  {notasCondicionValidas.map((n) => (
-                    <SelectItem key={n.id} value={String(n.id)}>{n.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Notas de Condición</Label>
+              <SelectMultiple
+                options={notasCondicionValidas.map((n) => ({ id: n.id, label: n.descripcion }))}
+                selectedIds={notaCondicionIds}
+                onChange={setNotaCondicionIds}
+                placeholder='Agregar nota de condición...'
+              />
             </div>
             <div className='space-y-1.5'>
               <Label>Cantidad de pallets</Label>

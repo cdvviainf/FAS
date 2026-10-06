@@ -9,6 +9,7 @@ import type { InstructivoEmbalajePdfPayload } from '../../../schemas/instructivo
 type Linea = InstructivoEmbalajePdfPayload['detalle'][number]
 
 const columnas: ColumnaTabla<Linea>[] = [
+  { titulo: 'Grupo Mercado', render: (l) => l.grupoMercado },
   { titulo: 'Especie', render: (l) => l.especie },
   { titulo: 'Variedad', render: (l) => l.variedad },
   { titulo: 'Var. Rotulada', render: (l) => l.variedadRotulada ?? '—' },
@@ -24,6 +25,7 @@ const columnas: ColumnaTabla<Linea>[] = [
   { titulo: 'Pallets', render: (l) => fmt.entero(l.cantidadPallets), numerica: true },
   { titulo: 'Cajas/Pallet', render: (l) => fmt.entero(l.cajasPorPallet), numerica: true },
   { titulo: 'Cajas', render: (l) => fmt.entero(l.cajas), numerica: true },
+  { titulo: 'Observaciones', render: (l) => l.observaciones ?? '—' },
 ]
 
 // v1 — sin control de copia (Etapa 4 §8, ver documentos.types.ts): nunca
@@ -47,7 +49,7 @@ export function InstructivoEmbalajeV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
 
       <div className='doc-fila-grupos'>
         <GrupoCampos
-          titulo='Exportador'
+          titulo='Empresa'
           campos={[
             { label: 'Razón social', valor: d.empresa.razonSocial },
             { label: 'RUT', valor: fmt.rut(d.empresa.rut) },
@@ -68,7 +70,7 @@ export function InstructivoEmbalajeV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
       <GrupoCampos
         titulo='Programa'
         campos={[
-          { label: 'Grupo de Mercado', valor: d.grupoMercado },
+          { label: 'Exportador', valor: d.exportador ?? '—' },
           {
             label: 'Fecha inicio programa',
             // Semana ISO (feedback Christian, 2026-08-19), mismo cálculo que
@@ -93,7 +95,7 @@ export function InstructivoEmbalajeV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
         titulo='Detalle de embalaje'
         filas={d.detalle}
         columnas={columnas}
-        totales={['', '', '', '', '', '', '', '', 'Total:', '', fmt.entero(d.totales.pallets), '', fmt.entero(d.totales.cajas)]}
+        totales={['', '', '', '', '', '', '', '', '', 'Total:', '', fmt.entero(d.totales.pallets), '', fmt.entero(d.totales.cajas), '']}
       />
 
       <PieFirma firmantes={['Frutera Agrosan', 'Productor']} />

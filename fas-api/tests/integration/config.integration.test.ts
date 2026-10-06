@@ -171,21 +171,22 @@ describe('mantenedores contra PostgreSQL', () => {
     const mercado = await prisma.mercado.create({
       data: { empresaId: empresa.id, codigo: 'M-ARG', descripcion: 'Mercado Argentina', grupoMercadoId: grupoMercado.id, creadoPor: 'test' },
     })
-    // Fase 2b: crear/eliminar un Pais con mercadoId pasa por MercadoPais
-    // (tenant-scoped) — hace falta contexto de empresa activa, que fuera de
-    // un request HTTP no existe por defecto.
+    // Fase 2b: crear/eliminar un Pais con sus mercados pasa por MercadoPais
+    // (tenant-scoped, N:M desde 2026-10-06 — `mercadoIds`) — hace falta
+    // contexto de empresa activa, que fuera de un request HTTP no existe por
+    // defecto.
     const { pais, reemplazo } = await empresaContext.run({ empresaId: empresa.id }, async () => {
       const pais = await crearMantenedor('pais', {
         codigo: 'ARG',
         descripcion: 'Argentina',
-        mercadoId: mercado.id,
+        mercadoIds: [mercado.id],
       })
       await eliminarMantenedor('pais', pais.id, 'test')
 
       const reemplazo = await crearMantenedor('pais', {
         codigo: 'ARG',
         descripcion: 'Argentina nueva',
-        mercadoId: mercado.id,
+        mercadoIds: [mercado.id],
       })
       return { pais, reemplazo }
     })

@@ -40,6 +40,11 @@ interface DocumentoPreviewDialogProps {
   // por documento). Default portrait: todos los documentos salvo el
   // Instructivo de Embalaje son A4 vertical (FAS-DOC-R1-001).
   orientacion?: 'portrait' | 'landscape'
+  // Se dispara tras emitir el documento oficial con éxito. Lo usan los callers
+  // cuya emisión tiene efectos de lado en el documento de origen — p. ej. la
+  // Orden de Compra pasa a EMITIDA al emitir (2026-10-05) y necesita invalidar
+  // sus queries para reflejar el nuevo estado.
+  onEmitido?: () => void
 }
 
 // Tamaño de página A4 en px CSS a 96dpi (210mm × 297mm) — mismo formato que
@@ -60,7 +65,7 @@ const PAGINA_A4_LANDSCAPE = { ancho: 1123, alto: 794 }
 // renderice igual que en el PDF, pero se escala con transform para caber en
 // el contenedor — sin esto, en modales angostos o viewports chicos la hoja
 // se corta en vez de reducirse (ver nota de ajuste en el dialog).
-export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, puedeEmitir, controlCopia = true, orientacion = 'portrait' }: DocumentoPreviewDialogProps) {
+export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, puedeEmitir, controlCopia = true, orientacion = 'portrait', onEmitido }: DocumentoPreviewDialogProps) {
   const contenedorRef = useRef<HTMLDivElement>(null)
   const [escala, setEscala] = useState(1)
   const { ancho: paginaAncho, alto: paginaAlto } = orientacion === 'landscape' ? PAGINA_A4_LANDSCAPE : PAGINA_A4_PORTRAIT
@@ -109,6 +114,7 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
       window.open(url, '_blank', 'noopener,noreferrer')
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
       toast.success(documentoEmitidoId ? `Documento emitido — folio interno #${documentoEmitidoId}` : 'Documento emitido')
+      onEmitido?.()
     } catch {
       toast.error('No se pudo emitir el documento')
     } finally {

@@ -197,6 +197,12 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const responsables = responsablesData?.data ?? []
   const especies = especiesData?.data ?? []
   const articulos = articulosData?.data ?? []
+  // Embalajes filtrados por la especie de la línea (2026-10-05): los de esa
+  // especie + los genéricos (sin especie). La lista completa `articulos` se
+  // conserva para resolver el artículo seleccionado (autofill de kg/etiqueta).
+  const articulosLinea = linea.especieId
+    ? articulos.filter((a) => a.especieId == null || a.especieId === linea.especieId)
+    : articulos
 
   // Cuotas que se derivarán automáticamente al guardar (según Condición de Pago
   // seleccionada) — solo lectura, no se cargan manualmente.
@@ -784,7 +790,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   <Label>Especie <span className='text-destructive'>*</span></Label>
                   <Select
                     value={linea.especieId ? String(linea.especieId) : ''}
-                    onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreIds: [] })); resetCalibreRango() }}
+                    onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreIds: [], articuloId: 0 })); resetCalibreRango() }}
                     disabled={lineaBloqueadaPorCierre}
                   >
                     <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
@@ -799,12 +805,12 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 <div className='space-y-1.5 md:col-span-2'>
                   <Label>Embalaje <span className='text-destructive'>*</span></Label>
                   <Combobox
-                    options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+                    options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
                     value={linea.articuloId ? String(linea.articuloId) : null}
                     onChange={(v) => { const id = Number(v); setLinea((l) => ({ ...l, articuloId: id })); void aplicarTeoricaCajas(id, linea.tipoPalletId) }}
-                    placeholder='Seleccionar...'
+                    placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'}
                     searchPlaceholder='Buscar embalaje...'
-                    disabled={lineaBloqueadaPorCierre}
+                    disabled={lineaBloqueadaPorCierre || !linea.especieId}
                   />
                   {lineaErrors.articuloId && <p className='text-xs text-destructive'>{lineaErrors.articuloId}</p>}
                 </div>

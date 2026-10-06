@@ -5,7 +5,7 @@ export interface Pais {
   descripcionExtranjera?: string;
   esPaisNacional: boolean;
   puedeSerOrigen: boolean;
-  mercadoId: number;
+  mercadoIds: number[];
   creadoEn: string;
 }
 
@@ -26,5 +26,5 @@ export interface PaisMutationPayload {
   descripcionExtranjera?: string;
   esPaisNacional: boolean;
   puedeSerOrigen: boolean;
-  mercadoId: number;
+  mercadoIds: number[];
 }

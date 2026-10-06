@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { ExpandableText } from '@/components/shared/expandable-text'
+import { formatFechaCorta } from '@/lib/format'
 import { reclamosPorEmbarqueOptions } from '@/features/reclamos/queries'
 import { ESTADO_RECLAMO_LABELS } from '@/features/reclamos/types'
 import type { Reclamo } from '@/features/reclamos/types'
@@ -60,8 +62,9 @@ export function ReclamosTab({ embarque }: { embarque: EmbarqueDetalle }) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>N° Reclamo</TableHead>
                 <TableHead>Fecha</TableHead>
-                <TableHead>Resumen</TableHead>
+                <TableHead className='min-w-[14rem]'>Resumen</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className='text-right'>Cajas</TableHead>
                 <TableHead className='text-right'>Provisión vigente</TableHead>
@@ -79,8 +82,9 @@ export function ReclamosTab({ embarque }: { embarque: EmbarqueDetalle }) {
                     className='cursor-pointer'
                     onClick={() => router.push(`/dashboard/ventas/reclamos/${r.id}`)}
                   >
-                    <TableCell className='text-muted-foreground'>{r.fechaReclamo ?? '—'}</TableCell>
-                    <TableCell className='max-w-xs truncate'>{r.resumenCliente ?? '—'}</TableCell>
+                    <TableCell className='font-mono text-sm font-medium'>{r.codigo}</TableCell>
+                    <TableCell className='text-muted-foreground whitespace-nowrap'>{r.fechaReclamo ? formatFechaCorta(r.fechaReclamo) : '—'}</TableCell>
+                    <TableCell className='max-w-sm'><ExpandableText text={r.resumenCliente} max={90} /></TableCell>
                     <TableCell><Badge variant='outline'>{ESTADO_RECLAMO_LABELS[r.estado]}</Badge></TableCell>
                     <TableCell className='text-right tabular-nums'>{cajas}</TableCell>
                     <TableCell className='text-right tabular-nums'>

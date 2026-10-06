@@ -170,8 +170,9 @@ async function crearRegistro(hoja: HojaSpec, input: Record<string, any>, userId:
       await crearPrefijoCodigo(input as any, userId)
       break
     case 'mercadoPais':
-      // Mapeo país↔mercado por empresa: upsert (no crea país ni mercado).
-      await configRepo.upsertMercadoPais(input.paisId, input.mercadoId, userId)
+      // Mapeo país↔mercado por empresa (N:M): agrega la arista de forma
+      // idempotente, sin borrar otros mercados del país (no crea país ni mercado).
+      await configRepo.agregarMercadoPais(input.paisId, input.mercadoId, userId)
       break
     case 'cajasPorPallet':
       // Cajas teóricas por embalaje+tipo pallet: upsert validado.

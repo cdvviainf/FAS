@@ -8,17 +8,25 @@ const etiquetaSelect = { id: true, codigo: true, descripcion: true }
 const especieSelect = { id: true, codigo: true, descripcion: true }
 
 function buildWhere(filters: ArticuloListFilters): Prisma.ArticuloWhereInput {
+  const and: Prisma.ArticuloWhereInput[] = []
+  if (filters.q) {
+    and.push({
+      OR: [
+        { codigo: { contains: filters.q, mode: 'insensitive' as const } },
+        { descripcion: { contains: filters.q, mode: 'insensitive' as const } },
+      ],
+    })
+  }
+  // Filtro por especie (2026-10-05): incluye los embalajes de la especie pedida
+  // Y los genéricos (sin especie asignada) — así no se ocultan embalajes que hoy
+  // no tienen especie. Se combina con el OR de `q` vía AND para no pisarlo.
+  if (filters.especieId != null) {
+    and.push({ OR: [{ especieId: filters.especieId }, { especieId: null }] })
+  }
   return {
     ...(filters.tipo ? { tipo: filters.tipo } : {}),
     ...(filters.activo !== undefined ? { activo: filters.activo } : {}),
-    ...(filters.q
-      ? {
-          OR: [
-            { codigo: { contains: filters.q, mode: 'insensitive' as const } },
-            { descripcion: { contains: filters.q, mode: 'insensitive' as const } },
-          ],
-        }
-      : {}),
+    ...(and.length > 0 ? { AND: and } : {}),
   }
 }
 

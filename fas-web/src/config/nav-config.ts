@@ -272,8 +272,8 @@ export const navGroups: NavGroup[] = [
         isActive: false,
         items: [
           { title: 'Tipos de Defecto',       url: '/dashboard/configuracion/tipos-defecto',            icon: 'page'  },
-          { title: 'Grupos de Defecto',      url: '/dashboard/configuracion/grupos-defecto',           icon: 'page', disabled: true  },
-          { title: 'Defectos',               url: '/dashboard/configuracion/defectos',                 icon: 'page', disabled: true  },
+          { title: 'Grupos de Defecto',      url: '/dashboard/configuracion/grupos-defecto',           icon: 'page'  },
+          { title: 'Defectos',               url: '/dashboard/configuracion/defectos',                 icon: 'page'  },
           { title: 'Características Madurez',url: '/dashboard/configuracion/caracteristicas-madurez',  icon: 'forms', disabled: true },
           { title: 'Notas de Calidad',       url: '/dashboard/configuracion/notas-calidad',            icon: 'page'  },
           { title: 'Notas de Condición',     url: '/dashboard/configuracion/notas-condicion',          icon: 'page'  },

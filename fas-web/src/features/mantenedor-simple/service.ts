@@ -23,6 +23,8 @@ export function createMantenedorService(recurso: string) {
       if (filters.paisId) params.paisId = String(filters.paisId)
       if (filters.mercadoId) params.mercadoId = String(filters.mercadoId)
       if (filters.tipoEmbarqueId) params.tipoEmbarqueId = String(filters.tipoEmbarqueId)
+      if (filters.tipoDefectoId) params.tipoDefectoId = String(filters.tipoDefectoId)
+      if (filters.grupoDefectoId) params.grupoDefectoId = String(filters.grupoDefectoId)
       if (filters.contexto) params.contexto = filters.contexto
       if (filters.soloActivos !== undefined) params.soloActivos = String(filters.soloActivos)
       if (filters.sort) params.sort = filters.sort

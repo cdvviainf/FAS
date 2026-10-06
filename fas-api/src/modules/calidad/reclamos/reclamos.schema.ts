@@ -77,8 +77,27 @@ export const reclamoUpdateSchema = z.object({
   lineas: lineasSchema('Selecciona al menos una línea de pallet').optional(),
 })
 
+// Línea de defecto del análisis (2026-10-06): grupo (Calidad/Condición) +
+// defecto de ese grupo + porcentaje. Sin palletLineaId duplicados no aplica
+// (un mismo defecto puede repetirse, pero lo bloqueamos por par grupo+defecto).
+const reclamoDefectoSchema = z.object({
+  grupoDefectoId: z.number().int().positive('Selecciona el grupo'),
+  defectoId: z.number().int().positive('Selecciona el defecto'),
+  porcentaje: z.number().min(0, 'El porcentaje no puede ser negativo').max(100, 'El porcentaje no puede superar 100'),
+})
+
 export const analisisCalidadSchema = z.object({
   comentarioCalidad: z.string().trim().min(1).max(5000),
+  // Clasificación del reclamo (GrupoDefecto, Calidad/Condición) — opcional.
+  grupoDefectoId: z.number().int().positive().optional().nullable(),
+  // Líneas de defecto (opcional, reemplazo total del set si viene).
+  defectos: z
+    .array(reclamoDefectoSchema)
+    .refine(
+      (ls) => new Set(ls.map((l) => `${l.grupoDefectoId}:${l.defectoId}`)).size === ls.length,
+      { message: 'No se puede repetir el mismo defecto en el mismo grupo' },
+    )
+    .optional(),
 })
 
 export const valorizarSchema = z.object({

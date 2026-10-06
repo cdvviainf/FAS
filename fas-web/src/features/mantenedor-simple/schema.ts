@@ -22,7 +22,8 @@ export const paisSchema = mantenedorSimpleSchema.extend({
     .trim(),
   esPaisNacional: z.boolean().default(false),
   puedeSerOrigen: z.boolean().default(false),
-  mercadoId: z.coerce.number().int().positive('Selecciona un mercado')
+  // N:M (2026-10-05): un país puede mapear a varios mercados por empresa.
+  mercadoIds: z.array(z.number().int().positive()).min(1, 'Selecciona al menos un mercado')
 })
 
 export type PaisFormValues = z.infer<typeof paisSchema>

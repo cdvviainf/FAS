@@ -459,6 +459,12 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   }
 
   const articuloSeleccionado = (articulosData?.data ?? []).find((a) => a.id === linea.articuloId)
+  // Embalajes filtrados por la especie de la línea (2026-10-05): los de esa
+  // especie + los genéricos (sin especie). La lista completa se conserva para
+  // resolver el artículo seleccionado (autofill de kg/etiqueta).
+  const articulosLinea = linea.especieId
+    ? (articulosData?.data ?? []).filter((a) => a.especieId == null || a.especieId === linea.especieId)
+    : (articulosData?.data ?? [])
   const cajasPorPalletValor = Number(linea.cajasPorPallet) || CAJAS_POR_PALLET_DEFAULT
   const lineaMutationPending = addDetalleMutation.isPending || updateDetalleMutation.isPending
 
@@ -719,7 +725,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
                 <div className='space-y-1.5'>
                   <Label>Especie <span className='text-destructive'>*</span></Label>
-                  <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: null, calibreIds: [] })); resetCalibreRango() }}>
+                  <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: null, calibreIds: [], articuloId: 0 })); resetCalibreRango() }}>
                     <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                     <SelectContent>
                       {(especiesData?.data ?? []).map((e) => (
@@ -759,11 +765,12 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 <div className='space-y-1.5 sm:col-span-2'>
                   <Label>Artículo (Embalaje) <span className='text-destructive'>*</span></Label>
                   <Combobox
-                    options={(articulosData?.data ?? []).map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+                    options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
                     value={linea.articuloId ? String(linea.articuloId) : null}
                     onChange={(v) => { const id = Number(v); setLinea((l) => ({ ...l, articuloId: id })); void aplicarTeoricaCajas(id, linea.tipoPalletId) }}
-                    placeholder='Seleccionar...'
+                    placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'}
                     searchPlaceholder='Buscar embalaje...'
+                    disabled={!linea.especieId}
                   />
                   {lineaErrors.articuloId && <p className='text-xs text-destructive'>{lineaErrors.articuloId}</p>}
                 </div>

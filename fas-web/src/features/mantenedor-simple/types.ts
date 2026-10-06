@@ -29,6 +29,8 @@ export interface MantenedorSimpleFilters {
   paisId?: number
   mercadoId?: number
   tipoEmbarqueId?: number
+  tipoDefectoId?: number
+  grupoDefectoId?: number
   contexto?: 'origen' | 'destino'
   soloActivos?: boolean
   // Orden server-side: JSON [{ id, desc }] (getSortingStateParser)
@@ -51,6 +53,10 @@ export interface MantenedorSimpleCreateInput {
   paisId?: number
   mercadoId?: number
   tipoEmbarqueId?: number
+  // Catálogo de defectos (2026-10-06)
+  tipoDefectoId?: number   // GrupoDefecto
+  grupoDefectoId?: number  // Defecto
+  especieIds?: number[]    // Defecto (N:M, validez por especie)
   orden?: number
   esPaisNacional?: boolean
   puedeSerOrigen?: boolean

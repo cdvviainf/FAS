@@ -30,8 +30,8 @@ const includeDetalle = {
   especie: { select: { id: true, codigo: true, descripcion: true } },
   mercado: { select: { id: true, codigo: true, descripcion: true } },
   cliente: { select: { id: true, codigo: true, descripcion: true, razonSocial: true } },
-  notaCalidad: { select: { id: true, codigo: true, descripcion: true } },
-  notaCondicion: { select: { id: true, codigo: true, descripcion: true } },
+  notasCalidad: { select: { notaCalidad: { select: { id: true, codigo: true, descripcion: true } } } },
+  notasCondicion: { select: { notaCondicion: { select: { id: true, codigo: true, descripcion: true } } } },
   paises: { select: { pais: { select: { id: true, codigo: true, descripcion: true } } } },
   variedades: { select: { variedad: { select: { id: true, codigo: true, descripcion: true } } } },
   calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
@@ -146,8 +146,6 @@ export interface SolicitudCoreData {
   clienteId?: number | null
   fechaDespacho?: Date | null
   cantidadPallets?: number | null
-  notaCalidadId?: number | null
-  notaCondicionId?: number | null
   observaciones?: string | null
 }
 
@@ -157,6 +155,8 @@ export interface SolicitudMultiSelects {
   calibreIds: number[]
   categoriaIds: number[]
   articuloIds: number[]
+  notaCalidadIds: number[]
+  notaCondicionIds: number[]
 }
 
 /**
@@ -202,6 +202,8 @@ export async function createSolicitud(
         calibres: { create: multi.calibreIds.map((calibreId) => ({ calibreId })) },
         categorias: { create: multi.categoriaIds.map((categoriaId) => ({ categoriaId })) },
         embalajes: { create: multi.articuloIds.map((articuloId) => ({ articuloId })) },
+        notasCalidad: { create: multi.notaCalidadIds.map((notaCalidadId) => ({ notaCalidadId })) },
+        notasCondicion: { create: multi.notaCondicionIds.map((notaCondicionId) => ({ notaCondicionId })) },
       },
       include: includeDetalle,
     })
@@ -244,6 +246,14 @@ export async function updateSolicitud(
     if (multi.articuloIds !== undefined) {
       await tx.solicitudInspeccionEmbalaje.deleteMany({ where: { solicitudId: id } })
       await tx.solicitudInspeccionEmbalaje.createMany({ data: multi.articuloIds.map((articuloId) => ({ solicitudId: id, articuloId })) })
+    }
+    if (multi.notaCalidadIds !== undefined) {
+      await tx.solicitudInspeccionNotaCalidad.deleteMany({ where: { solicitudId: id } })
+      await tx.solicitudInspeccionNotaCalidad.createMany({ data: multi.notaCalidadIds.map((notaCalidadId) => ({ solicitudId: id, notaCalidadId })) })
+    }
+    if (multi.notaCondicionIds !== undefined) {
+      await tx.solicitudInspeccionNotaCondicion.deleteMany({ where: { solicitudId: id } })
+      await tx.solicitudInspeccionNotaCondicion.createMany({ data: multi.notaCondicionIds.map((notaCondicionId) => ({ solicitudId: id, notaCondicionId })) })
     }
     return tx.solicitudInspeccion.update({
       where: { id },
@@ -429,12 +439,18 @@ export async function getClienteExtranjero(id: number) {
   })
 }
 
-export async function getNotaCalidadActiva(id: number) {
-  return prisma.notaCalidad.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+export async function getNotasCalidadActivas(ids: number[]) {
+  return prisma.notaCalidad.findMany({
+    where: { id: { in: ids }, eliminadoEn: null, bloqueado: false },
+    select: { id: true, especies: { select: { especieId: true } } },
+  })
 }
 
-export async function getNotaCondicionActiva(id: number) {
-  return prisma.notaCondicion.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+export async function getNotasCondicionActivas(ids: number[]) {
+  return prisma.notaCondicion.findMany({
+    where: { id: { in: ids }, eliminadoEn: null, bloqueado: false },
+    select: { id: true, especies: { select: { especieId: true } } },
+  })
 }
 
 export async function getPaisesActivos(ids: number[]) {

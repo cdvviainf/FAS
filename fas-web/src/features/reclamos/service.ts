@@ -11,6 +11,7 @@ import type {
   ReclamoUpdateInput,
   ReclamosListFilters,
   ReclamosListResponse,
+  AnalisisCalidadInput,
 } from './types'
 
 export const reclamosService = {
@@ -45,8 +46,8 @@ export const reclamosService = {
   async getById(id: number): Promise<{ data: Reclamo }> {
     return api.get(`calidad/reclamos/${id}`).json()
   },
-  async actualizarAnalisis(id: number, comentarioCalidad: string): Promise<{ data: Reclamo }> {
-    return api.patch(`calidad/reclamos/${id}/analisis`, { json: { comentarioCalidad } }).json()
+  async actualizarAnalisis(id: number, body: AnalisisCalidadInput): Promise<{ data: Reclamo }> {
+    return api.patch(`calidad/reclamos/${id}/analisis`, { json: body }).json()
   },
   async valorizar(id: number, valorConfirmado: number): Promise<{ data: Reclamo }> {
     return api.post(`calidad/reclamos/${id}/valorizar`, { json: { valorConfirmado } }).json()

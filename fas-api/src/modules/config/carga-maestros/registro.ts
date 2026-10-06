@@ -180,7 +180,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
     hoja: 'PaisMercado',
     modelo: 'mercadoPais',
     titulo: 'Países por Mercado',
-    descripcion: 'Asigna cada país a un mercado (mapeo por empresa). El País y el Mercado YA DEBEN EXISTIR; se puede recargar para reasignar (upsert, no duplica).',
+    descripcion: 'Asigna países a mercados (mapeo por empresa, N:M — un país puede estar en varios mercados). El País y el Mercado YA DEBEN EXISTIR; se puede recargar sin problema (agrega la arista de forma idempotente, no duplica).',
     dependeDe: ['Paises', 'Mercados'],
     columnas: [
       { encabezado: 'País (código)', campo: 'paisId', tipo: 'fk', requerido: true, fk: { hoja: 'Paises', externo: true, modelo: 'pais' } },

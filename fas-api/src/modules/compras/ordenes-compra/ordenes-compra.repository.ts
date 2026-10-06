@@ -426,6 +426,19 @@ export async function removeLinea(id: number, ordenCompraId: number) {
   })
 }
 
+// Emisión del documento oficial = transición BORRADOR -> EMITIDA (2026-10-05).
+// Idempotente: el updateMany con estado=BORRADOR en el where actúa como
+// compare-and-swap — una OC ya EMITIDA o RECEPCIONADA no se toca (count: 0),
+// y dos emisiones concurrentes del mismo documento no la "re-emiten". La
+// dispara documentos.service.emitirDocumento tras congelar el PDF.
+export async function marcarOrdenCompraEmitida(id: number, actualizadoPor: string): Promise<number> {
+  const result = await prisma.ordenCompra.updateMany({
+    where: { id, estado: 'BORRADOR', eliminadoEn: null },
+    data: { estado: 'EMITIDA', actualizadoPor },
+  })
+  return result.count
+}
+
 export async function softDeleteOrdenCompra(id: number, eliminadoPor: string) {
   return prisma.$transaction(async (tx) => {
     await lockYVerificarEditable(tx, id)

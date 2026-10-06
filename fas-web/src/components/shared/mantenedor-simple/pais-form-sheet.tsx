@@ -12,13 +12,7 @@ import {
   SheetHeader,
   SheetTitle
 } from '@/components/ui/sheet'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { SelectMultiple } from '@/components/shared/select-multiple'
 import { Icons } from '@/components/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -31,7 +25,7 @@ import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 interface PaisItem extends MantenedorSimple {
   esPaisNacional?: boolean
   puedeSerOrigen?: boolean
-  mercadoId?: number | null
+  mercadoIds?: number[]
   codigoAduana?: string | null
 }
 
@@ -81,7 +75,7 @@ export function PaisFormSheet({ item, open, onOpenChange }: PaisFormSheetProps) 
       esPaisNacional: item?.esPaisNacional ?? false,
       puedeSerOrigen: item?.puedeSerOrigen ?? false,
       bloqueado: item?.bloqueado ?? false,
-      mercadoId: item?.mercadoId ?? 0
+      mercadoIds: item?.mercadoIds ?? []
     } as PaisFormValues,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validators: { onSubmit: paisSchema as any },
@@ -156,27 +150,21 @@ export function PaisFormSheet({ item, open, onOpenChange }: PaisFormSheetProps) 
                 description='Habilita que los puertos de este país aparezcan también como origen (además de destino). Puede activarse en varios países a la vez.'
               />
 
-              <form.Field name='mercadoId'>
+              <form.Field name='mercadoIds'>
                 {(field) => (
                   <div className='space-y-1.5'>
                     <Label className='text-sm font-medium'>
-                      Mercado <span className='text-destructive'>*</span>
+                      Mercados <span className='text-destructive'>*</span>
                     </Label>
-                    <Select
-                      value={field.state.value ? String(field.state.value) : ''}
-                      onValueChange={(v) => field.handleChange(Number(v))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder='Seleccionar mercado...' />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {mercados.map((m) => (
-                          <SelectItem key={m.id} value={String(m.id)}>
-                            {m.descripcion}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SelectMultiple
+                      options={mercados.map((m) => ({ id: m.id, label: m.descripcion }))}
+                      selectedIds={(field.state.value as number[]) ?? []}
+                      onChange={(ids) => field.handleChange(ids)}
+                      placeholder='Agregar mercado...'
+                    />
+                    <p className='text-xs text-muted-foreground'>
+                      Un país puede pertenecer a varios mercados (y por lo tanto a varios grupos de mercado).
+                    </p>
                     {field.state.meta.errors.length > 0 && (
                       <p className='text-sm text-destructive'>
                         {String(field.state.meta.errors[0])}

@@ -31,6 +31,8 @@ const childrenMap: Partial<Record<MantenedorModelo, ChildDef[]>> = {
     { childModelo: 'calibre', parentField: 'especieId', label: 'calibres' },
   ],
   grupoVariedad: [{ childModelo: 'variedad', parentField: 'grupoVariedadId', label: 'variedades' }],
+  tipoDefecto: [{ childModelo: 'grupoDefecto', parentField: 'tipoDefectoId', label: 'grupos de defecto' }],
+  grupoDefecto: [{ childModelo: 'defecto', parentField: 'grupoDefectoId', label: 'defectos' }],
   tipoParametro: [{ childModelo: 'parametro', parentField: 'tipoParametroId', label: 'parámetros' }],
   grupoMercado: [{ childModelo: 'mercado', parentField: 'grupoMercadoId', label: 'mercados' }],
   // mercado -> pais: manejo dedicado en eliminarMantenedor (ya no es un FK
@@ -192,12 +194,34 @@ export async function crearMantenedor(
     if (!grupo) throw new ValidationError('El grupo de mercado seleccionado no existe o no pertenece a esta empresa')
   }
 
-  // Fase 2b: Pais — mercadoId debe pertenecer al tenant activo (mismo patrón
+  // Fase 2b: Pais — cada mercado debe pertenecer al tenant activo (mismo patrón
   // que Mercado/GrupoMercado arriba; Pais ya no tiene mercadoId propio, se
-  // valida contra Mercado antes de upsertear MercadoPais más abajo).
-  if (modelo === 'pais' && data.mercadoId) {
-    const mercado = await repo.getMantenedorById('mercado', data.mercadoId)
-    if (!mercado) throw new ValidationError('El mercado seleccionado no existe o no pertenece a esta empresa')
+  // valida contra Mercado antes de sincronizar MercadoPais más abajo). N:M.
+  if (modelo === 'pais' && Array.isArray(data.mercadoIds)) {
+    for (const mercadoId of new Set(data.mercadoIds)) {
+      const mercado = await repo.getMantenedorById('mercado', mercadoId)
+      if (!mercado) throw new ValidationError('Uno o más mercados seleccionados no existen o no pertenecen a esta empresa')
+    }
+  }
+
+  // Catálogo de defectos (2026-10-06): GrupoDefecto.tipoDefectoId, Defecto.
+  // grupoDefectoId y Defecto.especieIds deben pertenecer al tenant activo
+  // (getMantenedorById ya queda tenant-scoped por la extensión de Prisma).
+  if (modelo === 'grupoDefecto' && data.tipoDefectoId) {
+    const tipo = await repo.getMantenedorById('tipoDefecto', data.tipoDefectoId)
+    if (!tipo) throw new ValidationError('El tipo de defecto seleccionado no existe o no pertenece a esta empresa')
+  }
+  if (modelo === 'defecto') {
+    if (data.grupoDefectoId) {
+      const grupo = await repo.getMantenedorById('grupoDefecto', data.grupoDefectoId)
+      if (!grupo) throw new ValidationError('El grupo de defecto seleccionado no existe o no pertenece a esta empresa')
+    }
+    if (Array.isArray(data.especieIds)) {
+      for (const especieId of new Set(data.especieIds)) {
+        const especie = await repo.getMantenedorById('especie', especieId)
+        if (!especie) throw new ValidationError('Una o más especies seleccionadas no existen o no pertenecen a esta empresa')
+      }
+    }
   }
 
   // QAS-MG-L4-004: Bodega — validate active FK comunaId
@@ -254,9 +278,9 @@ export async function crearMantenedor(
     }
   }
 
-  // Fase 2b: mercadoId de Pais no es una columna propia — se extrae acá y se
-  // resuelve aparte (MercadoPais) después de crear el país.
-  const { contactos, mercadoId, ...coreData } = data as MantenedorCreateInput & {
+  // Columnas no propias que se resuelven aparte tras crear: los mercados de Pais
+  // (MercadoPais, N:M) y las especies de Defecto (DefectoEspecie, N:M).
+  const { contactos, mercadoIds, especieIds, ...coreData } = data as MantenedorCreateInput & {
     contactos?: import('./config.types.js').BodegaContactoInput[]
   }
   descartarCodigoAduanaSiNoAplica(modelo, coreData as AnyRecord)
@@ -274,8 +298,13 @@ export async function crearMantenedor(
     return repo.getMantenedorById(modelo, created.id)
   }
 
-  if (modelo === 'pais' && mercadoId != null) {
-    await repo.upsertMercadoPais(created.id, mercadoId, userId)
+  if (modelo === 'pais' && Array.isArray(mercadoIds)) {
+    await repo.sincronizarMercadosPais(created.id, mercadoIds, userId)
+    return repo.getMantenedorById(modelo, created.id)
+  }
+
+  if (modelo === 'defecto' && Array.isArray(especieIds)) {
+    await repo.sincronizarDefectoEspecies(created.id, especieIds)
     return repo.getMantenedorById(modelo, created.id)
   }
 
@@ -363,10 +392,30 @@ export async function actualizarMantenedor(
     if (!grupo) throw new ValidationError('El grupo de mercado seleccionado no existe o no pertenece a esta empresa')
   }
 
-  // Fase 2b: Pais — mercadoId debe pertenecer al tenant activo (on update)
-  if (modelo === 'pais' && data.mercadoId !== undefined && data.mercadoId !== null) {
-    const mercado = await repo.getMantenedorById('mercado', data.mercadoId)
-    if (!mercado) throw new ValidationError('El mercado seleccionado no existe o no pertenece a esta empresa')
+  // Fase 2b: Pais — cada mercado debe pertenecer al tenant activo (on update, N:M)
+  if (modelo === 'pais' && data.mercadoIds !== undefined) {
+    for (const mercadoId of new Set(data.mercadoIds)) {
+      const mercado = await repo.getMantenedorById('mercado', mercadoId)
+      if (!mercado) throw new ValidationError('Uno o más mercados seleccionados no existen o no pertenecen a esta empresa')
+    }
+  }
+
+  // Catálogo de defectos (2026-10-06): FK/especies deben pertenecer al tenant (on update)
+  if (modelo === 'grupoDefecto' && data.tipoDefectoId !== undefined) {
+    const tipo = await repo.getMantenedorById('tipoDefecto', data.tipoDefectoId)
+    if (!tipo) throw new ValidationError('El tipo de defecto seleccionado no existe o no pertenece a esta empresa')
+  }
+  if (modelo === 'defecto') {
+    if (data.grupoDefectoId !== undefined) {
+      const grupo = await repo.getMantenedorById('grupoDefecto', data.grupoDefectoId)
+      if (!grupo) throw new ValidationError('El grupo de defecto seleccionado no existe o no pertenece a esta empresa')
+    }
+    if (data.especieIds !== undefined) {
+      for (const especieId of new Set(data.especieIds)) {
+        const especie = await repo.getMantenedorById('especie', especieId)
+        if (!especie) throw new ValidationError('Una o más especies seleccionadas no existen o no pertenecen a esta empresa')
+      }
+    }
   }
 
   // QAS-MG-L4-004: Bodega — validate active FK comunaId on update
@@ -434,7 +483,7 @@ export async function actualizarMantenedor(
     }
   }
 
-  const { contactos, mercadoId, ...coreData } = data as Partial<MantenedorCreateInput> & {
+  const { contactos, mercadoIds, especieIds, ...coreData } = data as Partial<MantenedorCreateInput> & {
     contactos?: import('./config.types.js').BodegaContactoInput[]
   }
   descartarCodigoAduanaSiNoAplica(modelo, coreData as AnyRecord)
@@ -453,13 +502,21 @@ export async function actualizarMantenedor(
   const updated = await repo.updateMantenedor(modelo, id, coreData, userId)
 
   if (modelo === 'pais') {
-    if (mercadoId !== undefined && mercadoId !== null) {
-      await repo.upsertMercadoPais(id, mercadoId, userId)
+    if (mercadoIds !== undefined) {
+      await repo.sincronizarMercadosPais(id, mercadoIds, userId)
     }
-    // Siempre re-consultar (aunque este PATCH no haya tocado mercadoId): el
-    // contrato de respuesta de Pais incluye mercadoId/mercado reconstruidos
-    // vía MercadoPais (aplanarMercado), que `updated` (registro Prisma crudo)
+    // Siempre re-consultar (aunque este PATCH no haya tocado los mercados): el
+    // contrato de respuesta de Pais incluye mercadoIds/mercados reconstruidos
+    // vía MercadoPais (aplanarMercados), que `updated` (registro Prisma crudo)
     // no tiene.
+    return repo.getMantenedorById(modelo, id)
+  }
+
+  if (modelo === 'defecto') {
+    if (especieIds !== undefined) {
+      await repo.sincronizarDefectoEspecies(id, especieIds)
+    }
+    // Re-consultar para devolver `especies` reconstruidas vía DefectoEspecie.
     return repo.getMantenedorById(modelo, id)
   }
 

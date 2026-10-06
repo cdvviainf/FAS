@@ -46,8 +46,18 @@ export interface ReclamoListFilters {
   soloConAnalisis?: boolean
 }
 
+export interface ReclamoDefectoInput {
+  grupoDefectoId: number
+  defectoId: number
+  porcentaje: number
+}
+
 export interface AnalisisCalidadInput {
   comentarioCalidad: string
+  // Clasificación del reclamo (GrupoDefecto, Calidad/Condición) — opcional.
+  grupoDefectoId?: number | null
+  // Líneas de defecto — si viene, reemplaza el set completo (2026-10-06).
+  defectos?: ReclamoDefectoInput[]
 }
 
 export interface ValorizarInput {

@@ -368,10 +368,10 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
 
     const instructivo = await crearInstructivo(f.empresa.id, {
       entidadProductorId: f.productor.id,
-      grupoMercadoId: f.grupoMercado.id,
       fechaInicioPrograma: new Date('2026-08-01'),
       detalle: [{
         articuloId: f.articulo.id,
+        grupoMercadoId: f.grupoMercado.id,
         especieId: f.especie.id,
         variedadId: f.variedad.id,
         categoriaId: f.categoria.id,
@@ -390,10 +390,10 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
     const nv = await crearNotaVenta(f.empresa.id, nvBase(f), 'test')
     await crearInstructivo(f.empresa.id, {
       entidadProductorId: f.productor.id,
-      grupoMercadoId: f.grupoMercado.id,
       fechaInicioPrograma: new Date('2026-08-01'),
       detalle: [{
         articuloId: f.articulo.id,
+        grupoMercadoId: f.grupoMercado.id,
         especieId: f.especie.id,
         variedadId: f.variedad.id,
         categoriaId: f.categoria.id,

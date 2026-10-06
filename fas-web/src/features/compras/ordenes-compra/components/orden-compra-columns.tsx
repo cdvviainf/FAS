@@ -114,6 +114,9 @@ function OrdenCompraCellAction({ orden }: { orden: OrdenCompraListItem }) {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         puedeEmitir={puedeEscribir}
+        // Emitir el documento oficial deja la OC en EMITIDA (2026-10-05):
+        // refrescar el listado para que el estado se actualice en pantalla.
+        onEmitido={() => queryClient.invalidateQueries({ queryKey: ordenesCompraKeys.all })}
       />
     </>
   )

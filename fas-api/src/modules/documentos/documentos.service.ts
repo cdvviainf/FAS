@@ -5,7 +5,12 @@ import { NotFoundError, ValidationError } from '../../shared/errors.js'
 import { renderPdf } from '../../shared/pdf/render.js'
 import { getDocumentDefinition } from './documentos.registry.js'
 import * as repo from './documentos.repository.js'
+import { marcarOrdenCompraEmitida } from '../compras/ordenes-compra/ordenes-compra.repository.js'
 import { fmt } from './ui/formato.js'
+
+// Tipo de documento de la OC de fruta en el registro — emitir su documento
+// oficial también deja la Orden de Compra en estado EMITIDA (2026-10-05).
+const TIPO_ORDEN_COMPRA = 'orden-compra'
 
 function getDefinicionOFallar(tipo: string) {
   const def = getDocumentDefinition(tipo)
@@ -98,6 +103,9 @@ export async function emitirDocumento(
 
   const previo = await repo.getDocumentoEmitidoPorHash(tipo, id, def.plantillaActual, hashSha256)
   if (previo) {
+    // Idempotente también para el estado: si la OC quedó en BORRADOR (ej.
+    // emisión previa que no alcanzó a transicionar), al reemitir se corrige.
+    await marcarEmitidaEnOrigen(tipo, id, creadoPor)
     return { id: previo.id, buffer: Buffer.from(previo.pdf), nombreArchivo: def.nombreArchivo(payload) }
   }
 
@@ -115,7 +123,19 @@ export async function emitirDocumento(
     creadoPor,
   })
 
+  // La emisión del documento oficial de la OC de fruta la deja en EMITIDA
+  // (2026-10-05). Para los demás tipos es un no-op.
+  await marcarEmitidaEnOrigen(tipo, id, creadoPor)
+
   return { id: emitido.id, buffer: Buffer.from(emitido.pdf), nombreArchivo: def.nombreArchivo(payload) }
+}
+
+// Efecto de la emisión sobre el documento de origen. Hoy solo la OC de fruta
+// transiciona (BORRADOR -> EMITIDA); el resto de los tipos no cambian de estado.
+async function marcarEmitidaEnOrigen(tipo: string, id: number, userId: string): Promise<void> {
+  if (tipo === TIPO_ORDEN_COMPRA) {
+    await marcarOrdenCompraEmitida(id, userId)
+  }
 }
 
 // ─── Reimpresión (Etapa 4 §4 — "un documento emitido no puede cambiar después") ──
