@@ -82,6 +82,15 @@ export async function crearBorradorDesdeProforma(proformaId: number, userId: str
   if (!embarque) throw new NotFoundError('Embarque', String(proforma.embarqueId))
   requireEmbarqueDespachado(embarque)
 
+  // Tipo de Venta (2026-10-06): la Factura de Exportación es un DTE 110 (venta
+  // al exterior). Si el Cierre Comercial se marcó como venta NACIONAL, no hay
+  // ruta de facturación nacional todavía — se bloquea la generación.
+  if (embarque.notaVenta.tipoVenta === 'NACIONAL') {
+    throw new ValidationError(
+      'El Cierre Comercial es una venta NACIONAL: no admite Factura de Exportación (DTE 110). Cámbialo a Exportación o usa la facturación nacional cuando esté disponible.',
+    )
+  }
+
   const existente = await repo.getFacturaActivaPorEmbarque(proforma.embarqueId)
   if (existente) {
     throw new ValidationError('Este Embarque ya tiene una Factura de Exportación — anúlala antes de crear otra (CB2)')
@@ -124,7 +133,10 @@ export async function crearBorradorDesdeProforma(proformaId: number, userId: str
   let tipoCambio: number | null = null
   let fechaTipoCambio: Date | null = null
   if (!embarque.notaVenta.moneda.esMonedaBase) {
-    const tc = await obtenerTipoCambio(embarque.notaVenta.moneda.codigo)
+    // Tipo de cambio de la FECHA DEL DOCUMENTO (2026-10-06), no del día: se usa
+    // la fechaDocumento heredada de la Proforma; si es null, el adapter cae al
+    // valor más reciente (hoy).
+    const tc = await obtenerTipoCambio(embarque.notaVenta.moneda.codigo, proforma.fechaDocumento ?? undefined)
     if ('valor' in tc) {
       tipoCambio = tc.valor
       fechaTipoCambio = tc.fecha ? new Date(tc.fecha) : null
@@ -687,7 +699,7 @@ export async function obtenerPdfBorrador(id: number) {
 // la moneda de la Factura — para el botón "Obtener" del editor. No persiste: el
 // valor se guarda al editar la Factura (actualizarBorrador), que invalida el DTE
 // temporal. Lanza error si la moneda es la base (no aplica) o la fuente falla.
-export async function obtenerTipoCambioSugerido(id: number) {
+export async function obtenerTipoCambioSugerido(id: number, fecha?: Date) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
   const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
@@ -695,7 +707,11 @@ export async function obtenerTipoCambioSugerido(id: number) {
   if (embarque.notaVenta.moneda.esMonedaBase) {
     throw new ValidationError('La factura está en pesos (moneda base) — no requiere tipo de cambio')
   }
-  const tc = await obtenerTipoCambio(embarque.notaVenta.moneda.codigo)
+  // Tipo de cambio de la FECHA DEL DOCUMENTO (2026-10-06): el botón "Obtener"
+  // corre antes de guardar, así que el frontend envía la fechaDocumento del
+  // formulario. Si no viene, se usa la persistida; si tampoco, el valor de hoy.
+  const fechaEfectiva = fecha ?? factura.fechaDocumento ?? undefined
+  const tc = await obtenerTipoCambio(embarque.notaVenta.moneda.codigo, fechaEfectiva)
   if ('error' in tc) throw new ValidationError(tc.error)
   return { valor: tc.valor, fecha: tc.fecha, moneda: embarque.notaVenta.moneda.codigo }
 }

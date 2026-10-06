@@ -191,7 +191,9 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   })
 
   const obtenerTc = useMutation({
-    mutationFn: () => facturaExportacionService.obtenerTipoCambio(factura.id),
+    // Envía la fechaDocumento del formulario (aún sin guardar) para que la
+    // paridad sea la de esa fecha, no la de hoy (2026-10-06).
+    mutationFn: () => facturaExportacionService.obtenerTipoCambio(factura.id, fechaDocumento || undefined),
     onSuccess: ({ data }) => {
       setTipoCambio(String(data.valor))
       setFechaTipoCambio(data.fecha)

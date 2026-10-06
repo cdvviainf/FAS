@@ -64,6 +64,8 @@ Sistematizar el ciclo comercial de exportación de Frutera Agrosan, desde el com
 >
 > **⚠️ Supersesión (2026-07-30, segunda decisión del día).** Por decisión de Christian: (a) `compradorId` (FK a `Entidad`, rol "Comprador" independiente) se **reemplaza** por `compradorContactoId` (FK a `EntidadContacto`) — el Comprador pasa a ser un contacto de la propia Entidad Cliente, mismo patrón que `SolicitudInspeccion.contactoId`; se elimina "Comprador" como rol/tipo de `Entidad` en la lista de roles (§2, línea 35) y de R4 (línea 349, ya no aplica herencia porque el contacto depende del cliente, no se hereda como Entidad suelta). No hay backfill posible (un id de Entidad no corresponde a ningún id de EntidadContacto): los Cierres Comerciales existentes pierden el Comprador asignado. (b) `clienteId` sigue siendo `Int` obligatorio, pero ahora existe una Entidad placeholder sembrada ("Cliente Sin Definir", código fijo `CLIENTE-SD`) que se preselecciona automáticamente al crear un Cierre Comercial nuevo cuando el cliente real todavía no se conoce — editable en cualquier momento, incluso después de guardado.
 >
+> **⚠️ Agregado (2026-10-06) — Tipo de Venta (Exportación / Nacional).** El Cierre Comercial gana `tipoVenta` (`enum TipoVenta { EXPORTACION NACIONAL }`, default `EXPORTACION`; migración con el DEFAULT backfilleando los existentes a EXPORTACION). Es un **select en la cabecera** del formulario. Hoy es **informativo + un guard**: como el sistema solo tiene facturación de exportación (DTE 110), si el Cierre es `NACIONAL` se **bloquea la generación de Factura de Exportación** (`factura-exportacion.service.crearBorradorDesdeProforma` lanza 422) — hasta que exista facturación nacional. No afecta ningún otro flujo.
+>
 > **⚠️ Supersesión (2026-09-30) — Cláusula de Venta (Incoterm) sale de `Parametro`.** Por decisión de Christian: `clausulaVentaId` deja de ser FK al catálogo genérico `Parametro` (`TipoParametro` `INCOTERM`) y pasa a ser FK al mantenedor dedicado **`ClausulaVenta`** (`config/clausulas-venta`, mismo patrón tenant-scoped que el resto de mantenedores, ver `Docs/mantenedores-generales.md`). Motivo: el catch-all `Parametro` no exponía `requiereFlete`/`requiereSeguro` en su listado — el mantenedor dedicado sí (columnas propias). Migración `clausula_venta_dedicada` (2026-09-30) preserva los `id` que las filas tenían como `Parametro` tipo `INCOTERM`, así que las FK existentes en `NotaVenta`/`OrdenCompra` no se reescriben. `modalidadVentaId`/`tipoFleteId` **no** se ven afectados — siguen siendo `Parametro` genérico.
 
 ```prisma
@@ -71,6 +73,7 @@ model NotaVenta {
   id               Int       @id @default(autoincrement())
   folio            Int       @unique              // correlativo autonumérico (ver §5 R1)
   fecha            DateTime
+  tipoVenta        TipoVenta @default(EXPORTACION) // Exportación / Nacional (2026-10-06)
 
   // --- Partes / entidades ---
   clienteId        Int  // preselecciona placeholder "Cliente Sin Definir" al crear (ver supersesión)

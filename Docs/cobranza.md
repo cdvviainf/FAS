@@ -43,6 +43,7 @@
 >   - `POST .../facturas-exportacion/:id/reabrir` → `RECHAZADA` → `BORRADOR` para editar y reintentar.
 >   - **Editar descarta el temporal** (FAS-COB-F1-001): `PATCH` invalida el `DocumentoDte` descartable (`TEMPORAL_CREADO/ERROR/PENDIENTE`, nunca en vuelo/timbrado) bajo el mismo advisory lock que emitir/firmar, para que "Firmar" nunca timbre un payload viejo. Política de rechazo (F1-A03): se **reusa** el temporal para reintentar; solo se descarta si se edita.
 > - **Idioma + fecha del documento (editables en `BORRADOR`):** `FacturaExportacion.idioma` (ES/EN) y `fechaDocumento` (fecha **calendario `YYYY-MM-DD`**, F1-003). Se **heredan de la Proforma** al crear el borrador y luego son **independientes** (copia inicial, no sincronía permanente — F1-A02). La Proforma también gana `fechaDocumento` editable al emitir.
+> - **Tipo de cambio por la fecha del documento (2026-10-06):** la paridad (`OtraMoneda.TpoCambio` del DTE 110, dólar/euro observado del Banco Central vía mindicador.cl) se toma de la **`fechaDocumento`**, no del día. Si esa fecha cae en día sin publicación (finde/feriado) se usa la del **día hábil anterior más cercano** (se consulta la serie del año y, si hace falta por borde de año, la del anterior). Si `fechaDocumento` está vacía, cae al valor más reciente (hoy). El botón **"Obtener"** del editor corre antes de guardar, así que el frontend envía la `fechaDocumento` del formulario como `?fecha=YYYY-MM-DD` (`GET .../facturas-exportacion/:id/tipo-cambio?fecha=`); al **crear** el borrador se usa la `fechaDocumento` heredada de la Proforma.
 > - **Descripción por idioma:** la descripción de cada línea se **reconstruye desde los IDs** de los mantenedores (`descripcion` en ES, `descripcionExtranjera` en EN) en el PDF de la Proforma y en el `NmbItem` del DTE. Al elegir EN o al emitir/firmar, si algún mantenedor referenciado no tiene `descripcionExtranjera`, se **bloquea** y se listan los faltantes. La descripción deja de ser texto libre (read-only en pantalla).
 > - **XML timbrado:** `generarReal` se llama con `getXML=1`; el XML se persiste en `DocumentoDte.xml` y se descarga con `GET .../facturas-exportacion/:id/xml`. El detalle expone `dte: { estado, folio, tieneXml }`.
 > - **PDFs de la Factura (dos artefactos distintos):**
@@ -51,7 +52,7 @@
 > - **Flete/Seguro de la cláusula de venta (Incoterm):** `ClausulaVenta.requiereFlete/requiereSeguro` marcan si la cláusula los exige (⚠️ **Supersesión 2026-09-30:** antes vivían en el catálogo genérico `Parametro`; el mantenedor dedicado `ClausulaVenta` — `config/clausulas-venta` — los expone en su propio listado, ver `Docs/ventas.md` §4.1); `Proforma`/`FacturaExportacion.montoFlete/montoSeguro` los guardan. Son un **monto cerrado dentro del total** (restan al valor de venta → valor FOB de la mercadería). Total y cuotas siguen sobre el valor cláusula/CIF; el detalle del DTE se timbra a FOB y la Aduana lleva `MntFlete/MntSeguro` (`TotClauVenta` = CIF).
 > - **Anulación:** la **Proforma** no se puede anular si el Embarque tiene una Factura activa (se anula primero la Factura). La **Factura** se anula (soft delete, permite reemitir) en `BORRADOR`/`RECHAZADA`; una `APROBADA` (timbrada) **no** se anula — requiere Nota de Crédito de anulación (fase 2).
 > - **Landing embarque-céntrica (supersede el listado de Proformas):** `/dashboard/facturacion/exportacion` lista los **Embarques despachados** (`GET .../exportacion/embarques-despachados`) con columnas de estado **Proforma** (Pendiente/Emitida) y **SII** (Pendiente/Borrador/Aprobada/Rechazada) y acciones (Emitir/Ver Proforma, Generar/Ver Factura).
-> - **Link a Cierre Comercial:** desde la emisión y el detalle de la Proforma se ofrece "Ver Cierre Comercial" (`/dashboard/ventas/cierre/{notaVentaId}`).
+> - **"Ver Cierre Comercial" desde la Proforma:** abre el **PDF del Cierre Comercial en una pestaña nueva** (`documentosService.abrirPdf('cierre-comercial', notaVentaId)`) — supersede (2026-09-30, reconfirmado 2026-10-06) la navegación original a la pantalla `/dashboard/ventas/cierre/{notaVentaId}`. Análogamente "Ver Factura" abre el PDF de la Factura en pestaña nueva.
 
 ## 0. Contexto
 
@@ -110,7 +111,7 @@ Dependencias externas (specs pendientes o de otro documento):
 - Entidad Provisión → anexo al spec de Reclamos.
 - Registro de "Fecha de envío de documentos" en Embarque — campo pendiente de agregar en el módulo de Despacho; aquí solo se referencia como una de las 6 fechas posibles.
 - Selección del proveedor DTE concreto (se consume vía interfaz de adaptador).
-- Conversión de moneda / consolidación de cartera en una moneda única — cada documento y cada pago se mantiene en su propia moneda (USD, EUR, RMB, etc.), sin tipo de cambio.
+- Conversión de moneda / consolidación de cartera en una moneda única — cada documento y cada pago se mantiene en su propia moneda (USD, EUR, RMB, etc.), sin tipo de cambio. *(Nota: esto aplica solo a la gestión de cobranza/cartera; NO contradice la paridad tributaria `OtraMoneda.TpoCambio` del DTE 110, que sí usa el dólar/euro observado por la fecha del documento — ver §4 arriba.)*
 
 ---
 

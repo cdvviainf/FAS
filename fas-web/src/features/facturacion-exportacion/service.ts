@@ -109,8 +109,11 @@ export const facturaExportacionService = {
   },
   // Tipo de cambio sugerido (dólar/euro observado del Banco Central) para la
   // moneda de la factura. No persiste: el valor se guarda al editar la factura.
-  async obtenerTipoCambio(id: number): Promise<{ data: TipoCambioSugerido }> {
-    return api.get(`ventas/cobranza/facturas-exportacion/${id}/tipo-cambio`).json()
+  async obtenerTipoCambio(id: number, fecha?: string): Promise<{ data: TipoCambioSugerido }> {
+    // fecha (YYYY-MM-DD): la del documento, para la paridad de esa fecha (día
+    // hábil anterior más cercano) en vez del valor de hoy (2026-10-06).
+    const searchParams = fecha ? { fecha } : undefined
+    return api.get(`ventas/cobranza/facturas-exportacion/${id}/tipo-cambio`, { searchParams }).json()
   },
   async list(filters: FacturasExportacionListFilters = {}): Promise<FacturasExportacionListResponse> {
     const sp: Record<string, string> = {}

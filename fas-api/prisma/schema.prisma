@@ -2724,12 +2724,23 @@ model NotaCondicionEspecie {
 // Embarque/Instructivo de Embarque y Solicitud de Reserva (§4.2/§4.3) quedan
 // diferidos — no están implementados todavía.
 
+// Tipo de venta del Cierre Comercial (2026-10-06): identifica si la venta es de
+// exportación o nacional. Hoy solo existe facturación de exportación (DTE 110);
+// una NV NACIONAL no puede generar Factura de Exportación (guard en el service).
+enum TipoVenta {
+  EXPORTACION
+  NACIONAL
+}
+
 model NotaVenta {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   empresaId Int
-  empresa   Empresa  @relation(fields: [empresaId], references: [id])
+  empresa   Empresa   @relation(fields: [empresaId], references: [id])
   folio     Int // correlativo autonumérico (R1), único por empresa
   fecha     DateTime
+  // Exportación / Nacional (2026-10-06). Default EXPORTACION (los existentes se
+  // backfillean a EXPORTACION — hoy todo el dominio de ventas es exportación).
+  tipoVenta TipoVenta @default(EXPORTACION)
 
   clienteId           Int
   // FK compuesta (empresaId, clienteId) -> Entidad(empresaId, id).

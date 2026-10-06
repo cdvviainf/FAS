@@ -26,8 +26,14 @@ vi.mock('../src/modules/finanzas/facturacion/dte-emitidos.service.js', () => ({
 vi.mock('../src/modules/finanzas/facturacion/dte-emitidos.repository.js', () => ({
   getEmpresaParaDte: vi.fn(),
 }))
+// Tipo de cambio (2026-10-06): se mockea para que crearBorrador no pegue contra
+// mindicador.cl real (red externa → timeouts intermitentes en la suite).
+vi.mock('../src/modules/finanzas/facturacion/tipo-cambio.adapter.js', () => ({
+  obtenerTipoCambio: vi.fn(),
+}))
 
 import * as repo from '../src/modules/ventas/cobranza/factura-exportacion.repository.js'
+import { obtenerTipoCambio } from '../src/modules/finanzas/facturacion/tipo-cambio.adapter.js'
 import { siguienteCodigo } from '../src/modules/config/prefijos-codigo/prefijos-codigo.service.js'
 import { validarYCompletarLineas } from '../src/modules/ventas/cobranza/proforma.service.js'
 import * as dteService from '../src/modules/finanzas/facturacion/dte-emitidos.service.js'
@@ -63,7 +69,12 @@ const embarqueDespachado = {
   },
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  // Default determinista del tipo de cambio (sin red). Los tests que no usan
+  // moneda extranjera igual no lo invocan.
+  vi.mocked(obtenerTipoCambio).mockResolvedValue({ valor: 950, fecha: '2026-09-20' })
+})
 
 describe('crearBorradorDesdeProforma', () => {
   const proforma = {

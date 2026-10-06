@@ -52,6 +52,7 @@ const clausulasVentaService = createMantenedorService('clausulas-venta')
 
 interface HeaderFields {
   fecha: string
+  tipoVenta: 'EXPORTACION' | 'NACIONAL'
   clienteId: number
   compradorContactoId: number | null
   notifyId: number | null
@@ -73,6 +74,7 @@ interface HeaderFields {
 
 const HEADER_EMPTY: HeaderFields = {
   fecha: new Date().toISOString().slice(0, 10),
+  tipoVenta: 'EXPORTACION',
   clienteId: 0,
   compradorContactoId: null,
   notifyId: null,
@@ -215,6 +217,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación del form al cargar la NV a editar
       setFields({
         fecha: d.fecha.slice(0, 10),
+        tipoVenta: d.tipoVenta ?? 'EXPORTACION',
         clienteId: d.clienteId,
         compradorContactoId: d.compradorContactoId,
         notifyId: d.notifyId,
@@ -273,6 +276,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   function buildPayload(): NotaVentaCreateInput {
     return {
       fecha: fields.fecha,
+      tipoVenta: fields.tipoVenta,
       clienteId: fields.clienteId,
       compradorContactoId: fields.compradorContactoId,
       notifyId: fields.notifyId,
@@ -481,11 +485,23 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
           <CardTitle>{isEdit ? `Cierre Comercial — Folio ${notaVenta?.data.folio}` : 'Nuevo Cierre Comercial'}</CardTitle>
         </CardHeader>
         <CardContent className='space-y-4'>
-          {/* Línea 1: Fecha sola. */}
-          <div className='max-w-xs space-y-1.5'>
-            <Label>Fecha <span className='text-destructive'>*</span></Label>
-            <Input type='date' value={fields.fecha} onChange={(e) => setFields((f) => ({ ...f, fecha: e.target.value }))} />
-            {errors.fecha && <p className='text-xs text-destructive'>{errors.fecha}</p>}
+          {/* Línea 1: Fecha + Tipo de Venta (Exportación/Nacional, 2026-10-06). */}
+          <div className='grid max-w-xl gap-4 sm:grid-cols-2'>
+            <div className='space-y-1.5'>
+              <Label>Fecha <span className='text-destructive'>*</span></Label>
+              <Input type='date' value={fields.fecha} onChange={(e) => setFields((f) => ({ ...f, fecha: e.target.value }))} />
+              {errors.fecha && <p className='text-xs text-destructive'>{errors.fecha}</p>}
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Tipo de Venta <span className='text-destructive'>*</span></Label>
+              <Select value={fields.tipoVenta} onValueChange={(v) => setFields((f) => ({ ...f, tipoVenta: v as 'EXPORTACION' | 'NACIONAL' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='EXPORTACION'>Exportación</SelectItem>
+                  <SelectItem value='NACIONAL'>Nacional</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Línea 2: Cliente + Dirección + Detalle de Dirección. */}

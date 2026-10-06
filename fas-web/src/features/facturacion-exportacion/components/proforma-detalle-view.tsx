@@ -38,9 +38,9 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
   const subtotalFob = Math.round((montoTotal - reduccion) * 100) / 100
   const moneda = proforma.moneda.codigo
 
-  // "Ver Cierre Comercial"/"Ver Factura" abren directamente su PDF (2026-09-30)
-  // — antes navegaban a la pantalla. Si el PDF no está disponible (ej. Factura
-  // sin aprobar aún), se avisa con un toast en vez de fallar en silencio.
+  // "Ver Cierre Comercial"/"Ver Factura" abren directamente su PDF en pestaña
+  // nueva (2026-09-30; "pestaña nueva" reconfirmado 2026-10-06). Si el PDF no
+  // está disponible, se avisa con un toast en vez de fallar en silencio.
   async function abrirPdfCierre(notaVentaId: number) {
     try {
       await documentosService.abrirPdf('cierre-comercial', notaVentaId)

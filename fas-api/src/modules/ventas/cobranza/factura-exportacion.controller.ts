@@ -6,6 +6,7 @@ import {
   facturaParamsSchema,
   facturasExportacionListQuerySchema,
   proformaParamsSchema,
+  tipoCambioQuerySchema,
 } from './factura-exportacion.schema.js'
 import * as service from './factura-exportacion.service.js'
 
@@ -67,7 +68,10 @@ export async function previsualizarPayloadDte(req: FastifyRequest, reply: Fastif
 
 export async function obtenerTipoCambio(req: FastifyRequest, reply: FastifyReply) {
   const { id } = facturaParamsSchema.parse(req.params)
-  const data = await service.obtenerTipoCambioSugerido(id)
+  // Fecha del documento (2026-10-06): el editor la envía como ?fecha=YYYY-MM-DD
+  // para que la paridad sea la de esa fecha (día hábil anterior más cercano).
+  const { fecha } = tipoCambioQuerySchema.parse(req.query)
+  const data = await service.obtenerTipoCambioSugerido(id, fecha ? new Date(fecha) : undefined)
   return reply.send({ data })
 }
 

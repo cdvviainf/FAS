@@ -255,6 +255,20 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
           </div>
         )}
 
+        {/* Reporte de Packing List en Excel (2026-10-06): placeholder — el
+            formato del reporte queda pendiente de definir, por ahora solo el
+            botón/ícono de descarga. */}
+        <div>
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            onClick={() => toast.info('Reporte de Packing List en Excel: pendiente de definir')}
+          >
+            <Icons.fileTypeXls className='mr-1 h-4 w-4' /> Descargar Packing List (Excel)
+          </Button>
+        </div>
+
         {erroresCarga && (
           <div className='space-y-1.5 rounded-md border border-destructive/40 bg-destructive/5 p-3'>
             <p className='text-destructive text-sm font-medium'>{erroresCarga.mensaje}</p>

@@ -2,6 +2,9 @@ import { z } from 'zod'
 
 export const notaVentaCreateSchema = z.object({
   fecha: z.coerce.date(),
+  // Exportación / Nacional (2026-10-06). Opcional en el body: si se omite, el
+  // default del modelo (EXPORTACION) aplica.
+  tipoVenta: z.enum(['EXPORTACION', 'NACIONAL']).optional(),
   clienteId: z.number().int().positive('El cliente es requerido'),
   compradorContactoId: z.number().int().positive().optional().nullable(),
   notifyId: z.number().int().positive().optional().nullable(),

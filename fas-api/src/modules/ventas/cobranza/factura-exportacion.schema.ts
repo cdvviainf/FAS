@@ -60,6 +60,8 @@ export const facturasExportacionListQuerySchema = z.object({
 
 export const proformaParamsSchema = z.object({ id: z.coerce.number().int().positive() })
 export const facturaParamsSchema = z.object({ id: z.coerce.number().int().positive() })
+// Tipo de cambio por fecha del documento (2026-10-06, opcional).
+export const tipoCambioQuerySchema = z.object({ fecha: z.string().date().optional() })
 export const embarqueParamsSchema = z.object({ id: z.coerce.number().int().positive() })
 
 export type FacturaExportacionActualizarBody = z.infer<typeof facturaExportacionActualizarSchema>
