@@ -360,7 +360,8 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
               value={observaciones}
               onChange={(e) => { setObservaciones(e.target.value); setDirty(true) }}
               rows={3}
-              placeholder='Observaciones libres del documento'
+              maxLength={100}
+              placeholder='Observaciones libres del documento (máx. 100 caracteres)'
               disabled={!puedeEscribir}
             />
           </div>

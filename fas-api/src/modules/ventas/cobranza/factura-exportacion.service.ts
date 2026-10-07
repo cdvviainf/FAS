@@ -450,6 +450,8 @@ async function construirPayloadDte(
         : null,
     },
     referencias,
+    // Observaciones del documento → IdDoc.TermPagoGlosa (glosa en el PDF).
+    observaciones: factura.observaciones ?? null,
   })
 }
 

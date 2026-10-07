@@ -42,8 +42,9 @@ export const proformaEmitirSchema = z.object({
   // dato de la Nota de Venta). No negativos; el service redondea a 2 decimales.
   montoFlete: z.number().min(0).max(9_999_999_999).optional().nullable(),
   montoSeguro: z.number().min(0).max(9_999_999_999).optional().nullable(),
-  // Observaciones libres del documento (se muestran en el PDF).
-  observaciones: z.string().trim().max(2000).optional().nullable(),
+  // Observaciones libres del documento. Se copian a la Factura y de ahí al DTE
+  // 110 como Encabezado.IdDoc.TermPagoGlosa, que el SII limita a 100 caracteres.
+  observaciones: z.string().trim().max(100).optional().nullable(),
 })
 
 export const proformasListQuerySchema = z.object({

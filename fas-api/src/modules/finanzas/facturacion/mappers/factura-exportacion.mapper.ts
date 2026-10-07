@@ -79,6 +79,10 @@ export interface FacturaExportacionMapeo {
   lineas: LineaFacturaExportacion[]
   aduana: AduanaFacturaExportacion
   referencias?: ReferenciaFacturaExportacion[]
+  // Observaciones libres del documento. Se emiten como IdDoc.TermPagoGlosa, el
+  // campo que LibreDTE imprime como glosa/observaciones en el PDF (máx. 100
+  // caracteres según el SII; el schema de entrada ya lo acota).
+  observaciones?: string | null
 }
 
 // RUT genérico de receptor extranjero para DTE de exportación (norma SII).
@@ -132,7 +136,12 @@ function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
 export function mapFacturaExportacionA110(data: FacturaExportacionMapeo): LibredteDtePayload {
   return {
     Encabezado: {
-      IdDoc: { TipoDTE: 110, FchEmis: fmtFecha(data.fechaEmision) },
+      IdDoc: {
+        TipoDTE: 110,
+        FchEmis: fmtFecha(data.fechaEmision),
+        // Glosa/observaciones del documento (LibreDTE la imprime en el PDF).
+        ...(data.observaciones?.trim() ? { TermPagoGlosa: data.observaciones.trim() } : {}),
+      },
       Emisor: {
         RUTEmisor: data.emisor.rut,
         RznSoc: data.emisor.razonSocial,

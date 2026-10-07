@@ -183,7 +183,8 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
               value={observaciones}
               onChange={(e) => setObservaciones(e.target.value)}
               rows={3}
-              placeholder='Observaciones libres del documento (se muestran en el PDF)'
+              maxLength={100}
+              placeholder='Observaciones libres del documento (máx. 100 caracteres, se muestran en el PDF)'
             />
           </div>
           {enBloqueadoPorFaltantes && (
