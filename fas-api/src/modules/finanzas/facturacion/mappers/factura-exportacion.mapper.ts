@@ -150,8 +150,13 @@ export function mapFacturaExportacionA110(data: FacturaExportacionMapeo): Libred
           ...(data.receptor.nacionalidadCodigo ? { Nacionalidad: data.receptor.nacionalidadCodigo } : {}),
         },
       },
-      // Sección de Aduana (obligatoria en la 110).
-      Aduana: buildAduana(data.aduana),
+      // Sección de Aduana (obligatoria en la 110) — va DENTRO de Transporte
+      // según el esquema del SII, no al mismo nivel que el resto del Encabezado
+      // (confirmado por soporte LibreDTE 2026-10-07: el borrador temporal no
+      // valida contra el XSD, pero el DTE real sí, y rechaza Aduana fuera de
+      // Transporte). Antes iba como Encabezado.Aduana y el normalizador de
+      // LibreDTE descartaba naviera/nave/booking/pesos/bultos/puerto de embarque.
+      Transporte: { Aduana: buildAduana(data.aduana) },
       // Equivalente en pesos: el SII exige el tipo de cambio cuando el documento
       // se emite en moneda extranjera. Con normalizar=1, LibreDTE deriva los
       // montos en pesos a partir de TpoCambio. Se omite si la moneda ya es CLP.

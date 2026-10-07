@@ -53,7 +53,8 @@ describe('mapFacturaExportacionA110', () => {
 
   it('incluye la sección Aduana con los códigos provistos', () => {
     const dte = mapFacturaExportacionA110(base)
-    const aduana = (dte.Encabezado as Record<string, unknown>).Aduana as Record<string, unknown>
+    const transporte = (dte.Encabezado as Record<string, unknown>).Transporte as Record<string, unknown>
+    const aduana = transporte.Aduana as Record<string, unknown>
     expect(aduana.CodModVenta).toBe('1')
     expect(aduana.CodClauVenta).toBe('3')
     expect(aduana.TotClauVenta).toBe(1950)
@@ -73,14 +74,16 @@ describe('mapFacturaExportacionA110', () => {
       ...base,
       aduana: { ...base.aduana, montoFlete: 4000, montoSeguro: 1000 },
     })
-    const aduana = (dte.Encabezado as Record<string, unknown>).Aduana as Record<string, unknown>
+    const transporte = (dte.Encabezado as Record<string, unknown>).Transporte as Record<string, unknown>
+    const aduana = transporte.Aduana as Record<string, unknown>
     expect(aduana.MntFlete).toBe(4000)
     expect(aduana.MntSeguro).toBe(1000)
   })
 
   it('omite MntFlete/MntSeguro cuando son nulos (ej. FOB)', () => {
     const dte = mapFacturaExportacionA110(base)
-    const aduana = (dte.Encabezado as Record<string, unknown>).Aduana as Record<string, unknown>
+    const transporte = (dte.Encabezado as Record<string, unknown>).Transporte as Record<string, unknown>
+    const aduana = transporte.Aduana as Record<string, unknown>
     expect(aduana).not.toHaveProperty('MntFlete')
     expect(aduana).not.toHaveProperty('MntSeguro')
   })
@@ -104,7 +107,8 @@ describe('mapFacturaExportacionA110', () => {
       ...base,
       aduana: { ...base.aduana, codModVenta: null, codClauVenta: null, codPtoEmbarque: null },
     })
-    const aduana = (dte.Encabezado as Record<string, unknown>).Aduana as Record<string, unknown>
+    const transporte = (dte.Encabezado as Record<string, unknown>).Transporte as Record<string, unknown>
+    const aduana = transporte.Aduana as Record<string, unknown>
     expect(aduana).not.toHaveProperty('CodModVenta')
     expect(aduana).not.toHaveProperty('CodClauVenta')
     expect(aduana).not.toHaveProperty('CodPtoEmbarque')
@@ -128,7 +132,8 @@ describe('mapFacturaExportacionA110', () => {
       },
       referencias: [{ tpoDocRef: '808', folioRef: 'MEDUW9324551', fecha: '2026-05-09', razonRef: 'B/L' }],
     })
-    const aduana = (dte.Encabezado as Record<string, unknown>).Aduana as Record<string, unknown>
+    const transporte = (dte.Encabezado as Record<string, unknown>).Transporte as Record<string, unknown>
+    const aduana = transporte.Aduana as Record<string, unknown>
     expect(aduana.NombreCiaTransp).toBe('MEDITERRANEAN SHIPPING COMPANY')
     expect(aduana.NombreTransp).toBe('MSC EUGENIA')
     expect(aduana.Booking).toBe('EBKG16677344')

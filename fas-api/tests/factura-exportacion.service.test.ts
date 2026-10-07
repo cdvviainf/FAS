@@ -228,11 +228,12 @@ describe('emitir', () => {
 
     const payload = vi.mocked(dteService.emitirDteTemporal).mock.calls[0][0].payload as {
       Detalle: { PrcItem: number }[]
-      Encabezado: { Aduana: Record<string, unknown> }
+      Encabezado: { Transporte: { Aduana: Record<string, unknown> } }
     }
+    const aduana = payload.Encabezado.Transporte.Aduana
     expect(payload.Detalle[0].PrcItem).toBe(8) // 10 × 0.8 (FOB)
-    expect(payload.Encabezado.Aduana.MntFlete).toBe(100)
-    expect(payload.Encabezado.Aduana.MntSeguro).toBe(100)
-    expect(payload.Encabezado.Aduana.TotClauVenta).toBe(1000) // valor cláusula/CIF
+    expect(aduana.MntFlete).toBe(100)
+    expect(aduana.MntSeguro).toBe(100)
+    expect(aduana.TotClauVenta).toBe(1000) // valor cláusula/CIF
   })
 })
