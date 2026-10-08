@@ -21,11 +21,15 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { usuariosService } from '../service'
 import { usuariosKeys } from '../queries'
 import type { Usuario } from '../types'
+import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { ResetPasswordDialog } from './reset-password-dialog'
 
 function UsuarioCellAction({ usuario }: { usuario: Usuario }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [resetPasswordOpen, setResetPasswordOpen] = useState(false)
   const queryClient = useQueryClient()
   const router = useRouter()
+  const puedeEscribir = usePuedeEscribir('CONFIG_USUARIOS')
 
   const deleteMutation = useMutation({
     mutationFn: () => usuariosService.remove(usuario.id),
@@ -46,6 +50,12 @@ function UsuarioCellAction({ usuario }: { usuario: Usuario }) {
         loading={deleteMutation.isPending}
       />
 
+      <ResetPasswordDialog
+        usuario={usuario}
+        open={resetPasswordOpen}
+        onClose={() => setResetPasswordOpen(false)}
+      />
+
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button variant='ghost' className='h-8 w-8 p-0'>
@@ -59,6 +69,12 @@ function UsuarioCellAction({ usuario }: { usuario: Usuario }) {
             <Icons.edit className='mr-2 h-4 w-4' />
             Editar
           </DropdownMenuItem>
+          {puedeEscribir && (
+            <DropdownMenuItem onClick={() => setResetPasswordOpen(true)}>
+              <Icons.lock className='mr-2 h-4 w-4' />
+              Restablecer contraseña
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => setDeleteOpen(true)}
