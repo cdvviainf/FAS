@@ -76,13 +76,29 @@ enum NivelAcceso {
   TOTAL
 }
 
+// Tipo de ítem de menú. Determina cómo se edita el permiso en la matriz de
+// perfiles: PANTALLA = 3 niveles (Total/Lectura/Sin Acceso); ACCION = Sí/No
+// (Sí = TOTAL, permiso de acción); REPORTE = Sí/No (Sí = LECTURA, solo consulta).
+enum ItemMenuTipo {
+  PANTALLA
+  ACCION
+  REPORTE
+}
+
 model ItemMenu {
   id       Int            @id @default(autoincrement())
   codigo   String         @unique
   nombre   String
+  // Jerarquía del menú: `grupo` es el nivel superior (Inicio, Gestión Comercial,
+  // Operaciones, …) y `seccion` el submódulo (Compras, Ventas, …). La matriz de
+  // perfiles agrupa por grupo → sección, ordenada por `orden` (global por bloques).
+  grupo    String         @default("")
   seccion  String
   ruta     String?
+  // esAccion se conserva por compatibilidad (= tipo == ACCION); `tipo` es la
+  // fuente canónica del comportamiento de edición en la matriz.
   esAccion Boolean        @default(false)
+  tipo     ItemMenuTipo   @default(PANTALLA)
   orden    Int            @default(0)
   activo   Boolean        @default(true)
   accesos  PerfilAcceso[]

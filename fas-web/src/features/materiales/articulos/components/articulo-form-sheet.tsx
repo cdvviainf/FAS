@@ -36,7 +36,7 @@ import type { Articulo, TipoArticulo, TipoCosteo } from '../types'
 const unidadesService = createMantenedorService('unidades-medida')
 const etiquetasService = createMantenedorService('etiquetas')
 const especiesService = createMantenedorService('especies')
-const ITEM = 'OPER_MATERIALES'
+const ITEM = 'MATERIALES_ARTICULOS'
 
 interface ArticuloFormSheetProps {
   item?: Articulo

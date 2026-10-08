@@ -12,7 +12,7 @@ import { notasCondicionService } from '../service'
 import type { NotaCondicion } from '../types'
 import { NotaCondicionFormSheet } from './nota-condicion-form-sheet'
 
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_NOTAS_CONDICION'
 
 export function NotaCondicionListingClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)

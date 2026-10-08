@@ -125,6 +125,9 @@ export interface MantenedorConfig {
   modelo: MantenedorModelo
   prefixRuta: string     // e.g. 'paises'
   label: string          // e.g. 'País'
+  // Código de ItemMenu que protege este mantenedor (2026-10-07: un permiso por
+  // mantenedor, en vez del genérico CONFIG_MANTENEDORES).
+  itemCodigo: string     // e.g. 'CONFIG_PAISES'
   tienePaisOrigen?: boolean
   schemaKey?: string     // para selección de schema en controller
 }

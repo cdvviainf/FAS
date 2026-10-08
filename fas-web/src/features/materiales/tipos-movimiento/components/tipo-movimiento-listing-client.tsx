@@ -16,7 +16,7 @@ import { CLASE_MOVIMIENTO_LABELS } from '../types'
 import type { TipoMovimiento } from '../types'
 import { TipoMovimientoFormSheet } from './tipo-movimiento-form-sheet'
 
-const ITEM = 'OPER_MATERIALES'
+const ITEM = 'CONFIG_TIPOS_MOVIMIENTO'
 
 export function TipoMovimientoListingClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)

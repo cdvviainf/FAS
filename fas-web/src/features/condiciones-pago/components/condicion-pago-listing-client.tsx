@@ -20,7 +20,7 @@ function labelCuota(cuota: CondicionPagoCuota): string {
   return `${base} a ${cuota.plazoDias} días desde ${FECHA_REFERENCIA_LABELS[cuota.fechaReferencia]}${cuota.descripcion ? ` — ${cuota.descripcion}` : ''}`
 }
 
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_CONDICIONES_PAGO'
 
 export function CondicionPagoListingClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)

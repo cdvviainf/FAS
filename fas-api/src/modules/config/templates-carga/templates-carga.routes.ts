@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { requireAuth, requireLevel } from '../../../plugins/auth-guard.js'
 import * as ctrl from './templates-carga.controller.js'
 
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_TEMPLATES_CARGA'
 
 export async function templatesCargaRoutes(app: FastifyInstance) {
   app.get('/templates-carga', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)

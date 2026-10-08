@@ -2,124 +2,145 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
-const itemsMenu = [
-  // Dashboard
-  { codigo: 'DASHBOARD', nombre: 'Dashboard', seccion: 'Dashboard', ruta: '/dashboard', esAccion: false, orden: 1 },
-  // Configuración
-  { codigo: 'CONFIG_MANTENEDORES', nombre: 'Mantenedores Generales', seccion: 'Configuración', ruta: '/dashboard/configuracion', esAccion: false, orden: 10 },
-  { codigo: 'CONFIG_USUARIOS', nombre: 'Usuarios', seccion: 'Configuración', ruta: '/dashboard/configuracion/usuarios', esAccion: false, orden: 11 },
-  { codigo: 'CONFIG_PERFILES', nombre: 'Perfiles', seccion: 'Configuración', ruta: '/dashboard/configuracion/perfiles', esAccion: false, orden: 12 },
-  { codigo: 'CONFIG_ENTIDADES', nombre: 'Entidades', seccion: 'Configuración', ruta: '/dashboard/configuracion/entidades', esAccion: false, orden: 9 },
-  { codigo: 'CONFIG_EMPRESAS', nombre: 'Empresas', seccion: 'Configuración', ruta: '/dashboard/configuracion/empresas', esAccion: false, orden: 8 },
-  { codigo: 'CONFIG_GENERAL', nombre: 'Configuración General', seccion: 'Configuración', ruta: '/dashboard/configuracion/general', esAccion: false, orden: 13 },
-  // Mantenedor de Integraciones (2026-09-07) — ítem propio, no el genérico
-  // CONFIG_MANTENEDORES, por guardar credenciales de sistemas externos.
-  { codigo: 'CONFIG_INTEGRACIONES', nombre: 'Integraciones', seccion: 'Configuración', ruta: '/dashboard/configuracion/integraciones', esAccion: false, orden: 14 },
-  { codigo: 'CONFIG_CARGA_MASIVA', nombre: 'Carga Masiva de Maestros', seccion: 'Configuración', ruta: '/dashboard/configuracion/carga-masiva', esAccion: false, orden: 15 },
-  { codigo: 'CONFIG_CAJAS_POR_PALLET', nombre: 'Cajas por Pallet', seccion: 'Configuración', ruta: '/dashboard/configuracion/cajas-por-pallet', esAccion: false, orden: 16 },
-  // Compras
-  // Gestión completa (ingresar/editar/notificar/cerrar) de la Solicitud de
-  // Inspección — antes vivía únicamente bajo CAL_SOLICITUDES; Calidad ahora
-  // solo ve y cierra (2026-08-10, ver Docs/Hallazgos/solicitud-inspeccion.md).
-  { codigo: 'COMPRAS_SOLICITUDES', nombre: 'Solicitud de Inspección', seccion: 'Compras', ruta: '/dashboard/compras/solicitudes', esAccion: false, orden: 18 },
-  { codigo: 'COMPRAS_INSTRUCTIVO', nombre: 'Instructivo de Embalaje', seccion: 'Compras', ruta: '/dashboard/compras/instructivo-embalaje', esAccion: false, orden: 19 },
-  { codigo: 'COMPRAS_OC', nombre: 'Órdenes de Compra', seccion: 'Compras', ruta: '/dashboard/compras/ordenes', esAccion: false, orden: 20 },
-  { codigo: 'OC_APROBACION', nombre: 'Aprobación de OC', seccion: 'Compras', ruta: null, esAccion: true, orden: 21 },
-  { codigo: 'COMPRAS_RECEPCION', nombre: 'Recepción de Stock', seccion: 'Compras', ruta: '/dashboard/compras/recepciones', esAccion: false, orden: 22 },
-  // Productores
-  { codigo: 'PROD_FICHA', nombre: 'Productores', seccion: 'Productores', ruta: '/dashboard/configuracion/productores', esAccion: false, orden: 30 },
-  { codigo: 'PROD_CONTRATO', nombre: 'Contrato', seccion: 'Productores', ruta: '/dashboard/productores/contrato', esAccion: false, orden: 31 },
-  { codigo: 'PROD_CTA_CTE', nombre: 'Cuenta Corriente', seccion: 'Productores', ruta: '/dashboard/productores/cuenta-corriente', esAccion: false, orden: 32 },
-  { codigo: 'PROD_CONCEPTOS_LIQ', nombre: 'Conceptos de Liquidación', seccion: 'Productores', ruta: '/dashboard/configuracion/conceptos-liquidacion', esAccion: false, orden: 33 },
-  // Ventas
-  { codigo: 'VENTAS_NV', nombre: 'Cierre Comercial', seccion: 'Ventas', ruta: '/dashboard/ventas/cierre', esAccion: false, orden: 40 },
-  // Permiso especial (acción) para reabrir un Cierre Comercial ya bloqueado
-  // (2026-09-28). Cerrar/bloquear lo puede hacer quien tenga TOTAL en VENTAS_NV;
-  // reabrir exige TOTAL en este ítem dedicado.
-  { codigo: 'VENTAS_REABRIR_CIERRE', nombre: 'Reabrir Cierre Comercial', seccion: 'Ventas', ruta: null, esAccion: true, orden: 400 },
-  { codigo: 'VENTAS_EMBARQUES', nombre: 'Embarques', seccion: 'Ventas', ruta: '/dashboard/ventas/embarques', esAccion: false, orden: 41 },
-  // Reclamos — pantalla de Comercial (2026-09-23, split Ventas/Calidad):
-  // crear reclamo, Provisión, Valorización. Lee el mismo Reclamo que Calidad
-  // (backend acepta CAL_RECLAMOS o VENTAS_RECLAMOS en las lecturas
-  // compartidas), pero es una ruta y un ítem de menú propios — no depende
-  // del permiso de Calidad para poder abrir la pantalla.
-  { codigo: 'VENTAS_RECLAMOS', nombre: 'Reclamos', seccion: 'Ventas', ruta: '/dashboard/ventas/reclamos', esAccion: false, orden: 42 },
-  // Operaciones
-  { codigo: 'OPER_MATERIALES', nombre: 'Materiales', seccion: 'Operaciones', ruta: '/dashboard/configuracion/articulos', esAccion: false, orden: 50 },
-  // Orden de Compra de Materiales (2026-09-03, materiales.md §4.9) — ítem
-  // propio, separado de OPER_MATERIALES, mismo patrón que COMPRAS_OC.
-  { codigo: 'MATERIALES_OC', nombre: 'Orden de Compra de Materiales', seccion: 'Operaciones', ruta: '/dashboard/operaciones/materiales/ordenes-compra', esAccion: false, orden: 52 },
-  // Proforma de Venta de Materiales (2026-09-06, materiales.md §4.8/R25) —
-  // ítem propio, mismo patrón que MATERIALES_OC.
-  { codigo: 'MATERIALES_PROFORMA', nombre: 'Proforma de Venta de Materiales', seccion: 'Operaciones', ruta: '/dashboard/operaciones/materiales/proformas', esAccion: false, orden: 53 },
-  // Facturación y Cobranza (2026-09-04) — nueva sección propia después de
-  // Ventas; VENTAS_COBRANZA se reubica aquí (mismo codigo, no se huerfana
-  // PerfilAcceso) y FIN_FACTURACION queda superseded por los 2 ítems nuevos
-  // más específicos (Exportación/Nacional). Sin backend/pantalla aún.
-  { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/cobranza', esAccion: false, orden: 63 },
-  { codigo: 'FACT_EXPORTACION', nombre: 'Facturación Exportación', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/exportacion', esAccion: false, orden: 61 },
-  { codigo: 'FACT_NACIONAL', nombre: 'Facturación Nacional', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/nacional', esAccion: false, orden: 62 },
-  // Finanzas
-  { codigo: 'FIN_COSTOS', nombre: 'Gestión de Costos', seccion: 'Finanzas', ruta: '/dashboard/finanzas/costos', esAccion: false, orden: 60 },
-  { codigo: 'FIN_PAGOS', nombre: 'Gestión de Pagos', seccion: 'Finanzas', ruta: '/dashboard/finanzas/pagos', esAccion: false, orden: 61 },
-  // Calidad
-  // ruta = prefijo común '/dashboard/calidad' (no solo '/solicitudes'): cubre
-  // también /inspeccion-compra (decisión de negocio, Christian, 2026-07-30).
-  // /inspeccion-proceso ya no existe (2026-09-02): el Instructivo de
-  // Embalaje dejó de tener inspección de Calidad, ver calidad.md.
-  // Supersesión (2026-08-10): Calidad pasa a rol de revisor — solo ver y
-  // cerrar (Aprobada/Rechazada/Objetada). Ingresar/editar/notificar/eliminar
-  // se trasladan a COMPRAS_SOLICITUDES (arriba).
-  { codigo: 'CAL_SOLICITUDES', nombre: 'Solicitudes de Inspección', seccion: 'Calidad', ruta: '/dashboard/calidad', esAccion: false, orden: 69 },
-  { codigo: 'CAL_CONTROL', nombre: 'Control de Calidad', seccion: 'Calidad', ruta: '/dashboard/calidad/control', esAccion: false, orden: 70 },
-  { codigo: 'CAL_LOTES', nombre: 'Validación de Lotes', seccion: 'Calidad', ruta: '/dashboard/calidad/lotes', esAccion: false, orden: 71 },
-  // CAL_RECLAMOS = pantalla de Calidad: fruta reclamada (solo lectura),
-  // Análisis (comentario/documentos) y Veredicto Final/Cierre. Provisión y
-  // Valorización se reubican a Ventas (2026-09-23, decisión de negocio,
-  // Christian): son funciones de Comercial, y ahora viven en la pantalla de
-  // Ventas (VENTAS_RECLAMOS) — la sección acá es solo agrupación visual del
-  // sidebar, el guard de cada acción sigue siendo su propio ítem.
-  { codigo: 'CAL_RECLAMOS', nombre: 'Reclamos', seccion: 'Calidad', ruta: '/dashboard/calidad/reclamos', esAccion: false, orden: 72 },
-  { codigo: 'RECLAMO_VALORIZACION', nombre: 'Valorización Reclamo', seccion: 'Ventas', ruta: null, esAccion: true, orden: 73 },
-  { codigo: 'RECLAMO_CIERRE', nombre: 'Veredicto Final / Cierre Reclamo', seccion: 'Calidad', ruta: null, esAccion: true, orden: 74 },
-  // Crear/reversar la Provisión del reclamo (2026-09-08, reclamos.md RC-D10)
-  // — permiso específico, distinto de CAL_RECLAMOS (decisión de negocio,
-  // Christian).
-  { codigo: 'RECLAMO_PROVISION', nombre: 'Provisión de Reclamo', seccion: 'Ventas', ruta: null, esAccion: true, orden: 75 },
-  // Calificación de Pallets (antes "Gestión de Pallets" bajo Operaciones,
-  // reubicado a Calidad 2026-09-04 — decisión de negocio, Christian): edita
-  // Nota de Calidad/Condición y Completo/Incompleto de un Pallet ya
-  // recepcionado, separado del reporte de solo lectura REPORTES_STOCK_FRUTA.
-  // Mismo `codigo` que antes (`OPERACIONES_GESTION_PALLETS`) a propósito: el
-  // upsert es por `codigo`, así no se huerfanan los PerfilAcceso existentes.
-  { codigo: 'OPERACIONES_GESTION_PALLETS', nombre: 'Calificación de Pallets', seccion: 'Calidad', ruta: '/dashboard/operaciones/pallets', esAccion: false, orden: 75 },
-  // Liquidaciones
-  { codigo: 'LIQ_CLIENTES', nombre: 'Liquidación Clientes', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/clientes', esAccion: false, orden: 80 },
-  { codigo: 'LIQ_COSTOS', nombre: 'Matriz de Costos', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/costos', esAccion: false, orden: 81 },
-  { codigo: 'LIQ_PRECIOS', nombre: 'Determinación de Precios', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/precios', esAccion: false, orden: 82 },
-  { codigo: 'LIQ_PRODUCTOR', nombre: 'Liquidación Productor', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/productor', esAccion: false, orden: 83 },
-  // Reportes (nuevo, 2026-08-24) — reemplaza a OPER_STOCK (ver limpieza más
-  // abajo, antes del upsert): mismo reporte, reubicado de Operaciones a su
-  // propia sección "Reportes".
-  { codigo: 'REPORTES_STOCK_FRUTA', nombre: 'Stock de Fruta', seccion: 'Reportes', ruta: '/dashboard/reportes/stock-fruta', esAccion: false, orden: 90 },
-  // Permiso especial (acción) para editar las características de un lote/pallet
-  // desde la consulta de Stock (2026-09-28): cambiar datos, agregar y eliminar
-  // líneas. Solo pallets libres (no reservados ni despachados).
-  { codigo: 'OPER_STOCK_EDICION', nombre: 'Edición de Stock', seccion: 'Reportes', ruta: null, esAccion: true, orden: 405 },
-  { codigo: 'REPORTES_KARDEX_MATERIALES', nombre: 'Kardex de Materiales', seccion: 'Reportes', ruta: '/dashboard/reportes/kardex-materiales', esAccion: false, orden: 91 },
-  // Completa el catálogo de Reportes (2026-09-01): estos dos ítems ya tenían
-  // pantalla funcional y entrada en nav-config.ts, pero nunca tuvieron fila en
-  // ItemMenu — por eso eran visibles para todos los perfiles sin poder
-  // restringirse (fallback "sin match en catálogo = visible", ver
-  // menu-acceso-context.tsx) y no aparecían en el admin de Perfiles.
-  { codigo: 'REPORTES_STOCK_RECETA', nombre: 'Stock por Receta', seccion: 'Reportes', ruta: '/dashboard/reportes/stock-materiales', esAccion: false, orden: 92 },
-  { codigo: 'REPORTES_GESTION_RIESGO', nombre: 'Gestión de Riesgo', seccion: 'Reportes', ruta: '/dashboard/reportes/gestion-riesgo', esAccion: false, orden: 93 },
-  // Stock de Materiales (2026-09-08) — listado plano de SaldoArticulo
-  // (Artículo x Bodega), tercer reporte de Materiales junto a Kardex (ledger
-  // valorizado) y Stock por Receta (simulador de demanda): este es el
-  // inventario actual sin más. Ruta distinta de REPORTES_STOCK_RECETA
-  // (`/stock-materiales`, ya tomada) a propósito.
-  { codigo: 'REPORTES_STOCK_MATERIALES', nombre: 'Stock de Materiales', seccion: 'Reportes', ruta: '/dashboard/reportes/saldos-materiales', esAccion: false, orden: 94 },
+// Catálogo de ítems de menú (2026-10-07, reorganización de permisos).
+//   - `grupo` = nivel superior del menú; `seccion` = submódulo. La matriz de
+//     perfiles agrupa por grupo → sección y ordena por `orden` (bloques
+//     globales: grupo×1000 + sección×100 + ítem, para que el orden sea el del
+//     menú y cada grupo/sección quede contiguo).
+//   - `tipo`: PANTALLA (3 niveles), ACCION (Sí/No → TOTAL), REPORTE (Sí/No →
+//     LECTURA). `esAccion` se deriva de `tipo` en el upsert (compat).
+//   - Permisos por mantenedor: el genérico CONFIG_MANTENEDORES se desglosa en
+//     un CONFIG_* por catálogo (ver backfill más abajo); Artículos/Recetas/
+//     Tipos de Movimiento salen de OPER_MATERIALES a ítems propios.
+type ItemTipo = 'PANTALLA' | 'ACCION' | 'REPORTE'
+const itemsMenu: Array<{ codigo: string; nombre: string; grupo: string; seccion: string; ruta: string | null; tipo: ItemTipo; orden: number }> = [
+  // ── Inicio ──────────────────────────────────────────────────────────────
+  { codigo: 'DASHBOARD', nombre: 'Dashboard', grupo: 'Inicio', seccion: 'Inicio', ruta: '/dashboard', tipo: 'PANTALLA', orden: 1000 },
+
+  // ── Gestión Comercial › Compras ─────────────────────────────────────────
+  { codigo: 'COMPRAS_SOLICITUDES', nombre: 'Solicitud de Inspección', grupo: 'Gestión Comercial', seccion: 'Compras', ruta: '/dashboard/compras/solicitudes', tipo: 'PANTALLA', orden: 2110 },
+  { codigo: 'COMPRAS_OC', nombre: 'Órdenes de Compra', grupo: 'Gestión Comercial', seccion: 'Compras', ruta: '/dashboard/compras/ordenes', tipo: 'PANTALLA', orden: 2120 },
+  { codigo: 'OC_APROBACION', nombre: 'Aprobación de OC', grupo: 'Gestión Comercial', seccion: 'Compras', ruta: null, tipo: 'ACCION', orden: 2130 },
+  { codigo: 'COMPRAS_INSTRUCTIVO', nombre: 'Instructivo de Embalaje', grupo: 'Gestión Comercial', seccion: 'Compras', ruta: '/dashboard/compras/instructivo-embalaje', tipo: 'PANTALLA', orden: 2140 },
+  { codigo: 'COMPRAS_RECEPCION', nombre: 'Recepción de Stock', grupo: 'Gestión Comercial', seccion: 'Compras', ruta: '/dashboard/compras/recepciones', tipo: 'PANTALLA', orden: 2150 },
+
+  // ── Gestión Comercial › Ventas ──────────────────────────────────────────
+  { codigo: 'VENTAS_NV', nombre: 'Cierre Comercial', grupo: 'Gestión Comercial', seccion: 'Ventas', ruta: '/dashboard/ventas/cierre', tipo: 'PANTALLA', orden: 2210 },
+  { codigo: 'VENTAS_REABRIR_CIERRE', nombre: 'Reabrir Cierre Comercial', grupo: 'Gestión Comercial', seccion: 'Ventas', ruta: null, tipo: 'ACCION', orden: 2220 },
+  { codigo: 'VENTAS_EMBARQUES', nombre: 'Embarques', grupo: 'Gestión Comercial', seccion: 'Ventas', ruta: '/dashboard/ventas/embarques', tipo: 'PANTALLA', orden: 2230 },
+  { codigo: 'VENTAS_RECLAMOS', nombre: 'Reclamos', grupo: 'Gestión Comercial', seccion: 'Ventas', ruta: '/dashboard/ventas/reclamos', tipo: 'PANTALLA', orden: 2240 },
+  { codigo: 'RECLAMO_VALORIZACION', nombre: 'Valorización Reclamo', grupo: 'Gestión Comercial', seccion: 'Ventas', ruta: null, tipo: 'ACCION', orden: 2250 },
+  { codigo: 'RECLAMO_PROVISION', nombre: 'Provisión de Reclamo', grupo: 'Gestión Comercial', seccion: 'Ventas', ruta: null, tipo: 'ACCION', orden: 2260 },
+
+  // ── Gestión Comercial › Facturación y Cobranza ──────────────────────────
+  { codigo: 'FACT_EXPORTACION', nombre: 'Facturación Exportación', grupo: 'Gestión Comercial', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/exportacion', tipo: 'PANTALLA', orden: 2310 },
+  { codigo: 'FACT_NACIONAL', nombre: 'Facturación Nacional', grupo: 'Gestión Comercial', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/nacional', tipo: 'PANTALLA', orden: 2320 },
+  { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', grupo: 'Gestión Comercial', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/cobranza', tipo: 'PANTALLA', orden: 2330 },
+
+  // ── Operaciones › Materiales ────────────────────────────────────────────
+  // OPER_MATERIALES queda para Movimientos de Materiales (operación); Artículos/
+  // Recetas/Tipos de Movimiento salen a ítems propios (ver Configuración).
+  { codigo: 'OPER_MATERIALES', nombre: 'Movimientos de Materiales', grupo: 'Operaciones', seccion: 'Materiales', ruta: '/dashboard/operaciones/movimientos', tipo: 'PANTALLA', orden: 3110 },
+  { codigo: 'MATERIALES_OC', nombre: 'Orden de Compra de Materiales', grupo: 'Operaciones', seccion: 'Materiales', ruta: '/dashboard/operaciones/materiales/ordenes-compra', tipo: 'PANTALLA', orden: 3120 },
+  { codigo: 'MATERIALES_PROFORMA', nombre: 'Proforma de Venta de Materiales', grupo: 'Operaciones', seccion: 'Materiales', ruta: '/dashboard/operaciones/materiales/proformas', tipo: 'PANTALLA', orden: 3130 },
+
+  // ── Gestión Productores › Productores ───────────────────────────────────
+  { codigo: 'PROD_FICHA', nombre: 'Productores', grupo: 'Gestión Productores', seccion: 'Productores', ruta: '/dashboard/configuracion/productores', tipo: 'PANTALLA', orden: 4110 },
+  { codigo: 'PROD_CONTRATO', nombre: 'Contrato', grupo: 'Gestión Productores', seccion: 'Productores', ruta: '/dashboard/productores/contrato', tipo: 'PANTALLA', orden: 4120 },
+  { codigo: 'PROD_CTA_CTE', nombre: 'Cuenta Corriente', grupo: 'Gestión Productores', seccion: 'Productores', ruta: '/dashboard/productores/cuenta-corriente', tipo: 'PANTALLA', orden: 4130 },
+  { codigo: 'PROD_CONCEPTOS_LIQ', nombre: 'Conceptos de Liquidación', grupo: 'Gestión Productores', seccion: 'Productores', ruta: '/dashboard/configuracion/conceptos-liquidacion', tipo: 'PANTALLA', orden: 4140 },
+
+  // ── Gestión Productores › Liquidaciones ─────────────────────────────────
+  { codigo: 'LIQ_CLIENTES', nombre: 'Liquidación Clientes', grupo: 'Gestión Productores', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/clientes', tipo: 'PANTALLA', orden: 4210 },
+  { codigo: 'LIQ_COSTOS', nombre: 'Matriz de Costos', grupo: 'Gestión Productores', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/costos', tipo: 'PANTALLA', orden: 4220 },
+  { codigo: 'LIQ_PRECIOS', nombre: 'Determinación de Precios', grupo: 'Gestión Productores', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/precios', tipo: 'PANTALLA', orden: 4230 },
+  { codigo: 'LIQ_PRODUCTOR', nombre: 'Liquidación Productor', grupo: 'Gestión Productores', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/productor', tipo: 'PANTALLA', orden: 4240 },
+
+  // ── Calidad ─────────────────────────────────────────────────────────────
+  { codigo: 'CAL_SOLICITUDES', nombre: 'Solicitudes de Inspección', grupo: 'Calidad', seccion: 'Calidad', ruta: '/dashboard/calidad', tipo: 'PANTALLA', orden: 5110 },
+  { codigo: 'CAL_CONTROL', nombre: 'Control de Calidad', grupo: 'Calidad', seccion: 'Calidad', ruta: '/dashboard/calidad/control', tipo: 'PANTALLA', orden: 5120 },
+  { codigo: 'CAL_LOTES', nombre: 'Validación de Lotes', grupo: 'Calidad', seccion: 'Calidad', ruta: '/dashboard/calidad/lotes', tipo: 'PANTALLA', orden: 5130 },
+  { codigo: 'CAL_RECLAMOS', nombre: 'Reclamos', grupo: 'Calidad', seccion: 'Calidad', ruta: '/dashboard/calidad/reclamos', tipo: 'PANTALLA', orden: 5140 },
+  { codigo: 'RECLAMO_CIERRE', nombre: 'Veredicto Final / Cierre Reclamo', grupo: 'Calidad', seccion: 'Calidad', ruta: null, tipo: 'ACCION', orden: 5150 },
+  { codigo: 'OPERACIONES_GESTION_PALLETS', nombre: 'Calificación de Pallets', grupo: 'Calidad', seccion: 'Calidad', ruta: '/dashboard/operaciones/pallets', tipo: 'PANTALLA', orden: 5160 },
+
+  // ── Finanzas ────────────────────────────────────────────────────────────
+  { codigo: 'FIN_COSTOS', nombre: 'Gestión de Costos', grupo: 'Finanzas', seccion: 'Finanzas', ruta: '/dashboard/finanzas/costos', tipo: 'PANTALLA', orden: 6110 },
+  { codigo: 'FIN_PAGOS', nombre: 'Gestión de Pagos', grupo: 'Finanzas', seccion: 'Finanzas', ruta: '/dashboard/finanzas/pagos', tipo: 'PANTALLA', orden: 6120 },
+
+  // ── Reportes (todos de solo consulta → tipo REPORTE, Sí/No) ─────────────
+  { codigo: 'REPORTES_STOCK_FRUTA', nombre: 'Stock de Fruta', grupo: 'Reportes', seccion: 'Reportes', ruta: '/dashboard/reportes/stock-fruta', tipo: 'REPORTE', orden: 7110 },
+  { codigo: 'OPER_STOCK_EDICION', nombre: 'Edición de Stock', grupo: 'Reportes', seccion: 'Reportes', ruta: null, tipo: 'ACCION', orden: 7120 },
+  { codigo: 'REPORTES_KARDEX_MATERIALES', nombre: 'Kardex de Materiales', grupo: 'Reportes', seccion: 'Reportes', ruta: '/dashboard/reportes/kardex-materiales', tipo: 'REPORTE', orden: 7130 },
+  { codigo: 'REPORTES_STOCK_RECETA', nombre: 'Stock por Receta', grupo: 'Reportes', seccion: 'Reportes', ruta: '/dashboard/reportes/stock-materiales', tipo: 'REPORTE', orden: 7140 },
+  { codigo: 'REPORTES_STOCK_MATERIALES', nombre: 'Stock de Materiales', grupo: 'Reportes', seccion: 'Reportes', ruta: '/dashboard/reportes/saldos-materiales', tipo: 'REPORTE', orden: 7150 },
+  { codigo: 'REPORTES_GESTION_RIESGO', nombre: 'Gestión de Riesgo', grupo: 'Reportes', seccion: 'Reportes', ruta: '/dashboard/reportes/gestion-riesgo', tipo: 'REPORTE', orden: 7160 },
+
+  // ── Configuración › Herramientas ────────────────────────────────────────
+  { codigo: 'CONFIG_CARGA_MASIVA', nombre: 'Carga Masiva de Maestros', grupo: 'Configuración', seccion: 'Herramientas', ruta: '/dashboard/configuracion/carga-masiva', tipo: 'PANTALLA', orden: 8050 },
+
+  // ── Configuración › Gestión Comercial ───────────────────────────────────
+  { codigo: 'CONFIG_ENTIDADES', nombre: 'Entidades', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/entidades', tipo: 'PANTALLA', orden: 8110 },
+  { codigo: 'CONFIG_GRUPOS_MERCADO', nombre: 'Grupos de Mercado', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/grupos-mercado', tipo: 'PANTALLA', orden: 8120 },
+  { codigo: 'CONFIG_MERCADOS', nombre: 'Mercados', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/mercados', tipo: 'PANTALLA', orden: 8130 },
+  { codigo: 'CONFIG_TIPOS_EMBARQUE', nombre: 'Tipos de Embarque', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/tipos-embarque', tipo: 'PANTALLA', orden: 8140 },
+  { codigo: 'CONFIG_PUERTOS', nombre: 'Puertos', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/puertos', tipo: 'PANTALLA', orden: 8150 },
+  { codigo: 'CONFIG_FORMAS_PAGO', nombre: 'Formas de Pago', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/formas-pago', tipo: 'PANTALLA', orden: 8160 },
+  { codigo: 'CONFIG_CONDICIONES_PAGO', nombre: 'Condiciones de Pago', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/condiciones-pago', tipo: 'PANTALLA', orden: 8170 },
+  { codigo: 'CONFIG_CLAUSULAS_VENTA', nombre: 'Cláusulas de Venta (Incoterm)', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/clausulas-venta', tipo: 'PANTALLA', orden: 8180 },
+
+  // ── Configuración › Materiales ──────────────────────────────────────────
+  { codigo: 'MATERIALES_ARTICULOS', nombre: 'Artículos', grupo: 'Configuración', seccion: 'Materiales', ruta: '/dashboard/configuracion/articulos', tipo: 'PANTALLA', orden: 8210 },
+  { codigo: 'MATERIALES_RECETAS', nombre: 'Recetas', grupo: 'Configuración', seccion: 'Materiales', ruta: '/dashboard/configuracion/recetas', tipo: 'PANTALLA', orden: 8220 },
+  { codigo: 'CONFIG_CAJAS_POR_PALLET', nombre: 'Cajas por Pallet', grupo: 'Configuración', seccion: 'Materiales', ruta: '/dashboard/configuracion/cajas-por-pallet', tipo: 'PANTALLA', orden: 8230 },
+
+  // ── Configuración › Operaciones ─────────────────────────────────────────
+  { codigo: 'CONFIG_TIPOS_MOVIMIENTO', nombre: 'Tipos de Movimiento', grupo: 'Configuración', seccion: 'Operaciones', ruta: '/dashboard/configuracion/tipos-movimiento', tipo: 'PANTALLA', orden: 8250 },
+
+  // ── Configuración › Gestión Productores ─────────────────────────────────
+  { codigo: 'CONFIG_CONCEPTOS_CTA_CTE', nombre: 'Conceptos Cta. Cte.', grupo: 'Configuración', seccion: 'Gestión Productores', ruta: '/dashboard/configuracion/conceptos-cta-cte', tipo: 'PANTALLA', orden: 8310 },
+
+  // ── Configuración › Calidad ─────────────────────────────────────────────
+  { codigo: 'CONFIG_GRUPOS_DEFECTO', nombre: 'Grupos de Defecto', grupo: 'Configuración', seccion: 'Calidad', ruta: '/dashboard/configuracion/grupos-defecto', tipo: 'PANTALLA', orden: 8410 },
+  { codigo: 'CONFIG_DEFECTOS', nombre: 'Defectos', grupo: 'Configuración', seccion: 'Calidad', ruta: '/dashboard/configuracion/defectos', tipo: 'PANTALLA', orden: 8420 },
+  { codigo: 'CONFIG_NOTAS_CALIDAD', nombre: 'Notas de Calidad', grupo: 'Configuración', seccion: 'Calidad', ruta: '/dashboard/configuracion/notas-calidad', tipo: 'PANTALLA', orden: 8430 },
+  { codigo: 'CONFIG_NOTAS_CONDICION', nombre: 'Notas de Condición', grupo: 'Configuración', seccion: 'Calidad', ruta: '/dashboard/configuracion/notas-condicion', tipo: 'PANTALLA', orden: 8440 },
+  { codigo: 'CONFIG_TIPOS_RECLAMO', nombre: 'Tipos de Reclamo', grupo: 'Configuración', seccion: 'Calidad', ruta: '/dashboard/configuracion/tipos-reclamo', tipo: 'PANTALLA', orden: 8450 },
+
+  // ── Configuración › Geográfico ──────────────────────────────────────────
+  { codigo: 'CONFIG_ZONAS', nombre: 'Zonas', grupo: 'Configuración', seccion: 'Geográfico', ruta: '/dashboard/configuracion/zonas', tipo: 'PANTALLA', orden: 8510 },
+  { codigo: 'CONFIG_PAISES', nombre: 'Países', grupo: 'Configuración', seccion: 'Geográfico', ruta: '/dashboard/configuracion/paises', tipo: 'PANTALLA', orden: 8520 },
+  { codigo: 'CONFIG_REGIONES', nombre: 'Regiones', grupo: 'Configuración', seccion: 'Geográfico', ruta: '/dashboard/configuracion/regiones', tipo: 'PANTALLA', orden: 8530 },
+  { codigo: 'CONFIG_PROVINCIAS', nombre: 'Provincias', grupo: 'Configuración', seccion: 'Geográfico', ruta: '/dashboard/configuracion/provincias', tipo: 'PANTALLA', orden: 8540 },
+  { codigo: 'CONFIG_COMUNAS', nombre: 'Comunas', grupo: 'Configuración', seccion: 'Geográfico', ruta: '/dashboard/configuracion/comunas', tipo: 'PANTALLA', orden: 8550 },
+
+  // ── Configuración › Operación ───────────────────────────────────────────
+  { codigo: 'CONFIG_TIPOS_PALLET', nombre: 'Tipos de Pallet', grupo: 'Configuración', seccion: 'Operación', ruta: '/dashboard/configuracion/tipos-pallet', tipo: 'PANTALLA', orden: 8610 },
+  { codigo: 'CONFIG_ETIQUETAS', nombre: 'Etiquetas', grupo: 'Configuración', seccion: 'Operación', ruta: '/dashboard/configuracion/etiquetas', tipo: 'PANTALLA', orden: 8620 },
+  { codigo: 'CONFIG_ALTURAS', nombre: 'Alturas', grupo: 'Configuración', seccion: 'Operación', ruta: '/dashboard/configuracion/alturas', tipo: 'PANTALLA', orden: 8630 },
+  { codigo: 'CONFIG_TIPOS_PRODUCCION', nombre: 'Tipos de Producción', grupo: 'Configuración', seccion: 'Operación', ruta: '/dashboard/configuracion/tipos-produccion', tipo: 'PANTALLA', orden: 8640 },
+
+  // ── Configuración › Fruta ───────────────────────────────────────────────
+  { codigo: 'CONFIG_ESPECIES', nombre: 'Especies', grupo: 'Configuración', seccion: 'Fruta', ruta: '/dashboard/configuracion/especies', tipo: 'PANTALLA', orden: 8710 },
+  { codigo: 'CONFIG_GRUPOS_VARIEDAD', nombre: 'Grupos de Variedad', grupo: 'Configuración', seccion: 'Fruta', ruta: '/dashboard/configuracion/grupos-variedad', tipo: 'PANTALLA', orden: 8720 },
+  { codigo: 'CONFIG_VARIEDADES', nombre: 'Variedades', grupo: 'Configuración', seccion: 'Fruta', ruta: '/dashboard/configuracion/variedades', tipo: 'PANTALLA', orden: 8730 },
+  { codigo: 'CONFIG_CATEGORIAS', nombre: 'Categorías', grupo: 'Configuración', seccion: 'Fruta', ruta: '/dashboard/configuracion/categorias', tipo: 'PANTALLA', orden: 8740 },
+  { codigo: 'CONFIG_CALIBRES', nombre: 'Calibres', grupo: 'Configuración', seccion: 'Fruta', ruta: '/dashboard/configuracion/calibres', tipo: 'PANTALLA', orden: 8750 },
+
+  // ── Configuración › Sistema ─────────────────────────────────────────────
+  { codigo: 'CONFIG_EMPRESAS', nombre: 'Empresas', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/empresas', tipo: 'PANTALLA', orden: 8810 },
+  { codigo: 'CONFIG_USUARIOS', nombre: 'Usuarios', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/usuarios', tipo: 'PANTALLA', orden: 8820 },
+  { codigo: 'CONFIG_PERFILES', nombre: 'Perfiles', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/perfiles', tipo: 'PANTALLA', orden: 8830 },
+  { codigo: 'CONFIG_BODEGAS', nombre: 'Bodegas', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/bodegas', tipo: 'PANTALLA', orden: 8840 },
+  { codigo: 'CONFIG_UNIDADES_MEDIDA', nombre: 'Unidades de Medida', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/unidades-medida', tipo: 'PANTALLA', orden: 8850 },
+  { codigo: 'CONFIG_TEMPORADAS', nombre: 'Temporadas', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/temporadas', tipo: 'PANTALLA', orden: 8860 },
+  { codigo: 'CONFIG_MONEDAS', nombre: 'Monedas', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/monedas', tipo: 'PANTALLA', orden: 8870 },
+  { codigo: 'CONFIG_TIPOS_PARAMETRO', nombre: 'Tipos de Parámetro', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/tipos-parametro', tipo: 'PANTALLA', orden: 8880 },
+  { codigo: 'CONFIG_PARAMETROS', nombre: 'Parámetros', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/parametros', tipo: 'PANTALLA', orden: 8890 },
+  { codigo: 'CONFIG_PREFIJOS_CODIGO', nombre: 'Prefijos de Código', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/prefijos-codigo', tipo: 'PANTALLA', orden: 8900 },
+  { codigo: 'CONFIG_TEMPLATES_CARGA', nombre: 'Templates de Carga', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/templates-carga', tipo: 'PANTALLA', orden: 8910 },
+  { codigo: 'CONFIG_INTEGRACIONES', nombre: 'Integraciones', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/integraciones', tipo: 'PANTALLA', orden: 8920 },
+  { codigo: 'CONFIG_GENERAL', nombre: 'Configuración General', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/general', tipo: 'PANTALLA', orden: 8930 },
 ]
 
 const SISTEMA_USER = 'system'
@@ -211,15 +232,32 @@ async function main() {
 
   console.log('Seeding ItemMenu...')
 
+  // El catálogo y el backfill de accesos (desglose de CONFIG_MANTENEDORES y
+  // OPER_MATERIALES) se aplican en la migración 20261007120000 (idempotente, se
+  // ejecuta en `migrate deploy`). Acá solo se re-afirma el catálogo por upsert
+  // para BD de desarrollo fresca; la migración siempre corre antes del seed.
   for (const item of itemsMenu) {
+    const esAccion = item.tipo === 'ACCION'
+    const data = {
+      codigo: item.codigo,
+      nombre: item.nombre,
+      grupo: item.grupo,
+      seccion: item.seccion,
+      ruta: item.ruta,
+      esAccion,
+      tipo: item.tipo,
+      orden: item.orden,
+    }
     await prisma.itemMenu.upsert({
       where: { codigo: item.codigo },
-      create: item,
+      create: data,
       update: {
         nombre: item.nombre,
+        grupo: item.grupo,
         seccion: item.seccion,
         ruta: item.ruta,
-        esAccion: item.esAccion,
+        esAccion,
+        tipo: item.tipo,
         orden: item.orden,
       },
     })

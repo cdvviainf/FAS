@@ -145,7 +145,7 @@ function PaisQuickDialog({
 
 export function PaisQuickCreate({ onCreated }: PaisQuickCreateProps) {
   const [open, setOpen] = useState(false);
-  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES');
+  const puedeEscribir = usePuedeEscribir('CONFIG_PAISES');
 
   if (!puedeEscribir) return null;
 

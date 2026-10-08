@@ -59,19 +59,20 @@ export const navGroups: NavGroup[] = [
           { title: 'Cierre Comercial',   url: '/dashboard/ventas/cierre',     icon: 'forms'   },
           { title: 'Embarques',         url: '/dashboard/ventas/embarques',  icon: 'post'    }
         ]
+      },
+      // Facturación y Cobranza pasa a ser submódulo de Gestión Comercial
+      // (2026-10-07), ya no un grupo propio.
+      {
+        title: 'Facturación y Cobranza',
+        url: '#',
+        icon: 'billing',
+        isActive: false,
+        items: [
+          { title: 'Facturación Exportación', url: '/dashboard/facturacion/exportacion', icon: 'post'    },
+          { title: 'Facturación Nacional',    url: '/dashboard/facturacion/nacional',    icon: 'post',    disabled: true },
+          { title: 'Cobranza / CRM',          url: '/dashboard/facturacion/cobranza',    icon: 'billing', disabled: true }
+        ]
       }
-    ]
-  },
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // FACTURACIÓN Y COBRANZA
-  // ═══════════════════════════════════════════════════════════════════════════
-  {
-    label: 'Facturación y Cobranza',
-    items: [
-      { title: 'Facturación Exportación', url: '/dashboard/facturacion/exportacion', icon: 'post',    isActive: false, items: [], disabled: false },
-      { title: 'Facturación Nacional',     url: '/dashboard/facturacion/nacional',    icon: 'post',    isActive: false, items: [], disabled: true },
-      { title: 'Cobranza / CRM',           url: '/dashboard/facturacion/cobranza',    icon: 'billing', isActive: false, items: [], disabled: true }
     ]
   },
 

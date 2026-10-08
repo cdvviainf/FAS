@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { requireAuth, requireLevel } from '../../../plugins/auth-guard.js'
 import * as ctrl from './articulos.controller.js'
 
-const ITEM = 'OPER_MATERIALES'
+const ITEM = 'MATERIALES_ARTICULOS'
 
 export async function articulosRoutes(app: FastifyInstance) {
   app.get('/articulos', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)

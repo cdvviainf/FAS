@@ -6,7 +6,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -18,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Icons } from '@/components/icons'
+import { Switch } from '@/components/ui/switch'
 import { useAppForm, useFormFields } from '@/components/ui/tanstack-form'
 import { itemsMenuOptions, perfilDetailOptions, perfilesKeys } from '../queries'
 import { perfilesService } from '../service'
@@ -31,11 +31,18 @@ const perfilSchema = z.object({
 
 type PerfilFormValues = z.infer<typeof perfilSchema>
 
+// Orden del select de niveles para pantallas (Total → Lectura → Sin Acceso).
 const NIVEL_OPTIONS: { value: NivelAcceso; label: string }[] = [
-  { value: 'SIN_ACCESO', label: 'Sin Acceso' },
-  { value: 'LECTURA', label: 'Lectura' },
   { value: 'TOTAL', label: 'Total' },
+  { value: 'LECTURA', label: 'Lectura' },
+  { value: 'SIN_ACCESO', label: 'Sin Acceso' },
 ]
+
+// Nivel que concede un toggle "Sí" según el tipo de ítem: una acción exige
+// TOTAL; un reporte es de solo consulta (LECTURA). "No" = SIN_ACCESO.
+function nivelBinarioActivo(tipo: ItemMenu['tipo']): NivelAcceso {
+  return tipo === 'REPORTE' ? 'LECTURA' : 'TOTAL'
+}
 
 interface PerfilFormProps {
   perfilId?: number
@@ -105,13 +112,16 @@ export function PerfilForm({ perfilId }: PerfilFormProps) {
     return accesosMap.get(itemMenuId) ?? 'SIN_ACCESO'
   }
 
-  // Group items by section
-  const itemsBySection = useMemo(() => {
-    if (!itemsMenu) return new Map<string, ItemMenu[]>()
-    const map = new Map<string, ItemMenu[]>()
+  // Agrupa por grupo → sección preservando el orden del backend (ordenado por
+  // `orden` global): la matriz refleja la jerarquía del menú.
+  const itemsByGrupo = useMemo(() => {
+    const map = new Map<string, Map<string, ItemMenu[]>>()
+    if (!itemsMenu) return map
     for (const item of itemsMenu) {
-      if (!map.has(item.seccion)) map.set(item.seccion, [])
-      map.get(item.seccion)!.push(item)
+      if (!map.has(item.grupo)) map.set(item.grupo, new Map())
+      const secciones = map.get(item.grupo)!
+      if (!secciones.has(item.seccion)) secciones.set(item.seccion, [])
+      secciones.get(item.seccion)!.push(item)
     }
     return map
   }, [itemsMenu])
@@ -143,6 +153,7 @@ export function PerfilForm({ perfilId }: PerfilFormProps) {
       for (const acceso of perfilData.accesos) {
         map.set(acceso.itemMenuId, acceso.nivel)
       }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAccesosMap(map)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,61 +220,84 @@ export function PerfilForm({ perfilId }: PerfilFormProps) {
           <CardTitle className='text-base'>Matriz de Permisos</CardTitle>
         </CardHeader>
         <CardContent>
-          {itemsBySection.size === 0 ? (
+          {itemsByGrupo.size === 0 ? (
             <p className='text-sm text-muted-foreground py-4 text-center'>
               No hay ítems de menú configurados.
             </p>
           ) : (
-            <div className='space-y-4'>
-              {Array.from(itemsBySection.entries()).map(([seccion, items], sectionIndex) => (
-                <div key={seccion}>
-                  <h4 className='text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2'>
-                    {seccion}
-                  </h4>
-                  <div className='rounded-md border overflow-hidden'>
-                    <table className='w-full text-sm'>
-                      <thead className='bg-muted/50'>
-                        <tr>
-                          <th className='text-left py-2 px-3 font-medium text-xs text-muted-foreground'>Ítem</th>
-                          <th className='text-left py-2 px-3 font-medium text-xs text-muted-foreground w-40'>Acceso</th>
-                        </tr>
-                      </thead>
-                      <tbody className='divide-y'>
-                        {items.map((item) => (
-                          <tr key={item.id} className='hover:bg-muted/30 transition-colors'>
-                            <td className='py-2 px-3'>
-                              <div className='flex items-center gap-2'>
-                                <span>{item.nombre}</span>
-                                {item.esAccion && (
-                                  <Badge variant='secondary' className='text-xs py-0 px-1.5'>
-                                    Acción
-                                  </Badge>
-                                )}
-                              </div>
-                            </td>
-                            <td className='py-2 px-3'>
-                              <Select
-                                value={getNivel(item.id)}
-                                onValueChange={(v) => setNivel(item.id, v as NivelAcceso)}
-                              >
-                                <SelectTrigger className='h-7 text-xs w-36'>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {NIVEL_OPTIONS.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value} className='text-xs'>
-                                      {opt.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {sectionIndex < itemsBySection.size - 1 && <Separator className='mt-4' />}
+            <div className='space-y-6'>
+              {Array.from(itemsByGrupo.entries()).map(([grupo, secciones], grupoIndex) => (
+                <div key={grupo} className='space-y-3'>
+                  <h3 className='text-sm font-bold tracking-wide'>{grupo}</h3>
+                  {Array.from(secciones.entries()).map(([seccion, items]) => (
+                    <div key={seccion}>
+                      {seccion !== grupo && (
+                        <h4 className='text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2'>
+                          {seccion}
+                        </h4>
+                      )}
+                      <div className='rounded-md border overflow-hidden'>
+                        <table className='w-full text-sm'>
+                          <thead className='bg-muted/50'>
+                            <tr>
+                              <th className='text-left py-2 px-3 font-medium text-xs text-muted-foreground'>Ítem</th>
+                              <th className='text-left py-2 px-3 font-medium text-xs text-muted-foreground w-40'>Acceso</th>
+                            </tr>
+                          </thead>
+                          <tbody className='divide-y'>
+                            {items.map((item) => {
+                              const binario = item.tipo !== 'PANTALLA'
+                              const nivel = getNivel(item.id)
+                              return (
+                                <tr key={item.id} className='hover:bg-muted/30 transition-colors'>
+                                  <td className='py-2 px-3'>
+                                    <div className='flex items-center gap-2'>
+                                      <span>{item.nombre}</span>
+                                      {item.tipo === 'ACCION' && (
+                                        <Badge variant='secondary' className='text-xs py-0 px-1.5'>Acción</Badge>
+                                      )}
+                                      {item.tipo === 'REPORTE' && (
+                                        <Badge variant='outline' className='text-xs py-0 px-1.5'>Reporte</Badge>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className='py-2 px-3'>
+                                    {binario ? (
+                                      <div className='flex items-center gap-2'>
+                                        <Switch
+                                          checked={nivel !== 'SIN_ACCESO'}
+                                          onCheckedChange={(on) =>
+                                            setNivel(item.id, on ? nivelBinarioActivo(item.tipo) : 'SIN_ACCESO')
+                                          }
+                                        />
+                                        <span className='text-xs text-muted-foreground'>
+                                          {nivel !== 'SIN_ACCESO' ? 'Sí' : 'No'}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <Select value={nivel} onValueChange={(v) => setNivel(item.id, v as NivelAcceso)}>
+                                        <SelectTrigger className='h-7 text-xs w-36'>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {NIVEL_OPTIONS.map((opt) => (
+                                            <SelectItem key={opt.value} value={opt.value} className='text-xs'>
+                                              {opt.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    )}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                  {grupoIndex < itemsByGrupo.size - 1 && <Separator className='mt-4' />}
                 </div>
               ))}
             </div>

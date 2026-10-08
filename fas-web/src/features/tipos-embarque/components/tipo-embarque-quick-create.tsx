@@ -96,7 +96,7 @@ function TipoEmbarqueQuickDialog({
 
 export function TipoEmbarqueQuickCreate({ onCreated }: TipoEmbarqueQuickCreateProps) {
   const [open, setOpen] = useState(false)
-  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
+  const puedeEscribir = usePuedeEscribir('CONFIG_TIPOS_EMBARQUE')
 
   if (!puedeEscribir) return null
 

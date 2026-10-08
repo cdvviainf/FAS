@@ -12,7 +12,7 @@ import { notasCalidadService } from '../service'
 import type { NotaCalidad } from '../types'
 import { NotaCalidadFormSheet } from './nota-calidad-form-sheet'
 
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_NOTAS_CALIDAD'
 
 export function NotaCalidadListingClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)

@@ -32,7 +32,7 @@ import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 const defectosService = createMantenedorService('defectos')
 const gruposDefectoService = createMantenedorService('grupos-defecto')
 const especiesService = createMantenedorService('especies')
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_DEFECTOS'
 
 export interface DefectoItem extends MantenedorSimple {
   grupoDefectoId?: number

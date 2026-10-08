@@ -30,7 +30,7 @@ import { condicionesPagoService } from '../service'
 import { FECHA_REFERENCIA_LABELS, TIPO_CONDICION_PAGO_LABELS } from '../types'
 import type { CondicionPago, CondicionPagoCuotaInput, FechaReferenciaPago, TipoValorCuota, TipoCondicionPago } from '../types'
 
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_CONDICIONES_PAGO'
 const monedasService = createMantenedorService('monedas')
 const unidadesService = createMantenedorService('unidades-medida')
 

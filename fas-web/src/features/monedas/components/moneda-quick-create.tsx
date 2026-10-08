@@ -13,7 +13,7 @@ interface MonedaQuickCreateProps {
 
 export function MonedaQuickCreate({ onCreated }: MonedaQuickCreateProps) {
   const [open, setOpen] = useState(false)
-  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
+  const puedeEscribir = usePuedeEscribir('CONFIG_MONEDAS')
 
   if (!puedeEscribir) return null
 

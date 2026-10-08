@@ -1,12 +1,18 @@
 export type NivelAcceso = 'SIN_ACCESO' | 'LECTURA' | 'TOTAL'
 
+// PANTALLA = 3 niveles (Total/Lectura/Sin Acceso); ACCION = Sí/No → TOTAL;
+// REPORTE = Sí/No → LECTURA.
+export type ItemMenuTipo = 'PANTALLA' | 'ACCION' | 'REPORTE'
+
 export interface ItemMenu {
   id: number
   codigo: string
   nombre: string
+  grupo: string
   seccion: string
   ruta: string | null
   esAccion: boolean
+  tipo: ItemMenuTipo
   orden: number
   activo: boolean
 }

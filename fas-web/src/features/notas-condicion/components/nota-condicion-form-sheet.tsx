@@ -23,7 +23,7 @@ import { notasCondicionService } from '../service'
 import type { NotaCondicion } from '../types'
 
 const especiesService = createMantenedorService('especies')
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_NOTAS_CONDICION'
 
 interface NotaCondicionFormSheetProps {
   item?: NotaCondicion

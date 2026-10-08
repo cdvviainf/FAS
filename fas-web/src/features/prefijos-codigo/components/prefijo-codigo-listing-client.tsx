@@ -12,7 +12,7 @@ import { MODELOS_CON_CODIGO_OPTIONS, MODELO_EMBARQUE_OPTION } from '../types'
 import type { PrefijoCodigo } from '../types'
 import { PrefijoCodigoFormSheet } from './prefijo-codigo-form-sheet'
 
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_PREFIJOS_CODIGO'
 const TODAS_LAS_OPCIONES = [...MODELOS_CON_CODIGO_OPTIONS, MODELO_EMBARQUE_OPTION]
 
 function labelDeModelo(modelo: string): string {

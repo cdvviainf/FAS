@@ -153,7 +153,7 @@ function ProvinciaQuickDialog({
 
 export function ProvinciaQuickCreate({ onCreated }: ProvinciaQuickCreateProps) {
   const [open, setOpen] = useState(false)
-  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
+  const puedeEscribir = usePuedeEscribir('CONFIG_PROVINCIAS')
 
   if (!puedeEscribir) return null
 

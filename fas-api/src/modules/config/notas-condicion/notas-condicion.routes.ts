@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { requireAuth, requireLevel } from '../../../plugins/auth-guard.js'
 import * as ctrl from './notas-condicion.controller.js'
 
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_NOTAS_CONDICION'
 
 export async function notasCondicionRoutes(app: FastifyInstance) {
   app.get('/notas-condicion', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)

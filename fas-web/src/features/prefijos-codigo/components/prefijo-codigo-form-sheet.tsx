@@ -28,7 +28,7 @@ import { prefijosCodigoService } from '../service'
 import { MODELOS_CON_CODIGO_OPTIONS, MODELO_EMBARQUE_OPTION } from '../types'
 import type { PrefijoCodigo } from '../types'
 
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_PREFIJOS_CODIGO'
 const tiposEmbarqueService = createMantenedorService('tipos-embarque')
 // Ordenadas alfabéticamente por etiqueta para el selector de Mantenedor.
 const TODAS_LAS_OPCIONES = [...MODELOS_CON_CODIGO_OPTIONS, MODELO_EMBARQUE_OPTION].sort((a, b) =>

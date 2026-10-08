@@ -13,7 +13,7 @@ import { articulosService } from '../service'
 import { TIPO_ARTICULO_LABELS } from '../types'
 import { recetasService } from '../../recetas/service'
 
-const ITEM = 'OPER_MATERIALES'
+const ITEM = 'MATERIALES_ARTICULOS'
 
 function formatoBytes(b: number): string {
   if (b < 1024) return `${b} B`

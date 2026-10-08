@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { requireAuth, requireLevel } from '../../../plugins/auth-guard.js'
 import * as ctrl from './condiciones-pago.controller.js'
 
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_CONDICIONES_PAGO'
 
 export async function condicionesPagoRoutes(app: FastifyInstance) {
   app.get('/condiciones-pago', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)

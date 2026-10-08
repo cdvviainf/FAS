@@ -197,7 +197,8 @@ describe('contrato HTTP de la API', () => {
   })
 
   it('ejecuta CRUD autenticado y registra auditoría del usuario', async () => {
-    const { cookie, userId } = await crearSesion('TOTAL')
+    // Cada mantenedor tiene su propio permiso (2026-10-07): Regiones → CONFIG_REGIONES.
+    const { cookie, userId } = await crearSesion('TOTAL', 'CONFIG_REGIONES')
     const created = await app.inject({
       method: 'POST',
       url: '/api/config/regiones',
@@ -228,7 +229,7 @@ describe('contrato HTTP de la API', () => {
   })
 
   it('aplica Zod y responde 422 ante datos inválidos', async () => {
-    const { cookie } = await crearSesion('TOTAL')
+    const { cookie } = await crearSesion('TOTAL', 'CONFIG_PAISES')
     const response = await app.inject({
       method: 'POST',
       url: '/api/config/paises',
@@ -241,7 +242,7 @@ describe('contrato HTTP de la API', () => {
   })
 
   it('permite lectura pero rechaza escrituras a un perfil LECTURA', async () => {
-    const { cookie } = await crearSesion('LECTURA')
+    const { cookie } = await crearSesion('LECTURA', 'CONFIG_REGIONES')
     const listed = await app.inject({
       method: 'GET',
       url: '/api/config/regiones',
@@ -256,6 +257,28 @@ describe('contrato HTTP de la API', () => {
 
     expect(listed.statusCode).toBe(200)
     expect(created.statusCode).toBe(403)
+  })
+
+  it('aísla permisos por mantenedor: acceso a Regiones no concede Países', async () => {
+    // Permiso por mantenedor (2026-10-07): un perfil con TOTAL en CONFIG_REGIONES
+    // puede escribir en /regiones pero NO en /paises (requiere CONFIG_PAISES).
+    const { cookie } = await crearSesion('TOTAL', 'CONFIG_REGIONES')
+
+    const enRegiones = await app.inject({
+      method: 'POST',
+      url: '/api/config/regiones',
+      headers: { cookie },
+      payload: { codigo: 'RM', descripcion: 'Metropolitana' },
+    })
+    expect(enRegiones.statusCode).toBe(201)
+
+    const enPaises = await app.inject({
+      method: 'POST',
+      url: '/api/config/paises',
+      headers: { cookie },
+      payload: { codigo: 'CL', descripcion: 'Chile' },
+    })
+    expect(enPaises.statusCode).toBe(403)
   })
 
   it('cambia la contraseña propia validando complejidad y contraseña actual', async () => {

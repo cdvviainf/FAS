@@ -99,7 +99,7 @@ function GrupoVariedadQuickDialog({
 
 export function GrupoVariedadQuickCreate({ especieId, onCreated }: GrupoVariedadQuickCreateProps) {
   const [open, setOpen] = useState(false)
-  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
+  const puedeEscribir = usePuedeEscribir('CONFIG_GRUPOS_VARIEDAD')
 
   if (!puedeEscribir) return null
 

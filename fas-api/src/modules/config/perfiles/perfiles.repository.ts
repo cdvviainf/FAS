@@ -34,7 +34,7 @@ export async function findPerfilById(id: number) {
       accesos: {
         include: {
           itemMenu: {
-            select: { id: true, codigo: true, nombre: true, seccion: true, ruta: true, esAccion: true, orden: true },
+            select: { id: true, codigo: true, nombre: true, grupo: true, seccion: true, ruta: true, esAccion: true, tipo: true, orden: true },
           },
         },
       },
@@ -84,7 +84,7 @@ export async function createPerfil(
     return tx.perfil.findFirst({
       where: { id: perfil.id },
       include: {
-        accesos: { include: { itemMenu: { select: { id: true, codigo: true, nombre: true, seccion: true, ruta: true, esAccion: true, orden: true } } } },
+        accesos: { include: { itemMenu: { select: { id: true, codigo: true, nombre: true, grupo: true, seccion: true, ruta: true, esAccion: true, tipo: true, orden: true } } } },
       },
     })
   })
@@ -122,7 +122,7 @@ export async function updatePerfil(
     return tx.perfil.findFirst({
       where: { id },
       include: {
-        accesos: { include: { itemMenu: { select: { id: true, codigo: true, nombre: true, seccion: true, ruta: true, esAccion: true, orden: true } } } },
+        accesos: { include: { itemMenu: { select: { id: true, codigo: true, nombre: true, grupo: true, seccion: true, ruta: true, esAccion: true, tipo: true, orden: true } } } },
       },
     })
   })
@@ -136,9 +136,12 @@ export async function softDeletePerfil(id: number, deletedBy: string) {
 }
 
 export async function findAllItemsMenu() {
+  // Orden por `orden` global (bloques grupo×1000 + sección×100 + ítem): respeta
+  // la jerarquía del menú (grupo → sección) en vez del orden alfabético de la
+  // sección. El frontend agrupa preservando este orden.
   return prisma.itemMenu.findMany({
     where: { activo: true },
-    orderBy: [{ seccion: 'asc' }, { orden: 'asc' }],
+    orderBy: [{ orden: 'asc' }],
   })
 }
 
@@ -147,7 +150,7 @@ export async function findAccesosByPerfilAndNivel(perfilId: number, nivelMinimo:
   return prisma.perfilAcceso.findMany({
     where: { perfilId, nivel: { in: niveles } },
     include: {
-      itemMenu: { select: { id: true, codigo: true, nombre: true, seccion: true, ruta: true, esAccion: true, orden: true } },
+      itemMenu: { select: { id: true, codigo: true, nombre: true, grupo: true, seccion: true, ruta: true, esAccion: true, tipo: true, orden: true } },
     },
   })
 }

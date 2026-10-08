@@ -82,6 +82,54 @@ export const RECURSO_A_MODELO: Record<string, string> = {
   bodegas: 'bodega',
 }
 
+// Permiso (ItemMenu) por mantenedor (2026-10-07): un permiso propio por cada
+// catálogo, en vez del genérico CONFIG_MANTENEDORES. Debe reflejar `itemCodigo`
+// de MANTENEDORES en fas-api/config.routes.ts. Usado por los componentes
+// genéricos de mantenedor-simple para ocultar acciones de escritura según nivel.
+export const RECURSO_A_ITEM_MENU: Record<string, string> = {
+  paises: 'CONFIG_PAISES',
+  zonas: 'CONFIG_ZONAS',
+  'grupos-mercado': 'CONFIG_GRUPOS_MERCADO',
+  'tipos-embarque': 'CONFIG_TIPOS_EMBARQUE',
+  'formas-pago': 'CONFIG_FORMAS_PAGO',
+  'unidades-medida': 'CONFIG_UNIDADES_MEDIDA',
+  'tipos-pallet': 'CONFIG_TIPOS_PALLET',
+  etiquetas: 'CONFIG_ETIQUETAS',
+  alturas: 'CONFIG_ALTURAS',
+  'tipos-produccion': 'CONFIG_TIPOS_PRODUCCION',
+  'tipos-parametro': 'CONFIG_TIPOS_PARAMETRO',
+  'grupos-defecto': 'CONFIG_GRUPOS_DEFECTO',
+  regiones: 'CONFIG_REGIONES',
+  especies: 'CONFIG_ESPECIES',
+  provincias: 'CONFIG_PROVINCIAS',
+  comunas: 'CONFIG_COMUNAS',
+  'grupos-variedad': 'CONFIG_GRUPOS_VARIEDAD',
+  variedades: 'CONFIG_VARIEDADES',
+  defectos: 'CONFIG_DEFECTOS',
+  categorias: 'CONFIG_CATEGORIAS',
+  calibres: 'CONFIG_CALIBRES',
+  parametros: 'CONFIG_PARAMETROS',
+  'clausulas-venta': 'CONFIG_CLAUSULAS_VENTA',
+  'tipos-reclamo': 'CONFIG_TIPOS_RECLAMO',
+  mercados: 'CONFIG_MERCADOS',
+  puertos: 'CONFIG_PUERTOS',
+  monedas: 'CONFIG_MONEDAS',
+  'conceptos-cta-cte': 'CONFIG_CONCEPTOS_CTA_CTE',
+  temporadas: 'CONFIG_TEMPORADAS',
+  bodegas: 'CONFIG_BODEGAS',
+  'condiciones-pago': 'CONFIG_CONDICIONES_PAGO',
+  'notas-calidad': 'CONFIG_NOTAS_CALIDAD',
+  'notas-condicion': 'CONFIG_NOTAS_CONDICION',
+  'templates-carga': 'CONFIG_TEMPLATES_CARGA',
+  'prefijos-codigo': 'CONFIG_PREFIJOS_CODIGO',
+}
+
+// Código de ItemMenu de un recurso de mantenedor. Fallback '' → nivel
+// SIN_ACCESO (oculta la acción) si el recurso no está mapeado.
+export function itemMenuDeRecurso(recurso: string): string {
+  return RECURSO_A_ITEM_MENU[recurso] ?? ''
+}
+
 export interface PrefijoCodigo {
   id: number
   modelo: string

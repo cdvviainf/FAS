@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { itemMenuDeRecurso } from '@/features/prefijos-codigo/types'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 import { MantenedorFormSheet } from './mantenedor-form-sheet'
 
@@ -19,7 +20,7 @@ interface MantenedorQuickCreateProps {
  * mantenedores sin feature module propio (ej. Forma de Pago). */
 export function MantenedorQuickCreate({ recurso, titulo, onCreated }: MantenedorQuickCreateProps) {
   const [open, setOpen] = useState(false)
-  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
+  const puedeEscribir = usePuedeEscribir(itemMenuDeRecurso(recurso))
 
   if (!puedeEscribir) return null
 

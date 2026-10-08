@@ -29,7 +29,7 @@ import { templatesCargaService } from '../service'
 import { TIPOS_TEMPLATE_CARGA, TIPO_TEMPLATE_CARGA_LABELS, CAMPOS_POR_TIPO, CAMPOS_OPCIONALES_POR_TIPO, CAMPO_TEMPLATE_CARGA_LABELS } from '../types'
 import type { TemplateCarga, TipoTemplateCarga } from '../types'
 
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_TEMPLATES_CARGA'
 
 interface TemplateCargaFormSheetProps {
   item?: TemplateCarga

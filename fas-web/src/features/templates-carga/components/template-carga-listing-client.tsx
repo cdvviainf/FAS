@@ -14,7 +14,7 @@ import { TIPOS_TEMPLATE_CARGA, TIPO_TEMPLATE_CARGA_LABELS, CAMPO_TEMPLATE_CARGA_
 import type { TemplateCarga, TipoTemplateCarga } from '../types'
 import { TemplateCargaFormSheet } from './template-carga-form-sheet'
 
-const ITEM = 'CONFIG_MANTENEDORES'
+const ITEM = 'CONFIG_TEMPLATES_CARGA'
 const FILTRO_TODOS = 'TODOS'
 
 export function TemplateCargaListingClient() {

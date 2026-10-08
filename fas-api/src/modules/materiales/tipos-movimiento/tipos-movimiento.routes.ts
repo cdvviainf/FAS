@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { requireAuth, requireLevel } from '../../../plugins/auth-guard.js'
 import * as ctrl from './tipos-movimiento.controller.js'
 
-const ITEM = 'OPER_MATERIALES'
+const ITEM = 'CONFIG_TIPOS_MOVIMIENTO'
 
 export async function tiposMovimientoRoutes(app: FastifyInstance) {
   app.get('/tipos-movimiento', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)

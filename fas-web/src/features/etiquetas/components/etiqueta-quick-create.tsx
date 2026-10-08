@@ -94,7 +94,7 @@ function EtiquetaQuickDialog({
 
 export function EtiquetaQuickCreate({ onCreated }: EtiquetaQuickCreateProps) {
   const [open, setOpen] = useState(false)
-  const puedeEscribir = usePuedeEscribir('CONFIG_MANTENEDORES')
+  const puedeEscribir = usePuedeEscribir('CONFIG_ETIQUETAS')
 
   if (!puedeEscribir) return null
 
