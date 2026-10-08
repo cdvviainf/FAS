@@ -636,6 +636,11 @@ model TipoEmbarque {
   descripcionExtranjera String?
   // Código de la tabla de Aduana del SII (vía de transporte) para el DTE 110.
   codigoAduana          String?
+  // Si este tipo de embarque genera Solicitud de Reserva (booking logístico,
+  // p.ej. AGL360). Solo aplica a Aéreo y Marítimo; Terrestre no reserva espacio
+  // (2026-10-08). Al generar un Embarque de un tipo con requiereReserva=false no
+  // se intenta la reserva y la pestaña "Solicitar Reserva" queda deshabilitada.
+  requiereReserva       Boolean   @default(false)
   bloqueado             Boolean   @default(false)
   creadoEn              DateTime  @default(now())
   creadoPor             String

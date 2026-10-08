@@ -188,6 +188,20 @@ export const tipoReclamoUpdateSchema = tipoReclamoBodySchema
   .omit({ codigo: true })
   .partial()
 
+// ─── Tipo de Embarque (2026-10-08) ────────────────────────────────────────────
+// Hereda codigoAduana del schema base (vía de transporte del DTE 110).
+
+export const tipoEmbarqueBodySchema = mantenedorBaseSchema.extend({
+  // Si este tipo de embarque genera Solicitud de Reserva (solo Aéreo/Marítimo;
+  // Terrestre = false). z.boolean().default(false) — nunca z.coerce.boolean()
+  // (convertiría "false" string a true, bug sistémico ya documentado).
+  requiereReserva: z.boolean().default(false),
+})
+
+export const tipoEmbarqueUpdateSchema = tipoEmbarqueBodySchema
+  .omit({ codigo: true })
+  .partial()
+
 // ─── Mercado ────────────────────────────────────────────────────────────────
 
 export const mercadoBodySchema = mantenedorBaseSchema.extend({

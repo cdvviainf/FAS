@@ -51,7 +51,7 @@ async function crearFixturesBase() {
   const cliente = await prisma.entidad.create({
     data: { empresaId: empresa.id, codigo: 'CLI-01', descripcion: 'Cliente Uno', razonSocial: 'Cliente Uno SpA', paisId: pais.id, tipos: ['CLIENTE_NACIONAL'], creadoPor: 'test' },
   })
-  const tipoEmbarque = await prisma.tipoEmbarque.create({ data: { empresaId: empresa.id, codigo: 'MARIT', descripcion: 'Marítimo', creadoPor: 'test' } })
+  const tipoEmbarque = await prisma.tipoEmbarque.create({ data: { empresaId: empresa.id, codigo: 'MARIT', descripcion: 'Marítimo', requiereReserva: true, creadoPor: 'test' } })
   const moneda = await prisma.moneda.create({ data: { codigo: 'USD', descripcion: 'Dólar', creadoPor: 'test' } })
   await prisma.prefijoCodigo.create({
     data: { empresaId: empresa.id, modelo: 'embarque', tipoEmbarqueId: tipoEmbarque.id, prefijo: 'EMB-', digitos: 4, creadoPor: 'test' },

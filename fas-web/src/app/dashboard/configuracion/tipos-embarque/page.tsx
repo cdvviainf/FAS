@@ -1,8 +1,8 @@
 import PageContainer from '@/components/layout/page-container'
 import { searchParamsCache } from '@/lib/searchparams'
 import { SearchParams } from 'nuqs/server'
-import MantenedorListing from '@/components/shared/mantenedor-simple/mantenedor-listing'
-import { MantenedorFormSheetTrigger } from '@/components/shared/mantenedor-simple/mantenedor-form-sheet'
+import { TipoEmbarqueFormSheetTrigger } from '@/features/tipos-embarque/components/tipo-embarque-form-sheet'
+import { TipoEmbarqueListingClient } from '@/features/tipos-embarque/components/tipo-embarque-listing-client'
 
 export const metadata = {
   title: 'FAS — Tipo de Embarque'
@@ -19,10 +19,10 @@ export default async function Page(props: PageProps) {
   return (
     <PageContainer
       pageTitle='Tipo de Embarque'
-      pageDescription='Tipos de embarque disponibles para exportación'
-      pageHeaderAction={<MantenedorFormSheetTrigger recurso='tipos-embarque' titulo='Tipo de Embarque' mostrarCodigoAduana />}
+      pageDescription='Tipos de embarque disponibles para exportación. El flag "Requiere Reserva" decide si al generar un Embarque se envía la Solicitud de Reserva (solo Aéreo/Marítimo).'
+      pageHeaderAction={<TipoEmbarqueFormSheetTrigger />}
     >
-      <MantenedorListing recurso='tipos-embarque' titulo='Tipo de Embarque' mostrarCodigoAduana />
+      <TipoEmbarqueListingClient />
     </PageContainer>
   )
 }

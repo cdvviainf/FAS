@@ -5,6 +5,8 @@ export interface MantenedorSimple {
   descripcionExtranjera?: string | null
   // Código de la tabla de Aduana del SII (DTE 110) — solo algunos mantenedores.
   codigoAduana?: string | null
+  // TipoEmbarque (2026-10-08): si genera Solicitud de Reserva (Aéreo/Marítimo).
+  requiereReserva?: boolean
   bloqueado?: boolean
   creadoEn: string
   creadoPor: string
@@ -42,6 +44,8 @@ export interface MantenedorSimpleCreateInput {
   descripcionExtranjera?: string
   codigoAduana?: string | null
   bloqueado?: boolean
+  // TipoEmbarque (2026-10-08): si genera Solicitud de Reserva (Aéreo/Marítimo).
+  requiereReserva?: boolean
   // FK fields (optional, used when creating FK models)
   regionId?: number
   provinciaId?: number

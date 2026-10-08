@@ -559,6 +559,12 @@ async function main() {
       data: { codigoAduana },
     })
   }
+  // Requiere Solicitud de Reserva (2026-10-08): solo Aéreo y Marítimo reservan
+  // espacio logístico; Terrestre no (queda en el default false).
+  await prisma.tipoEmbarque.updateMany({
+    where: { empresaId: agrosanParaParametros.id, codigo: { in: ['MARITIMO', 'AEREO'] }, eliminadoEn: null },
+    data: { requiereReserva: true },
+  })
   // Modalidad de Venta "A firme" (Parametro bajo MODALIDAD_VENTA) → código SII 1.
   await prisma.parametro.updateMany({
     where: {

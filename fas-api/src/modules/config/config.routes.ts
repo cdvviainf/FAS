@@ -24,7 +24,7 @@ const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'pais', prefixRuta: 'paises', label: 'País', itemCodigo: 'CONFIG_PAISES', tienePaisOrigen: true, schemaKey: 'pais' },
   { modelo: 'zona', prefixRuta: 'zonas', label: 'Zona', itemCodigo: 'CONFIG_ZONAS' },
   { modelo: 'grupoMercado', prefixRuta: 'grupos-mercado', label: 'Grupo de Mercado', itemCodigo: 'CONFIG_GRUPOS_MERCADO' },
-  { modelo: 'tipoEmbarque', prefixRuta: 'tipos-embarque', label: 'Tipo de Embarque', itemCodigo: 'CONFIG_TIPOS_EMBARQUE' },
+  { modelo: 'tipoEmbarque', prefixRuta: 'tipos-embarque', label: 'Tipo de Embarque', itemCodigo: 'CONFIG_TIPOS_EMBARQUE', schemaKey: 'tipoEmbarque' },
   { modelo: 'formaPago', prefixRuta: 'formas-pago', label: 'Forma de Pago', itemCodigo: 'CONFIG_FORMAS_PAGO' },
   { modelo: 'unidadMedida', prefixRuta: 'unidades-medida', label: 'Unidad de Medida', itemCodigo: 'CONFIG_UNIDADES_MEDIDA' },
   { modelo: 'tipoPallet', prefixRuta: 'tipos-pallet', label: 'Tipo de Pallet', itemCodigo: 'CONFIG_TIPOS_PALLET' },

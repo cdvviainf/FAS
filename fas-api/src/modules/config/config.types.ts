@@ -98,6 +98,8 @@ export interface MantenedorCreateInput {
   requiereSeguro?: boolean
   // TipoReclamo
   generaAnalisisCalidad?: boolean
+  // TipoEmbarque (2026-10-08): si genera Solicitud de Reserva (Aéreo/Marítimo)
+  requiereReserva?: boolean
   // Código de Aduana del SII (ClausulaVenta, TipoEmbarque, Puerto, Pais, Modalidad).
   codigoAduana?: string | null
   // Moneda

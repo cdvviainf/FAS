@@ -562,7 +562,14 @@ export async function findByNumeroInstructivo(numeroInstructivo: string) {
 export async function getNotaVenta(id: number) {
   return prisma.notaVenta.findFirst({
     where: { id, eliminadoEn: null },
-    select: { id: true, folio: true, tipoEmbarqueId: true },
+    select: {
+      id: true,
+      folio: true,
+      tipoEmbarqueId: true,
+      // requiereReserva gatea el intento de Solicitud de Reserva (solo
+      // Aéreo/Marítimo; Terrestre no reserva — 2026-10-08).
+      tipoEmbarque: { select: { requiereReserva: true } },
+    },
   })
 }
 
@@ -648,6 +655,9 @@ export async function generarEmbarqueTransaccional(
   creadoPor: string,
   forzarSinReserva: boolean,
   modoAutomatico: boolean,
+  // Si el tipo de embarque genera Solicitud de Reserva (Aéreo/Marítimo). Para
+  // Terrestre (false) se crea el Embarque sin intentar AGL ni crear reserva.
+  requiereReserva: boolean,
   procesarReserva: (numeroInstructivo: string) => Promise<ResultadoIntentoReserva>,
   // Información base del contenedor (2026-09-30) — se persiste en el Embarque
   // desde su creación (en vez de requerir la edición posterior vía
@@ -680,6 +690,18 @@ export async function generarEmbarqueTransaccional(
       if (!Number.isNaN(num) && num > maximo) maximo = num
     }
     const numeroInstructivo = `${prefijo}${String(maximo + 1).padStart(digitos, '0')}`
+
+    // Tipo de embarque sin Solicitud de Reserva (Terrestre, 2026-10-08): se crea
+    // el Embarque plano, sin llamar a AGL360 ni registrar SolicitudReserva y sin
+    // modo manual. estadoReserva queda en su default (PENDIENTE); las acciones de
+    // reserva están bloqueadas en el service (solicitarReservaParaEmbarque). El
+    // despacho no depende de estadoReserva, así que no se bloquea.
+    if (!requiereReserva) {
+      return tx.embarque.create({
+        data: { empresaId, notaVentaId, numeroInstructivo, gestorLogisticoId, creadoPor, ...datosBase },
+        include: { notaVenta: { select: notaVentaRefSelect } },
+      })
+    }
 
     if (!modoAutomatico) {
       return tx.embarque.create({

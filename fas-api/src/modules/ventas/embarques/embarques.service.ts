@@ -172,6 +172,11 @@ export async function generarEmbarquesMultiples(
   const notaVenta = await repo.getNotaVenta(body.notaVentaId)
   if (!notaVenta) throw new ValidationError('El Cierre Comercial seleccionado no existe')
 
+  // La Solicitud de Reserva solo aplica a tipos de embarque que la requieren
+  // (Aéreo/Marítimo). Para Terrestre (requiereReserva=false) el Embarque se crea
+  // sin intentar el booking AGL360 ni registrar SolicitudReserva (2026-10-08).
+  const requiereReserva = notaVenta.tipoEmbarque?.requiereReserva ?? false
+
   const gestor = await repo.getGestorLogistico(body.gestorLogisticoId)
   if (!gestor) throw new ValidationError('El Gestor Logístico seleccionado no existe o está inactivo')
   if (!gestor.tipos.includes('GESTOR_LOGISTICO')) {
@@ -227,6 +232,7 @@ export async function generarEmbarquesMultiples(
         creadoPor,
         body.forzarSinReserva ?? false,
         modoAutomatico,
+        requiereReserva,
         (numeroInstructivo) => intentarReservaAgl(body.notaVentaId, referenciaFasDe(numeroInstructivo), datosContenedor),
         datosContenedor,
       )
@@ -269,6 +275,12 @@ export async function solicitarReservaParaEmbarque(embarqueId: number, creadoPor
   const embarque = await obtenerEmbarque(embarqueId)
   if (embarque.estadoReserva !== 'PENDIENTE') {
     throw new ValidationError('Este Embarque ya tiene una Solicitud de Reserva enviada')
+  }
+  // El tipo de embarque debe requerir reserva (Aéreo/Marítimo). Terrestre no
+  // reserva espacio logístico (2026-10-08).
+  const nv = await repo.getNotaVenta(embarque.notaVentaId)
+  if (!nv?.tipoEmbarque?.requiereReserva) {
+    throw new ValidationError('El tipo de embarque de este Cierre no requiere Solicitud de Reserva')
   }
   if (embarque.reservaManual) {
     throw new ValidationError('Este Embarque está en modo de reserva manual — ingresa los datos de booking directamente')
