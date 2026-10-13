@@ -7,6 +7,10 @@ import * as integracionesRepo from '../../config/integraciones/integraciones.rep
 import * as templatesCargaRepo from '../../config/templates-carga/templates-carga.repository.js'
 import { reconciliarPackingList } from './embarques.packing-list.motor.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
+import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
+import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
+import { mapEmbarqueAGuiaDespacho, type EmbarqueGuiaLineaMapeo } from '../../finanzas/facturacion/mappers/embarque-guia-despacho.mapper.js'
+import type { EmitirGuiaDespachoInput, RegistrarGuiaExternaInput } from './embarques.schema.js'
 import type { ResultadoIntentoReserva } from './embarques.repository.js'
 import type { DatosReservaManualInput, DatosReservaBaseInput, DatosInstructivoInput, InstructivoHijoUpdateInput, EmbarqueCreateInput, DatosContenedorInput } from './embarques.types.js'
 import type { AglWebhookConfirmarBody } from './embarques.schema.js'
@@ -506,6 +510,9 @@ export async function anularDespacho(embarqueId: number, userId: string) {
   if (resultado === 'TIENE_RECLAMOS') {
     throw new ValidationError('Este Embarque tiene Reclamos registrados — no se puede anular el despacho')
   }
+  if (resultado === 'TIENE_GUIA_TIMBRADA') {
+    throw new ValidationError('Este Embarque tiene una Guía de Despacho timbrada (o en proceso) — no se puede anular el despacho')
+  }
   return repo.getEmbarqueById(embarqueId)
 }
 
@@ -591,4 +598,261 @@ export async function eliminarPackingList(embarqueId: number, packingListId: num
     throw new ValidationError('No se puede eliminar un Packing List de un Embarque ya despachado')
   }
   return repo.getEmbarqueById(embarqueId)
+}
+
+// ─── Guía de Despacho electrónica (DTE 52, vía LibreDTE) ────────────────────
+// Se emite OPCIONALMENTE tras el despacho efectivo del Embarque ("para algunos
+// casos"). Flujo de 2 pasos, igual que la Factura de Exportación: emitir
+// borrador temporal → firmar (timbrar folio real + XML). El DTE se registra en
+// DocumentoDte con origenTipo='embarque'. Receptor = la propia Empresa emisora
+// (traslado de fruta a puerto); si se necesita un receptor distinto para
+// ventas, es una extensión posterior.
+
+const ORIGEN_TIPO_GUIA = 'embarque'
+const TIPO_DTE_GUIA = 52
+
+type EmbarqueParaGuia = NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaGuia>>>
+
+function estaDespachadoEfectivo(e: { despachadoEn: Date | null; despachoAnuladoEn: Date | null }): boolean {
+  return e.despachadoEn != null && e.despachoAnuladoEn == null
+}
+
+// Detalle de la carga agrupado por especie/variedad/categoría/calibre, sumando
+// cajas y peso neto (cajas × kgNetoEnvase del artículo).
+function construirDetalleGuia(pallets: EmbarqueParaGuia['pallets']): EmbarqueGuiaLineaMapeo[] {
+  const map = new Map<string, EmbarqueGuiaLineaMapeo>()
+  for (const p of pallets) {
+    for (const l of p.lineas) {
+      const partes = [l.especie?.descripcion, l.variedad?.descripcion, l.categoria?.descripcion, l.calibre?.descripcion].filter(Boolean)
+      const descripcion = partes.join(' ') || 'Fruta'
+      const kgNeto = Number(l.articulo?.kgNetoEnvase ?? 0)
+      const prev = map.get(descripcion)
+      if (prev) {
+        prev.cajas += l.cajas
+        prev.pesoNetoKg += l.cajas * kgNeto
+      } else {
+        map.set(descripcion, { descripcion, cajas: l.cajas, pesoNetoKg: l.cajas * kgNeto })
+      }
+    }
+  }
+  return [...map.values()].map((d) => ({ ...d, pesoNetoKg: Math.round(d.pesoNetoKg * 100) / 100 }))
+}
+
+// Valores a precargar en el popup: los ya guardados si la guía fue iniciada, o
+// los defaults (origen = dirección de la Planta de retiro; destino = Puerto de
+// zarpe) si es la primera vez.
+function construirDatosGuia(e: EmbarqueParaGuia) {
+  const plantaDir = e.instructivosHijos[0]?.planta?.direcciones[0]
+  return {
+    indTraslado: e.guiaIndTraslado,
+    transporteId: e.guiaTransporteId,
+    choferRut: e.guiaChoferRut ?? '',
+    choferNombre: e.guiaChoferNombre ?? '',
+    patenteCamion: e.guiaPatenteCamion ?? '',
+    patenteRemolque: e.guiaPatenteRemolque ?? '',
+    dirOrigen: e.guiaDirOrigen ?? plantaDir?.direccion ?? '',
+    comunaOrigen: e.guiaComunaOrigen ?? plantaDir?.comuna?.descripcion ?? '',
+    dirDestino: e.guiaDirDestino ?? e.puertoZarpe?.descripcion ?? '',
+    comunaDestino: e.guiaComunaDestino ?? '',
+  }
+}
+
+export async function obtenerGuiaDespacho(embarqueId: number) {
+  const embarque = await repo.getEmbarqueParaGuia(embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
+  const documento = await dteService.obtenerDocumentoDte(ORIGEN_TIPO_GUIA, embarqueId)
+  return {
+    despachado: estaDespachadoEfectivo(embarque),
+    documento: documento ?? null,
+    datos: construirDatosGuia(embarque),
+    // Guía externa (emitida por un tercero) — null si no hay una registrada.
+    externa:
+      embarque.guiaExternaNumero != null
+        ? {
+            numero: embarque.guiaExternaNumero,
+            fecha: embarque.guiaExternaFecha,
+            emisorId: embarque.guiaExternaEmisorId,
+            emisor: embarque.guiaExternaEmisor
+              ? {
+                  id: embarque.guiaExternaEmisor.id,
+                  razonSocial: embarque.guiaExternaEmisor.razonSocial,
+                  rut: embarque.guiaExternaEmisor.identificador,
+                }
+              : null,
+          }
+        : null,
+  }
+}
+
+// Motivos de traslado (IndTraslado SII) que implican una VENTA: requieren
+// receptor comprador y precios reales, que esta Guía todavía no resuelve
+// (FAS-GD-R1-002). Se bloquean hasta definir el flujo comercial; los motivos
+// sin venta (consignación, traslado interno, etc.) sí se soportan.
+const INDTRASLADO_VENTA = new Set([1, 2])
+
+export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDespachoInput, userId: string) {
+  const embarque = await repo.getEmbarqueParaGuia(embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
+  if (!estaDespachadoEfectivo(embarque)) {
+    throw new ValidationError('El Embarque debe estar despachado para emitir la Guía de Despacho')
+  }
+  if (INDTRASLADO_VENTA.has(input.indTraslado)) {
+    throw new ValidationError('El motivo de traslado de venta aún no está soportado en la Guía de Despacho — usa Traslado interno, Consignación u otro motivo sin venta')
+  }
+  // Exclusión mutua: no se puede emitir una Guía propia si ya hay una externa
+  // registrada (chequeo temprano; el definitivo race-safe está en
+  // prepararEmisionGuiaEnTx bajo el lock DTE).
+  if (embarque.guiaExternaNumero != null) {
+    throw new ValidationError('Este Embarque ya tiene registrada una Guía de Despacho externa; quítala antes de emitir una propia')
+  }
+
+  let transportista: Awaited<ReturnType<typeof repo.getTransportistaParaGuia>> = null
+  if (input.transporteId != null) {
+    transportista = await repo.getTransportistaParaGuia(input.transporteId)
+    if (!transportista) throw new ValidationError('La empresa de transporte seleccionada no existe')
+    if (!transportista.tipos.includes('EMPRESA_TRANSPORTE')) {
+      throw new ValidationError('La entidad seleccionada no tiene tipo Empresa de Transporte')
+    }
+  }
+
+  const empresaId = getEmpresaIdActual()!
+  const empresa = await dteRepo.getEmpresaParaDte(empresaId)
+  if (!empresa?.rut) {
+    throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas antes de emitir DTE')
+  }
+
+  const datosGuia = {
+    guiaIndTraslado: input.indTraslado,
+    guiaTransporteId: input.transporteId ?? null,
+    guiaChoferRut: input.choferRut ?? null,
+    guiaChoferNombre: input.choferNombre ?? null,
+    guiaPatenteCamion: input.patenteCamion ?? null,
+    guiaPatenteRemolque: input.patenteRemolque ?? null,
+    guiaDirOrigen: input.dirOrigen ?? null,
+    guiaComunaOrigen: input.comunaOrigen ?? null,
+    guiaDirDestino: input.dirDestino ?? null,
+    guiaComunaDestino: input.comunaDestino ?? null,
+  }
+
+  const payload = mapEmbarqueAGuiaDespacho({
+    fechaEmision: new Date().toISOString().slice(0, 10),
+    indTraslado: input.indTraslado,
+    emisor: { ...empresa, rut: empresa.rut },
+    receptor: { ...empresa, rut: empresa.rut },
+    transporte: {
+      transportistaRut: transportista?.identificador ?? null,
+      transportistaRazonSocial: transportista?.razonSocial ?? null,
+      choferRut: input.choferRut ?? null,
+      choferNombre: input.choferNombre ?? null,
+      patenteCamion: input.patenteCamion ?? null,
+      patenteRemolque: input.patenteRemolque ?? null,
+    },
+    origen: { direccion: input.dirOrigen ?? null, comuna: input.comunaOrigen ?? null },
+    destino: { direccion: input.dirDestino ?? null, comuna: input.comunaDestino ?? null },
+    detalle: construirDetalleGuia(embarque.pallets),
+  })
+
+  // verificarVigencia corre DENTRO del lock del origen DTE (FAS-GD-R1-001 /
+  // R3-004): descarta el borrador anterior, revalida despacho y persiste los
+  // datos — atómico con la creación del nuevo temporal.
+  return dteService.emitirDteTemporal({
+    origenTipo: ORIGEN_TIPO_GUIA,
+    origenId: embarqueId,
+    tipoDte: TIPO_DTE_GUIA,
+    payload,
+    rutEmisor: empresa.rut,
+    rutReceptor: empresa.rut,
+    creadoPor: userId,
+    verificarVigencia: (tx) => repo.prepararEmisionGuiaEnTx(tx, embarqueId, datosGuia, userId),
+  })
+}
+
+export async function firmarGuiaDespacho(embarqueId: number, userId: string) {
+  const embarque = await repo.getEmbarqueParaGuia(embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
+  if (!estaDespachadoEfectivo(embarque)) {
+    throw new ValidationError('El Embarque debe estar despachado para timbrar la Guía de Despacho')
+  }
+  const empresaId = getEmpresaIdActual()!
+  const empresa = await dteRepo.getEmpresaParaDte(empresaId)
+  if (!empresa?.rut) {
+    throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas antes de emitir DTE')
+  }
+  return dteService.generarDteReal({
+    origenTipo: ORIGEN_TIPO_GUIA,
+    origenId: embarqueId,
+    tipoDte: TIPO_DTE_GUIA,
+    rutEmisor: empresa.rut,
+    rutReceptor: empresa.rut,
+    creadoPor: userId,
+    // Revalida despacho vigente bajo el lock del origen DTE (FAS-GD-R3-004).
+    verificarVigencia: (tx) => repo.verificarEmbarqueDespachadoEnTx(tx, embarqueId),
+  })
+}
+
+export async function obtenerPdfGuiaDespacho(embarqueId: number): Promise<Buffer> {
+  const documento = await dteService.obtenerDocumentoDte(ORIGEN_TIPO_GUIA, embarqueId)
+  if (!documento?.libredteCodigoTemporal) {
+    throw new ValidationError('La Guía de Despacho aún no tiene un documento emitido en LibreDTE')
+  }
+  const empresaId = getEmpresaIdActual()!
+  const empresa = await dteRepo.getEmpresaParaDte(empresaId)
+  if (!empresa?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
+  const r = await dteService.obtenerPdfTemporal({
+    tipoDte: TIPO_DTE_GUIA,
+    codigo: documento.libredteCodigoTemporal,
+    rutEmisor: empresa.rut,
+    rutReceptor: empresa.rut,
+  })
+  if (!r.ok) throw new ValidationError(r.error)
+  return r.pdf
+}
+
+// ─── Guía de Despacho emitida por un tercero (2026-10-12) ───────────────────
+// Cuando NO emitimos nosotros el DTE 52, se registra el número de la Guía de
+// quien la emitió (Productor o Planta) para trazabilidad. Excluyente con la
+// Guía propia (enforcement atómico en el repo, bajo el lock DTE).
+
+export async function registrarGuiaExterna(embarqueId: number, input: RegistrarGuiaExternaInput, userId: string) {
+  const embarque = await repo.getEmbarqueParaGuia(embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
+  if (!estaDespachadoEfectivo(embarque)) {
+    throw new ValidationError('El Embarque debe estar despachado para registrar una Guía de Despacho externa')
+  }
+
+  const emisor = await repo.getEmisorGuiaExterna(input.emisorId)
+  if (!emisor) throw new ValidationError('La entidad emisora seleccionada no existe')
+  if (!emisor.activo) throw new ValidationError('La entidad emisora seleccionada está inactiva')
+  if (!emisor.tipos.includes('PRODUCTOR') && !emisor.tipos.includes('PLANTA')) {
+    throw new ValidationError('La entidad emisora debe ser un Productor o una Planta')
+  }
+  if (!emisor.identificador) {
+    throw new ValidationError('La entidad emisora no tiene RUT configurado')
+  }
+
+  const resultado = await repo.registrarGuiaExternaEnTx(
+    embarqueId,
+    { emisorId: input.emisorId, numero: input.numero, fecha: input.fecha ?? null },
+    userId,
+  )
+  if (resultado === 'NO_DESPACHADO') {
+    throw new ValidationError('El Embarque ya no está despachado — no se puede registrar la Guía de Despacho externa')
+  }
+  if (resultado === 'TIENE_GUIA_PROPIA') {
+    throw new ValidationError('Este Embarque ya tiene una Guía de Despacho propia (DTE 52) en curso o timbrada; anúlala antes de registrar una externa')
+  }
+  if (resultado === 'DUPLICADA') {
+    throw new ValidationError('Ya existe una Guía de Despacho con ese emisor y número en otro Embarque')
+  }
+  return obtenerGuiaDespacho(embarqueId)
+}
+
+export async function quitarGuiaExterna(embarqueId: number, userId: string) {
+  const embarque = await repo.getEmbarqueParaGuia(embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
+  if (embarque.guiaExternaNumero == null) {
+    throw new ValidationError('Este Embarque no tiene una Guía de Despacho externa registrada')
+  }
+  await repo.quitarGuiaExterna(embarqueId, userId)
+  return obtenerGuiaDespacho(embarqueId)
 }

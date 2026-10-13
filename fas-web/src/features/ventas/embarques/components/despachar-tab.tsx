@@ -29,6 +29,7 @@ import { embarquesService } from '../service'
 import { embarquesKeys } from '../queries'
 import { estaDespachado } from '../types'
 import type { EmbarqueDetalle } from '../types'
+import { GuiaDespachoSection } from './guia-despacho-section'
 
 const ITEM = 'VENTAS_EMBARQUES'
 const ACCEPT_PACKING_LIST = '.xlsx'
@@ -175,6 +176,7 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
             </Button>
           )}
         </div>
+        <GuiaDespachoSection embarqueId={embarque.id} />
         {embarque.packingLists.map((pl) => (
           <div key={pl.id} className='flex items-center gap-2 rounded-md border p-3 text-sm'>
             <Icons.paperclip className='text-muted-foreground h-4 w-4 shrink-0' />

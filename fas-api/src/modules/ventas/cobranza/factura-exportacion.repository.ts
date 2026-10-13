@@ -142,7 +142,7 @@ export async function getEmbarqueParaFacturaDte(embarqueId: number) {
           // Tipo de venta (2026-10-06): una NV NACIONAL no puede generar Factura
           // de Exportación (DTE 110) — guard en el service.
           tipoVenta: true,
-          cliente: { select: { id: true, razonSocial: true, identificador: true, giro: true } },
+          cliente: { select: { id: true, razonSocial: true, identificador: true, taxId: true, giro: true } },
           monedaId: true,
           moneda: { select: { codigo: true, descripcion: true, descripcionExtranjera: true, esMonedaBase: true } },
           condicionPagoId: true,

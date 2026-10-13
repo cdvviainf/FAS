@@ -26,6 +26,7 @@ import { Icons } from '@/components/icons'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { UnidadMedidaQuickCreate } from '@/features/unidades-medida/components/unidad-medida-quick-create'
 import { EtiquetaQuickCreate } from '@/features/etiquetas/components/etiqueta-quick-create'
+import { MultiCombobox } from '@/components/shared/multi-combobox'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { prefijosCodigoService } from '@/features/prefijos-codigo/service'
 import { articulosService } from '../service'
@@ -58,6 +59,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
   const [stockCritico, setStockCritico] = useState('')
   const [activo, setActivo] = useState(true)
   const [etiquetaId, setEtiquetaId] = useState<number | null>(null)
+  const [etiquetaIdsAdicionales, setEtiquetaIdsAdicionales] = useState<number[]>([])
   const [kgNetoEnvase, setKgNetoEnvase] = useState('')
   const [kgBrutoEnvase, setKgBrutoEnvase] = useState('')
   const [especieId, setEspecieId] = useState<number | null>(null)
@@ -111,6 +113,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setStockCritico(item.stockCritico ?? '')
       setActivo(item.activo)
       setEtiquetaId(item.etiquetaId)
+      setEtiquetaIdsAdicionales((item.etiquetasAdicionales ?? []).map((e) => e.etiquetaId))
       setKgNetoEnvase(item.kgNetoEnvase ?? '')
       setKgBrutoEnvase(item.kgBrutoEnvase ?? '')
       setEspecieId(item.especieId ?? null)
@@ -126,6 +129,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setStockCritico('')
       setActivo(true)
       setEtiquetaId(null)
+      setEtiquetaIdsAdicionales([])
       setKgNetoEnvase('')
       setKgBrutoEnvase('')
       setEspecieId(null)
@@ -147,6 +151,9 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
         stockCritico: stockCritico ? Number(stockCritico) : null,
         activo,
         etiquetaId: tipo === 'EMBALAJE' ? etiquetaId : null,
+        // Etiquetas adicionales permitidas (2026-10-12): sólo para EMBALAJE y
+        // sin repetir la principal.
+        etiquetaIdsAdicionales: tipo === 'EMBALAJE' ? etiquetaIdsAdicionales.filter((id) => id !== etiquetaId) : [],
         kgNetoEnvase: tipo === 'EMBALAJE' && kgNetoEnvase ? Number(kgNetoEnvase) : null,
         kgBrutoEnvase: tipo === 'EMBALAJE' && kgBrutoEnvase ? Number(kgBrutoEnvase) : null,
         especieId: tipo === 'EMBALAJE' ? especieId : null,
@@ -287,7 +294,11 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
                 <Label>Etiqueta <span className='text-destructive'>*</span></Label>
                 <div className='flex items-end gap-2'>
                   <div className='flex-1'>
-                    <Select value={etiquetaId ? String(etiquetaId) : ''} onValueChange={(v) => setEtiquetaId(parseInt(v))}>
+                    <Select value={etiquetaId ? String(etiquetaId) : ''} onValueChange={(v) => {
+                      const id = parseInt(v)
+                      setEtiquetaId(id)
+                      setEtiquetaIdsAdicionales((prev) => prev.filter((x) => x !== id))
+                    }}>
                       <SelectTrigger><SelectValue placeholder='Seleccionar etiqueta...' /></SelectTrigger>
                       <SelectContent>
                         {(etiquetas?.data ?? []).map((e) => (
@@ -299,9 +310,27 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
                   <EtiquetaQuickCreate onCreated={(e) => {
                     queryClient.invalidateQueries({ queryKey: ['etiquetas-options'] })
                     setEtiquetaId(e.id)
+                    setEtiquetaIdsAdicionales((prev) => prev.filter((id) => id !== e.id))
                   }} />
                 </div>
                 {errors.etiquetaId && <p className='text-xs text-destructive'>{errors.etiquetaId}</p>}
+              </div>
+
+              <div className='space-y-1.5'>
+                <Label>Etiquetas adicionales permitidas</Label>
+                <MultiCombobox
+                  options={(etiquetas?.data ?? [])
+                    .filter((e) => e.id !== etiquetaId)
+                    .map((e) => ({ value: String(e.id), label: e.descripcion }))}
+                  selected={etiquetaIdsAdicionales.map(String)}
+                  onChange={(vals) => setEtiquetaIdsAdicionales(vals.map(Number))}
+                  placeholder='Ninguna (etiqueta fija)'
+                />
+                <p className='text-muted-foreground text-xs'>
+                  Opcional. Si agregas una o más, el embalaje admitirá varias etiquetas: la etiqueta pasa a ser
+                  obligatoria y seleccionable al cargar o editar Stock, dentro de este conjunto. Si no agregas
+                  ninguna, se usa siempre la etiqueta principal y no se puede cambiar en Stock.
+                </p>
               </div>
 
               <div className='space-y-1.5'>

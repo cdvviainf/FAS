@@ -6,6 +6,7 @@ import {
   LOCK_NAMESPACE_EMBARQUE_DESPACHO,
   LOCK_NAMESPACE_EMBARQUE_SOLICITUD_RESERVA,
   LOCK_NAMESPACE_EMBARQUE_CORRELATIVO,
+  LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION,
 } from '../../../shared/advisory-locks.js'
 import { palletCalzaConDetalleNV } from './embarques.comparacion.js'
 import type { DatosReservaManualInput, DatosReservaBaseInput, DatosInstructivoInput, InstructivoHijoUpdateInput, DatosContenedorInput } from './embarques.types.js'
@@ -265,7 +266,9 @@ export async function getPalletsDisponibles(
   // Nota Condición + Completo). Antes se filtraba `completo: true` acá, lo que
   // ocultaba por completo los incompletos; ahora se muestran deshabilitados.
   const pallets = await prisma.pallet.findMany({
-    where: { embarqueId: null },
+    // eliminadoEn: null (2026-10-12) — un pallet eliminado desde Edición de
+    // Stock no es stock disponible y no debe poder reservarse a un Embarque.
+    where: { embarqueId: null, eliminadoEn: null },
     include: palletInclude,
     orderBy: { creadoEn: 'asc' },
   })
@@ -296,6 +299,7 @@ export async function reservarPalletsEnEmbarque(palletIds: number[], embarqueId:
       where: {
         id: { in: palletIds },
         embarqueId: null,
+        eliminadoEn: null,
         completo: true,
         notaCalidadId: { not: null },
         notaCondicionId: { not: null },
@@ -390,7 +394,7 @@ export async function confirmarDespacho(embarqueId: number, despachadoPor: strin
   return getEmbarqueById(embarqueId)
 }
 
-type AnularDespachoResultado = 'OK' | 'NO_ENCONTRADO' | 'NO_DESPACHADO' | 'TIENE_RECLAMOS'
+type AnularDespachoResultado = 'OK' | 'NO_ENCONTRADO' | 'NO_DESPACHADO' | 'TIENE_RECLAMOS' | 'TIENE_GUIA_TIMBRADA'
 
 // "Anular Despacho" (2026-09-22, decisión de negocio Christian) — soft
 // delete de la confirmación: `despachadoEn`/`despachadoPor` NO se limpian
@@ -406,6 +410,11 @@ type AnularDespachoResultado = 'OK' | 'NO_ENCONTRADO' | 'NO_DESPACHADO' | 'TIENE
 export async function anularDespacho(embarqueId: number, actualizadoPor: string): Promise<AnularDespachoResultado> {
   const resultado = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_DESPACHO}::int, ${embarqueId}::int)`
+    // FAS-GD-R3-004: tomar también el lock del origen DTE (mismo que usan
+    // emitir/timbrar la Guía) para que la comprobación de guía timbrada y la
+    // anulación sean indivisibles frente a una emisión/firma concurrente. Orden
+    // estable despacho→DTE (ningún flujo toma DTE antes que despacho).
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION}::int, hashtext(${`embarque:${embarqueId}`}))`
 
     const embarque = await tx.embarque.findFirst({
       where: { id: embarqueId, eliminadoEn: null },
@@ -418,9 +427,30 @@ export async function anularDespacho(embarqueId: number, actualizadoPor: string)
     const reclamosActivos = await tx.reclamo.count({ where: { embarqueId, eliminadoEn: null } })
     if (reclamosActivos > 0) return 'TIENE_RECLAMOS' as const
 
+    // FAS-GD-R2-003: no se puede anular el despacho si la Guía de Despacho
+    // (DTE 52) ya fue timbrada o está timbrándose/emitiéndose — el DTE es un
+    // documento legal (o un intento en curso contra LibreDTE) que no puede
+    // quedar vigente sobre un embarque "no despachado". Se consulta dentro de la
+    // misma transacción, bajo el lock DTE ya tomado.
+    const guiaEnProceso = await tx.documentoDte.count({
+      where: { origenTipo: 'embarque', origenId: embarqueId, estado: { in: ['GENERADO', 'GENERANDO', 'EMITIENDO'] } },
+    })
+    if (guiaEnProceso > 0) return 'TIENE_GUIA_TIMBRADA' as const
+
     const claim = await tx.embarque.updateMany({
       where: { id: embarqueId, despachadoEn: { not: null }, despachoAnuladoEn: null },
-      data: { despachoAnuladoEn: new Date(), despachoAnuladoPor: actualizadoPor },
+      data: {
+        despachoAnuladoEn: new Date(),
+        despachoAnuladoPor: actualizadoPor,
+        // FAS-BATCH-R1-004 (2026-10-12, decisión de negocio Christian): la Guía
+        // emitida por un tercero se registra sólo sobre un despacho efectivo;
+        // al anularlo se limpia (número/emisor/fecha) para que no quede
+        // asociada a un ciclo posterior. La Guía propia (DTE 52) ya bloquea la
+        // anulación si está timbrada/en proceso.
+        guiaExternaNumero: null,
+        guiaExternaEmisorId: null,
+        guiaExternaFecha: null,
+      },
     })
     if (claim.count === 0) return 'NO_DESPACHADO' as const
 
@@ -433,6 +463,13 @@ export async function anularDespacho(embarqueId: number, actualizadoPor: string)
     await tx.embarquePackingList.updateMany({
       where: { embarqueId, eliminadoEn: null },
       data: { eliminadoEn: new Date(), eliminadoPor: actualizadoPor },
+    })
+    // FAS-GD-R4-005: descartar los borradores de Guía NO timbrados — un
+    // TEMPORAL_CREADO/ERROR/PENDIENTE no debe sobrevivir a la anulación para
+    // timbrarse en un ciclo de despacho posterior (su snapshot ya no
+    // corresponde). Las timbradas/en proceso ya bloquearon la anulación arriba.
+    await tx.documentoDte.deleteMany({
+      where: { origenTipo: 'embarque', origenId: embarqueId, estado: { in: ['TEMPORAL_CREADO', 'ERROR', 'PENDIENTE'] } },
     })
     return 'OK' as const
   })
@@ -1141,5 +1178,220 @@ export async function confirmarSolicitud(
       },
     })
     await tx.embarque.update({ where: { id: embarqueId }, data: { estadoReserva: 'CONFIRMADA' } })
+  })
+}
+
+// ─── Guía de Despacho (DTE 52) ──────────────────────────────────────────────
+
+// Carga el Embarque con lo necesario para armar la Guía de Despacho: estado de
+// despacho, datos de transporte ya guardados, pallets (líneas con peso/cajas),
+// Plantas de retiro (para la dirección de origen por defecto) y Puerto de
+// zarpe (destino por defecto).
+export async function getEmbarqueParaGuia(embarqueId: number) {
+  return prisma.embarque.findFirst({
+    where: { id: embarqueId, eliminadoEn: null },
+    select: {
+      id: true,
+      despachadoEn: true,
+      despachoAnuladoEn: true,
+      guiaIndTraslado: true,
+      guiaTransporteId: true,
+      guiaChoferRut: true,
+      guiaChoferNombre: true,
+      guiaPatenteCamion: true,
+      guiaPatenteRemolque: true,
+      guiaDirOrigen: true,
+      guiaComunaOrigen: true,
+      guiaDirDestino: true,
+      guiaComunaDestino: true,
+      guiaExternaNumero: true,
+      guiaExternaEmisorId: true,
+      guiaExternaFecha: true,
+      guiaExternaEmisor: { select: { id: true, razonSocial: true, identificador: true } },
+      puertoZarpe: { select: { descripcion: true } },
+      instructivosHijos: {
+        where: { eliminadoEn: null },
+        select: {
+          planta: {
+            select: {
+              razonSocial: true,
+              direcciones: {
+                where: { eliminadoEn: null },
+                select: { direccion: true, comuna: { select: { descripcion: true } } },
+                orderBy: [{ esPorDefecto: 'desc' }, { codigo: 'asc' }],
+                take: 1,
+              },
+            },
+          },
+        },
+      },
+      pallets: {
+        select: {
+          lineas: {
+            select: {
+              especie: { select: { descripcion: true } },
+              variedad: { select: { descripcion: true } },
+              categoria: { select: { descripcion: true } },
+              calibre: { select: { descripcion: true } },
+              articulo: { select: { kgNetoEnvase: true } },
+              cajas: true,
+            },
+          },
+        },
+      },
+    },
+  })
+}
+
+interface DatosGuiaEmbarque {
+  guiaIndTraslado: number
+  guiaTransporteId: number | null
+  guiaChoferRut: string | null
+  guiaChoferNombre: string | null
+  guiaPatenteCamion: string | null
+  guiaPatenteRemolque: string | null
+  guiaDirOrigen: string | null
+  guiaComunaOrigen: string | null
+  guiaDirDestino: string | null
+  guiaComunaDestino: string | null
+}
+
+// FAS-GD-R1-001 / R3-004 (BUG_REAL arbitrado + carrera): se ejecuta como
+// `verificarVigencia` del motor DTE, es decir DENTRO de la transacción que ya
+// tomó el advisory lock del origen (LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION +
+// hashtext('embarque:<id>')) justo antes de crear/retomar el documento. Dentro
+// de esa única sección crítica: (1) rechaza si el DTE ya está timbrado/en
+// proceso, (2) descarta el borrador no terminal para que se cree uno nuevo con
+// los datos actuales, (3) revalida que el Embarque siga efectivamente
+// despachado (cierra la carrera con anularDespacho) y (4) persiste los datos de
+// transporte. Todo atómico ⇒ el payload emitido siempre coincide con el
+// Embarque guardado, aun con ediciones/anulaciones concurrentes.
+export async function prepararEmisionGuiaEnTx(
+  tx: Prisma.TransactionClient,
+  embarqueId: number,
+  datos: DatosGuiaEmbarque,
+  actualizadoPor: string,
+): Promise<void> {
+  const doc = await tx.documentoDte.findFirst({ where: { origenTipo: 'embarque', origenId: embarqueId } })
+  if (doc && (doc.estado === 'GENERADO' || doc.estado === 'GENERANDO' || doc.estado === 'EMITIENDO')) {
+    throw new ValidationError('La Guía de Despacho ya está timbrada o en proceso de timbrado; no se puede modificar')
+  }
+  if (doc) await tx.documentoDte.delete({ where: { id: doc.id } })
+  const e = await tx.embarque.findFirst({
+    where: { id: embarqueId, eliminadoEn: null },
+    select: { despachadoEn: true, despachoAnuladoEn: true, guiaExternaNumero: true },
+  })
+  if (!e || !(e.despachadoEn && !e.despachoAnuladoEn)) {
+    throw new ValidationError('El Embarque ya no está despachado — no se puede emitir la Guía de Despacho')
+  }
+  // Exclusión mutua (2026-10-12): si ya hay una Guía externa registrada, no se
+  // puede emitir una propia. Re-chequeo bajo el lock DTE para cerrar la carrera
+  // con registrarGuiaExterna (que toma el mismo lock).
+  if (e.guiaExternaNumero != null) {
+    throw new ValidationError('Este Embarque ya tiene registrada una Guía de Despacho externa; quítala antes de emitir una propia')
+  }
+  await tx.embarque.update({ where: { id: embarqueId }, data: { ...datos, actualizadoPor } })
+}
+
+// Revalida, dentro del lock del origen DTE (verificarVigencia del timbrado),
+// que el Embarque siga efectivamente despachado antes de pasar el documento a
+// GENERANDO — cierra la carrera anular/firmar (FAS-GD-R3-004).
+export async function verificarEmbarqueDespachadoEnTx(tx: Prisma.TransactionClient, embarqueId: number): Promise<void> {
+  const e = await tx.embarque.findFirst({
+    where: { id: embarqueId, eliminadoEn: null },
+    select: { despachadoEn: true, despachoAnuladoEn: true },
+  })
+  if (!e || !(e.despachadoEn && !e.despachoAnuladoEn)) {
+    throw new ValidationError('El Embarque ya no está despachado — no se puede timbrar la Guía de Despacho')
+  }
+}
+
+// RUT + razón social de la Entidad transportista (empresa de transporte) para
+// el bloque Transporte del DTE 52.
+export async function getTransportistaParaGuia(entidadId: number) {
+  return prisma.entidad.findFirst({
+    where: { id: entidadId, eliminadoEn: null },
+    select: { id: true, identificador: true, razonSocial: true, tipos: true },
+  })
+}
+
+// ─── Guía de Despacho emitida por un tercero (2026-10-12) ───────────────────
+
+// Entidad emisora de una Guía externa: debe ser Productor o Planta, activa y
+// con RUT (identificador) — el RUT es la mitad de la clave de duplicidad.
+export async function getEmisorGuiaExterna(entidadId: number) {
+  return prisma.entidad.findFirst({
+    where: { id: entidadId, eliminadoEn: null },
+    select: { id: true, identificador: true, razonSocial: true, tipos: true, activo: true },
+  })
+}
+
+type GuiaExternaResultado =
+  | 'OK'
+  | 'NO_DESPACHADO'
+  | 'TIENE_GUIA_PROPIA'
+  | 'DUPLICADA'
+
+// Registra (o reemplaza) la Guía externa de forma atómica, bajo el MISMO
+// advisory lock del origen DTE que usan emitir/timbrar la Guía propia — así la
+// exclusión mutua propia/externa es indivisible frente a una emisión
+// concurrente. Dentro de la sección crítica: (1) revalida despacho vigente,
+// (2) rechaza si ya existe un DocumentoDte propio no-ERROR (propia en curso o
+// timbrada), (3) valida duplicidad por empresa (mismo emisor + número) y
+// (4) persiste. El índice único parcial es la última línea de defensa.
+export async function registrarGuiaExternaEnTx(
+  embarqueId: number,
+  datos: { emisorId: number; numero: string; fecha: Date | null },
+  actualizadoPor: string,
+): Promise<GuiaExternaResultado> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION}::int, hashtext(${`embarque:${embarqueId}`}))`
+
+    const e = await tx.embarque.findFirst({
+      where: { id: embarqueId, eliminadoEn: null },
+      select: { despachadoEn: true, despachoAnuladoEn: true },
+    })
+    if (!e || !(e.despachadoEn && !e.despachoAnuladoEn)) return 'NO_DESPACHADO' as const
+
+    // Exclusión mutua: cualquier DocumentoDte propio no-ERROR bloquea la guía
+    // externa (borrador temporal, emitiendo, generando o timbrado).
+    const propia = await tx.documentoDte.findFirst({
+      where: { origenTipo: 'embarque', origenId: embarqueId, estado: { not: 'ERROR' } },
+      select: { id: true },
+    })
+    if (propia) return 'TIENE_GUIA_PROPIA' as const
+
+    // Duplicidad por empresa (el tenant extension inyecta empresaId): mismo
+    // emisor + mismo número en otro embarque.
+    const dup = await tx.embarque.findFirst({
+      where: {
+        id: { not: embarqueId },
+        eliminadoEn: null,
+        guiaExternaEmisorId: datos.emisorId,
+        guiaExternaNumero: datos.numero,
+      },
+      select: { id: true },
+    })
+    if (dup) return 'DUPLICADA' as const
+
+    await tx.embarque.update({
+      where: { id: embarqueId },
+      data: {
+        guiaExternaEmisorId: datos.emisorId,
+        guiaExternaNumero: datos.numero,
+        guiaExternaFecha: datos.fecha,
+        actualizadoPor,
+      },
+    })
+    return 'OK' as const
+  })
+}
+
+// Quita la Guía externa registrada (deja el Embarque libre para emitir una
+// propia). No toca el despacho ni ningún DTE.
+export async function quitarGuiaExterna(embarqueId: number, actualizadoPor: string): Promise<void> {
+  await prisma.embarque.update({
+    where: { id: embarqueId },
+    data: { guiaExternaEmisorId: null, guiaExternaNumero: null, guiaExternaFecha: null, actualizadoPor },
   })
 }

@@ -18,6 +18,9 @@ export const entidadCreateSchema = z.object({
   email: z.string().email('Email inválido').max(200).trim().optional(),
   telefono: z.string().max(50).trim().optional(),
   codigoExterno: z.string().max(50).trim().optional(),
+  // Obligatoriedad condicional por tipo (PLANTA / CLIENTE_EXTRANJERO) en el service.
+  csp: z.string().max(50).trim().optional(),
+  taxId: z.string().max(50).trim().optional(),
   activo: z.boolean().default(true),
   tipos: z.array(z.enum(tipoEntidadValues)).min(1, 'Debe tener al menos un tipo'),
 })
@@ -33,6 +36,8 @@ export const entidadUpdateSchema = z.object({
   email: z.string().email('Email inválido').max(200).trim().nullable().optional(),
   telefono: z.string().max(50).trim().nullable().optional(),
   codigoExterno: z.string().max(50).trim().nullable().optional(),
+  csp: z.string().max(50).trim().nullable().optional(),
+  taxId: z.string().max(50).trim().nullable().optional(),
   activo: z.boolean().optional(),
   tipos: z.array(z.enum(tipoEntidadValues)).min(1).optional(),
 })

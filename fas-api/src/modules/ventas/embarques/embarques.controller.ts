@@ -17,6 +17,8 @@ import {
   packingListUploadQuerySchema,
   packingListDescargaQuerySchema,
   packingListParamsSchema,
+  emitirGuiaDespachoSchema,
+  registrarGuiaExternaSchema,
 } from './embarques.schema.js'
 import * as service from './embarques.service.js'
 import { prisma } from '../../../lib/prisma.js'
@@ -263,4 +265,48 @@ export async function actualizarReclamo(req: FastifyRequest, reply: FastifyReply
   const body = reclamoUpdateSchema.parse(req.body)
   const reclamo = await reclamosService.actualizarReclamo(reclamoId, id, body, req.fasUserId!)
   return reply.send({ data: reclamo })
+}
+
+// ─── Guía de Despacho (DTE 52, 2026-10-09) ──────────────────────────────────
+
+export async function obtenerGuiaDespacho(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const data = await service.obtenerGuiaDespacho(id)
+  return reply.send({ data })
+}
+
+export async function emitirGuiaDespacho(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const body = emitirGuiaDespachoSchema.parse(req.body)
+  const documento = await service.emitirGuiaDespacho(id, body, req.fasUserId!)
+  return reply.status(201).send({ data: documento })
+}
+
+export async function firmarGuiaDespacho(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const documento = await service.firmarGuiaDespacho(id, req.fasUserId!)
+  return reply.send({ data: documento })
+}
+
+export async function descargarGuiaDespachoPdf(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const pdf = await service.obtenerPdfGuiaDespacho(id)
+  return reply
+    .header('Content-Type', 'application/pdf')
+    .header('Content-Disposition', `inline; filename="guia-despacho-${id}.pdf"`)
+    .header('Content-Length', String(pdf.length))
+    .send(pdf)
+}
+
+export async function registrarGuiaExterna(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const body = registrarGuiaExternaSchema.parse(req.body)
+  const data = await service.registrarGuiaExterna(id, body, req.fasUserId!)
+  return reply.send({ data })
+}
+
+export async function quitarGuiaExterna(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const data = await service.quitarGuiaExterna(id, req.fasUserId!)
+  return reply.send({ data })
 }

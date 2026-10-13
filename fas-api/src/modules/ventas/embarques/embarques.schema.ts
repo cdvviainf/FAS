@@ -200,6 +200,37 @@ export const embarquePalletParamsSchema = z.object({
   palletId: z.coerce.number().int().positive(),
 })
 
+// Emisión de la Guía de Despacho (DTE 52) — datos de transporte del popup
+// (ventas, 2026-10-09). IndTraslado: catálogo SII (1=Venta, 2=Ventas por
+// efectuar, 3=Consignación, 4=Entrega gratuita, 5=Traslado interno, 6=Otros,
+// 7=Devolución...). Los campos de transporte/direcciones son opcionales a
+// nivel de tipo, pero la norma exige completarlos para una guía válida.
+export const emitirGuiaDespachoSchema = z.object({
+  indTraslado: z.number().int().min(1).max(9),
+  transporteId: z.number().int().positive().optional().nullable(),
+  choferRut: z.string().trim().max(20).optional().nullable(),
+  choferNombre: z.string().trim().max(200).optional().nullable(),
+  patenteCamion: z.string().trim().max(20).optional().nullable(),
+  patenteRemolque: z.string().trim().max(20).optional().nullable(),
+  dirOrigen: z.string().trim().max(300).optional().nullable(),
+  comunaOrigen: z.string().trim().max(100).optional().nullable(),
+  dirDestino: z.string().trim().max(300).optional().nullable(),
+  comunaDestino: z.string().trim().max(100).optional().nullable(),
+})
+
+export type EmitirGuiaDespachoInput = z.infer<typeof emitirGuiaDespachoSchema>
+
+// Registro de una Guía de Despacho emitida por un tercero (2026-10-12): número
+// + entidad emisora (Productor o Planta) + fecha opcional. La validación de
+// tipo/RUT del emisor y la duplicidad viven en el service/repo.
+export const registrarGuiaExternaSchema = z.object({
+  emisorId: z.number().int().positive(),
+  numero: z.string().trim().min(1).max(40),
+  fecha: z.coerce.date().optional().nullable(),
+})
+
+export type RegistrarGuiaExternaInput = z.infer<typeof registrarGuiaExternaSchema>
+
 export type EmbarqueCreateBody = z.infer<typeof embarqueCreateSchema>
 export type ReservarPalletsBody = z.infer<typeof reservarPalletsSchema>
 export type AglWebhookConfirmarBody = z.infer<typeof aglWebhookConfirmarSchema>

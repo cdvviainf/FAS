@@ -16,7 +16,7 @@ const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 // (2026-08-24, ver compras.md §11 y stock.types.ts).
 export async function listPalletsConLineas() {
   return prisma.pallet.findMany({
-    where: { embarqueId: null },
+    where: { embarqueId: null, eliminadoEn: null },
     include: {
       productor: { select: entidadSelect },
       recepcion: { select: { estado: true, plantaId: true, planta: { select: entidadSelect } } },
@@ -46,7 +46,7 @@ export async function listPalletsConLineas() {
 // client-side (decisión del usuario, sin validación dura en backend).
 export async function getPalletParaEdicion(id: number) {
   return prisma.pallet.findFirst({
-    where: { id },
+    where: { id, eliminadoEn: null },
     select: { id: true },
   })
 }
@@ -76,7 +76,7 @@ export async function getNotaCondicionById(id: number) {
 // "libre" (embarqueId) y para el formulario de edición.
 export async function getLoteParaEditar(id: number) {
   return prisma.pallet.findFirst({
-    where: { id },
+    where: { id, eliminadoEn: null },
     select: {
       id: true,
       numeroPallet: true,
@@ -118,13 +118,31 @@ export async function getEspeciesByIds(ids: number[]) {
   return prisma.especie.findMany({ where: { id: { in: ids }, eliminadoEn: null }, select: { id: true } })
 }
 export async function getArticulosByIds(ids: number[]) {
-  return prisma.articulo.findMany({ where: { id: { in: ids } }, select: { id: true, tipo: true, activo: true } })
+  return prisma.articulo.findMany({
+    where: { id: { in: ids } },
+    // etiquetaId (principal) + etiquetasAdicionales = conjunto de etiquetas
+    // permitidas del embalaje (2026-10-12) — la edición de Stock sólo acepta
+    // una etiqueta dentro de ese conjunto.
+    select: { id: true, tipo: true, activo: true, etiquetaId: true, etiquetasAdicionales: { select: { etiquetaId: true } } },
+  })
 }
 export async function getEntidadesByIds(ids: number[]) {
   return prisma.entidad.findMany({ where: { id: { in: ids }, eliminadoEn: null }, select: { id: true, tipos: true, activo: true } })
 }
-export async function getEtiquetasByIds(ids: number[]) {
-  return prisma.etiqueta.findMany({ where: { id: { in: ids }, eliminadoEn: null }, select: { id: true } })
+
+// Soft delete del pallet (2026-10-12, OPER_STOCK_EDICION). Reclamo atómico:
+// el updateMany condicionado a `embarqueId: null, eliminadoEn: null` toma el
+// lock de la fila y verifica en un solo paso que siga siendo stock libre y no
+// eliminado — si una reserva concurrente lo tomó primero (o ya fue eliminado),
+// cuenta 0 y el service lo traduce a error. Mismo criterio que el reclamo de
+// editarLote. Las PalletLinea no se tocan (quedan vivas pero ocultas al filtrar
+// el pallet por eliminadoEn:null).
+export async function softDeletePallet(id: number, eliminadoPor: string): Promise<number> {
+  const res = await prisma.pallet.updateMany({
+    where: { id, embarqueId: null, eliminadoEn: null },
+    data: { eliminadoEn: new Date(), eliminadoPor },
+  })
+  return res.count
 }
 
 // Reemplaza el lote (pallet + líneas) en una transacción. Las líneas con `id`

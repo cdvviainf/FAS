@@ -184,9 +184,15 @@ export async function tomarDocumentoDteParaGenerar(
   origenTipo: string,
   origenId: number,
   actualizadoPor: string,
+  // Validación del origen bajo el advisory lock, antes de pasar a GENERANDO
+  // (ej. revalidar que el Embarque siga despachado — FAS-GD-R3-004). Puede
+  // lanzar para abortar el timbrado.
+  verificarVigencia?: (tx: Prisma.TransactionClient) => Promise<void>,
 ): Promise<DocumentoDteParaGenerar | { error: string }> {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION}::int, hashtext(${`${origenTipo}:${origenId}`}))`
+
+    if (verificarVigencia) await verificarVigencia(tx)
 
     const existente = await tx.documentoDte.findFirst({ where: { origenTipo, origenId } })
     if (!existente) return { error: 'No existe un DTE temporal para timbrar — emite primero el documento' }

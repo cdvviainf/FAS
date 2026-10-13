@@ -41,6 +41,9 @@ export interface Articulo {
   especieId: number | null
   especie?: { id: number; codigo: string; descripcion: string } | null
   codigosEquivalentes?: CodigoEquivalente[]
+  // Etiquetas adicionales permitidas (2026-10-12). El conjunto permitido del
+  // embalaje = etiqueta (principal) ∪ estas.
+  etiquetasAdicionales?: { etiquetaId: number; etiqueta: { id: number; codigo: string; descripcion: string } }[]
   saldos?: SaldoBodega[]
 }
 
@@ -66,6 +69,7 @@ export interface ArticuloCreateInput {
   stockCritico?: number | null
   activo?: boolean
   etiquetaId?: number | null
+  etiquetaIdsAdicionales?: number[]
   kgNetoEnvase?: number | null
   kgBrutoEnvase?: number | null
   especieId?: number | null

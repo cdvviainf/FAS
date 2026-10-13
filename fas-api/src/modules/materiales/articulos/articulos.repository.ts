@@ -61,7 +61,14 @@ export async function listArticulos(filters: ArticuloListFilters) {
   const [data, total] = await Promise.all([
     prisma.articulo.findMany({
       where,
-      include: { unidad: { select: unidadSelect }, etiqueta: { select: etiquetaSelect }, especie: { select: especieSelect } },
+      include: {
+        unidad: { select: unidadSelect },
+        etiqueta: { select: etiquetaSelect },
+        especie: { select: especieSelect },
+        // Conjunto permitido del embalaje (2026-10-12): lo usa el editor de
+        // Stock para limitar/bloquear la etiqueta por línea.
+        etiquetasAdicionales: { select: { etiquetaId: true, etiqueta: { select: etiquetaSelect } }, orderBy: { id: 'asc' } },
+      },
       orderBy: resolveOrderByArticulo(filters.sort),
       skip: (page - 1) * limit,
       take: limit,
@@ -79,6 +86,7 @@ export async function getArticuloById(id: number) {
       etiqueta: { select: etiquetaSelect },
       especie: { select: especieSelect },
       codigosEquivalentes: { select: { id: true, codigo: true, descripcion: true }, orderBy: { id: 'asc' } },
+      etiquetasAdicionales: { select: { etiquetaId: true, etiqueta: { select: etiquetaSelect } }, orderBy: { id: 'asc' } },
       saldos: {
         include: { bodega: { select: { id: true, codigo: true, descripcion: true } } },
       },
@@ -110,14 +118,19 @@ const articuloInclude = {
   etiqueta: { select: etiquetaSelect },
   especie: { select: especieSelect },
   codigosEquivalentes: { select: { id: true, codigo: true, descripcion: true }, orderBy: { id: 'asc' as const } },
+  etiquetasAdicionales: { select: { etiquetaId: true, etiqueta: { select: etiquetaSelect } }, orderBy: { id: 'asc' as const } },
 }
 
 function nestedCodigos(codigos: ArticuloCreateInput['codigosEquivalentes']) {
   return (codigos ?? []).map((c) => ({ codigo: c.codigo, descripcion: c.descripcion ?? null }))
 }
 
+function nestedEtiquetas(ids: number[] | undefined) {
+  return (ids ?? []).map((etiquetaId) => ({ etiquetaId }))
+}
+
 export async function createArticulo(data: ArticuloCreateInput) {
-  const { codigosEquivalentes, ...scalar } = data
+  const { codigosEquivalentes, etiquetaIdsAdicionales, ...scalar } = data
   return prisma.articulo.create({
     // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
     // valor con la empresa activa del contexto — se declara aquí solo para
@@ -128,23 +141,33 @@ export async function createArticulo(data: ArticuloCreateInput) {
       ...(codigosEquivalentes && codigosEquivalentes.length > 0
         ? { codigosEquivalentes: { create: nestedCodigos(codigosEquivalentes) } }
         : {}),
+      ...(etiquetaIdsAdicionales && etiquetaIdsAdicionales.length > 0
+        ? { etiquetasAdicionales: { create: nestedEtiquetas(etiquetaIdsAdicionales) } }
+        : {}),
     },
     include: articuloInclude,
   })
 }
 
 export async function updateArticulo(id: number, data: ArticuloUpdateInput) {
-  const { codigosEquivalentes, ...scalar } = data
-  // Si `codigosEquivalentes` viene definida, reemplaza toda la lista (borra +
-  // recrea) en una transacción; si es undefined, no se toca.
-  if (codigosEquivalentes !== undefined) {
+  const { codigosEquivalentes, etiquetaIdsAdicionales, ...scalar } = data
+  // Si `codigosEquivalentes` o `etiquetaIdsAdicionales` vienen definidas,
+  // reemplazan toda la lista (borra + recrea) en una transacción; si son
+  // undefined, no se tocan.
+  if (codigosEquivalentes !== undefined || etiquetaIdsAdicionales !== undefined) {
     return prisma.$transaction(async (tx) => {
-      await tx.articuloCodigoEquivalente.deleteMany({ where: { articuloId: id } })
+      if (codigosEquivalentes !== undefined) {
+        await tx.articuloCodigoEquivalente.deleteMany({ where: { articuloId: id } })
+      }
+      if (etiquetaIdsAdicionales !== undefined) {
+        await tx.articuloEtiqueta.deleteMany({ where: { articuloId: id } })
+      }
       return tx.articulo.update({
         where: { id },
         data: {
           ...scalar,
-          ...(codigosEquivalentes.length > 0 ? { codigosEquivalentes: { create: nestedCodigos(codigosEquivalentes) } } : {}),
+          ...(codigosEquivalentes && codigosEquivalentes.length > 0 ? { codigosEquivalentes: { create: nestedCodigos(codigosEquivalentes) } } : {}),
+          ...(etiquetaIdsAdicionales && etiquetaIdsAdicionales.length > 0 ? { etiquetasAdicionales: { create: nestedEtiquetas(etiquetaIdsAdicionales) } } : {}),
         },
         include: articuloInclude,
       })

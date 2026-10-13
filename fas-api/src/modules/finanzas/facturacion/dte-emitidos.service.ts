@@ -121,6 +121,9 @@ export interface GenerarDteRealInput {
   rutEmisor: string
   rutReceptor: string
   creadoPor: string
+  // Validación del origen bajo el advisory lock antes de pasar a GENERANDO
+  // (ej. revalidar despacho vigente — FAS-GD-R3-004). Lanza para abortar.
+  verificarVigencia?: (tx: Prisma.TransactionClient) => Promise<void>
 }
 
 // Segundo paso: timbra el DTE real (folio + envío SII) a partir del temporal ya
@@ -128,7 +131,7 @@ export interface GenerarDteRealInput {
 // DocumentoDte resultante — el caller decide qué hacer según `estado`
 // (GENERADO = OK con folio; TEMPORAL_CREADO + errorMensaje = falló, reintentar).
 export async function generarDteReal(input: GenerarDteRealInput) {
-  const tomado = await repo.tomarDocumentoDteParaGenerar(input.origenTipo, input.origenId, input.creadoPor)
+  const tomado = await repo.tomarDocumentoDteParaGenerar(input.origenTipo, input.origenId, input.creadoPor, input.verificarVigencia)
   if ('error' in tomado) throw new ValidationError(tomado.error)
   const { doc, debeGenerar } = tomado
   if (!debeGenerar) return doc

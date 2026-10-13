@@ -57,6 +57,8 @@ const FIELD_TAB: Record<string, 'entidad' | 'direcciones' | 'contactos'> = {
   email: 'entidad',
   giro: 'entidad',
   identificador: 'entidad',
+  csp: 'entidad',
+  taxId: 'entidad',
   direcciones: 'direcciones',
   direccionesPorDefecto: 'direcciones',
 }
@@ -444,6 +446,8 @@ interface BaseFields {
   email: string
   telefono: string
   codigoExterno: string
+  csp: string
+  taxId: string
   activo: boolean
   tipos: TipoEntidad[]
 }
@@ -471,6 +475,8 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
     email: '',
     telefono: '',
     codigoExterno: '',
+    csp: '',
+    taxId: '',
     activo: true,
     tipos: [],
   })
@@ -509,6 +515,9 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
   // mano por Agrosan — se exime del RUT/giro obligatorios de Chile y se
   // asume un RUT genérico si no se indica uno (decisión de negocio).
   const esSoloPacking = fields.tipos.length === 1 && fields.tipos[0] === 'PACKING'
+  // CSP obligatorio si es PLANTA; TAXID obligatorio si es CLIENTE_EXTRANJERO.
+  const esPlanta = fields.tipos.includes('PLANTA')
+  const esClienteExtranjero = fields.tipos.includes('CLIENTE_EXTRANJERO')
 
   // ── Load existing entity ──
   useEffect(() => {
@@ -524,6 +533,8 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
         email: entidad.email ?? '',
         telefono: entidad.telefono ?? '',
         codigoExterno: entidad.codigoExterno ?? '',
+        csp: entidad.csp ?? '',
+        taxId: entidad.taxId ?? '',
         activo: entidad.activo,
         tipos: entidad.tipos,
       })
@@ -573,6 +584,8 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
     if (selectedPaisEsChile && !esSoloPacking && fields.identificador.trim()) {
       if (!validarRutChileno(fields.identificador)) e.identificador = 'RUT inválido'
     }
+    if (esPlanta && !fields.csp.trim()) e.csp = 'El CSP es requerido para Planta'
+    if (esClienteExtranjero && !fields.taxId.trim()) e.taxId = 'El TAXID es requerido para Cliente Extranjero'
     if (!isEdit && !esSoloPacking && localDirecciones.length === 0) e.direcciones = 'Debe agregar al menos una dirección'
     if (!isEdit && !esSoloPacking && !localDirecciones.some((d) => d.esPorDefecto)) e.direccionesPorDefecto = 'Una dirección debe ser la principal'
     setFieldErrors(e)
@@ -652,6 +665,8 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
       email: fields.email.trim() || undefined,
       telefono: fields.telefono.trim() || undefined,
       codigoExterno: fields.codigoExterno.trim() || undefined,
+      csp: fields.csp.trim() || undefined,
+      taxId: fields.taxId.trim() || undefined,
       activo: fields.activo,
       tipos: fields.tipos,
     }
@@ -980,6 +995,30 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                     onChange={(e) => setFields((f) => ({ ...f, codigoExterno: e.target.value }))}
                     placeholder='Código en sistema anterior'
                   />
+                </div>
+                <div className='space-y-1.5'>
+                  <Label>
+                    CSP
+                    {esPlanta && <span className='text-destructive ml-1'>*</span>}
+                  </Label>
+                  <Input
+                    value={fields.csp}
+                    onChange={(e) => setFields((f) => ({ ...f, csp: e.target.value }))}
+                    placeholder={esPlanta ? 'CSP de la planta' : 'Solo aplica a Planta'}
+                  />
+                  {fieldErrors.csp && <p className='text-xs text-destructive'>{fieldErrors.csp}</p>}
+                </div>
+                <div className='space-y-1.5'>
+                  <Label>
+                    TAXID
+                    {esClienteExtranjero && <span className='text-destructive ml-1'>*</span>}
+                  </Label>
+                  <Input
+                    value={fields.taxId}
+                    onChange={(e) => setFields((f) => ({ ...f, taxId: e.target.value }))}
+                    placeholder={esClienteExtranjero ? 'Tax ID del cliente extranjero' : 'Solo aplica a Cliente Extranjero'}
+                  />
+                  {fieldErrors.taxId && <p className='text-xs text-destructive'>{fieldErrors.taxId}</p>}
                 </div>
                 <div className='flex items-center gap-2 pt-4'>
                   <Switch

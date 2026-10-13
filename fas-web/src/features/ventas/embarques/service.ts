@@ -2,14 +2,18 @@ import { api } from '@/lib/api'
 import type {
   DatosInstructivoInput,
   DatosReservaManualInput,
+  DocumentoDteResumen,
   Embarque,
   EmbarqueCreateInput,
   EmbarqueDetalle,
   EmbarqueListResponse,
+  EmitirGuiaDespachoInput,
+  GuiaDespachoResponse,
   InstructivoHijo,
   InstructivoHijoUpdateInput,
   PackingListEmbarque,
   PalletResumen,
+  RegistrarGuiaExternaInput,
 } from './types'
 
 export const embarquesService = {
@@ -123,5 +127,32 @@ export const embarquesService = {
 
   async actualizarInstructivoHijo(id: number, instructivoId: number, data: InstructivoHijoUpdateInput): Promise<{ data: InstructivoHijo }> {
     return api.patch(`ventas/embarques/${id}/instructivos/${instructivoId}`, { json: data }).json()
+  },
+
+  // ─── Guía de Despacho (DTE 52, 2026-10-09) ────────────────────────────────
+
+  async obtenerGuiaDespacho(id: number): Promise<{ data: GuiaDespachoResponse }> {
+    return api.get(`ventas/embarques/${id}/guia-despacho`).json()
+  },
+
+  async emitirGuiaDespacho(id: number, data: EmitirGuiaDespachoInput): Promise<{ data: DocumentoDteResumen }> {
+    return api.post(`ventas/embarques/${id}/guia-despacho/emitir`, { json: data }).json()
+  },
+
+  async firmarGuiaDespacho(id: number): Promise<{ data: DocumentoDteResumen }> {
+    return api.post(`ventas/embarques/${id}/guia-despacho/firmar`).json()
+  },
+
+  urlPdfGuiaDespacho(id: number): string {
+    return `/api/ventas/embarques/${id}/guia-despacho/pdf`
+  },
+
+  // Guía emitida por un tercero (2026-10-12).
+  async registrarGuiaExterna(id: number, data: RegistrarGuiaExternaInput): Promise<{ data: GuiaDespachoResponse }> {
+    return api.post(`ventas/embarques/${id}/guia-despacho/externa`, { json: data }).json()
+  },
+
+  async quitarGuiaExterna(id: number): Promise<{ data: GuiaDespachoResponse }> {
+    return api.delete(`ventas/embarques/${id}/guia-despacho/externa`).json()
   },
 }

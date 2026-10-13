@@ -109,6 +109,8 @@ export interface EntidadDetalle {
   email: string | null
   telefono: string | null
   codigoExterno: string | null
+  csp: string | null
+  taxId: string | null
   activo: boolean
   tipos: TipoEntidad[]
   paisId: number
@@ -133,6 +135,8 @@ export interface EntidadCreateInput {
   email?: string
   telefono?: string
   codigoExterno?: string
+  csp?: string
+  taxId?: string
   activo: boolean
   tipos: TipoEntidad[]
 }

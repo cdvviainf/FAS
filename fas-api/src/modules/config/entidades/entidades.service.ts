@@ -72,6 +72,14 @@ export async function crearEntidad(input: EntidadCreateInput, userId: string) {
     throw new ValidationError('El giro es obligatorio para entidades nacionales (Chile)')
   }
 
+  // CSP obligatorio si la entidad es PLANTA; TAXID si es CLIENTE_EXTRANJERO
+  if (input.tipos.includes('PLANTA') && !input.csp) {
+    throw new ValidationError('El CSP es obligatorio para entidades de tipo Planta')
+  }
+  if (input.tipos.includes('CLIENTE_EXTRANJERO') && !input.taxId) {
+    throw new ValidationError('El TAXID es obligatorio para entidades de tipo Cliente Extranjero')
+  }
+
   return repo.createEntidad(input, userId)
 }
 
@@ -123,6 +131,18 @@ export async function actualizarEntidad(
   const giroEfectivo = input.giro !== undefined ? input.giro : entidad.giro
   if (pais.esPaisNacional && !giroEfectivo) {
     throw new ValidationError('El giro es obligatorio para entidades nacionales (Chile)')
+  }
+
+  // CSP obligatorio si es PLANTA; TAXID si es CLIENTE_EXTRANJERO (valor efectivo:
+  // el nuevo si viene en el request, el actual en BD si no).
+  const tiposEfectivos = input.tipos ?? entidad.tipos
+  const cspEfectivo = input.csp !== undefined ? input.csp : entidad.csp
+  const taxIdEfectivo = input.taxId !== undefined ? input.taxId : entidad.taxId
+  if (tiposEfectivos.includes('PLANTA') && !cspEfectivo) {
+    throw new ValidationError('El CSP es obligatorio para entidades de tipo Planta')
+  }
+  if (tiposEfectivos.includes('CLIENTE_EXTRANJERO') && !taxIdEfectivo) {
+    throw new ValidationError('El TAXID es obligatorio para entidades de tipo Cliente Extranjero')
   }
 
   return repo.updateEntidad(id, input, userId)

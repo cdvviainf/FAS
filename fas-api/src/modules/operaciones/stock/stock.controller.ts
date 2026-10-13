@@ -26,3 +26,9 @@ export async function editarLote(req: FastifyRequest, reply: FastifyReply) {
   const lote = await service.editarLote(id, body)
   return reply.send({ data: lote })
 }
+
+export async function eliminarPallet(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = palletParamsSchema.parse(req.params)
+  await service.eliminarPallet(id, req.fasUserId!)
+  return reply.status(204).send()
+}

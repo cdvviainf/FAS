@@ -56,6 +56,7 @@ type ExternalReferenceDef = {
     | 'solicitudInspeccionCategoria'
     | 'solicitudInspeccionEmbalaje'
     | 'articulo'
+    | 'articuloEtiqueta'
     | 'notaVenta'
     | 'ordenCompra'
   parentField: string
@@ -101,6 +102,9 @@ const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceD
   ],
   etiqueta: [
     { delegateName: 'articulo', parentField: 'etiquetaId', label: 'artículos', usesSoftDelete: false },
+    // Etiquetas adicionales permitidas de un Artículo (2026-10-12): bloquea
+    // borrar/bloquear una etiqueta que algún artículo admite como adicional.
+    { delegateName: 'articuloEtiqueta', parentField: 'etiquetaId', label: 'artículos (etiqueta adicional)', usesSoftDelete: false },
   ],
   // CVD-QA-004: NotaVenta/OrdenCompra no son mantenedores genéricos, no
   // encajan en childrenMap — se referencian vía Prisma delegate directo.

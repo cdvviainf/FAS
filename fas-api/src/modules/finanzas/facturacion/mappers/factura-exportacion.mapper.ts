@@ -13,7 +13,7 @@ export interface EmisorFacturaExportacion {
 // es el genérico de extranjeros; la identificación real va en Extranjero.NumId.
 export interface ReceptorFacturaExportacion {
   razonSocial: string
-  identificador: string | null // NumId extranjero (RUT/Tax ID del cliente)
+  taxId: string | null // NumId extranjero: Tax ID del cliente (campo TAXID de la Entidad)
   giro: string | null
   direccion: string | null
   // Código de nacionalidad del cliente según tabla de Aduana del SII.
@@ -155,7 +155,7 @@ export function mapFacturaExportacionA110(data: FacturaExportacionMapeo): Libred
         ...(data.receptor.giro ? { GiroRecep: data.receptor.giro } : {}),
         ...(data.receptor.direccion ? { DirRecep: data.receptor.direccion } : {}),
         Extranjero: {
-          ...(data.receptor.identificador ? { NumId: data.receptor.identificador } : {}),
+          ...(data.receptor.taxId ? { NumId: data.receptor.taxId } : {}),
           ...(data.receptor.nacionalidadCodigo ? { Nacionalidad: data.receptor.nacionalidadCodigo } : {}),
         },
       },

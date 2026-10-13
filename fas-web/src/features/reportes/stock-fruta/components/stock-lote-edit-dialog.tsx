@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -32,7 +32,6 @@ const especiesService = createMantenedorService('especies')
 const variedadesService = createMantenedorService('variedades')
 const categoriasService = createMantenedorService('categorias')
 const calibresService = createMantenedorService('calibres')
-const etiquetasService = createMantenedorService('etiquetas')
 
 interface Props {
   palletId: number | null
@@ -101,15 +100,44 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
   const { data: variedades } = useQuery({ queryKey: ['variedades-options'], queryFn: () => variedadesService.list(opts), enabled: open, staleTime: 5 * 60_000 })
   const { data: categorias } = useQuery({ queryKey: ['categorias-options'], queryFn: () => categoriasService.list(opts), enabled: open, staleTime: 5 * 60_000 })
   const { data: calibres } = useQuery({ queryKey: ['calibres-options'], queryFn: () => calibresService.list(opts), enabled: open, staleTime: 5 * 60_000 })
-  const { data: etiquetas } = useQuery({ queryKey: ['etiquetas-options'], queryFn: () => etiquetasService.list(opts), enabled: open, staleTime: 5 * 60_000 })
   const { data: articulos } = useQuery({ queryKey: ['articulos-embalaje-options'], queryFn: () => articulosService.list({ tipo: 'EMBALAJE', activo: true, limit: 500 }), enabled: open, staleTime: 5 * 60_000 })
   const { data: productores } = useQuery({ queryKey: ['entidades-productor-options'], queryFn: () => entidadesService.list({ tipo: 'PRODUCTOR', activo: true, limit: 500 }), enabled: open, staleTime: 5 * 60_000 })
   const { data: packings } = useQuery({ queryKey: ['entidades-packing-options'], queryFn: () => entidadesService.list({ tipo: 'PACKING', activo: true, limit: 500 }), enabled: open, staleTime: 5 * 60_000 })
   const { data: notasCalidad } = useQuery({ queryKey: ['notas-calidad'], queryFn: () => notasCalidadService.list(), enabled: open, staleTime: 60_000 })
   const { data: notasCondicion } = useQuery({ queryKey: ['notas-condicion'], queryFn: () => notasCondicionService.list(), enabled: open, staleTime: 60_000 })
 
+  // Conjunto de etiquetas permitidas por artículo (2026-10-12): etiqueta
+  // principal ∪ etiquetasAdicionales. 1 permitida = fija (no editable); varias
+  // = elegible dentro del conjunto. El backend valida lo mismo.
+  const etiquetasPorArticulo = useMemo(() => {
+    const m = new Map<number, { value: string; label: string }[]>()
+    for (const a of articulos?.data ?? []) {
+      const opts: { value: string; label: string }[] = []
+      if (a.etiqueta) opts.push({ value: String(a.etiqueta.id), label: a.etiqueta.descripcion })
+      for (const ad of a.etiquetasAdicionales ?? []) opts.push({ value: String(ad.etiqueta.id), label: ad.etiqueta.descripcion })
+      m.set(a.id, opts)
+    }
+    return m
+  }, [articulos])
+
   function setLinea(i: number, cambios: Partial<LoteLineaInput>) {
     setLineas((prev) => prev.map((l, j) => (j === i ? { ...l, ...cambios } : l)))
+  }
+
+  // Al cambiar el artículo de una línea, reajusta la etiqueta al conjunto del
+  // nuevo artículo: si es fija (1 permitida) la fija; si la actual ya no está
+  // permitida la limpia.
+  function cambiarArticuloLinea(i: number, articuloId: number) {
+    const permitidas = etiquetasPorArticulo.get(articuloId) ?? []
+    setLineas((prev) =>
+      prev.map((l, j) => {
+        if (j !== i) return l
+        let etiquetaId = l.etiquetaId
+        if (permitidas.length === 1) etiquetaId = Number(permitidas[0].value)
+        else if (etiquetaId != null && !permitidas.some((o) => o.value === String(etiquetaId))) etiquetaId = null
+        return { ...l, articuloId, etiquetaId }
+      }),
+    )
   }
 
   const guardar = useMutation({
@@ -254,17 +282,24 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
                     <Label className='text-[10px] uppercase'>F. Embalaje</Label>
                     <Input type='date' value={l.fechaEmbalaje ?? ''} onChange={(e) => setLinea(i, { fechaEmbalaje: e.target.value || null })} className='h-8 w-full' />
                   </div>
-                  <div className='min-w-0 space-y-1'>
-                    <Label className='text-[10px] uppercase'>Etiqueta</Label>
-                    <Combobox
-                      options={[{ value: NINGUNO, label: '—' }, ...toOptions(etiquetas?.data)]}
-                      value={l.etiquetaId ? String(l.etiquetaId) : NINGUNO}
-                      onChange={(v) => setLinea(i, { etiquetaId: v === NINGUNO ? null : Number(v) })}
-                      placeholder='—'
-                      searchPlaceholder='Buscar etiqueta...'
-                      className='h-8'
-                    />
-                  </div>
+                  {(() => {
+                    const permitidas = l.articuloId ? etiquetasPorArticulo.get(l.articuloId) ?? [] : []
+                    const fija = permitidas.length <= 1
+                    return (
+                      <div className='min-w-0 space-y-1'>
+                        <Label className='text-[10px] uppercase'>Etiqueta</Label>
+                        <Combobox
+                          options={permitidas}
+                          value={l.etiquetaId ? String(l.etiquetaId) : null}
+                          onChange={(v) => setLinea(i, { etiquetaId: v ? Number(v) : null })}
+                          placeholder={l.articuloId ? '—' : 'Elige artículo'}
+                          searchPlaceholder='Buscar etiqueta...'
+                          className='h-8'
+                          disabled={!l.articuloId || fija}
+                        />
+                      </div>
+                    )
+                  })()}
 
                   {/* Fila 2: Artículo (2 col) · Packing (2 col) · Cajas · eliminar */}
                   <div className='min-w-0 space-y-1 sm:col-span-2'>
@@ -272,7 +307,7 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
                     <Combobox
                       options={toOptions(articulos?.data)}
                       value={l.articuloId ? String(l.articuloId) : null}
-                      onChange={(v) => setLinea(i, { articuloId: Number(v) })}
+                      onChange={(v) => cambiarArticuloLinea(i, Number(v))}
                       placeholder='—'
                       searchPlaceholder='Buscar artículo...'
                       className='h-8'

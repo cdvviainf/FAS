@@ -1,7 +1,8 @@
 'use client'
 
 import { Fragment, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { Bar, BarChart, XAxis } from 'recharts'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { AlertModal } from '@/components/modal/alert-modal'
 import { StockLoteEditDialog } from './stock-lote-edit-dialog'
 import { cn } from '@/lib/utils'
 import { MultiCombobox } from '@/components/shared/multi-combobox'
@@ -106,7 +108,10 @@ function groupKey(row: StockDetalleRow): string {
 
 export function StockFrutaClient() {
   const puedeEditarStock = usePuedeEscribir('OPER_STOCK_EDICION')
+  const queryClient = useQueryClient()
   const [editPalletId, setEditPalletId] = useState<number | null>(null)
+  // Pallet a eliminar (soft delete) — {id, numeroPallet} para el modal de confirmación.
+  const [deletePallet, setDeletePallet] = useState<{ id: number; numeroPallet: string } | null>(null)
   const [filters, setFilters] = useState<Filters>(FILTROS_VACIOS)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   // Antigüedad desde/hasta (días) — rango numérico, no un facet de multi-
@@ -120,6 +125,17 @@ export function StockFrutaClient() {
     queryFn: () => stockFrutaService.list(),
     staleTime: 30_000,
   })
+
+  const deleteMutation = useMutation({
+    mutationFn: (palletId: number) => stockFrutaService.eliminarPallet(palletId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stock-fruta'] })
+      toast.success('Pallet eliminado')
+      setDeletePallet(null)
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al eliminar el pallet'),
+  })
+
   const rows = useMemo(() => data?.data ?? [], [data])
   const filteredRows = useMemo(() => {
     const desde = antiguedadDesde.trim() ? Number(antiguedadDesde) : null
@@ -479,15 +495,26 @@ export function StockFrutaClient() {
                               <TableRow key={row.palletLineaId} className='text-muted-foreground font-normal'>
                                 <TableCell>
                                   {puedeEditarStock && (
-                                    <Button
-                                      variant='ghost'
-                                      size='icon'
-                                      className='h-6 w-6'
-                                      title='Editar lote'
-                                      onClick={() => setEditPalletId(row.palletId)}
-                                    >
-                                      <Icons.edit className='h-3.5 w-3.5' />
-                                    </Button>
+                                    <div className='flex'>
+                                      <Button
+                                        variant='ghost'
+                                        size='icon'
+                                        className='h-6 w-6'
+                                        title='Editar lote'
+                                        onClick={() => setEditPalletId(row.palletId)}
+                                      >
+                                        <Icons.edit className='h-3.5 w-3.5' />
+                                      </Button>
+                                      <Button
+                                        variant='ghost'
+                                        size='icon'
+                                        className='h-6 w-6 text-destructive'
+                                        title='Eliminar pallet'
+                                        onClick={() => setDeletePallet({ id: row.palletId, numeroPallet: row.numeroPallet })}
+                                      >
+                                        <Icons.trash className='h-3.5 w-3.5' />
+                                      </Button>
+                                    </div>
                                   )}
                                 </TableCell>
                                 <TableCell></TableCell>
@@ -526,6 +553,14 @@ export function StockFrutaClient() {
         palletId={editPalletId}
         open={editPalletId != null}
         onOpenChange={(v) => { if (!v) setEditPalletId(null) }}
+      />
+      <AlertModal
+        isOpen={deletePallet != null}
+        onClose={() => setDeletePallet(null)}
+        onConfirm={() => deletePallet && deleteMutation.mutate(deletePallet.id)}
+        loading={deleteMutation.isPending}
+        title='Eliminar pallet'
+        description={deletePallet ? `¿Eliminar el pallet ${deletePallet.numeroPallet} del stock? Esta acción no se puede deshacer.` : ''}
       />
     </div>
   )

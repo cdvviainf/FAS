@@ -58,7 +58,9 @@ export async function resolverFacturaExportacion(id: number, empresaId: number):
     idioma,
     cliente: {
       razonSocial: cliente?.razonSocial ?? '—',
-      rut: cliente?.identificador ?? null,
+      // Cliente extranjero: mostrar el TAXID (fallback a identificador para
+      // clientes creados antes del campo TAXID, 2026-10-09).
+      rut: cliente?.taxId ?? cliente?.identificador ?? null,
       direccion: cliente?.direcciones[0]?.direccion ?? null,
     },
     moneda: factura.moneda.codigo,

@@ -14,7 +14,7 @@ const base = {
   },
   receptor: {
     razonSocial: 'Global Fruit Importers LLC',
-    identificador: '99-1234567',
+    taxId: '99-1234567',
     giro: 'Import',
     direccion: null,
     nacionalidadCodigo: '563',

@@ -425,6 +425,7 @@ export async function countActiveReferences(
     | 'solicitudInspeccionCategoria'
     | 'solicitudInspeccionEmbalaje'
     | 'articulo'
+    | 'articuloEtiqueta'
     | 'notaVenta'
     | 'ordenCompra',
   parentId: number,

@@ -13,4 +13,8 @@ export const stockFrutaService = {
   async editarLote(palletId: number, data: LoteEditarInput): Promise<{ data: Lote }> {
     return api.patch(`operaciones/stock/pallets/${palletId}/lote`, { json: data }).json()
   },
+  // Eliminar pallet (soft delete, 2026-10-12) — solo stock libre.
+  async eliminarPallet(palletId: number): Promise<void> {
+    await api.delete(`operaciones/stock/pallets/${palletId}`)
+  },
 }

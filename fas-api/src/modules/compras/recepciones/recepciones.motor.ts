@@ -78,7 +78,9 @@ function validarFilasCompletas(filasCrudas: FilaExcelCruda[]): string[] {
     if (!f.calibre) errores.push(`Fila ${f.fila}: falta el Calibre`)
     if (!f.productor) errores.push(`Fila ${f.fila}: falta el Productor`)
     if (!f.fechaEmbalaje) errores.push(`Fila ${f.fila}: falta la Fecha de Embalaje`)
-    if (!f.etiqueta) errores.push(`Fila ${f.fila}: falta la Etiqueta`)
+    // La Etiqueta ya no es obligatoria acá (2026-10-12): su obligatoriedad
+    // depende del artículo (fija → se hereda del maestro; dinámica → es
+    // obligatoria). Se valida en Etapa 3a, donde el artículo ya está resuelto.
     if (!f.packing) errores.push(`Fila ${f.fila}: falta el Packing`)
 
     if (!f.cajas) {
@@ -241,10 +243,38 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
       erroresFila.push(`Fila ${cruda.fila}: Fecha de Embalaje "${cruda.fechaEmbalaje}" no es una fecha válida (usa dd-mm-aaaa)`)
     }
 
-    const keyEtiqueta = cruda.etiqueta.toLowerCase()
-    if (!cacheEtiqueta.has(keyEtiqueta)) cacheEtiqueta.set(keyEtiqueta, await repo.findEtiquetaByTexto(cruda.etiqueta))
-    const etiqueta = cacheEtiqueta.get(keyEtiqueta)
-    if (!etiqueta) erroresFila.push(`Fila ${cruda.fila}: Etiqueta "${cruda.etiqueta}" no existe en el maestro`)
+    // Etiqueta (2026-10-12): la obligatoriedad y el conjunto permitido dependen
+    // del artículo. Set permitido = etiquetaId principal ∪ etiquetasAdicionales.
+    //  - 1 sola permitida (fija): si no viene en el Excel se hereda del maestro;
+    //    si viene, debe ser esa misma.
+    //  - varias permitidas (dinámica): es obligatoria y debe ser una del conjunto.
+    let etiquetaIdFinal: number | null = null
+    const textoEtiqueta = cruda.etiqueta.trim()
+    let etiquetaResuelta: Awaited<ReturnType<typeof repo.findEtiquetaByTexto>> = null
+    if (textoEtiqueta !== '') {
+      const keyEtiqueta = textoEtiqueta.toLowerCase()
+      if (!cacheEtiqueta.has(keyEtiqueta)) cacheEtiqueta.set(keyEtiqueta, await repo.findEtiquetaByTexto(textoEtiqueta))
+      etiquetaResuelta = cacheEtiqueta.get(keyEtiqueta) ?? null
+      if (!etiquetaResuelta) erroresFila.push(`Fila ${cruda.fila}: Etiqueta "${cruda.etiqueta}" no existe en el maestro`)
+    }
+    if (articulo) {
+      const permitidas = new Set<number>()
+      if (articulo.etiquetaId != null) permitidas.add(articulo.etiquetaId)
+      for (const a of articulo.etiquetasAdicionales) permitidas.add(a.etiquetaId)
+      if (textoEtiqueta !== '') {
+        if (etiquetaResuelta && !permitidas.has(etiquetaResuelta.id)) {
+          erroresFila.push(`Fila ${cruda.fila}: la Etiqueta "${cruda.etiqueta}" no está permitida para el artículo "${articulo.descripcion}"`)
+        } else if (etiquetaResuelta) {
+          etiquetaIdFinal = etiquetaResuelta.id
+        }
+      } else if (permitidas.size === 0) {
+        erroresFila.push(`Fila ${cruda.fila}: el artículo "${articulo.descripcion}" no tiene una etiqueta configurada`)
+      } else if (permitidas.size === 1) {
+        etiquetaIdFinal = [...permitidas][0] // etiqueta fija heredada del maestro
+      } else {
+        erroresFila.push(`Fila ${cruda.fila}: la Etiqueta es obligatoria — el artículo "${articulo.descripcion}" admite varias etiquetas`)
+      }
+    }
 
     const keyPacking = cruda.packing.toLowerCase()
     if (!cachePacking.has(keyPacking)) cachePacking.set(keyPacking, await repo.findPackingByTexto(cruda.packing))
@@ -259,7 +289,7 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
     // Etapa 2 ya garantizó formato; acá solo falta el parseo final.
     const cajas = Number(cruda.cajas.replace(',', '.'))
     const e = especie!, v = variedad!, c = categoria!, cal = calibre!, art = articulo!, prod = productor!
-    const etq = etiqueta!, pack = packing!
+    const pack = packing!
     filas.push({
       fila: cruda.fila,
       numeroPallet: cruda.numeroPallet,
@@ -272,7 +302,7 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
       calibreLabel: cal.descripcion,
       cajas,
       fechaEmbalaje: fechaParseada as Date,
-      etiquetaId: etq.id,
+      etiquetaId: etiquetaIdFinal!,
       packingId: pack.id,
       productorId: prod.id,
       comboLabel: `${e.descripcion} / ${v.descripcion} / ${c.descripcion} / ${art.descripcion}`,

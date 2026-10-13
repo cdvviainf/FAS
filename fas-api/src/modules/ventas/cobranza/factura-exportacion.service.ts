@@ -409,7 +409,9 @@ async function construirPayloadDte(
     emisor,
     receptor: {
       razonSocial: nv.cliente.razonSocial,
-      identificador: nv.cliente.identificador,
+      // NumId del receptor extranjero = TAXID de la Entidad. Fallback a
+      // `identificador` para clientes creados antes del campo TAXID (2026-10-09).
+      taxId: nv.cliente.taxId ?? nv.cliente.identificador,
       giro: nv.cliente.giro,
       direccion: null,
       // SII espera el código de país de SU tabla de Aduana (no "COL").

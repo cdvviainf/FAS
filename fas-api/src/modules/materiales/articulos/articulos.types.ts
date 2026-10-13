@@ -18,6 +18,9 @@ export interface ArticuloCreateInput {
   activo?: boolean
   controlaStock?: boolean // calculado por el service a partir de tipoCosteo (R3)
   etiquetaId?: number | null
+  // Etiquetas adicionales permitidas (2026-10-12). En update, si viene definida
+  // reemplaza toda la lista; si es undefined, no se toca.
+  etiquetaIdsAdicionales?: number[]
   kgNetoEnvase?: number | null
   kgBrutoEnvase?: number | null
   especieId?: number | null

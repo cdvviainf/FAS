@@ -775,6 +775,7 @@ model Etiqueta {
   eliminadoPor          String?
 
   articulos                   Articulo[]
+  articuloEtiquetas           ArticuloEtiqueta[]
   palletLineas                PalletLinea[]
   proformaLineas              ProformaLinea[]
   facturaExportacionLineas    FacturaExportacionLinea[]
@@ -1545,6 +1546,11 @@ model Entidad {
   email                          String?
   telefono                       String?
   codigoExterno                  String?
+  // CSP: obligatorio cuando la entidad es PLANTA (se valida en el service según
+  // `tipos`, no con NOT NULL en BD — misma convención que giro/identificador).
+  csp                            String?
+  // TAXID: obligatorio cuando la entidad es CLIENTE_EXTRANJERO (ídem).
+  taxId                          String?
   activo                         Boolean                     @default(true)
   tipos                          TipoEntidad[]
   creadoEn                       DateTime                    @default(now())
@@ -1582,6 +1588,8 @@ model Entidad {
   embarquesAgenteAduana          Embarque[]                  @relation("EmbarqueAgenteAduana")
   embarquesEmbarcador            Embarque[]                  @relation("EmbarqueEmbarcador")
   embarquesNaviera               Embarque[]                  @relation("EmbarqueNaviera")
+  embarquesGuiaTransporte        Embarque[]                  @relation("EmbarqueGuiaTransporte")
+  embarquesGuiaExternaEmisor     Embarque[]                  @relation("EmbarqueGuiaExternaEmisor")
   instructivosHijosPlanta        InstructivoHijo[]           @relation("InstructivoHijoPlanta")
 
   @@unique([empresaId, id])
@@ -2015,12 +2023,20 @@ model Articulo {
   activo                Boolean      @default(true)
   // Atributos físicos del embalaje (Orden de Compra hereda estos valores del
   // artículo elegido en la línea, no los duplica — ver compras.md §4.3).
+  // Etiqueta PRINCIPAL (por defecto) del embalaje. Requerida solo si tipo =
+  // EMBALAJE (validado en articulos.service.ts, no a nivel de columna — mismo
+  // criterio que valorEstandar/ESTANDAR). La leen en vivo OC/Cierre Comercial/
+  // Instructivo de Embalaje como etiqueta del artículo.
   etiquetaId            Int?
   // FK compuesta (empresaId, etiquetaId) -> Etiqueta(empresaId, id): mismo
-  // patrón que Articulo.unidadId. Requerida solo si tipo = EMBALAJE (validado
-  // en articulos.service.ts, no a nivel de columna — mismo criterio que
-  // valorEstandar/ESTANDAR).
+  // patrón que Articulo.unidadId.
   etiqueta              Etiqueta?    @relation(fields: [empresaId, etiquetaId], references: [empresaId, id])
+  // Etiquetas ADICIONALES permitidas (2026-10-12): el conjunto permitido del
+  // embalaje = etiquetaId (principal) ∪ estas. Vacío = etiqueta FIJA (se hereda
+  // en Stock y no es editable); con ≥1 adicional = DINÁMICA (la etiqueta es
+  // obligatoria en la carga de Stock y sólo puede ser una del conjunto, y en la
+  // edición de Stock sólo se puede cambiar dentro del conjunto permitido).
+  etiquetasAdicionales  ArticuloEtiqueta[]
   kgNetoEnvase          Decimal?     @db.Decimal(10, 3)
   kgBrutoEnvase         Decimal?     @db.Decimal(10, 3)
   // Especie del embalaje (opcional): agrupa los embalajes por especie en el
@@ -2056,6 +2072,25 @@ model Articulo {
   @@index([activo])
   @@index([empresaId])
   @@map("articulos")
+}
+
+// Etiquetas adicionales permitidas de un Artículo (2026-10-12) — ver el
+// comentario de Articulo.etiquetasAdicionales. El conjunto permitido del
+// embalaje = Articulo.etiquetaId (principal) ∪ estas filas. Hijo de Articulo
+// (tenant vía el padre, igual que ArticuloCodigoEquivalente — no lleva
+// empresaId ni entra a MODELOS_TENANT). articuloId ya acota al tenant, así que
+// el único de (articuloId, etiquetaId) basta.
+model ArticuloEtiqueta {
+  id         Int      @id @default(autoincrement())
+  articuloId Int
+  articulo   Articulo @relation(fields: [articuloId], references: [id], onDelete: Cascade)
+  etiquetaId Int
+  etiqueta   Etiqueta @relation(fields: [etiquetaId], references: [id])
+
+  @@unique([articuloId, etiquetaId])
+  @@index([articuloId])
+  @@index([etiquetaId])
+  @@map("articulo_etiquetas")
 }
 
 // Códigos equivalentes / alternativos de un Artículo (2026-09-28): un artículo
@@ -3058,6 +3093,36 @@ model Embarque {
   // BD (ver comentario en el modelo `EmbarquePackingList`).
   packingLists EmbarquePackingList[]
 
+  // ─── Guía de Despacho (DTE 52, 2026-10-09) — datos de transporte capturados
+  // al emitir la Guía desde la pestaña Despachar (solo tras despacho efectivo,
+  // opcional "para algunos casos"). El DTE en sí (folio, XML, estado) se
+  // registra en DocumentoDte con origenTipo='embarque'. Origen/destino se
+  // guardan como texto (dirección + comuna) porque son editables en el popup.
+  guiaIndTraslado     Int? // IndTraslado SII (1=Venta, 5=Traslado interno, etc.)
+  guiaTransporteId    Int? // Entidad tipo EMPRESA_TRANSPORTE (RUT transportista)
+  guiaTransporte      Entidad? @relation("EmbarqueGuiaTransporte", fields: [empresaId, guiaTransporteId], references: [empresaId, id])
+  guiaChoferRut       String?
+  guiaChoferNombre    String?
+  guiaPatenteCamion   String?
+  guiaPatenteRemolque String?
+  guiaDirOrigen       String?
+  guiaComunaOrigen    String?
+  guiaDirDestino      String?
+  guiaComunaDestino   String?
+
+  // ─── Guía de Despacho emitida por un tercero (2026-10-12) — cuando NO
+  // emitimos nosotros el DTE 52, se registra el número de la Guía de quien la
+  // emitió (Entidad tipo PRODUCTOR o PLANTA) para trazabilidad. EXCLUYENTE con
+  // la Guía propia (DocumentoDte origenTipo='embarque'): un Embarque tiene una
+  // u otra, nunca ambas (enforcement en el service). Duplicidad "mismo emisor
+  // + mismo número" bloqueada por índice único parcial por empresa (ver
+  // migración 20261012130000_embarque_guia_externa — no se declara acá, mismo
+  // patrón que el resto de índices parciales del schema).
+  guiaExternaNumero   String?
+  guiaExternaEmisorId Int?
+  guiaExternaEmisor   Entidad?  @relation("EmbarqueGuiaExternaEmisor", fields: [empresaId, guiaExternaEmisorId], references: [empresaId, id])
+  guiaExternaFecha    DateTime?
+
   creadoEn       DateTime  @default(now())
   creadoPor      String
   actualizadoEn  DateTime? @updatedAt
@@ -3073,6 +3138,8 @@ model Embarque {
   @@index([agenteAduanaId])
   @@index([embarcadorId])
   @@index([navieraId])
+  @@index([guiaTransporteId])
+  @@index([guiaExternaEmisorId])
   @@map("embarques")
 }
 
@@ -4294,12 +4361,21 @@ model Pallet {
 
   creadoEn DateTime @default(now())
 
+  // Soft delete (2026-10-12): eliminar un pallet desde Edición de Stock
+  // (OPER_STOCK_EDICION) — solo permitido si el pallet es stock libre
+  // (embarqueId == null), mismo guard que editar el lote. Las PalletLinea
+  // quedan vivas en BD (onDelete: Cascade físico) pero ocultas al filtrar el
+  // pallet por eliminadoEn:null en todas las lecturas de stock.
+  eliminadoEn  DateTime?
+  eliminadoPor String?
+
   @@index([recepcionId])
   @@index([productorId])
   @@index([embarqueId])
   @@index([empresaId])
   @@index([notaCalidadId])
   @@index([notaCondicionId])
+  @@index([eliminadoEn])
   @@map("pallets")
 }
 

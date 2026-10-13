@@ -15,6 +15,11 @@ export const articuloCreateSchema = z.object({
   // solo si tipo=EMBALAJE — validado en articulos.service.ts (mismo criterio
   // que valorEstandar/ESTANDAR), no aquí.
   etiquetaId: z.number().int().positive().optional().nullable(),
+  // Etiquetas adicionales permitidas (2026-10-12): además de la principal
+  // (etiquetaId). Si trae ≥1, el embalaje es de etiqueta DINÁMICA. Validado en
+  // el service (todas activas, distintas y != principal; solo para EMBALAJE).
+  // En update, si viene definida reemplaza toda la lista; undefined no la toca.
+  etiquetaIdsAdicionales: z.array(z.number().int().positive()).optional(),
   kgNetoEnvase: z.number().min(0).optional().nullable(),
   kgBrutoEnvase: z.number().min(0).optional().nullable(),
   // Especie del embalaje (opcional): agrupa embalajes en Cajas por Pallet.

@@ -19,6 +19,36 @@ function validarEtiqueta(tipo: string | undefined, etiquetaId: number | null | u
   }
 }
 
+// Etiquetas adicionales permitidas (2026-10-12): solo para EMBALAJE, distintas
+// entre sí y distintas de la principal. Devuelve la lista saneada (vacía si no
+// aplica). La validación de existencia/activa de cada una se hace aparte.
+function sanearEtiquetasAdicionales(
+  tipo: string | undefined,
+  etiquetaPrincipalId: number | null | undefined,
+  adicionales: number[] | undefined,
+): number[] {
+  if (adicionales === undefined) return []
+  if (adicionales.length === 0) return []
+  if (tipo !== 'EMBALAJE') {
+    throw new ValidationError('Solo los artículos de tipo Embalaje pueden tener etiquetas adicionales')
+  }
+  const unicas = [...new Set(adicionales)]
+  if (unicas.length !== adicionales.length) {
+    throw new ValidationError('Hay etiquetas adicionales repetidas')
+  }
+  if (etiquetaPrincipalId != null && unicas.includes(etiquetaPrincipalId)) {
+    throw new ValidationError('La etiqueta principal no debe repetirse en las etiquetas adicionales')
+  }
+  return unicas
+}
+
+async function validarEtiquetasActivas(ids: number[]) {
+  for (const id of ids) {
+    const etiqueta = await repo.getEtiquetaActiva(id)
+    if (!etiqueta) throw new ValidationError('Una de las etiquetas adicionales no existe, está bloqueada o fue eliminada')
+  }
+}
+
 function controlaStockDe(tipoCosteo: string): boolean {
   return tipoCosteo === 'PROMEDIO_PONDERADO'
 }
@@ -51,8 +81,12 @@ export async function crearArticulo(body: ArticuloCreateInput) {
     if (!etiqueta) throw new ValidationError('La etiqueta seleccionada no existe, está bloqueada o fue eliminada')
   }
 
+  const adicionales = sanearEtiquetasAdicionales(body.tipo, body.etiquetaId, body.etiquetaIdsAdicionales)
+  await validarEtiquetasActivas(adicionales)
+
   return repo.createArticulo({
     ...body,
+    etiquetaIdsAdicionales: adicionales,
     controlaStock: controlaStockDe(body.tipoCosteo),
   })
 }
@@ -83,6 +117,25 @@ export async function actualizarArticulo(id: number, body: ArticuloUpdateInput) 
   const data: ArticuloUpdateInput & { controlaStock?: boolean } = { ...body }
   if (body.tipoCosteo !== undefined) {
     data.controlaStock = controlaStockDe(body.tipoCosteo)
+  }
+
+  // Etiquetas adicionales: si vienen en el body se reemplazan; si el artículo
+  // dejó de ser EMBALAJE se limpian aunque el body no las mande; en cualquier
+  // otro caso (undefined) no se tocan.
+  if (body.etiquetaIdsAdicionales !== undefined) {
+    const adicionales = sanearEtiquetasAdicionales(tipo, etiquetaId, body.etiquetaIdsAdicionales)
+    await validarEtiquetasActivas(adicionales)
+    data.etiquetaIdsAdicionales = adicionales
+  } else if (tipo !== 'EMBALAJE') {
+    data.etiquetaIdsAdicionales = []
+  } else if (body.etiquetaId !== undefined && etiquetaId != null) {
+    // Invariante principal != adicional: si el PATCH cambia sólo la etiqueta
+    // principal a una que ya figuraba como adicional, se la quita de las
+    // adicionales (reemplaza la lista con las existentes menos la nueva principal).
+    const existentes = (actual.etiquetasAdicionales ?? []).map((e) => e.etiquetaId)
+    if (existentes.includes(etiquetaId)) {
+      data.etiquetaIdsAdicionales = existentes.filter((x) => x !== etiquetaId)
+    }
   }
 
   return repo.updateArticulo(id, data)

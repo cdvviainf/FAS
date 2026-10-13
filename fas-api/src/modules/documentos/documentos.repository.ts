@@ -45,6 +45,10 @@ export async function getEntidadParaDocumento(id: number) {
     select: {
       razonSocial: true,
       identificador: true,
+      taxId: true,
+      // telefono de la entidad + datos del contacto (nombre/teléfono): usados
+      // por la AGA en el Instructivo para Notify/Consignatario (2026-10-12).
+      telefono: true,
       direcciones: {
         where: { eliminadoEn: null },
         select: { direccion: true },
@@ -53,7 +57,7 @@ export async function getEntidadParaDocumento(id: number) {
       },
       contactos: {
         where: { eliminadoEn: null },
-        select: { nombre: true },
+        select: { nombre: true, telefono: true },
         orderBy: [{ esRepresentanteLegal: 'desc' }, { codigo: 'asc' }],
         take: 1,
       },

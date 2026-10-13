@@ -3,6 +3,23 @@ import { getInstructivoHijoConDetalle } from '../../ventas/embarques/embarques.r
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
 import type { InstructivoEmbarquePdfPayload } from '../schemas/instructivo-embarque.schema.js'
 
+type EntidadDocumento = Awaited<ReturnType<typeof getEntidadParaDocumento>>
+
+// Mapea una Entidad (Notify/Consignatario) a los datos completos que la AGA
+// necesita en el Instructivo: dirección, RUT, TaxId, teléfono y contacto.
+function actorCompleto(ent: EntidadDocumento) {
+  if (!ent) return null
+  return {
+    razonSocial: ent.razonSocial,
+    direccion: ent.direcciones[0]?.direccion ?? null,
+    rut: ent.identificador ?? null,
+    taxId: ent.taxId ?? null,
+    telefono: ent.telefono ?? null,
+    contacto: ent.contactos[0]?.nombre ?? null,
+    contactoTelefono: ent.contactos[0]?.telefono ?? null,
+  }
+}
+
 // Resolver del Instructivo de Embarque (InstructivoHijo, ventas.md R11) —
 // mismo criterio que instructivo-embalaje.resolver.ts. `id` acá es el id del
 // InstructivoHijo, no del Embarque — cada Planta/punto de retiro tiene su
@@ -61,10 +78,14 @@ export async function resolverInstructivoEmbarque(id: number, empresaId: number)
     cliente: {
       razonSocial: cliente?.razonSocial ?? '—',
       rut: cliente?.identificador ?? null,
+      taxId: cliente?.taxId ?? null,
       direccion: cliente?.direcciones[0]?.direccion ?? null,
     },
-    consignatario: consignatario?.razonSocial ?? null,
-    notify: notify?.razonSocial ?? null,
+    // Notify y Consignatario (AGA): sólo se emiten con sus datos completos
+    // cuando difieren del Cliente (2026-10-12). Si coinciden con el Cliente (o
+    // no hay uno asignado) el bloque queda null y no se repite en el PDF.
+    consignatario: nv.consignatarioId != null && nv.consignatarioId !== nv.clienteId ? actorCompleto(consignatario) : null,
+    notify: nv.notifyId != null && nv.notifyId !== nv.clienteId ? actorCompleto(notify) : null,
     tipoEmbarque: nv.tipoEmbarque?.descripcion ?? null,
     tipoFlete: nv.tipoFlete?.descripcion ?? null,
     modalidadVenta: nv.modalidadVenta?.descripcion ?? null,

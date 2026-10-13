@@ -95,6 +95,39 @@ export async function embarquesRoutes(app: FastifyInstance) {
     ctrl.anularDespacho,
   )
 
+  // ─── Guía de Despacho (DTE 52, 2026-10-09) — opcional tras el despacho ────
+  app.get(
+    '/embarques/:id/guia-despacho',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    ctrl.obtenerGuiaDespacho,
+  )
+  app.post(
+    '/embarques/:id/guia-despacho/emitir',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.emitirGuiaDespacho,
+  )
+  app.post(
+    '/embarques/:id/guia-despacho/firmar',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.firmarGuiaDespacho,
+  )
+  app.get(
+    '/embarques/:id/guia-despacho/pdf',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    ctrl.descargarGuiaDespachoPdf,
+  )
+  // Guía emitida por un tercero (2026-10-12): registrar número + emisor, o quitarla.
+  app.post(
+    '/embarques/:id/guia-despacho/externa',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.registrarGuiaExterna,
+  )
+  app.delete(
+    '/embarques/:id/guia-despacho/externa',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.quitarGuiaExterna,
+  )
+
   // ─── Packing List (compras.md §9.3, cierra EP-QA-003) ────────────────────
   app.post(
     '/embarques/:id/packing-list',

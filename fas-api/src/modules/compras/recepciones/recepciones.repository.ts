@@ -269,6 +269,10 @@ export async function findCalibreByTexto(especieId: number, texto: string) {
 export async function findArticuloByTexto(texto: string) {
   return prisma.articulo.findFirst({
     where: { tipo: 'EMBALAJE', activo: true, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
+    // etiquetaId (principal) + etiquetasAdicionales = conjunto de etiquetas
+    // permitidas del embalaje (2026-10-12) — el motor valida la etiqueta de la
+    // fila contra este conjunto.
+    include: { etiquetasAdicionales: { select: { etiquetaId: true } } },
   })
 }
 

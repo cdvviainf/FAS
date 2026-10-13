@@ -56,12 +56,45 @@ export function InstructivoEmbarqueV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
           campos={[
             { label: 'Razón social', valor: d.cliente.razonSocial },
             { label: 'RUT', valor: fmt.rut(d.cliente.rut) },
+            { label: 'TaxId', valor: d.cliente.taxId ?? '—' },
             { label: 'Dirección', valor: d.cliente.direccion ?? '—' },
-            { label: 'Consignatario', valor: d.consignatario ?? '—' },
-            { label: 'Notify', valor: d.notify ?? '—' },
           ]}
         />
       </div>
+
+      {/* Consignatario y Notify (AGA) — sólo aparecen cuando difieren del
+          Cliente, con sus datos completos (dirección, RUT, TaxId, teléfono,
+          contacto). Si coinciden con el Cliente el resolver los deja null. */}
+      {(d.consignatario || d.notify) && (
+        <div className='doc-fila-grupos'>
+          {d.consignatario && (
+            <GrupoCampos
+              titulo='Consignatario'
+              campos={[
+                { label: 'Razón social', valor: d.consignatario.razonSocial },
+                { label: 'RUT', valor: fmt.rut(d.consignatario.rut) },
+                { label: 'TaxId', valor: d.consignatario.taxId ?? '—' },
+                { label: 'Dirección', valor: d.consignatario.direccion ?? '—' },
+                { label: 'Teléfono', valor: d.consignatario.telefono ?? '—' },
+                { label: 'Contacto', valor: [d.consignatario.contacto, d.consignatario.contactoTelefono].filter(Boolean).join(' · ') || '—' },
+              ]}
+            />
+          )}
+          {d.notify && (
+            <GrupoCampos
+              titulo='Notify'
+              campos={[
+                { label: 'Razón social', valor: d.notify.razonSocial },
+                { label: 'RUT', valor: fmt.rut(d.notify.rut) },
+                { label: 'TaxId', valor: d.notify.taxId ?? '—' },
+                { label: 'Dirección', valor: d.notify.direccion ?? '—' },
+                { label: 'Teléfono', valor: d.notify.telefono ?? '—' },
+                { label: 'Contacto', valor: [d.notify.contacto, d.notify.contactoTelefono].filter(Boolean).join(' · ') || '—' },
+              ]}
+            />
+          )}
+        </div>
+      )}
 
       {/* Tipo de venta: sección propia en la columna izquierda, sobre Planta de
           retiro (Tipo de flete / Modalidad de venta / Incoterm). */}

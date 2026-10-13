@@ -292,3 +292,83 @@ export interface EmbarqueListResponse {
   data: Embarque[]
   meta: { total: number; page: number; limit: number; totalPages: number }
 }
+
+// ─── Guía de Despacho (DTE 52, 2026-10-09) ──────────────────────────────────
+
+export type EstadoDocumentoDte =
+  | 'PENDIENTE'
+  | 'EMITIENDO'
+  | 'TEMPORAL_CREADO'
+  | 'GENERANDO'
+  | 'GENERADO'
+  | 'ERROR'
+
+export interface DocumentoDteResumen {
+  id: number
+  tipoDte: number
+  estado: EstadoDocumentoDte
+  libredteCodigoTemporal: string | null
+  folio: number | null
+  errorMensaje: string | null
+}
+
+// Valores precargados en el popup (guardados o defaults del backend).
+export interface GuiaDespachoDatos {
+  indTraslado: number | null
+  transporteId: number | null
+  choferRut: string
+  choferNombre: string
+  patenteCamion: string
+  patenteRemolque: string
+  dirOrigen: string
+  comunaOrigen: string
+  dirDestino: string
+  comunaDestino: string
+}
+
+// Guía emitida por un tercero (2026-10-12) — registrada manualmente cuando no
+// emitimos nosotros el DTE 52.
+export interface GuiaExternaResumen {
+  numero: string
+  fecha: string | null
+  emisorId: number | null
+  emisor: { id: number; razonSocial: string; rut: string | null } | null
+}
+
+export interface GuiaDespachoResponse {
+  despachado: boolean
+  documento: DocumentoDteResumen | null
+  datos: GuiaDespachoDatos
+  externa: GuiaExternaResumen | null
+}
+
+export interface RegistrarGuiaExternaInput {
+  emisorId: number
+  numero: string
+  fecha?: string | null
+}
+
+export interface EmitirGuiaDespachoInput {
+  indTraslado: number
+  transporteId?: number | null
+  choferRut?: string | null
+  choferNombre?: string | null
+  patenteCamion?: string | null
+  patenteRemolque?: string | null
+  dirOrigen?: string | null
+  comunaOrigen?: string | null
+  dirDestino?: string | null
+  comunaDestino?: string | null
+}
+
+// Catálogo SII de motivo de traslado (IndTraslado) para la Guía de Despacho.
+// Los motivos de VENTA (1=Venta, 2=Ventas por efectuar) se excluyen por ahora:
+// requieren receptor comprador y precios reales que esta guía aún no resuelve
+// (FAS-GD-R1-002) — el backend también los rechaza.
+export const IND_TRASLADO_OPCIONES: { value: number; label: string }[] = [
+  { value: 5, label: 'Traslado interno' },
+  { value: 3, label: 'Consignación' },
+  { value: 4, label: 'Entrega gratuita' },
+  { value: 6, label: 'Otros traslados no venta' },
+  { value: 7, label: 'Guía de devolución' },
+]

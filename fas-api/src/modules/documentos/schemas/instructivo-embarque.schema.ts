@@ -1,5 +1,17 @@
 import { z } from 'zod'
 
+// Datos completos de un actor (Notify/Consignatario) que exige la AGA:
+// dirección, RUT, TaxId, teléfono y contacto (2026-10-12).
+const actorCompletoSchema = z.object({
+  razonSocial: z.string(),
+  direccion: z.string().nullable(),
+  rut: z.string().nullable(),
+  taxId: z.string().nullable(),
+  telefono: z.string().nullable(),
+  contacto: z.string().nullable(),
+  contactoTelefono: z.string().nullable(),
+})
+
 // Payload del Instructivo de Embarque (InstructivoHijo, ventas.md R11) en
 // PDF — un documento por Planta/punto de retiro dentro de un Embarque, no
 // por Embarque completo. Sin control de copia (documentos.types.ts
@@ -22,10 +34,13 @@ export const instructivoEmbarquePdfPayloadSchema = z.object({
   cliente: z.object({
     razonSocial: z.string(),
     rut: z.string().nullable(),
+    taxId: z.string().nullable(),
     direccion: z.string().nullable(),
   }),
-  consignatario: z.string().nullable(),
-  notify: z.string().nullable(),
+  // Notify y Consignatario (AGA): datos completos sólo cuando difieren del
+  // Cliente (2026-10-12). null = no corresponde / coincide con el Cliente.
+  consignatario: actorCompletoSchema.nullable(),
+  notify: actorCompletoSchema.nullable(),
   tipoEmbarque: z.string().nullable(),
   tipoFlete: z.string().nullable(),
   modalidadVenta: z.string().nullable(),

@@ -83,16 +83,14 @@ async function validarLineasLote(data: LoteEditarInput) {
   const categoriaIds = [...new Set(data.lineas.map((l) => l.categoriaId))]
   const calibreIds = [...new Set(data.lineas.map((l) => l.calibreId))]
   const articuloIds = [...new Set(data.lineas.map((l) => l.articuloId))]
-  const etiquetaIds = [...new Set(data.lineas.map((l) => l.etiquetaId).filter((v): v is number => v != null))]
   const packingIds = [...new Set(data.lineas.map((l) => l.packingId).filter((v): v is number => v != null))]
 
-  const [especies, variedades, categorias, calibres, articulos, etiquetas, packings] = await Promise.all([
+  const [especies, variedades, categorias, calibres, articulos, packings] = await Promise.all([
     repo.getEspeciesByIds(especieIds),
     repo.getVariedadesByIds(variedadIds),
     repo.getCategoriasByIds(categoriaIds),
     repo.getCalibresByIds(calibreIds),
     repo.getArticulosByIds(articuloIds),
-    etiquetaIds.length ? repo.getEtiquetasByIds(etiquetaIds) : Promise.resolve([]),
     packingIds.length ? repo.getEntidadesByIds(packingIds) : Promise.resolve([]),
   ])
 
@@ -101,7 +99,17 @@ async function validarLineasLote(data: LoteEditarInput) {
   const categoriaEspecie = new Map(categorias.map((c) => [c.id, c.especieId]))
   const calibreEspecie = new Map(calibres.map((c) => [c.id, c.especieId]))
   const articuloMap = new Map(articulos.map((a) => [a.id, a]))
-  const etiquetaSet = new Set(etiquetas.map((e) => e.id))
+  // Conjunto de etiquetas permitidas por artículo = etiquetaId principal ∪
+  // etiquetasAdicionales (2026-10-12). La edición sólo acepta una etiqueta de
+  // ese conjunto (fija = una sola permitida; dinámica = varias).
+  const etiquetasPermitidasPorArticulo = new Map<number, Set<number>>(
+    articulos.map((a) => {
+      const set = new Set<number>()
+      if (a.etiquetaId != null) set.add(a.etiquetaId)
+      for (const e of a.etiquetasAdicionales) set.add(e.etiquetaId)
+      return [a.id, set]
+    }),
+  )
   // Packing = Entidad tipo PACKING activa (FAS-DEV-QA-R3-010) — no cualquier Entidad.
   const packingSet = new Set(packings.filter((p) => p.activo && p.tipos.includes('PACKING')).map((p) => p.id))
 
@@ -118,7 +126,23 @@ async function validarLineasLote(data: LoteEditarInput) {
     if (!art) throw new ValidationError(`Línea ${n}: el artículo no existe`)
     if (art.tipo !== 'EMBALAJE') throw new ValidationError(`Línea ${n}: el artículo debe ser de tipo Embalaje`)
     if (!art.activo) throw new ValidationError(`Línea ${n}: el artículo está inactivo`)
-    if (l.etiquetaId != null && !etiquetaSet.has(l.etiquetaId)) throw new ValidationError(`Línea ${n}: la etiqueta no existe`)
+    // Etiqueta fija/dinámica (2026-10-12), misma regla que la carga de Stock:
+    //  - 1 permitida (fija): si la línea no trae etiqueta, se hereda; debe ser esa.
+    //  - varias (dinámica): obligatoria y dentro del conjunto permitido.
+    // Se normaliza `l.etiquetaId` in situ (la misma referencia viaja al repo).
+    const permitidas = etiquetasPermitidasPorArticulo.get(l.articuloId) ?? new Set<number>()
+    if (permitidas.size === 0) {
+      throw new ValidationError(`Línea ${n}: el artículo no tiene una etiqueta configurada`)
+    }
+    if (l.etiquetaId == null) {
+      if (permitidas.size === 1) {
+        l.etiquetaId = [...permitidas][0] // etiqueta fija heredada del maestro
+      } else {
+        throw new ValidationError(`Línea ${n}: la etiqueta es obligatoria — el artículo admite varias etiquetas`)
+      }
+    } else if (!permitidas.has(l.etiquetaId)) {
+      throw new ValidationError(`Línea ${n}: la etiqueta no está permitida para el artículo`)
+    }
     if (l.packingId != null && !packingSet.has(l.packingId)) throw new ValidationError(`Línea ${n}: el packing no existe, está inactivo o no es tipo Packing`)
   })
 }
@@ -145,4 +169,19 @@ export async function editarLote(id: number, data: LoteEditarInput) {
   // `completo` siempre presente para el reclamo atómico del repo (si el body lo
   // omite, se conserva el valor actual — no es un cambio).
   return repo.editarLote(id, { ...data, completo: data.completo ?? lote.completo })
+}
+
+// Eliminar pallet (soft delete, 2026-10-12). Mismo guard de "stock libre" que
+// editarLote: un pallet reservado/despachado (embarqueId != null) no se puede
+// eliminar. El reclamo atómico del repo revalida ambas condiciones bajo lock.
+export async function eliminarPallet(id: number, userId: string) {
+  const lote = await repo.getLoteParaEditar(id)
+  if (!lote) throw new NotFoundError('Lote', String(id))
+  if (lote.embarqueId != null) {
+    throw new ValidationError('No se puede eliminar un lote reservado a un Embarque o ya despachado')
+  }
+  const count = await repo.softDeletePallet(id, userId)
+  if (count === 0) {
+    throw new ValidationError('El lote fue reservado a un Embarque o eliminado mientras se procesaba — recarga e intenta de nuevo')
+  }
 }
