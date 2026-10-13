@@ -70,6 +70,8 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
   const [codigo, setCodigo] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [tipo, setTipo] = useState<TipoCondicionPago | ''>('')
+  // Código SII de Forma de Pago de Exportación (FmaPagExp) — DTE 110 (2026-10-13).
+  const [codigoAduana, setCodigoAduana] = useState('')
   const [cuotas, setCuotas] = useState<CondicionPagoCuotaInput[]>([cuotaVacia()])
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -86,11 +88,13 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
 
   useEffect(() => {
     if (!open) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación del form al abrir
     setErrors({})
     if (item) {
       setCodigo(item.codigo)
       setDescripcion(item.descripcion)
       setTipo(item.tipo)
+      setCodigoAduana(item.codigoAduana ?? '')
       setCuotas(item.cuotas.length > 0
         ? item.cuotas.map((c) => ({
             fechaReferencia: c.fechaReferencia,
@@ -107,6 +111,7 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
       setCodigo('')
       setDescripcion('')
       setTipo('')
+      setCodigoAduana('')
       setCuotas([cuotaVacia()])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -163,6 +168,7 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
     mutationFn: async () => {
       const payload = {
         descripcion: descripcion.trim(),
+        codigoAduana: codigoAduana.trim() || null,
         cuotas: cuotas.map((c) => ({ ...c, descripcion: c.descripcion?.trim() || undefined })),
       }
       if (isEdit) return condicionesPagoService.update(item!.id, payload)
@@ -212,6 +218,16 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
             </Select>
             {errors.tipo && <p className='text-xs text-destructive'>{errors.tipo}</p>}
           </div>
+          {tipo === 'VENTA' && (
+            <div className='space-y-1.5'>
+              <Label>Código SII Forma de Pago Exportación</Label>
+              <Input value={codigoAduana} onChange={(e) => setCodigoAduana(e.target.value)} placeholder='Ej: 1, 11, 21…' />
+              <p className='text-muted-foreground text-xs'>
+                Código de la tabla aduanera del SII (FmaPagExp). Se emite en la Factura de Exportación (DTE 110);
+                es obligatorio para timbrarla.
+              </p>
+            </div>
+          )}
 
           <div className='space-y-2'>
             <Label>Cuotas</Label>

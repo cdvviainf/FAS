@@ -17,7 +17,8 @@ const descSelect = { select: { descripcion: true, descripcionExtranjera: true } 
 const facturaInclude = {
   cliente: { select: mantenedorSelect },
   moneda: { select: mantenedorSelect },
-  condicionPago: { select: mantenedorSelect },
+  // codigoAduana = FmaPagExp (DTE 110); cuotas.plazoDias → deriva FmaPago 1/2/3.
+  condicionPago: { select: { ...mantenedorSelect, codigoAduana: true, cuotas: { select: { plazoDias: true } } } },
   proforma: { select: { id: true, codigo: true } },
   embarque: {
     select: {
@@ -142,7 +143,22 @@ export async function getEmbarqueParaFacturaDte(embarqueId: number) {
           // Tipo de venta (2026-10-06): una NV NACIONAL no puede generar Factura
           // de Exportación (DTE 110) — guard en el service.
           tipoVenta: true,
-          cliente: { select: { id: true, razonSocial: true, identificador: true, taxId: true, giro: true } },
+          cliente: {
+            select: {
+              id: true,
+              razonSocial: true,
+              identificador: true,
+              taxId: true,
+              giro: true,
+              // Dirección por defecto del cliente → DirRecep del DTE 110 (2026-10-13).
+              direcciones: {
+                where: { eliminadoEn: null },
+                select: { direccion: true },
+                orderBy: [{ esPorDefecto: 'desc' }, { codigo: 'asc' }],
+                take: 1,
+              },
+            },
+          },
           monedaId: true,
           moneda: { select: { codigo: true, descripcion: true, descripcionExtranjera: true, esMonedaBase: true } },
           condicionPagoId: true,

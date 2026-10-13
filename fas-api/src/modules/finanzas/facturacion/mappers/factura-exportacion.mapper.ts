@@ -43,6 +43,10 @@ export interface AduanaFacturaExportacion {
   codPtoEmbarque: string | null // Puerto de zarpe .codigo
   codPtoDesembarque: string | null // Puerto de destino .codigo
   paisDestinoCodigo: string | null // Pais destino .codigo (Aduana)
+  // Forma de Pago de Exportación (FmaPagExp): código SII de la Condición de
+  // Pago de la factura (2026-10-13). Null solo si no se pudo resolver; el
+  // service lo exige antes de timbrar (validarCodigosAduana).
+  codFormaPagoExp: string | null
   // Transporte (todos opcionales): compañía (naviera), nave, booking.
   nombreCiaTransp: string | null
   rutCiaTransp: string | null
@@ -74,6 +78,10 @@ export interface FacturaExportacionMapeo {
   // DTE 110 para expresar el equivalente en pesos. Null cuando la moneda ya es
   // CLP o no se capturó.
   tipoCambio: number | null
+  // Forma de pago genérica del SII (IdDoc.FmaPago): 1=contado, 2=crédito,
+  // 3=sin costo. Derivada del plazo de las cuotas (2026-10-13); null = no se
+  // emite (sin condición de pago cargada).
+  fmaPago?: number | null
   emisor: EmisorFacturaExportacion
   receptor: ReceptorFacturaExportacion
   lineas: LineaFacturaExportacion[]
@@ -126,6 +134,7 @@ function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
       : {}),
     ...(a.montoFlete != null ? { MntFlete: a.montoFlete } : {}),
     ...(a.montoSeguro != null ? { MntSeguro: a.montoSeguro } : {}),
+    ...(a.codFormaPagoExp ? { FmaPagExp: a.codFormaPagoExp } : {}),
     ...(a.paisDestinoCodigo ? { CodPaisRecep: a.paisDestinoCodigo } : {}),
   }
 }
@@ -139,6 +148,9 @@ export function mapFacturaExportacionA110(data: FacturaExportacionMapeo): Libred
       IdDoc: {
         TipoDTE: 110,
         FchEmis: fmtFecha(data.fechaEmision),
+        // Forma de pago genérica (1=contado, 2=crédito, 3=sin costo). Se omite
+        // si no se pudo derivar (sin condición de pago).
+        ...(data.fmaPago != null ? { FmaPago: data.fmaPago } : {}),
         // Glosa/observaciones del documento (LibreDTE la imprime en el PDF).
         ...(data.observaciones?.trim() ? { TermPagoGlosa: data.observaciones.trim() } : {}),
       },

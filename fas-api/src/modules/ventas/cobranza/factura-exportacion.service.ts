@@ -21,6 +21,11 @@ const ORIGEN_TIPO = 'factura-exportacion'
 const TIPO_DTE_FACTURA_EXPORTACION = 110
 // RUT genérico de receptor extranjero en DTE de exportación (mismo que usa el mapper).
 const RUT_RECEPTOR_EXTRANJERO = '55555555-5'
+// Código de referencia para el Instructivo de Embarque (2026-10-13). El
+// Instructivo no es documento tributario y no tiene código SII; se usa un
+// código libre corto (RazonRef lleva el significado). Confirmar contra el
+// primer DTE real que el SII no lo rechace; si así fuera, ajustar aquí.
+const TPO_DOC_REF_INSTRUCTIVO = 'INS'
 
 // Suma exacta en centavos (evita arrastre de float) — mismo criterio que Proforma.
 function sumarMontos(montos: number[]): number {
@@ -300,6 +305,7 @@ async function construirCuotas(
 // en vez de fallar de a uno. (Decisión 2026-10-01: normalizar a códigos SII.)
 function validarCodigosAduana(
   embarque: NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>,
+  condicionPago: { descripcion: string; codigoAduana: string | null } | null,
 ) {
   const nv = embarque.notaVenta
   // `donde` dice dónde completar cada dato cuando FALTA el registro en sí (no el
@@ -316,6 +322,9 @@ function validarCodigosAduana(
     { etiqueta: 'Puerto de Embarque (zarpe)', registro: embarque.puertoZarpe, donde: 'el Embarque, pestaña "Solicitud de Reserva" → "Puerto Embarque"' },
     { etiqueta: 'Puerto de Desembarque (destino)', registro: nv.puertoDestino, donde: 'el Cierre Comercial / Nota de Venta' },
     { etiqueta: 'País de destino', registro: nv.paisDestino, donde: 'el Cierre Comercial / Nota de Venta' },
+    // FmaPagExp (forma de pago de exportación) — código SII de la Condición de
+    // Pago; el SII lo exige en el DTE 110 (2026-10-13).
+    { etiqueta: 'Forma de Pago de Exportación (Condición de Pago)', registro: condicionPago, donde: 'el Cierre Comercial / Nota de Venta (Condición de Pago) con su Código SII cargado en Configuración' },
   ]
   const faltantes = requeridos
     .filter((r) => !r.registro || !r.registro.codigoAduana?.trim())
@@ -354,6 +363,15 @@ async function conManejoPayloadDte<T>(facturaId: number, accion: string, fn: () 
 // cantidad de cajas como pallets/contenedores — dato aduanero incorrecto
 // (FAS-EXP-ADU-QA-001). El contenedor va aparte en IdContainer.
 const COD_TIPO_BULTO_CAJA = '22'
+
+// FmaPago del SII (IdDoc): 1=contado, 2=crédito, 3=sin costo. No hay un flag
+// explícito contado/crédito en el modelo; se deriva del plazo de las cuotas de
+// la Condición de Pago (decisión 2026-10-13): todas a 0 días = contado; alguna
+// a >0 = crédito. Sin condición/cuotas → null (no se emite FmaPago).
+function derivarFmaPago(condicionPago: { cuotas: { plazoDias: number }[] } | null): number | null {
+  if (!condicionPago || condicionPago.cuotas.length === 0) return null
+  return condicionPago.cuotas.some((c) => c.plazoDias > 0) ? 2 : 1
+}
 
 async function construirPayloadDte(
   factura: NonNullable<Awaited<ReturnType<typeof repo.getFacturaActivaById>>>,
@@ -401,11 +419,24 @@ async function construirPayloadDte(
   if (embarque.awbBl?.trim()) {
     referencias.push({ tpoDocRef: '808', folioRef: embarque.awbBl.trim(), fecha: fechaRef, razonRef: 'B/L' })
   }
+  // Instructivo de Embarque (2026-10-13): identificación operativa del documento.
+  // El Instructivo no es un documento tributario y no tiene código SII propio;
+  // se envía como referencia con código libre (TPO_DOC_REF_INSTRUCTIVO) y el
+  // significado en RazonRef. LibreDTE lo pasa tal cual (no valida TpoDocRef).
+  if (embarque.numeroInstructivo?.trim()) {
+    referencias.push({
+      tpoDocRef: TPO_DOC_REF_INSTRUCTIVO,
+      folioRef: embarque.numeroInstructivo.trim(),
+      fecha: fechaRef,
+      razonRef: 'Instructivo de Embarque',
+    })
+  }
 
   return mapFacturaExportacionA110({
     fechaEmision: fechaDocumento,
     monedaAduana,
     tipoCambio: factura.tipoCambio == null ? null : Number(factura.tipoCambio),
+    fmaPago: derivarFmaPago(factura.condicionPago),
     emisor,
     receptor: {
       razonSocial: nv.cliente.razonSocial,
@@ -413,7 +444,8 @@ async function construirPayloadDte(
       // `identificador` para clientes creados antes del campo TAXID (2026-10-09).
       taxId: nv.cliente.taxId ?? nv.cliente.identificador,
       giro: nv.cliente.giro,
-      direccion: null,
+      // DirRecep del DTE 110 (2026-10-13): dirección por defecto del cliente.
+      direccion: nv.cliente.direcciones[0]?.direccion ?? null,
       // SII espera el código de país de SU tabla de Aduana (no "COL").
       nacionalidadCodigo: nv.paisDestino?.codigoAduana ?? null,
     },
@@ -435,6 +467,8 @@ async function construirPayloadDte(
       codPtoEmbarque: embarque.puertoZarpe?.codigoAduana ?? null,
       codPtoDesembarque: nv.puertoDestino?.codigoAduana ?? null,
       paisDestinoCodigo: nv.paisDestino?.codigoAduana ?? null,
+      // FmaPagExp: código SII de la Condición de Pago de la factura.
+      codFormaPagoExp: factura.condicionPago?.codigoAduana ?? null,
       // Transporte. RUTCiaTransp se omite: la naviera suele ser extranjera (sin
       // RUT chileno) y un RUT inválido haría rechazar el DTE.
       nombreCiaTransp: embarque.naviera?.razonSocial ?? null,
@@ -525,7 +559,7 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
   // El bloque Aduana del DTE 110 exige los códigos de las tablas del SII; se
   // validan ANTES de mandar a simpleDTE (si no, LibreDTE los descarta en
   // silencio y el documento sale sin la info de exportación).
-  validarCodigosAduana(embarque)
+  validarCodigosAduana(embarque, factura.condicionPago)
 
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
   if (!emisor?.rut) {
