@@ -24,6 +24,9 @@ export interface FilaPackingListCruda {
   productor: string
   etiqueta: string
   fechaEmbalaje: string
+  // Termógrafo (2026-10-12): opcional, dato del contenedor (puede repetirse
+  // por fila o variar entre pallets). La celda puede venir vacía.
+  termografo: string
 }
 
 interface TemplateParaLectura {
@@ -66,6 +69,7 @@ export function leerFilasPackingList(
       productor: valores.PRODUCTOR,
       etiqueta: valores.ETIQUETA,
       fechaEmbalaje: valores.FECHA_EMBALAJE,
+      termografo: valores.TERMOGRAFO,
     })
     fila++
   }

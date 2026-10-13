@@ -249,6 +249,8 @@ export interface PackingListEmbarque {
   estado: EstadoPackingList
   discrepancias: string[]
   numerosPallet: string[]
+  // Termógrafo(s) declarados en el archivo (2026-10-12) — columna opcional.
+  termografos: string[]
   cargadoEn: string
   cargadoPor: string
 }

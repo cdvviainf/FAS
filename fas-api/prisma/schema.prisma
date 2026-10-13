@@ -3308,6 +3308,10 @@ model EmbarquePackingList {
   // unión de los archivos OK activos cubre exactamente los reservados, sin
   // faltantes ni solapes. Array de strings (N° de Pallet).
   numerosPallet Json              @default("[]")
+  // Termógrafo(s) declarados en este archivo (2026-10-12): columna opcional del
+  // Packing List; un contenedor puede llevar más de uno. Array de strings con
+  // los valores distintos no vacíos leídos del Excel.
+  termografos   Json              @default("[]")
 
   cargadoEn    DateTime  @default(now())
   cargadoPor   String

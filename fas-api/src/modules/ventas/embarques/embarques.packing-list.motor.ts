@@ -43,6 +43,9 @@ export interface ResultadoReconciliacion {
   // N° de Pallet que cubre este archivo (subconjunto de los reservados) — se
   // usa para validar la unión de archivos al despachar (packing parcializado).
   numerosPallet: string[]
+  // Termógrafos declarados en el archivo (2026-10-12): valores distintos no
+  // vacíos de la columna Termógrafo (opcional, puede variar por pallet).
+  termografos: string[]
 }
 
 // ─── Etapa 2: filas completas y con datos válidos (sin BD) ────────────────
@@ -67,6 +70,11 @@ function validarFilasCompletas(filas: FilaPackingListCruda[]): string[] {
       if (!Number.isFinite(cajas) || !Number.isInteger(cajas) || cajas <= 0) {
         errores.push(`Fila ${f.fila}: Cajas "${f.cajas}" no es un número entero válido`)
       }
+    }
+
+    // Termógrafo (2026-10-12): opcional, pero si viene se valida el largo.
+    if (f.termografo && f.termografo.trim().length > 60) {
+      errores.push(`Fila ${f.fila}: el Termógrafo "${f.termografo}" supera los 60 caracteres`)
     }
   }
   return errores
@@ -181,6 +189,10 @@ export async function reconciliarPackingList(
     throw new ValidationError('Etapa 2 — Hay filas incompletas o con datos inválidos', { diferencias: erroresFilas })
   }
 
+  // Termógrafo(s) del archivo (2026-10-12): valores distintos no vacíos de la
+  // columna (opcional; un contenedor puede llevar más de uno).
+  const termografos = [...new Set(filasCrudas.map((f) => f.termografo.trim()).filter(Boolean))]
+
   // Etapa 3 — Maestros: cada valor resuelve a un registro real.
   const { filas, errores: erroresMaestros } = await resolverContraMaestros(filasCrudas)
   if (erroresMaestros.length > 0) {
@@ -211,6 +223,6 @@ export async function reconciliarPackingList(
   discrepancias.push(...compararDetallePalletsConStock(filasPorPallet, stockDeclarado))
 
   return discrepancias.length > 0
-    ? { estado: 'DISCREPANCIA', discrepancias, numerosPallet: numerosExcel }
-    : { estado: 'OK', discrepancias: [], numerosPallet: numerosExcel }
+    ? { estado: 'DISCREPANCIA', discrepancias, numerosPallet: numerosExcel, termografos }
+    : { estado: 'OK', discrepancias: [], numerosPallet: numerosExcel, termografos }
 }

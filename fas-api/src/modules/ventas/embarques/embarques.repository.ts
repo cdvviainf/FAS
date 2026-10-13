@@ -49,6 +49,7 @@ const packingListSelect = {
   estado: true,
   discrepancias: true,
   numerosPallet: true,
+  termografos: true,
   cargadoEn: true,
   cargadoPor: true,
 } satisfies Prisma.EmbarquePackingListSelect
@@ -536,6 +537,7 @@ export async function guardarPackingList(
     estado: 'OK' | 'DISCREPANCIA'
     discrepancias: string[]
     numerosPallet: string[]
+    termografos: string[]
     cargadoPor: string
   },
 ) {
@@ -573,6 +575,7 @@ export async function guardarPackingList(
         estado: datos.estado,
         discrepancias: datos.discrepancias,
         numerosPallet: datos.numerosPallet,
+        termografos: datos.termografos,
         cargadoPor: datos.cargadoPor,
         contenido: { create: { datos: datos.contenido } },
       },

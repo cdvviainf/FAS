@@ -580,6 +580,7 @@ export async function subirPackingList(
     estado: resultado.estado,
     discrepancias: resultado.discrepancias,
     numerosPallet: resultado.numerosPallet,
+    termografos: resultado.termografos,
     cargadoPor: userId,
   })
 }

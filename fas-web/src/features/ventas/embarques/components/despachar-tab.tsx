@@ -187,7 +187,10 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
             >
               {pl.nombreArchivo}
             </button>
-            <span className='text-muted-foreground text-xs'>{pl.numerosPallet.length} pallets — reconciliado</span>
+            <span className='text-muted-foreground text-xs'>
+              {pl.numerosPallet.length} pallets — reconciliado
+              {pl.termografos.length > 0 ? ` · Termógrafo: ${pl.termografos.join(', ')}` : ''}
+            </span>
           </div>
         ))}
         <AnularDespachoDialog embarque={embarque} open={anulando} onOpenChange={setAnulando} />
@@ -316,6 +319,7 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
                     </button>
                     <span className='text-muted-foreground text-xs'>
                       {pl.numerosPallet.length} pallet{pl.numerosPallet.length === 1 ? '' : 's'} · {new Date(pl.cargadoEn).toLocaleString('es-CL')}
+                      {pl.termografos.length > 0 ? ` · Termógrafo: ${pl.termografos.join(', ')}` : ''}
                     </span>
                     {puedeEscribir && !despachado && (
                       <Button

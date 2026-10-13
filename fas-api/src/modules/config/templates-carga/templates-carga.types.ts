@@ -38,7 +38,8 @@ export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
   ],
   // Formato de carga del Packing List (2026-09-21) — mismos campos que
   // Recepción salvo Nota Calidad/Condición/Completo y Packing (no aplican
-  // acá); todos obligatorios (sin entradas en CAMPOS_OPCIONALES_POR_TIPO).
+  // acá). TERMOGRAFO (2026-10-12) es opcional (ver CAMPOS_OPCIONALES_POR_TIPO);
+  // el resto son obligatorios.
   PACKING_LIST: [
     'NUMERO_PALLET',
     'ESPECIE',
@@ -50,6 +51,7 @@ export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
     'PRODUCTOR',
     'ETIQUETA',
     'FECHA_EMBALAJE',
+    'TERMOGRAFO',
   ],
 }
 
@@ -60,7 +62,9 @@ export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
 // existentes que no las contemplaban.
 export const CAMPOS_OPCIONALES_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
   RECEPCION: ['NOTA_CALIDAD', 'NOTA_CONDICION', 'COMPLETO'],
-  PACKING_LIST: [],
+  // TERMOGRAFO (2026-10-12): opcional tanto de mapear (no rompe templates
+  // PACKING_LIST ya creados) como de valor (la celda puede venir vacía).
+  PACKING_LIST: ['TERMOGRAFO'],
 }
 
 export const CAMPO_TEMPLATE_CARGA_LABELS: Record<string, string> = {
@@ -78,6 +82,7 @@ export const CAMPO_TEMPLATE_CARGA_LABELS: Record<string, string> = {
   FECHA_EMBALAJE: 'Fecha de Embalaje',
   ETIQUETA: 'Etiqueta',
   PACKING: 'Packing',
+  TERMOGRAFO: 'Termógrafo',
 }
 
 export interface TemplateCargaCampoInput {
