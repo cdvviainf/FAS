@@ -33,7 +33,9 @@ export const notaVentaDetalleCreateSchema = z.object({
   variedadId: z.number().int().positive('La variedad es requerida'),
   articuloId: z.number().int().positive('El artículo de embalaje es requerido'),
   categoriaId: z.number().int().positive().optional().nullable(),
-  tipoPalletId: z.number().int().positive().optional().nullable(),
+  // Requerido (2026-10-13): la cantidad de cajas por pallet sale del mantenedor
+  // CajasPorPallet (embalaje + tipo de pallet); sin tipo de pallet no hay cifra.
+  tipoPalletId: z.number().int().positive('El tipo de pallet es requerido'),
   cantidadPallets: z.number().int().positive('La cantidad de pallets debe ser mayor a 0'),
   cajasPorPallet: z.number().int().positive('Las cajas por pallet deben ser mayor a 0'),
   cajas: z.number().int().positive('Las cajas deben ser mayor a 0'),

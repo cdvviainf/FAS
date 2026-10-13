@@ -149,10 +149,10 @@ model NotaVentaDetalle {
   variedadId      Int
   articuloId      Int
   categoriaId     Int?
-  tipoPalletId    Int?
+  tipoPalletId    Int?       // DB nullable; REQUERIDO en captura (2026-10-13): de él sale cajasPorPallet
 
   cantidadPallets Int
-  cajasPorPallet  Int
+  cajasPorPallet  Int        // cifra del mantenedor CajasPorPallet (embalaje + tipo de pallet); sin default 108 (2026-10-13)
   cajas           Int
   precio          Decimal   @db.Decimal(14, 4)       // valor unitario por caja, en la moneda del encabezado
 

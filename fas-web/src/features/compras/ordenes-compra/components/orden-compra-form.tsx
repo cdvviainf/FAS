@@ -30,6 +30,7 @@ import type { MantenedorSimple, MantenedorSimpleListResponse } from '@/features/
 import { entidadesService } from '@/features/entidades/service'
 import { articulosService } from '@/features/materiales/articulos/service'
 import { cajasPorPalletService } from '@/features/cajas-por-pallet/service'
+import { CajasPorPalletQuickCreate } from '@/features/cajas-por-pallet/components/cajas-por-pallet-quick-create'
 import { notasVentaService } from '@/features/ventas/notas-venta/service'
 import { usuariosService } from '@/features/usuarios/service'
 import { condicionesPagoService } from '@/features/condiciones-pago/service'
@@ -55,12 +56,9 @@ const formasPagoService = createMantenedorService('formas-pago')
 const mercadosService = createMantenedorService('mercados')
 const clausulasVentaService = createMantenedorService('clausulas-venta')
 
-// Cajas por pallet aún no tiene mantenedor propio (pendiente de desarrollar).
-// Mientras tanto se asume un valor fijo, usado para precalcular "Cantidad de
-// Cajas" y que el usuario puede sobrescribir manualmente (mismo criterio que
-// nota-venta-form.tsx).
-const CAJAS_POR_PALLET_DEFAULT = 108
-
+// Cajas por pallet: cifra teórica del mantenedor CajasPorPallet (embalaje +
+// tipo de pallet). Ya NO hay default 108 (2026-10-13): si la combinación no
+// tiene cantidad configurada se marca error y se ofrece el alta inline.
 type Origen = 'CIERRE' | 'MANUAL'
 
 interface HeaderFields {
@@ -103,7 +101,7 @@ const LINEA_EMPTY: OrdenCompraLineaCreateInput = {
   calibreIds: [],
   tipoPalletId: null,
   cantidadPallets: 0,
-  cajasPorPallet: CAJAS_POR_PALLET_DEFAULT,
+  cajasPorPallet: 0,
   cajas: 0,
   precioUsdCaja: 0,
   notaVentaDetalleId: null,
@@ -135,6 +133,10 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [linea, setLinea] = useState<OrdenCompraLineaCreateInput>(LINEA_EMPTY)
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
+  // Estado del lookup de cajas por pallet (2026-10-13, CPP-QA-003): distingue
+  // "no configurada" (respuesta OK sin registro → alta inline) de un fallo
+  // técnico (error → reintentar, sin ofrecer alta). Reemplaza el default 108.
+  const [cajasLookup, setCajasLookup] = useState<'idle' | 'loading' | 'notFound' | 'error'>('idle')
   const [editingLineaId, setEditingLineaId] = useState<number | null>(null)
   const [deleteLineaId, setDeleteLineaId] = useState<number | null>(null)
   const [calibreDesdeId, setCalibreDesdeId] = useState<number | null>(null)
@@ -142,6 +144,13 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   // Al usar una línea del Cierre el resto queda bloqueado y solo falta el
   // precio: saltamos el foco a ese campo.
   const precioInputRef = useRef<HTMLInputElement>(null)
+  // Token para descartar respuestas obsoletas del lookup de cajas por pallet.
+  const cajasReqRef = useRef(0)
+  // Combinación visible actual: una respuesta del lookup solo se aplica si el
+  // embalaje + tipo de pallet siguen siendo los consultados (CPP-QA, ronda 4) —
+  // cubre editar/duplicar/cancelar/precargar mientras un lookup está en vuelo.
+  const lineaRef = useRef(linea)
+  useEffect(() => { lineaRef.current = linea }, [linea])
   // Grilla de líneas del Cierre Comercial: pallets a tomar por línea, antes
   // de "usar" (precargar el form de línea de abajo) — 2026-08-23.
   const [palletsPorLineaCierre, setPalletsPorLineaCierre] = useState<Record<number, string>>({})
@@ -241,19 +250,56 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   // (editable). Se dispara solo por acción del usuario (no al cargar líneas de
   // un Cierre), para no pisar el cajasPorPallet que venga de ahí.
   async function aplicarTeoricaCajas(artId: number, tpId: number | null) {
-    // Sin teórica configurada (o falta algún dato) NO se arrastra el valor
-    // anterior: se vuelve al valor por defecto.
-    let teorica: number | null = null
-    if (artId && tpId) {
-      try {
-        const r = await cajasPorPalletService.buscar(artId, tpId)
-        if (r) teorica = r.cajasPorPallet
-      } catch {
-        /* sin teórica configurada */
-      }
+    // Token de petición (CPP-QA-002): descarta respuestas obsoletas si el
+    // usuario cambia embalaje/tipo de pallet antes de que resuelva el lookup.
+    const token = ++cajasReqRef.current
+    // Se limpia SIEMPRE al iniciar (CPP-QA-003): nunca se arrastra la cifra de
+    // la combinación anterior — ni durante la carga ni si el lookup falla. Solo
+    // una respuesta exitosa con cantidad vuelve a setearla. Sin default 108.
+    setLinea((l) => ({ ...l, cajasPorPallet: 0, cajas: 0 }))
+    if (!artId || !tpId) {
+      setCajasLookup('idle')
+      return
     }
-    const valor = teorica ?? CAJAS_POR_PALLET_DEFAULT
+    setCajasLookup('loading')
+    let teorica: number | null = null
+    let huboError = false
+    try {
+      const r = await cajasPorPalletService.buscar(artId, tpId)
+      if (r) teorica = r.cajasPorPallet
+    } catch {
+      huboError = true
+    }
+    if (token !== cajasReqRef.current) return // respuesta de una combinación anterior
+    // La línea pudo cambiarse/reemplazarse (editar/duplicar/cancelar) mientras
+    // el lookup estaba en vuelo: solo aplicar si la combinación visible coincide.
+    if (lineaRef.current.articuloId !== artId || lineaRef.current.tipoPalletId !== tpId) return
+    if (huboError) {
+      // Error técnico: NO es "sin configuración". No se habilita el alta inline.
+      setCajasLookup('error')
+      return
+    }
+    if (teorica == null) {
+      setCajasLookup('notFound') // respuesta OK sin registro → alta inline
+      return
+    }
+    setCajasLookup('idle')
+    setLinea((l) => ({ ...l, cajasPorPallet: teorica, cajas: l.cantidadPallets ? l.cantidadPallets * teorica : l.cajas }))
+  }
+
+  // La cantidad recién dada de alta inline se aplica igual que la teórica.
+  function aplicarCajasCreadas(valor: number) {
+    cajasReqRef.current++ // invalida cualquier lookup en vuelo
+    setCajasLookup('idle')
     setLinea((l) => ({ ...l, cajasPorPallet: valor, cajas: l.cantidadPallets ? l.cantidadPallets * valor : l.cajas }))
+  }
+
+  // Descarta cualquier lookup de cajas en vuelo de forma SÍNCRONA (CPP-QA ronda
+  // 5): se llama al reemplazar/descartar la línea (editar, precargar, cancelar,
+  // guardar) para que una respuesta atrasada no se aplique a la línea nueva.
+  function invalidarLookupCajas() {
+    cajasReqRef.current++
+    setCajasLookup('idle')
   }
 
   function validate(): boolean {
@@ -321,6 +367,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     onSuccess: () => {
       toast.success('Línea agregada')
       setLinea(LINEA_EMPTY)
+      invalidarLookupCajas()
       setLineaErrors({})
       resetCalibreRango()
       queryClient.invalidateQueries({ queryKey: ordenesCompraKeys.detail(ordenCompraId!) })
@@ -334,6 +381,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     onSuccess: () => {
       toast.success('Línea actualizada')
       setLinea(LINEA_EMPTY)
+      invalidarLookupCajas()
       setLineaErrors({})
       setEditingLineaId(null)
       resetCalibreRango()
@@ -372,6 +420,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     if (!linea.articuloId) e.articuloId = 'Requerido'
     if (linea.calibreIds.length === 0) e.calibreIds = 'Selecciona al menos un calibre'
     if (!linea.cantidadPallets || linea.cantidadPallets <= 0) e.cantidadPallets = 'Debe ser mayor a 0'
+    // Cajas por pallet debe venir del mantenedor (sin default 108): si falta,
+    // se bloquea el alta con un mensaje claro (lo refuerza el aviso de arriba).
+    if (!linea.cajasPorPallet || linea.cajasPorPallet <= 0) e.cajasPorPallet = 'Falta la cantidad de cajas por pallet (elige tipo de pallet y configúrala)'
     if (!linea.cajas || linea.cajas <= 0) e.cajas = 'Debe ser mayor a 0'
     if (linea.precioUsdCaja < 0) e.precioUsdCaja = 'No puede ser negativo'
     setLineaErrors(e)
@@ -399,6 +450,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       precioUsdCaja: Number(l.precioUsdCaja),
       notaVentaDetalleId: l.notaVentaDetalleId,
     })
+    invalidarLookupCajas()
     setLineaErrors({})
     resetCalibreRango()
   }
@@ -425,6 +477,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       precioUsdCaja: 0,
       notaVentaDetalleId: detalle.id,
     })
+    invalidarLookupCajas()
     setLineaErrors({})
     resetCalibreRango()
     // Tras pintar la línea precargada, lleva el foco al Valor (único campo que
@@ -438,6 +491,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   function handleCancelarEdicionLinea() {
     setEditingLineaId(null)
     setLinea(LINEA_EMPTY)
+    invalidarLookupCajas()
     setLineaErrors({})
     resetCalibreRango()
   }
@@ -953,6 +1007,38 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   {lineaErrors.cajas && <p className='text-xs text-destructive'>{lineaErrors.cajas}</p>}
                 </div>
               </div>
+
+              {linea.articuloId > 0 && linea.tipoPalletId == null && (
+                <div className='flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2'>
+                  <Icons.alertCircle className='text-destructive h-4 w-4 shrink-0' />
+                  <span className='text-destructive text-xs'>Selecciona el tipo de pallet para obtener la cantidad de cajas por pallet.</span>
+                </div>
+              )}
+              {linea.articuloId > 0 && linea.tipoPalletId != null && cajasLookup === 'loading' && (
+                <p className='text-muted-foreground text-xs'>Verificando cantidad de cajas por pallet…</p>
+              )}
+              {linea.articuloId > 0 && linea.tipoPalletId != null && cajasLookup === 'error' && (
+                <div className='flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2'>
+                  <Icons.alertCircle className='text-destructive h-4 w-4 shrink-0' />
+                  <span className='text-destructive text-xs'>No se pudo verificar la cantidad de cajas por pallet.</span>
+                  <Button type='button' variant='outline' size='sm' onClick={() => void aplicarTeoricaCajas(linea.articuloId, linea.tipoPalletId)}>
+                    <Icons.reopen className='mr-1 h-4 w-4' /> Reintentar
+                  </Button>
+                </div>
+              )}
+              {linea.articuloId > 0 && linea.tipoPalletId != null && cajasLookup === 'notFound' && (
+                <div className='flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2'>
+                  <Icons.alertCircle className='text-destructive h-4 w-4 shrink-0' />
+                  <span className='text-destructive text-xs'>No hay cantidad de cajas configurada para este embalaje y tipo de pallet.</span>
+                  {!lineaBloqueadaPorCierre && (
+                    <CajasPorPalletQuickCreate
+                      articuloId={linea.articuloId}
+                      tipoPalletId={linea.tipoPalletId}
+                      onCreated={aplicarCajasCreadas}
+                    />
+                  )}
+                </div>
+              )}
 
               {/* Fila 5: Valor USD/Caja */}
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>

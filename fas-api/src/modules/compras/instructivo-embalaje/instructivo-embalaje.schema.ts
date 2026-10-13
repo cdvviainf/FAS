@@ -9,7 +9,9 @@ const instructivoEmbalajeDetalleSchema = z.object({
   variedadRotuladaId: z.number().int().positive().optional().nullable(),
   categoriaId: z.number().int().positive('La categoría es requerida'),
   calibreIds: z.array(z.number().int().positive()).min(1, 'Selecciona al menos un calibre'),
-  tipoPalletId: z.number().int().positive().optional().nullable(),
+  // Requerido (2026-10-13): la cantidad de cajas por pallet sale del mantenedor
+  // CajasPorPallet (embalaje + tipo de pallet); sin tipo de pallet no hay cifra.
+  tipoPalletId: z.number().int().positive('El tipo de pallet es requerido'),
   alturaId: z.number().int().positive('La altura de pallet es requerida'),
   // Marca (Etiqueta) editable por línea (2026-10-05).
   etiquetaId: z.number().int().positive().optional().nullable(),
