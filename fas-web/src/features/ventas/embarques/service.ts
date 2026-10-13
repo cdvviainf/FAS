@@ -78,9 +78,21 @@ export const embarquesService = {
       .json()
   },
 
-  urlDescargaPackingList(id: number, packingListId?: number): string {
-    const base = `/api/ventas/embarques/${id}/packing-list/descarga`
-    return packingListId ? `${base}?packingListId=${packingListId}` : base
+  // Descarga del archivo de Packing List (2026-10-12, FAS-EMB-LIST-R1-001):
+  // SIEMPRE vía `api` (ky adjunta X-Empresa-Id) — un <a href> plano perdería la
+  // empresa activa en multiempresa y podría traer el archivo de otra empresa.
+  async descargarPackingList(id: number, packingListId: number, nombreArchivo: string): Promise<void> {
+    const blob = await api
+      .get(`ventas/embarques/${id}/packing-list/descarga`, { searchParams: { packingListId: String(packingListId) } })
+      .blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombreArchivo
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
   },
 
   // Packing parcializado (2026-09-28): eliminar un archivo de la carga.
@@ -143,8 +155,13 @@ export const embarquesService = {
     return api.post(`ventas/embarques/${id}/guia-despacho/firmar`).json()
   },
 
-  urlPdfGuiaDespacho(id: number): string {
-    return `/api/ventas/embarques/${id}/guia-despacho/pdf`
+  // Abre el PDF de la Guía de Despacho en pestaña nueva (2026-10-12,
+  // FAS-EMB-LIST-R1-001): vía `api` (ky adjunta X-Empresa-Id), no <a href>.
+  async abrirGuiaDespachoPdf(id: number): Promise<void> {
+    const blob = await api.get(`ventas/embarques/${id}/guia-despacho/pdf`).blob()
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
   },
 
   // Guía emitida por un tercero (2026-10-12).

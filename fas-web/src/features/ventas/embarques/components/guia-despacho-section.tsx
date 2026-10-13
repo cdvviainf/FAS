@@ -413,7 +413,7 @@ export function GuiaDespachoSection({ embarqueId }: { embarqueId: number }) {
           {sinGuiaVigente && (
             <>
               <Button type='button' size='sm' onClick={() => setDialogOpen(true)}>
-                <Icons.fileTypePdf className='mr-1 h-4 w-4' /> Emitir Guía (nosotros)
+                <Icons.fileTypePdf className='mr-1 h-4 w-4' /> Emitir Guía
               </Button>
               <Button type='button' size='sm' variant='outline' onClick={() => setExternaDialogOpen(true)}>
                 <Icons.edit className='mr-1 h-4 w-4' /> Registrar guía de un tercero
@@ -441,10 +441,17 @@ export function GuiaDespachoSection({ embarqueId }: { embarqueId: number }) {
           {externa == null && enProceso && <span className='text-muted-foreground text-xs'>Procesando en LibreDTE…</span>}
 
           {externa == null && (borrador || timbrada) && doc?.libredteCodigoTemporal && (
-            <Button type='button' size='sm' variant='outline' asChild>
-              <a href={embarquesService.urlPdfGuiaDespacho(embarqueId)} target='_blank' rel='noreferrer'>
-                <Icons.fileTypePdf className='mr-1 h-4 w-4' /> Ver PDF
-              </a>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              onClick={() => {
+                embarquesService
+                  .abrirGuiaDespachoPdf(embarqueId)
+                  .catch((e: Error) => toast.error(e.message || 'No se pudo abrir la Guía de Despacho'))
+              }}
+            >
+              <Icons.fileTypePdf className='mr-1 h-4 w-4' /> Ver PDF
             </Button>
           )}
         </div>

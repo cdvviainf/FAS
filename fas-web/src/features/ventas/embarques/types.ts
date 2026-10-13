@@ -213,6 +213,11 @@ export interface Embarque extends DatosReservaManual, DatosInstructivo {
   // Estado combinado del listado (2026-09-30, solo en la respuesta de
   // list()) — Reserva hasta que se despacha, ahí refleja el despacho.
   estadoListado?: EstadoEmbarqueListado
+  // Guía de Despacho por fila (2026-10-12, solo en list()): estado de la guía
+  // PROPIA (DTE 52) para el link al PDF cuando la emitimos nosotros.
+  guiaDespacho?: { pdfDisponible: boolean; estado: EstadoDocumentoDte | null; folio: number | null }
+  // Número de la guía externa (emitida por un tercero), si hay una registrada.
+  guiaExternaNumero?: string | null
 }
 
 export type EstadoEmbarqueListado = 'PENDIENTE' | 'SOLICITADA' | 'CONFIRMADA' | 'DESPACHADO' | 'DESPACHO_ANULADO'

@@ -172,7 +172,31 @@ export async function listEmbarques(
     }),
     prisma.embarque.count({ where }),
   ])
-  return { data, total }
+
+  // Guía de Despacho propia (DTE 52) por fila (2026-10-12): una sola consulta
+  // para toda la página en vez de N llamadas a obtenerGuiaDespacho. Expone si
+  // hay PDF disponible (libredteCodigoTemporal presente = borrador o timbrada)
+  // y el folio si está timbrada. La guía externa ya viaja en el escalar
+  // guiaExternaNumero del propio Embarque.
+  const guias = data.length
+    ? await prisma.documentoDte.findMany({
+        where: { origenTipo: 'embarque', origenId: { in: data.map((e) => e.id) }, tipoDte: 52 },
+        select: { origenId: true, estado: true, folio: true, libredteCodigoTemporal: true },
+      })
+    : []
+  const guiaPorEmbarque = new Map(guias.map((g) => [g.origenId, g]))
+  const dataConGuia = data.map((e) => {
+    const g = guiaPorEmbarque.get(e.id)
+    return {
+      ...e,
+      guiaDespacho: {
+        pdfDisponible: !!g?.libredteCodigoTemporal,
+        estado: g?.estado ?? null,
+        folio: g?.folio ?? null,
+      },
+    }
+  })
+  return { data: dataConGuia, total }
 }
 
 // `instructivosHijos`/`packingLists` filtran `eliminadoEn: null` (soft

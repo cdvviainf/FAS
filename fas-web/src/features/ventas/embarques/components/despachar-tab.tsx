@@ -180,14 +180,13 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
         {embarque.packingLists.map((pl) => (
           <div key={pl.id} className='flex items-center gap-2 rounded-md border p-3 text-sm'>
             <Icons.paperclip className='text-muted-foreground h-4 w-4 shrink-0' />
-            <a
-              href={embarquesService.urlDescargaPackingList(embarque.id, pl.id)}
-              target='_blank'
-              rel='noreferrer'
+            <button
+              type='button'
+              onClick={() => embarquesService.descargarPackingList(embarque.id, pl.id, pl.nombreArchivo).catch((err: Error) => toast.error(err.message || 'No se pudo descargar el Packing List'))}
               className='underline underline-offset-2'
             >
               {pl.nombreArchivo}
-            </a>
+            </button>
             <span className='text-muted-foreground text-xs'>{pl.numerosPallet.length} pallets — reconciliado</span>
           </div>
         ))}
@@ -308,14 +307,13 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
                     ) : (
                       <Icons.alertCircle className='h-4 w-4 shrink-0 text-amber-600' />
                     )}
-                    <a
-                      href={embarquesService.urlDescargaPackingList(embarque.id, pl.id)}
-                      target='_blank'
-                      rel='noreferrer'
+                    <button
+                      type='button'
+                      onClick={() => embarquesService.descargarPackingList(embarque.id, pl.id, pl.nombreArchivo).catch((err: Error) => toast.error(err.message || 'No se pudo descargar el Packing List'))}
                       className='text-sm underline underline-offset-2'
                     >
                       {pl.nombreArchivo}
-                    </a>
+                    </button>
                     <span className='text-muted-foreground text-xs'>
                       {pl.numerosPallet.length} pallet{pl.numerosPallet.length === 1 ? '' : 's'} · {new Date(pl.cargadoEn).toLocaleString('es-CL')}
                     </span>
