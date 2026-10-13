@@ -424,6 +424,7 @@ export async function countActiveReferences(
     | 'solicitudInspeccionCalibre'
     | 'solicitudInspeccionCategoria'
     | 'solicitudInspeccionEmbalaje'
+    | 'solicitudInspeccionDefecto'
     | 'articulo'
     | 'articuloEtiqueta'
     | 'notaVenta'

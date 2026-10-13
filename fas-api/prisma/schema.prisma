@@ -850,14 +850,23 @@ model GrupoDefecto {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  defectos        Defecto[]
-  reclamos        Reclamo[]        @relation("ReclamoClasificacionGrupo")
-  reclamoDefectos ReclamoDefecto[]
+  defectos                    Defecto[]
+  reclamos                    Reclamo[]                    @relation("ReclamoClasificacionGrupo")
+  reclamoDefectos             ReclamoDefecto[]
+  solicitudInspeccionDefectos SolicitudInspeccionDefecto[]
 
   // @@unique necesario para la FK compuesta (empresaId, grupoDefectoId) de Defecto.
   @@unique([empresaId, id])
   @@index([empresaId])
   @@map("grupos_defecto")
+}
+
+// Unidad de medida del valor de un Defecto (2026-10-13): UNIDADES = número
+// entero (ej. 3 cajas); PORCENTAJE = decimal 0..100 (ej. 12.5 = 12,5%). Define
+// cómo se captura/valida el valor del defecto en el cierre de la Inspección.
+enum TipoMedidaDefecto {
+  UNIDADES
+  PORCENTAJE
 }
 
 model Defecto {
@@ -870,6 +879,9 @@ model Defecto {
   grupoDefectoId        Int
   // FK compuesta (empresaId, grupoDefectoId) -> GrupoDefecto(empresaId, id).
   grupoDefecto          GrupoDefecto @relation(fields: [empresaId, grupoDefectoId], references: [empresaId, id])
+  // Unidad de medida del valor (2026-10-13): determina si el valor es entero
+  // (UNIDADES) o decimal porcentual (PORCENTAJE) en el cierre de la Inspección.
+  tipoMedida            TipoMedidaDefecto @default(UNIDADES)
   bloqueado             Boolean      @default(false)
   creadoEn              DateTime     @default(now())
   creadoPor             String
@@ -878,8 +890,9 @@ model Defecto {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  especies        DefectoEspecie[]
-  reclamoDefectos ReclamoDefecto[]
+  especies                    DefectoEspecie[]
+  reclamoDefectos             ReclamoDefecto[]
+  solicitudInspeccionDefectos SolicitudInspeccionDefecto[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1695,7 +1708,10 @@ model SolicitudInspeccion {
   contacto              EntidadContacto?          @relation(fields: [contactoId], references: [id])
   especieId             Int?
   especie               Especie?                  @relation(fields: [empresaId, especieId], references: [empresaId, id])
-  fechaHora             DateTime // fecha y hora de la visita
+  // Fecha y hora de la VISITA. Nullable desde 2026-10-13: ya no se ingresa al
+  // crear la solicitud (lo que importa al crear es `creadoEn` = ingreso); se
+  // fija al editar la visita (dispara el recordatorio 24h) o en el cierre.
+  fechaHora             DateTime?
   // Documento N° 107 (calidad.md §3) — retomados por decisión de negocio (2026-07-26)
   mercadoId             Int?
   mercado               Mercado?                  @relation(fields: [empresaId, mercadoId], references: [empresaId, id])
@@ -1737,6 +1753,9 @@ model SolicitudInspeccion {
   // por `especieId` de esta Solicitud cuando está definido.
   notasCalidad   SolicitudInspeccionNotaCalidad[]
   notasCondicion SolicitudInspeccionNotaCondicion[]
+  // Defectos registrados en el cierre (2026-10-13): grupo + defecto + valor
+  // (entero o % según Defecto.tipoMedida).
+  defectos       SolicitudInspeccionDefecto[]
 
   ordenesCompra OrdenCompraSolicitudInspeccion[]
 
@@ -1836,6 +1855,26 @@ model SolicitudInspeccionAsignado {
 
   @@unique([solicitudId, usuarioId])
   @@map("solicitud_inspeccion_asignados")
+}
+
+// Defectos registrados en el CIERRE de la Inspección (2026-10-13) — mismo
+// patrón de tabla hija que ReclamoDefecto (sin empresaId, aislamiento vía el
+// padre). `valor` admite entero (si el Defecto es UNIDADES) o decimal 0..100
+// (si es PORCENTAJE, ej. 12.5 = 12,5%); la interpretación la da Defecto.tipoMedida.
+model SolicitudInspeccionDefecto {
+  id             Int                 @id @default(autoincrement())
+  solicitudId    Int
+  solicitud      SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  grupoDefectoId Int
+  grupoDefecto   GrupoDefecto        @relation(fields: [grupoDefectoId], references: [id])
+  defectoId      Int
+  defecto        Defecto             @relation(fields: [defectoId], references: [id])
+  valor          Decimal             @db.Decimal(7, 2)
+
+  @@index([solicitudId])
+  @@index([grupoDefectoId])
+  @@index([defectoId])
+  @@map("solicitud_inspeccion_defectos")
 }
 
 // Metadatos del adjunto — el binario vive en tabla aparte para no cargar blobs al listar

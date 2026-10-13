@@ -3,7 +3,9 @@
 
 interface SolicitudParaCorreo {
   codigo: string
-  fechaHora: Date
+  // Fecha de visita: nullable desde 2026-10-13 (se fija al editar la visita o
+  // en el cierre, no al crear).
+  fechaHora: Date | null
   observaciones?: string | null
   entidadProductor: { descripcion: string; razonSocial: string }
   direccion: {
@@ -63,7 +65,7 @@ ${fila('Solicitud', `<strong>${esc(s.codigo)}</strong>`)}
 ${fila('Productor', esc(s.entidadProductor.razonSocial))}
 ${fila('Lugar', `${esc(lugar)}${mapa}`)}
 ${contactoStr ? fila('Contacto en terreno', contactoStr) : ''}
-${fila('Fecha y hora', fmtFecha.format(s.fechaHora))}
+${fila('Fecha y hora de visita', s.fechaHora ? fmtFecha.format(s.fechaHora) : 'Por definir')}
 ${s.mercado ? fila('Mercado', esc(s.mercado.descripcion)) : ''}
 ${s.paises && s.paises.length > 0 ? fila('Países', s.paises.map((p) => esc(p.pais.descripcion)).join(', ')) : ''}
 ${s.cliente ? fila('Cliente', esc(s.cliente.razonSocial)) : ''}
@@ -92,7 +94,7 @@ ${contenido}
 
 export function correoNotificacion(s: SolicitudParaCorreo) {
   return {
-    subject: `[FAS] Solicitud de inspección ${s.codigo} — ${fmtFecha.format(s.fechaHora)}`,
+    subject: `[FAS] Solicitud de inspección ${s.codigo}${s.fechaHora ? ` — ${fmtFecha.format(s.fechaHora)}` : ''}`,
     html: envolver(
       'Nueva solicitud de inspección',
       `<p>Se te ha asignado una solicitud de inspección:</p>${cuerpoDetalle(s)}`,
@@ -147,7 +149,7 @@ export function correoReapertura(s: SolicitudParaCorreo) {
 
 export function correoRecordatorio(s: SolicitudParaCorreo) {
   return {
-    subject: `[FAS] Recordatorio: inspección ${s.codigo} — ${fmtFecha.format(s.fechaHora)}`,
+    subject: `[FAS] Recordatorio: inspección ${s.codigo}${s.fechaHora ? ` — ${fmtFecha.format(s.fechaHora)}` : ''}`,
     html: envolver(
       'Recordatorio de visita de inspección',
       `<p>Te recordamos la visita de inspección programada:</p>${cuerpoDetalle(s)}`,

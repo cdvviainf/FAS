@@ -55,6 +55,7 @@ type ExternalReferenceDef = {
     | 'solicitudInspeccionCalibre'
     | 'solicitudInspeccionCategoria'
     | 'solicitudInspeccionEmbalaje'
+    | 'solicitudInspeccionDefecto'
     | 'articulo'
     | 'articuloEtiqueta'
     | 'notaVenta'
@@ -111,6 +112,14 @@ const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceD
   clausulaVenta: [
     { delegateName: 'notaVenta', parentField: 'clausulaVentaId', label: 'notas de venta' },
     { delegateName: 'ordenCompra', parentField: 'incotermId', label: 'órdenes de compra' },
+  ],
+  // Defectos del cierre de Inspección (2026-10-13): bloquea borrar/bloquear un
+  // Grupo/Defecto referenciado por el cierre de una solicitud vigente.
+  grupoDefecto: [
+    { delegateName: 'solicitudInspeccionDefecto', parentField: 'grupoDefectoId', label: 'defectos de inspección', viaSolicitud: true },
+  ],
+  defecto: [
+    { delegateName: 'solicitudInspeccionDefecto', parentField: 'defectoId', label: 'defectos de inspección', viaSolicitud: true },
   ],
 }
 

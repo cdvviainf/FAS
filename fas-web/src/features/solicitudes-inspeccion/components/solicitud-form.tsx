@@ -77,7 +77,9 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const [productorId, setProductorId] = useState<number | null>(null)
   const [direccionId, setDireccionId] = useState<number | null>(null)
   const [contactoId, setContactoId] = useState<number | null>(null)
-  const [fechaHora, setFechaHora] = useState(() => toLocalInput(new Date().toISOString()))
+  // Fecha de visita (2026-10-13): ya NO se ingresa al crear — vacía por defecto.
+  // Se puede fijar al editar la visita, o en el cierre.
+  const [fechaHora, setFechaHora] = useState('')
   const [mercadoId, setMercadoId] = useState<number | null>(null)
   const [paisIds, setPaisIds] = useState<number[]>([])
   const [clienteId, setClienteId] = useState<number | null>(null)
@@ -203,11 +205,12 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   useEffect(() => {
     if (solicitud) {
       const d = solicitud.data
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación del form al cargar la solicitud
       setUsuarioSolicitanteId(d.usuarioSolicitanteId)
       setProductorId(d.entidadProductorId)
       setDireccionId(d.direccionId)
       setContactoId(d.contactoId)
-      setFechaHora(toLocalInput(d.fechaHora))
+      setFechaHora(d.fechaHora ? toLocalInput(d.fechaHora) : '')
       setMercadoId(d.mercadoId)
       setPaisIds(d.paises.map((p) => p.pais.id))
       setClienteId(d.clienteId)
@@ -267,7 +270,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     if (!usuarioSolicitanteId) e.usuarioSolicitanteId = 'El solicitante es requerido'
     if (!productorId) e.productor = 'El productor es requerido'
     if (!direccionId) e.direccion = 'La dirección es requerida'
-    if (!fechaHora) e.fechaHora = 'La fecha y hora son requeridas'
+    // La fecha de visita ya no es obligatoria (2026-10-13): se fija al editar la
+    // visita o en el cierre.
     // 2026-10-05: ya no se exige un asignado con función Acudir — basta con al
     // menos un asignado (puede ser solo Notificar).
     if (asignados.length === 0) e.asignados = 'Debe asignar al menos un usuario'
@@ -282,7 +286,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       entidadProductorId: productorId!,
       direccionId: direccionId!,
       contactoId,
-      fechaHora: new Date(fechaHora).toISOString(),
+      fechaHora: fechaHora ? new Date(fechaHora).toISOString() : null,
       mercadoId,
       paisIds,
       clienteId,
@@ -451,8 +455,11 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
               </Select>
             </div>
             <div className='space-y-1.5'>
-              <Label>Fecha y hora de visita <span className='text-destructive'>*</span></Label>
-              <Input type='datetime-local' value={fechaHora} onChange={(e) => setFechaHora(e.target.value)} />
+              {/* La fecha de visita ya no se ingresa al crear (2026-10-13): solo
+                  se puede fijar/editar en una solicitud existente, o en el cierre. */}
+              <Label>Fecha y hora de visita {!isEdit && <span className='text-muted-foreground text-xs'>(se define luego)</span>}</Label>
+              <Input type='datetime-local' value={fechaHora} onChange={(e) => setFechaHora(e.target.value)} disabled={!isEdit} />
+              {isEdit && <p className='text-muted-foreground text-xs'>Opcional: podés dejarla en blanco y fijarla en el cierre. Al guardarla, se reprograma el recordatorio.</p>}
               {errors.fechaHora && <p className='text-xs text-destructive'>{errors.fechaHora}</p>}
             </div>
           </div>

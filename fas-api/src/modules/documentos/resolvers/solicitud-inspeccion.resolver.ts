@@ -50,7 +50,7 @@ export async function resolverSolicitudInspeccion(id: number, empresaId: number)
     codigo: solicitud.codigo,
     fecha: solicitud.creadoEn.toISOString(),
     estado: ESTADO_LABELS[solicitud.estado] ?? solicitud.estado,
-    fechaHoraVisita: solicitud.fechaHora.toISOString(),
+    fechaHoraVisita: solicitud.fechaHora?.toISOString() ?? null,
     productor: {
       razonSocial: productor?.razonSocial ?? solicitud.entidadProductor.razonSocial,
       rut: productor?.identificador ?? null,

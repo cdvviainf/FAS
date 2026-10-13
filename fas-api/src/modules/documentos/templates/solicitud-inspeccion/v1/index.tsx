@@ -55,7 +55,7 @@ export function SolicitudInspeccionV1({ d, marcaAgua, marcaAguaFecha }: { d: Sol
       <GrupoCampos
         titulo='Detalle de la visita'
         campos={[
-          { label: 'Fecha y hora', valor: fmt.fechaHora(d.fechaHoraVisita) },
+          { label: 'Fecha y hora', valor: d.fechaHoraVisita ? fmt.fechaHora(d.fechaHoraVisita) : 'Por definir' },
           { label: 'Mercado', valor: d.mercado ?? '—' },
           { label: 'Cliente', valor: d.cliente ?? '—' },
           { label: 'Fecha de despacho', valor: d.fechaDespacho ? fmt.fecha(d.fechaDespacho) : '—' },

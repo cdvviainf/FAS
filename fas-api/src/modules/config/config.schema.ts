@@ -107,6 +107,9 @@ export const defectoBodySchema = mantenedorBaseSchema.extend({
   grupoDefectoId: z.number().int().positive({ message: 'Selecciona un grupo de defecto' }),
   // Validez por especie (opcional, N:M). Sin especies = defecto genérico.
   especieIds: z.array(z.number().int().positive()).optional(),
+  // Unidad de medida del valor (2026-10-13): determina cómo se captura el valor
+  // del defecto en el cierre de la Inspección (entero vs porcentaje decimal).
+  tipoMedida: z.enum(['UNIDADES', 'PORCENTAJE']).default('UNIDADES'),
 })
 
 export const defectoUpdateSchema = defectoBodySchema.omit({ codigo: true }).partial()

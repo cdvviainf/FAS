@@ -34,10 +34,13 @@ const gruposDefectoService = createMantenedorService('grupos-defecto')
 const especiesService = createMantenedorService('especies')
 const ITEM = 'CONFIG_DEFECTOS'
 
+export type TipoMedidaDefecto = 'UNIDADES' | 'PORCENTAJE'
+
 export interface DefectoItem extends MantenedorSimple {
   grupoDefectoId?: number
   grupoDefecto?: { id: number; descripcion: string }
   especies?: { especieId: number; especie: { id: number; descripcion: string } }[]
+  tipoMedida?: TipoMedidaDefecto
 }
 
 interface DefectoFormSheetProps {
@@ -56,6 +59,7 @@ export function DefectoFormSheet({ item, open, onOpenChange }: DefectoFormSheetP
   const [descripcionExtranjera, setDescripcionExtranjera] = useState('')
   const [grupoDefectoId, setGrupoDefectoId] = useState<number>(0)
   const [especieIds, setEspecieIds] = useState<number[]>([])
+  const [tipoMedida, setTipoMedida] = useState<TipoMedidaDefecto>('UNIDADES')
   const [bloqueado, setBloqueado] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -82,6 +86,7 @@ export function DefectoFormSheet({ item, open, onOpenChange }: DefectoFormSheetP
       setDescripcionExtranjera(item.descripcionExtranjera ?? '')
       setGrupoDefectoId(item.grupoDefectoId ?? 0)
       setEspecieIds((item.especies ?? []).map((e) => e.especieId))
+      setTipoMedida(item.tipoMedida ?? 'UNIDADES')
       setBloqueado(item.bloqueado ?? false)
     } else {
       setCodigo('')
@@ -89,6 +94,7 @@ export function DefectoFormSheet({ item, open, onOpenChange }: DefectoFormSheetP
       setDescripcionExtranjera('')
       setGrupoDefectoId(0)
       setEspecieIds([])
+      setTipoMedida('UNIDADES')
       setBloqueado(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,6 +107,7 @@ export function DefectoFormSheet({ item, open, onOpenChange }: DefectoFormSheetP
         descripcionExtranjera: descripcionExtranjera.trim() || undefined,
         grupoDefectoId,
         especieIds,
+        tipoMedida,
         ...(isEdit ? { bloqueado } : {}),
       }
       if (isEdit) return defectosService.update(item!.id, payload)
@@ -170,6 +177,18 @@ export function DefectoFormSheet({ item, open, onOpenChange }: DefectoFormSheetP
               </SelectContent>
             </Select>
             {errors.grupoDefectoId && <p className='text-xs text-destructive'>{errors.grupoDefectoId}</p>}
+          </div>
+
+          <div className='space-y-1.5'>
+            <Label>Unidad de medida <span className='text-destructive'>*</span></Label>
+            <Select value={tipoMedida} onValueChange={(v) => setTipoMedida(v as TipoMedidaDefecto)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value='UNIDADES'>Unidades (entero)</SelectItem>
+                <SelectItem value='PORCENTAJE'>Porcentaje (ej. 12,5)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className='text-muted-foreground text-xs'>Define cómo se ingresa el valor del defecto en el cierre de la inspección.</p>
           </div>
 
           <div className='space-y-1.5'>

@@ -33,6 +33,12 @@ function recordatorioJobId(solicitudId: number): string {
 
 /** Programa (o reprograma) el recordatorio a HORAS_RECORDATORIO antes de la visita. */
 async function programarRecordatorio(solicitud: SolicitudDetalle) {
+  // Sin fecha de visita (2026-10-13: ya no se fija al crear) no hay nada que
+  // recordar — se cancela cualquier recordatorio previo y se sale.
+  if (!solicitud.fechaHora) {
+    await cancelarCorreoDiferido(recordatorioJobId(solicitud.id))
+    return
+  }
   const disparo = solicitud.fechaHora.getTime() - HORAS_RECORDATORIO * 3_600_000
   const delay = disparo - Date.now()
   if (delay <= 0) {
@@ -242,7 +248,7 @@ export async function crearSolicitud(body: SolicitudCreateBody, userId: string) 
   return repo.createSolicitud(
     temporadaId,
     temporada.codigo,
-    { ...core, usuarioSolicitanteId, fechaHora: new Date(fechaHora), fechaDespacho: core.fechaDespacho ? new Date(core.fechaDespacho) : null },
+    { ...core, usuarioSolicitanteId, fechaHora: fechaHora ? new Date(fechaHora) : null, fechaDespacho: core.fechaDespacho ? new Date(core.fechaDespacho) : null },
     { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, notaCalidadIds, notaCondicionIds },
     asignados,
     userId,
@@ -284,7 +290,8 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
     id,
     {
       ...core,
-      ...(fechaHora ? { fechaHora: new Date(fechaHora) } : {}),
+      // null limpia la visita (y cancela el recordatorio); undefined = no tocar.
+      ...(fechaHora !== undefined ? { fechaHora: fechaHora ? new Date(fechaHora) : null } : {}),
       ...(fechaDespacho !== undefined ? { fechaDespacho: fechaDespacho ? new Date(fechaDespacho) : null } : {}),
     },
     asignados,
@@ -364,7 +371,54 @@ export async function cerrarSolicitud(
     throw new ForbiddenError('Solo un asignado con función Acudir (o un usuario con acceso total) puede cerrar la inspección')
   }
 
-  const cerrada = await repo.cerrarSolicitud(id, body.comentarios, body.resultado, userId)
+  // Fecha de visita efectiva: la del cierre o la ya registrada. El cierre exige
+  // una fecha (no se puede cerrar sin visita; null explícito se rechaza).
+  const fechaEfectiva = body.fechaHora !== undefined ? body.fechaHora : (solicitud.fechaHora ? solicitud.fechaHora.toISOString() : null)
+  if (!fechaEfectiva) {
+    throw new ValidationError('Debes indicar la fecha y hora de la visita para cerrar la inspección')
+  }
+
+  // Asignados del cierre (obligatorios): usuarios activos + con email (misma
+  // regla que creación/edición) y al menos un ACUDIR (quién asiste).
+  await validarReferencias({ asignados: body.asignados })
+  if (!body.asignados.some((a) => a.funcion === 'ACUDIR')) {
+    throw new ValidationError('Debe registrar al menos una persona que asiste (función Acudir)')
+  }
+
+  // Defectos del cierre (2026-10-13): grupo/defecto existen (tenant), el defecto
+  // pertenece a su grupo y es válido para la especie de la solicitud (o es
+  // genérico); el valor respeta la unidad de medida (UNIDADES = entero ≥ 0;
+  // PORCENTAJE = decimal 0..100).
+  if (body.defectos !== undefined) {
+    for (const [i, linea] of body.defectos.entries()) {
+      const prefijo = `Defecto ${i + 1}:`
+      const grupo = await repo.getGrupoDefectoActivo(linea.grupoDefectoId)
+      if (!grupo) throw new ValidationError(`${prefijo} el grupo seleccionado no existe o está bloqueado`)
+      const defecto = await repo.getDefectoActivo(linea.defectoId)
+      if (!defecto) throw new ValidationError(`${prefijo} el defecto seleccionado no existe o está bloqueado`)
+      if (defecto.grupoDefectoId !== linea.grupoDefectoId) {
+        throw new ValidationError(`${prefijo} el defecto no pertenece al grupo seleccionado`)
+      }
+      // Validez por especie (calidad.md): si la solicitud tiene especie y el
+      // defecto declara especies, debe incluirla; un defecto sin especies es genérico.
+      if (solicitud.especieId != null && defecto.especies.length > 0 && !defecto.especies.some((e) => e.especieId === solicitud.especieId)) {
+        throw new ValidationError(`${prefijo} el defecto no es válido para la especie de la solicitud`)
+      }
+      if (defecto.tipoMedida === 'PORCENTAJE') {
+        if (linea.valor > 100) throw new ValidationError(`${prefijo} el porcentaje no puede superar 100`)
+      } else if (!Number.isInteger(linea.valor)) {
+        throw new ValidationError(`${prefijo} el valor por unidades debe ser un número entero`)
+      }
+    }
+  }
+
+  const cerrada = await repo.cerrarSolicitud(id, {
+    comentarios: body.comentarios,
+    resultado: body.resultado,
+    fechaHora: body.fechaHora ? new Date(body.fechaHora) : undefined,
+    asignados: body.asignados,
+    defectos: body.defectos,
+  }, userId)
   await cancelarCorreoDiferido(recordatorioJobId(id))
 
   const adjuntosCierre = cerrada.adjuntos.filter((a) => a.etapa === 'CIERRE').length

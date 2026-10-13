@@ -40,8 +40,16 @@ async function crearSolicitudInspeccion(empresaId: number, body: SolicitudCreate
 async function notificarSolicitudInspeccion(empresaId: number, id: number, userId: string) {
   return empresaContext.run({ empresaId }, () => notificarSolicitudSvc(id, userId))
 }
-async function cerrarSolicitudInspeccion(empresaId: number, id: number, resultado: 'APROBADA' | 'RECHAZADA', userId: string) {
-  return empresaContext.run({ empresaId }, () => cerrarSolicitudSvc(id, { comentarios: 'OK', resultado }, userId, true))
+async function cerrarSolicitudInspeccion(
+  empresaId: number,
+  id: number,
+  resultado: 'APROBADA' | 'RECHAZADA',
+  userId: string,
+  asignadoUserId: string,
+) {
+  return empresaContext.run({ empresaId }, () =>
+    cerrarSolicitudSvc(id, { comentarios: 'OK', resultado, asignados: [{ usuarioId: asignadoUserId, funcion: 'ACUDIR' }] }, userId, true),
+  )
 }
 
 const databaseName = new URL(process.env.DATABASE_URL ?? '').pathname.slice(1)
@@ -125,13 +133,16 @@ async function crearFixtures() {
     update: {},
     create: { id: 1, empresaId: empresa.id, codigo: 'CAJA', descripcion: 'Caja', creadoPor: 'test' },
   })
-  const articulo = await prisma.articulo.create({
-    data: { empresaId: empresa.id, tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
-  })
   // Fecha de Embalaje/Etiqueta/Packing (compras.md §4.10) — maestros que
   // resuelven las 3 columnas nuevas y obligatorias del Excel de Recepción.
+  // La etiqueta se crea antes del artículo para fijarla como etiqueta principal
+  // (modelo etiqueta N:M): la carga valida que la etiqueta del Excel pertenezca
+  // al conjunto permitido del artículo (etiquetaId principal ∪ adicionales).
   const etiqueta = await prisma.etiqueta.create({
     data: { empresaId: empresa.id, codigo: 'ETQ-01', descripcion: 'Etiqueta Uno', creadoPor: 'test' },
+  })
+  const articulo = await prisma.articulo.create({
+    data: { empresaId: empresa.id, tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO', etiquetaId: etiqueta.id },
   })
   const packing = await prisma.entidad.create({
     data: { empresaId: empresa.id, codigo: 'PACK-01', descripcion: 'Packing Uno', razonSocial: 'Packing Uno SpA', paisId: pais.id, tipos: ['PACKING'], creadoPor: 'test' },
@@ -153,7 +164,7 @@ async function crearFixtures() {
     asignados: [{ usuarioId: usuarioInspector.id, funcion: 'ACUDIR' }],
   }, 'test')
   await notificarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'test')
-  const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'APROBADA', 'test')
+  const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'APROBADA', 'test', usuarioInspector.id)
 
   return { empresa, pais, productor, predioProductor, planta, direccionPlanta, especie, variedad, categoria, calibreChico, calibreGrande, articulo, etiqueta, packing, solicitudInspeccionCompraAprobada }
 }

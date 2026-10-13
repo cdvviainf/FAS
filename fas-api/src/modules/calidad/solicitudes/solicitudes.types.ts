@@ -14,7 +14,8 @@ export interface SolicitudCreateInput {
   direccionId: number
   contactoId?: number | null
   especieId?: number | null
-  fechaHora: string // ISO 8601
+  // Opcional/nullable (2026-10-13): la fecha de visita ya no se ingresa al crear.
+  fechaHora?: string | null // ISO 8601
   mercadoId?: number | null
   paisIds?: number[]
   clienteId?: number | null
@@ -36,7 +37,7 @@ export interface SolicitudUpdateInput {
   direccionId?: number
   contactoId?: number | null
   especieId?: number | null
-  fechaHora?: string
+  fechaHora?: string | null
   mercadoId?: number | null
   paisIds?: number[]
   clienteId?: number | null

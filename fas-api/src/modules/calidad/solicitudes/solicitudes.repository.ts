@@ -45,6 +45,18 @@ const includeDetalle = {
       usuario: { select: { id: true, nombre: true, email: true } },
     },
   },
+  // Defectos del cierre (2026-10-13): grupo + defecto + valor + unidad de medida.
+  defectos: {
+    select: {
+      id: true,
+      grupoDefectoId: true,
+      defectoId: true,
+      valor: true,
+      grupoDefecto: { select: { id: true, codigo: true, descripcion: true } },
+      defecto: { select: { id: true, codigo: true, descripcion: true, tipoMedida: true } },
+    },
+    orderBy: { id: 'asc' as const },
+  },
   adjuntos: {
     select: { id: true, nombre: true, mime: true, tamano: true, etapa: true, subidoEn: true, subidoPor: true },
     orderBy: { subidoEn: 'asc' as const },
@@ -119,7 +131,9 @@ export async function listSolicitudes(filters: SolicitudListFilters) {
     prisma.solicitudInspeccion.findMany({
       where,
       include: includeDetalle,
-      orderBy: { fechaHora: 'desc' },
+      // Orden por fecha de INGRESO (2026-10-13): `fechaHora` (visita) ahora puede
+      // ser null y dejaría arriba las solicitudes sin visita (NULLS FIRST en desc).
+      orderBy: { creadoEn: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
     }),
@@ -141,7 +155,7 @@ export interface SolicitudCoreData {
   direccionId: number
   contactoId?: number | null
   especieId?: number | null
-  fechaHora: Date
+  fechaHora: Date | null
   mercadoId?: number | null
   clienteId?: number | null
   fechaDespacho?: Date | null
@@ -307,25 +321,86 @@ export async function marcarNotificada(id: number, userId: string) {
   })
 }
 
-export async function cerrarSolicitud(id: number, comentarios: string, resultado: 'APROBADA' | 'RECHAZADA' | 'OBJETADA', userId: string) {
-  return transicionAtomica(id, 'NOTIFICADA', {
-    estado: resultado,
-    comentariosCierre: comentarios,
-    fechaCierre: new Date(),
-    cerradaPor: userId,
-    actualizadoPor: userId,
+export interface CierreData {
+  comentarios: string
+  resultado: 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
+  // Fecha/hora de la visita (2026-10-13): se fija/edita en el cierre. undefined = no tocar.
+  fechaHora?: Date
+  // Si vienen, reemplazan el set de asignados (incluye quién asiste = ACUDIR).
+  asignados?: AsignadoInput[]
+  // Si vienen, reemplazan las líneas de defecto del cierre.
+  defectos?: { grupoDefectoId: number; defectoId: number; valor: number }[]
+}
+
+// Cierre atómico (CAS NOTIFICADA -> resultado) + fecha de visita + asignados +
+// defectos, todo en una transacción (mismo criterio anti-carrera que
+// transicionAtomica).
+export async function cerrarSolicitud(id: number, data: CierreData, userId: string) {
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.solicitudInspeccion.updateMany({
+      where: { id, estado: 'NOTIFICADA', eliminadoEn: null },
+      data: {
+        estado: data.resultado,
+        comentariosCierre: data.comentarios,
+        fechaCierre: new Date(),
+        cerradaPor: userId,
+        actualizadoPor: userId,
+        ...(data.fechaHora !== undefined ? { fechaHora: data.fechaHora } : {}),
+      },
+    })
+    if (result.count === 0) {
+      throw new ConflictError(
+        'La solicitud ya no está en el estado esperado: probablemente fue modificada por otro usuario. Recarga e intenta de nuevo.',
+      )
+    }
+    if (data.asignados !== undefined) {
+      await tx.solicitudInspeccionAsignado.deleteMany({ where: { solicitudId: id } })
+      await tx.solicitudInspeccionAsignado.createMany({ data: data.asignados.map((a) => ({ solicitudId: id, ...a })) })
+    }
+    if (data.defectos !== undefined) {
+      await tx.solicitudInspeccionDefecto.deleteMany({ where: { solicitudId: id } })
+      if (data.defectos.length > 0) {
+        await tx.solicitudInspeccionDefecto.createMany({
+          data: data.defectos.map((d) => ({ solicitudId: id, grupoDefectoId: d.grupoDefectoId, defectoId: d.defectoId, valor: d.valor })),
+        })
+      }
+    }
+    return tx.solicitudInspeccion.findUniqueOrThrow({ where: { id }, include: includeDetalle })
+  })
+}
+
+// Lookups para validar las líneas de defecto del cierre (2026-10-13), mismo
+// criterio que reclamos: activos (no eliminados ni bloqueados).
+export async function getGrupoDefectoActivo(id: number) {
+  return prisma.grupoDefecto.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getDefectoActivo(id: number) {
+  return prisma.defecto.findFirst({
+    where: { id, eliminadoEn: null, bloqueado: false },
+    // especies: validez por especie — un defecto sin especies es genérico.
+    select: { id: true, grupoDefectoId: true, tipoMedida: true, especies: { select: { especieId: true } } },
   })
 }
 
 export async function reabrirSolicitud(id: number, userId: string) {
   // QAS-SI-004: al reabrir se limpian los datos de cierre para no dejar una
-  // solicitud NOTIFICADA con evidencia de que sigue cerrada.
-  return transicionAtomica(id, ['APROBADA', 'RECHAZADA', 'OBJETADA'], {
-    estado: 'NOTIFICADA',
-    comentariosCierre: null,
-    fechaCierre: null,
-    cerradaPor: null,
-    actualizadoPor: userId,
+  // solicitud NOTIFICADA con evidencia de que sigue cerrada — incluye los
+  // defectos registrados en el cierre (2026-10-13), que son evidencia de la
+  // visita cerrada. La `fechaHora` (visita) NO se limpia: es editable y puede
+  // haberse fijado antes del cierre.
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.solicitudInspeccion.updateMany({
+      where: { id, estado: { in: ['APROBADA', 'RECHAZADA', 'OBJETADA'] }, eliminadoEn: null },
+      data: { estado: 'NOTIFICADA', comentariosCierre: null, fechaCierre: null, cerradaPor: null, actualizadoPor: userId },
+    })
+    if (result.count === 0) {
+      throw new ConflictError(
+        'La solicitud ya no está en el estado esperado: probablemente fue modificada por otro usuario. Recarga e intenta de nuevo.',
+      )
+    }
+    await tx.solicitudInspeccionDefecto.deleteMany({ where: { solicitudId: id } })
+    return tx.solicitudInspeccion.findUniqueOrThrow({ where: { id }, include: includeDetalle })
   })
 }
 

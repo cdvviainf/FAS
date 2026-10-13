@@ -76,7 +76,8 @@ export interface SolicitudInspeccion {
   } | null
   especieId: number | null
   especie: { id: number; codigo: string; descripcion: string } | null
-  fechaHora: string
+  // Fecha de visita: nullable (2026-10-13) — se fija al editar la visita o en el cierre.
+  fechaHora: string | null
   mercadoId: number | null
   mercado: { id: number; codigo: string; descripcion: string } | null
   clienteId: number | null
@@ -100,6 +101,25 @@ export interface SolicitudInspeccion {
   creadoPor: string
   asignados: SolicitudAsignado[]
   adjuntos: SolicitudAdjunto[]
+  // Defectos registrados en el cierre (2026-10-13).
+  defectos: SolicitudDefecto[]
+}
+
+export type TipoMedidaDefecto = 'UNIDADES' | 'PORCENTAJE'
+
+export interface SolicitudDefecto {
+  id: number
+  grupoDefectoId: number
+  defectoId: number
+  valor: string
+  grupoDefecto: { id: number; codigo: string; descripcion: string }
+  defecto: { id: number; codigo: string; descripcion: string; tipoMedida: TipoMedidaDefecto }
+}
+
+export interface SolicitudDefectoInput {
+  grupoDefectoId: number
+  defectoId: number
+  valor: number
 }
 
 export interface SolicitudCreateInput {
@@ -109,7 +129,8 @@ export interface SolicitudCreateInput {
   direccionId: number
   contactoId?: number | null
   especieId?: number | null
-  fechaHora: string
+  // Opcional (2026-10-13): la fecha de visita ya no se ingresa al crear.
+  fechaHora?: string | null
   mercadoId?: number | null
   paisIds?: number[]
   clienteId?: number | null
@@ -126,6 +147,18 @@ export interface SolicitudCreateInput {
 }
 
 export type SolicitudUpdateInput = Partial<Omit<SolicitudCreateInput, 'temporadaId'>>
+
+export interface SolicitudCerrarInput {
+  comentarios: string
+  resultado: ResultadoCierre
+  // Fecha/hora de la visita (se ingresa/edita en el cierre). Opcional solo si la
+  // solicitud ya la tenía fijada; el backend exige una fecha efectiva.
+  fechaHora?: string | null
+  // Asignados (incluye a quién asiste = ACUDIR): REEMPLAZA el set, obligatorio.
+  asignados: AsignadoInput[]
+  // Defectos registrados en la visita.
+  defectos?: SolicitudDefectoInput[]
+}
 
 export interface SolicitudListResponse {
   data: SolicitudInspeccion[]

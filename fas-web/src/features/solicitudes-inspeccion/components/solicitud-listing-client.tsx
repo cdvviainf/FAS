@@ -160,9 +160,14 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
       cell: ({ row }) => row.original.entidadProductor.descripcion,
     },
     {
+      id: 'creadoEn',
+      header: 'Fecha ingreso',
+      cell: ({ row }) => fmt.format(new Date(row.original.creadoEn)),
+    },
+    {
       id: 'fechaHora',
       header: 'Fecha visita',
-      cell: ({ row }) => fmt.format(new Date(row.original.fechaHora)),
+      cell: ({ row }) => (row.original.fechaHora ? fmt.format(new Date(row.original.fechaHora)) : <span className='text-muted-foreground'>—</span>),
     },
     {
       accessorKey: 'estado',

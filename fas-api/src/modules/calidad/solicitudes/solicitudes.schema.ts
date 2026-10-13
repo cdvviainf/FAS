@@ -15,7 +15,9 @@ export const solicitudCreateSchema = z.object({
   direccionId: z.number().int().positive('La dirección es requerida'),
   contactoId: z.number().int().positive().nullable().optional(),
   especieId: z.number().int().positive().nullable().optional(),
-  fechaHora: z.string().datetime({ offset: true, message: 'Fecha/hora inválida (ISO 8601)' }),
+  // Fecha/hora de la VISITA (2026-10-13): ya NO se ingresa al crear — se fija
+  // al editar la visita o en el cierre. Opcional/nullable acá.
+  fechaHora: z.string().datetime({ offset: true, message: 'Fecha/hora inválida (ISO 8601)' }).nullable().optional(),
   mercadoId: z.number().int().positive().nullable().optional(),
   paisIds: z.array(z.number().int().positive()).optional(),
   clienteId: z.number().int().positive().nullable().optional(),
@@ -65,11 +67,39 @@ export const solicitudListQuerySchema = z.object({
   fechaHasta: z.string().date().optional(),
 })
 
+// Línea de defecto del cierre (2026-10-13): grupo + defecto + valor. El rango
+// del valor (entero si UNIDADES, 0..100 si PORCENTAJE) se valida en el service
+// contra Defecto.tipoMedida — acá solo se exige ≥ 0.
+export const solicitudDefectoSchema = z.object({
+  grupoDefectoId: z.number().int().positive(),
+  defectoId: z.number().int().positive(),
+  // Máximo acorde a la columna Decimal(7,2) (99999.99). El tope 0..100 para
+  // PORCENTAJE y el entero para UNIDADES se validan en el service por tipoMedida.
+  valor: z.number().min(0, 'El valor no puede ser negativo').max(99999.99, 'El valor es demasiado grande'),
+})
+
 export const solicitudCerrarSchema = z.object({
   comentarios: z.string().min(1, 'Los comentarios de cierre son requeridos').max(5000),
   // OBJETADA (2026-08-10): tercer veredicto de cierre, terminal — mismo
   // tratamiento que RECHAZADA (bloquea OC, no se reabre automáticamente).
   resultado: z.enum(['APROBADA', 'RECHAZADA', 'OBJETADA'], { message: 'El resultado (Aprobado/Rechazado/Objetado) es requerido' }),
+  // Fecha/hora de la visita (2026-10-13): se ingresa/edita en el cierre. Puede
+  // omitirse si la solicitud ya la tenía fijada; el service exige una fecha
+  // efectiva (body o la vigente) y rechaza null.
+  fechaHora: z.string().datetime({ offset: true, message: 'Fecha/hora inválida (ISO 8601)' }).nullable().optional(),
+  // Asignados (incluye a quién asiste = ACUDIR): REEMPLAZA el set y es obligatorio
+  // en el cierre — debe registrar quién asistió (el service exige ≥1 ACUDIR).
+  asignados: z
+    .array(asignadoSchema)
+    .min(1, 'Debe registrar al menos una persona que asiste')
+    .refine((a) => new Set(a.map((x) => x.usuarioId)).size === a.length, { message: 'Hay usuarios repetidos en los asignados' }),
+  // Defectos registrados en la visita: grupo+defecto no se repiten.
+  defectos: z
+    .array(solicitudDefectoSchema)
+    .refine((ds) => new Set(ds.map((d) => `${d.grupoDefectoId}-${d.defectoId}`)).size === ds.length, {
+      message: 'Hay defectos repetidos (mismo grupo y defecto)',
+    })
+    .optional(),
 })
 
 export type SolicitudCreateBody = z.infer<typeof solicitudCreateSchema>

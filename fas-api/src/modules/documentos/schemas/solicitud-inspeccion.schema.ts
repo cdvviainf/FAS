@@ -15,7 +15,7 @@ export const solicitudInspeccionPdfPayloadSchema = z.object({
   codigo: z.string(), // SI-{codTemporada}-{NNNN}
   fecha: z.string(), // ISO — fecha de creación de la Solicitud
   estado: z.string(), // label ya resuelto (ver LABELS en el resolver)
-  fechaHoraVisita: z.string(), // ISO, con hora significativa
+  fechaHoraVisita: z.string().nullable(), // ISO con hora; null si aún no se fijó la visita
   productor: z.object({
     razonSocial: z.string(),
     rut: z.string().nullable(),

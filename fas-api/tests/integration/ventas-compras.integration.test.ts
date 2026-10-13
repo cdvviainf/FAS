@@ -104,8 +104,16 @@ async function crearSolicitudInspeccion(empresaId: number, body: SolicitudCreate
 async function notificarSolicitudInspeccion(empresaId: number, id: number, userId: string) {
   return empresaContext.run({ empresaId }, () => notificarSolicitudSvc(id, userId))
 }
-async function cerrarSolicitudInspeccion(empresaId: number, id: number, resultado: 'APROBADA' | 'RECHAZADA', userId: string) {
-  return empresaContext.run({ empresaId }, () => cerrarSolicitudSvc(id, { comentarios: 'OK', resultado }, userId, true))
+async function cerrarSolicitudInspeccion(
+  empresaId: number,
+  id: number,
+  resultado: 'APROBADA' | 'RECHAZADA',
+  userId: string,
+  asignadoUserId: string,
+) {
+  return empresaContext.run({ empresaId }, () =>
+    cerrarSolicitudSvc(id, { comentarios: 'OK', resultado, asignados: [{ usuarioId: asignadoUserId, funcion: 'ACUDIR' }] }, userId, true),
+  )
 }
 
 const databaseName = new URL(process.env.DATABASE_URL ?? '').pathname.slice(1)
@@ -252,7 +260,7 @@ async function crearFixtures() {
     asignados: [{ usuarioId: usuarioInspector.id, funcion: 'ACUDIR' }],
   }, 'test')
   await notificarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'test')
-  const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'APROBADA', 'test')
+  const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'APROBADA', 'test', usuarioInspector.id)
 
   return {
     empresa, pais, cliente, productor, tipoEmbarque, mercado, grupoMercado, moneda, especie, variedad, categoria,
@@ -275,7 +283,7 @@ async function crearOtraSolicitudAprobada(f: Awaited<ReturnType<typeof crearFixt
     asignados: [{ usuarioId: f.usuarioInspector.id, funcion: 'ACUDIR' }],
   }, 'test')
   await notificarSolicitudInspeccion(f.empresa.id, solicitud.id, 'test')
-  return cerrarSolicitudInspeccion(f.empresa.id, solicitud.id, 'APROBADA', 'test')
+  return cerrarSolicitudInspeccion(f.empresa.id, solicitud.id, 'APROBADA', 'test', f.usuarioInspector.id)
 }
 
 function nvBase(f: Awaited<ReturnType<typeof crearFixtures>>) {

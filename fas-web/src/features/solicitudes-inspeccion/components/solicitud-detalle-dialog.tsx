@@ -79,7 +79,8 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
                 )}
               </Campo>
             )}
-            <Campo label='Fecha y hora'>{fmt.format(new Date(solicitud.fechaHora))}</Campo>
+            <Campo label='Fecha de ingreso'>{fmt.format(new Date(solicitud.creadoEn))}</Campo>
+            <Campo label='Fecha y hora de visita'>{solicitud.fechaHora ? fmt.format(new Date(solicitud.fechaHora)) : 'Por definir'}</Campo>
             {solicitud.mercado && <Campo label='Mercado'>{solicitud.mercado.descripcion}</Campo>}
             {solicitud.paises.length > 0 && (
               <Campo label='Países'>{solicitud.paises.map((p) => p.pais.descripcion).join(', ')}</Campo>
@@ -139,6 +140,19 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
               )}
               {solicitud.comentariosCierre && (
                 <p className='mt-1 whitespace-pre-wrap text-sm'>{solicitud.comentariosCierre}</p>
+              )}
+              {solicitud.defectos.length > 0 && (
+                <div className='mt-2'>
+                  <p className='text-muted-foreground text-xs font-medium'>Defectos</p>
+                  <ul className='mt-1 space-y-0.5 text-sm'>
+                    {solicitud.defectos.map((d) => (
+                      <li key={d.id}>
+                        {d.grupoDefecto.descripcion} · {d.defecto.descripcion}:{' '}
+                        {String(d.valor).replace('.', ',')}{d.defecto.tipoMedida === 'PORCENTAJE' ? '%' : ' u.'}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
           )}

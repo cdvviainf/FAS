@@ -3,6 +3,11 @@
 > Primer modelo funcional del sistema (más allá de mantenedores). Reemplaza el `SolicitudInspeccion` complejo de `Docs/calidad.md` (ver nota de supersesión en su §4).
 > Implementado: 2026-07-23. Autor: Claude. Revisor QA: Codex.
 
+> **⚠️ Supersesión (2026-10-13) — la fecha de visita sale de la creación; defectos en el cierre.** Por decisión de Christian:
+> - **Fecha y hora de la visita (`fechaHora`) ya NO se ingresa al crear** la solicitud. Al crear, lo que importa es la fecha/hora de **ingreso** (`creadoEn`). `fechaHora` pasa a **opcional (nullable)** en el modelo/API; se **fija o edita** en la edición de la solicitud o en el **cierre**. El recordatorio 24h se programa cuando se fija la fecha de visita (al editar/cerrar); si no hay fecha, no se programa. La lista de inspecciones muestra **Fecha de ingreso** y **Fecha de visita** (esta última "Por definir" si aún no se fijó). El orden del listado es por `creadoEn` descendente.
+> - **Cierre**: además de comentarios/resultado/adjuntos, ahora se ingresa la **fecha/hora de la visita**, se asigna **quién asiste** (asignados función `ACUDIR`, reemplaza el set validando usuarios activos/con email) y se registran **defectos**.
+> - **Defectos del cierre**: nuevo modelo hijo `SolicitudInspeccionDefecto { solicitudId, grupoDefectoId, defectoId, valor Decimal(7,2) }`. Se elige Grupo → Defecto (filtrado por la `especieId` de la solicitud: genérico o válido para esa especie) → **valor** según la **unidad de medida del defecto**: nuevo campo `Defecto.tipoMedida` (`UNIDADES` = entero; `PORCENTAJE` = decimal 0..100, se ingresa como `12,5` para 12,5%). Al **reabrir** una solicitud cerrada se eliminan estos defectos (evidencia del cierre anulado, mismo criterio que QAS-SI-004). El borrado/bloqueo de un Grupo/Defecto se bloquea si lo referencia el cierre de una solicitud vigente.
+
 ## 1. Alcance funcional (definido por Christian)
 
 Flujo de **visita de inspección a terreno**:
