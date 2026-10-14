@@ -6,8 +6,21 @@ import {
   recepcionParamsSchema,
   recepcionAdjuntoParamsSchema,
   recepcionListQuerySchema,
+  formatoBaseOcQuerySchema,
 } from './recepciones.schema.js'
 import * as service from './recepciones.service.js'
+
+// GET /recepciones/formato-base-oc → Excel del template con los campos de la OC
+// precargados (valores únicos) y validados por dropdown (multivalor), con N filas.
+export async function descargarFormatoBaseOc(req: FastifyRequest, reply: FastifyReply) {
+  const { templateCargaId, ordenCompraId, filas } = formatoBaseOcQuerySchema.parse(req.query)
+  const { buffer, codigo } = await service.generarFormatoBaseOc(templateCargaId, ordenCompraId, filas)
+  const nombre = `Formato_${codigo}_OC.xlsx`.replace(/[^\w.-]+/g, '_')
+  return reply
+    .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    .header('Content-Disposition', `attachment; filename="${nombre}"`)
+    .send(Buffer.from(buffer))
+}
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
   const { page, limit, plantaId, origen, estado } = recepcionListQuerySchema.parse(req.query)

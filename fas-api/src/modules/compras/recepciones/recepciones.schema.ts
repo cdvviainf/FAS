@@ -59,5 +59,13 @@ export const recepcionListQuerySchema = z.object({
   estado: z.enum(['CARGADA', 'VALIDADA', 'RECHAZADA']).optional(),
 })
 
+// Descarga del formato base guiado por la OC (2026-10-14): template + OC +
+// cantidad de filas a pre-generar.
+export const formatoBaseOcQuerySchema = z.object({
+  templateCargaId: z.coerce.number().int().positive(),
+  ordenCompraId: z.coerce.number().int().positive(),
+  filas: z.coerce.number().int().min(1).max(10000).default(1),
+})
+
 export type RecepcionCreateBody = z.infer<typeof recepcionCreateSchema>
 export type RecepcionUpdateBody = z.infer<typeof recepcionUpdateSchema>

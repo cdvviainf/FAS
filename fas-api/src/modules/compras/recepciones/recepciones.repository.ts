@@ -353,6 +353,34 @@ export async function getOrdenCompraConLineas(id: number) {
   })
 }
 
+// OC con las DESCRIPCIONES de cada campo (no solo IDs) para guiar la descarga
+// del formato base (2026-10-14): precargar valores únicos y restringir los
+// multivalor por dropdown. El texto debe calzar con lo que el cargador matchea
+// (findXByTexto acepta código o descripción; productor acepta descripción).
+export async function getOrdenCompraParaFormatoBase(id: number) {
+  return prisma.ordenCompra.findFirst({
+    where: { id, eliminadoEn: null },
+    select: {
+      entidadProductor: { select: { descripcion: true } },
+      lineas: {
+        select: {
+          especie: { select: { descripcion: true } },
+          variedad: { select: { descripcion: true } },
+          categoria: { select: { descripcion: true } },
+          articulo: {
+            select: {
+              descripcion: true,
+              etiqueta: { select: { descripcion: true } },
+              etiquetasAdicionales: { select: { etiqueta: { select: { descripcion: true } } } },
+            },
+          },
+          calibres: { select: { calibre: { select: { descripcion: true } } } },
+        },
+      },
+    },
+  })
+}
+
 const detalleParaComparar = {
   especieId: true,
   variedadId: true,

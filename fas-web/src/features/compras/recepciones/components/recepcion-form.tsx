@@ -7,6 +7,7 @@ import { isHTTPError } from 'ky'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -115,6 +116,10 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   const [erroresCarga, setErroresCarga] = useState<{ mensaje: string; diferencias: string[] } | null>(null)
   const [advertencias, setAdvertencias] = useState<{ items: string[]; adjuntoId: number } | null>(null)
   const [descargandoFormato, setDescargandoFormato] = useState(false)
+  // Popup de cantidad de filas para la descarga guiada por OC (2026-10-14).
+  const [popupFilasOpen, setPopupFilasOpen] = useState(false)
+  const [filasInput, setFilasInput] = useState('')
+  const [cargandoSugerencia, setCargandoSugerencia] = useState(false)
 
   const { data: recepcion, isLoading } = useQuery({
     ...recepcionDetailOptions(recepcionId ?? 0),
@@ -272,7 +277,8 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
     },
   })
 
-  async function descargarFormatoBase() {
+  // Formato base simple (sin OC): Excel en blanco con las columnas del template.
+  async function descargarFormatoBasePlano() {
     if (!fields.templateCargaId) return
     const tpl = templatesCarga.find((t) => t.id === fields.templateCargaId)
     setDescargandoFormato(true)
@@ -281,6 +287,55 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
         fields.templateCargaId,
         `Formato_${tpl?.codigo ?? 'carga'}.xlsx`,
       )
+    } catch (e) {
+      toast.error((e as Error).message || 'No se pudo descargar el formato base')
+    } finally {
+      setDescargandoFormato(false)
+    }
+  }
+
+  // Click en "Formato base": con OC seleccionada abre el popup de cantidad de
+  // filas (precarga sugerida = total de pallets de la OC); sin OC, descarga el
+  // formato en blanco de siempre.
+  async function onClickFormatoBase() {
+    if (!fields.templateCargaId) return
+    if (fields.modo !== 'OC' || !fields.ordenCompraId) {
+      await descargarFormatoBasePlano()
+      return
+    }
+    setCargandoSugerencia(true)
+    setFilasInput('')
+    setPopupFilasOpen(true)
+    try {
+      const { data: oc } = await ordenesCompraService.getById(fields.ordenCompraId)
+      const totalPallets = oc.lineas.reduce((s, l) => s + (l.cantidadPallets ?? 0), 0)
+      setFilasInput(totalPallets > 0 ? String(totalPallets) : '')
+    } catch {
+      // Si falla la sugerencia, el usuario igual puede tipear la cantidad.
+      setFilasInput('')
+    } finally {
+      setCargandoSugerencia(false)
+    }
+  }
+
+  // Descarga guiada por OC con la cantidad de filas confirmada en el popup.
+  async function confirmarDescargaOc() {
+    if (!fields.templateCargaId || !fields.ordenCompraId) return
+    const filas = Number(filasInput)
+    if (!Number.isInteger(filas) || filas < 1 || filas > 10000) {
+      toast.error('Ingresa una cantidad de registros válida (1 a 10.000)')
+      return
+    }
+    const tpl = templatesCarga.find((t) => t.id === fields.templateCargaId)
+    setDescargandoFormato(true)
+    try {
+      await recepcionesService.descargarFormatoBaseOc(
+        fields.templateCargaId,
+        fields.ordenCompraId,
+        filas,
+        `Formato_${tpl?.codigo ?? 'carga'}_OC.xlsx`,
+      )
+      setPopupFilasOpen(false)
     } catch (e) {
       toast.error((e as Error).message || 'No se pudo descargar el formato base')
     } finally {
@@ -468,13 +523,14 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
                 variant='outline'
                 size='sm'
                 disabled={!fields.templateCargaId || descargandoFormato}
-                onClick={descargarFormatoBase}
+                onClick={onClickFormatoBase}
               >
                 <Icons.download className='mr-1 h-4 w-4' /> Formato base
               </Button>
             </div>
             <p className='text-xs text-muted-foreground'>
-              Elige un template y descarga el Excel en blanco con sus columnas para llenarlo y subirlo.
+              Elige un template y descarga el Excel con sus columnas para llenarlo y subirlo. Con una Orden
+              de Compra seleccionada, el formato viene con los datos de la OC precargados y validados.
             </p>
           </div>
 
@@ -577,6 +633,35 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
             isLoading={confirmarAdvertenciasMutation.isPending}
           >
             Cargar de todas formas
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        title='Descargar formato base de la Orden de Compra'
+        description='El Excel se descarga con los datos de la OC precargados (especie, variedad, etc. cuando hay un solo valor) y con los campos de varios valores restringidos a lo permitido por la OC. Indica cuántos registros (filas) quieres generar.'
+        isOpen={popupFilasOpen}
+        onClose={() => setPopupFilasOpen(false)}
+      >
+        <div className='space-y-1.5'>
+          <Label>Cantidad de registros a cargar <span className='text-destructive'>*</span></Label>
+          <Input
+            type='number'
+            min={1}
+            max={10000}
+            value={filasInput}
+            onChange={(e) => setFilasInput(e.target.value)}
+            placeholder={cargandoSugerencia ? 'Calculando sugerencia…' : 'Ej: 20'}
+            disabled={cargandoSugerencia}
+          />
+          <p className='text-xs text-muted-foreground'>Sugerido: total de pallets de la OC. Puedes ajustarlo.</p>
+        </div>
+        <div className='mt-6 flex justify-end gap-2'>
+          <Button variant='outline' onClick={() => setPopupFilasOpen(false)} disabled={descargandoFormato}>
+            Cancelar
+          </Button>
+          <Button onClick={confirmarDescargaOc} isLoading={descargandoFormato} disabled={cargandoSugerencia}>
+            <Icons.download className='mr-1 h-4 w-4' /> Descargar
           </Button>
         </div>
       </Modal>

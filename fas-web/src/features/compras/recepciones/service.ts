@@ -56,4 +56,32 @@ export const recepcionesService = {
   urlDescargaAdjunto(id: number, adjuntoId: number): string {
     return `/api/compras/recepciones/${id}/adjuntos/${adjuntoId}/descarga`
   },
+
+  // Descarga el formato base guiado por la OC: el Excel del template con los
+  // campos de la OC precargados (valores únicos) y validados por dropdown
+  // (multivalor), con `filas` filas pre-generadas.
+  async descargarFormatoBaseOc(
+    templateCargaId: number,
+    ordenCompraId: number,
+    filas: number,
+    nombreArchivo: string,
+  ): Promise<void> {
+    const blob = await api
+      .get('compras/recepciones/formato-base-oc', {
+        searchParams: {
+          templateCargaId: String(templateCargaId),
+          ordenCompraId: String(ordenCompraId),
+          filas: String(filas),
+        },
+      })
+      .blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombreArchivo
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  },
 }

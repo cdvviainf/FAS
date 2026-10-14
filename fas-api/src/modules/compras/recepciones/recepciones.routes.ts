@@ -6,6 +6,13 @@ const ITEM = 'COMPRAS_RECEPCION'
 
 export async function recepcionesRoutes(app: FastifyInstance) {
   app.get('/recepciones', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
+  // Ruta estática antes de la paramétrica (:id) — Fastify prioriza estáticas,
+  // pero se deja arriba por claridad. Descarga del formato guiado por la OC.
+  app.get(
+    '/recepciones/formato-base-oc',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    ctrl.descargarFormatoBaseOc,
+  )
   app.get('/recepciones/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
   app.post('/recepciones', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)
   app.patch('/recepciones/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.update)

@@ -3,6 +3,8 @@ import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './recepciones.repository.js'
 import { procesarCargaExcel } from './recepciones.motor.js'
 import type { RecepcionCreateInput, RecepcionUpdateInput } from './recepciones.types.js'
+import * as templatesService from '../../config/templates-carga/templates-carga.service.js'
+import { generarFormatoBase, type GuiaOcCampo } from '../../config/templates-carga/templates-carga.excel.js'
 
 // Editable/eliminable/re-procesable mientras no haya quedado firme: CARGADA
 // (recién creada) o RECHAZADA (intento anterior no cuadró, se corrige y se
@@ -283,4 +285,69 @@ export async function eliminarAdjunto(recepcionId: number, adjuntoId: number) {
   const meta = await repo.getAdjuntoMeta(recepcionId, adjuntoId)
   if (!meta) throw new NotFoundError('Adjunto', String(adjuntoId))
   await repo.deleteAdjunto(adjuntoId)
+}
+
+// ─── Formato base guiado por la OC (2026-10-14) ─────────────────────────────
+// Al descargar el Excel de carga de una Recepción asociada a una OC, se precarga
+// cada campo cuyo valor es ÚNICO en la OC (ej. especie/variedad) y se restringe
+// por dropdown el multivalor (ej. los calibres J/JJ/JJJ). El texto usado es la
+// descripción del maestro — el cargador (findXByTexto) acepta código o
+// descripción, así que calza. La validación dura sigue siendo al cargar
+// (compararLineasOcConExcel): el dropdown es una ayuda, no la barrera.
+
+const MAX_FILAS_FORMATO_OC = 10000
+
+type OcParaFormato = NonNullable<Awaited<ReturnType<typeof repo.getOrdenCompraParaFormatoBase>>>
+
+function entradaGuiaOc(valores: string[]): GuiaOcCampo | null {
+  const unicos = [...new Set(valores.map((v) => v?.trim()).filter((v): v is string => !!v))]
+  if (unicos.length === 0) return null
+  if (unicos.length === 1) return { precarga: unicos[0] }
+  return { opciones: unicos.sort((a, b) => a.localeCompare(b)) }
+}
+
+function construirGuiaOc(oc: OcParaFormato): Record<string, GuiaOcCampo> {
+  const guia: Record<string, GuiaOcCampo> = {}
+  const set = (campo: string, valores: string[]) => {
+    const e = entradaGuiaOc(valores)
+    if (e) guia[campo] = e
+  }
+  set('ESPECIE', oc.lineas.map((l) => l.especie?.descripcion ?? ''))
+  set('VARIEDAD', oc.lineas.map((l) => l.variedad?.descripcion ?? ''))
+  set('CATEGORIA', oc.lineas.map((l) => l.categoria?.descripcion ?? ''))
+  set('ARTICULO', oc.lineas.map((l) => l.articulo?.descripcion ?? ''))
+  set('CALIBRE', oc.lineas.flatMap((l) => l.calibres.map((c) => c.calibre?.descripcion ?? '')))
+  set(
+    'ETIQUETA',
+    oc.lineas.flatMap((l) => {
+      const etiquetas: string[] = []
+      if (l.articulo?.etiqueta?.descripcion) etiquetas.push(l.articulo.etiqueta.descripcion)
+      for (const a of l.articulo?.etiquetasAdicionales ?? []) {
+        if (a.etiqueta?.descripcion) etiquetas.push(a.etiqueta.descripcion)
+      }
+      return etiquetas
+    }),
+  )
+  // El Productor es único por OC → siempre se precarga.
+  if (oc.entidadProductor?.descripcion) guia.PRODUCTOR = { precarga: oc.entidadProductor.descripcion }
+  return guia
+}
+
+export async function generarFormatoBaseOc(templateCargaId: number, ordenCompraId: number, filas: number) {
+  const template = await templatesService.obtenerTemplateCarga(templateCargaId)
+  // Defensa en profundidad (FBOC-R1-001): el picker del frontend ya filtra por
+  // tipo=RECEPCION, esto cubre un request armado a mano. Mismo criterio que
+  // validarTemplateCarga() del flujo de creación.
+  if (template.tipo !== 'RECEPCION') {
+    throw new ValidationError('El template de carga seleccionado no es de tipo Recepción')
+  }
+  const oc = await repo.getOrdenCompraParaFormatoBase(ordenCompraId)
+  if (!oc) throw new NotFoundError('Orden de Compra', String(ordenCompraId))
+  const filasSeguras = Math.min(Math.max(1, Math.trunc(filas)), MAX_FILAS_FORMATO_OC)
+  const guia = construirGuiaOc(oc)
+  const buffer = await generarFormatoBase(template as Parameters<typeof generarFormatoBase>[0], {
+    filas: filasSeguras,
+    guia,
+  })
+  return { buffer, codigo: template.codigo }
 }
