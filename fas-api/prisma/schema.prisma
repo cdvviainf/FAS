@@ -4093,11 +4093,6 @@ model CondicionPago {
   descripcion String
   tipo        TipoCondicionPago
   bloqueado   Boolean           @default(false)
-  // Código SII de Forma de Pago de Exportación (FmaPagExp) — se emite en el
-  // bloque Aduana del DTE 110 (2026-10-13). Lo carga el cliente desde la tabla
-  // aduanera del SII; se valida presente antes de timbrar la Factura de
-  // Exportación. Mismo criterio que codigoAduana en ClausulaVenta/Puerto/etc.
-  codigoAduana String?
 
   cuotas                CondicionPagoCuota[]
   ordenesCompra         OrdenCompra[]

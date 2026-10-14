@@ -305,7 +305,6 @@ async function construirCuotas(
 // en vez de fallar de a uno. (Decisión 2026-10-01: normalizar a códigos SII.)
 function validarCodigosAduana(
   embarque: NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>,
-  condicionPago: { descripcion: string; codigoAduana: string | null } | null,
 ) {
   const nv = embarque.notaVenta
   // `donde` dice dónde completar cada dato cuando FALTA el registro en sí (no el
@@ -322,9 +321,6 @@ function validarCodigosAduana(
     { etiqueta: 'Puerto de Embarque (zarpe)', registro: embarque.puertoZarpe, donde: 'el Embarque, pestaña "Solicitud de Reserva" → "Puerto Embarque"' },
     { etiqueta: 'Puerto de Desembarque (destino)', registro: nv.puertoDestino, donde: 'el Cierre Comercial / Nota de Venta' },
     { etiqueta: 'País de destino', registro: nv.paisDestino, donde: 'el Cierre Comercial / Nota de Venta' },
-    // FmaPagExp (forma de pago de exportación) — código SII de la Condición de
-    // Pago; el SII lo exige en el DTE 110 (2026-10-13).
-    { etiqueta: 'Forma de Pago de Exportación (Condición de Pago)', registro: condicionPago, donde: 'el Cierre Comercial / Nota de Venta (Condición de Pago) con su Código SII cargado en Configuración' },
   ]
   const faltantes = requeridos
     .filter((r) => !r.registro || !r.registro.codigoAduana?.trim())
@@ -391,6 +387,19 @@ async function construirPayloadDte(
   const factor = factorFob(montoTotalNum, montoFlete, montoSeguro)
   const fechaDocumento = factura.fechaDocumento ?? new Date()
   const fechaRef = fechaDocumento.toISOString().slice(0, 10)
+
+  // Cuotas del cliente (CB5/CB6) → IdDoc.MntPagos. Se CALCULAN aquí, no se leen
+  // de `factura.cuotas`: al enviar el borrador al SII las cuotas todavía no están
+  // persistidas (se guardan al confirmar el timbrado), así que leerlas daría un
+  // DTE temporal sin MntPagos. Se usa el mismo construirCuotas que la persistencia
+  // → el payload timbrado y el guardado coinciden. Tope SII: 30 repeticiones.
+  const cuotasDte = await construirCuotas(embarque.notaVentaId, montoTotalNum, fechaDocumento, embarque)
+  if (cuotasDte.length > 30) {
+    throw new ValidationError(
+      `La Condición de Pago genera ${cuotasDte.length} cuotas y el DTE 110 admite máximo 30 (MntPagos). ` +
+        'Ajusta la Condición de Pago antes de enviar al SII.',
+    )
+  }
 
   // Transporte/booking: según reservaManual, de los campos manuales del Embarque
   // o de la SolicitudReserva (AGL360) — mismo criterio que el PDF del Instructivo.
@@ -467,8 +476,6 @@ async function construirPayloadDte(
       codPtoEmbarque: embarque.puertoZarpe?.codigoAduana ?? null,
       codPtoDesembarque: nv.puertoDestino?.codigoAduana ?? null,
       paisDestinoCodigo: nv.paisDestino?.codigoAduana ?? null,
-      // FmaPagExp: código SII de la Condición de Pago de la factura.
-      codFormaPagoExp: factura.condicionPago?.codigoAduana ?? null,
       // Transporte. RUTCiaTransp se omite: la naviera suele ser extranjera (sin
       // RUT chileno) y un RUT inválido haría rechazar el DTE.
       nombreCiaTransp: embarque.naviera?.razonSocial ?? null,
@@ -485,6 +492,14 @@ async function construirPayloadDte(
         ? { codTpoBultos: COD_TIPO_BULTO_CAJA, cantBultos: totBultos, idContainer: contenedor }
         : null,
     },
+    // Programación de pagos del cliente → IdDoc.MntPagos (cuotasDte calculadas
+    // arriba). Vencimiento = fecha de referencia + plazoDias; solo las que tienen
+    // vencimiento se emiten (FchPago es obligatorio dentro del bloque).
+    cuotas: cuotasDte.map((c) => ({
+      glosa: `Cuota ${c.numeroCuota}`,
+      fechaVencimiento: c.fechaVencimiento ? c.fechaVencimiento.toISOString().slice(0, 10) : null,
+      monto: c.montoCuota,
+    })),
     referencias,
     // Observaciones del documento → IdDoc.TermPagoGlosa (glosa en el PDF).
     observaciones: factura.observaciones ?? null,
@@ -559,7 +574,7 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
   // El bloque Aduana del DTE 110 exige los códigos de las tablas del SII; se
   // validan ANTES de mandar a simpleDTE (si no, LibreDTE los descarta en
   // silencio y el documento sale sin la info de exportación).
-  validarCodigosAduana(embarque, factura.condicionPago)
+  validarCodigosAduana(embarque)
 
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
   if (!emisor?.rut) {

@@ -40,8 +40,6 @@ export interface CondicionPago {
   descripcion: string
   tipo: TipoCondicionPago
   bloqueado: boolean
-  // Código SII de Forma de Pago de Exportación (FmaPagExp) — DTE 110 (2026-10-13).
-  codigoAduana: string | null
   cuotas: CondicionPagoCuota[]
 }
 
@@ -61,7 +59,6 @@ export interface CondicionPagoCreateInput {
   descripcion: string
   tipo: TipoCondicionPago
   bloqueado?: boolean
-  codigoAduana?: string | null
   cuotas: CondicionPagoCuotaInput[]
 }
 

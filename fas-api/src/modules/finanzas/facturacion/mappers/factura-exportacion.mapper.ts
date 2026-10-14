@@ -43,10 +43,6 @@ export interface AduanaFacturaExportacion {
   codPtoEmbarque: string | null // Puerto de zarpe .codigo
   codPtoDesembarque: string | null // Puerto de destino .codigo
   paisDestinoCodigo: string | null // Pais destino .codigo (Aduana)
-  // Forma de Pago de Exportación (FmaPagExp): código SII de la Condición de
-  // Pago de la factura (2026-10-13). Null solo si no se pudo resolver; el
-  // service lo exige antes de timbrar (validarCodigosAduana).
-  codFormaPagoExp: string | null
   // Transporte (todos opcionales): compañía (naviera), nave, booking.
   nombreCiaTransp: string | null
   rutCiaTransp: string | null
@@ -70,6 +66,15 @@ export interface ReferenciaFacturaExportacion {
   razonRef?: string
 }
 
+// Cuota de la programación de pagos del cliente → IdDoc.MntPagos (SII campos
+// 17-20, hasta 30 repeticiones). FchPago (vencimiento) es obligatorio dentro del
+// bloque, así que una cuota sin fecha de vencimiento no se emite.
+export interface CuotaFacturaExportacion {
+  glosa: string // GlosaPagos: "Cuota 1", "Cuota 2", …
+  fechaVencimiento: string | null // FchPago (YYYY-MM-DD)
+  monto: number // MntPago
+}
+
 export interface FacturaExportacionMapeo {
   fechaEmision: Date
   monedaAduana: string // nombre de la moneda según tabla de Aduana (ej. "DOLAR USA")
@@ -86,6 +91,9 @@ export interface FacturaExportacionMapeo {
   receptor: ReceptorFacturaExportacion
   lineas: LineaFacturaExportacion[]
   aduana: AduanaFacturaExportacion
+  // Programación de pagos del cliente (cuotas de la Condición de Pago). Se emite
+  // como IdDoc.MntPagos; FchVenc de cabecera = vencimiento de la última cuota.
+  cuotas?: CuotaFacturaExportacion[]
   referencias?: ReferenciaFacturaExportacion[]
   // Observaciones libres del documento. Se emiten como IdDoc.TermPagoGlosa, el
   // campo que LibreDTE imprime como glosa/observaciones en el PDF (máx. 100
@@ -134,7 +142,6 @@ function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
       : {}),
     ...(a.montoFlete != null ? { MntFlete: a.montoFlete } : {}),
     ...(a.montoSeguro != null ? { MntSeguro: a.montoSeguro } : {}),
-    ...(a.codFormaPagoExp ? { FmaPagExp: a.codFormaPagoExp } : {}),
     ...(a.paisDestinoCodigo ? { CodPaisRecep: a.paisDestinoCodigo } : {}),
   }
 }
@@ -143,6 +150,11 @@ function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
 // LibreDTE. Se envía con normalizar=1: LibreDTE completa totales, DV y campos
 // derivados. Los montos van en la moneda extranjera de la factura (TpoMoneda).
 export function mapFacturaExportacionA110(data: FacturaExportacionMapeo): LibredteDtePayload {
+  // Programación de pagos (cuotas del cliente). Solo se emiten las cuotas con
+  // vencimiento (FchPago es obligatorio dentro de MntPagos); FchVenc de cabecera
+  // = vencimiento de la última cuota con fecha.
+  const cuotasConFecha = (data.cuotas ?? []).filter((c) => c.fechaVencimiento)
+  const fchVenc = cuotasConFecha.length > 0 ? cuotasConFecha[cuotasConFecha.length - 1].fechaVencimiento : null
   return {
     Encabezado: {
       IdDoc: {
@@ -151,6 +163,20 @@ export function mapFacturaExportacionA110(data: FacturaExportacionMapeo): Libred
         // Forma de pago genérica (1=contado, 2=crédito, 3=sin costo). Se omite
         // si no se pudo derivar (sin condición de pago).
         ...(data.fmaPago != null ? { FmaPago: data.fmaPago } : {}),
+        // Fecha de vencimiento del pago (cabecera) = vencimiento de la última cuota.
+        ...(fchVenc ? { FchVenc: fchVenc } : {}),
+        // Programación de pagos del cliente (SII campos 17-20, hasta 30). LibreDTE
+        // ubica MntPagos en su posición del XSD; el orden de las claves aquí no
+        // importa (mismo criterio que TermPagoGlosa, que es campo 28).
+        ...(cuotasConFecha.length > 0
+          ? {
+              MntPagos: cuotasConFecha.map((c) => ({
+                FchPago: c.fechaVencimiento,
+                MntPago: c.monto,
+                GlosaPagos: c.glosa,
+              })),
+            }
+          : {}),
         // Glosa/observaciones del documento (LibreDTE la imprime en el PDF).
         ...(data.observaciones?.trim() ? { TermPagoGlosa: data.observaciones.trim() } : {}),
       },

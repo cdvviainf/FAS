@@ -17,8 +17,9 @@ const descSelect = { select: { descripcion: true, descripcionExtranjera: true } 
 const facturaInclude = {
   cliente: { select: mantenedorSelect },
   moneda: { select: mantenedorSelect },
-  // codigoAduana = FmaPagExp (DTE 110); cuotas.plazoDias → deriva FmaPago 1/2/3.
-  condicionPago: { select: { ...mantenedorSelect, codigoAduana: true, cuotas: { select: { plazoDias: true } } } },
+  // cuotas.plazoDias → deriva FmaPago 1/2/3 (contado/crédito). Las cuotas del
+  // DTE (MntPagos) salen de factura.cuotas, no de la plantilla de la condición.
+  condicionPago: { select: { ...mantenedorSelect, cuotas: { select: { plazoDias: true } } } },
   proforma: { select: { id: true, codigo: true } },
   embarque: {
     select: {

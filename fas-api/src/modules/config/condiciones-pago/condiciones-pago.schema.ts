@@ -52,21 +52,21 @@ export const condicionPagoCreateSchema = z.object({
   descripcion: z.string().min(1, 'La descripción es requerida').max(200).trim(),
   tipo: z.enum(['COMPRA', 'VENTA'], { message: 'El tipo (Compra/Venta) es requerido' }),
   bloqueado: z.boolean().default(false),
-  // Código SII de Forma de Pago de Exportación (FmaPagExp) — DTE 110 (2026-10-13).
-  codigoAduana: z.string().max(20).trim().optional().nullable(),
   cuotas: z
     .array(cuotaSchema)
     .min(1, 'Debe agregar al menos una cuota')
+    // Tope SII: IdDoc.MntPagos admite hasta 30 repeticiones en el DTE 110.
+    .max(30, 'El máximo es 30 cuotas (límite del DTE de exportación)')
     .refine(validarCuotas, { message: MENSAJE_CUOTAS }),
 })
 
 export const condicionPagoUpdateSchema = z.object({
   descripcion: z.string().min(1).max(200).trim().optional(),
   bloqueado: z.boolean().optional(),
-  codigoAduana: z.string().max(20).trim().optional().nullable(),
   cuotas: z
     .array(cuotaSchema)
     .min(1, 'Debe agregar al menos una cuota')
+    .max(30, 'El máximo es 30 cuotas (límite del DTE de exportación)')
     .refine(validarCuotas, { message: MENSAJE_CUOTAS })
     .optional(),
 })
