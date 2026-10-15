@@ -248,6 +248,19 @@ export async function anularProformaMaterial(id: number) {
     if (actual.estado === 'FACTURADA' || actual.estado === 'ANULADA') {
       throw new ValidationError('Esta Proforma de Venta de Materiales ya no puede anularse')
     }
+    // FAS-FN-QA-007: mientras exista una Factura Nacional activa sobre esta
+    // Proforma, no se puede anular (la factura la "reserva"). Esto bloquea la
+    // carrera anulación-proforma / timbrado-factura — hay que anular la factura
+    // primero. El índice único garantiza a lo más una factura activa.
+    const facturaActiva = await tx.facturaNacional.findFirst({
+      where: { proformaMaterialId: id, eliminadoEn: null },
+      select: { codigo: true },
+    })
+    if (facturaActiva) {
+      throw new ValidationError(
+        `No se puede anular: la Proforma tiene la Factura Nacional ${facturaActiva.codigo} asociada. Anula primero la factura.`,
+      )
+    }
     return tx.proformaMaterial.update({
       where: { id },
       data: { estado: 'ANULADA' },

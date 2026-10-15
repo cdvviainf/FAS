@@ -265,6 +265,7 @@ model Empresa {
   provisiones            Provision[]
   proformas              Proforma[]
   facturasExportacion    FacturaExportacion[]
+  facturasNacional       FacturaNacional[]
   EmbarquePackingList    EmbarquePackingList[]
   embarqueStackingRangos EmbarqueStackingRango[]
 
@@ -1463,6 +1464,7 @@ model Moneda {
   reclamos              Reclamo[]
   proformas             Proforma[]
   facturasExportacion   FacturaExportacion[]
+  facturasNacional      FacturaNacional[]
 
   @@map("monedas")
 }
@@ -1653,6 +1655,7 @@ model Entidad {
   reclamosCliente                Reclamo[]                   @relation("ReclamoCliente")
   proformasCliente               Proforma[]                  @relation("ProformaCliente")
   facturasExportacionCliente     FacturaExportacion[]        @relation("FacturaExportacionCliente")
+  facturasNacionalCliente        FacturaNacional[]           @relation("FacturaNacionalCliente")
   // Instructivo de Embarque (2026-09-21, ventas.md R11).
   embarquesAgenteAduana          Embarque[]                  @relation("EmbarqueAgenteAduana")
   embarquesEmbarcador            Embarque[]                  @relation("EmbarqueEmbarcador")
@@ -2156,6 +2159,7 @@ model Articulo {
   cajasPorPallet              CajasPorPallet[]
   proformaLineas              ProformaLinea[]
   facturaExportacionLineas    FacturaExportacionLinea[]
+  facturaNacionalLineas       FacturaNacionalLinea[]
   codigosEquivalentes         ArticuloCodigoEquivalente[]
 
   creadoEn      DateTime @default(now())
@@ -2534,6 +2538,7 @@ model ProformaMaterial {
 
   lineas     ProformaMaterialLinea[]
   cuotasPago ProformaMaterialCuotaPago[]
+  facturasNacional FacturaNacional[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -3916,6 +3921,105 @@ model FacturaExportacionCuota {
   @@map("factura_exportacion_cuotas")
 }
 
+// ─── Facturación Nacional (DTE 33/34) — cobranza.md ─────────────────────────
+// Factura Nacional desde Proforma de Materiales (2026-10-14, primera entrega).
+// Mismo flujo que la Factura de Exportación (borrador → emitir temporal →
+// firmar real), pero DTE 33 (Afecta, IVA 19%) / 34 (Exenta), receptor con RUT
+// real, CLP, sin bloque Aduana. Orígenes futuros (Proforma Productor, Venta
+// Nacional) ya contemplados en `origenClase` pero sin implementar.
+enum EstadoFacturaNacional {
+  BORRADOR
+  APROBADA
+  RECHAZADA
+  ANULADA
+}
+
+enum OrigenFacturaNacional {
+  PROFORMA_MATERIAL
+  PROFORMA_PRODUCTOR
+  VENTA_NACIONAL
+}
+
+model FacturaNacional {
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  // Origen del documento (por ahora solo PROFORMA_MATERIAL). Alimenta la columna
+  // "origen" del listado y deja el carril para futuros orígenes.
+  origenClase OrigenFacturaNacional @default(PROFORMA_MATERIAL)
+  // Proforma de Materiales de origen. A lo más una Factura activa por Proforma
+  // → índice único parcial WHERE eliminadoEn IS NULL (ver migración).
+  proformaMaterialId Int?
+  proformaMaterial   ProformaMaterial? @relation(fields: [proformaMaterialId], references: [id])
+
+  codigo String // autogenerado vía PrefijoCodigo (modelo='facturaNacional')
+
+  // Receptor nacional: Entidad tipo CLIENTE_NACIONAL (RUT = identificador).
+  clienteId Int
+  cliente   Entidad @relation("FacturaNacionalCliente", fields: [empresaId, clienteId], references: [empresaId, id])
+  monedaId  Int
+  moneda    Moneda  @relation(fields: [monedaId], references: [id])
+
+  condicionPagoId Int?
+  condicionPago   CondicionPago? @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
+
+  // Montos (CLP). montoNeto = Σ líneas afectas; montoExento = Σ líneas exentas;
+  // montoIva = 19% del neto; montoTotal = neto + iva + exento.
+  montoNeto   Decimal @db.Decimal(14, 2)
+  montoExento Decimal @db.Decimal(14, 2)
+  montoIva    Decimal @db.Decimal(14, 2)
+  montoTotal  Decimal @db.Decimal(14, 2)
+
+  idioma String @default("ES")
+
+  estado          EstadoFacturaNacional @default(BORRADOR)
+  fechaDocumento  DateTime?
+  fechaEmision    DateTime?
+  observaciones   String?
+  errorMensajeSii String?
+
+  // DTE nacional: 33 (Afecta) si hay alguna línea afecta, 34 (Exenta) si todas
+  // son exentas — derivado al crear/actualizar el borrador.
+  tipoDte    Int     @default(33)
+  folio      Int?
+  trackIdSii String?
+
+  lineas FacturaNacionalLinea[]
+
+  creadoPorId   String
+  creadoEn      DateTime  @default(now())
+  emitidoPorId  String?
+  emitidoEn     DateTime?
+  actualizadoEn DateTime? @updatedAt
+  eliminadoEn   DateTime?
+  eliminadoPor  String?
+
+  @@index([empresaId])
+  @@index([clienteId])
+  @@index([proformaMaterialId])
+  @@map("facturas_nacional")
+}
+
+model FacturaNacionalLinea {
+  id                Int             @id @default(autoincrement())
+  facturaNacionalId Int
+  facturaNacional   FacturaNacional @relation(fields: [facturaNacionalId], references: [id], onDelete: Cascade)
+
+  descripcion String
+  articuloId  Int?
+  articulo    Articulo? @relation(fields: [articuloId], references: [id])
+
+  cantidad       Decimal @db.Decimal(14, 3)
+  precioUnitario Decimal @db.Decimal(14, 4)
+  // Línea exenta de IVA (afecta por defecto). Define 33 (hay afectas) vs 34.
+  exento         Boolean @default(false)
+  montoLinea     Decimal @db.Decimal(14, 2)
+
+  @@index([facturaNacionalId])
+  @@map("factura_nacional_lineas")
+}
+
 // ─── Compras — Instructivo de Embalaje (Docs/compras.md §4.1) ───────────────
 // Documento que instruye qué embalar. Sin FK a OrdenCompra (relación
 // inexistente por diseño, ver compras.md §6.1). Sin máquina de estados
@@ -4159,6 +4263,7 @@ model CondicionPago {
   proformasMaterial     ProformaMaterial[]
   proformas             Proforma[]
   facturasExportacion   FacturaExportacion[]
+  facturasNacional      FacturaNacional[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String

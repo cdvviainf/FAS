@@ -426,6 +426,14 @@ model SaldoAFavorAplicacion {
 
 ### 4.11 Ventas Nacionales (emisión y validación)
 
+> **⚠️ Supersesión — Implementación (2026-10-15), primera entrega: Factura Nacional desde Proforma de Materiales.** Reconciliación de este spec con lo construido (decisión del usuario):
+> - **Alcance:** solo el camino **MATERIAL** (desde `ProformaMaterial` en estado `ENVIADA_VALIDACION`). **SERVICIO_PRODUCTOR** (su módulo aún no existe, `productores.md`) y **DIRECTO** (emisor desde 0) quedan **diferidos** — el `origen`/`origenClase` ya los contempla en el enum.
+> - **Flujo = 2 pasos borrador→firma**, igual que la Factura de Exportación (DTE 110): estados **`BORRADOR / APROBADA / RECHAZADA / ANULADA`** y endpoints `enviar-sii` (crea el DTE temporal, sin folio) → `firmar` (timbra folio real). Esto **supersede** el `BORRADOR/EMITIDA/ANULADA` + `/emitir` único de VN5.
+> - **Líneas mixtas afecta/exenta:** cada línea lleva un flag `exento` (IndExe=1 en el DTE). El `tipoDte` se **deriva**: `34` (Exenta) si TODAS las líneas son exentas, `33` (Afecta) si hay alguna afecta. Esto refina VN2 ("33 o 34") para permitir documentos mixtos. IVA 19% sobre el neto; totales reales los calcula LibreDTE con `normalizar=1`.
+> - **Receptor:** RUT real del cliente (`Entidad.identificador`), `RznSocRecep/GiroRecep/DirRecep/CmnaRecep` de la Entidad `CLIENTE_NACIONAL` (VN3 validado al crear y antes de emitir). Sin bloque Aduana, sin moneda extranjera/tipo de cambio (CLP).
+> - **Stock (VN5):** para el origen **MATERIAL** el stock **ya se descontó** al confirmar el Movimiento que originó la Proforma (ver `materiales.md`); la Factura **no** genera una nueva salida — solo marca la `ProformaMaterial` como **`FACTURADA`**. La "nueva salida al emitir" de VN5 aplicaría al camino **DIRECTO** (diferido).
+> - **Modelo/contrato implementados:** `FacturaNacional` (+ `FacturaNacionalLinea`, `cantidad Decimal(14,3)`), discriminador `origenClase` (`PROFORMA_MATERIAL`↔MATERIAL) + `proformaMaterialId`; endpoints `/cobranza/facturas-nacional` (crear desde `{ proformaMaterialId }`, PATCH borrador, enviar-sii, firmar, reabrir, anular, list, `proformas-facturables`, pdf-borrador, xml); prefijo de código `FNA`; permiso `FACT_NACIONAL`. NC/ND y Pagos siguen fuera de alcance.
+
 Sección de emisión **paralela** a la de exportación. Cubre dos caminos que desembocan en la misma `FacturaNacional`:
 
 1. **Confirmador de proformas** — recibe las proformas generadas en otros módulos: `ProformaServicioProductor` (`productores.md`) y `ProformaMaterial` (`materiales.md`).

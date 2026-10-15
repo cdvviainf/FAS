@@ -69,7 +69,7 @@ export const navGroups: NavGroup[] = [
         isActive: false,
         items: [
           { title: 'Facturación Exportación', url: '/dashboard/facturacion/exportacion', icon: 'post'    },
-          { title: 'Facturación Nacional',    url: '/dashboard/facturacion/nacional',    icon: 'post',    disabled: true },
+          { title: 'Facturación Nacional',    url: '/dashboard/facturacion/nacional',    icon: 'post'    },
           { title: 'Cobranza / CRM',          url: '/dashboard/facturacion/cobranza',    icon: 'billing', disabled: true }
         ]
       }
