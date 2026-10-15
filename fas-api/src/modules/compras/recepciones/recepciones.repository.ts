@@ -242,38 +242,77 @@ function condicionesPorCampos(campos: readonly string[], texto: string) {
   return candidatosTexto(texto).flatMap((c) => campos.map((campo) => ({ [campo]: { equals: c, ...insensible } })))
 }
 
+// Rama OR para matchear por los CÓDIGOS ALTERNATIVOS del maestro (2026-10-14):
+// acepta que el Excel traiga un código externo (cliente/proveedor) registrado en
+// la lista `codigosEquivalentes` del maestro. Mismo criterio insensible/espacios
+// que condicionesPorCampos, pero contra la relación hija.
+function condicionCodigosEquivalentes(texto: string) {
+  return {
+    codigosEquivalentes: {
+      some: { OR: candidatosTexto(texto).map((c) => ({ codigo: { equals: c, ...insensible } })) },
+    },
+  }
+}
+
+// PRECEDENCIA (QAS-CAMS-001): primero se resuelve por código/descripción
+// (principal); solo si no hay match se cae a los códigos alternativos. Así, si
+// un código principal coincide con el alias de otro registro, gana el principal
+// (determinista). En la rama de alias, si hay MÁS de un candidato (dos registros
+// comparten el mismo código alternativo), NO se elige arbitrariamente: se deja
+// sin resolver (el motor reporta la fila como no encontrada) — nunca una
+// asignación incorrecta silenciosa.
 export async function findEspecieByTexto(texto: string) {
-  return prisma.especie.findFirst({
+  const principal = await prisma.especie.findFirst({
     where: { eliminadoEn: null, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
   })
+  if (principal) return principal
+  const alias = await prisma.especie.findMany({ where: { eliminadoEn: null, ...condicionCodigosEquivalentes(texto) }, take: 2 })
+  return alias.length === 1 ? alias[0] : null
 }
 
 export async function findVariedadByTexto(especieId: number, texto: string) {
-  return prisma.variedad.findFirst({
+  const principal = await prisma.variedad.findFirst({
     where: { especieId, eliminadoEn: null, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
   })
+  if (principal) return principal
+  const alias = await prisma.variedad.findMany({ where: { especieId, eliminadoEn: null, ...condicionCodigosEquivalentes(texto) }, take: 2 })
+  return alias.length === 1 ? alias[0] : null
 }
 
 export async function findCategoriaByTexto(especieId: number, texto: string) {
-  return prisma.categoria.findFirst({
+  const principal = await prisma.categoria.findFirst({
     where: { especieId, eliminadoEn: null, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
   })
+  if (principal) return principal
+  const alias = await prisma.categoria.findMany({ where: { especieId, eliminadoEn: null, ...condicionCodigosEquivalentes(texto) }, take: 2 })
+  return alias.length === 1 ? alias[0] : null
 }
 
 export async function findCalibreByTexto(especieId: number, texto: string) {
-  return prisma.calibre.findFirst({
+  const principal = await prisma.calibre.findFirst({
     where: { especieId, eliminadoEn: null, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
   })
+  if (principal) return principal
+  const alias = await prisma.calibre.findMany({ where: { especieId, eliminadoEn: null, ...condicionCodigosEquivalentes(texto) }, take: 2 })
+  return alias.length === 1 ? alias[0] : null
 }
 
 export async function findArticuloByTexto(texto: string) {
-  return prisma.articulo.findFirst({
+  // etiquetaId (principal) + etiquetasAdicionales = conjunto de etiquetas
+  // permitidas del embalaje (2026-10-12) — el motor valida la etiqueta de la
+  // fila contra este conjunto.
+  const incluir = { etiquetasAdicionales: { select: { etiquetaId: true } } }
+  const principal = await prisma.articulo.findFirst({
     where: { tipo: 'EMBALAJE', activo: true, OR: condicionesPorCampos(['codigo', 'descripcion'], texto) },
-    // etiquetaId (principal) + etiquetasAdicionales = conjunto de etiquetas
-    // permitidas del embalaje (2026-10-12) — el motor valida la etiqueta de la
-    // fila contra este conjunto.
-    include: { etiquetasAdicionales: { select: { etiquetaId: true } } },
+    include: incluir,
   })
+  if (principal) return principal
+  const alias = await prisma.articulo.findMany({
+    where: { tipo: 'EMBALAJE', activo: true, ...condicionCodigosEquivalentes(texto) },
+    include: incluir,
+    take: 2,
+  })
+  return alias.length === 1 ? alias[0] : null
 }
 
 // Nota de Calidad / Condición (compras.md §4.8, 2026-09-02) — opcionales,

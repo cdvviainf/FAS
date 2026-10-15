@@ -288,8 +288,9 @@ export async function crearMantenedor(
 
   // Columnas no propias que se resuelven aparte tras crear: los mercados de Pais
   // (MercadoPais, N:M) y las especies de Defecto (DefectoEspecie, N:M).
-  const { contactos, mercadoIds, especieIds, ...coreData } = data as MantenedorCreateInput & {
+  const { contactos, mercadoIds, especieIds, codigosEquivalentes, ...coreData } = data as MantenedorCreateInput & {
     contactos?: import('./config.types.js').BodegaContactoInput[]
+    codigosEquivalentes?: Array<{ codigo: string; descripcion?: string | null }>
   }
   descartarCodigoAduanaSiNoAplica(modelo, coreData as AnyRecord)
 
@@ -297,6 +298,15 @@ export async function crearMantenedor(
   if (modelo === 'temporada') {
     if ((coreData as AnyRecord).fechaInicio) (coreData as AnyRecord).fechaInicio = new Date((coreData as AnyRecord).fechaInicio)
     if ((coreData as AnyRecord).fechaTermino) (coreData as AnyRecord).fechaTermino = new Date((coreData as AnyRecord).fechaTermino)
+  }
+
+  // Códigos alternativos (especie/variedad/categoría/calibre) — nested write
+  // ATÓMICO junto al maestro (QAS-CAMS-002): se crea el padre y sus códigos en
+  // la misma operación. Solo los 4 schemas lo traen, así que es seguro inyectarlo.
+  if (Array.isArray(codigosEquivalentes)) {
+    ;(coreData as AnyRecord).codigosEquivalentes = {
+      create: codigosEquivalentes.map((c) => ({ codigo: c.codigo, descripcion: c.descripcion ?? null })),
+    }
   }
 
   const created = await repo.createMantenedor(modelo, coreData, userId)
@@ -322,6 +332,8 @@ export async function crearMantenedor(
     return repo.getMantenedorById(modelo, created.id)
   }
 
+  // Si se sincronizaron códigos alternativos, devolver el registro ya con ellos.
+  if (Array.isArray(codigosEquivalentes)) return repo.getMantenedorById(modelo, created.id)
   return created
 }
 
@@ -488,8 +500,9 @@ export async function actualizarMantenedor(
     }
   }
 
-  const { contactos, mercadoIds, especieIds, ...coreData } = data as Partial<MantenedorCreateInput> & {
+  const { contactos, mercadoIds, especieIds, codigosEquivalentes, ...coreData } = data as Partial<MantenedorCreateInput> & {
     contactos?: import('./config.types.js').BodegaContactoInput[]
+    codigosEquivalentes?: Array<{ codigo: string; descripcion?: string | null }>
   }
   descartarCodigoAduanaSiNoAplica(modelo, coreData as AnyRecord)
 
@@ -502,6 +515,15 @@ export async function actualizarMantenedor(
   if (modelo === 'bodega' && contactos !== undefined) {
     // Transacción atómica: update bodega + replace contactos
     return repo.updateBodegaConContactos(id, coreData, contactos, userId)
+  }
+
+  // Códigos alternativos: reemplazo ATÓMICO junto al update (deleteMany + create
+  // en la misma operación, QAS-CAMS-002). undefined = no tocar la lista.
+  if (codigosEquivalentes !== undefined) {
+    ;(coreData as AnyRecord).codigosEquivalentes = {
+      deleteMany: {},
+      create: codigosEquivalentes.map((c) => ({ codigo: c.codigo, descripcion: c.descripcion ?? null })),
+    }
   }
 
   const updated = await repo.updateMantenedor(modelo, id, coreData, userId)
@@ -525,6 +547,8 @@ export async function actualizarMantenedor(
     return repo.getMantenedorById(modelo, id)
   }
 
+  // Si se sincronizaron códigos alternativos, devolver el registro ya con ellos.
+  if (codigosEquivalentes !== undefined) return repo.getMantenedorById(modelo, id)
   return updated
 }
 

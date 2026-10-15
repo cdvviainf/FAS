@@ -1,6 +1,12 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import {
+  CodigosEquivalentesEditor,
+  codigosEquivalentesDesdeItem,
+  codigosEquivalentesParaPayload,
+  type CodigoEquivalenteDraft,
+} from '@/features/mantenedor-simple/components/codigos-equivalentes-editor'
 import { useAppForm, useFormFields } from '@/components/ui/tanstack-form'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -57,6 +63,14 @@ export function EspecieFormSheet({ item, open, onOpenChange }: EspecieFormSheetP
   const { keys } = createMantenedorQueries('especies')
   const codigoValidator = useMemo(() => createCodigoValidator('especies'), [])
 
+  // Códigos alternativos (useState aparte del TanStack Form, igual que Artículos).
+  const [codigosEq, setCodigosEq] = useState<CodigoEquivalenteDraft[]>([])
+  useEffect(() => {
+    if (!open) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación al abrir
+    setCodigosEq(codigosEquivalentesDesdeItem(item))
+  }, [open, item?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const umQueries = createMantenedorQueries('unidades-medida')
   const { data: umData } = useQuery(umQueries.listOptions({ limit: 200, soloActivos: true }))
   const unidades = umData?.data ?? []
@@ -76,6 +90,7 @@ export function EspecieFormSheet({ item, open, onOpenChange }: EspecieFormSheetP
         ...value,
         // 0 = "Sin asignar": enviar null para limpiar FK existente
         unidadMedidaCalidadId: value.unidadMedidaCalidadId || null,
+        codigosEquivalentes: codigosEquivalentesParaPayload(codigosEq),
       }
       if (isEdit) {
         await updateMutation.mutateAsync({ id: item.id, values: payload })
@@ -179,6 +194,8 @@ export function EspecieFormSheet({ item, open, onOpenChange }: EspecieFormSheetP
                   </div>
                 )}
               </form.Field>
+
+              <CodigosEquivalentesEditor value={codigosEq} onChange={setCodigosEq} />
 
               {isEdit && (
                 <FormSwitchField

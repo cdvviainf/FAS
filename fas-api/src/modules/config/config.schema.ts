@@ -37,6 +37,19 @@ export const mantenedorBaseSchema = z.object({
   codigoAduana: z.string().max(20).trim().optional().nullable(),
 })
 
+// Códigos alternativos de un maestro (2026-10-14) — mismo patrón que Artículo.
+// Lista libre de código + "a qué corresponde" (cliente/proveedor/etc.). Aplica a
+// Especie/Variedad/Categoría/Calibre; la carga de stock matchea también por aquí.
+// En update, si viene definida reemplaza toda la lista; undefined no la toca.
+export const codigosEquivalentesSchema = z
+  .array(
+    z.object({
+      codigo: z.string().min(1, 'El código es requerido').max(50).trim(),
+      descripcion: z.string().max(200).trim().optional().nullable(),
+    }),
+  )
+  .optional()
+
 export const mantenedorUpdateSchema = mantenedorBaseSchema
   .omit({ codigo: true })
   .partial()
@@ -94,6 +107,7 @@ export const grupoVariedadUpdateSchema = grupoVariedadBodySchema
 export const variedadBodySchema = mantenedorBaseSchema.extend({
   especieId: z.number().int().positive({ message: 'Selecciona una especie' }),
   grupoVariedadId: z.number().int().positive({ message: 'Selecciona un grupo de variedad' }),
+  codigosEquivalentes: codigosEquivalentesSchema,
 })
 
 export const variedadUpdateSchema = variedadBodySchema
@@ -118,6 +132,7 @@ export const defectoUpdateSchema = defectoBodySchema.omit({ codigo: true }).part
 
 export const especieBodySchema = mantenedorBaseSchema.extend({
   unidadMedidaCalidadId: z.number().int().positive().optional().nullable(),
+  codigosEquivalentes: codigosEquivalentesSchema,
 })
 
 export const especieUpdateSchema = especieBodySchema
@@ -132,6 +147,7 @@ export const categoriaBodySchema = mantenedorBaseSchema.extend({
   especieId: z.number().int().positive({ message: 'Selecciona una especie' }),
   orden: z.number().int().min(1, 'El orden debe ser mayor a 0'),
   control: z.array(controlEnum).default([]),
+  codigosEquivalentes: codigosEquivalentesSchema,
 })
 
 export const categoriaUpdateSchema = categoriaBodySchema
@@ -147,6 +163,7 @@ export const calibreBodySchema = mantenedorBaseSchema.extend({
   // Calibre equivalente (misma especie). Opcional al crear: si no viene, el
   // service lo deja apuntando a sí mismo.
   calibreEquivalenteId: z.number().int().positive().optional(),
+  codigosEquivalentes: codigosEquivalentesSchema,
 })
 
 export const calibreUpdateSchema = calibreBodySchema

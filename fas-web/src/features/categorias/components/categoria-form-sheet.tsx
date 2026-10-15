@@ -1,7 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppForm, useFormFields } from '@/components/ui/tanstack-form'
+import {
+  CodigosEquivalentesEditor,
+  codigosEquivalentesDesdeItem,
+  codigosEquivalentesParaPayload,
+  type CodigoEquivalenteDraft,
+} from '@/features/mantenedor-simple/components/codigos-equivalentes-editor'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -68,6 +74,14 @@ export function CategoriaFormSheet({ item, open, onOpenChange }: CategoriaFormSh
   const { data: especiesData } = useQuery(especiesQueries.listOptions({ limit: 300, soloActivos: true }))
   const especies = especiesData?.data ?? []
 
+  // Códigos alternativos (useState aparte del TanStack Form).
+  const [codigosEq, setCodigosEq] = useState<CodigoEquivalenteDraft[]>([])
+  useEffect(() => {
+    if (!open) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación al abrir
+    setCodigosEq(codigosEquivalentesDesdeItem(item))
+  }, [open, item?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const createMutation = useMutation({
     ...mutations.create,
     onSuccess: () => {
@@ -101,10 +115,11 @@ export function CategoriaFormSheet({ item, open, onOpenChange }: CategoriaFormSh
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validators: { onSubmit: categoriaSchema as any },
     onSubmit: async ({ value }) => {
+      const payload = { ...value, codigosEquivalentes: codigosEquivalentesParaPayload(codigosEq) }
       if (isEdit) {
-        await updateMutation.mutateAsync({ id: item.id, values: value })
+        await updateMutation.mutateAsync({ id: item.id, values: payload })
       } else {
-        await createMutation.mutateAsync(value)
+        await createMutation.mutateAsync(payload)
       }
     }
   })
@@ -204,6 +219,8 @@ export function CategoriaFormSheet({ item, open, onOpenChange }: CategoriaFormSh
                   </div>
                 )}
               </form.Field>
+
+              <CodigosEquivalentesEditor value={codigosEq} onChange={setCodigosEq} />
             </form.Form>
           </form.AppForm>
         </div>

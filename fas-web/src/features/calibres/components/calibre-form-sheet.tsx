@@ -1,7 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppForm, useFormFields } from '@/components/ui/tanstack-form'
+import {
+  CodigosEquivalentesEditor,
+  codigosEquivalentesDesdeItem,
+  codigosEquivalentesParaPayload,
+  type CodigoEquivalenteDraft,
+} from '@/features/mantenedor-simple/components/codigos-equivalentes-editor'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -103,6 +109,14 @@ export function CalibreFormSheet({ item, open, onOpenChange }: CalibreFormSheetP
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar el calibre')
   })
 
+  // Códigos alternativos (useState aparte del TanStack Form).
+  const [codigosEq, setCodigosEq] = useState<CodigoEquivalenteDraft[]>([])
+  useEffect(() => {
+    if (!open) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación al abrir
+    setCodigosEq(codigosEquivalentesDesdeItem(item))
+  }, [open, item?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const form = useAppForm({
     defaultValues: {
       codigo: item?.codigo ?? '',
@@ -121,10 +135,11 @@ export function CalibreFormSheet({ item, open, onOpenChange }: CalibreFormSheetP
       // 0 = "el mismo calibre": se omite para que el backend lo resuelva a sí mismo.
       const payload: CalibreFormValues = { ...value }
       if (!payload.calibreEquivalenteId) delete payload.calibreEquivalenteId
+      const payloadConCodigos = { ...payload, codigosEquivalentes: codigosEquivalentesParaPayload(codigosEq) }
       if (isEdit) {
-        await updateMutation.mutateAsync({ id: item.id, values: payload })
+        await updateMutation.mutateAsync({ id: item.id, values: payloadConCodigos })
       } else {
-        await createMutation.mutateAsync(payload)
+        await createMutation.mutateAsync(payloadConCodigos)
       }
     }
   })
@@ -262,6 +277,8 @@ export function CalibreFormSheet({ item, open, onOpenChange }: CalibreFormSheetP
                   </div>
                 )}
               </form.Field>
+
+              <CodigosEquivalentesEditor value={codigosEq} onChange={setCodigosEq} />
             </form.Form>
           </form.AppForm>
         </div>

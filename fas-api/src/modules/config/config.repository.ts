@@ -43,14 +43,24 @@ const modelMap: Record<MantenedorModelo, string> = {
 const includeMap: Partial<Record<MantenedorModelo, object>> = {
   provincia: { region: { select: { id: true, descripcion: true } } },
   comuna: { provincia: { select: { id: true, descripcion: true, region: { select: { id: true, descripcion: true } } } } },
-  especie: { unidadMedidaCalidad: { select: { id: true, descripcion: true, codigo: true } } },
+  especie: {
+    unidadMedidaCalidad: { select: { id: true, descripcion: true, codigo: true } },
+    codigosEquivalentes: { select: { id: true, codigo: true, descripcion: true }, orderBy: { id: 'asc' as const } },
+  },
   grupoVariedad: { especie: { select: { id: true, descripcion: true } } },
   variedad: {
     especie: { select: { id: true, descripcion: true } },
     grupoVariedad: { select: { id: true, descripcion: true } },
+    codigosEquivalentes: { select: { id: true, codigo: true, descripcion: true }, orderBy: { id: 'asc' as const } },
   },
-  categoria: { especie: { select: { id: true, descripcion: true } } },
-  calibre: { especie: { select: { id: true, descripcion: true } } },
+  categoria: {
+    especie: { select: { id: true, descripcion: true } },
+    codigosEquivalentes: { select: { id: true, codigo: true, descripcion: true }, orderBy: { id: 'asc' as const } },
+  },
+  calibre: {
+    especie: { select: { id: true, descripcion: true } },
+    codigosEquivalentes: { select: { id: true, codigo: true, descripcion: true }, orderBy: { id: 'asc' as const } },
+  },
   defecto: {
     grupoDefecto: { select: { id: true, descripcion: true } },
     especies: { select: { especieId: true, especie: { select: { id: true, descripcion: true } } } },

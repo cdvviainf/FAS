@@ -1,3 +1,10 @@
+// Código alternativo de un maestro (2026-10-14) — Especie/Variedad/Categoría/Calibre.
+export interface CodigoEquivalenteSimple {
+  id: number
+  codigo: string
+  descripcion: string | null
+}
+
 export interface MantenedorSimple {
   id: number
   codigo: string
@@ -5,6 +12,8 @@ export interface MantenedorSimple {
   descripcionExtranjera?: string | null
   // Código de la tabla de Aduana del SII (DTE 110) — solo algunos mantenedores.
   codigoAduana?: string | null
+  // Códigos alternativos (Especie/Variedad/Categoría/Calibre) — solo esos maestros.
+  codigosEquivalentes?: CodigoEquivalenteSimple[]
   // TipoEmbarque (2026-10-08): si genera Solicitud de Reserva (Aéreo/Marítimo).
   requiereReserva?: boolean
   bloqueado?: boolean
@@ -70,4 +79,7 @@ export interface MantenedorSimpleCreateInput {
   longitud?: number | null
   // ConceptoCtaCte
   naturaleza?: string
+  // Códigos alternativos (Especie/Variedad/Categoría/Calibre) — si viene definido
+  // reemplaza toda la lista; undefined no la toca (en update).
+  codigosEquivalentes?: { codigo: string; descripcion?: string | null }[]
 }

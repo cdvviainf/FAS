@@ -1074,10 +1074,26 @@ model Especie {
   notasCalidad                NotaCalidadEspecie[]
   notasCondicion              NotaCondicionEspecie[]
   defectos                    DefectoEspecie[]
+  codigosEquivalentes         EspecieCodigoEquivalente[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
   @@map("especies")
+}
+
+// Códigos alternativos de una Especie (2026-10-14): mismo patrón que
+// ArticuloCodigoEquivalente (tenant vía el padre, sin empresaId). La carga de
+// stock (findEspecieByTexto) matchea también por estos códigos, para aceptar los
+// códigos externos (cliente/proveedor) que trae el Excel de la planta.
+model EspecieCodigoEquivalente {
+  id          Int     @id @default(autoincrement())
+  especieId   Int
+  especie     Especie @relation(fields: [especieId], references: [id], onDelete: Cascade)
+  codigo      String
+  descripcion String? // opcional: a qué corresponde (cliente, proveedor, etc.)
+
+  @@index([especieId])
+  @@map("especie_codigos_equivalentes")
 }
 
 model GrupoVariedad {
@@ -1137,6 +1153,7 @@ model Variedad {
   palletLineas                        PalletLinea[]
   proformaLineas                      ProformaLinea[]
   facturaExportacionLineas            FacturaExportacionLinea[]
+  codigosEquivalentes                 VariedadCodigoEquivalente[]
 
   @@index([empresaId])
   @@map("variedades")
@@ -1170,6 +1187,7 @@ model Categoria {
   palletLineas                PalletLinea[]
   proformaLineas              ProformaLinea[]
   facturaExportacionLineas    FacturaExportacionLinea[]
+  codigosEquivalentes         CategoriaCodigoEquivalente[]
 
   @@index([empresaId])
   @@map("categorias")
@@ -1211,10 +1229,48 @@ model Calibre {
   proformaLineas                     ProformaLinea[]
   facturaExportacionLineas           FacturaExportacionLinea[]
   palletLineas                       PalletLinea[]
+  codigosEquivalentes                CalibreCodigoEquivalente[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
   @@map("calibres")
+}
+
+// Códigos alternativos de Variedad / Categoría / Calibre (2026-10-14) — mismo
+// patrón que EspecieCodigoEquivalente / ArticuloCodigoEquivalente (tenant vía el
+// padre, sin empresaId). La carga de stock los matchea además del código y la
+// descripción, scoped por especie en el service.
+model VariedadCodigoEquivalente {
+  id          Int      @id @default(autoincrement())
+  variedadId  Int
+  variedad    Variedad @relation(fields: [variedadId], references: [id], onDelete: Cascade)
+  codigo      String
+  descripcion String?
+
+  @@index([variedadId])
+  @@map("variedad_codigos_equivalentes")
+}
+
+model CategoriaCodigoEquivalente {
+  id          Int       @id @default(autoincrement())
+  categoriaId Int
+  categoria   Categoria @relation(fields: [categoriaId], references: [id], onDelete: Cascade)
+  codigo      String
+  descripcion String?
+
+  @@index([categoriaId])
+  @@map("categoria_codigos_equivalentes")
+}
+
+model CalibreCodigoEquivalente {
+  id          Int     @id @default(autoincrement())
+  calibreId   Int
+  calibre     Calibre @relation(fields: [calibreId], references: [id], onDelete: Cascade)
+  codigo      String
+  descripcion String?
+
+  @@index([calibreId])
+  @@map("calibre_codigos_equivalentes")
 }
 
 model Parametro {
