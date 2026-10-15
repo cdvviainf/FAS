@@ -481,6 +481,28 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     resetCalibreRango()
   }
 
+  // Duplicar (2026-10-14): precarga el form con los datos de la línea SIN marcar
+  // edición → al "Agregar" se crea una nueva. El usuario ajusta lo que necesite.
+  function handleDuplicarLinea(d: NotaVentaDetalleItem) {
+    setEditingDetalleId(null)
+    setLinea({
+      fechaCompromiso: d.fechaCompromiso.slice(0, 10),
+      especieId: d.especieId,
+      variedadId: d.variedadId,
+      articuloId: d.articuloId,
+      categoriaId: d.categoriaId,
+      tipoPalletId: d.tipoPalletId,
+      cantidadPallets: String(d.cantidadPallets),
+      cajasPorPallet: String(d.cajasPorPallet),
+      cajas: String(d.cajas),
+      precio: d.precio,
+      calibreIds: d.calibres.map((c) => c.calibre.id),
+    })
+    invalidarLookupCajas()
+    setLineaErrors({})
+    resetCalibreRango()
+  }
+
   function handleCancelarEdicionLinea() {
     setEditingDetalleId(null)
     setLinea(LINEA_EMPTY)
@@ -508,12 +530,13 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   }
 
   const articuloSeleccionado = (articulosData?.data ?? []).find((a) => a.id === linea.articuloId)
-  // Embalajes filtrados por la especie de la línea (2026-10-05): los de esa
-  // especie + los genéricos (sin especie). La lista completa se conserva para
-  // resolver el artículo seleccionado (autofill de kg/etiqueta).
+  // Embalajes filtrados ESTRICTAMENTE por la especie de la línea (2026-10-14):
+  // solo los de esa especie; los sin especie asignada no aparecen nunca; sin
+  // especie elegida, lista vacía. La lista completa se conserva para resolver el
+  // artículo seleccionado (autofill de kg/etiqueta).
   const articulosLinea = linea.especieId
-    ? (articulosData?.data ?? []).filter((a) => a.especieId == null || a.especieId === linea.especieId)
-    : (articulosData?.data ?? [])
+    ? (articulosData?.data ?? []).filter((a) => a.especieId === linea.especieId)
+    : []
   // Cifra teórica cargada en la línea (0 si aún no se resolvió; sin default 108).
   const cajasPorPalletValor = Number(linea.cajasPorPallet) || 0
   const lineaMutationPending = addDetalleMutation.isPending || updateDetalleMutation.isPending
@@ -1024,10 +1047,13 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                           <TableCell className='whitespace-nowrap text-muted-foreground'>${d.precio}/cj</TableCell>
                           <TableCell className='text-right'>
                             <div className='flex justify-end gap-1'>
-                              <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleEditarLinea(d)}>
+                              <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleEditarLinea(d)} title='Editar'>
                                 <Icons.edit className='h-4 w-4' />
                               </Button>
-                              <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => setDeleteDetalleId(d.id)}>
+                              <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleDuplicarLinea(d)} title='Duplicar'>
+                                <Icons.copy className='h-4 w-4' />
+                              </Button>
+                              <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => setDeleteDetalleId(d.id)} title='Eliminar'>
                                 <Icons.trash className='h-4 w-4' />
                               </Button>
                             </div>

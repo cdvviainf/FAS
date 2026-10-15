@@ -206,12 +206,13 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const responsables = responsablesData?.data ?? []
   const especies = especiesData?.data ?? []
   const articulos = articulosData?.data ?? []
-  // Embalajes filtrados por la especie de la línea (2026-10-05): los de esa
-  // especie + los genéricos (sin especie). La lista completa `articulos` se
+  // Embalajes filtrados ESTRICTAMENTE por la especie de la línea (2026-10-14):
+  // solo los de esa especie; los sin especie asignada NO aparecen nunca, y sin
+  // especie elegida la lista queda vacía. La lista completa `articulos` se
   // conserva para resolver el artículo seleccionado (autofill de kg/etiqueta).
   const articulosLinea = linea.especieId
-    ? articulos.filter((a) => a.especieId == null || a.especieId === linea.especieId)
-    : articulos
+    ? articulos.filter((a) => a.especieId === linea.especieId)
+    : []
 
   // Cuotas que se derivarán automáticamente al guardar (según Condición de Pago
   // seleccionada) — solo lectura, no se cargan manualmente.
@@ -437,6 +438,29 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
 
   function handleEditarLinea(l: OrdenCompraLineaItem) {
     setEditingLineaId(l.id)
+    setLinea({
+      especieId: l.especieId,
+      variedadId: l.variedadId,
+      categoriaId: l.categoriaId,
+      articuloId: l.articuloId,
+      calibreIds: l.calibres.map((c) => c.calibre.id),
+      tipoPalletId: l.tipoPalletId,
+      cantidadPallets: l.cantidadPallets,
+      cajasPorPallet: l.cajasPorPallet,
+      cajas: l.cajas,
+      precioUsdCaja: Number(l.precioUsdCaja),
+      notaVentaDetalleId: l.notaVentaDetalleId,
+    })
+    invalidarLookupCajas()
+    setLineaErrors({})
+    resetCalibreRango()
+  }
+
+  // Duplicar (2026-10-14): precarga el form de línea con los datos de una línea
+  // existente SIN marcar edición → al "Agregar línea" se crea una nueva. El
+  // usuario ajusta solo lo que necesite.
+  function handleDuplicarLinea(l: OrdenCompraLineaItem) {
+    setEditingLineaId(null)
     setLinea({
       especieId: l.especieId,
       variedadId: l.variedadId,
@@ -1105,10 +1129,13 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                           <TableCell className='whitespace-nowrap text-muted-foreground'>${l.precioUsdCaja}/cj</TableCell>
                           <TableCell className='text-right'>
                             <div className='flex justify-end gap-1'>
-                              <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleEditarLinea(l)}>
+                              <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleEditarLinea(l)} title='Editar'>
                                 <Icons.edit className='h-4 w-4' />
                               </Button>
-                              <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => setDeleteLineaId(l.id)}>
+                              <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleDuplicarLinea(l)} title='Duplicar'>
+                                <Icons.copy className='h-4 w-4' />
+                              </Button>
+                              <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => setDeleteLineaId(l.id)} title='Eliminar'>
                                 <Icons.trash className='h-4 w-4' />
                               </Button>
                             </div>

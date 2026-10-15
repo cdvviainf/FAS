@@ -180,9 +180,11 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   // los de esa especie + los genéricos (sin especie asignada). La lista
   // completa `articulos` se conserva para el nombrado en la tabla de líneas ya
   // guardadas (que pueden ser de varias especies).
+  // Filtro ESTRICTO por especie (2026-10-14): solo embalajes de esa especie; los
+  // sin especie asignada no aparecen nunca; sin especie elegida, lista vacía.
   const articulosLinea = linea.especieId
-    ? articulos.filter((a) => a.especieId == null || a.especieId === linea.especieId)
-    : articulos
+    ? articulos.filter((a) => a.especieId === linea.especieId)
+    : []
 
   const semanaIsoInicioPrograma = fechaInicioPrograma ? getISOWeek(new Date(`${fechaInicioPrograma}T00:00:00`)) : null
 
