@@ -40,7 +40,7 @@ const variedadesService = createMantenedorService('variedades')
 const categoriasService = createMantenedorService('categorias')
 const calibresService = createMantenedorService('calibres')
 const tiposPalletService = createMantenedorService('tipos-pallet')
-const gruposMercadoService = createMantenedorService('grupos-mercado')
+const mercadosService = createMantenedorService('mercados')
 const alturasService = createMantenedorService('alturas')
 const etiquetasService = createMantenedorService('etiquetas')
 
@@ -57,7 +57,7 @@ interface MantenedorConEspecie {
 
 interface NuevaLinea {
   articuloId: number
-  grupoMercadoId: number
+  mercadoId: number
   especieId: number
   variedadId: number
   variedadRotuladaId: number | null
@@ -74,7 +74,7 @@ interface NuevaLinea {
 
 const LINEA_EMPTY: NuevaLinea = {
   articuloId: 0,
-  grupoMercadoId: 0,
+  mercadoId: 0,
   especieId: 0,
   variedadId: 0,
   variedadRotuladaId: null,
@@ -136,7 +136,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
     queryFn: () => entidadesService.list({ tipo: 'EXPORTADORA', limit: 500, activo: true }),
     staleTime: 60_000,
   })
-  const { data: gruposMercadoData } = useQuery({ queryKey: ['grupos-mercado-options'], queryFn: () => gruposMercadoService.list({ limit: 200 }), staleTime: 5 * 60_000 })
+  const { data: mercadosData } = useQuery({ queryKey: ['mercados-options'], queryFn: () => mercadosService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const { data: etiquetasData } = useQuery({ queryKey: ['etiquetas-options'], queryFn: () => etiquetasService.list({ limit: 300 }), staleTime: 5 * 60_000 })
   const { data: especiesData } = useQuery({ queryKey: ['especies-options'], queryFn: () => especiesService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   // Listas SIN filtrar (todas las especies) — se usan para mostrar nombres en
@@ -170,7 +170,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
 
   const productores = productoresData?.data ?? []
   const exportadores = exportadoresData?.data ?? []
-  const gruposMercado = gruposMercadoData?.data ?? []
+  const mercados = mercadosData?.data ?? []
   const etiquetas = etiquetasData?.data ?? []
   const especies = especiesData?.data ?? []
   const articulos = articulosData?.data ?? []
@@ -274,7 +274,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
       setDetalle(
         d.detalle.map((linea) => ({
           articuloId: linea.articuloId,
-          grupoMercadoId: linea.grupoMercadoId,
+          mercadoId: linea.mercadoId,
           especieId: linea.especieId,
           variedadId: linea.variedadId,
           variedadRotuladaId: linea.variedadRotuladaId,
@@ -294,7 +294,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
 
   function validarLinea(): boolean {
     const e: Record<string, string> = {}
-    if (!linea.grupoMercadoId) e.grupoMercadoId = 'Requerido'
+    if (!linea.mercadoId) e.mercadoId = 'Requerido'
     if (!linea.articuloId) e.articuloId = 'Requerido'
     if (!linea.especieId) e.especieId = 'Requerida'
     if (!linea.variedadId) e.variedadId = 'Requerida'
@@ -313,7 +313,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
     if (!validarLinea()) return
     const nueva: InstructivoEmbalajeDetalleInput = {
       articuloId: linea.articuloId,
-      grupoMercadoId: linea.grupoMercadoId,
+      mercadoId: linea.mercadoId,
       especieId: linea.especieId,
       variedadId: linea.variedadId,
       variedadRotuladaId: linea.variedadRotuladaId,
@@ -344,7 +344,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
     setEditingIndex(index)
     setLinea({
       articuloId: d.articuloId,
-      grupoMercadoId: d.grupoMercadoId,
+      mercadoId: d.mercadoId,
       especieId: d.especieId,
       variedadId: d.variedadId,
       variedadRotuladaId: d.variedadRotuladaId,
@@ -370,7 +370,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
     setEditingIndex(null)
     setLinea({
       articuloId: d.articuloId,
-      grupoMercadoId: d.grupoMercadoId,
+      mercadoId: d.mercadoId,
       especieId: d.especieId,
       variedadId: d.variedadId,
       variedadRotuladaId: d.variedadRotuladaId,
@@ -505,7 +505,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
           <CardContent className='space-y-2'>
             {d.detalle.map((linea) => (
               <div key={linea.id} className='flex flex-wrap items-center gap-2 border-b pb-2 text-sm last:border-b-0 last:pb-0'>
-                <Badge variant='outline' className='text-xs'>{linea.grupoMercado.descripcion}</Badge>
+                <Badge variant='outline' className='text-xs'>{linea.mercado.descripcion}</Badge>
                 <span className='font-medium'>{linea.especie.descripcion} / {linea.variedad.descripcion}</span>
                 {linea.variedadRotulada && <span className='text-muted-foreground'>(rotulada: {linea.variedadRotulada.descripcion})</span>}
                 <span className='text-muted-foreground'>{linea.articulo.descripcion}</span>
@@ -585,19 +585,19 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
         <CardContent className='space-y-4'>
           {errors.detalle && <p className='text-xs text-destructive'>{errors.detalle}</p>}
 
-          {/* Fila 1: Grupo de Mercado, Especie, Embalaje */}
+          {/* Fila 1: Mercado, Especie, Embalaje */}
           <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
             <div className='space-y-1.5'>
-              <Label>Grupo de Mercado <span className='text-destructive'>*</span></Label>
-              <Select value={linea.grupoMercadoId ? String(linea.grupoMercadoId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, grupoMercadoId: Number(v) }))}>
+              <Label>Mercado <span className='text-destructive'>*</span></Label>
+              <Select value={linea.mercadoId ? String(linea.mercadoId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, mercadoId: Number(v) }))}>
                 <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                 <SelectContent>
-                  {gruposMercado.map((g) => (
+                  {mercados.map((g) => (
                     <SelectItem key={g.id} value={String(g.id)}>{g.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {lineaErrors.grupoMercadoId && <p className='text-xs text-destructive'>{lineaErrors.grupoMercadoId}</p>}
+              {lineaErrors.mercadoId && <p className='text-xs text-destructive'>{lineaErrors.mercadoId}</p>}
             </div>
             <div className='space-y-1.5'>
               <Label>Especie <span className='text-destructive'>*</span></Label>
@@ -838,7 +838,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Grupo Mercado</TableHead>
+                    <TableHead>Mercado</TableHead>
                     <TableHead>Especie</TableHead>
                     <TableHead>Variedad</TableHead>
                     <TableHead>Variedad Rotulada</TableHead>
@@ -855,7 +855,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
                 <TableBody>
                   {detalle.map((d, i) => (
                     <TableRow key={i}>
-                      <TableCell className='whitespace-nowrap'>{nombre(gruposMercado, d.grupoMercadoId)}</TableCell>
+                      <TableCell className='whitespace-nowrap'>{nombre(mercados, d.mercadoId)}</TableCell>
                       <TableCell className='font-medium whitespace-nowrap'>{nombre(especies, d.especieId)}</TableCell>
                       <TableCell className='whitespace-nowrap'>{nombre(variedadesTodas, d.variedadId)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{d.variedadRotuladaId ? nombre(variedadesTodas, d.variedadRotuladaId) : '—'}</TableCell>

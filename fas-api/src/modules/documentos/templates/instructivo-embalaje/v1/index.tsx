@@ -9,7 +9,7 @@ import type { InstructivoEmbalajePdfPayload } from '../../../schemas/instructivo
 type Linea = InstructivoEmbalajePdfPayload['detalle'][number]
 
 const columnas: ColumnaTabla<Linea>[] = [
-  { titulo: 'Grupo Mercado', render: (l) => l.grupoMercado },
+  { titulo: 'Mercado', render: (l) => l.mercado },
   { titulo: 'Especie', render: (l) => l.especie },
   { titulo: 'Variedad', render: (l) => l.variedad },
   { titulo: 'Var. Rotulada', render: (l) => l.variedadRotulada ?? '—' },

@@ -5,8 +5,8 @@ import type { InstructivoEmbalajeCreateInput, InstructivoEmbalajeDetalleInput, I
 async function validarLinea(linea: InstructivoEmbalajeDetalleInput, index: number) {
   const prefijo = `Línea ${index + 1}:`
 
-  const grupoMercado = await repo.getGrupoMercado(linea.grupoMercadoId)
-  if (!grupoMercado) throw new ValidationError(`${prefijo} el grupo de mercado seleccionado no existe o está bloqueado`)
+  const mercado = await repo.getMercado(linea.mercadoId)
+  if (!mercado) throw new ValidationError(`${prefijo} el mercado seleccionado no existe o está bloqueado`)
 
   const especie = await repo.getEspecie(linea.especieId)
   if (!especie) throw new ValidationError(`${prefijo} la especie seleccionada no existe o está bloqueada`)

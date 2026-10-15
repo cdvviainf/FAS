@@ -16,8 +16,8 @@ export interface InstructivoEmbalajeDetalleItem {
   instructivoId: number
   articuloId: number
   articulo: MantenedorRef & { etiqueta: MantenedorRef | null }
-  grupoMercadoId: number
-  grupoMercado: MantenedorRef
+  mercadoId: number
+  mercado: MantenedorRef
   especieId: number
   especie: MantenedorRef
   variedadId: number
@@ -64,7 +64,7 @@ export interface InstructivoEmbalajeListResponse {
 
 export interface InstructivoEmbalajeDetalleInput {
   articuloId: number
-  grupoMercadoId: number
+  mercadoId: number
   especieId: number
   variedadId: number
   variedadRotuladaId: number | null

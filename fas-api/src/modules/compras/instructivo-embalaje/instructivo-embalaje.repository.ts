@@ -11,8 +11,8 @@ const includeDetalle = {
   exportador: { select: entidadSelect },
   detalle: {
     include: {
-      // Grupo de mercado a nivel de línea (2026-10-05, supersede el de cabecera).
-      grupoMercado: { select: mantenedorSelect },
+      // Mercado a nivel de línea (2026-10-14, supersede grupoMercado).
+      mercado: { select: mantenedorSelect },
       // articulo.etiqueta: la Etiqueta del Artículo (sugerencia por defecto).
       // kgNetoEnvase: agregado (2026-08-19) — lo usa el PDF del Instructivo
       // (documentos/resolvers/instructivo-embalaje.resolver.ts), mismo campo
@@ -140,8 +140,8 @@ export async function getEntidadProductor(id: number) {
   })
 }
 
-export async function getGrupoMercado(id: number) {
-  return prisma.grupoMercado.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+export async function getMercado(id: number) {
+  return prisma.mercado.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
 }
 
 export async function getExportador(id: number) {

@@ -24,8 +24,8 @@ export const instructivoEmbalajePdfPayloadSchema = z.object({
   semana: z.number().int(), // ISO — mismo cálculo que instructivo-form.tsx
   observaciones: z.string().nullable(),
   detalle: z.array(z.object({
-    // Grupo de mercado a nivel de línea (2026-10-05, supersede el de cabecera).
-    grupoMercado: z.string(),
+    // Mercado a nivel de línea (2026-10-14, supersede grupoMercado).
+    mercado: z.string(),
     especie: z.string(),
     variedad: z.string(),
     variedadRotulada: z.string().nullable(),

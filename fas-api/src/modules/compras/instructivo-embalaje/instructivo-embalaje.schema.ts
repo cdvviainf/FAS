@@ -2,8 +2,8 @@ import { z } from 'zod'
 
 const instructivoEmbalajeDetalleSchema = z.object({
   articuloId: z.number().int().positive('El artículo de embalaje es requerido'),
-  // Grupo de mercado a nivel de línea (2026-10-05, supersede el de cabecera).
-  grupoMercadoId: z.number().int().positive('El grupo de mercado es requerido'),
+  // Mercado a nivel de línea (2026-10-14, supersede grupoMercadoId).
+  mercadoId: z.number().int().positive('El mercado es requerido'),
   especieId: z.number().int().positive('La especie es requerida'),
   variedadId: z.number().int().positive('La variedad es requerida'),
   variedadRotuladaId: z.number().int().positive().optional().nullable(),

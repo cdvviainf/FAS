@@ -616,7 +616,6 @@ model GrupoMercado {
   eliminadoPor          String?
 
   mercados                    Mercado[]
-  instructivosEmbalajeDetalle InstructivoEmbalajeDetalle[]
 
   // Target de la FK compuesta de Mercado (empresaId, grupoMercadoId) — hace
   // estructuralmente imposible que un Mercado y su GrupoMercado pertenezcan a
@@ -1393,10 +1392,11 @@ model Mercado {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  mercadoPaises         MercadoPais[]
-  notasVenta            NotaVenta[]
-  ordenesCompra         OrdenCompra[]
-  solicitudesInspeccion SolicitudInspeccion[]
+  mercadoPaises               MercadoPais[]
+  notasVenta                  NotaVenta[]
+  ordenesCompra               OrdenCompra[]
+  solicitudesInspeccion       SolicitudInspeccion[]
+  instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -3938,9 +3938,9 @@ model InstructivoEmbalaje {
   // (empresaId, exportadorId) -> Entidad(empresaId, id).
   exportadorId        Int?
   exportador          Entidad?     @relation("InstructivoEmbalajeExportador", fields: [empresaId, exportadorId], references: [empresaId, id])
-  // El Grupo de Mercado pasó a nivel de línea (2026-10-05, supersede el
-  // grupoMercadoId de cabecera): cada línea del instructivo puede destinarse a
-  // un grupo de mercado distinto — ver InstructivoEmbalajeDetalle.grupoMercadoId.
+  // El Mercado va a nivel de línea (2026-10-14, antes Grupo de Mercado; y antes
+  // de 2026-10-05 estaba en cabecera): cada línea del instructivo puede
+  // destinarse a un mercado distinto — ver InstructivoEmbalajeDetalle.mercadoId.
   fechaInicioPrograma DateTime
   observaciones       String?
 
@@ -3969,9 +3969,10 @@ model InstructivoEmbalajeDetalle {
 
   articuloId         Int // FK → Artículo tipo EMBALAJE
   articulo           Articulo    @relation(fields: [articuloId], references: [id])
-  // Grupo de Mercado a nivel de línea (2026-10-05, supersede el de cabecera).
-  grupoMercadoId     Int
-  grupoMercado       GrupoMercado @relation(fields: [grupoMercadoId], references: [id])
+  // Mercado a nivel de línea (2026-10-14, supersede grupoMercado: ahora se pide
+  // el Mercado, no el Grupo de Mercado). Cada línea puede ir a un mercado distinto.
+  mercadoId          Int
+  mercado            Mercado     @relation(fields: [mercadoId], references: [id])
   especieId          Int
   especie            Especie     @relation(fields: [especieId], references: [id])
   variedadId         Int
@@ -4001,7 +4002,7 @@ model InstructivoEmbalajeDetalle {
   calibres InstructivoEmbalajeDetalleCalibre[]
 
   @@index([instructivoId])
-  @@index([grupoMercadoId])
+  @@index([mercadoId])
   @@index([etiquetaId])
   @@index([variedadRotuladaId])
   @@index([alturaId])

@@ -1,7 +1,7 @@
 export interface InstructivoEmbalajeDetalleInput {
   articuloId: number
-  // Grupo de mercado a nivel de línea (2026-10-05).
-  grupoMercadoId: number
+  // Mercado a nivel de línea (2026-10-14, supersede grupoMercadoId).
+  mercadoId: number
   especieId: number
   variedadId: number
   // Segunda variedad opcional, de la misma especie (2026-08-12).

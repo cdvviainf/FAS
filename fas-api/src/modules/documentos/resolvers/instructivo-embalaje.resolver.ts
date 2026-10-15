@@ -21,7 +21,7 @@ export async function resolverInstructivoEmbalaje(id: number, empresaId: number)
   ])
 
   const detalle = instructivo.detalle.map((d) => ({
-    grupoMercado: d.grupoMercado.descripcion,
+    mercado: d.mercado.descripcion,
     especie: d.especie.descripcion,
     variedad: d.variedad.descripcion,
     variedadRotulada: d.variedadRotulada?.descripcion ?? null,
