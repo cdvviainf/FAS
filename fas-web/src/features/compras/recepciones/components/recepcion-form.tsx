@@ -30,6 +30,7 @@ import { entidadDetailOptions } from '@/features/entidades/queries'
 import { ordenesCompraService } from '@/features/compras/ordenes-compra/service'
 import { templatesCargaService } from '@/features/templates-carga/service'
 import { instructivoEmbalajeService } from '@/features/compras/instructivo-embalaje/service'
+import { semanaISO } from '@/lib/format'
 import { recepcionDetailOptions, recepcionesKeys } from '../queries'
 import { recepcionesService } from '../service'
 import type { RecepcionCreateInput } from '../types'
@@ -440,7 +441,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
               <SelectMultiple
                 options={instructivos.map((i) => ({
                   id: i.id,
-                  label: `N° ${i.numero} — ${i.entidadProductor.descripcion}`,
+                  label: `N° ${i.numero} - Sem ${semanaISO(i.fechaInicioPrograma) ?? '—'} - ${i.entidadProductor.descripcion}`,
                 }))}
                 selectedIds={fields.instructivoIds}
                 onChange={(ids) => setFields((f) => ({ ...f, instructivoIds: ids }))}

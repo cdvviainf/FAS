@@ -46,11 +46,12 @@ export interface InstructivoEmbalajeListItem {
   entidadProductor: EntidadRef
   exportadorId: number | null
   exportador: EntidadRef | null
+  // Fecha de inicio de programa — de ella se deriva la semana ISO (2026-10-14).
+  fechaInicioPrograma: string
   creadoEn: string
 }
 
 export interface InstructivoEmbalajeDetalle extends InstructivoEmbalajeListItem {
-  fechaInicioPrograma: string
   observaciones: string | null
   detalle: InstructivoEmbalajeDetalleItem[]
   creadoPor: string
