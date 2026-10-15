@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useQueryStates, parseAsInteger, parseAsString } from 'nuqs'
 import { DataTable } from '@/components/ui/table/data-table'
 import { DataTableToolbar } from '@/components/ui/table/data-table-toolbar'
@@ -22,7 +22,8 @@ export function UsuarioListingClient() {
     ...(params.q ? { q: params.q } : {}),
   }
 
-  const { data, isPending } = useQuery(usuariosListOptions(filters))
+  // keepPreviousData: evita desmontar el buscador al tipear (ver mantenedor-table).
+  const { data, isPending } = useQuery({ ...usuariosListOptions(filters), placeholderData: keepPreviousData })
 
   const pageCount = data ? Math.ceil(data.meta.total / params.perPage) : 0
 

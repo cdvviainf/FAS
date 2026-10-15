@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useQueryStates, parseAsInteger } from 'nuqs'
 import { useRouter } from 'next/navigation'
 import { DataTable } from '@/components/ui/table/data-table'
@@ -27,8 +27,8 @@ export function IntegracionListingClient() {
   })
   const [formOpen, setFormOpen] = useState(false)
 
-  const { data, isPending } = useQuery(integracionesListOptions({ page: params.page, limit: params.perPage }))
-
+  // keepPreviousData: evita desmontar la tabla/buscador en búsqueda y paginación.
+  const { data, isPending } = useQuery({ ...integracionesListOptions({ page: params.page, limit: params.perPage }), placeholderData: keepPreviousData })
   const columns = useMemo<ColumnDef<IntegracionListItem>[]>(() => [
     ...buildIntegracionColumns(),
     {

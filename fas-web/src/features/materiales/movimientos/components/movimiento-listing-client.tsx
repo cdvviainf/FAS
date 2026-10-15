@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useQueryStates, parseAsInteger } from 'nuqs'
 import { DataTable } from '@/components/ui/table/data-table'
 import { DataTableSkeleton } from '@/components/ui/table/data-table-skeleton'
@@ -21,8 +21,8 @@ export function MovimientoListingClient() {
     perPage: parseAsInteger.withDefault(20),
   })
 
-  const { data, isPending } = useQuery(movimientosListOptions({ page: params.page, limit: params.perPage }))
-
+  // keepPreviousData: evita desmontar la tabla/buscador en búsqueda y paginación.
+  const { data, isPending } = useQuery({ ...movimientosListOptions({ page: params.page, limit: params.perPage }), placeholderData: keepPreviousData })
   const pageCount = data ? Math.ceil(data.meta.total / params.perPage) : 0
   const { table } = useDataTable({
     data: data?.data ?? [],

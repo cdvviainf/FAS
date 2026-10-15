@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useQueryStates, parseAsInteger } from 'nuqs'
 import { DataTable } from '@/components/ui/table/data-table'
 import { DataTableSkeleton } from '@/components/ui/table/data-table-skeleton'
@@ -27,8 +27,8 @@ export function TipoMovimientoListingClient() {
   const [editItem, setEditItem] = useState<TipoMovimiento | undefined>()
   const [formOpen, setFormOpen] = useState(false)
 
-  const { data, isPending } = useQuery(tiposMovimientoListOptions({ page: params.page, limit: params.perPage }))
-
+  // keepPreviousData: evita desmontar la tabla/buscador en búsqueda y paginación.
+  const { data, isPending } = useQuery({ ...tiposMovimientoListOptions({ page: params.page, limit: params.perPage }), placeholderData: keepPreviousData })
   const columns = useMemo<ColumnDef<TipoMovimiento>[]>(() => [
     { accessorKey: 'codigo', header: 'Código', cell: ({ row }) => <span className='font-medium'>{row.original.codigo}</span> },
     { accessorKey: 'descripcion', header: 'Descripción' },

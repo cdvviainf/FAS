@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ColumnDef } from '@tanstack/react-table'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs'
 import { toast } from 'sonner'
 import { DataTable } from '@/components/ui/table/data-table'
@@ -118,7 +118,8 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
     ...(temporada ? { temporadaId: temporada.id } : {}),
   }
 
-  const { data, isPending } = useQuery(solicitudesListOptions(filters))
+  // keepPreviousData: evita desmontar el buscador al tipear (ver mantenedor-table).
+  const { data, isPending } = useQuery({ ...solicitudesListOptions(filters), placeholderData: keepPreviousData })
 
   const notificarMutation = useMutation({
     mutationFn: (id: number) => solicitudesService.notificar(id),

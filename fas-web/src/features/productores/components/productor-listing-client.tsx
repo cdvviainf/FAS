@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useQueryStates, parseAsInteger, parseAsString } from 'nuqs'
 import { useRouter } from 'next/navigation'
 import { DataTable } from '@/components/ui/table/data-table'
@@ -24,7 +24,8 @@ export function ProductorListingClient() {
     q: parseAsString,
   })
 
-  const { data, isPending } = useQuery(productoresListOptions({ page: params.page, limit: params.perPage, q: params.q ?? undefined }))
+  // keepPreviousData: evita desmontar el buscador al tipear (ver mantenedor-table).
+  const { data, isPending } = useQuery({ ...productoresListOptions({ page: params.page, limit: params.perPage, q: params.q ?? undefined }), placeholderData: keepPreviousData })
 
   const columns = useMemo<ColumnDef<ProductorListItem>[]>(() => [
     {

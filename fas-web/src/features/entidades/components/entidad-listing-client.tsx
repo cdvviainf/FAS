@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs'
 import { DataTable } from '@/components/ui/table/data-table'
 import { DataTableToolbar } from '@/components/ui/table/data-table-toolbar'
@@ -34,7 +34,8 @@ export function EntidadListingClient() {
     ...(params.tipo ? { tipo: params.tipo } : {}),
   }
 
-  const { data, isPending } = useQuery(entidadesListOptions(filters))
+  // keepPreviousData: evita desmontar el buscador al tipear (ver mantenedor-table).
+  const { data, isPending } = useQuery({ ...entidadesListOptions(filters), placeholderData: keepPreviousData })
 
   const pageCount = data ? Math.ceil(data.meta.total / params.perPage) : 0
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useQueryStates, parseAsInteger, parseAsString, parseAsStringEnum } from 'nuqs'
 import { useRouter } from 'next/navigation'
 import { DataTable } from '@/components/ui/table/data-table'
@@ -56,7 +56,8 @@ export function ArticuloListingClient() {
     ...(params.sort ? { sort: params.sort } : {}),
   }
 
-  const { data, isPending } = useQuery(articulosListOptions(filters))
+  // keepPreviousData: evita desmontar el buscador al tipear (ver mantenedor-table).
+  const { data, isPending } = useQuery({ ...articulosListOptions(filters), placeholderData: keepPreviousData })
 
   const columns = useMemo<ColumnDef<Articulo>[]>(() => [
     {

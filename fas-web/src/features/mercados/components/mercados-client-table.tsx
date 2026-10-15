@@ -4,7 +4,7 @@ import { DataTable } from '@/components/ui/table/data-table'
 import { DataTableToolbar } from '@/components/ui/table/data-table-toolbar'
 import { DataTableSkeleton } from '@/components/ui/table/data-table-skeleton'
 import { useDataTable } from '@/hooks/use-data-table'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { parseAsInteger, parseAsString, useQueryStates } from 'nuqs'
 import { mercadosQueryOptions } from '../api/queries'
 import { columns } from './mercados-table/columns'
@@ -22,8 +22,8 @@ export function MercadosClientTable() {
     ...(params.q ? { q: params.q } : {})
   }
 
-  const { data, isPending } = useQuery(mercadosQueryOptions(filters))
-
+  // keepPreviousData: evita desmontar la tabla/buscador en búsqueda y paginación.
+  const { data, isPending } = useQuery({ ...mercadosQueryOptions(filters), placeholderData: keepPreviousData })
   const pageCount = data ? Math.ceil(data.total / params.perPage) : 0
 
   const { table } = useDataTable({

@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useQueryStates, parseAsInteger, parseAsString } from 'nuqs'
 import { DataTable } from '@/components/ui/table/data-table'
 import { DataTableToolbar } from '@/components/ui/table/data-table-toolbar'
@@ -30,8 +30,8 @@ export function EmbarqueListingClient() {
     ...(params.estado ? { estado: params.estado } : {}),
     ...(params.sort ? { sort: params.sort } : {}),
   }
-  const { data, isPending } = useQuery(embarquesListOptions(filters))
-
+  // keepPreviousData: evita desmontar la tabla/buscador en búsqueda y paginación.
+  const { data, isPending } = useQuery({ ...embarquesListOptions(filters), placeholderData: keepPreviousData })
   const pageCount = data ? Math.ceil(data.meta.total / params.perPage) : 0
 
   const { table } = useDataTable({
