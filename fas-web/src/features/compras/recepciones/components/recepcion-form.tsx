@@ -335,6 +335,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
         fields.ordenCompraId,
         filas,
         `Formato_${tpl?.codigo ?? 'carga'}_OC.xlsx`,
+        fields.plantaId || null,
       )
       setPopupFilasOpen(false)
     } catch (e) {

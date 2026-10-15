@@ -306,7 +306,14 @@ function entradaGuiaOc(valores: string[]): GuiaOcCampo | null {
   return { opciones: unicos.sort((a, b) => a.localeCompare(b)) }
 }
 
-function construirGuiaOc(oc: OcParaFormato): Record<string, GuiaOcCampo> {
+type PlantaParaFormato = Awaited<ReturnType<typeof repo.getPlantaParaFormatoBase>>
+type NotasParaFormato = Awaited<ReturnType<typeof repo.getNotasParaFormatoBase>>
+
+function construirGuiaOc(
+  oc: OcParaFormato,
+  planta: PlantaParaFormato,
+  notas: NotasParaFormato,
+): Record<string, GuiaOcCampo> {
   const guia: Record<string, GuiaOcCampo> = {}
   const set = (campo: string, valores: string[]) => {
     const e = entradaGuiaOc(valores)
@@ -315,7 +322,8 @@ function construirGuiaOc(oc: OcParaFormato): Record<string, GuiaOcCampo> {
   set('ESPECIE', oc.lineas.map((l) => l.especie?.descripcion ?? ''))
   set('VARIEDAD', oc.lineas.map((l) => l.variedad?.descripcion ?? ''))
   set('CATEGORIA', oc.lineas.map((l) => l.categoria?.descripcion ?? ''))
-  set('ARTICULO', oc.lineas.map((l) => l.articulo?.descripcion ?? ''))
+  // Artículo por CÓDIGO (#2).
+  set('ARTICULO', oc.lineas.map((l) => l.articulo?.codigo ?? ''))
   set('CALIBRE', oc.lineas.flatMap((l) => l.calibres.map((c) => c.calibre?.descripcion ?? '')))
   set(
     'ETIQUETA',
@@ -328,12 +336,35 @@ function construirGuiaOc(oc: OcParaFormato): Record<string, GuiaOcCampo> {
       return etiquetas
     }),
   )
-  // El Productor es único por OC → siempre se precarga.
-  if (oc.entidadProductor?.descripcion) guia.PRODUCTOR = { precarga: oc.entidadProductor.descripcion }
+  // Productor: "código CSG - Nombre CSG" por cada Predio del productor (#3).
+  // Único → precarga; varios → dropdown. El match de carga es por el código CSG.
+  set(
+    'PRODUCTOR',
+    (oc.entidadProductor?.predios ?? [])
+      .filter((p) => p.codigoCsg)
+      .map((p) => (p.nombreCsg ? `${p.codigoCsg} - ${p.nombreCsg}` : `${p.codigoCsg}`)),
+  )
+  // Notas de Calidad/Condición validadas contra la lista del maestro (#4).
+  if (notas.calidad.length > 0) guia.NOTA_CALIDAD = { opciones: [...notas.calidad] }
+  if (notas.condicion.length > 0) guia.NOTA_CONDICION = { opciones: [...notas.condicion] }
+  // Completo: SI/NO (#5).
+  guia.COMPLETO = { opciones: ['SI', 'NO'] }
+  // Fecha de embalaje formateada como fecha (#6).
+  guia.FECHA_EMBALAJE = { formatoFecha: true }
+  // Packing: si la planta de la Recepción también es PACKING → "CSP - Nombre"
+  // (#7); si no, se deja en blanco. El match de carga es por el CSP.
+  if (planta && planta.tipos.includes('PACKING') && planta.csp) {
+    guia.PACKING = { precarga: `${planta.csp} - ${planta.descripcion || planta.razonSocial}` }
+  }
   return guia
 }
 
-export async function generarFormatoBaseOc(templateCargaId: number, ordenCompraId: number, filas: number) {
+export async function generarFormatoBaseOc(
+  templateCargaId: number,
+  ordenCompraId: number,
+  filas: number,
+  plantaId?: number,
+) {
   const template = await templatesService.obtenerTemplateCarga(templateCargaId)
   // Defensa en profundidad (FBOC-R1-001): el picker del frontend ya filtra por
   // tipo=RECEPCION, esto cubre un request armado a mano. Mismo criterio que
@@ -341,10 +372,14 @@ export async function generarFormatoBaseOc(templateCargaId: number, ordenCompraI
   if (template.tipo !== 'RECEPCION') {
     throw new ValidationError('El template de carga seleccionado no es de tipo Recepción')
   }
-  const oc = await repo.getOrdenCompraParaFormatoBase(ordenCompraId)
+  const [oc, planta, notas] = await Promise.all([
+    repo.getOrdenCompraParaFormatoBase(ordenCompraId),
+    plantaId ? repo.getPlantaParaFormatoBase(plantaId) : Promise.resolve(null),
+    repo.getNotasParaFormatoBase(),
+  ])
   if (!oc) throw new NotFoundError('Orden de Compra', String(ordenCompraId))
   const filasSeguras = Math.min(Math.max(1, Math.trunc(filas)), MAX_FILAS_FORMATO_OC)
-  const guia = construirGuiaOc(oc)
+  const guia = construirGuiaOc(oc, planta, notas)
   const buffer = await generarFormatoBase(template as Parameters<typeof generarFormatoBase>[0], {
     filas: filasSeguras,
     guia,

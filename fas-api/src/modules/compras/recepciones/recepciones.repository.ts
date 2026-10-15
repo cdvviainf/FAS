@@ -254,6 +254,15 @@ function condicionCodigosEquivalentes(texto: string) {
   }
 }
 
+// El formato base guiado por OC precarga "código - nombre" para Productor
+// (código CSG del Predio) y Packing (CSP de la Entidad), pero el match es SOLO
+// por el código → se toma la parte ANTES de " - " (2026-10-14). Si no hay " - ",
+// devuelve el texto completo (compat con Excel que trae solo el código).
+function codigoAntesDeGuion(texto: string): string {
+  const i = texto.indexOf(' - ')
+  return (i >= 0 ? texto.slice(0, i) : texto).trim()
+}
+
 // PRECEDENCIA (QAS-CAMS-001): primero se resuelve por código/descripción
 // (principal); solo si no hay match se cae a los códigos alternativos. Así, si
 // un código principal coincide con el alias de otro registro, gana el principal
@@ -338,11 +347,13 @@ export async function findNotaCondicionByTexto(texto: string) {
 // Excel excepcionalmente trae el código de la Entidad), se cae al match
 // directo contra la Entidad como antes.
 export async function findProductorByTexto(texto: string) {
-  const t = texto.trim()
+  // "código CSG - Nombre CSG" (formato base) o solo el código CSG (Packing List
+  // real) → se matchea por el código CSG (parte antes de " - ").
+  const codigoCsg = codigoAntesDeGuion(texto)
   const predio = await prisma.predio.findFirst({
     where: {
       eliminadoEn: null,
-      codigoCsg: { equals: t, ...insensible },
+      codigoCsg: { equals: codigoCsg, ...insensible },
       entidad: { eliminadoEn: null, activo: true, tipos: { has: 'PRODUCTOR' } },
     },
     include: { entidad: true },
@@ -354,7 +365,7 @@ export async function findProductorByTexto(texto: string) {
       eliminadoEn: null,
       activo: true,
       tipos: { has: 'PRODUCTOR' },
-      OR: condicionesPorCampos(['codigo', 'descripcion', 'razonSocial'], texto),
+      OR: condicionesPorCampos(['codigo', 'descripcion', 'razonSocial'], texto.trim()),
     },
   })
 }
@@ -369,12 +380,18 @@ export async function findEtiquetaByTexto(texto: string) {
 }
 
 export async function findPackingByTexto(texto: string) {
+  // El formato base precarga "CSP - Nombre" del Packing → match por CSP (parte
+  // antes de " - "). Se mantiene el match por código/descripción/razón social.
+  const csp = codigoAntesDeGuion(texto)
   return prisma.entidad.findFirst({
     where: {
       eliminadoEn: null,
       activo: true,
       tipos: { has: 'PACKING' },
-      OR: condicionesPorCampos(['codigo', 'descripcion', 'razonSocial'], texto),
+      OR: [
+        ...condicionesPorCampos(['codigo', 'descripcion', 'razonSocial'], texto),
+        { csp: { equals: csp, ...insensible } },
+      ],
     },
   })
 }
@@ -400,15 +417,23 @@ export async function getOrdenCompraParaFormatoBase(id: number) {
   return prisma.ordenCompra.findFirst({
     where: { id, eliminadoEn: null },
     select: {
-      entidadProductor: { select: { descripcion: true } },
+      // Productor: sus Predios dan "código CSG - Nombre CSG" para la columna
+      // Productor (2026-10-14); el match de carga es por el código CSG.
+      entidadProductor: {
+        select: {
+          descripcion: true,
+          predios: { where: { eliminadoEn: null }, select: { codigoCsg: true, nombreCsg: true } },
+        },
+      },
       lineas: {
         select: {
           especie: { select: { descripcion: true } },
           variedad: { select: { descripcion: true } },
           categoria: { select: { descripcion: true } },
+          // Artículo por CÓDIGO (2026-10-14).
           articulo: {
             select: {
-              descripcion: true,
+              codigo: true,
               etiqueta: { select: { descripcion: true } },
               etiquetasAdicionales: { select: { etiqueta: { select: { descripcion: true } } } },
             },
@@ -418,6 +443,27 @@ export async function getOrdenCompraParaFormatoBase(id: number) {
       },
     },
   })
+}
+
+// Planta de la Recepción (2026-10-14): si también es PACKING, el formato base
+// precarga su "CSP - Nombre" en la columna Packing.
+export async function getPlantaParaFormatoBase(plantaId: number) {
+  // Debe ser una PLANTA activa (FBOC-R1-002). El service además exige que sea
+  // también PACKING y tenga CSP para precargar la columna Packing.
+  return prisma.entidad.findFirst({
+    where: { id: plantaId, eliminadoEn: null, activo: true, tipos: { has: 'PLANTA' } },
+    select: { descripcion: true, razonSocial: true, csp: true, tipos: true },
+  })
+}
+
+// Notas de Calidad/Condición activas (2026-10-14): alimentan los dropdowns del
+// formato base (validadas contra la lista del maestro).
+export async function getNotasParaFormatoBase() {
+  const [calidad, condicion] = await Promise.all([
+    prisma.notaCalidad.findMany({ where: { eliminadoEn: null, bloqueado: false }, select: { descripcion: true }, orderBy: { descripcion: 'asc' } }),
+    prisma.notaCondicion.findMany({ where: { eliminadoEn: null, bloqueado: false }, select: { descripcion: true }, orderBy: { descripcion: 'asc' } }),
+  ])
+  return { calidad: calidad.map((n) => n.descripcion), condicion: condicion.map((n) => n.descripcion) }
 }
 
 const detalleParaComparar = {

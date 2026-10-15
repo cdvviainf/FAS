@@ -65,16 +65,15 @@ export const recepcionesService = {
     ordenCompraId: number,
     filas: number,
     nombreArchivo: string,
+    plantaId?: number | null,
   ): Promise<void> {
-    const blob = await api
-      .get('compras/recepciones/formato-base-oc', {
-        searchParams: {
-          templateCargaId: String(templateCargaId),
-          ordenCompraId: String(ordenCompraId),
-          filas: String(filas),
-        },
-      })
-      .blob()
+    const searchParams: Record<string, string> = {
+      templateCargaId: String(templateCargaId),
+      ordenCompraId: String(ordenCompraId),
+      filas: String(filas),
+    }
+    if (plantaId) searchParams.plantaId = String(plantaId)
+    const blob = await api.get('compras/recepciones/formato-base-oc', { searchParams }).blob()
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

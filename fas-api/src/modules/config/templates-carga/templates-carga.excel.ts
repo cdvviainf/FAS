@@ -26,6 +26,8 @@ export interface TemplateParaFormato {
 export interface GuiaOcCampo {
   precarga?: string
   opciones?: string[]
+  // Formatea la columna como celda de fecha (dd-mm-yyyy) — ej. Fecha de Embalaje.
+  formatoFecha?: boolean
 }
 
 export interface FormatoBaseOpciones {
@@ -115,32 +117,42 @@ export async function generarFormatoBase(t: TemplateParaFormato, opts?: FormatoB
       const col = colPorCampo.get(campo)
       if (!col) continue // el campo no está mapeado en este template → se omite
 
-      if (g.precarga != null && g.precarga !== '') {
-        for (let r = filaInicio; r <= filaFin; r++) ws.getCell(r, col).value = g.precarga
+      // Columna de fecha: solo formato de celda (dd-mm-yyyy), sin precarga ni lista.
+      if (g.formatoFecha) {
+        for (let r = filaInicio; r <= filaFin; r++) ws.getCell(r, col).numFmt = 'dd-mm-yyyy'
         continue
       }
 
-      if (g.opciones && g.opciones.length > 0) {
-        if (!listas) {
-          listas = wb.addWorksheet('Listas')
-          listas.state = 'veryHidden'
-        }
-        colListas += 1
-        g.opciones.forEach((op, i) => {
-          listas!.getCell(i + 1, colListas).value = op
-        })
-        const letra = indiceAColumnaLetra(colListas)
-        const rango = `Listas!$${letra}$1:$${letra}$${g.opciones.length}`
-        for (let r = filaInicio; r <= filaFin; r++) {
-          ws.getCell(r, col).dataValidation = {
-            type: 'list',
-            allowBlank: true,
-            formulae: [rango],
-            showErrorMessage: true,
-            errorStyle: 'error',
-            errorTitle: 'Valor fuera de la Orden de Compra',
-            error: 'Elige uno de los valores permitidos por la Orden de Compra.',
-          }
+      // Opciones del dropdown: un valor único (precarga) o varios. El valor único
+      // ADEMÁS se escribe en cada fila; en ambos casos se pone el dropdown para
+      // que la celda quede validada (no editable a un valor inválido).
+      const esPrecarga = g.precarga != null && g.precarga !== ''
+      const opciones = esPrecarga ? [g.precarga as string] : (g.opciones ?? [])
+      if (opciones.length === 0) continue
+
+      if (esPrecarga) {
+        for (let r = filaInicio; r <= filaFin; r++) ws.getCell(r, col).value = g.precarga as string
+      }
+
+      if (!listas) {
+        listas = wb.addWorksheet('Listas')
+        listas.state = 'veryHidden'
+      }
+      colListas += 1
+      opciones.forEach((op, i) => {
+        listas!.getCell(i + 1, colListas).value = op
+      })
+      const letra = indiceAColumnaLetra(colListas)
+      const rango = `Listas!$${letra}$1:$${letra}$${opciones.length}`
+      for (let r = filaInicio; r <= filaFin; r++) {
+        ws.getCell(r, col).dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: [rango],
+          showErrorMessage: true,
+          errorStyle: 'error',
+          errorTitle: 'Valor no permitido',
+          error: 'Elige uno de los valores de la lista.',
         }
       }
     }

@@ -78,7 +78,7 @@ export const CAMPO_TEMPLATE_CARGA_LABELS: Record<string, string> = {
   PRODUCTOR: 'Productor',
   NOTA_CALIDAD: 'Nota de Calidad',
   NOTA_CONDICION: 'Nota de Condición',
-  COMPLETO: 'Completo/Incompleto',
+  COMPLETO: 'Completo',
   FECHA_EMBALAJE: 'Fecha de Embalaje',
   ETIQUETA: 'Etiqueta',
   PACKING: 'Packing',

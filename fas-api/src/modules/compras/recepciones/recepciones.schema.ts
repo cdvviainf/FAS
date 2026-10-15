@@ -65,6 +65,8 @@ export const formatoBaseOcQuerySchema = z.object({
   templateCargaId: z.coerce.number().int().positive(),
   ordenCompraId: z.coerce.number().int().positive(),
   filas: z.coerce.number().int().min(1).max(10000).default(1),
+  // Planta de la Recepción (2026-10-14): si también es PACKING, precarga su CSP.
+  plantaId: z.coerce.number().int().positive().optional(),
 })
 
 export type RecepcionCreateBody = z.infer<typeof recepcionCreateSchema>
