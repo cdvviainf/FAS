@@ -27,19 +27,26 @@ function filtrarItem(item: NavItem, accesoItems: ItemMenuAcceso[]): NavItem | nu
 }
 
 export function useFilteredNavItems(items: NavItem[]) {
-  const { items: accesoItems, isLoading } = useMenuAcceso();
+  const { items: accesoItems, isLoading, isError } = useMenuAcceso();
   return useMemo(() => {
-    if (isLoading) return items;
+    // Fail-closed: sin permisos resueltos (cargando o error) no se muestra nada.
+    if (isError) return [];
+    // Mientras cargan los permisos no se muestra nada (evita el flash de ítems
+    // SIN_ACCESO antes de resolver /me/menu — QA-MENU-002).
+    if (isLoading) return [];
     return items
       .map((item) => filtrarItem(item, accesoItems))
       .filter((item): item is NavItem => item !== null);
-  }, [items, accesoItems, isLoading]);
+  }, [items, accesoItems, isLoading, isError]);
 }
 
 export function useFilteredNavGroups(groups: NavGroup[]) {
-  const { items: accesoItems, isLoading } = useMenuAcceso();
+  const { items: accesoItems, isLoading, isError } = useMenuAcceso();
   return useMemo(() => {
-    if (isLoading) return groups;
+    // Fail-closed: sin permisos resueltos (cargando o error) no se muestra nada.
+    if (isError) return [];
+    // Mientras cargan los permisos no se muestra nada (QA-MENU-002).
+    if (isLoading) return [];
     return groups
       .map((group) => ({
         ...group,
@@ -48,5 +55,5 @@ export function useFilteredNavGroups(groups: NavGroup[]) {
           .filter((item): item is NavItem => item !== null),
       }))
       .filter((group) => group.items.length > 0);
-  }, [groups, accesoItems, isLoading]);
+  }, [groups, accesoItems, isLoading, isError]);
 }

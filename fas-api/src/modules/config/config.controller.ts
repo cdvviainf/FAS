@@ -76,22 +76,28 @@ export async function getTemporadaPredeterminada(_req: FastifyRequest, reply: Fa
   return reply.send(temporada ?? null)
 }
 
-// Retorna los ítems de menú accesibles para el perfil del usuario autenticado
+// Retorna el nivel de acceso del perfil del usuario para TODOS los ítems de menú
+// activos (2026-10-14): los no otorgados vienen con nivel SIN_ACCESO, no se
+// omiten. El frontend necesita la fila SIN_ACCESO para ocultar el ítem del menú
+// (si no llega, el filtro del sidebar lo trata como "sin match" = mostrar). Mismo
+// patrón que obtenerPerfil (findAllItemsMenu + completar faltantes).
 export async function getMiMenu(req: FastifyRequest, reply: FastifyReply) {
   const perfilId = req.fasUserPerfilId
   if (!perfilId) return reply.status(401).send({ error: { code: 'UNAUTHORIZED', message: 'Sin sesión.' } })
 
-  const accesos = await prisma.perfilAcceso.findMany({
-    where: { perfilId, nivel: { not: 'SIN_ACCESO' } },
-    include: {
-      itemMenu: { select: { codigo: true, nombre: true, seccion: true, ruta: true, esAccion: true, orden: true } },
-    },
-    orderBy: { itemMenu: { orden: 'asc' } },
-  })
+  const [itemsMenu, accesos] = await Promise.all([
+    prisma.itemMenu.findMany({
+      where: { activo: true },
+      select: { id: true, codigo: true, nombre: true, seccion: true, ruta: true, esAccion: true, orden: true },
+      orderBy: { orden: 'asc' },
+    }),
+    prisma.perfilAcceso.findMany({ where: { perfilId }, select: { itemMenuId: true, nivel: true } }),
+  ])
 
-  const items = accesos.map((a) => ({
-    ...a.itemMenu,
-    nivel: a.nivel,
+  const nivelPorItem = new Map(accesos.map((a) => [a.itemMenuId, a.nivel]))
+  const items = itemsMenu.map(({ id, ...rest }) => ({
+    ...rest,
+    nivel: nivelPorItem.get(id) ?? 'SIN_ACCESO',
   }))
 
   return reply.send(items)

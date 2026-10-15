@@ -37,18 +37,23 @@ interface MenuAccesoContextValue {
   accesos: Map<string, NivelAcceso>
   items: ItemMenuAcceso[]
   isLoading: boolean
+  // Error al cargar /me/menu: se trata como fail-closed (no se asume acceso) —
+  // QA-MENU-003. El sidebar no muestra ítems y el route-guard no renderiza
+  // contenido protegido.
+  isError: boolean
 }
 
 const MenuAccesoContext = createContext<MenuAccesoContextValue>({
   accesos: new Map(),
   items: [],
   isLoading: true,
+  isError: false,
 })
 
 export function MenuAccesoProvider({ children }: { children: React.ReactNode }) {
   // Sin sesión (ej. páginas de login) devuelve 401 — se trata como "sin accesos"
-  // en vez de reintentar o mostrar error.
-  const { data, isLoading } = useQuery({
+  // (fail-closed) en vez de reintentar.
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['config', 'me', 'menu'],
     queryFn: () => api.get('config/me/menu').json<ItemMenuAcceso[]>(),
     staleTime: 5 * 60_000,
@@ -60,7 +65,7 @@ export function MenuAccesoProvider({ children }: { children: React.ReactNode }) 
   const accesos = useMemo(() => new Map(items.map((item) => [item.codigo, item.nivel])), [items])
 
   return (
-    <MenuAccesoContext.Provider value={{ accesos, items, isLoading }}>
+    <MenuAccesoContext.Provider value={{ accesos, items, isLoading, isError }}>
       {children}
     </MenuAccesoContext.Provider>
   )

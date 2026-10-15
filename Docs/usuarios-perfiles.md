@@ -170,7 +170,7 @@ model Usuario {
 **Sesión actual**
 | Método | Ruta | Notas |
 |---|---|---|
-| GET | `/me/menu` | Menú del usuario actual: ítems con nivel ≥ `LECTURA`, agrupados por sección, para el sidebar. |
+| GET | `/me/menu` | Menú del usuario actual para el sidebar: **todos** los ítems activos con el **nivel del perfil** (los no otorgados vienen `SIN_ACCESO`) — ⚠️ ver CA10 (supersesión 2026-10-14). El frontend oculta los `SIN_ACCESO`. |
 
 > El **guard de autorización** resuelve, por cada ruta protegida, el `ItemMenu` asociado y el nivel del perfil del usuario; aplica RP3. La subida de avatar guarda metadata + ruta en storage.
 
@@ -195,7 +195,7 @@ model Usuario {
 - **CA7 (RU2):** Contraseña que no cumple complejidad → 422; `password ≠ passwordConfirm` → 422.
 - **CA8 (RU3):** Crear usuario sin perfil → 422.
 - **CA9 (RU4):** Usuario con softdelete no puede autenticarse.
-- **CA10 (/me/menu):** Retorna solo ítems con nivel ≥ `LECTURA`, agrupados por sección.
+- **CA10 (/me/menu):** ⚠️ **Supersesión 2026-10-14.** Retorna **todos** los ítems de menú **activos** con el **nivel del perfil** del usuario (los no otorgados vienen con `SIN_ACCESO`, no se omiten). El frontend necesita la fila `SIN_ACCESO` para **ocultar** el ítem del menú: el filtro del sidebar (`use-nav.ts`) oculta solo cuando la ruta resuelve a `SIN_ACCESO`; si la fila no llegara, trataría el ítem como "sin match del catálogo" = mostrar. No es una fuga: la estructura del menú (nombres/rutas) ya está hardcodeada en el bundle del frontend (`nav-config.ts`); la barrera real sigue siendo el guard de ruta + la autorización por endpoint en el backend. *(Antes: retornaba solo ítems con nivel ≥ `LECTURA`.)*
 
 ---
 
