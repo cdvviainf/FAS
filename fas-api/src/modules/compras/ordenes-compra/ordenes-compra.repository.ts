@@ -35,6 +35,7 @@ const includeDetalle = {
       variedad: { select: mantenedorSelect },
       categoria: { select: mantenedorSelect },
       articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+      etiqueta: { select: mantenedorSelect },
       calibres: { select: { calibre: { select: mantenedorSelect } } },
       tipoPallet: { select: mantenedorSelect },
     },
@@ -295,6 +296,7 @@ const lineaInclude = {
   variedad: { select: mantenedorSelect },
   categoria: { select: mantenedorSelect },
   articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+  etiqueta: { select: mantenedorSelect },
   calibres: { select: { calibre: { select: mantenedorSelect } } },
   tipoPallet: { select: mantenedorSelect },
 }
@@ -357,6 +359,30 @@ async function resolverLineaCierreBajoLock(
   }
 }
 
+// Resuelve/valida la etiqueta de la línea contra el set permitido del artículo
+// FINAL (el resuelto bajo lock), para que una línea de Cierre cuyo artículo
+// cambió entre el pre-check y la transacción no quede con una etiqueta ajena a
+// su artículo (FAS-EOCSP-004). Fija → autocompleta; dinámica sin elección → error.
+async function resolverEtiquetaBajoLock(tx: Prisma.TransactionClient, articuloId: number, etiquetaId: number | null): Promise<number> {
+  const art = await tx.articulo.findUnique({
+    where: { id: articuloId },
+    select: { descripcion: true, etiquetaId: true, etiquetasAdicionales: { select: { etiquetaId: true } } },
+  })
+  const permitidas = new Set<number>()
+  if (art?.etiquetaId != null) permitidas.add(art.etiquetaId)
+  for (const a of art?.etiquetasAdicionales ?? []) permitidas.add(a.etiquetaId)
+  const nombre = art?.descripcion ?? `#${articuloId}`
+  if (permitidas.size === 0) throw new ValidationError(`El artículo "${nombre}" no tiene etiqueta configurada`)
+  if (etiquetaId != null) {
+    if (!permitidas.has(etiquetaId)) {
+      throw new ValidationError(`La etiqueta seleccionada no está permitida para el artículo "${nombre}" (pudo cambiar el artículo del Cierre Comercial) — recarga y reintenta`)
+    }
+    return etiquetaId
+  }
+  if (permitidas.size === 1) return [...permitidas][0]
+  throw new ValidationError(`El artículo "${nombre}" tiene etiqueta dinámica — selecciona la etiqueta`)
+}
+
 export async function addLinea(ordenCompraId: number, data: OrdenCompraLineaCreateInput) {
   const { calibreIds, notaVentaDetalleId, ...resto } = data
   return prisma.$transaction(async (tx) => {
@@ -369,10 +395,14 @@ export async function addLinea(ordenCompraId: number, data: OrdenCompraLineaCrea
       const orden = await tx.ordenCompra.findUniqueOrThrow({ where: { id: ordenCompraId }, select: { notaVentaId: true } })
       camposCierre = await resolverLineaCierreBajoLock(tx, orden.notaVentaId, notaVentaDetalleId, calibreIds, resto.cajas)
     }
+    // Re-resolver la etiqueta contra el artículo FINAL bajo lock (FAS-EOCSP-004).
+    const articuloFinal = camposCierre.articuloId ?? resto.articuloId
+    const etiquetaFinal = await resolverEtiquetaBajoLock(tx, articuloFinal, resto.etiquetaId ?? null)
     const linea = await tx.ordenCompraLinea.create({
       data: {
         ...resto,
         ...camposCierre,
+        etiquetaId: etiquetaFinal,
         ordenCompraId,
         notaVentaDetalleId: notaVentaDetalleId ?? null,
         calibres: { create: calibreIds.map((calibreId) => ({ calibreId })) },
@@ -404,11 +434,15 @@ export async function updateLinea(ordenCompraId: number, id: number, data: Orden
       const orden = await tx.ordenCompra.findUniqueOrThrow({ where: { id: ordenCompraId }, select: { notaVentaId: true } })
       camposCierre = await resolverLineaCierreBajoLock(tx, orden.notaVentaId, lineaActual.notaVentaDetalleId, calibreIds, resto.cajas, id)
     }
+    // Re-resolver la etiqueta contra el artículo FINAL bajo lock (FAS-EOCSP-004).
+    const articuloFinal = camposCierre.articuloId ?? resto.articuloId
+    const etiquetaFinal = await resolverEtiquetaBajoLock(tx, articuloFinal, resto.etiquetaId ?? null)
     const linea = await tx.ordenCompraLinea.update({
       where: { id },
       data: {
         ...resto,
         ...camposCierre,
+        etiquetaId: etiquetaFinal,
         calibres: { deleteMany: {}, create: calibreIds.map((calibreId) => ({ calibreId })) },
       },
       include: lineaInclude,
@@ -606,7 +640,18 @@ export async function getCalibresActivos(ids: number[]) {
 }
 
 export async function getArticuloTipo(id: number) {
-  return prisma.articulo.findUnique({ where: { id }, select: { id: true, tipo: true, activo: true } })
+  return prisma.articulo.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      tipo: true,
+      activo: true,
+      descripcion: true,
+      // Set de etiquetas permitido = principal ∪ adicionales (2026-10-15).
+      etiquetaId: true,
+      etiquetasAdicionales: { select: { etiquetaId: true } },
+    },
+  })
 }
 
 export async function getTipoPallet(id: number) {

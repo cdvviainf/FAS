@@ -165,6 +165,30 @@ La OC es **multilínea**. Cada línea es una combinación completa de caracterí
 > `tipo = EMBALAJE`, validado en `articulos.service.ts`, no a nivel de
 > columna. Migración destructiva: los valores de texto libre existentes no
 > se preservan (decisión aceptada, sistema en desarrollo).
+>
+> **Supersesión (2026-10-17) — Etiqueta POR LÍNEA de OC:** la etiqueta pasa a
+> persistirse en la **línea de la OC** (`OrdenCompraLinea.etiquetaId`, FK →
+> `Etiqueta`, nullable por OCs históricas), **superando** la regla anterior de
+> "solo atributo del artículo". Motivación: un artículo de embalaje puede tener
+> etiqueta **dinámica** (varias permitidas), y la compra debe fijar cuál. Reglas:
+> - **Una sola** etiqueta por línea, dentro del **set permitido del artículo**
+>   (`Articulo.etiquetaId` principal ∪ `ArticuloEtiqueta` adicionales).
+> - Artículo **FIJO** (1 permitida): se autocompleta y queda de solo lectura.
+>   Artículo **DINÁMICO** (>1): obligatorio elegirla. El backend resuelve la fija
+>   aunque el request venga sin etiqueta (`ordenes-compra.service.ts`).
+> - **Carga de Recepción (modo COMPRA):** la etiqueta del pallet debe coincidir
+>   con la de la línea de OC que matchea; la clave de match incluye la etiqueta
+>   (combo + etiqueta), de modo que dos líneas de igual combo y distinta etiqueta
+>   se distinguen. Líneas históricas sin etiqueta (`etiquetaId = null`) mantienen
+>   el match por combo. La asignación es **no superpuesta** y se compara por
+>   **totales agregados**: las líneas se agrupan por combo+etiqueta (las
+>   históricas toman el remanente del combo) y se compara la suma de pallets/
+>   cajas y la unión de calibres del grupo contra sus filas — así líneas
+>   indistinguibles (mismo combo+etiqueta, permitido al repartir una línea del
+>   Cierre) no se rechazan por el orden en que aparecen. El formato
+>   base precarga la columna Etiqueta desde la línea de OC.
+> - Migración aditiva `20261015140000_oc_linea_etiqueta` (columna nullable, sin
+>   backfill — las OCs previas quedan con etiqueta heredada del artículo).
 
 ### 4.4 Recepcion
 Módulo único, dos modos según origen. Una Recepción se valida contra **una** OC, contra **el/los Instructivo(s) de Embalaje seleccionados**, o contra **nada** (nunca varias fuentes a la vez).

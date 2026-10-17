@@ -14,6 +14,8 @@ export interface FilaParaComparar {
   articuloId: number
   calibreId: number
   calibreLabel: string
+  etiquetaId: number
+  etiquetaLabel?: string
   cajas: number
   comboLabel: string
   comboKey: string
@@ -24,6 +26,9 @@ export interface LineaOcParaComparar {
   variedadId: number
   categoriaId: number
   articuloId: number
+  // Etiqueta de la línea de OC (2026-10-15): null en OCs históricas → no se
+  // valida acá (el motor igual exige que la etiqueta esté en el set del artículo).
+  etiquetaId: number | null
   cantidadPallets: number
   cajas: number
   calibres: Array<{ calibreId: number }>
@@ -40,47 +45,94 @@ export function compararLineasOcConExcel(lineas: LineaOcParaComparar[], filas: F
     porCombo.set(f.comboKey, arr)
   }
 
-  const combosDeLaOc = new Set(lineas.map((l) => `${l.especieId}-${l.variedadId}-${l.categoriaId}-${l.articuloId}`))
+  const comboKeyLinea = (l: LineaOcParaComparar) => `${l.especieId}-${l.variedadId}-${l.categoriaId}-${l.articuloId}`
 
-  // 1-3: cada línea de la OC contra su grupo del Excel (grupo vacío si la OC
-  // trae una combinación que el Excel no trajo en absoluto).
-  for (const linea of lineas) {
-    const key = `${linea.especieId}-${linea.variedadId}-${linea.categoriaId}-${linea.articuloId}`
-    const grupo = porCombo.get(key) ?? []
-    const label = grupo[0]?.comboLabel ?? key
+  // Agrupar líneas de OC por combo (especie/variedad/categoría/artículo).
+  const lineasPorCombo = new Map<string, LineaOcParaComparar[]>()
+  for (const l of lineas) {
+    const k = comboKeyLinea(l)
+    const arr = lineasPorCombo.get(k) ?? []
+    arr.push(l)
+    lineasPorCombo.set(k, arr)
+  }
 
-    const palletsExcel = new Set(grupo.map((f) => f.numeroPallet)).size
-    if (palletsExcel !== linea.cantidadPallets) {
+  // Evalúa un conjunto de líneas INDISTINGUIBLES (mismo combo+etiqueta, o varias
+  // históricas del combo) contra su conjunto de filas: compara TOTALES agregados
+  // (suma de pallets/cajas, unión de calibres). Esto resuelve de forma unificada:
+  // dos líneas de distinta etiqueta no se pisan (FAS-EOCSP-002); legacy + nueva
+  // del mismo combo no se solapan (FAS-EOCSP-005); y líneas duplicadas
+  // indistinguibles no se rechazan por el orden (FAS-EOCSP-006).
+  const evaluarGrupo = (grupoLineas: LineaOcParaComparar[], filasGrupo: FilaParaComparar[], label: string) => {
+    const palletsEsperados = grupoLineas.reduce((a, l) => a + l.cantidadPallets, 0)
+    const cajasEsperadas = grupoLineas.reduce((a, l) => a + l.cajas, 0)
+
+    const palletsExcel = new Set(filasGrupo.map((f) => f.numeroPallet)).size
+    if (palletsExcel !== palletsEsperados) {
+      errores.push(`N° de pallets de "${label}": la OC indica ${palletsEsperados} y el Excel trae ${palletsExcel}`)
+    }
+    const cajasExcel = filasGrupo.reduce((a, f) => a + f.cajas, 0)
+    if (cajasExcel !== cajasEsperadas) {
+      const diff = cajasExcel - cajasEsperadas
       errores.push(
-        `N° de pallets de "${label}": la OC indica ${linea.cantidadPallets} y el Excel trae ${palletsExcel}`,
+        `Cajas de "${label}": la OC indica ${cajasEsperadas} y el Excel trae ${cajasExcel} (${diff > 0 ? `${diff} de más` : `${-diff} de menos`})`,
       )
     }
-
-    const cajasExcel = grupo.reduce((a, f) => a + f.cajas, 0)
-    if (cajasExcel !== linea.cajas) {
-      const diff = cajasExcel - linea.cajas
-      errores.push(
-        `Cajas de "${label}": la OC indica ${linea.cajas} y el Excel trae ${cajasExcel} (${diff > 0 ? `${diff} de más` : `${-diff} de menos`})`,
-      )
-    }
-
-    const calibresPermitidos = new Set(linea.calibres.map((c) => c.calibreId))
-    const filasFueraDeLista = grupo.filter((f) => !calibresPermitidos.has(f.calibreId))
+    const calibresPermitidos = new Set(grupoLineas.flatMap((l) => l.calibres.map((c) => c.calibreId)))
+    const filasFueraDeLista = filasGrupo.filter((f) => !calibresPermitidos.has(f.calibreId))
     if (filasFueraDeLista.length > 0) {
       const calibresInvalidos = [...new Set(filasFueraDeLista.map((f) => f.calibreLabel))].join(', ')
       const filasTxt = filasFueraDeLista.map((f) => f.fila).join(', ')
-      errores.push(
-        `Calibre ${calibresInvalidos} de las filas ${filasTxt} del Excel no está en la lista de calibres de "${label}"`,
-      )
+      errores.push(`Calibre ${calibresInvalidos} de las filas ${filasTxt} del Excel no está en la lista de calibres de "${label}"`)
     }
   }
 
-  // 4: cobertura — combos del Excel que no corresponden a ninguna línea de la OC.
-  for (const [key, grupo] of porCombo) {
-    if (!combosDeLaOc.has(key)) {
-      const filasTxt = grupo.map((f) => f.fila).join(', ')
-      errores.push(`"${grupo[0].comboLabel}" de las filas ${filasTxt} del Excel no está en la Orden de Compra`)
+  const disponible = new Set(filas) // filas aún no asignadas a ningún grupo
+
+  for (const [combo, lineasCombo] of lineasPorCombo) {
+    const filasCombo = (porCombo.get(combo) ?? []).filter((f) => disponible.has(f))
+    const comboLabel = filasCombo[0]?.comboLabel ?? combo
+
+    // Líneas específicas (con etiqueta): un grupo por etiquetaId.
+    const porEtiqueta = new Map<number, LineaOcParaComparar[]>()
+    for (const l of lineasCombo) {
+      if (l.etiquetaId == null) continue
+      const arr = porEtiqueta.get(l.etiquetaId) ?? []
+      arr.push(l)
+      porEtiqueta.set(l.etiquetaId, arr)
     }
+    const etiquetasReclamadas = new Set<number>()
+    for (const [etq, grupoLineas] of porEtiqueta) {
+      etiquetasReclamadas.add(etq)
+      const filasGrupo = filasCombo.filter((f) => f.etiquetaId === etq)
+      for (const f of filasGrupo) disponible.delete(f)
+      const etqLabel = filasGrupo[0]?.etiquetaLabel ?? `etiqueta ${etq}`
+      evaluarGrupo(grupoLineas, filasGrupo, `${comboLabel} [${etqLabel}]`)
+    }
+
+    // Líneas históricas (sin etiqueta): toman el remanente del combo cuyas
+    // etiquetas no fueron reclamadas por una línea específica.
+    const historicas = lineasCombo.filter((l) => l.etiquetaId == null)
+    if (historicas.length > 0) {
+      const filasRem = filasCombo.filter((f) => !etiquetasReclamadas.has(f.etiquetaId))
+      for (const f of filasRem) disponible.delete(f)
+      evaluarGrupo(historicas, filasRem, comboLabel)
+    }
+  }
+
+  // 4: cobertura — filas del Excel que ningún grupo consumió (combo o etiqueta
+  // sin correspondencia en la OC). Agrupadas por combo+etiqueta para el mensaje.
+  const filasNoCubiertas = filas.filter((f) => disponible.has(f))
+  const porNoCubierta = new Map<string, FilaParaComparar[]>()
+  for (const f of filasNoCubiertas) {
+    const k = `${f.comboKey}|${f.etiquetaId}`
+    const arr = porNoCubierta.get(k) ?? []
+    arr.push(f)
+    porNoCubierta.set(k, arr)
+  }
+  for (const grupo of porNoCubierta.values()) {
+    const filasTxt = grupo.map((f) => f.fila).join(', ')
+    const etqTxt = grupo[0].etiquetaLabel ? ` [${grupo[0].etiquetaLabel}]` : ''
+    errores.push(`"${grupo[0].comboLabel}${etqTxt}" de las filas ${filasTxt} del Excel no está en la Orden de Compra`)
   }
 
   return errores

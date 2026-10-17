@@ -328,6 +328,10 @@ function construirGuiaOc(
   set(
     'ETIQUETA',
     oc.lineas.flatMap((l) => {
+      // Etiqueta de la línea (2026-10-15): valor único por línea → precarga/
+      // valida la columna con esa sola etiqueta. Fallback al set del artículo
+      // para OCs históricas sin etiqueta en la línea.
+      if (l.etiqueta?.descripcion) return [l.etiqueta.descripcion]
       const etiquetas: string[] = []
       if (l.articulo?.etiqueta?.descripcion) etiquetas.push(l.articulo.etiqueta.descripcion)
       for (const a of l.articulo?.etiquetasAdicionales ?? []) {

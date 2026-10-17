@@ -47,6 +47,7 @@ interface FilaResuelta {
   // de las 3 de arriba): viajan tal cual hasta crear cada PalletLinea.
   fechaEmbalaje: Date
   etiquetaId: number
+  etiquetaLabel?: string // para el mensaje de comparación contra la OC
   packingId: number
 }
 
@@ -303,6 +304,7 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
       cajas,
       fechaEmbalaje: fechaParseada as Date,
       etiquetaId: etiquetaIdFinal!,
+      etiquetaLabel: etiquetaResuelta?.descripcion ?? textoEtiqueta,
       packingId: pack.id,
       productorId: prod.id,
       comboLabel: `${e.descripcion} / ${v.descripcion} / ${c.descripcion} / ${art.descripcion}`,

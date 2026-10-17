@@ -780,6 +780,7 @@ model Etiqueta {
   proformaLineas              ProformaLinea[]
   facturaExportacionLineas    FacturaExportacionLinea[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
+  ordenCompraLineas           OrdenCompraLinea[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -4348,8 +4349,15 @@ model OrdenCompraLinea {
   variedad     Variedad    @relation(fields: [variedadId], references: [id])
   categoriaId  Int
   categoria    Categoria   @relation(fields: [categoriaId], references: [id])
-  articuloId   Int // FK → Artículo tipo EMBALAJE (etiqueta/pesos se leen del artículo)
+  articuloId   Int // FK → Artículo tipo EMBALAJE (pesos se leen del artículo)
   articulo     Articulo    @relation(fields: [articuloId], references: [id])
+  // Etiqueta de la línea (2026-10-15): una sola por línea, dentro del set
+  // permitido del artículo (principal ∪ adicionales). Si el artículo es FIJA se
+  // fija la principal; si es DINÁMICA se elige. Nullable en columna por OCs
+  // históricas; requerida en validación para líneas nuevas. La carga de stock
+  // (modo COMPRA) exige que la etiqueta del pallet coincida con esta.
+  etiquetaId   Int?
+  etiqueta     Etiqueta?   @relation(fields: [etiquetaId], references: [id])
   tipoPalletId Int?
   tipoPallet   TipoPallet? @relation(fields: [tipoPalletId], references: [id])
 

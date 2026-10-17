@@ -438,6 +438,10 @@ export async function getOrdenCompraParaFormatoBase(id: number) {
               etiquetasAdicionales: { select: { etiqueta: { select: { descripcion: true } } } },
             },
           },
+          // Etiqueta de la línea (2026-10-15): valor único conocido → precarga y
+          // valida la columna Etiqueta del formato base (en vez del set del
+          // artículo). Null en OCs históricas → se usa el set del artículo.
+          etiqueta: { select: { descripcion: true } },
           calibres: { select: { calibre: { select: { descripcion: true } } } },
         },
       },

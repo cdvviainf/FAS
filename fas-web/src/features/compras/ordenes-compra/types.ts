@@ -35,6 +35,9 @@ export interface OrdenCompraLineaItem {
   categoria: MantenedorRef
   articuloId: number
   articulo: MantenedorRef & { etiqueta: MantenedorRef | null; kgNetoEnvase: string | null; kgBrutoEnvase: string | null }
+  // Etiqueta de la línea (2026-10-15).
+  etiquetaId: number | null
+  etiqueta: MantenedorRef | null
   calibres: { calibre: MantenedorRef }[]
   tipoPalletId: number | null
   tipoPallet: MantenedorRef | null
@@ -140,6 +143,9 @@ export interface OrdenCompraLineaInput {
   variedadId: number
   categoriaId: number
   articuloId: number
+  // Etiqueta de la línea (2026-10-15): opcional en el input — el backend la
+  // resuelve si el artículo tiene etiqueta fija; obligatoria si es dinámica.
+  etiquetaId: number | null
   calibreIds: number[]
   tipoPalletId: number | null
   cantidadPallets: number

@@ -3,6 +3,9 @@ export interface OrdenCompraLineaInput {
   variedadId: number
   categoriaId: number
   articuloId: number
+  // Etiqueta de la línea (opcional en el input: el service la resuelve si el
+  // artículo tiene etiqueta fija). 2026-10-15.
+  etiquetaId?: number | null
   calibreIds: number[]
   tipoPalletId?: number | null
   cantidadPallets: number

@@ -98,6 +98,7 @@ const LINEA_EMPTY: OrdenCompraLineaCreateInput = {
   variedadId: 0,
   categoriaId: 0,
   articuloId: 0,
+  etiquetaId: null,
   calibreIds: [],
   tipoPalletId: null,
   cantidadPallets: 0,
@@ -419,6 +420,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     if (!linea.variedadId) e.variedadId = 'Requerida'
     if (!linea.categoriaId) e.categoriaId = 'Requerida'
     if (!linea.articuloId) e.articuloId = 'Requerido'
+    // Etiqueta: obligatoria solo si el artículo es dinámico (>1 permitida). Si es
+    // fija, el backend la autocompleta aunque venga null.
+    if (etiquetasPermitidas.length > 1 && !linea.etiquetaId) e.etiquetaId = 'Selecciona la etiqueta'
     if (linea.calibreIds.length === 0) e.calibreIds = 'Selecciona al menos un calibre'
     if (!linea.cantidadPallets || linea.cantidadPallets <= 0) e.cantidadPallets = 'Debe ser mayor a 0'
     // Cajas por pallet debe venir del mantenedor (sin default 108): si falta,
@@ -443,6 +447,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       variedadId: l.variedadId,
       categoriaId: l.categoriaId,
       articuloId: l.articuloId,
+      etiquetaId: l.etiquetaId,
       calibreIds: l.calibres.map((c) => c.calibre.id),
       tipoPalletId: l.tipoPalletId,
       cantidadPallets: l.cantidadPallets,
@@ -466,6 +471,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       variedadId: l.variedadId,
       categoriaId: l.categoriaId,
       articuloId: l.articuloId,
+      etiquetaId: l.etiquetaId,
       calibreIds: l.calibres.map((c) => c.calibre.id),
       tipoPalletId: l.tipoPalletId,
       cantidadPallets: l.cantidadPallets,
@@ -493,6 +499,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       variedadId: detalle.variedadId,
       categoriaId: detalle.categoriaId ?? 0,
       articuloId: detalle.articuloId,
+      etiquetaId: null,
       calibreIds: detalle.calibres.map((c) => c.calibre.id),
       tipoPalletId: detalle.tipoPalletId,
       cantidadPallets: pallets,
@@ -545,7 +552,16 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const isPending = createMutation.isPending || updateMutation.isPending
   const yaRecepcionada = ordenCompra?.data.estado === 'RECEPCIONADA'
   const soloLectura = !puedeEscribir || yaRecepcionada
-  const articuloSeleccionado = articulos.find((a) => a.id === linea.articuloId) as { etiqueta?: { descripcion: string } | null; kgNetoEnvase?: string | null; kgBrutoEnvase?: string | null } | undefined
+  const articuloSeleccionado = articulos.find((a) => a.id === linea.articuloId)
+  // Set de etiquetas permitido del artículo = principal ∪ adicionales. FIJA (1)
+  // → se autocompleta y queda de solo lectura; DINÁMICA (>1) → se elige.
+  const etiquetasPermitidas = articuloSeleccionado
+    ? [
+        ...(articuloSeleccionado.etiqueta ? [articuloSeleccionado.etiqueta] : []),
+        ...(articuloSeleccionado.etiquetasAdicionales ?? []).map((a) => a.etiqueta),
+      ]
+    : []
+  const etiquetaFija = etiquetasPermitidas.length === 1
   const lineaMutationPending = addLineaMutation.isPending || updateLineaMutation.isPending
   // Línea tomada de una línea del Cierre Comercial (2026-08-23): especie/
   // variedad/categoría/artículo/tipoPallet quedan bloqueados en el form —
@@ -868,7 +884,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   <Label>Especie <span className='text-destructive'>*</span></Label>
                   <Select
                     value={linea.especieId ? String(linea.especieId) : ''}
-                    onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreIds: [], articuloId: 0 })); resetCalibreRango() }}
+                    onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: 0, calibreIds: [], articuloId: 0, etiquetaId: null })); resetCalibreRango() }}
                     disabled={lineaBloqueadaPorCierre}
                   >
                     <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
@@ -880,17 +896,50 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   </Select>
                   {lineaErrors.especieId && <p className='text-xs text-destructive'>{lineaErrors.especieId}</p>}
                 </div>
-                <div className='space-y-1.5 md:col-span-2'>
+                <div className='space-y-1.5'>
                   <Label>Embalaje <span className='text-destructive'>*</span></Label>
                   <Combobox
                     options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
                     value={linea.articuloId ? String(linea.articuloId) : null}
-                    onChange={(v) => { const id = Number(v); setLinea((l) => ({ ...l, articuloId: id })); void aplicarTeoricaCajas(id, linea.tipoPalletId) }}
+                    onChange={(v) => {
+                      const id = Number(v)
+                      // Resolver la etiqueta del nuevo artículo: si tiene una sola
+                      // permitida (FIJA) se autocompleta; si no, queda a elegir.
+                      const art = articulos.find((a) => a.id === id)
+                      const permit = art
+                        ? [...(art.etiqueta ? [art.etiqueta] : []), ...(art.etiquetasAdicionales ?? []).map((a) => a.etiqueta)]
+                        : []
+                      const etiquetaAuto = permit.length === 1 ? permit[0].id : null
+                      setLinea((l) => ({ ...l, articuloId: id, etiquetaId: etiquetaAuto }))
+                      void aplicarTeoricaCajas(id, linea.tipoPalletId)
+                    }}
                     placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'}
                     searchPlaceholder='Buscar embalaje...'
                     disabled={lineaBloqueadaPorCierre || !linea.especieId}
                   />
                   {lineaErrors.articuloId && <p className='text-xs text-destructive'>{lineaErrors.articuloId}</p>}
+                </div>
+                <div className='space-y-1.5'>
+                  <Label>Etiqueta {etiquetasPermitidas.length > 1 && <span className='text-destructive'>*</span>}</Label>
+                  {etiquetaFija ? (
+                    <Input value={etiquetasPermitidas[0]?.descripcion ?? ''} disabled readOnly />
+                  ) : (
+                    <Select
+                      value={linea.etiquetaId ? String(linea.etiquetaId) : ''}
+                      onValueChange={(v) => setLinea((l) => ({ ...l, etiquetaId: Number(v) }))}
+                      disabled={!articuloSeleccionado || etiquetasPermitidas.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={articuloSeleccionado ? 'Seleccionar...' : 'Elige un embalaje primero'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {etiquetasPermitidas.map((e) => (
+                          <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {lineaErrors.etiquetaId && <p className='text-xs text-destructive'>{lineaErrors.etiquetaId}</p>}
                 </div>
               </div>
 
@@ -1105,6 +1154,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                       <TableRow>
                         <TableHead>Especie / Variedad</TableHead>
                         <TableHead className='w-[110px]'>Embalaje</TableHead>
+                        <TableHead>Etiqueta</TableHead>
                         <TableHead>Categoría</TableHead>
                         <TableHead className='min-w-[240px]'>Calibre</TableHead>
                         <TableHead>Cantidad</TableHead>
@@ -1117,6 +1167,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                         <TableRow key={l.id}>
                           <TableCell className='font-medium whitespace-nowrap'>{l.especie.descripcion} / {l.variedad.descripcion}</TableCell>
                           <TableCell className='w-[110px] max-w-[110px] truncate text-muted-foreground' title={l.articulo.descripcion}>{l.articulo.codigo}</TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.etiqueta?.descripcion ?? l.articulo.etiqueta?.descripcion ?? '—'}</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{l.categoria.descripcion}</TableCell>
                           <TableCell className='min-w-[240px] text-muted-foreground'>
                             <div className='flex flex-wrap gap-1'>

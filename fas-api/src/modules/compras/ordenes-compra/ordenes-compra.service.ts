@@ -20,6 +20,27 @@ async function validarLinea(linea: OrdenCompraLineaInput, index: number) {
   if (articulo.tipo !== 'EMBALAJE') throw new ValidationError(`${prefijo} el artículo debe ser de tipo Embalaje`)
   if (!articulo.activo) throw new ValidationError(`${prefijo} el artículo de embalaje seleccionado está inactivo`)
 
+  // Etiqueta de la línea (2026-10-15): una sola, dentro del set permitido del
+  // artículo (principal ∪ adicionales). FIJA (1 permitida) → se autocompleta;
+  // DINÁMICA (>1) → debe venir elegida.
+  const permitidas = new Set<number>()
+  if (articulo.etiquetaId != null) permitidas.add(articulo.etiquetaId)
+  for (const a of articulo.etiquetasAdicionales) permitidas.add(a.etiquetaId)
+  if (permitidas.size === 0) {
+    throw new ValidationError(`${prefijo} el artículo "${articulo.descripcion}" no tiene etiqueta configurada — defínela en el maestro de Artículos`)
+  }
+  let etiquetaIdResuelta: number
+  if (linea.etiquetaId != null) {
+    if (!permitidas.has(linea.etiquetaId)) {
+      throw new ValidationError(`${prefijo} la etiqueta seleccionada no está permitida para el artículo "${articulo.descripcion}"`)
+    }
+    etiquetaIdResuelta = linea.etiquetaId
+  } else if (permitidas.size === 1) {
+    etiquetaIdResuelta = [...permitidas][0] // etiqueta fija heredada del maestro
+  } else {
+    throw new ValidationError(`${prefijo} el artículo "${articulo.descripcion}" tiene etiqueta dinámica — selecciona la etiqueta`)
+  }
+
   const variedad = await repo.getVariedad(linea.variedadId)
   if (!variedad) throw new ValidationError(`${prefijo} la variedad seleccionada no existe o está bloqueada`)
   if (variedad.especieId !== linea.especieId) {
@@ -44,6 +65,8 @@ async function validarLinea(linea: OrdenCompraLineaInput, index: number) {
     const tipoPallet = await repo.getTipoPallet(linea.tipoPalletId)
     if (!tipoPallet) throw new ValidationError(`${prefijo} el tipo de pallet seleccionado no existe o está bloqueado`)
   }
+
+  return { etiquetaId: etiquetaIdResuelta }
 }
 
 // Pre-check amigable (2026-08-23) — lectura NO bloqueada, solo para devolver
@@ -260,8 +283,8 @@ export async function agregarLinea(ordenCompraId: number, body: OrdenCompraLinea
   const lineaResuelta = body.notaVentaDetalleId != null
     ? await resolverLineaDesdeCierre(orden.notaVentaId, body.notaVentaDetalleId, body, 0)
     : body
-  await validarLinea(lineaResuelta, 0)
-  return repo.addLinea(ordenCompraId, { ...lineaResuelta, notaVentaDetalleId: body.notaVentaDetalleId ?? null })
+  const { etiquetaId } = await validarLinea(lineaResuelta, 0)
+  return repo.addLinea(ordenCompraId, { ...lineaResuelta, etiquetaId, notaVentaDetalleId: body.notaVentaDetalleId ?? null })
 }
 
 // La OrdenCompraLinea no es un modelo tenant (tabla hija, decisión #5 de
@@ -287,8 +310,8 @@ export async function actualizarLinea(ordenCompraId: number, lineaId: number, bo
   const lineaResuelta = linea.notaVentaDetalleId != null
     ? await resolverLineaDesdeCierre(orden.notaVentaId, linea.notaVentaDetalleId, body, 0, lineaId)
     : body
-  await validarLinea(lineaResuelta, 0)
-  return repo.updateLinea(ordenCompraId, lineaId, lineaResuelta)
+  const { etiquetaId } = await validarLinea(lineaResuelta, 0)
+  return repo.updateLinea(ordenCompraId, lineaId, { ...lineaResuelta, etiquetaId })
 }
 
 export async function eliminarLinea(ordenCompraId: number, lineaId: number) {
