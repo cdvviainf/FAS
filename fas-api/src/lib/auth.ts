@@ -3,6 +3,7 @@ import { prismaAdapter } from 'better-auth/adapters/prisma'
 import { admin } from 'better-auth/plugins'
 import { env } from '../config/env.js'
 import { prisma } from './prisma.js'
+import { prismaBase } from './prisma.js'
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
@@ -24,6 +25,27 @@ export const auth = betterAuth({
             select: { id: true },
           })
           if (!usuario) return false
+        },
+        // Auditoría de acceso: sesión creada = LOGIN exitoso. Best-effort — un
+        // fallo de auditoría nunca debe impedir el inicio de sesión.
+        after: async (session) => {
+          try {
+            const s = session as { userId: string; ipAddress?: string | null; userAgent?: string | null }
+            const usuario = await prismaBase.usuario.findFirst({
+              where: { id: s.userId },
+              select: { email: true, empresaPredeterminadaId: true },
+            })
+            const { registrarAcceso } = await import('../modules/auditoria/auditoria.service.js')
+            await registrarAcceso('LOGIN', {
+              usuarioId: s.userId,
+              usuarioEmail: usuario?.email ?? null,
+              empresaId: usuario?.empresaPredeterminadaId ?? null,
+              ip: s.ipAddress ?? null,
+              userAgent: s.userAgent ?? null,
+            })
+          } catch {
+            /* best-effort */
+          }
         },
       },
     },

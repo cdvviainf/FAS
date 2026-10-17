@@ -4765,3 +4765,46 @@ model DocumentoDte {
   @@unique([empresaId, origenTipo, origenId])
   @@map("documentos_dte")
 }
+
+// ─── Auditoría (trazabilidad de acciones de usuario) ─────────────────────────
+// Módulo autocontenido y portable: SIN relaciones/FK a Usuario ni Empresa (se
+// guardan ids + snapshots) para poder llevarlo a otros proyectos. NO es tabla
+// tenant (no va en MODELOS_TENANT) y está excluida de la propia auditoría.
+enum AccionAuditoria {
+  LOGIN
+  LOGOUT
+  LOGIN_FALLIDO
+  ACCESO_MENU
+  CREAR
+  EDITAR
+  ELIMINAR
+}
+
+model AuditLog {
+  id           Int             @id @default(autoincrement())
+  empresaId    Int? // empresa activa al momento del evento (puede ser null: login, jobs)
+  usuarioId    String? // id del Usuario (String, boundary Better Auth); null si anónimo
+  usuarioEmail String? // snapshot del email por si el usuario se elimina
+  accion       AccionAuditoria
+
+  entidad   String? // nombre del modelo Prisma afectado (CREAR/EDITAR/ELIMINAR)
+  entidadId String? // id del registro afectado (como texto)
+
+  ruta           String? // ACCESO_MENU: ruta del frontend; mutaciones: endpoint opcional
+  itemMenuCodigo String? // ACCESO_MENU: código del ItemMenu
+
+  datosAntes   Json? // snapshot previo (EDITAR/ELIMINAR), campos sensibles enmascarados
+  datosDespues Json? // snapshot posterior (CREAR/EDITAR), campos sensibles enmascarados
+  // Resumen de operaciones masivas (updateMany/deleteMany): { criterio, cantidad }
+  resumen Json?
+
+  ip        String?
+  userAgent String?
+  creadoEn  DateTime @default(now())
+
+  @@index([empresaId, creadoEn])
+  @@index([usuarioId, creadoEn])
+  @@index([accion, creadoEn])
+  @@index([entidad, entidadId])
+  @@map("audit_logs")
+}

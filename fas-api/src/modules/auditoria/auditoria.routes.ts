@@ -1,0 +1,13 @@
+import type { FastifyInstance } from 'fastify'
+import { requireAuth, requireLevel } from '../../plugins/auth-guard.js'
+import * as ctrl from './auditoria.controller.js'
+
+const ITEM = 'CONFIG_AUDITORIA'
+
+export async function auditoriaRoutes(app: FastifyInstance) {
+  // Registro de navegación: cualquier usuario autenticado (se audita a sí mismo).
+  app.post('/navegacion', { preHandler: [requireAuth] }, ctrl.registrarNavegacion)
+
+  // Consulta de la bitácora: requiere permiso de lectura del ítem de auditoría.
+  app.get('/', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
+}

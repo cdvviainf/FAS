@@ -1,7 +1,9 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
+import { fromNodeHeaders } from 'better-auth/node'
 import { env } from './config/env.js'
 import { auth } from './lib/auth.js'
 import { empresaContext } from './lib/empresa-context.js'
+import { auditoriaContext, storeAuditoriaVacio, getAuditoriaContext } from './lib/auditoria/auditoria-context.js'
 import { errorHandler } from './plugins/error-handler.js'
 import { swaggerPlugin } from './plugins/swagger.plugin.js'
 import { validatePasswordComplexity } from './shared/password-validator.js'
@@ -15,6 +17,9 @@ import { ventasRoutes } from './modules/ventas/ventas.routes.js'
 import { comprasRoutes } from './modules/compras/compras.routes.js'
 import { operacionesRoutes } from './modules/operaciones/operaciones.routes.js'
 import { documentosRoutes } from './modules/documentos/documentos.routes.js'
+import { auditoriaRoutes } from './modules/auditoria/auditoria.routes.js'
+import { registrarAcceso } from './modules/auditoria/auditoria.service.js'
+import { encolarAuditoria } from './modules/auditoria/auditoria.queue.js'
 import { closeBrowser } from './shared/pdf/browser.js'
 
 export async function buildApp(options: { logger?: boolean } = {}) {
@@ -46,7 +51,22 @@ export async function buildApp(options: { logger?: boolean } = {}) {
   // acá para todo request; `requireAuth` lo completa una vez resuelto el
   // usuario y el header X-Empresa-Id.
   app.addHook('onRequest', (_req, _reply, done) => {
-    empresaContext.run({ empresaId: null }, done)
+    // Ambos contextos ALS activos para todo el request; `requireAuth` los
+    // completa. El de auditoría va anidado dentro del de empresa.
+    empresaContext.run({ empresaId: null }, () => {
+      auditoriaContext.run(storeAuditoriaVacio(), done)
+    })
+  })
+
+  // Publica los eventos de mutación acumulados durante el request SOLO si la
+  // respuesta fue exitosa (A-QA-004): si la operación/transacción falló, la
+  // respuesta es de error y los eventos se descartan (no quedan fantasmas).
+  app.addHook('onResponse', async (_req, reply) => {
+    const store = getAuditoriaContext()
+    if (store.pendientes.length === 0) return
+    const eventos = store.pendientes.splice(0)
+    if (reply.statusCode >= 400) return // operación fallida → se descartan
+    for (const evento of eventos) await encolarAuditoria(evento)
   })
 
   app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
@@ -125,6 +145,48 @@ export async function buildApp(options: { logger?: boolean } = {}) {
 
   app.all('/api/auth/*', forwardToBetterAuth)
 
+  // Auditoría de acceso al sistema. LOGIN se registra en el hook
+  // session.create.after de Better Auth (ver lib/auth.ts); acá se capturan
+  // LOGOUT y LOGIN_FALLIDO sobre las rutas de auth.
+  // En sign-out la sesión aún es válida al llegar el request: se resuelve el
+  // usuario antes de que Better Auth la invalide, para registrar quién salió.
+  app.addHook('onRequest', async (req) => {
+    if (req.url?.startsWith('/api/auth/sign-out')) {
+      try {
+        const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) })
+        ;(req as FastifyRequest & { logoutUser?: { id: string; email: string } | null }).logoutUser = session?.user
+          ? { id: session.user.id, email: session.user.email }
+          : null
+      } catch {
+        /* best-effort: si no se resuelve, se registra sin usuario */
+      }
+    }
+  })
+
+  app.addHook('onResponse', async (req, reply) => {
+    const url = req.url ?? ''
+    if (!url.startsWith('/api/auth/')) return
+    const ip = req.ip
+    const userAgent = (req.headers['user-agent'] as string | undefined) ?? null
+    try {
+      if (url.includes('/sign-out') && reply.statusCode < 400) {
+        const u = (req as FastifyRequest & { logoutUser?: { id: string; email: string } | null }).logoutUser ?? null
+        await registrarAcceso('LOGOUT', { usuarioId: u?.id ?? null, usuarioEmail: u?.email ?? null, ip, userAgent })
+      } else if (url.includes('/sign-in') && reply.statusCode >= 400) {
+        let email: string | null = null
+        try {
+          const raw = req.body instanceof Buffer ? req.body.toString('utf8') : ''
+          email = raw ? (JSON.parse(raw)?.email ?? null) : null
+        } catch {
+          /* body ilegible: se registra sin email */
+        }
+        await registrarAcceso('LOGIN_FALLIDO', { usuarioEmail: email, ip, userAgent })
+      }
+    } catch {
+      /* la auditoría nunca interfiere con la respuesta de auth */
+    }
+  })
+
   await app.register(healthRoutes)
   await app.register(configRoutes, { prefix: '/api/config' })
   await app.register(solicitudesRoutes, { prefix: '/api/calidad' })
@@ -138,6 +200,7 @@ export async function buildApp(options: { logger?: boolean } = {}) {
   await app.register(comprasRoutes, { prefix: '/api/compras' })
   await app.register(operacionesRoutes, { prefix: '/api/operaciones' })
   await app.register(documentosRoutes, { prefix: '/api/documentos' })
+  await app.register(auditoriaRoutes, { prefix: '/api/auditoria' })
 
   // Motor de Documentos (Etapa 4): cierre ordenado del Chromium compartido
   // (shared/pdf/browser.ts) al apagar el server — evita dejar el proceso

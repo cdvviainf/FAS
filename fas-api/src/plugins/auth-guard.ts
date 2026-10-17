@@ -4,6 +4,7 @@ import { fromNodeHeaders } from 'better-auth/node'
 import { auth } from '../lib/auth.js'
 import { prisma } from '../lib/prisma.js'
 import { empresaContext } from '../lib/empresa-context.js'
+import { auditoriaContext } from '../lib/auditoria/auditoria-context.js'
 import { env } from '../config/env.js'
 
 declare module 'fastify' {
@@ -78,6 +79,17 @@ export const requireAuth: preHandlerHookHandler = async (request, reply) => {
   request.fasAccesos = new Map(
     usuario.perfil.accesos.map((a) => [a.itemMenu.codigo, a.nivel]),
   )
+
+  // Contexto de auditoría: quién/desde-dónde, para que la extensión Prisma
+  // atribuya cada mutación al usuario del request en curso.
+  const auditStore = auditoriaContext.getStore()
+  if (auditStore) {
+    auditStore.usuarioId = usuario.id
+    auditStore.usuarioEmail = session.user.email ?? null
+    auditStore.ip = request.ip ?? null
+    auditStore.userAgent = (request.headers['user-agent'] as string | undefined) ?? null
+    auditStore.ruta = request.url ?? null
+  }
 
   const headerRaw = request.headers['x-empresa-id']
   let empresaId: number | null = null

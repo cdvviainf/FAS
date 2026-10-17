@@ -141,6 +141,7 @@ const itemsMenu: Array<{ codigo: string; nombre: string; grupo: string; seccion:
   { codigo: 'CONFIG_TEMPLATES_CARGA', nombre: 'Templates de Carga', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/templates-carga', tipo: 'PANTALLA', orden: 8910 },
   { codigo: 'CONFIG_INTEGRACIONES', nombre: 'Integraciones', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/integraciones', tipo: 'PANTALLA', orden: 8920 },
   { codigo: 'CONFIG_GENERAL', nombre: 'Configuración General', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/general', tipo: 'PANTALLA', orden: 8930 },
+  { codigo: 'CONFIG_AUDITORIA', nombre: 'Auditoría', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/auditoria', tipo: 'REPORTE', orden: 8940 },
 ]
 
 const SISTEMA_USER = 'system'
