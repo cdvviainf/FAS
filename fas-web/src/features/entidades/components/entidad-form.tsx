@@ -515,8 +515,9 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
   // mano por Agrosan — se exime del RUT/giro obligatorios de Chile y se
   // asume un RUT genérico si no se indica uno (decisión de negocio).
   const esSoloPacking = fields.tipos.length === 1 && fields.tipos[0] === 'PACKING'
-  // CSP obligatorio si es PLANTA; TAXID obligatorio si es CLIENTE_EXTRANJERO.
+  // CSP obligatorio si es PLANTA o PACKING; TAXID obligatorio si es CLIENTE_EXTRANJERO.
   const esPlanta = fields.tipos.includes('PLANTA')
+  const cspRequerido = esPlanta || fields.tipos.includes('PACKING')
   const esClienteExtranjero = fields.tipos.includes('CLIENTE_EXTRANJERO')
 
   // ── Load existing entity ──
@@ -584,7 +585,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
     if (selectedPaisEsChile && !esSoloPacking && fields.identificador.trim()) {
       if (!validarRutChileno(fields.identificador)) e.identificador = 'RUT inválido'
     }
-    if (esPlanta && !fields.csp.trim()) e.csp = 'El CSP es requerido para Planta'
+    if (cspRequerido && !fields.csp.trim()) e.csp = 'El CSP es requerido para Planta o Packing'
     if (esClienteExtranjero && !fields.taxId.trim()) e.taxId = 'El TAXID es requerido para Cliente Extranjero'
     if (!isEdit && !esSoloPacking && localDirecciones.length === 0) e.direcciones = 'Debe agregar al menos una dirección'
     if (!isEdit && !esSoloPacking && !localDirecciones.some((d) => d.esPorDefecto)) e.direccionesPorDefecto = 'Una dirección debe ser la principal'
@@ -999,12 +1000,12 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                 <div className='space-y-1.5'>
                   <Label>
                     CSP
-                    {esPlanta && <span className='text-destructive ml-1'>*</span>}
+                    {cspRequerido && <span className='text-destructive ml-1'>*</span>}
                   </Label>
                   <Input
                     value={fields.csp}
                     onChange={(e) => setFields((f) => ({ ...f, csp: e.target.value }))}
-                    placeholder={esPlanta ? 'CSP de la planta' : 'Solo aplica a Planta'}
+                    placeholder={cspRequerido ? 'CSP de la planta/packing' : 'Aplica a Planta o Packing'}
                   />
                   {fieldErrors.csp && <p className='text-xs text-destructive'>{fieldErrors.csp}</p>}
                 </div>
