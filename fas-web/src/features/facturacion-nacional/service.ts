@@ -5,6 +5,8 @@ import type {
   FacturasNacionalListFilters,
   FacturasNacionalListResponse,
   ProformasFacturablesResponse,
+  EmbarquesFacturablesResponse,
+  TipoCambioSugerido,
 } from './types'
 
 // Fecha de HOY como "YYYY-MM-DD" en hora local (para sugerir la fecha del
@@ -31,11 +33,27 @@ export const facturaNacionalService = {
     if (filters.q?.trim()) sp.q = filters.q.trim()
     return api.get('ventas/cobranza/facturas-nacional/proformas-facturables', { searchParams: sp }).json()
   },
+  async listEmbarquesFacturables(filters: { page?: number; limit?: number; q?: string } = {}): Promise<EmbarquesFacturablesResponse> {
+    const sp: Record<string, string> = {}
+    if (filters.page) sp.page = String(filters.page)
+    if (filters.limit) sp.limit = String(filters.limit)
+    if (filters.q?.trim()) sp.q = filters.q.trim()
+    return api.get('ventas/cobranza/facturas-nacional/embarques-facturables', { searchParams: sp }).json()
+  },
   async obtenerPorId(id: number): Promise<{ data: FacturaNacional }> {
     return api.get(`ventas/cobranza/facturas-nacional/${id}`).json()
   },
   async crearDesdeProforma(proformaMaterialId: number): Promise<{ data: FacturaNacional }> {
     return api.post('ventas/cobranza/facturas-nacional', { json: { proformaMaterialId } }).json()
+  },
+  async crearDesdeEmbarque(embarqueId: number): Promise<{ data: FacturaNacional }> {
+    return api.post(`ventas/cobranza/facturas-nacional/desde-embarque/${embarqueId}`).json()
+  },
+  // Tipo de cambio sugerido (moneda de origen → CLP) para una factura de venta;
+  // fecha (YYYY-MM-DD) opcional = paridad de esa fecha.
+  async obtenerTipoCambio(id: number, fecha?: string): Promise<{ data: TipoCambioSugerido }> {
+    const searchParams = fecha ? { fecha } : undefined
+    return api.get(`ventas/cobranza/facturas-nacional/${id}/tipo-cambio`, { searchParams }).json()
   },
   async actualizar(id: number, body: FacturaNacionalActualizarInput): Promise<{ data: FacturaNacional }> {
     return api.patch(`ventas/cobranza/facturas-nacional/${id}`, { json: body }).json()

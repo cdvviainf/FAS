@@ -9,6 +9,8 @@ const ITEM = 'FACT_NACIONAL'
 export async function facturaNacionalRoutes(app: FastifyInstance) {
   // Crear el borrador desde una Proforma de Materiales (body: proformaMaterialId).
   app.post('/facturas-nacional', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.crear)
+  // Crear el borrador desde un Embarque (venta NACIONAL).
+  app.post('/facturas-nacional/desde-embarque/:embarqueId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.crearDesdeEmbarque)
 
   app.patch('/facturas-nacional/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.actualizar)
   app.post('/facturas-nacional/:id/enviar-sii', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.enviarSii)
@@ -19,7 +21,9 @@ export async function facturaNacionalRoutes(app: FastifyInstance) {
   // Listados (estáticos antes de la paramétrica :id).
   app.get('/facturas-nacional', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
   app.get('/facturas-nacional/proformas-facturables', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listProformasFacturables)
+  app.get('/facturas-nacional/embarques-facturables', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listEmbarquesFacturables)
   app.get('/facturas-nacional/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
+  app.get('/facturas-nacional/:id/tipo-cambio', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.tipoCambio)
   app.get('/facturas-nacional/:id/xml', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarXml)
   app.get('/facturas-nacional/:id/pdf-borrador', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.descargarPdfBorrador)
 }

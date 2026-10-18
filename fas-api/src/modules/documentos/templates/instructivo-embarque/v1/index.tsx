@@ -45,11 +45,20 @@ export function InstructivoEmbarqueV1({ d, marcaAgua, marcaAguaFecha }: { d: Ins
       <div className='doc-fila-grupos'>
         <GrupoCampos
           titulo='Exportador'
-          campos={[
-            { label: 'Razón social', valor: d.empresa.razonSocial },
-            { label: 'RUT', valor: fmt.rut(d.empresa.rut) },
-            { label: 'Dirección', valor: d.empresa.direccion ?? '—' },
-          ]}
+          campos={
+            // Venta NACIONAL: exporta el cliente (exportadora); exportación:
+            // exporta la empresa emisora (2026-10-17).
+            d.exportador
+              ? [
+                  { label: 'Razón social', valor: d.exportador.razonSocial },
+                  { label: 'RUT', valor: fmt.rut(d.exportador.rut) },
+                ]
+              : [
+                  { label: 'Razón social', valor: d.empresa.razonSocial },
+                  { label: 'RUT', valor: fmt.rut(d.empresa.rut) },
+                  { label: 'Dirección', valor: d.empresa.direccion ?? '—' },
+                ]
+          }
         />
         <GrupoCampos
           titulo='Cliente'

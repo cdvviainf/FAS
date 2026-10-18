@@ -13,6 +13,10 @@ export interface FacturaNacionalLineaInput {
 export interface FacturaNacionalActualizarInput {
   fechaDocumento?: string | null // YYYY-MM-DD
   observaciones?: string | null
+  // Venta nacional: tipo de cambio (origen → CLP) + fecha de la paridad. En
+  // VENTA_NACIONAL el `precioUnitario` de cada línea es el de ORIGEN (USD).
+  tipoCambio?: number | null
+  fechaTipoCambio?: string | null
   lineas?: FacturaNacionalLineaInput[]
 }
 

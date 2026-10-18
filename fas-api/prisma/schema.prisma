@@ -3122,6 +3122,9 @@ model Embarque {
   // Factura de Exportación (DTE 110, 2026-09-24) — a lo más una ACTIVA por
   // Embarque (mismo índice único parcial, ver modelo FacturaExportacion).
   facturasExportacion FacturaExportacion[]
+  // Factura Nacional (venta NACIONAL, 2026-10-17) — a lo más una ACTIVA por
+  // Embarque (índice único parcial, ver FacturaNacional).
+  facturasNacional    FacturaNacional[]    @relation("FacturaNacionalEmbarque")
 
   // Datos de booking cuando reservaManual=true (mismo shape que
   // SolicitudReserva.numeroBooking/nave/numeroContenedor/fechaZarpe,
@@ -3946,21 +3949,31 @@ model FacturaNacional {
   empresaId Int
   empresa   Empresa @relation(fields: [empresaId], references: [id])
 
-  // Origen del documento (por ahora solo PROFORMA_MATERIAL). Alimenta la columna
-  // "origen" del listado y deja el carril para futuros orígenes.
+  // Origen del documento: PROFORMA_MATERIAL o VENTA_NACIONAL (Embarque con
+  // Cierre tipoVenta=NACIONAL). Alimenta la columna "origen" del listado.
   origenClase OrigenFacturaNacional @default(PROFORMA_MATERIAL)
   // Proforma de Materiales de origen. A lo más una Factura activa por Proforma
   // → índice único parcial WHERE eliminadoEn IS NULL (ver migración).
   proformaMaterialId Int?
   proformaMaterial   ProformaMaterial? @relation(fields: [proformaMaterialId], references: [id])
+  // Embarque de origen (VENTA_NACIONAL). A lo más una Factura activa por Embarque
+  // → índice único parcial WHERE eliminadoEn IS NULL (ver migración).
+  embarqueId Int?
+  embarque   Embarque? @relation("FacturaNacionalEmbarque", fields: [empresaId, embarqueId], references: [empresaId, id])
 
   codigo String // autogenerado vía PrefijoCodigo (modelo='facturaNacional')
 
   // Receptor nacional: Entidad tipo CLIENTE_NACIONAL (RUT = identificador).
+  // En VENTA_NACIONAL el cliente es la exportadora (CLIENTE_NACIONAL + EXPORTADORA).
   clienteId Int
   cliente   Entidad @relation("FacturaNacionalCliente", fields: [empresaId, clienteId], references: [empresaId, id])
+  // Siempre CLP (se factura convertido). tipoCambio/fechaTipoCambio aplican a
+  // VENTA_NACIONAL: precio de la fruta viene en USD y se convierte a CLP con
+  // este tipo de cambio (sugerido por fecha, editable antes de emitir).
   monedaId  Int
   moneda    Moneda  @relation(fields: [monedaId], references: [id])
+  tipoCambio      Decimal?  @db.Decimal(14, 4)
+  fechaTipoCambio DateTime?
 
   condicionPagoId Int?
   condicionPago   CondicionPago? @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
@@ -3999,6 +4012,7 @@ model FacturaNacional {
   @@index([empresaId])
   @@index([clienteId])
   @@index([proformaMaterialId])
+  @@index([embarqueId])
   @@map("facturas_nacional")
 }
 
@@ -4012,7 +4026,10 @@ model FacturaNacionalLinea {
   articulo    Articulo? @relation(fields: [articuloId], references: [id])
 
   cantidad       Decimal @db.Decimal(14, 3)
-  precioUnitario Decimal @db.Decimal(14, 4)
+  precioUnitario Decimal @db.Decimal(14, 4) // en CLP (ya convertido en VENTA_NACIONAL)
+  // Precio unitario en la moneda de origen (USD) para VENTA_NACIONAL — permite
+  // reconvertir a CLP si se edita el tipo de cambio. Null en otros orígenes.
+  precioUnitarioOrigen Decimal? @db.Decimal(14, 4)
   // Línea exenta de IVA (afecta por defecto). Define 33 (hay afectas) vs 34.
   exento         Boolean @default(false)
   montoLinea     Decimal @db.Decimal(14, 2)

@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Icons } from '@/components/icons'
 import { formatMonto, formatFechaCorta } from '@/lib/format'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
-import { facturasNacionalListOptions, proformasFacturablesOptions, facturasNacionalKeys } from '../queries'
+import { facturasNacionalListOptions, proformasFacturablesOptions, embarquesFacturablesOptions, facturasNacionalKeys } from '../queries'
 import { facturaNacionalService } from '../service'
 import type { EstadoFacturaNacional } from '../types'
 import { ESTADO_FN_LABELS, ORIGEN_FN_LABELS } from '../types'
@@ -60,8 +60,27 @@ export function FacturasNacionalListingClient() {
   const facturables = facturablesData?.data ?? []
   const facturablesMeta = facturablesData?.meta
 
+  // ── Embarques (ventas nacionales) facturables ──
+  const [qEmb, setQEmb] = useState('')
+  const [pageEmb, setPageEmb] = useState(1)
+  const { data: embarquesData, isPending: embarquesPending } = useQuery(
+    embarquesFacturablesOptions({ ...(qEmb.trim() ? { q: qEmb.trim() } : {}), page: pageEmb, limit }),
+  )
+  const embarques = embarquesData?.data ?? []
+  const embarquesMeta = embarquesData?.meta
+
   const crear = useMutation({
     mutationFn: (proformaMaterialId: number) => facturaNacionalService.crearDesdeProforma(proformaMaterialId),
+    onSuccess: ({ data }) => {
+      queryClient.invalidateQueries({ queryKey: facturasNacionalKeys.all })
+      toast.success(`Factura ${data.codigo} creada en borrador`)
+      router.push(`/dashboard/facturacion/nacional/factura/${data.id}`)
+    },
+    onError: (err: Error) => toast.error(err.message || 'No se pudo crear la factura'),
+  })
+
+  const crearEmbarque = useMutation({
+    mutationFn: (embarqueId: number) => facturaNacionalService.crearDesdeEmbarque(embarqueId),
     onSuccess: ({ data }) => {
       queryClient.invalidateQueries({ queryKey: facturasNacionalKeys.all })
       toast.success(`Factura ${data.codigo} creada en borrador`)
@@ -75,7 +94,10 @@ export function FacturasNacionalListingClient() {
       <TabsList>
         <TabsTrigger value='facturas'>Facturas</TabsTrigger>
         <TabsTrigger value='facturables'>
-          Por facturar{facturablesMeta?.total ? ` (${facturablesMeta.total})` : ''}
+          Materiales por facturar{facturablesMeta?.total ? ` (${facturablesMeta.total})` : ''}
+        </TabsTrigger>
+        <TabsTrigger value='embarques'>
+          Ventas nacionales por facturar{embarquesMeta?.total ? ` (${embarquesMeta.total})` : ''}
         </TabsTrigger>
       </TabsList>
 
@@ -246,6 +268,70 @@ export function FacturasNacionalListingClient() {
 
         {facturablesMeta && facturablesMeta.totalPages > 1 && (
           <Paginacion page={pageProf} totalPages={facturablesMeta.totalPages} onChange={setPageProf} />
+        )}
+      </TabsContent>
+
+      {/* ───────────────── Embarques (ventas nacionales) por facturar ───────────────── */}
+      <TabsContent value='embarques' className='space-y-4'>
+        <div className='grid gap-1'>
+          <label className='text-muted-foreground text-xs'>Buscar</label>
+          <Input
+            placeholder='Folio embarque o cliente…'
+            value={qEmb}
+            onChange={(e) => {
+              setQEmb(e.target.value)
+              setPageEmb(1)
+            }}
+            className='w-64'
+          />
+        </div>
+
+        <div className='rounded-md border'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Embarque</TableHead>
+                <TableHead>Cierre</TableHead>
+                <TableHead>Cliente (exportadora)</TableHead>
+                <TableHead>Despachado</TableHead>
+                <TableHead className='text-right'>Acción</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {embarquesPending ? (
+                <TableRow>
+                  <TableCell colSpan={5} className='text-muted-foreground py-8 text-center'>
+                    Cargando…
+                  </TableCell>
+                </TableRow>
+              ) : embarques.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className='text-muted-foreground py-8 text-center'>
+                    No hay embarques de venta nacional despachados pendientes de facturar.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                embarques.map((e) => (
+                  <TableRow key={e.id}>
+                    <TableCell className='font-medium'>{e.numeroInstructivo}</TableCell>
+                    <TableCell className='text-muted-foreground'>{e.notaVenta.folio}</TableCell>
+                    <TableCell>{e.notaVenta.cliente.razonSocial ?? '—'}</TableCell>
+                    <TableCell>{e.despachadoEn ? formatFechaCorta(e.despachadoEn) : '—'}</TableCell>
+                    <TableCell className='text-right'>
+                      <Button size='sm' disabled={!puedeEscribir || crearEmbarque.isPending} onClick={() => crearEmbarque.mutate(e.id)}>
+                        <Icons.add className='mr-1 h-4 w-4' />
+                        Crear factura
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {embarquesMeta && embarquesMeta.totalPages > 1 && (
+          <Paginacion page={pageEmb} totalPages={embarquesMeta.totalPages} onChange={setPageEmb} />
         )}
       </TabsContent>
     </Tabs>

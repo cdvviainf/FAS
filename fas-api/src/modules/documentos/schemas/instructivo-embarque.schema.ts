@@ -37,6 +37,11 @@ export const instructivoEmbarquePdfPayloadSchema = z.object({
     taxId: z.string().nullable(),
     direccion: z.string().nullable(),
   }),
+  // Exportador: en ventas NACIONALES el exportador es el cliente (exportadora),
+  // no la empresa (2026-10-17). null en exportación (exporta la empresa emisora).
+  exportador: z
+    .object({ razonSocial: z.string(), rut: z.string().nullable() })
+    .nullable(),
   // Notify y Consignatario (AGA): datos completos sólo cuando difieren del
   // Cliente (2026-10-12). null = no corresponde / coincide con el Cliente.
   consignatario: actorCompletoSchema.nullable(),

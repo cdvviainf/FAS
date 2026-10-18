@@ -29,12 +29,14 @@ export interface FacturaNacionalLinea {
   articuloId: number | null
   articulo: MantenedorRef | null
   cantidad: string
-  precioUnitario: string
+  precioUnitario: string // CLP (convertido en VENTA_NACIONAL)
+  precioUnitarioOrigen: string | null // USD (VENTA_NACIONAL)
   exento: boolean
   montoLinea: string
 }
 
-// Línea editable en el borrador (lo que se envía en el PATCH).
+// Línea editable en el borrador (lo que se envía en el PATCH). En VENTA_NACIONAL
+// `precioUnitario` es el precio de ORIGEN (USD); el backend lo convierte a CLP.
 export interface FacturaNacionalLineaInput {
   descripcion: string
   articuloId?: number | null
@@ -66,6 +68,10 @@ export interface FacturaNacional {
   origenClase: OrigenFacturaNacional
   proformaMaterialId: number | null
   proformaMaterial: { id: number; numero: string; estado: string } | null
+  embarqueId: number | null
+  embarque: { id: number; numeroInstructivo: string; notaVenta: { moneda: { codigo: string } } } | null
+  tipoCambio: string | null
+  fechaTipoCambio: string | null
   codigo: string
   clienteId: number
   cliente: FacturaNacionalClienteRef
@@ -96,7 +102,28 @@ export interface FacturaNacional {
 export interface FacturaNacionalActualizarInput {
   fechaDocumento?: string | null
   observaciones?: string | null
+  tipoCambio?: number | null
+  fechaTipoCambio?: string | null
   lineas?: FacturaNacionalLineaInput[]
+}
+
+// Embarque de venta NACIONAL disponible para facturar (despachado, sin factura).
+export interface EmbarqueFacturable {
+  id: number
+  numeroInstructivo: string
+  despachadoEn: string | null
+  notaVenta: { folio: number; cliente: { id: number; razonSocial: string | null } }
+}
+
+export interface EmbarquesFacturablesResponse {
+  data: EmbarqueFacturable[]
+  meta: { total: number; page: number; limit: number; totalPages: number }
+}
+
+export interface TipoCambioSugerido {
+  valor: number
+  fecha: string
+  moneda: string
 }
 
 export interface FacturasNacionalListFilters {

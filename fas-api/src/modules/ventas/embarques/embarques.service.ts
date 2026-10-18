@@ -513,6 +513,9 @@ export async function anularDespacho(embarqueId: number, userId: string) {
   if (resultado === 'TIENE_GUIA_TIMBRADA') {
     throw new ValidationError('Este Embarque tiene una Guía de Despacho timbrada (o en proceso) — no se puede anular el despacho')
   }
+  if (resultado === 'TIENE_FACTURA_NACIONAL') {
+    throw new ValidationError('Este Embarque tiene una Factura Nacional asociada — anúlala primero (o emite la Nota de Crédito si ya está timbrada) antes de anular el despacho')
+  }
   return repo.getEmbarqueById(embarqueId)
 }
 

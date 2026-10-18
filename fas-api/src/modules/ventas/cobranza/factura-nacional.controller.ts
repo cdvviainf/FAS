@@ -5,6 +5,8 @@ import {
   actualizarBorradorSchema,
   facturasNacionalListQuerySchema,
   proformasFacturablesQuerySchema,
+  embarqueParamsSchema,
+  tipoCambioQuerySchema,
 } from './factura-nacional.schema.js'
 import * as service from './factura-nacional.service.js'
 
@@ -18,10 +20,27 @@ export async function listProformasFacturables(req: FastifyRequest, reply: Fasti
   return reply.send(await service.listarProformasFacturables(filters))
 }
 
+export async function listEmbarquesFacturables(req: FastifyRequest, reply: FastifyReply) {
+  const filters = proformasFacturablesQuerySchema.parse(req.query)
+  return reply.send(await service.listarEmbarquesFacturables(filters))
+}
+
 export async function crear(req: FastifyRequest, reply: FastifyReply) {
   const { proformaMaterialId } = crearBorradorSchema.parse(req.body)
   const factura = await service.crearBorradorDesdeProforma(proformaMaterialId, req.fasUserId!)
   return reply.status(201).send({ data: factura })
+}
+
+export async function crearDesdeEmbarque(req: FastifyRequest, reply: FastifyReply) {
+  const { embarqueId } = embarqueParamsSchema.parse(req.params)
+  const factura = await service.crearBorradorDesdeEmbarque(embarqueId, req.fasUserId!)
+  return reply.status(201).send({ data: factura })
+}
+
+export async function tipoCambio(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = facturaNacionalParamsSchema.parse(req.params)
+  const { fecha } = tipoCambioQuerySchema.parse(req.query)
+  return reply.send({ data: await service.obtenerTipoCambioSugerido(id, fecha) })
 }
 
 export async function getById(req: FastifyRequest, reply: FastifyReply) {

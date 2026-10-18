@@ -61,15 +61,26 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
 
   const editable = factura.estado === 'BORRADOR' || factura.estado === 'RECHAZADA'
   const soloLectura = !editable || !puedeEscribir
+  // Venta nacional: precio de la fruta en moneda de origen (USD) + tipo de
+  // cambio editable; se factura en CLP convertido. Materiales: precio en CLP.
+  const esVenta = factura.origenClase === 'VENTA_NACIONAL'
+  // Moneda de origen real del Cierre (USD/EUR/…) — no asumir USD (VN-QA-003).
+  const monedaOrigen = factura.embarque?.notaVenta.moneda.codigo ?? 'USD'
+  // Cierre ya en CLP: no hay conversión (TC = 1), no se edita (VN-QA-004).
+  const esClp = monedaOrigen === 'CLP'
 
   const [fechaDocumento, setFechaDocumento] = useState(factura.fechaDocumento?.slice(0, 10) ?? hoyFecha())
   const [observaciones, setObservaciones] = useState(factura.observaciones ?? '')
+  const [tipoCambio, setTipoCambio] = useState(factura.tipoCambio ?? '')
+  // Fecha de la paridad usada (null = ingreso manual) — se persiste (VN-QA-002).
+  const [fechaTipoCambio, setFechaTipoCambio] = useState<string | null>(factura.fechaTipoCambio?.slice(0, 10) ?? null)
   const [lineas, setLineas] = useState<LineaEdit[]>(
     factura.lineas.map((l) => ({
       descripcion: l.descripcion,
       articuloId: l.articuloId,
       cantidad: l.cantidad,
-      precioUnitario: l.precioUnitario,
+      // En venta el precio editable es el de origen (USD); en materiales, CLP.
+      precioUnitario: esVenta ? (l.precioUnitarioOrigen ?? l.precioUnitario) : l.precioUnitario,
       exento: l.exento,
     })),
   )
@@ -81,7 +92,9 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
   const borradorEnviado = dte?.estado === 'TEMPORAL_CREADO' || dte?.estado === 'GENERADO'
 
   // Totales recalculados en cliente (el valor tributario real lo computa LibreDTE).
-  const montoLinea = (l: LineaEdit) => (Number(l.cantidad) || 0) * (Number(l.precioUnitario) || 0)
+  // En venta, el monto CLP = cantidad × precio(USD) × tipo de cambio.
+  const tc = esVenta ? Number(tipoCambio) || 0 : 1
+  const montoLinea = (l: LineaEdit) => (Number(l.cantidad) || 0) * (Number(l.precioUnitario) || 0) * tc
   const neto = lineas.filter((l) => !l.exento).reduce((a, l) => a + montoLinea(l), 0)
   const exento = lineas.filter((l) => l.exento).reduce((a, l) => a + montoLinea(l), 0)
   const iva = Math.round(neto * 0.19)
@@ -121,6 +134,7 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
       facturaNacionalService.actualizar(factura.id, {
         fechaDocumento: fechaDocumento || null,
         observaciones: observaciones.trim() || null,
+        ...(esVenta ? { tipoCambio: Number(tipoCambio) || null, fechaTipoCambio } : {}),
         lineas: lineasInput(),
       }),
     onSuccess: () => {
@@ -129,6 +143,18 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
       invalidar()
     },
     onError: (e: Error) => toast.error(e.message || 'Error al guardar la Factura'),
+  })
+
+  // Tipo de cambio sugerido (venta) — paridad de la fecha del documento.
+  const obtenerTc = useMutation({
+    mutationFn: () => facturaNacionalService.obtenerTipoCambio(factura.id, fechaDocumento || undefined),
+    onSuccess: ({ data }) => {
+      setTipoCambio(String(data.valor))
+      setFechaTipoCambio(data.fecha)
+      setDirty(true)
+      toast.success(`Tipo de cambio ${data.valor} CLP/${data.moneda} (${data.fecha})`)
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo obtener el tipo de cambio'),
   })
 
   // Enviar borrador = guardar primero (persiste fecha/observaciones/líneas y
@@ -189,6 +215,10 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
       toast.error('La factura no tiene líneas')
       return
     }
+    if (esVenta && (!(Number(tipoCambio) > 0))) {
+      toast.error('Indica el tipo de cambio antes de enviar al SII')
+      return
+    }
     enviarSii.mutate()
   }
   function handleFirmar() {
@@ -218,7 +248,8 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
           </h2>
           <p className='text-muted-foreground text-sm'>
             {ORIGEN_FN_LABELS[factura.origenClase]}
-            {factura.proformaMaterial ? ` · ${factura.proformaMaterial.numero}` : ''} ·{' '}
+            {factura.proformaMaterial ? ` · ${factura.proformaMaterial.numero}` : ''}
+            {factura.embarque ? ` · Embarque ${factura.embarque.numeroInstructivo}` : ''} ·{' '}
             {factura.cliente.razonSocial ?? factura.cliente.descripcion}
             {factura.cliente.identificador ? ` (${factura.cliente.identificador})` : ''}
           </p>
@@ -296,6 +327,33 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
             <Label>Moneda</Label>
             <Input value={factura.moneda.codigo} disabled />
           </div>
+          {esVenta && !esClp && (
+            <div className='grid gap-1.5 sm:col-span-2'>
+              <Label>Tipo de cambio (CLP por 1 {monedaOrigen})</Label>
+              <div className='flex gap-2'>
+                <Input
+                  type='number'
+                  className='w-48 text-right'
+                  value={tipoCambio}
+                  disabled={soloLectura}
+                  placeholder='Ej. 950'
+                  onChange={(e) => {
+                    setTipoCambio(e.target.value)
+                    setFechaTipoCambio(null) // ingreso manual: sin fecha de paridad
+                    setDirty(true)
+                  }}
+                />
+                {!soloLectura && (
+                  <Button type='button' variant='outline' disabled={obtenerTc.isPending} onClick={() => obtenerTc.mutate()}>
+                    Obtener
+                  </Button>
+                )}
+              </div>
+              <p className='text-muted-foreground text-xs'>
+                Los precios se ingresan en {monedaOrigen} y se facturan en CLP convertidos con este valor.
+              </p>
+            </div>
+          )}
           <div className='grid gap-1.5 sm:col-span-2'>
             <Label>Observaciones</Label>
             <Textarea
@@ -330,16 +388,16 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
               <TableRow>
                 <TableHead className='w-[45%]'>Descripción</TableHead>
                 <TableHead className='text-right'>Cantidad</TableHead>
-                <TableHead className='text-right'>Precio</TableHead>
-                <TableHead className='text-center'>Exenta</TableHead>
-                <TableHead className='text-right'>Monto</TableHead>
+                <TableHead className='text-right'>{esVenta ? `Precio (${monedaOrigen})` : 'Precio'}</TableHead>
+                {!esVenta && <TableHead className='text-center'>Exenta</TableHead>}
+                <TableHead className='text-right'>Monto {esVenta ? '(CLP)' : ''}</TableHead>
                 {!soloLectura && <TableHead />}
               </TableRow>
             </TableHeader>
             <TableBody>
               {lineas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={soloLectura ? 5 : 6} className='text-muted-foreground py-6 text-center'>
+                  <TableCell colSpan={(esVenta ? 3 : 4) + (soloLectura ? 0 : 1)} className='text-muted-foreground py-6 text-center'>
                     Sin líneas.
                   </TableCell>
                 </TableRow>
@@ -371,13 +429,15 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
                         onChange={(e) => patch(i, 'precioUnitario', e.target.value)}
                       />
                     </TableCell>
-                    <TableCell className='text-center'>
-                      <Checkbox
-                        checked={l.exento}
-                        disabled={soloLectura}
-                        onCheckedChange={(v) => patch(i, 'exento', v === true)}
-                      />
-                    </TableCell>
+                    {!esVenta && (
+                      <TableCell className='text-center'>
+                        <Checkbox
+                          checked={l.exento}
+                          disabled={soloLectura}
+                          onCheckedChange={(v) => patch(i, 'exento', v === true)}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell className='text-right tabular-nums'>{formatMonto(montoLinea(l))}</TableCell>
                     {!soloLectura && (
                       <TableCell>
@@ -432,7 +492,8 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Anular la factura</AlertDialogTitle>
             <AlertDialogDescription>
-              La factura quedará anulada y la Proforma de origen volverá a estar disponible para facturar.
+              La factura quedará anulada y el {esVenta ? 'Embarque' : 'documento'} de origen volverá a estar disponible para
+              facturar.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

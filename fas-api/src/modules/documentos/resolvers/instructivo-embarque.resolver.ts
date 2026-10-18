@@ -81,6 +81,12 @@ export async function resolverInstructivoEmbarque(id: number, empresaId: number)
       taxId: cliente?.taxId ?? null,
       direccion: cliente?.direcciones[0]?.direccion ?? null,
     },
+    // Venta NACIONAL (2026-10-17): el exportador es el cliente (exportadora),
+    // no la empresa. En exportación queda null (exporta la empresa emisora).
+    exportador:
+      nv.tipoVenta === 'NACIONAL'
+        ? { razonSocial: cliente?.razonSocial ?? '—', rut: cliente?.identificador ?? null }
+        : null,
     // Notify y Consignatario (AGA): sólo se emiten con sus datos completos
     // cuando difieren del Cliente (2026-10-12). Si coinciden con el Cliente (o
     // no hay uno asignado) el bloque queda null y no se repite en el PDF.

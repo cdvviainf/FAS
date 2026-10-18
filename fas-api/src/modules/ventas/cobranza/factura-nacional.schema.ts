@@ -44,7 +44,19 @@ export const lineaSchema = z.object({
 export const actualizarBorradorSchema = z.object({
   fechaDocumento: z.string().date().optional().nullable(),
   observaciones: z.string().max(5000).optional().nullable(),
+  // Venta nacional: tipo de cambio (moneda de origen → CLP) editable antes de
+  // emitir; recotiza las líneas. No aplica a facturas desde Proforma de Materiales.
+  tipoCambio: z.number().positive().max(9_999_999_999).optional().nullable(),
+  fechaTipoCambio: z.string().date().optional().nullable(),
   lineas: z.array(lineaSchema).optional(),
+})
+
+export const embarqueParamsSchema = z.object({
+  embarqueId: z.coerce.number().int().positive(),
+})
+
+export const tipoCambioQuerySchema = z.object({
+  fecha: z.string().date().optional(),
 })
 
 export const facturasNacionalListQuerySchema = z.object({

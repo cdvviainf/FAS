@@ -4,13 +4,21 @@ import { siguienteCodigo } from '../../config/prefijos-codigo/prefijos-codigo.se
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
 import { mapFacturaNacionalADte } from '../../finanzas/facturacion/mappers/factura-nacional.mapper.js'
+import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
+import * as proformaService from './proforma.service.js'
 import * as repo from './factura-nacional.repository.js'
+import type { DimensionProforma } from './proforma.types.js'
 import type { FacturaNacionalActualizarInput, FacturasNacionalListFilters } from './factura-nacional.types.js'
+
+// Dimensiones por defecto para agrupar el despacho al crear la Factura Nacional
+// de venta (editable luego línea a línea en el borrador).
+const DIMENSIONES_VENTA = ['VARIEDAD', 'ARTICULO', 'CALIBRE', 'CATEGORIA'] as const
 
 const ORIGEN_TIPO = 'factura-nacional'
 const IVA_TASA = 0.19
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+const round4 = (n: number) => Math.round(n * 10000) / 10000
 
 // Tope de las columnas Decimal(14,2): 12 enteros + 2 decimales. El producto
 // cantidad × precio (o un total acumulado) no puede excederlo — se valida en el
@@ -49,12 +57,15 @@ function calcularMontosYTipoDte(lineas: LineaCalculo[]) {
   return { montoNeto, montoExento, montoIva, montoTotal, tipoDte }
 }
 
-function lineasPersistir(lineas: Array<{ descripcion: string; articuloId?: number | null; cantidad: number; precioUnitario: number; exento: boolean }>) {
+function lineasPersistir(
+  lineas: Array<{ descripcion: string; articuloId?: number | null; cantidad: number; precioUnitario: number; precioUnitarioOrigen?: number | null; exento: boolean }>,
+) {
   return lineas.map((l) => ({
     descripcion: l.descripcion.trim(),
     articuloId: l.articuloId ?? null,
     cantidad: l.cantidad,
     precioUnitario: l.precioUnitario,
+    precioUnitarioOrigen: l.precioUnitarioOrigen ?? null,
     exento: l.exento,
     montoLinea: round2(l.cantidad * l.precioUnitario),
   }))
@@ -103,6 +114,7 @@ export async function crearBorradorDesdeProforma(proformaMaterialId: number, use
   try {
     return await repo.crearBorrador(
       {
+        origenClase: 'PROFORMA_MATERIAL',
         proformaMaterialId,
         codigo,
         clienteId: proforma.entidadId,
@@ -127,6 +139,93 @@ export async function crearBorradorDesdeProforma(proformaMaterialId: number, use
   }
 }
 
+// ─── Crear borrador desde un Embarque (venta NACIONAL) ────────────────────────
+export async function crearBorradorDesdeEmbarque(embarqueId: number, userId: string) {
+  const embarque = await repo.getEmbarqueParaFacturaNacional(embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
+  if (!embarque.despachadoEn || embarque.despachoAnuladoEn) {
+    throw new ValidationError('El Embarque debe estar despachado (y no anulado) para facturar')
+  }
+  if (embarque.notaVenta.tipoVenta !== 'NACIONAL') {
+    throw new ValidationError('El Cierre Comercial del Embarque no es una venta Nacional')
+  }
+  if (!embarque.notaVenta.cliente.tipos.includes('CLIENTE_NACIONAL')) {
+    throw new ValidationError('El cliente (exportadora) del Cierre no es un Cliente Nacional — ajústalo en Entidades')
+  }
+  if (await repo.getFacturaActivaPorEmbarque(embarqueId)) {
+    throw new ValidationError('Este Embarque ya tiene una Factura Nacional asociada')
+  }
+
+  // Líneas agregadas del despacho (precio en la moneda de la NV, ej. USD).
+  const sugeridas = await proformaService.sugerirLineas(embarqueId, [...DIMENSIONES_VENTA] as DimensionProforma[])
+  if (sugeridas.length === 0) throw new ValidationError('El Embarque no tiene pallets despachados para facturar')
+
+  // Tipo de cambio SUGERIDO (moneda de la NV → CLP). Es una sugerencia, no una
+  // precondición (VN-QA-001): si la fuente falla o la moneda no tiene serie, el
+  // borrador se crea igual con el TC pendiente (se completa/edita en el borrador
+  // y el envío al SII lo exige). CLP no necesita conversión → TC = 1.
+  const monedaOrigen = embarque.notaVenta.moneda.codigo
+  let tipoCambio: number | null = null
+  let fechaTipoCambio: Date | null = null
+  if (monedaOrigen === 'CLP') {
+    tipoCambio = 1
+  } else {
+    const tc = await obtenerTipoCambio(monedaOrigen, undefined)
+    if (!('error' in tc)) {
+      tipoCambio = tc.valor
+      fechaTipoCambio = new Date(tc.fecha)
+    }
+  }
+
+  const clp = await repo.getMonedaClp()
+  if (!clp) throw new ValidationError('No existe la moneda CLP en el maestro de Monedas')
+
+  const lineas = lineasPersistir(
+    sugeridas.map((l) => ({
+      descripcion: l.descripcion || 'Fruta',
+      articuloId: null,
+      cantidad: l.cantidadCajas,
+      // CLP convertido; si aún no hay TC, queda 0 hasta que se cargue en el borrador.
+      precioUnitario: tipoCambio != null ? round4(l.precioUnitario * tipoCambio) : 0,
+      precioUnitarioOrigen: l.precioUnitario, // moneda de origen (USD/EUR)
+      exento: false,
+    })),
+  )
+  const montos = calcularMontosYTipoDte(lineas)
+  const codigo = await siguienteCodigo('facturaNacional')
+  if (!codigo) {
+    throw new ValidationError('No hay un prefijo de código configurado para Factura Nacional (Configuración › Prefijos de Código)')
+  }
+
+  try {
+    return await repo.crearBorrador(
+      {
+        origenClase: 'VENTA_NACIONAL',
+        embarqueId,
+        codigo,
+        clienteId: embarque.notaVenta.clienteId,
+        monedaId: clp.id,
+        condicionPagoId: embarque.notaVenta.condicionPagoId,
+        idioma: 'ES',
+        tipoDte: montos.tipoDte,
+        tipoCambio,
+        fechaTipoCambio,
+        montoNeto: montos.montoNeto,
+        montoExento: montos.montoExento,
+        montoIva: montos.montoIva,
+        montoTotal: montos.montoTotal,
+        lineas,
+      },
+      userId,
+    )
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
+      throw new ValidationError('Este Embarque ya tiene una Factura Nacional asociada')
+    }
+    throw err
+  }
+}
+
 export async function actualizarBorrador(id: number, body: FacturaNacionalActualizarInput) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura Nacional', String(id))
@@ -135,14 +234,60 @@ export async function actualizarBorrador(id: number, body: FacturaNacionalActual
   const data: repo.ActualizarBorradorData = {}
   if (body.fechaDocumento !== undefined) data.fechaDocumento = body.fechaDocumento ? new Date(body.fechaDocumento) : null
   if (body.observaciones !== undefined) data.observaciones = body.observaciones?.trim() || null
-  if (body.lineas !== undefined) {
+
+  if (factura.origenClase === 'VENTA_NACIONAL') {
+    // Venta nacional: precios en moneda de origen (USD) → CLP con el tipo de
+    // cambio (editable). El campo `precioUnitario` del request es el de ORIGEN.
+    // Si el Cierre ya está en CLP no hay conversión: TC se fuerza a 1 y se
+    // ignora cualquier otro valor del request (VN-QA-004).
+    const monedaOrigen = factura.embarque?.notaVenta?.moneda?.codigo ?? ''
+    const esClp = monedaOrigen === 'CLP'
+    let tipoCambio = factura.tipoCambio != null ? Number(factura.tipoCambio) : null
+    if (esClp) {
+      tipoCambio = 1
+      data.tipoCambio = 1
+      data.fechaTipoCambio = null
+    } else if (body.tipoCambio !== undefined) {
+      if (body.tipoCambio == null || body.tipoCambio <= 0) throw new ValidationError('Indica un tipo de cambio válido (mayor a 0)')
+      tipoCambio = body.tipoCambio
+      data.tipoCambio = body.tipoCambio
+      data.fechaTipoCambio = body.fechaTipoCambio ? new Date(body.fechaTipoCambio) : null // manual = sin fecha de paridad
+    }
+    // Líneas USD: las nuevas del request, o las existentes (para recotizar solo por TC).
+    const lineasUsd =
+      body.lineas !== undefined
+        ? body.lineas.map((l) => ({ descripcion: l.descripcion, cantidad: l.cantidad, precioUnitarioOrigen: l.precioUnitario }))
+        : factura.lineas.map((l) => ({ descripcion: l.descripcion, cantidad: Number(l.cantidad), precioUnitarioOrigen: Number(l.precioUnitarioOrigen ?? 0) }))
+    if (body.lineas !== undefined || body.tipoCambio !== undefined) {
+      if (tipoCambio == null || tipoCambio <= 0) throw new ValidationError('Falta el tipo de cambio para convertir los montos')
+      if (lineasUsd.length === 0) throw new ValidationError('La Factura debe tener al menos una línea')
+      const lineas = lineasPersistir(
+        lineasUsd.map((l) => ({
+          descripcion: l.descripcion,
+          articuloId: null,
+          cantidad: l.cantidad,
+          precioUnitario: round4(l.precioUnitarioOrigen * tipoCambio!),
+          precioUnitarioOrigen: l.precioUnitarioOrigen,
+          exento: false,
+        })),
+      )
+      const montos = calcularMontosYTipoDte(lineas)
+      data.lineas = lineas
+      data.tipoDte = montos.tipoDte
+      data.montoNeto = montos.montoNeto
+      data.montoExento = montos.montoExento
+      data.montoIva = montos.montoIva
+      data.montoTotal = montos.montoTotal
+    }
+  } else if (body.lineas !== undefined) {
+    // Proforma de Materiales: líneas con artículo (CLP), afecto/exento editable.
     if (body.lineas.length === 0) throw new ValidationError('La Factura debe tener al menos una línea')
     // Aislamiento tenant: los articuloId de las líneas deben pertenecer a la
     // empresa activa (FAS-FN-QA-002).
     const articuloIds = [...new Set(body.lineas.map((l) => l.articuloId).filter((x): x is number => x != null))]
     if (articuloIds.length > 0) {
       const validos = await repo.getArticulosIdsValidos(articuloIds)
-      const invalido = articuloIds.find((id) => !validos.has(id))
+      const invalido = articuloIds.find((aid) => !validos.has(aid))
       if (invalido != null) throw new ValidationError('Una de las líneas referencia un artículo que no existe en la empresa')
     }
     const lineas = lineasPersistir(body.lineas)
@@ -157,6 +302,20 @@ export async function actualizarBorrador(id: number, body: FacturaNacionalActual
   // El repo descarta el DTE temporal descartable al editar (atómico, bajo lock),
   // así que al reenviar se reconstruye con los datos nuevos.
   return repo.actualizarBorrador(id, data)
+}
+
+// Venta nacional: el Embarque de origen debe seguir despachado (no anulado) y
+// con Cierre NACIONAL al emitir/firmar — no se puede timbrar fruta cuyo despacho
+// se anuló (VN-QA-005).
+async function revalidarEmbarqueVenta(embarqueId: number | null) {
+  if (embarqueId == null) return
+  const e = await repo.getEmbarqueParaFacturaNacional(embarqueId)
+  if (!e || !e.despachadoEn || e.despachoAnuladoEn) {
+    throw new ValidationError('El despacho del Embarque de origen fue anulado — no se puede facturar. Anula el borrador o vuelve a despachar.')
+  }
+  if (e.notaVenta.tipoVenta !== 'NACIONAL') {
+    throw new ValidationError('El Cierre del Embarque de origen ya no es una venta Nacional')
+  }
 }
 
 // Captura errores inesperados al armar/enviar el DTE con un mensaje accionable.
@@ -191,10 +350,15 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
   if (factura.moneda.codigo !== 'CLP') {
     throw new ValidationError('La Factura Nacional solo se emite en pesos chilenos (CLP)')
   }
+  // Venta nacional: los montos CLP derivan del tipo de cambio — exigirlo.
+  if (factura.origenClase === 'VENTA_NACIONAL' && (factura.tipoCambio == null || Number(factura.tipoCambio) <= 0)) {
+    throw new ValidationError('Indica el tipo de cambio antes de enviar al SII')
+  }
   // La Proforma de origen debe seguir disponible (no anulada/facturada) — FAS-FN-QA-007.
   if (factura.proformaMaterial && factura.proformaMaterial.estado !== 'ENVIADA_VALIDACION') {
     throw new ValidationError('La Proforma de Materiales de origen ya no está disponible para facturar (fue anulada o facturada)')
   }
+  if (factura.origenClase === 'VENTA_NACIONAL') await revalidarEmbarqueVenta(factura.embarqueId)
 
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
   if (!emisor?.rut) {
@@ -291,6 +455,7 @@ export async function firmar(id: number, userId: string) {
   if (factura.proformaMaterial && factura.proformaMaterial.estado !== 'ENVIADA_VALIDACION') {
     throw new ValidationError('La Proforma de Materiales de origen ya no está disponible para facturar (fue anulada o facturada)')
   }
+  if (factura.origenClase === 'VENTA_NACIONAL') await revalidarEmbarqueVenta(factura.embarqueId)
 
   const dte = await dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id)
   if (!dte || (dte.estado !== 'TEMPORAL_CREADO' && dte.estado !== 'GENERADO')) {
@@ -387,6 +552,28 @@ export async function listarProformasFacturables(filters: { page?: number; limit
   const { page = 1, limit = 20 } = filters
   const { data, total } = await repo.listProformasFacturables(filters)
   return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
+}
+
+export async function listarEmbarquesFacturables(filters: { page?: number; limit?: number; q?: string }) {
+  const { page = 1, limit = 20 } = filters
+  const { data, total } = await repo.listEmbarquesFacturables(filters)
+  return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
+}
+
+// Tipo de cambio sugerido (moneda de origen del embarque → CLP) para el editor
+// de una Factura Nacional de venta; `fecha` (YYYY-MM-DD) usa la paridad de esa
+// fecha (día hábil anterior más cercano).
+export async function obtenerTipoCambioSugerido(id: number, fecha?: string) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura Nacional', String(id))
+  if (factura.origenClase !== 'VENTA_NACIONAL' || !factura.embarqueId) {
+    throw new ValidationError('El tipo de cambio solo aplica a facturas de venta nacional')
+  }
+  const embarque = await repo.getEmbarqueParaFacturaNacional(factura.embarqueId)
+  const monedaOrigen = embarque?.notaVenta.moneda.codigo ?? ''
+  const tc = await obtenerTipoCambio(monedaOrigen, fecha ? new Date(fecha) : undefined)
+  if ('error' in tc) throw new ValidationError(tc.error)
+  return { valor: tc.valor, fecha: tc.fecha, moneda: monedaOrigen }
 }
 
 export async function reabrirFactura(id: number) {

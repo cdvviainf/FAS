@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
-import { LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION } from '../../../shared/advisory-locks.js'
+import { LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION, LOCK_NAMESPACE_EMBARQUE_DESPACHO } from '../../../shared/advisory-locks.js'
 import type { FacturasNacionalListFilters } from './factura-nacional.types.js'
 
 // origenTipo del DocumentoDte de una Factura Nacional (debe calzar con el service).
@@ -31,6 +31,7 @@ const facturaInclude = {
   moneda: { select: { id: true, codigo: true, descripcion: true, esMonedaBase: true } },
   condicionPago: { select: mantenedorSelect },
   proformaMaterial: { select: { id: true, numero: true, estado: true } },
+  embarque: { select: { id: true, numeroInstructivo: true, notaVenta: { select: { moneda: { select: { codigo: true } } } } } },
   lineas: {
     select: {
       id: true,
@@ -39,6 +40,7 @@ const facturaInclude = {
       articulo: { select: { id: true, codigo: true, descripcion: true } },
       cantidad: true,
       precioUnitario: true,
+      precioUnitarioOrigen: true,
       exento: true,
       montoLinea: true,
     },
@@ -103,6 +105,82 @@ export async function getFacturaActivaPorProforma(proformaMaterialId: number) {
   })
 }
 
+export async function getFacturaActivaPorEmbarque(embarqueId: number) {
+  return prisma.facturaNacional.findFirst({
+    where: { embarqueId, eliminadoEn: null },
+    select: { id: true, estado: true },
+  })
+}
+
+// Moneda base CLP (para fijar la moneda de la Factura Nacional de venta, que se
+// factura en pesos convertidos).
+export async function getMonedaClp() {
+  return prisma.moneda.findFirst({ where: { codigo: 'CLP', eliminadoEn: null }, select: { id: true } })
+}
+
+// Embarque listo para facturar nacionalmente (despachado, Cierre tipoVenta
+// NACIONAL) con todo lo necesario para armar el borrador.
+export async function getEmbarqueParaFacturaNacional(id: number) {
+  return prisma.embarque.findFirst({
+    where: { id, eliminadoEn: null },
+    select: {
+      id: true,
+      numeroInstructivo: true,
+      despachadoEn: true,
+      despachoAnuladoEn: true,
+      notaVentaId: true,
+      notaVenta: {
+        select: {
+          tipoVenta: true,
+          clienteId: true,
+          monedaId: true,
+          moneda: { select: { codigo: true } },
+          condicionPagoId: true,
+          cliente: {
+            select: { id: true, razonSocial: true, identificador: true, giro: true, tipos: true },
+          },
+        },
+      },
+    },
+  })
+}
+
+// Embarques despachados de ventas NACIONALES sin Factura Nacional activa (landing).
+export async function listEmbarquesFacturables(filters: { page?: number; limit?: number; q?: string }) {
+  const { page = 1, limit = 20, q } = filters
+  const where: Prisma.EmbarqueWhereInput = {
+    eliminadoEn: null,
+    despachadoEn: { not: null },
+    despachoAnuladoEn: null,
+    notaVenta: { is: { tipoVenta: 'NACIONAL' } },
+    facturasNacional: { none: { eliminadoEn: null } },
+    ...(q
+      ? {
+          OR: [
+            { numeroInstructivo: { contains: q, mode: 'insensitive' } },
+            { notaVenta: { is: { cliente: { razonSocial: { contains: q, mode: 'insensitive' } } } } },
+          ],
+        }
+      : {}),
+  }
+  const [data, total] = await Promise.all([
+    prisma.embarque.findMany({
+      where,
+      select: {
+        id: true,
+        numeroInstructivo: true,
+        despachadoEn: true,
+        notaVenta: { select: { folio: true, cliente: { select: { id: true, razonSocial: true } } } },
+      },
+      orderBy: { despachadoEn: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.embarque.count({ where }),
+  ])
+  return { data, total }
+}
+
 export async function getFacturaActivaById(id: number) {
   return prisma.facturaNacional.findFirst({ where: { id, eliminadoEn: null }, include: facturaInclude })
 }
@@ -116,18 +194,24 @@ export interface LineaPersistir {
   articuloId: number | null
   cantidad: number
   precioUnitario: number
+  precioUnitarioOrigen?: number | null
   exento: boolean
   montoLinea: number
 }
 
 export interface CrearBorradorData {
-  proformaMaterialId: number
+  origenClase: 'PROFORMA_MATERIAL' | 'VENTA_NACIONAL'
+  proformaMaterialId?: number | null
+  embarqueId?: number | null
   codigo: string
   clienteId: number
   monedaId: number
   condicionPagoId: number | null
   idioma: string
   tipoDte: number
+  tipoCambio?: number | null
+  fechaTipoCambio?: Date | null
+  fechaDocumento?: Date | null
   montoNeto: number
   montoExento: number
   montoIva: number
@@ -137,17 +221,21 @@ export interface CrearBorradorData {
 
 export async function crearBorrador(data: CrearBorradorData, creadoPorId: string) {
   const empresaId = getEmpresaIdActual()!
-  return prisma.facturaNacional.create({
+  const createArgs = {
     data: {
       empresaId,
-      origenClase: 'PROFORMA_MATERIAL',
-      proformaMaterialId: data.proformaMaterialId,
+      origenClase: data.origenClase,
+      proformaMaterialId: data.proformaMaterialId ?? null,
+      embarqueId: data.embarqueId ?? null,
       codigo: data.codigo,
       clienteId: data.clienteId,
       monedaId: data.monedaId,
       condicionPagoId: data.condicionPagoId,
       idioma: data.idioma,
       tipoDte: data.tipoDte,
+      tipoCambio: data.tipoCambio ?? null,
+      fechaTipoCambio: data.fechaTipoCambio ?? null,
+      fechaDocumento: data.fechaDocumento ?? null,
       montoNeto: data.montoNeto,
       montoExento: data.montoExento,
       montoIva: data.montoIva,
@@ -156,12 +244,36 @@ export async function crearBorrador(data: CrearBorradorData, creadoPorId: string
       lineas: { create: data.lineas.map((l) => ({ ...l })) },
     },
     include: facturaInclude,
-  })
+  }
+
+  // VENTA_NACIONAL: la validación final + INSERT van bajo el lock de despacho
+  // del Embarque (mismo que anularDespacho), releyendo el estado DENTRO del lock
+  // para que no quede un borrador sobre un despacho anulado en paralelo (VN-QA-006).
+  if (data.origenClase === 'VENTA_NACIONAL' && data.embarqueId != null) {
+    const embarqueId = data.embarqueId
+    return prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_DESPACHO}::int, ${embarqueId}::int)`
+      const emb = await tx.embarque.findFirst({
+        where: { id: embarqueId, eliminadoEn: null },
+        select: { despachadoEn: true, despachoAnuladoEn: true, notaVenta: { select: { tipoVenta: true } } },
+      })
+      if (!emb || !emb.despachadoEn || emb.despachoAnuladoEn) {
+        throw new ValidationError('El despacho del Embarque fue anulado — no se puede crear la factura')
+      }
+      if (emb.notaVenta.tipoVenta !== 'NACIONAL') {
+        throw new ValidationError('El Cierre del Embarque ya no es una venta Nacional')
+      }
+      return tx.facturaNacional.create(createArgs)
+    })
+  }
+  return prisma.facturaNacional.create(createArgs)
 }
 
 export interface ActualizarBorradorData {
   fechaDocumento?: Date | null
   observaciones?: string | null
+  tipoCambio?: number | null
+  fechaTipoCambio?: Date | null
   tipoDte?: number
   montoNeto?: number
   montoExento?: number
@@ -196,6 +308,8 @@ export async function actualizarBorrador(id: number, data: ActualizarBorradorDat
       data: {
         ...(data.fechaDocumento !== undefined ? { fechaDocumento: data.fechaDocumento } : {}),
         ...(data.observaciones !== undefined ? { observaciones: data.observaciones } : {}),
+        ...(data.tipoCambio !== undefined ? { tipoCambio: data.tipoCambio } : {}),
+        ...(data.fechaTipoCambio !== undefined ? { fechaTipoCambio: data.fechaTipoCambio } : {}),
         ...(data.tipoDte !== undefined ? { tipoDte: data.tipoDte } : {}),
         ...(data.montoNeto !== undefined ? { montoNeto: data.montoNeto } : {}),
         ...(data.montoExento !== undefined ? { montoExento: data.montoExento } : {}),

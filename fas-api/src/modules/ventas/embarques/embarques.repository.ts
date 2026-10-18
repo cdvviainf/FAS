@@ -419,7 +419,7 @@ export async function confirmarDespacho(embarqueId: number, despachadoPor: strin
   return getEmbarqueById(embarqueId)
 }
 
-type AnularDespachoResultado = 'OK' | 'NO_ENCONTRADO' | 'NO_DESPACHADO' | 'TIENE_RECLAMOS' | 'TIENE_GUIA_TIMBRADA'
+type AnularDespachoResultado = 'OK' | 'NO_ENCONTRADO' | 'NO_DESPACHADO' | 'TIENE_RECLAMOS' | 'TIENE_GUIA_TIMBRADA' | 'TIENE_FACTURA_NACIONAL'
 
 // "Anular Despacho" (2026-09-22, decisión de negocio Christian) — soft
 // delete de la confirmación: `despachadoEn`/`despachadoPor` NO se limpian
@@ -461,6 +461,13 @@ export async function anularDespacho(embarqueId: number, actualizadoPor: string)
       where: { origenTipo: 'embarque', origenId: embarqueId, estado: { in: ['GENERADO', 'GENERANDO', 'EMITIENDO'] } },
     })
     if (guiaEnProceso > 0) return 'TIENE_GUIA_TIMBRADA' as const
+
+    // VN-QA-005: no se puede anular el despacho si el Embarque tiene una Factura
+    // Nacional activa (borrador/emitida) — la factura ancla la fruta despachada.
+    // Hay que anular primero la factura (o emitir la Nota de Crédito si está
+    // timbrada). Serializa con enviar/firmar de la factura a nivel de aplicación.
+    const facturaActiva = await tx.facturaNacional.count({ where: { embarqueId, eliminadoEn: null } })
+    if (facturaActiva > 0) return 'TIENE_FACTURA_NACIONAL' as const
 
     const claim = await tx.embarque.updateMany({
       where: { id: embarqueId, despachadoEn: { not: null }, despachoAnuladoEn: null },
@@ -1094,6 +1101,9 @@ export async function getInstructivoHijoConDetalle(instructivoHijoId: number) {
               clienteId: true,
               consignatarioId: true,
               notifyId: true,
+              // Venta NACIONAL: el exportador del Instructivo es el cliente
+              // (exportadora), no la empresa (2026-10-17).
+              tipoVenta: true,
               tipoEmbarque: { select: mantenedorSelect },
               mercado: { select: mantenedorSelect },
               paisDestino: { select: { descripcion: true } },

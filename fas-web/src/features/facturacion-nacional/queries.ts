@@ -6,6 +6,7 @@ export const facturasNacionalKeys = {
   all: ['facturas-nacional'] as const,
   list: (filters: object) => ['facturas-nacional', 'list', filters] as const,
   facturables: (filters: object) => ['facturas-nacional', 'facturables', filters] as const,
+  embarquesFacturables: (filters: object) => ['facturas-nacional', 'embarques-facturables', filters] as const,
   detalle: (id: number) => ['facturas-nacional', 'detalle', id] as const,
 }
 
@@ -21,6 +22,14 @@ export function proformasFacturablesOptions(filters: { page?: number; limit?: nu
   return queryOptions({
     queryKey: facturasNacionalKeys.facturables(filters),
     queryFn: () => facturaNacionalService.listProformasFacturables(filters),
+    staleTime: 10_000,
+  })
+}
+
+export function embarquesFacturablesOptions(filters: { page?: number; limit?: number; q?: string } = {}) {
+  return queryOptions({
+    queryKey: facturasNacionalKeys.embarquesFacturables(filters),
+    queryFn: () => facturaNacionalService.listEmbarquesFacturables(filters),
     staleTime: 10_000,
   })
 }
