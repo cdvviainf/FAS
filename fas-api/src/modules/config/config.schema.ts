@@ -237,8 +237,8 @@ export const mercadoUpdateSchema = mercadoBodySchema
 export const puertoBodySchema = mantenedorBaseSchema.extend({
   paisId: z.number().int().positive({ message: 'Selecciona un país' }),
   tipoEmbarqueId: z.number().int().positive({ message: 'Selecciona un tipo de embarque' }),
-  latitud: z.number().min(-90).max(90).optional(),
-  longitud: z.number().min(-180).max(180).optional(),
+  latitud: z.number().min(-90).max(90).optional().nullable(),
+  longitud: z.number().min(-180).max(180).optional().nullable(),
 })
 
 export const puertoUpdateSchema = puertoBodySchema

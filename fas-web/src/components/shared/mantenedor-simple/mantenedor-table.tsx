@@ -29,14 +29,18 @@ export function MantenedorTable({ recurso, titulo, extraColumns, renderEditSheet
   const [params] = useQueryStates({
     page: parseAsInteger.withDefault(1),
     perPage: parseAsInteger.withDefault(10),
-    q: parseAsString,
+    // El input de búsqueda escribe en la URL con la clave del id de la columna
+    // filtrable ('codigo', ver mantenedor-columns.tsx), vía useDataTable. Acá se
+    // lee con esa misma clave y se reenvía al backend como `q` (búsqueda OR en
+    // código/descripción). Si no coinciden, el término nunca llega a la API.
+    codigo: parseAsString,
     sort: getSortingStateParser(columnIds).withDefault([])
   })
 
   const filters = {
     page: params.page,
     limit: params.perPage,
-    ...(params.q ? { q: params.q } : {}),
+    ...(params.codigo ? { q: params.codigo } : {}),
     ...(params.sort.length > 0 ? { sort: JSON.stringify(params.sort) } : {})
   }
 
