@@ -499,7 +499,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       variedadId: detalle.variedadId,
       categoriaId: detalle.categoriaId ?? 0,
       articuloId: detalle.articuloId,
-      etiquetaId: null,
+      // Precarga la etiqueta (Marca) del Cierre como valor inicial; editable y
+      // re-validada contra el set permitido del artículo (2026-10-18).
+      etiquetaId: detalle.etiquetaId,
       calibreIds: detalle.calibres.map((c) => c.calibre.id),
       tipoPalletId: detalle.tipoPalletId,
       cantidadPallets: pallets,

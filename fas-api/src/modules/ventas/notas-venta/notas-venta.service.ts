@@ -138,7 +138,8 @@ async function validarReferenciasHeader(r: ReferenciasHeader) {
   }
 }
 
-async function validarDetalle(data: NotaVentaDetalleCreateInput) {
+// Devuelve la etiqueta (Marca) ya resuelta para persistir en la línea.
+async function validarDetalle(data: NotaVentaDetalleCreateInput): Promise<{ etiquetaId: number }> {
   const especie = await repo.getEspecie(data.especieId)
   if (!especie) throw new ValidationError('La especie seleccionada no existe o está bloqueada')
 
@@ -148,6 +149,27 @@ async function validarDetalle(data: NotaVentaDetalleCreateInput) {
     throw new ValidationError('El artículo de la línea debe ser de tipo Embalaje')
   }
   if (!articulo.activo) throw new ValidationError('El artículo de embalaje seleccionado está inactivo')
+
+  // Etiqueta (Marca) de la línea: una sola, dentro del set permitido del artículo
+  // (principal ∪ adicionales). FIJA (1 permitida) → se autocompleta; DINÁMICA
+  // (>1) → debe venir elegida. Mismo criterio que OrdenCompraLinea.
+  const permitidas = new Set<number>()
+  if (articulo.etiquetaId != null) permitidas.add(articulo.etiquetaId)
+  for (const a of articulo.etiquetasAdicionales) permitidas.add(a.etiquetaId)
+  if (permitidas.size === 0) {
+    throw new ValidationError(`El artículo "${articulo.descripcion}" no tiene etiqueta configurada — defínela en el maestro de Artículos`)
+  }
+  let etiquetaIdResuelta: number
+  if (data.etiquetaId != null) {
+    if (!permitidas.has(data.etiquetaId)) {
+      throw new ValidationError(`La etiqueta seleccionada no está permitida para el artículo "${articulo.descripcion}"`)
+    }
+    etiquetaIdResuelta = data.etiquetaId
+  } else if (permitidas.size === 1) {
+    etiquetaIdResuelta = [...permitidas][0] // etiqueta fija heredada del maestro
+  } else {
+    throw new ValidationError(`El artículo "${articulo.descripcion}" tiene etiqueta dinámica — selecciona la etiqueta`)
+  }
 
   const variedad = await repo.getVariedad(data.variedadId)
   if (!variedad) throw new ValidationError('La variedad seleccionada no existe o está bloqueada')
@@ -175,6 +197,8 @@ async function validarDetalle(data: NotaVentaDetalleCreateInput) {
   if (calibres.some((c) => c.especieId !== data.especieId)) {
     throw new ValidationError('Uno o más calibres no pertenecen a la especie de la línea')
   }
+
+  return { etiquetaId: etiquetaIdResuelta }
 }
 
 // Las FK a mantenedores/entidades opcionales (comprador, notify, dirección, etc.)
@@ -287,8 +311,8 @@ export async function eliminarNotaVenta(id: number, eliminadoPor: string) {
 export async function agregarDetalle(notaVentaId: number, body: NotaVentaDetalleCreateInput) {
   const nv = await obtenerNotaVenta(notaVentaId)
   requireAbierta(nv)
-  await validarDetalle(body)
-  return repo.addDetalle(notaVentaId, body)
+  const { etiquetaId } = await validarDetalle(body)
+  return repo.addDetalle(notaVentaId, { ...body, etiquetaId })
 }
 
 async function obtenerDetalleDeNotaVenta(notaVentaId: number, detalleId: number) {
@@ -339,8 +363,8 @@ export async function actualizarDetalle(notaVentaId: number, detalleId: number, 
       throw new ValidationError(`No se pueden reducir las cajas por debajo de lo ya comprometido por Orden de Compra (${comprometido})`)
     }
   }
-  await validarDetalle(body)
-  return repo.updateDetalle(detalleId, body)
+  const { etiquetaId } = await validarDetalle(body)
+  return repo.updateDetalle(detalleId, { ...body, etiquetaId })
 }
 
 export async function eliminarDetalle(notaVentaId: number, detalleId: number) {

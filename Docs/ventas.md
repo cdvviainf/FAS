@@ -148,6 +148,7 @@ model NotaVentaDetalle {
   especieId       Int
   variedadId      Int
   articuloId      Int
+  etiquetaId      Int?       // Etiqueta (Marca) de la línea (2026-10-18). Ver regla abajo.
   categoriaId     Int?
   tipoPalletId    Int?       // DB nullable; REQUERIDO en captura (2026-10-13): de él sale cajasPorPallet
 
@@ -161,8 +162,30 @@ model NotaVentaDetalle {
   ordenCompraLineas OrdenCompraLinea[]                // líneas de OC tomadas de esta línea (ver supersesión 2026-08-23, abajo)
 
   @@index([notaVentaId])
+  @@index([etiquetaId])
 }
 ```
+
+> **Etiqueta (Marca) por línea (2026-10-18).** `NotaVentaDetalle.etiquetaId`
+> (FK opcional a `Etiqueta`, `ON DELETE SET NULL`) captura la **etiqueta/marca**
+> de la línea, con el **mismo contrato que `OrdenCompraLinea.etiquetaId`**
+> (`compras.md` §4.3):
+>
+> - **Conjunto permitido** del artículo de embalaje = etiqueta principal
+>   (`Articulo.etiquetaId`) ∪ adicionales (`ArticuloEtiqueta`). **FIJA** (1
+>   permitida) → se autocompleta server-side y en la UI queda de solo lectura;
+>   **DINÁMICA** (>1) → debe venir elegida (se valida en `agregarDetalle`/
+>   `actualizarDetalle`; error de negocio si falta, si no pertenece al conjunto,
+>   o si el artículo no tiene ninguna etiqueta configurada).
+> - **Líneas históricas:** la columna es nullable y la migración es aditiva, así
+>   que los detalles previos quedan con `etiquetaId = NULL`; la regla FIJA/
+>   DINÁMICA solo aplica al crear/editar.
+> - **Precarga en Orden de Compra:** al tomar una línea del Cierre, la OC usa la
+>   etiqueta del Cierre como **valor inicial editable** (no se copia de forma
+>   obligatoria — la OC resuelve la suya contra el conjunto permitido del
+>   artículo, ver `compras.md`). Por eso la etiqueta **no** integra el bloqueo de
+>   identidad por cajas comprometidas descrito abajo: puede cambiarse aunque la
+>   línea ya tenga cajas comprometidas por una OC.
 
 > **⚠️ Supersesión (2026-08-23) — línea de OC tomada del Cierre Comercial.**
 > `compras.md` §4.3 agrega `OrdenCompraLinea.notaVentaDetalleId` (FK

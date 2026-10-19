@@ -43,6 +43,9 @@ export interface NotaVentaDetalleItem {
   variedad: MantenedorRef
   articuloId: number
   articulo: MantenedorRef & { etiqueta: MantenedorRef | null; kgNetoEnvase: string | null; kgBrutoEnvase: string | null }
+  // Etiqueta (Marca) de la línea, resuelta en el backend (FIJA/DINÁMICA).
+  etiquetaId: number | null
+  etiqueta: MantenedorRef | null
   categoriaId: number | null
   categoria: MantenedorRef | null
   tipoPalletId: number | null
@@ -162,6 +165,8 @@ export interface NotaVentaDetalleCreateInput {
   especieId: number
   variedadId: number
   articuloId: number
+  // Opcional: FIJA la resuelve el backend; DINÁMICA debe venir elegida.
+  etiquetaId?: number | null
   categoriaId?: number | null
   tipoPalletId?: number | null
   cantidadPallets: number

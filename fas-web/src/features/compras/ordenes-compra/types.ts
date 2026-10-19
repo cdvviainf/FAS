@@ -62,6 +62,10 @@ export interface NotaVentaDetalleDisponibilidad {
   categoria: MantenedorRef | null
   articuloId: number
   articulo: MantenedorRef
+  // Etiqueta (Marca) resuelta en el Cierre — se usa como valor inicial al tomar
+  // la línea en la OC (editable).
+  etiquetaId: number | null
+  etiqueta: MantenedorRef | null
   tipoPalletId: number | null
   tipoPallet: MantenedorRef | null
   cajasPorPallet: number

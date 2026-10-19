@@ -29,6 +29,9 @@ export interface NotaVentaDetalleCreateInput {
   especieId: number
   variedadId: number
   articuloId: number
+  // Etiqueta (Marca): opcional en el request; el service la resuelve (FIJA) o
+  // exige elegirla (DINÁMICA) según el set permitido del artículo.
+  etiquetaId?: number | null
   categoriaId?: number | null
   tipoPalletId?: number | null
   cantidadPallets: number

@@ -781,6 +781,7 @@ model Etiqueta {
   facturaExportacionLineas    FacturaExportacionLinea[]
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
   ordenCompraLineas           OrdenCompraLinea[]
+  notaVentaDetalles           NotaVentaDetalle[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -3019,6 +3020,11 @@ model NotaVentaDetalle {
   variedad        Variedad    @relation(fields: [variedadId], references: [id])
   articuloId      Int
   articulo        Articulo    @relation(fields: [articuloId], references: [id])
+  // Etiqueta (Marca) de la línea (2026-10-18): una sola, dentro del set permitido
+  // del artículo (principal ∪ adicionales). FK simple, mismo patrón que
+  // OrdenCompraLinea.etiquetaId / InstructivoEmbalajeDetalle.etiquetaId.
+  etiquetaId      Int?
+  etiqueta        Etiqueta?   @relation(fields: [etiquetaId], references: [id])
   categoriaId     Int?
   categoria       Categoria?  @relation(fields: [categoriaId], references: [id])
   tipoPalletId    Int?
@@ -3037,6 +3043,7 @@ model NotaVentaDetalle {
   ordenCompraLineas OrdenCompraLinea[]
 
   @@index([notaVentaId])
+  @@index([etiquetaId])
   @@map("notas_venta_detalle")
 }
 

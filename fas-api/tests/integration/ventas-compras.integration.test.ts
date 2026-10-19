@@ -134,6 +134,7 @@ async function limpiarDatos() {
       "notas_venta_detalle",
       "notas_venta",
       "articulos",
+      "etiquetas",
       "alturas",
       "calibres",
       "categorias",
@@ -233,8 +234,14 @@ async function crearFixtures() {
     update: {},
     create: { id: 1, empresaId: empresa.id, codigo: 'CAJA', descripcion: 'Caja', creadoPor: 'test' },
   })
+  // Etiqueta (Marca) del embalaje: un artículo EMBALAJE debe tener etiqueta
+  // configurada (regla del maestro). La OC y ahora el Cierre la exigen al usar
+  // la línea, así que el fixture la provee como etiqueta FIJA (una sola).
+  const etiqueta = await prisma.etiqueta.create({
+    data: { empresaId: empresa.id, codigo: 'ETQ-1', descripcion: 'Etiqueta 1', creadoPor: 'test' },
+  })
   const articulo = await prisma.articulo.create({
-    data: { empresaId: empresa.id, tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
+    data: { empresaId: empresa.id, tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, etiquetaId: etiqueta.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
   const altura = await prisma.altura.create({ data: { empresaId: empresa.id, codigo: 'ALT-1', descripcion: 'Altura 1', creadoPor: 'test' } })
 

@@ -32,6 +32,10 @@ export const notaVentaDetalleCreateSchema = z.object({
   especieId: z.number().int().positive('La especie es requerida'),
   variedadId: z.number().int().positive('La variedad es requerida'),
   articuloId: z.number().int().positive('El artículo de embalaje es requerido'),
+  // Etiqueta (Marca) de la línea: opcional en el request — si el artículo tiene
+  // etiqueta FIJA se resuelve en el service; si es DINÁMICA debe venir elegida.
+  // Mismo patrón que OrdenCompraLinea.etiquetaId.
+  etiquetaId: z.number().int().positive().optional().nullable(),
   categoriaId: z.number().int().positive().optional().nullable(),
   // Requerido (2026-10-13): la cantidad de cajas por pallet sale del mantenedor
   // CajasPorPallet (embalaje + tipo de pallet); sin tipo de pallet no hay cifra.

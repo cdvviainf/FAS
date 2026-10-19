@@ -103,6 +103,8 @@ interface NuevaLinea {
   especieId: number
   variedadId: number
   articuloId: number
+  // Etiqueta (Marca): FIJA se autocompleta, DINÁMICA se elige. null = sin resolver.
+  etiquetaId: number | null
   categoriaId: number | null
   tipoPalletId: number | null
   cantidadPallets: string
@@ -117,6 +119,7 @@ const LINEA_EMPTY: NuevaLinea = {
   especieId: 0,
   variedadId: 0,
   articuloId: 0,
+  etiquetaId: null,
   categoriaId: null,
   tipoPalletId: null,
   cantidadPallets: '',
@@ -433,6 +436,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     if (!linea.especieId) e.especieId = 'Requerida'
     if (!linea.variedadId) e.variedadId = 'Requerida'
     if (!linea.articuloId) e.articuloId = 'Requerido'
+    // Etiqueta DINÁMICA (el artículo tiene >1 permitida): debe elegirse.
+    if (etiquetasPermitidas.length > 1 && !linea.etiquetaId) e.etiquetaId = 'Selecciona la etiqueta'
     if (!linea.cantidadPallets || Number(linea.cantidadPallets) <= 0) e.cantidadPallets = 'Debe ser mayor a 0'
     if (!linea.cajasPorPallet || Number(linea.cajasPorPallet) <= 0) e.cajasPorPallet = 'Debe ser mayor a 0'
     if (!linea.cajas || Number(linea.cajas) <= 0) e.cajas = 'Debe ser mayor a 0'
@@ -449,6 +454,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       especieId: linea.especieId,
       variedadId: linea.variedadId,
       articuloId: linea.articuloId,
+      etiquetaId: linea.etiquetaId,
       categoriaId: linea.categoriaId,
       tipoPalletId: linea.tipoPalletId,
       cantidadPallets: Number(linea.cantidadPallets),
@@ -468,6 +474,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       especieId: d.especieId,
       variedadId: d.variedadId,
       articuloId: d.articuloId,
+      etiquetaId: d.etiquetaId,
       categoriaId: d.categoriaId,
       tipoPalletId: d.tipoPalletId,
       cantidadPallets: String(d.cantidadPallets),
@@ -490,6 +497,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       especieId: d.especieId,
       variedadId: d.variedadId,
       articuloId: d.articuloId,
+      etiquetaId: d.etiquetaId,
       categoriaId: d.categoriaId,
       tipoPalletId: d.tipoPalletId,
       cantidadPallets: String(d.cantidadPallets),
@@ -537,6 +545,15 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   const articulosLinea = linea.especieId
     ? (articulosData?.data ?? []).filter((a) => a.especieId === linea.especieId)
     : []
+  // Set de etiquetas permitido del artículo = principal ∪ adicionales. FIJA (1)
+  // → se autocompleta y queda de solo lectura; DINÁMICA (>1) → se elige.
+  const etiquetasPermitidas = articuloSeleccionado
+    ? [
+        ...(articuloSeleccionado.etiqueta ? [articuloSeleccionado.etiqueta] : []),
+        ...(articuloSeleccionado.etiquetasAdicionales ?? []).map((a) => a.etiqueta),
+      ]
+    : []
+  const etiquetaFija = etiquetasPermitidas.length === 1
   // Cifra teórica cargada en la línea (0 si aún no se resolvió; sin default 108).
   const cajasPorPalletValor = Number(linea.cajasPorPallet) || 0
   const lineaMutationPending = addDetalleMutation.isPending || updateDetalleMutation.isPending
@@ -810,7 +827,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
                 <div className='space-y-1.5'>
                   <Label>Especie <span className='text-destructive'>*</span></Label>
-                  <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: null, calibreIds: [], articuloId: 0 })); resetCalibreRango() }}>
+                  <Select value={linea.especieId ? String(linea.especieId) : ''} onValueChange={(v) => { setLinea((l) => ({ ...l, especieId: Number(v), variedadId: 0, categoriaId: null, calibreIds: [], articuloId: 0, etiquetaId: null })); resetCalibreRango() }}>
                     <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                     <SelectContent>
                       {(especiesData?.data ?? []).map((e) => (
@@ -852,12 +869,43 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                   <Combobox
                     options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
                     value={linea.articuloId ? String(linea.articuloId) : null}
-                    onChange={(v) => { const id = Number(v); setLinea((l) => ({ ...l, articuloId: id })); void aplicarTeoricaCajas(id, linea.tipoPalletId) }}
+                    onChange={(v) => {
+                      const id = Number(v)
+                      // Resolver etiqueta del nuevo artículo: FIJA (1 permitida) se
+                      // autocompleta; si no, queda a elegir (DINÁMICA).
+                      const art = (articulosData?.data ?? []).find((a) => a.id === id)
+                      const permit = art
+                        ? [...(art.etiqueta ? [art.etiqueta] : []), ...(art.etiquetasAdicionales ?? []).map((a) => a.etiqueta)]
+                        : []
+                      const etiquetaAuto = permit.length === 1 ? permit[0].id : null
+                      setLinea((l) => ({ ...l, articuloId: id, etiquetaId: etiquetaAuto }))
+                      void aplicarTeoricaCajas(id, linea.tipoPalletId)
+                    }}
                     placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'}
                     searchPlaceholder='Buscar embalaje...'
                     disabled={!linea.especieId}
                   />
                   {lineaErrors.articuloId && <p className='text-xs text-destructive'>{lineaErrors.articuloId}</p>}
+                </div>
+                <div className='space-y-1.5'>
+                  <Label>Etiqueta {etiquetasPermitidas.length > 1 && <span className='text-destructive'>*</span>}</Label>
+                  {etiquetaFija ? (
+                    <Input value={etiquetasPermitidas[0]?.descripcion ?? ''} disabled readOnly />
+                  ) : (
+                    <Select
+                      value={linea.etiquetaId ? String(linea.etiquetaId) : ''}
+                      onValueChange={(v) => setLinea((l) => ({ ...l, etiquetaId: Number(v) }))}
+                      disabled={!articuloSeleccionado || etiquetasPermitidas.length === 0}
+                    >
+                      <SelectTrigger><SelectValue placeholder={articuloSeleccionado ? 'Seleccionar...' : 'Elige un embalaje primero'} /></SelectTrigger>
+                      <SelectContent>
+                        {etiquetasPermitidas.map((e) => (
+                          <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {lineaErrors.etiquetaId && <p className='text-xs text-destructive'>{lineaErrors.etiquetaId}</p>}
                 </div>
                 <div className='space-y-1.5'>
                   <Label>Tipo Pallet</Label>
@@ -1023,6 +1071,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                       <TableRow>
                         <TableHead>Especie / Variedad</TableHead>
                         <TableHead className='w-[110px]'>Artículo</TableHead>
+                        <TableHead>Etiqueta</TableHead>
                         <TableHead>Categoría</TableHead>
                         <TableHead className='min-w-[240px]'>Calibre</TableHead>
                         <TableHead>Cantidad</TableHead>
@@ -1035,6 +1084,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                         <TableRow key={d.id}>
                           <TableCell className='font-medium whitespace-nowrap'>{d.especie.descripcion} / {d.variedad.descripcion}</TableCell>
                           <TableCell className='w-[110px] max-w-[110px] truncate text-muted-foreground' title={d.articulo.descripcion}>{d.articulo.codigo}</TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground'>{d.etiqueta?.descripcion ?? '—'}</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{d.categoria?.descripcion ?? '—'}</TableCell>
                           <TableCell className='min-w-[240px] text-muted-foreground'>
                             <div className='flex flex-wrap gap-1'>

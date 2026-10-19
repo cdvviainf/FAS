@@ -34,6 +34,7 @@ const includeDetalle = {
       especie: { select: { id: true, codigo: true, descripcion: true } },
       variedad: { select: { id: true, codigo: true, descripcion: true } },
       articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+      etiqueta: { select: { id: true, codigo: true, descripcion: true } },
       categoria: { select: { id: true, codigo: true, descripcion: true } },
       tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
       calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
@@ -343,6 +344,7 @@ const detalleInclude = {
   especie: { select: { id: true, codigo: true, descripcion: true } },
   variedad: { select: { id: true, codigo: true, descripcion: true } },
   articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+  etiqueta: { select: { id: true, codigo: true, descripcion: true } },
   categoria: { select: { id: true, codigo: true, descripcion: true } },
   tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
   calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
@@ -485,7 +487,18 @@ export async function getMoneda(id: number) {
 }
 
 export async function getArticuloTipo(articuloId: number) {
-  return prisma.articulo.findUnique({ where: { id: articuloId }, select: { id: true, tipo: true, activo: true } })
+  return prisma.articulo.findUnique({
+    where: { id: articuloId },
+    select: {
+      id: true,
+      tipo: true,
+      activo: true,
+      descripcion: true,
+      // Set permitido de etiquetas: principal ∪ adicionales (misma lógica que OC).
+      etiquetaId: true,
+      etiquetasAdicionales: { select: { etiquetaId: true } },
+    },
+  })
 }
 
 export async function getEspecie(especieId: number) {

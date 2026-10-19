@@ -545,6 +545,9 @@ export async function getNotaVentaDetalleConDisponibilidad(notaVentaId: number) 
       variedad: { select: mantenedorSelect },
       categoria: { select: mantenedorSelect },
       articulo: { select: { id: true, codigo: true, descripcion: true } },
+      // Etiqueta (Marca) resuelta en el Cierre: la OC la usa como valor inicial
+      // al tomar esta línea (editable, 2026-10-18).
+      etiqueta: { select: mantenedorSelect },
       tipoPallet: { select: mantenedorSelect },
       calibres: { select: { calibre: { select: mantenedorSelect } } },
     },
