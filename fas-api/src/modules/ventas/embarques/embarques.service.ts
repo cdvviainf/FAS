@@ -665,10 +665,30 @@ export async function obtenerGuiaDespacho(embarqueId: number) {
   const embarque = await repo.getEmbarqueParaGuia(embarqueId)
   if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
   const documento = await dteService.obtenerDocumentoDte(ORIGEN_TIPO_GUIA, embarqueId)
+  const dirAgente = resolverDireccionAgente(embarque)
   return {
     despachado: estaDespachadoEfectivo(embarque),
     documento: documento ?? null,
     datos: construirDatosGuia(embarque),
+    // Plantas de origen del Embarque, para elegir desde cuál se despacha la guía
+    // (el frontend precarga origen con la dirección de la planta elegida).
+    plantas: embarque.instructivosHijos.map((h) => ({
+      instructivoHijoId: h.id,
+      nombre: h.planta?.razonSocial ?? 'Planta',
+      direccion: h.planta?.direcciones[0]?.direccion ?? null,
+      comuna: h.planta?.direcciones[0]?.comuna?.descripcion ?? null,
+    })),
+    // Agente de aduana = receptor en exportación (IndTraslado 8); dirección
+    // resuelta según el puerto de zarpe. null si el Embarque no tiene agente.
+    agente: embarque.agenteAduana
+      ? {
+          id: embarque.agenteAduana.id,
+          razonSocial: embarque.agenteAduana.razonSocial,
+          rut: embarque.agenteAduana.identificador,
+          direccion: dirAgente?.direccion ?? null,
+          comuna: dirAgente?.comuna?.descripcion ?? null,
+        }
+      : null,
     // Guía externa (emitida por un tercero) — null si no hay una registrada.
     externa:
       embarque.guiaExternaNumero != null
@@ -693,6 +713,61 @@ export async function obtenerGuiaDespacho(embarqueId: number) {
 // (FAS-GD-R1-002). Se bloquean hasta definir el flujo comercial; los motivos
 // sin venta (consignación, traslado interno, etc.) sí se soportan.
 const INDTRASLADO_VENTA = new Set([1, 2])
+// Traslado para exportación (no constituye venta): la Guía va dirigida al Agente
+// de Aduana, a $1/caja exento, con bloque Aduana (ejemplo real Agrosan, 2026-10-19).
+const INDTRASLADO_EXPORTACION = 8
+
+// Dirección del Agente de Aduana a usar como receptor: ESTRICTAMENTE la asociada
+// al puerto de zarpe (decisión de negocio: sin fallback, 2026-10-19). null si no
+// hay agente, no hay puerto de zarpe, o el agente no tiene una dirección con ese
+// puerto — el emit bloquea en ese caso.
+function resolverDireccionAgente(e: EmbarqueParaGuia) {
+  const agente = e.agenteAduana
+  if (!agente || e.puertoZarpe == null) return null
+  return agente.direcciones.find((d) => d.puertoId === e.puertoZarpe!.id) ?? null
+}
+
+// Bloque Aduana de la Guía de exportación — derivado de la Nota de Venta del
+// Embarque (sus codigoAduana) + totales de la carga. Mismo criterio que el DTE 110.
+function construirAduanaGuia(e: EmbarqueParaGuia, detalle: EmbarqueGuiaLineaMapeo[]) {
+  const nv = e.notaVenta
+  let pesoNeto = 0
+  let pesoBruto = 0
+  let totalCajas = 0
+  for (const p of e.pallets) {
+    for (const l of p.lineas) {
+      totalCajas += l.cajas
+      pesoNeto += l.cajas * Number(l.articulo?.kgNetoEnvase ?? 0)
+      pesoBruto += l.cajas * Number(l.articulo?.kgBrutoEnvase ?? 0)
+    }
+  }
+  return {
+    codModVenta: nv?.modalidadVenta?.codigoAduana ?? null,
+    codClauVenta: nv?.clausulaVenta?.codigoAduana ?? null,
+    totClauVenta: totalCajas, // nominal: $1 por caja (traslado sin venta)
+    codViaTransp: nv?.tipoEmbarque?.codigoAduana ?? null,
+    codPtoEmbarque: e.puertoZarpe?.codigoAduana ?? null,
+    codPtoDesembarque: nv?.puertoDestino?.codigoAduana ?? null,
+    paisDestinoCodigo: nv?.paisDestino?.codigoAduana ?? null,
+    pesoBruto: Math.round(pesoBruto * 100) / 100,
+    pesoNeto: Math.round(pesoNeto * 100) / 100,
+    totItems: detalle.length,
+    totBultos: e.pallets.length,
+  }
+}
+
+// Valida que los mantenedores del bloque Aduana tengan su codigoAduana (SII) —
+// mismo criterio que la Factura de Exportación DTE 110: no se emite un bloque
+// Aduana a medias. Devuelve la lista de faltantes (vacía si todo OK).
+function faltantesCodigoAduanaGuia(e: EmbarqueParaGuia): string[] {
+  const nv = e.notaVenta
+  const faltantes: string[] = []
+  if (!nv?.clausulaVenta?.codigoAduana) faltantes.push('Cláusula de Venta (Incoterm)')
+  if (!nv?.tipoEmbarque?.codigoAduana) faltantes.push('Tipo de Embarque (vía de transporte)')
+  if (!e.puertoZarpe?.codigoAduana) faltantes.push('Puerto de Zarpe')
+  if (!nv?.paisDestino?.codigoAduana) faltantes.push('País de Destino')
+  return faltantes
+}
 
 export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDespachoInput, userId: string) {
   const embarque = await repo.getEmbarqueParaGuia(embarqueId)
@@ -725,6 +800,63 @@ export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDe
     throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas antes de emitir DTE')
   }
 
+  // Receptor de la Guía. Para traslados internos/consignación/etc. el receptor
+  // es la propia Empresa (traslado a sí misma). Para EXPORTACIÓN (IndTraslado 8)
+  // la Guía va dirigida al Agente de Aduana, a su dirección asociada al puerto
+  // de zarpe, y lleva el bloque Aduana.
+  const esExportacion = input.indTraslado === INDTRASLADO_EXPORTACION
+  const detalleGuia = construirDetalleGuia(embarque.pallets)
+  let receptor: { rut: string; razonSocial: string; giro: string | null; direccion: string | null; comuna: string | null } = {
+    rut: empresa.rut,
+    razonSocial: empresa.razonSocial,
+    giro: empresa.giro ?? null,
+    direccion: empresa.direccion ?? null,
+    comuna: empresa.comuna ?? null,
+  }
+  let rutReceptor = empresa.rut
+  let aduana: ReturnType<typeof construirAduanaGuia> | null = null
+  // Destino del transporte. Por defecto los campos libres del popup; en
+  // EXPORTACIÓN se fuerza a la dirección del agente asociada al puerto (R13).
+  let destino: { direccion: string | null; comuna: string | null } = {
+    direccion: input.dirDestino ?? null,
+    comuna: input.comunaDestino ?? null,
+  }
+
+  if (esExportacion) {
+    const agente = embarque.agenteAduana
+    if (!agente) {
+      throw new ValidationError('El Embarque no tiene Agente de Aduana asignado — complétalo en la Solicitud de Reserva / Instructivo antes de emitir la Guía de exportación')
+    }
+    if (!agente.identificador) {
+      throw new ValidationError('El Agente de Aduana no tiene RUT (identificador) configurado — complétalo en el maestro de Entidades')
+    }
+    if (!embarque.puertoZarpe) {
+      throw new ValidationError('El Embarque no tiene Puerto de Zarpe asignado — complétalo antes de emitir la Guía de exportación')
+    }
+    // Dirección del agente ESTRICTAMENTE asociada al puerto de zarpe (sin fallback).
+    const dirResuelta = resolverDireccionAgente(embarque)
+    if (!dirResuelta) {
+      throw new ValidationError(`El Agente de Aduana no tiene una dirección asociada al puerto de zarpe "${embarque.puertoZarpe.descripcion}" — asóciala en el maestro de Entidades (campo "Puerto" de la dirección)`)
+    }
+    // No emitir un bloque Aduana incompleto: exigir los codigoAduana requeridos.
+    const faltantes = faltantesCodigoAduanaGuia(embarque)
+    if (faltantes.length > 0) {
+      throw new ValidationError(`Faltan códigos de Aduana (SII) para la Guía de exportación: ${faltantes.join(', ')}. Complétalos en los mantenedores correspondientes.`)
+    }
+    receptor = {
+      rut: agente.identificador,
+      razonSocial: agente.razonSocial,
+      giro: agente.giro ?? null,
+      direccion: dirResuelta.direccion,
+      comuna: dirResuelta.comuna?.descripcion ?? null,
+    }
+    // R13 / FAS-GDE-R2-003: el destino del transporte es la MISMA dirección del
+    // agente por puerto (estricto, server-side — no se confía en el input).
+    destino = { direccion: dirResuelta.direccion, comuna: dirResuelta.comuna?.descripcion ?? null }
+    rutReceptor = agente.identificador
+    aduana = construirAduanaGuia(embarque, detalleGuia)
+  }
+
   const datosGuia = {
     guiaIndTraslado: input.indTraslado,
     guiaTransporteId: input.transporteId ?? null,
@@ -742,7 +874,7 @@ export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDe
     fechaEmision: new Date().toISOString().slice(0, 10),
     indTraslado: input.indTraslado,
     emisor: { ...empresa, rut: empresa.rut },
-    receptor: { ...empresa, rut: empresa.rut },
+    receptor,
     transporte: {
       transportistaRut: transportista?.identificador ?? null,
       transportistaRazonSocial: transportista?.razonSocial ?? null,
@@ -752,8 +884,9 @@ export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDe
       patenteRemolque: input.patenteRemolque ?? null,
     },
     origen: { direccion: input.dirOrigen ?? null, comuna: input.comunaOrigen ?? null },
-    destino: { direccion: input.dirDestino ?? null, comuna: input.comunaDestino ?? null },
-    detalle: construirDetalleGuia(embarque.pallets),
+    destino,
+    detalle: detalleGuia,
+    aduana,
   })
 
   // verificarVigencia corre DENTRO del lock del origen DTE (FAS-GD-R1-001 /
@@ -765,7 +898,7 @@ export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDe
     tipoDte: TIPO_DTE_GUIA,
     payload,
     rutEmisor: empresa.rut,
-    rutReceptor: empresa.rut,
+    rutReceptor,
     creadoPor: userId,
     verificarVigencia: (tx) => repo.prepararEmisionGuiaEnTx(tx, embarqueId, datosGuia, userId),
   })
@@ -782,12 +915,19 @@ export async function firmarGuiaDespacho(embarqueId: number, userId: string) {
   if (!empresa?.rut) {
     throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas antes de emitir DTE')
   }
+  // El receptor timbrado = snapshot del temporal (DocumentoDte.rutReceptor), NO
+  // se recalcula desde el Embarque: si el agente cambió entre emitir y firmar, el
+  // timbrado coincide exactamente con el temporal revisado (FAS-GDE-R1-002).
+  const documento = await dteService.obtenerDocumentoDte(ORIGEN_TIPO_GUIA, embarqueId)
+  if (!documento?.libredteCodigoTemporal) {
+    throw new ValidationError('La Guía de Despacho aún no tiene un borrador emitido en LibreDTE — emítelo antes de timbrar')
+  }
   return dteService.generarDteReal({
     origenTipo: ORIGEN_TIPO_GUIA,
     origenId: embarqueId,
     tipoDte: TIPO_DTE_GUIA,
     rutEmisor: empresa.rut,
-    rutReceptor: empresa.rut,
+    rutReceptor: documento.rutReceptor,
     creadoPor: userId,
     // Revalida despacho vigente bajo el lock del origen DTE (FAS-GD-R3-004).
     verificarVigencia: (tx) => repo.verificarEmbarqueDespachadoEnTx(tx, embarqueId),
@@ -806,7 +946,9 @@ export async function obtenerPdfGuiaDespacho(embarqueId: number): Promise<Buffer
     tipoDte: TIPO_DTE_GUIA,
     codigo: documento.libredteCodigoTemporal,
     rutEmisor: empresa.rut,
-    rutReceptor: empresa.rut,
+    // Receptor = snapshot del temporal (puede ser el Agente de Aduana en
+    // exportación): la URL del PDF en LibreDTE incluye el receptor (FAS-GDE-R1-001).
+    rutReceptor: documento.rutReceptor,
   })
   if (!r.ok) throw new ValidationError(r.error)
   return r.pdf

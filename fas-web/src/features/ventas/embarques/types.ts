@@ -342,10 +342,29 @@ export interface GuiaExternaResumen {
   emisor: { id: number; razonSocial: string; rut: string | null } | null
 }
 
+export interface GuiaDespachoPlanta {
+  instructivoHijoId: number
+  nombre: string
+  direccion: string | null
+  comuna: string | null
+}
+
+export interface GuiaDespachoAgente {
+  id: number
+  razonSocial: string
+  rut: string | null
+  direccion: string | null
+  comuna: string | null
+}
+
 export interface GuiaDespachoResponse {
   despachado: boolean
   documento: DocumentoDteResumen | null
   datos: GuiaDespachoDatos
+  // Plantas de origen del embarque (para elegir el origen de la guía).
+  plantas: GuiaDespachoPlanta[]
+  // Agente de aduana = receptor en exportación (IndTraslado 8). null si no hay.
+  agente: GuiaDespachoAgente | null
   externa: GuiaExternaResumen | null
 }
 
@@ -373,9 +392,14 @@ export interface EmitirGuiaDespachoInput {
 // requieren receptor comprador y precios reales que esta guía aún no resuelve
 // (FAS-GD-R1-002) — el backend también los rechaza.
 export const IND_TRASLADO_OPCIONES: { value: number; label: string }[] = [
+  { value: 8, label: 'Traslado para exportación (no venta)' },
   { value: 5, label: 'Traslado interno' },
   { value: 3, label: 'Consignación' },
   { value: 4, label: 'Entrega gratuita' },
   { value: 6, label: 'Otros traslados no venta' },
   { value: 7, label: 'Guía de devolución' },
 ]
+
+// IndTraslado 8 = Guía de EXPORTACIÓN: receptor = Agente de Aduana, $1/caja
+// exento, bloque Aduana. El frontend muestra el receptor resuelto (read-only).
+export const INDTRASLADO_EXPORTACION = 8

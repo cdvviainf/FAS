@@ -27,8 +27,8 @@ import { AlertModal } from '@/components/modal/alert-modal'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { entidadesService } from '@/features/entidades/service'
 import { embarquesService } from '../service'
-import { IND_TRASLADO_OPCIONES } from '../types'
-import type { GuiaDespachoDatos } from '../types'
+import { IND_TRASLADO_OPCIONES, INDTRASLADO_EXPORTACION } from '../types'
+import type { GuiaDespachoDatos, GuiaDespachoPlanta, GuiaDespachoAgente } from '../types'
 
 const ITEM = 'VENTAS_EMBARQUES'
 const GUIA_KEY = (embarqueId: number) => ['guia-despacho', embarqueId] as const
@@ -41,12 +41,16 @@ function EmitirGuiaDialog({
   open,
   onOpenChange,
   datos,
+  plantas,
+  agente,
   onEmitido,
 }: {
   embarqueId: number
   open: boolean
   onOpenChange: (open: boolean) => void
   datos: GuiaDespachoDatos
+  plantas: GuiaDespachoPlanta[]
+  agente: GuiaDespachoAgente | null
   onEmitido: () => void
 }) {
   interface FormState {
@@ -148,6 +152,21 @@ function EmitirGuiaDialog({
             </Select>
           </div>
 
+          {Number(form.indTraslado) === INDTRASLADO_EXPORTACION && (
+            <div className='rounded-md border bg-muted/40 p-3 text-sm'>
+              <p className='font-medium'>Receptor: Agente de Aduana</p>
+              {agente ? (
+                <div className='text-muted-foreground mt-1 space-y-0.5'>
+                  <p>{agente.razonSocial}{agente.rut ? ` · ${agente.rut}` : ''}</p>
+                  <p>{[agente.direccion, agente.comuna].filter(Boolean).join(', ') || 'Sin dirección asociada al puerto de zarpe'}</p>
+                </div>
+              ) : (
+                <p className='text-destructive mt-1'>El Embarque no tiene Agente de Aduana asignado — complétalo en la Solicitud de Reserva / Instructivo antes de emitir.</p>
+              )}
+              <p className='text-muted-foreground mt-1 text-xs'>Traslado para exportación: $1/caja exento, con bloque Aduana. La dirección se elige según el puerto de zarpe.</p>
+            </div>
+          )}
+
           <div className='grid gap-3 sm:grid-cols-2'>
             <div className='space-y-1.5 sm:col-span-2'>
               <Label>Empresa de transporte</Label>
@@ -182,6 +201,27 @@ function EmitirGuiaDialog({
           </div>
 
           <div className='grid gap-3 sm:grid-cols-2'>
+            {plantas.length > 0 && (
+              <div className='space-y-1.5 sm:col-span-2'>
+                <Label>Planta de origen</Label>
+                <Select
+                  onValueChange={(v) => {
+                    const p = plantas.find((x) => String(x.instructivoHijoId) === v)
+                    if (p) setForm((f) => ({ ...f, dirOrigen: p.direccion ?? f.dirOrigen, comunaOrigen: p.comuna ?? f.comunaOrigen }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder='Elegir planta para precargar el origen...' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {plantas.map((p) => (
+                      <SelectItem key={p.instructivoHijoId} value={String(p.instructivoHijoId)}>{p.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className='text-muted-foreground text-xs'>Precarga la dirección/comuna de origen con la de la planta elegida (editable).</p>
+              </div>
+            )}
             <div className='space-y-1.5'>
               <Label>Dirección de origen</Label>
               <Input value={form.dirOrigen} onChange={(e) => set('dirOrigen', e.target.value)} placeholder='Dirección de salida' />
@@ -192,12 +232,27 @@ function EmitirGuiaDialog({
             </div>
             <div className='space-y-1.5'>
               <Label>Dirección de destino</Label>
-              <Input value={form.dirDestino} onChange={(e) => set('dirDestino', e.target.value)} placeholder='Dirección de llegada' />
+              <Input
+                value={Number(form.indTraslado) === INDTRASLADO_EXPORTACION ? (agente?.direccion ?? '') : form.dirDestino}
+                onChange={(e) => set('dirDestino', e.target.value)}
+                disabled={Number(form.indTraslado) === INDTRASLADO_EXPORTACION}
+                placeholder='Dirección de llegada'
+              />
             </div>
             <div className='space-y-1.5'>
               <Label>Comuna de destino</Label>
-              <Input value={form.comunaDestino} onChange={(e) => set('comunaDestino', e.target.value)} placeholder='Comuna' />
+              <Input
+                value={Number(form.indTraslado) === INDTRASLADO_EXPORTACION ? (agente?.comuna ?? '') : form.comunaDestino}
+                onChange={(e) => set('comunaDestino', e.target.value)}
+                disabled={Number(form.indTraslado) === INDTRASLADO_EXPORTACION}
+                placeholder='Comuna'
+              />
             </div>
+            {Number(form.indTraslado) === INDTRASLADO_EXPORTACION && (
+              <p className='text-muted-foreground -mt-1 text-xs sm:col-span-2'>
+                En exportación el destino es la dirección del agente de aduana asociada al puerto de zarpe (se usa server-side).
+              </p>
+            )}
           </div>
         </div>
 
@@ -463,6 +518,8 @@ export function GuiaDespachoSection({ embarqueId }: { embarqueId: number }) {
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           datos={guia.datos}
+          plantas={guia.plantas}
+          agente={guia.agente}
           onEmitido={invalidar}
         />
       )}

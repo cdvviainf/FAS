@@ -97,6 +97,8 @@ model EntidadDireccion {
   esPorDefecto Boolean    @default(false)
   latitud      Decimal?   @db.Decimal(10, 7)  // geolocalización (2026-07-28) — pegado de coordenadas o link de Google Maps, ver componente compartido en mantenedores-generales.md (Puerto/Bodega) y productores.md (Predio)
   longitud     Decimal?   @db.Decimal(10, 7)
+  puertoId     Int?       // Puerto asociado (2026-10-19). FK simple a Puerto. Para agentes de aduana: a qué puerto corresponde esta dirección; la Guía de Despacho de EXPORTACIÓN (DTE 52, ventas.md R13) elige la dirección del agente cuyo puertoId = puerto de zarpe del Embarque. Validado contra la empresa activa al crear/editar.
+  puerto       Puerto?    @relation(fields: [puertoId], references: [id])
 
   // auditoría + softdelete (mismo patrón base)
   creadoEn     DateTime   @default(now())

@@ -196,6 +196,12 @@ export async function crearDireccion(
     if (!comuna) throw new NotFoundError('Comuna', String(input.comunaId))
   }
 
+  // Puerto opcional: validar que exista en la empresa activa.
+  if (input.puertoId != null) {
+    const puerto = await repo.findPuertoActivo(input.puertoId)
+    if (!puerto) throw new NotFoundError('Puerto', String(input.puertoId))
+  }
+
   // R4: esPorDefecto → desmarcar la anterior
   if (input.esPorDefecto) {
     await repo.clearDireccionPorDefecto(entidadId)
@@ -241,6 +247,12 @@ export async function actualizarDireccion(
     }
     const comuna = await repo.findComunaById(comunaId)
     if (!comuna) throw new NotFoundError('Comuna', String(comunaId))
+  }
+
+  // Puerto opcional: validar que exista en la empresa activa (si se envía).
+  if (input.puertoId != null) {
+    const puerto = await repo.findPuertoActivo(input.puertoId)
+    if (!puerto) throw new NotFoundError('Puerto', String(input.puertoId))
   }
 
   // R4: esPorDefecto

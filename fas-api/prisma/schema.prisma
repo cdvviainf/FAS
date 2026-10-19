@@ -1434,6 +1434,7 @@ model Puerto {
 
   notasVenta     NotaVenta[]
   embarquesZarpe Embarque[]  @relation("EmbarquePuertoZarpe")
+  direcciones    EntidadDireccion[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1683,6 +1684,12 @@ model EntidadDireccion {
   comunaId       Int?
   comuna         Comuna?   @relation(fields: [comunaId], references: [id])
   direccion      String
+  // Puerto asociado a esta dirección (2026-10-19). Se usa para elegir la
+  // dirección del agente de aduana según el puerto de zarpe en la Guía de
+  // Despacho de exportación (DTE 52). Nullable: solo aplica a direcciones de
+  // agentes de aduana; FK simple a Puerto (EntidadDireccion no es tenant).
+  puertoId       Int?
+  puerto         Puerto?   @relation(fields: [puertoId], references: [id])
   esPorDefecto   Boolean   @default(false)
   latitud        Decimal?  @db.Decimal(10, 7)
   longitud       Decimal?  @db.Decimal(10, 7)

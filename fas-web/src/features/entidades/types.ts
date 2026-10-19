@@ -71,8 +71,10 @@ export interface DireccionItem {
   esPorDefecto: boolean
   latitud: string | number | null
   longitud: string | number | null
+  puertoId: number | null
   pais: { id: number; codigo: string; descripcion: string }
   comuna: { id: number; codigo: string; descripcion: string } | null
+  puerto: { id: number; codigo: string; descripcion: string } | null
 }
 
 export interface ContactoItem {
@@ -150,6 +152,9 @@ export interface DireccionCreateInput {
   esPorDefecto: boolean
   latitud?: number | null
   longitud?: number | null
+  // Puerto asociado (opcional): define a qué puerto corresponde esta dirección;
+  // usado para elegir la dirección del agente de aduana en la Guía de exportación.
+  puertoId?: number | null
 }
 
 export interface ContactoCreateInput {

@@ -53,6 +53,9 @@ export const direccionCreateSchema = z.object({
   esPorDefecto: z.boolean().default(false),
   latitud: z.number().min(-90).max(90).nullable().optional(),
   longitud: z.number().min(-180).max(180).nullable().optional(),
+  // Puerto asociado (opcional) — usado para elegir la dirección del agente de
+  // aduana según el puerto de zarpe en la Guía de Despacho de exportación.
+  puertoId: z.number().int().positive().nullable().optional(),
 })
 
 export const direccionUpdateSchema = z.object({
@@ -64,6 +67,7 @@ export const direccionUpdateSchema = z.object({
   esPorDefecto: z.boolean().optional(),
   latitud: z.number().min(-90).max(90).nullable().optional(),
   longitud: z.number().min(-180).max(180).nullable().optional(),
+  puertoId: z.number().int().positive().nullable().optional(),
 })
 
 // ─── Contacto ─────────────────────────────────────────────────────────────────

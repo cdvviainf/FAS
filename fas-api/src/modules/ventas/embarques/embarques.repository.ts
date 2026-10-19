@@ -1245,10 +1245,47 @@ export async function getEmbarqueParaGuia(embarqueId: number) {
       guiaExternaEmisorId: true,
       guiaExternaFecha: true,
       guiaExternaEmisor: { select: { id: true, razonSocial: true, identificador: true } },
-      puertoZarpe: { select: { descripcion: true } },
+      // Puerto de zarpe: descripción (destino en Transporte) + codigoAduana
+      // (CodPtoEmbarque del bloque Aduana del DTE 52 de exportación).
+      puertoZarpe: { select: { id: true, descripcion: true, codigoAduana: true } },
+      // Agente de aduana (receptor de la Guía de exportación) + sus direcciones
+      // con el puerto asociado (para elegir la que calza con el puerto de zarpe).
+      agenteAduanaId: true,
+      agenteAduana: {
+        select: {
+          id: true,
+          razonSocial: true,
+          identificador: true,
+          giro: true,
+          direcciones: {
+            where: { eliminadoEn: null },
+            select: {
+              id: true,
+              direccion: true,
+              puertoId: true,
+              esPorDefecto: true,
+              comuna: { select: { descripcion: true } },
+            },
+            orderBy: [{ esPorDefecto: 'desc' }, { codigo: 'asc' }],
+          },
+        },
+      },
+      // Datos del bloque Aduana: se derivan de la Nota de Venta del Embarque
+      // (sus codigoAduana), igual que la Factura de Exportación DTE 110.
+      notaVenta: {
+        select: {
+          tipoEmbarque: { select: { codigoAduana: true } },
+          paisDestino: { select: { codigoAduana: true, descripcion: true } },
+          puertoDestino: { select: { codigoAduana: true } },
+          modalidadVenta: { select: { codigoAduana: true } },
+          clausulaVenta: { select: { codigoAduana: true, descripcion: true } },
+        },
+      },
       instructivosHijos: {
         where: { eliminadoEn: null },
         select: {
+          id: true,
+          plantaId: true,
           planta: {
             select: {
               razonSocial: true,
@@ -1270,7 +1307,7 @@ export async function getEmbarqueParaGuia(embarqueId: number) {
               variedad: { select: { descripcion: true } },
               categoria: { select: { descripcion: true } },
               calibre: { select: { descripcion: true } },
-              articulo: { select: { kgNetoEnvase: true } },
+              articulo: { select: { kgNetoEnvase: true, kgBrutoEnvase: true } },
               cajas: true,
             },
           },

@@ -96,6 +96,8 @@ export async function findEntidadById(id: number) {
           creadoEn: true,
           pais: { select: paisSelect },
           comuna: { select: comunaSelect },
+          puertoId: true,
+          puerto: { select: { id: true, codigo: true, descripcion: true } },
         },
         orderBy: [{ esPorDefecto: 'desc' }, { codigo: 'asc' }],
       },
@@ -258,6 +260,12 @@ export async function findComunaById(id: number) {
   })
 }
 
+// Puerto activo de la empresa actual (la extensión de tenancy inyecta empresaId),
+// para validar el puertoId opcional de una dirección.
+export async function findPuertoActivo(id: number) {
+  return prisma.puerto.findFirst({ where: { id, eliminadoEn: null }, select: { id: true } })
+}
+
 // ─── Direcciones ──────────────────────────────────────────────────────────────
 
 export async function findDireccionById(id: number, entidadId: number) {
@@ -313,6 +321,7 @@ export async function createDireccion(
       esPorDefecto: data.esPorDefecto,
       latitud: data.latitud,
       longitud: data.longitud,
+      puertoId: data.puertoId ?? null,
       creadoPor,
     },
     include: {
@@ -338,6 +347,7 @@ export async function updateDireccion(
       ...(data.esPorDefecto !== undefined ? { esPorDefecto: data.esPorDefecto } : {}),
       ...(data.latitud !== undefined ? { latitud: data.latitud } : {}),
       ...(data.longitud !== undefined ? { longitud: data.longitud } : {}),
+      ...(data.puertoId !== undefined ? { puertoId: data.puertoId } : {}),
       actualizadoPor,
     },
     include: {

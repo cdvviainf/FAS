@@ -28,6 +28,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { AlertModal } from '@/components/modal/alert-modal'
+import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { GeoPasteButton } from '@/components/shared/geo-paste-button'
 import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
@@ -106,8 +107,18 @@ function DireccionDialog({ open, initial, defaultPaisId, onClose, onSave, isSavi
     esPorDefecto: false,
     latitud: null,
     longitud: null,
+    puertoId: null,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // Puertos de la empresa activa, para asociar la dirección a un puerto (opcional).
+  const { data: puertosData } = useQuery({
+    queryKey: ['puertos-options-direccion'],
+    queryFn: () => createMantenedorService('puertos').list({ limit: 300 }),
+    enabled: open,
+    staleTime: 60_000,
+  })
+  const puertos = puertosData?.data ?? []
 
   useEffect(() => {
     if (open) {
@@ -120,6 +131,7 @@ function DireccionDialog({ open, initial, defaultPaisId, onClose, onSave, isSavi
         esPorDefecto: initial?.esPorDefecto ?? false,
         latitud: initial?.latitud ?? null,
         longitud: initial?.longitud ?? null,
+        puertoId: initial?.puertoId ?? null,
       })
       setErrors({})
     }
@@ -252,6 +264,24 @@ function DireccionDialog({ open, initial, defaultPaisId, onClose, onSave, isSavi
           <p className='text-xs text-muted-foreground -mt-2'>
             Geolocalización opcional. Facilita ubicar el predio en solicitudes de inspección.
           </p>
+          <div className='space-y-1.5'>
+            <Label>Puerto asociado (opcional)</Label>
+            <Select
+              value={form.puertoId ? String(form.puertoId) : 'NINGUNO'}
+              onValueChange={(v) => setForm((f) => ({ ...f, puertoId: v === 'NINGUNO' ? null : parseInt(v) }))}
+            >
+              <SelectTrigger><SelectValue placeholder='Sin puerto' /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value='NINGUNO'>Sin puerto</SelectItem>
+                {puertos.map((p) => (
+                  <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className='text-xs text-muted-foreground'>
+              Para agentes de aduana: a qué puerto corresponde esta dirección. Se usa para elegir la dirección de entrega en la Guía de Despacho de exportación.
+            </p>
+          </div>
           <div className='flex items-center gap-2'>
             <Switch
               id='esPorDefecto-dir'
@@ -811,8 +841,10 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
         esPorDefecto: d.esPorDefecto,
         latitud: d.latitud ?? null,
         longitud: d.longitud ?? null,
+        puertoId: d.puertoId ?? null,
         pais: paises.find((p) => p.id === d.paisId) ?? { id: d.paisId, codigo: '', descripcion: '' },
         comuna: d.comunaId ? (comunas.find((c) => c.id === d.comunaId) ?? null) : null,
+        puerto: null,
       }))
 
   const contactosToShow: ContactoItem[] = isEdit
@@ -1129,6 +1161,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                                     comunaId: dir.comunaId ?? undefined,
                                     direccion: dir.direccion,
                                     esPorDefecto: dir.esPorDefecto,
+                                    puertoId: dir.puertoId ?? null,
                                   },
                                   localId: localDir?._localId,
                                 })

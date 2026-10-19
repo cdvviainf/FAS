@@ -15,11 +15,29 @@ export interface EmbarqueGuiaLineaMapeo {
   precioUnitario?: number | null
 }
 
+// Bloque Aduana del DTE 52 de EXPORTACIÓN (IndTraslado=8), mismo patrón que la
+// Factura de Exportación DTE 110. Los códigos vienen de los `codigoAduana` de
+// los mantenedores (cláusula/modalidad/vía/puertos/país) de la Nota de Venta.
+export interface AduanaGuiaDespacho {
+  codModVenta?: string | null
+  codClauVenta?: string | null
+  totClauVenta?: number | null
+  codViaTransp?: string | null
+  codPtoEmbarque?: string | null
+  codPtoDesembarque?: string | null
+  paisDestinoCodigo?: string | null
+  pesoBruto?: number | null
+  pesoNeto?: number | null
+  totItems?: number | null
+  totBultos?: number | null
+}
+
 export interface EmbarqueGuiaDespachoMapeo {
   // YYYY-MM-DD
   fechaEmision: string
   // IndTraslado SII: 1=Venta, 2=Ventas por efectuar, 3=Consignación,
-  // 4=Entrega gratuita, 5=Traslado interno, 6=Otros, 7=Devolución...
+  // 4=Entrega gratuita, 5=Traslado interno, 6=Otros, 7=Devolución,
+  // 8=Traslado para exportación (no venta).
   indTraslado: number
   emisor: ContraparteResuelta
   receptor: ContraparteResuelta
@@ -37,9 +55,32 @@ export interface EmbarqueGuiaDespachoMapeo {
   origen: { direccion: string | null; comuna: string | null }
   destino: { direccion: string | null; comuna: string | null }
   detalle: EmbarqueGuiaLineaMapeo[]
+  // Bloque Aduana — solo en la Guía de EXPORTACIÓN (IndTraslado=8).
+  aduana?: AduanaGuiaDespacho | null
 }
 
 const INDTRASLADO_VENTA = 1
+// Traslado para exportación (no constituye venta): la fruta se despacha a $1 por
+// caja, exenta (sin IVA), y lleva el bloque Aduana. Decisión de negocio (ejemplo
+// real Agrosan, 2026-10-19).
+const INDTRASLADO_EXPORTACION = 8
+const PRECIO_EXPORTACION_POR_CAJA = 1
+
+function buildAduanaGuia(a: AduanaGuiaDespacho): Record<string, unknown> {
+  return {
+    ...(a.codModVenta ? { CodModVenta: a.codModVenta } : {}),
+    ...(a.codClauVenta ? { CodClauVenta: a.codClauVenta } : {}),
+    ...(a.totClauVenta != null ? { TotClauVenta: a.totClauVenta } : {}),
+    ...(a.codViaTransp ? { CodViaTransp: a.codViaTransp } : {}),
+    ...(a.codPtoEmbarque ? { CodPtoEmbarque: a.codPtoEmbarque } : {}),
+    ...(a.codPtoDesembarque ? { CodPtoDesemb: a.codPtoDesembarque } : {}),
+    ...(a.pesoBruto != null ? { PesoBruto: a.pesoBruto, CodUnidPesoBruto: 'KB' } : {}),
+    ...(a.pesoNeto != null ? { PesoNeto: a.pesoNeto, CodUnidPesoNeto: 'KN' } : {}),
+    ...(a.totItems != null ? { TotItems: a.totItems } : {}),
+    ...(a.totBultos != null ? { TotBultos: a.totBultos } : {}),
+    ...(a.paisDestinoCodigo ? { CodPaisRecep: a.paisDestinoCodigo } : {}),
+  }
+}
 
 function buildTransporte(
   t: EmbarqueGuiaDespachoMapeo['transporte'],
@@ -68,7 +109,13 @@ function buildTransporte(
 
 export function mapEmbarqueAGuiaDespacho(data: EmbarqueGuiaDespachoMapeo): LibredteDtePayload {
   const esVenta = data.indTraslado === INDTRASLADO_VENTA
-  const transporte = buildTransporte(data.transporte, data.destino)
+  const esExportacion = data.indTraslado === INDTRASLADO_EXPORTACION
+  let transporte = buildTransporte(data.transporte, data.destino)
+  // El bloque Aduana de la Guía de exportación va DENTRO de Transporte (mismo
+  // lugar que en el DTE 110, confirmado con soporte LibreDTE).
+  if (esExportacion && data.aduana) {
+    transporte = { ...(transporte ?? {}), Aduana: buildAduanaGuia(data.aduana) }
+  }
   return {
     Encabezado: {
       IdDoc: { TipoDTE: 52, IndTraslado: data.indTraslado, FchEmis: data.fechaEmision },
@@ -99,7 +146,13 @@ export function mapEmbarqueAGuiaDespacho(data: EmbarqueGuiaDespachoMapeo): Libre
       UnmdItem: 'CJ',
       // Peso neto total de la línea como ítem informativo del SII.
       ...(d.pesoNetoKg > 0 ? { DscItem: `Peso neto: ${d.pesoNetoKg} kg` } : {}),
-      ...(esVenta && d.precioUnitario != null ? { PrcItem: d.precioUnitario } : {}),
+      // Exportación (IndTraslado 8): $1 por caja, exento (IndExe=1, sin IVA).
+      // Venta: precio real. Otros traslados sin venta: sin precio.
+      ...(esExportacion
+        ? { PrcItem: PRECIO_EXPORTACION_POR_CAJA, IndExe: 1 }
+        : esVenta && d.precioUnitario != null
+          ? { PrcItem: d.precioUnitario }
+          : {}),
     })),
   }
 }
