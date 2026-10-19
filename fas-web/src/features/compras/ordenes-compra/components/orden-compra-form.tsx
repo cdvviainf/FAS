@@ -25,6 +25,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { MantenedorQuickCreate } from '@/components/shared/mantenedor-simple/mantenedor-quick-create'
+import { ExpandableText } from '@/components/shared/expandable-text'
 import { MonedaQuickCreate } from '@/features/monedas/components/moneda-quick-create'
 import type { MantenedorSimple, MantenedorSimpleListResponse } from '@/features/mantenedor-simple/types'
 import { entidadesService } from '@/features/entidades/service'
@@ -828,8 +829,8 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                             <TableCell className='font-medium whitespace-nowrap'>{d.especie.descripcion} / {d.variedad.descripcion}</TableCell>
                             <TableCell className='whitespace-nowrap text-muted-foreground'>{d.articulo.codigo}</TableCell>
                             <TableCell className='whitespace-nowrap text-muted-foreground'>{d.categoria?.descripcion ?? '—'}</TableCell>
-                            <TableCell className='max-w-[180px] text-muted-foreground'>
-                              {d.calibres.map((c) => c.calibre.descripcion).join(', ')}
+                            <TableCell className='max-w-[180px] align-top text-muted-foreground'>
+                              <ExpandableText text={d.calibres.map((c) => c.calibre.descripcion).join(', ')} max={24} />
                             </TableCell>
                             <TableCell className='whitespace-nowrap text-muted-foreground'>
                               {palletsDisponibles} pallets ({d.cajasDisponibles} cajas)
