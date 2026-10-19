@@ -359,6 +359,7 @@ export const navGroups: NavGroup[] = [
           { title: 'Prefijos de Código',    url: '/dashboard/configuracion/prefijos-codigo',   icon: 'adjustments'     },
           { title: 'Templates de Carga',    url: '/dashboard/configuracion/templates-carga',   icon: 'forms'           },
           { title: 'Integraciones',         url: '/dashboard/configuracion/integraciones',     icon: 'externalLink'    },
+          { title: 'Auditoría',             url: '/dashboard/configuracion/auditoria',         icon: 'page'            },
           { title: 'Configuración General', url: '/dashboard/configuracion/general',           icon: 'settings'        }
         ]
       },

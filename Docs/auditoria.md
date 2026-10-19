@@ -57,8 +57,10 @@ Tabla `audit_logs`. **Sin FKs** a Usuario/Empresa (se guardan ids + snapshot de 
 
 ## 6. Alcance por fase
 
-- **Fase A (este entregable)**: backend completo (modelo, extensión, cola+worker, hooks de acceso, endpoint de navegación, consulta con filtros).
-- **Fase B**: frontend — pantalla `/dashboard/configuracion/auditoria` con filtros (usuario, rango de fechas, acción, entidad, texto) + export; provider que emite `ACCESO_MENU` al navegar.
+- **Fase A**: backend completo (modelo, extensión, cola+worker, hooks de acceso, endpoint de navegación, consulta con filtros).
+- **Fase B (implementada 2026-10-18)**: frontend — pantalla `/dashboard/configuracion/auditoria` con filtros (usuario, rango de fechas, acción, entidad, texto) + export **CSV**; provider `NavegacionAuditoria` montado en el layout del dashboard que emite `ACCESO_MENU` al cambiar de ruta (resuelve el `itemMenuCodigo` por ruta desde `/me/menu`, best-effort). Endpoints agregados, todos con permiso `CONFIG_AUDITORIA` nivel `LECTURA`:
+  - `GET /api/auditoria/facetas` → usuarios y entidades **presentes en la bitácora** de la empresa activa, para los selectores (no depende de `CONFIG_USUARIOS`).
+  - `GET /api/auditoria/export` → CSV (UTF-8 con BOM) con los mismos filtros, sin paginación, tope `MAX_EXPORT=10.000` filas (cabeceras `X-Total-Registros`/`X-Truncado` avisan si se truncó).
 - **Futuro**: vista global de eventos anónimos, job de retención/purga configurable (propuesto 12 meses).
 
 ## 7. Reutilización

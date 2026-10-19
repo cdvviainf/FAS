@@ -3,6 +3,7 @@ import AppSidebar from '@/components/layout/app-sidebar';
 import Header from '@/components/layout/header';
 import { InfoSidebar } from '@/components/layout/info-sidebar';
 import { RouteAccessGuard } from '@/components/layout/route-access-guard';
+import { NavegacionAuditoria } from '@/features/reportes/auditoria/components/navegacion-auditoria';
 import { InfobarProvider } from '@/components/ui/infobar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import type { Metadata } from 'next';
@@ -28,6 +29,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <SidebarInset>
           <Header />
           <InfobarProvider defaultOpen={false}>
+            <NavegacionAuditoria />
             <RouteAccessGuard>{children}</RouteAccessGuard>
             <InfoSidebar side='right' />
           </InfobarProvider>

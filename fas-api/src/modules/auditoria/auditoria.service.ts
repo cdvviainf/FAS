@@ -77,3 +77,48 @@ export async function listar(filters: AuditoriaListFilters) {
   const { data, total } = await repo.listar(empresaIdActiva, filters)
   return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
+
+// Facetas (usuarios/entidades presentes en la bitácora de la empresa activa)
+// para alimentar los selectores del frontend sin requerir CONFIG_USUARIOS.
+export async function facetas() {
+  const empresaIdActiva = getEmpresaIdActual()
+  if (empresaIdActiva == null) return { usuarios: [], entidades: [] }
+  return repo.facetas(empresaIdActiva)
+}
+
+// Tope de filas por export para no agotar memoria; si se supera, el CSV incluye
+// las más recientes y el controller avisa por cabecera (sin truncado silencioso).
+const MAX_EXPORT = 10_000
+
+function campoCsv(valor: unknown): string {
+  if (valor == null) return ''
+  const s = typeof valor === 'string' ? valor : JSON.stringify(valor)
+  // Escape RFC 4180: comillas dobles y envoltura si hay coma/comilla/salto.
+  const escapado = s.replace(/"/g, '""')
+  return /[",\n\r]/.test(s) ? `"${escapado}"` : escapado
+}
+
+export async function exportarCsv(filters: AuditoriaListFilters): Promise<{ csv: string; total: number; truncado: boolean }> {
+  const empresaIdActiva = getEmpresaIdActual()
+  if (empresaIdActiva == null) return { csv: '', total: 0, truncado: false }
+  const { rows, total, truncado } = await repo.listarParaExport(empresaIdActiva, filters, MAX_EXPORT)
+
+  const encabezado = ['Fecha', 'Usuario', 'Accion', 'Entidad', 'EntidadId', 'Ruta', 'ItemMenu', 'IP']
+  const lineas = rows.map((r) =>
+    [
+      r.creadoEn.toISOString(),
+      r.usuarioEmail,
+      r.accion,
+      r.entidad,
+      r.entidadId,
+      r.ruta,
+      r.itemMenuCodigo,
+      r.ip,
+    ]
+      .map(campoCsv)
+      .join(','),
+  )
+  // BOM para que Excel reconozca UTF-8.
+  const csv = '﻿' + [encabezado.join(','), ...lineas].join('\r\n')
+  return { csv, total, truncado }
+}

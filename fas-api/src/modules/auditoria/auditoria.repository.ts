@@ -28,10 +28,10 @@ export async function crear(evento: EventoAuditoria) {
 // A-QA-002): nunca mezcla eventos de otras empresas ni eventos globales
 // (empresaId null) en la vista por-empresa. Los eventos globales (ej. login
 // fallido de email desconocido) quedan para una vista global futura.
-export async function listar(empresaIdActiva: number | null, filters: AuditoriaListFilters) {
-  const { page = 1, limit = 20, usuarioId, accion, entidad, desde, hasta, q } = filters
-
-  const where: Prisma.AuditLogWhereInput = {
+// Filtro común de la vista por-empresa, reutilizado por listar y exportar.
+function construirWhere(empresaIdActiva: number | null, filters: AuditoriaListFilters): Prisma.AuditLogWhereInput {
+  const { usuarioId, accion, entidad, desde, hasta, q } = filters
+  return {
     AND: [
       { empresaId: empresaIdActiva },
       usuarioId ? { usuarioId } : {},
@@ -58,6 +58,11 @@ export async function listar(empresaIdActiva: number | null, filters: AuditoriaL
         : {},
     ],
   }
+}
+
+export async function listar(empresaIdActiva: number | null, filters: AuditoriaListFilters) {
+  const { page = 1, limit = 20 } = filters
+  const where = construirWhere(empresaIdActiva, filters)
 
   const [data, total] = await Promise.all([
     prismaBase.auditLog.findMany({
@@ -69,4 +74,41 @@ export async function listar(empresaIdActiva: number | null, filters: AuditoriaL
     prismaBase.auditLog.count({ where }),
   ])
   return { data, total }
+}
+
+// Export: mismas condiciones de filtro, sin paginación, acotado a `max` filas
+// para no agotar memoria. Retorna también si hubo truncado (para avisar).
+export async function listarParaExport(empresaIdActiva: number | null, filters: AuditoriaListFilters, max: number) {
+  const where = construirWhere(empresaIdActiva, filters)
+  const [rows, total] = await Promise.all([
+    prismaBase.auditLog.findMany({ where, orderBy: { creadoEn: 'desc' }, take: max }),
+    prismaBase.auditLog.count({ where }),
+  ])
+  return { rows, total, truncado: total > rows.length }
+}
+
+// Facetas para los selectores del frontend, acotadas a la empresa activa: los
+// usuarios y las entidades que REALMENTE aparecen en la bitácora. Así el filtro
+// no depende del mantenedor de Usuarios (permiso ajeno — solo CONFIG_AUDITORIA).
+export async function facetas(empresaIdActiva: number | null) {
+  const [usuarios, entidades] = await Promise.all([
+    prismaBase.auditLog.findMany({
+      where: { empresaId: empresaIdActiva, usuarioId: { not: null } },
+      select: { usuarioId: true, usuarioEmail: true },
+      distinct: ['usuarioId'],
+      orderBy: { usuarioEmail: 'asc' },
+    }),
+    prismaBase.auditLog.findMany({
+      where: { empresaId: empresaIdActiva, entidad: { not: null } },
+      select: { entidad: true },
+      distinct: ['entidad'],
+      orderBy: { entidad: 'asc' },
+    }),
+  ])
+  return {
+    usuarios: usuarios
+      .filter((u) => u.usuarioId != null)
+      .map((u) => ({ usuarioId: u.usuarioId as string, usuarioEmail: u.usuarioEmail })),
+    entidades: entidades.map((e) => e.entidad as string),
+  }
 }
