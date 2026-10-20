@@ -444,6 +444,8 @@ async function main() {
     // Factura de Exportación / DTE 110 (2026-09-24, cobranza.md).
     { modelo: 'facturaExportacion', prefijo: 'FEX', digitos: 4 },
     { modelo: 'facturaNacional', prefijo: 'FNA', digitos: 4 },
+    // Pago / Cobranza (2026-10-19, cobranza.md §0.e).
+    { modelo: 'pago', prefijo: 'PAG', digitos: 4 },
     // Reclamo (2026-10-06) — correlativo propio. Mismo prefijo visible que
     // Receta ('REC'), pero son modelos distintos (la unicidad de PrefijoCodigo
     // es por (empresaId, modelo)); aquí 4 dígitos.

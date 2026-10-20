@@ -395,6 +395,9 @@ export async function marcarFirmada(
             plazoDias: c.plazoDias,
             montoCuota: c.montoCuota,
             fechaVencimiento: c.fechaVencimiento ?? undefined,
+            // Cobranza (Ciclo 1): al crear la cuota nada está pagado aún →
+            // saldoPendiente = montoCuota (montoPagado queda en 0 por default).
+            saldoPendiente: c.montoCuota,
           })),
         },
       },

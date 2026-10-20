@@ -56,6 +56,20 @@
 > - **Landing embarque-céntrica (supersede el listado de Proformas):** `/dashboard/facturacion/exportacion` lista los **Embarques despachados** (`GET .../exportacion/embarques-despachados`) con columnas de estado **Proforma** (Pendiente/Emitida) y **SII** (Pendiente/Borrador/Aprobada/Rechazada) y acciones (Emitir/Ver Proforma, Generar/Ver Factura).
 > - **"Ver Cierre Comercial" desde la Proforma:** abre el **PDF del Cierre Comercial en una pestaña nueva** (`documentosService.abrirPdf('cierre-comercial', notaVentaId)`) — supersede (2026-09-30, reconfirmado 2026-10-06) la navegación original a la pantalla `/dashboard/ventas/cierre/{notaVentaId}`. Análogamente "Ver Factura" abre el PDF de la Factura en pestaña nueva.
 
+## 0.e Supersesión (2026-10-19) — Pagos / Saldo a Favor construidos (Ciclo 1: modelo de datos)
+
+> Se construye el **registro de pagos** (objetivos 5-6 de §1) reconciliado contra el código real — el `Factura`/`Cuota`/`Pago`/`SaldoAFavorCliente` literales del §4 eran pre-reconciliación y quedan **superseded**. Modelos reales (`schema.prisma`, migración `20261019140000_cobranza_pagos`):
+>
+> - **Dos tipos de factura, no uno:** `Pago` aplica a `FacturaExportacion` **o** `FacturaNacional` vía **FK polimórfica** (`PagoAplicacionDocumento.facturaExportacionId?`/`facturaNacionalId?`, exactamente una). La cascada a cuotas (`PagoAplicacionCuota`) es igual de polimórfica (cuota de export o nacional).
+> - **Convenciones reales:** `empresaId` (tenant), `codigo` vía `PrefijoCodigo` (modelo `'pago'`, prefijo **PAG**), `clienteId`→`Entidad` (FK compuesta empresa/id), `monedaId`→`Moneda`, soft delete. `MedioPago {TRANSFERENCIA, CHEQUE, EFECTIVO, OTRO}`.
+> - **Saldo en cuotas persistido:** `FacturaExportacionCuota`/`FacturaNacionalCuota` ganan `montoPagado` (default 0) y `saldoPendiente` (= `montoCuota` al crear; CB7). Estado de cuota `PENDIENTE/PARCIAL/PAGADA/VENCIDA`.
+> - **Estado de cobranza a nivel factura** separado del estado SII: campo `estadoCobranza EstadoCobranza? {SIN_CUOTAS, PENDIENTE, PARCIAL, PAGADA, VENCIDA}` en ambas facturas, derivado del agregado de cuotas (CB15). El estado SII (`BORRADOR/APROBADA/...`) **no** se recicla.
+> - **Supersesión VN6:** la **Factura Nacional SÍ entra a cartera** — gana `FacturaNacionalCuota` (se generarán al aprobar/firmar desde la `CondicionPago`, como exportación). Decisión de negocio (Christian): "pagos de facturas nacionales **y** de exportación".
+> - **Supersesión D9/CB17:** pagos **multi-moneda CON conversión** (no "sin conversión"): `PagoAplicacionDocumento.tipoCambioAplicado` convierte del monto del pago (en su `monedaId`) a la moneda de la factura; `montoAplicado` queda en la moneda de la factura. Decisión de negocio (Christian).
+> - **Saldo a favor** (`SaldoAFavorCliente` + `SaldoAFavorAplicacion`, CB12/D11): remanente no aplicado, reaplicable a facturas del mismo cliente+moneda.
+>
+> **Ciclo 1 = solo el modelo de datos + migración.** La lógica (aplicación/cascada/saldo/multi-moneda, pantalla de Cobranza, job diario VENCIDA, NC/ND) va en ciclos posteriores encadenados.
+
 ## 0. Contexto
 
 Esta es la **v2** del spec de Cobranza. La v1 asumía que la Nota de Venta facturaba directo; en la práctica el eje real es el **Embarque**: una Nota de Venta puede generar varios embarques, y **cada embarque se factura por separado**, con su propia Proforma, su propio DTE, y sus propias NC/ND.

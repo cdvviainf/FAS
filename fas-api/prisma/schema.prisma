@@ -268,6 +268,8 @@ model Empresa {
   facturasNacional       FacturaNacional[]
   EmbarquePackingList    EmbarquePackingList[]
   embarqueStackingRangos EmbarqueStackingRango[]
+  pagos                  Pago[]
+  saldosAFavor           SaldoAFavorCliente[]
 
   @@map("empresas")
 }
@@ -1468,6 +1470,8 @@ model Moneda {
   proformas             Proforma[]
   facturasExportacion   FacturaExportacion[]
   facturasNacional      FacturaNacional[]
+  pagos                 Pago[]
+  saldosAFavor          SaldoAFavorCliente[]
 
   @@map("monedas")
 }
@@ -1659,6 +1663,8 @@ model Entidad {
   proformasCliente               Proforma[]                  @relation("ProformaCliente")
   facturasExportacionCliente     FacturaExportacion[]        @relation("FacturaExportacionCliente")
   facturasNacionalCliente        FacturaNacional[]           @relation("FacturaNacionalCliente")
+  pagos                          Pago[]                      @relation("PagoCliente")
+  saldosAFavor                   SaldoAFavorCliente[]        @relation("SaldoAFavorCliente")
   // Instructivo de Embarque (2026-09-21, ventas.md R11).
   embarquesAgenteAduana          Embarque[]                  @relation("EmbarqueAgenteAduana")
   embarquesEmbarcador            Embarque[]                  @relation("EmbarqueEmbarcador")
@@ -1705,6 +1711,7 @@ model EntidadDireccion {
   recepciones           Recepcion[]
 
   @@index([entidadId])
+  @@index([puertoId])
   @@map("entidad_direcciones")
 }
 
@@ -3875,6 +3882,12 @@ model FacturaExportacion {
   lineas FacturaExportacionLinea[]
   cuotas FacturaExportacionCuota[]
 
+  // Cobranza (Ciclo 1): estado de cartera derivado del agregado de cuotas,
+  // SEPARADO del estado SII. null mientras no esté APROBADA con cuotas.
+  estadoCobranza          EstadoCobranza?
+  aplicacionesPago        PagoAplicacionDocumento[] @relation("PagoAplicFacturaExport")
+  aplicacionesSaldoAFavor SaldoAFavorAplicacion[]   @relation("SaldoAplicFacturaExport")
+
   creadoPorId   String
   creadoEn      DateTime  @default(now())
   emitidoPorId  String?
@@ -3883,6 +3896,7 @@ model FacturaExportacion {
   eliminadoEn   DateTime?
   eliminadoPor  String?
 
+  @@unique([empresaId, id])
   @@index([empresaId, embarqueId])
   @@index([clienteId])
   @@index([proformaId])
@@ -3924,18 +3938,28 @@ model FacturaExportacionLinea {
 // (pendiente). Pagos aún fuera de alcance.
 model FacturaExportacionCuota {
   id                   Int                @id @default(autoincrement())
+  empresaId            Int
   facturaExportacionId Int
-  facturaExportacion   FacturaExportacion @relation(fields: [facturaExportacionId], references: [id], onDelete: Cascade)
+  facturaExportacion   FacturaExportacion @relation(fields: [empresaId, facturaExportacionId], references: [empresaId, id], onDelete: Cascade)
 
   numeroCuota      Int
   fechaReferencia  FechaReferenciaPago
   plazoDias        Int
   montoCuota       Decimal                       @db.Decimal(14, 2)
   fechaVencimiento DateTime?
+  // Cobranza (Ciclo 1, 2026-10-19): pago acumulado y saldo pendiente de la cuota
+  // (CB7: saldoPendiente = montoCuota - montoPagado - ΣNC + ΣND, ≥0). Backfill en
+  // la migración = montoCuota / 0 para cuotas existentes.
+  montoPagado      Decimal                       @db.Decimal(14, 2) @default(0)
+  saldoPendiente   Decimal                       @db.Decimal(14, 2)
   estado           EstadoCuotaFacturaExportacion @default(PENDIENTE)
 
+  aplicacionesPago PagoAplicacionCuota[] @relation("PagoAplicCuotaExport")
+
+  @@unique([empresaId, id])
   @@unique([facturaExportacionId, numeroCuota])
   @@index([facturaExportacionId])
+  @@index([fechaVencimiento])
   @@map("factura_exportacion_cuotas")
 }
 
@@ -4015,6 +4039,12 @@ model FacturaNacional {
 
   lineas FacturaNacionalLinea[]
 
+  // Cobranza (Ciclo 1, supersede VN6): la Factura Nacional SÍ entra a cartera.
+  cuotas                  FacturaNacionalCuota[]
+  estadoCobranza          EstadoCobranza?
+  aplicacionesPago        PagoAplicacionDocumento[] @relation("PagoAplicFacturaNacional")
+  aplicacionesSaldoAFavor SaldoAFavorAplicacion[]   @relation("SaldoAplicFacturaNacional")
+
   creadoPorId   String
   creadoEn      DateTime  @default(now())
   emitidoPorId  String?
@@ -4023,6 +4053,7 @@ model FacturaNacional {
   eliminadoEn   DateTime?
   eliminadoPor  String?
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@index([clienteId])
   @@index([proformaMaterialId])
@@ -4050,6 +4081,199 @@ model FacturaNacionalLinea {
 
   @@index([facturaNacionalId])
   @@map("factura_nacional_lineas")
+}
+
+// ─── Cobranza — Pagos (Ciclo 1, 2026-10-19, cobranza.md §4-§5) ──────────────
+// Registro de pagos de facturas (Exportación + Nacional) según vencimientos.
+// Reconciliado contra el código real (supersede el §4 histórico de cobranza.md):
+//  - Entidades por empresa (empresaId), `codigo` vía PrefijoCodigo, monedaId FK,
+//    cliente = Entidad (FK compuesta empresa/id), soft delete.
+//  - Aplicación POLIMÓRFICA: un pago/aplicación apunta a FacturaExportacion O
+//    FacturaNacional (exactamente una) — en reality hay 2 tipos de factura, no
+//    el `Factura` único del spec.
+//  - Supersesión VN6: la Factura Nacional SÍ entra a cartera (gana cuotas).
+//  - Supersesión D9/CB17: multi-moneda CON conversión (tipoCambioAplicado).
+
+enum MedioPago {
+  TRANSFERENCIA
+  CHEQUE
+  EFECTIVO
+  OTRO
+}
+
+// Estado de cobranza a nivel factura (CB15), derivado del agregado de cuotas.
+// SEPARADO del estado SII (BORRADOR/APROBADA/...): este describe la cartera.
+enum EstadoCobranza {
+  SIN_CUOTAS
+  PENDIENTE
+  PARCIAL
+  PAGADA
+  VENCIDA
+}
+
+enum EstadoCuotaFacturaNacional {
+  PENDIENTE
+  PARCIAL
+  PAGADA
+  VENCIDA
+}
+
+// Cuotas de la Factura Nacional (espeja FacturaExportacionCuota; se generarán al
+// aprobar/firmar desde la CondicionPago en el Ciclo 2). Con campos de pago.
+model FacturaNacionalCuota {
+  id                Int             @id @default(autoincrement())
+  empresaId         Int
+  facturaNacionalId Int
+  facturaNacional   FacturaNacional @relation(fields: [empresaId, facturaNacionalId], references: [empresaId, id], onDelete: Cascade)
+
+  numeroCuota      Int
+  fechaReferencia  FechaReferenciaPago
+  plazoDias        Int
+  montoCuota       Decimal                    @db.Decimal(14, 2)
+  fechaVencimiento DateTime?
+  montoPagado      Decimal                    @db.Decimal(14, 2) @default(0)
+  saldoPendiente   Decimal                    @db.Decimal(14, 2)
+  estado           EstadoCuotaFacturaNacional @default(PENDIENTE)
+
+  aplicacionesPago PagoAplicacionCuota[] @relation("PagoAplicCuotaNacional")
+
+  @@unique([empresaId, id])
+  @@unique([facturaNacionalId, numeroCuota])
+  @@index([facturaNacionalId])
+  @@index([fechaVencimiento])
+  @@map("factura_nacional_cuotas")
+}
+
+model Pago {
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  codigo    String // autogenerado vía PrefijoCodigo (modelo='pago', prefijo PAG)
+
+  clienteId Int
+  cliente   Entidad @relation("PagoCliente", fields: [empresaId, clienteId], references: [empresaId, id])
+
+  fecha       DateTime
+  monto       Decimal   @db.Decimal(14, 2)
+  monedaId    Int
+  moneda      Moneda    @relation(fields: [monedaId], references: [id])
+  medioPago   MedioPago
+  referencia  String?
+  observacion String?
+
+  aplicaciones        PagoAplicacionDocumento[]
+  saldoAFavorGenerado SaldoAFavorCliente?       @relation("SaldoOrigenPago")
+
+  creadoPorId   String
+  creadoEn      DateTime  @default(now())
+  actualizadoEn DateTime? @updatedAt
+  eliminadoEn   DateTime?
+  eliminadoPor  String?
+
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  @@index([clienteId])
+  @@map("pagos")
+}
+
+// Aplicación de un Pago a UN documento (Factura Exportación O Nacional,
+// exactamente una). `montoAplicado` queda EN LA MONEDA DE LA FACTURA;
+// `tipoCambioAplicado` convierte desde la moneda del pago (1 si misma moneda).
+model PagoAplicacionDocumento {
+  id        Int  @id @default(autoincrement())
+  empresaId Int
+  pagoId    Int
+  pago      Pago @relation(fields: [empresaId, pagoId], references: [empresaId, id], onDelete: Cascade)
+
+  facturaExportacionId Int?
+  facturaExportacion   FacturaExportacion? @relation("PagoAplicFacturaExport", fields: [empresaId, facturaExportacionId], references: [empresaId, id])
+  facturaNacionalId    Int?
+  facturaNacional      FacturaNacional?    @relation("PagoAplicFacturaNacional", fields: [empresaId, facturaNacionalId], references: [empresaId, id])
+
+  tipoCambioAplicado Decimal  @db.Decimal(14, 6) @default(1)
+  montoAplicado      Decimal  @db.Decimal(14, 2)
+  fecha              DateTime @default(now())
+
+  detalleCuotas PagoAplicacionCuota[]
+
+  @@unique([empresaId, id])
+  @@index([pagoId])
+  @@index([facturaExportacionId])
+  @@index([facturaNacionalId])
+  @@map("pago_aplicacion_documento")
+}
+
+// Cascada de la aplicación a una cuota (de Exportación O Nacional). Monto en la
+// moneda de la factura.
+model PagoAplicacionCuota {
+  id                        Int                     @id @default(autoincrement())
+  empresaId                 Int
+  pagoAplicacionDocumentoId Int
+  pagoAplicacionDocumento   PagoAplicacionDocumento @relation(fields: [empresaId, pagoAplicacionDocumentoId], references: [empresaId, id], onDelete: Cascade)
+
+  facturaExportacionCuotaId Int?
+  facturaExportacionCuota   FacturaExportacionCuota? @relation("PagoAplicCuotaExport", fields: [empresaId, facturaExportacionCuotaId], references: [empresaId, id])
+  facturaNacionalCuotaId    Int?
+  facturaNacionalCuota      FacturaNacionalCuota?    @relation("PagoAplicCuotaNacional", fields: [empresaId, facturaNacionalCuotaId], references: [empresaId, id])
+
+  monto Decimal @db.Decimal(14, 2)
+
+  @@index([pagoAplicacionDocumentoId])
+  @@index([facturaExportacionCuotaId])
+  @@index([facturaNacionalCuotaId])
+  @@map("pago_aplicacion_cuota")
+}
+
+// Saldo a favor del cliente (CB12/D11): remanente de un pago no aplicado.
+// Reaplicable a futuras facturas del mismo cliente + misma moneda.
+model SaldoAFavorCliente {
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  clienteId Int
+  cliente   Entidad @relation("SaldoAFavorCliente", fields: [empresaId, clienteId], references: [empresaId, id])
+  monedaId  Int
+  moneda    Moneda  @relation(fields: [monedaId], references: [id])
+
+  montoOriginal   Decimal @db.Decimal(14, 2)
+  montoDisponible Decimal @db.Decimal(14, 2)
+
+  pagoOrigenId Int?
+  pagoOrigen   Pago? @relation("SaldoOrigenPago", fields: [empresaId, pagoOrigenId], references: [empresaId, id])
+
+  fecha        DateTime                @default(now())
+  aplicaciones SaldoAFavorAplicacion[]
+
+  creadoPorId String
+  creadoEn    DateTime  @default(now())
+  eliminadoEn DateTime?
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, pagoOrigenId])
+  @@index([empresaId])
+  @@index([clienteId])
+  @@map("saldos_a_favor_cliente")
+}
+
+model SaldoAFavorAplicacion {
+  id            Int                @id @default(autoincrement())
+  empresaId     Int
+  saldoAFavorId Int
+  saldoAFavor   SaldoAFavorCliente @relation(fields: [empresaId, saldoAFavorId], references: [empresaId, id], onDelete: Cascade)
+
+  facturaExportacionId Int?
+  facturaExportacion   FacturaExportacion? @relation("SaldoAplicFacturaExport", fields: [empresaId, facturaExportacionId], references: [empresaId, id])
+  facturaNacionalId    Int?
+  facturaNacional      FacturaNacional?    @relation("SaldoAplicFacturaNacional", fields: [empresaId, facturaNacionalId], references: [empresaId, id])
+
+  monto Decimal  @db.Decimal(14, 2)
+  fecha DateTime @default(now())
+
+  @@index([saldoAFavorId])
+  @@index([facturaExportacionId])
+  @@index([facturaNacionalId])
+  @@map("saldo_a_favor_aplicacion")
 }
 
 // ─── Compras — Instructivo de Embalaje (Docs/compras.md §4.1) ───────────────

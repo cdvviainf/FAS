@@ -12,6 +12,7 @@ export const MODELOS_CON_CODIGO = [
   // Módulos dedicados
   'entidad', 'entidadDireccion', 'entidadContacto', 'articulo', 'condicionPago', 'receta', 'tipoMovimiento',
   'conceptoLiquidacion', 'perfil', 'templateCarga', 'proforma', 'facturaExportacion', 'facturaNacional',
+  'pago',
 ] as const
 
 export type ModeloConCodigo = (typeof MODELOS_CON_CODIGO)[number]

@@ -91,6 +91,8 @@ const MODELOS_TENANT = new Set([
   // raíz sí lleva empresaId — mismo criterio que Proforma/ProformaLinea.
   'FacturaExportacion',
   'FacturaNacional',
+  'Pago',
+  'SaldoAFavorCliente',
   // Cláusula de Venta / Incoterm (2026-09-30) — extraída de Parametro a su
   // propio mantenedor, mismo criterio de aislamiento que este ya tenía.
   'ClausulaVenta',
