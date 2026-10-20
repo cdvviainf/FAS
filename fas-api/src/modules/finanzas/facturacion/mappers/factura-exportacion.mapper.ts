@@ -115,12 +115,13 @@ const COD_UNID_PESO_NETO = '06'
 const COD_UNID_PESO_BRUTO = '36'
 
 // Las claves se emiten en el ORDEN EXACTO de la secuencia del XSD de Aduana del
-// SII (2026-10-20, corrige rechazo "campo 'NombreCiaTransp' no esperado, se
-// esperaba 'CodPaisDestin'"): CodModVenta, CodClauVenta, TotClauVenta,
-// CodViaTransp, NombreTransp, RUTCiaTransp, NombreCiaTransp, Booking,
-// CodPtoEmbarque, CodPtoDesemb, PesoBruto, CodUnidPesoBruto, PesoNeto,
-// CodUnidPesoNeto, TotItems, TipoBultos, TotBultos, MntFlete, MntSeguro,
-// CodPaisRecep, CodPaisDestin. (LibreDTE serializa el XML en este orden de claves.)
+// SII: CodModVenta, CodClauVenta, TotClauVenta, CodViaTransp, NombreTransp,
+// RUTCiaTransp, NomCiaTransp, Booking, CodPtoEmbarque, CodPtoDesemb, PesoBruto,
+// CodUnidPesoBruto, PesoNeto, CodUnidPesoNeto, TotItems, TipoBultos, TotBultos,
+// MntFlete, MntSeguro, CodPaisRecep, CodPaisDestin. (LibreDTE serializa el XML en
+// este orden de claves.) Ojo: el nombre de la compañía transportista es
+// `NomCiaTransp`, NO `NombreCiaTransp` — el SII rechaza este último como "elemento
+// no esperado" (2026-10-20, confirmado contra Formato DTE v2.5 campo de Aduana).
 function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
   return {
     ...(a.codModVenta ? { CodModVenta: a.codModVenta } : {}),
@@ -129,7 +130,7 @@ function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
     ...(a.codViaTransp ? { CodViaTransp: a.codViaTransp } : {}),
     ...(a.nombreTransp ? { NombreTransp: a.nombreTransp } : {}),
     ...(a.rutCiaTransp ? { RUTCiaTransp: a.rutCiaTransp } : {}),
-    ...(a.nombreCiaTransp ? { NombreCiaTransp: a.nombreCiaTransp } : {}),
+    ...(a.nombreCiaTransp ? { NomCiaTransp: a.nombreCiaTransp } : {}),
     ...(a.booking ? { Booking: a.booking } : {}),
     ...(a.codPtoEmbarque ? { CodPtoEmbarque: a.codPtoEmbarque } : {}),
     ...(a.codPtoDesembarque ? { CodPtoDesemb: a.codPtoDesembarque } : {}),

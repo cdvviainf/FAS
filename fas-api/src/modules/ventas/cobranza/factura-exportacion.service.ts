@@ -32,6 +32,29 @@ function sumarMontos(montos: number[]): number {
   return montos.reduce((acc, m) => acc + Math.round(m * 100), 0) / 100
 }
 
+// Largo máximo del <NumId> del receptor extranjero (SII, Formato DTE v2.5, campo
+// 53: ALFA, Largo Max 20).
+const MAX_NUMID_RECEPTOR = 20
+
+// Extrae el PRIMER código de identificación del TAXID del cliente. El campo suele
+// venir con varios IDs y etiquetas (ej. "IEC/PAN: ABOFA8252F - FSSAI NO: 10019...
+// - GST: 27ABOFA8252F1Z8"); el SII solo admite UN identificador en <NumId>. Se
+// separa por los delimitadores que dividen IDs distintos (coma, punto y coma,
+// pipe, salto de línea, " - " y " / " con espacios — NO el guion pegado, para no
+// romper códigos como "99-1234567"), se quita la etiqueta (lo anterior al último
+// ":") y se toma el primer segmento no vacío. Devuelve null si no hay nada.
+function resolverNumIdReceptor(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const segmentos = raw.split(/\s*[\n,;|]\s*|\s+-\s+|\s+\/\s+/)
+  for (const segmento of segmentos) {
+    // Quita la etiqueta ("GST:", "IEC/PAN:", etc.): lo que va tras el último ":".
+    const sinEtiqueta = segmento.includes(':') ? segmento.slice(segmento.lastIndexOf(':') + 1) : segmento
+    const codigo = sinEtiqueta.trim()
+    if (codigo) return codigo
+  }
+  return null
+}
+
 function requireEmbarqueDespachado(embarque: { despachadoEn: Date | null; despachoAnuladoEn: Date | null }) {
   const despachado = !!embarque.despachadoEn && !embarque.despachoAnuladoEn
   if (!despachado) throw new ValidationError('Este Embarque debe estar despachado antes de facturar')
@@ -476,7 +499,9 @@ async function construirPayloadDte(
       razonSocial: nv.cliente.razonSocial,
       // NumId del receptor extranjero = TAXID de la Entidad. Fallback a
       // `identificador` para clientes creados antes del campo TAXID (2026-10-09).
-      taxId: nv.cliente.taxId ?? nv.cliente.identificador,
+      // Se envía SOLO el primer código (el TAXID puede traer varios IDs); el
+      // largo ≤20 lo exige el guard de enviarBorradorSii antes de ir al SII.
+      taxId: resolverNumIdReceptor(nv.cliente.taxId ?? nv.cliente.identificador),
       giro: nv.cliente.giro,
       // DirRecep del DTE 110 (2026-10-13): dirección por defecto del cliente.
       direccion: nv.cliente.direcciones[0]?.direccion ?? null,
@@ -600,6 +625,19 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
   // validan ANTES de mandar a simpleDTE (si no, LibreDTE los descarta en
   // silencio y el documento sale sin la info de exportación).
   validarCodigosAduana(embarque)
+
+  // <NumId> del receptor extranjero: el SII admite máximo 20 caracteres (Formato
+  // DTE v2.5, campo 53). Se valida el PRIMER código extraído del TAXID ANTES de
+  // enviar — si aun así supera 20, se bloquea con mensaje accionable en vez de
+  // dejar que el SII rechace el documento y queme el folio del CAF.
+  const numIdReceptor = resolverNumIdReceptor(embarque.notaVenta.cliente.taxId ?? embarque.notaVenta.cliente.identificador)
+  if (numIdReceptor && numIdReceptor.length > MAX_NUMID_RECEPTOR) {
+    throw new ValidationError(
+      `El identificador tributario (TAXID) del cliente "${embarque.notaVenta.cliente.razonSocial}" tiene ` +
+        `${numIdReceptor.length} caracteres ("${numIdReceptor}"); el SII admite un máximo de ${MAX_NUMID_RECEPTOR} ` +
+        'en el campo NumId. Corrígelo en Entidades → TAXID dejando un solo identificador válido (máx. 20 caracteres).',
+    )
+  }
 
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
   if (!emisor?.rut) {

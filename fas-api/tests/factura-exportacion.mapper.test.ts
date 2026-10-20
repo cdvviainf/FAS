@@ -136,7 +136,9 @@ describe('mapFacturaExportacionA110', () => {
     })
     const transporte = (dte.Encabezado as Record<string, unknown>).Transporte as Record<string, unknown>
     const aduana = transporte.Aduana as Record<string, unknown>
-    expect(aduana.NombreCiaTransp).toBe('MEDITERRANEAN SHIPPING COMPANY')
+    // Nombre de la compañía transportista = NomCiaTransp (NO NombreCiaTransp,
+    // que el SII rechaza como elemento no esperado).
+    expect(aduana.NomCiaTransp).toBe('MEDITERRANEAN SHIPPING COMPANY')
     expect(aduana.NombreTransp).toBe('MSC EUGENIA')
     expect(aduana.Booking).toBe('EBKG16677344')
     // Unidad de peso = código numérico Anexo 51 (Kilo Bruto 36 / Kilo Neto 06).
