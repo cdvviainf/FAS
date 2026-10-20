@@ -9,12 +9,17 @@ import type {
 } from './libredte.types.js'
 
 // Adapter LibreDTE (https://www.libredte.cl/docs/api) — mismo patrón que
-// agl360.adapter.ts (ver ventas/embarques): la URL y el hash de autenticación
-// NO viven en variables de entorno, se configuran en el mantenedor de
-// Integraciones (Configuración → Integraciones, código 'LIBREDTE') para
-// poder rotarse/editarse por empresa sin redeploy. `DTE_PROVIDER=libredte` y
-// `DTE_AMBIENTE` sí viven en env porque son flags de ambiente (qué
-// implementación usar, cert vs prod), no datos de negocio por empresa.
+// agl360.adapter.ts (ver ventas/embarques): la URL, el hash de autenticación y
+// el AMBIENTE (certificación/producción) NO viven en variables de entorno, se
+// configuran en el mantenedor de Integraciones (Configuración → Integraciones,
+// código 'LIBREDTE') para poder rotarse/editarse por empresa sin redeploy.
+// `DTE_PROVIDER=libredte` sí vive en env porque es un flag de implementación
+// (qué adapter usar), no un dato de negocio por empresa.
+//
+// El ambiente determina el pool de folios/CAF que busca LibreDTE: si no calza
+// con el ambiente del CAF cargado, el timbrado falla con "no se encontró el CAF
+// que contiene el folio siguiente". El parámetro `AMBIENTE` de la Integración
+// manda; si no está cargado, se cae a `env.DTE_AMBIENTE` (compatibilidad).
 //
 // La emisión real de LibreDTE es de DOS pasos independientes:
 //   1. emitirTemporal() -> POST /api/dte/documentos/emitir  (borrador, NO consume folio)
@@ -28,10 +33,14 @@ import type {
 const CODIGO_INTEGRACION = 'LIBREDTE'
 const BASE_URL_DEFAULT = 'https://libredte.cl'
 const PARAM_API_HASH = 'API_HASH'
+const PARAM_AMBIENTE = 'AMBIENTE'
 
 interface Credenciales {
   baseUrl: string
   hash: string
+  // Valor crudo del parámetro AMBIENTE de la Integración (puede venir null si
+  // no está cargado — en ese caso se usa env.DTE_AMBIENTE como fallback).
+  ambiente: string | null
 }
 
 async function getCredenciales(): Promise<Credenciales | { error: string }> {
@@ -43,7 +52,8 @@ async function getCredenciales(): Promise<Credenciales | { error: string }> {
   if (!hash) {
     return { error: 'LibreDTE no está configurado — falta el parámetro API_HASH en la Integración "LIBREDTE"' }
   }
-  return { baseUrl: (integracion.url || BASE_URL_DEFAULT).replace(/\/$/, ''), hash }
+  const ambiente = await integracionesRepo.getValorParametro(CODIGO_INTEGRACION, PARAM_AMBIENTE)
+  return { baseUrl: (integracion.url || BASE_URL_DEFAULT).replace(/\/$/, ''), hash, ambiente }
 }
 
 function authHeader(hash: string): string {
@@ -51,8 +61,14 @@ function authHeader(hash: string): string {
 }
 
 // `_contribuyente_certificacion`: 0 = producción, 1 = certificación.
-function paramCertificacion(): string {
-  return env.DTE_AMBIENTE === 'produccion' ? '0' : '1'
+// El parámetro AMBIENTE de la Integración manda ('produccion'/'certificacion',
+// case-insensitive); si no está cargado o trae un valor no reconocido, se cae a
+// `env.DTE_AMBIENTE` (que default-ea a 'certificacion', el ambiente seguro: no
+// consume folios reales).
+function paramCertificacion(ambiente: string | null): string {
+  const valor = (ambiente ?? '').trim().toLowerCase()
+  const efectivo = valor === 'produccion' || valor === 'certificacion' ? valor : env.DTE_AMBIENTE
+  return efectivo === 'produccion' ? '0' : '1'
 }
 
 async function request<T>(
@@ -64,7 +80,7 @@ async function request<T>(
   if ('error' in creds) return { ok: false, error: creds.error }
 
   const url = new URL(`${creds.baseUrl}${path}`)
-  url.searchParams.set('_contribuyente_certificacion', paramCertificacion())
+  url.searchParams.set('_contribuyente_certificacion', paramCertificacion(creds.ambiente))
   for (const [k, v] of Object.entries(opts.query ?? {})) {
     if (v !== undefined) url.searchParams.set(k, v)
   }
@@ -123,7 +139,7 @@ export async function obtenerPdfTemporal(input: {
   if ('error' in creds) return { ok: false, error: creds.error }
   const path = `/api/dte/dte_tmps/pdf/${input.receptorSinDv}/${input.dte}/${encodeURIComponent(input.codigo)}/${input.emisorSinDv}`
   const url = new URL(`${creds.baseUrl}${path}`)
-  url.searchParams.set('_contribuyente_certificacion', paramCertificacion())
+  url.searchParams.set('_contribuyente_certificacion', paramCertificacion(creds.ambiente))
   try {
     const res = await fetch(url, {
       method: 'GET',
