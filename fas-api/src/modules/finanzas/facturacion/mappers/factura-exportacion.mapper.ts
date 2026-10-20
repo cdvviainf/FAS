@@ -108,27 +108,34 @@ function fmtFecha(d: Date): string {
   return d.toISOString().slice(0, 10) // YYYY-MM-DD
 }
 
-// Unidades de peso de la tabla de Aduana del SII: KN = kilos netos, KB = kilos
-// brutos (cada peso lleva la suya — FAS-EXP-ADU-QA-003).
-const COD_UNID_PESO_NETO = 'KN'
-const COD_UNID_PESO_BRUTO = 'KB'
+// Unidad de medida de peso según la tabla de Aduana del SII (Anexo 51): es un
+// CÓDIGO NUMÉRICO de 2 dígitos, NO la sigla (2026-10-20, corrige rechazo del SII
+// "'KB'/'KN' no es un valor válido"): Kilo Bruto = 36, Kilo Neto = 06.
+const COD_UNID_PESO_NETO = '06'
+const COD_UNID_PESO_BRUTO = '36'
 
+// Las claves se emiten en el ORDEN EXACTO de la secuencia del XSD de Aduana del
+// SII (2026-10-20, corrige rechazo "campo 'NombreCiaTransp' no esperado, se
+// esperaba 'CodPaisDestin'"): CodModVenta, CodClauVenta, TotClauVenta,
+// CodViaTransp, NombreTransp, RUTCiaTransp, NombreCiaTransp, Booking,
+// CodPtoEmbarque, CodPtoDesemb, PesoBruto, CodUnidPesoBruto, PesoNeto,
+// CodUnidPesoNeto, TotItems, TipoBultos, TotBultos, MntFlete, MntSeguro,
+// CodPaisRecep, CodPaisDestin. (LibreDTE serializa el XML en este orden de claves.)
 function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
   return {
     ...(a.codModVenta ? { CodModVenta: a.codModVenta } : {}),
     ...(a.codClauVenta ? { CodClauVenta: a.codClauVenta } : {}),
     TotClauVenta: a.totalClausulaVenta,
+    ...(a.codViaTransp ? { CodViaTransp: a.codViaTransp } : {}),
     ...(a.nombreTransp ? { NombreTransp: a.nombreTransp } : {}),
     ...(a.rutCiaTransp ? { RUTCiaTransp: a.rutCiaTransp } : {}),
     ...(a.nombreCiaTransp ? { NombreCiaTransp: a.nombreCiaTransp } : {}),
     ...(a.booking ? { Booking: a.booking } : {}),
-    ...(a.codViaTransp ? { CodViaTransp: a.codViaTransp } : {}),
     ...(a.codPtoEmbarque ? { CodPtoEmbarque: a.codPtoEmbarque } : {}),
     ...(a.codPtoDesembarque ? { CodPtoDesemb: a.codPtoDesembarque } : {}),
     ...(a.pesoBruto != null ? { PesoBruto: a.pesoBruto, CodUnidPesoBruto: COD_UNID_PESO_BRUTO } : {}),
     ...(a.pesoNeto != null ? { PesoNeto: a.pesoNeto, CodUnidPesoNeto: COD_UNID_PESO_NETO } : {}),
     ...(a.totItems != null ? { TotItems: a.totItems } : {}),
-    ...(a.totBultos != null ? { TotBultos: a.totBultos } : {}),
     ...(a.tipoBulto
       ? {
           TipoBultos: [
@@ -140,9 +147,12 @@ function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
           ],
         }
       : {}),
+    ...(a.totBultos != null ? { TotBultos: a.totBultos } : {}),
     ...(a.montoFlete != null ? { MntFlete: a.montoFlete } : {}),
     ...(a.montoSeguro != null ? { MntSeguro: a.montoSeguro } : {}),
+    // País receptor y país destino: mismo país del cliente (decisión de negocio).
     ...(a.paisDestinoCodigo ? { CodPaisRecep: a.paisDestinoCodigo } : {}),
+    ...(a.paisDestinoCodigo ? { CodPaisDestin: a.paisDestinoCodigo } : {}),
   }
 }
 

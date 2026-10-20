@@ -369,6 +369,26 @@ function derivarFmaPago(condicionPago: { cuotas: { plazoDias: number }[] } | nul
   return condicionPago.cuotas.some((c) => c.plazoDias > 0) ? 2 : 1
 }
 
+// Nombre de la moneda según la tabla "Monedas" de Aduana del SII (valores de
+// TipMonType, 2026-10-20). El DTE 110 exige el NOMBRE de la tabla (ej. "DOLAR
+// USA"), no la descripción libre (el SII rechaza "DOLAR"). Keyed por código ISO
+// 4217 de la Moneda (Moneda.codigo). Si falta, enviar-sii se bloquea con mensaje
+// accionable en vez de mandar un valor inválido.
+const MONEDA_ADUANA_SII: Record<string, string> = {
+  USD: 'DOLAR USA',
+  EUR: 'EURO',
+  GBP: 'LIBRA EST',
+  CNY: 'RENMINBI',
+  JPY: 'YEN',
+  CAD: 'DOLAR CAN',
+  AUD: 'DOLAR AUST',
+  HKD: 'DOLAR HK',
+  NZD: 'DOLAR NZ',
+  SGD: 'DOLAR SIN',
+  TWD: 'DOLAR TAI',
+  CLP: 'PESO CL',
+}
+
 async function construirPayloadDte(
   factura: NonNullable<Awaited<ReturnType<typeof repo.getFacturaActivaById>>>,
   embarque: NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>,
@@ -376,7 +396,12 @@ async function construirPayloadDte(
   idioma: Idioma,
 ) {
   const nv = embarque.notaVenta
-  const monedaAduana = nv.moneda.descripcionExtranjera || nv.moneda.descripcion || nv.moneda.codigo
+  const monedaAduana = MONEDA_ADUANA_SII[nv.moneda.codigo.toUpperCase()]
+  if (!monedaAduana) {
+    throw new ValidationError(
+      `La moneda "${nv.moneda.codigo}" no tiene equivalente en la tabla de Monedas de Aduana del SII. Completá el mapeo (código SII, ej. "DOLAR USA") antes de enviar el DTE 110.`,
+    )
+  }
   const montoTotalNum = Number(factura.montoTotal)
   // Revalida Flete/Seguro (última barrera). El total (CIF) NO cambia — va como
   // TotClauVenta; el detalle se timbra a valor FOB.

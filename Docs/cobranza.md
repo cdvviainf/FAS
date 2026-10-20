@@ -70,6 +70,17 @@
 >
 > **Ciclo 1 = solo el modelo de datos + migración.** La lógica (aplicación/cascada/saldo/multi-moneda, pantalla de Cobranza, job diario VENCIDA, NC/ND) va en ciclos posteriores encadenados.
 
+## 0.f Supersesión (2026-10-20) — Correcciones DTE 110 (bloque Aduana + moneda) contra rechazo real del SII
+
+> Al timbrar la primera Factura de Exportación real, el SII rechazó el XML por errores de estructura/datos en el bloque Aduana y la moneda. Correcciones en `factura-exportacion.mapper.ts` + `factura-exportacion.service.ts`:
+>
+> - **Unidad de peso = código numérico de 2 dígitos del Anexo 51 de Aduana**, NO la sigla: `CodUnidPesoBruto = 36` (Kilo Bruto), `CodUnidPesoNeto = 06` (Kilo Neto). Antes se mandaba `'KB'`/`'KN'` (rechazado).
+> - **Orden del bloque Aduana = secuencia exacta del XSD del SII**: `CodModVenta, CodClauVenta, TotClauVenta, CodViaTransp, NombreTransp, RUTCiaTransp, NombreCiaTransp, Booking, CodPtoEmbarque, CodPtoDesemb, PesoBruto, CodUnidPesoBruto, PesoNeto, CodUnidPesoNeto, TotItems, TipoBultos, TotBultos, MntFlete, MntSeguro, CodPaisRecep, CodPaisDestin`. Antes `CodViaTransp` iba después de los datos de transporte (rechazado: "'NombreCiaTransp' no esperado, se esperaba 'CodPaisDestin'").
+> - **`CodPaisDestin` agregado** = mismo código de país que `CodPaisRecep` (país del cliente, decisión de negocio).
+> - **`TpoMoneda` = nombre de la tabla "Monedas" de Aduana** (valores de `TipMonType`), mapeado por código ISO de la Moneda: `USD→DOLAR USA`, `EUR→EURO`, `GBP→LIBRA EST`, `CNY→RENMINBI`, `JPY→YEN`, etc. (mapa fijo en `factura-exportacion.service.ts`). Antes se mandaba la descripción libre (`"DOLAR"`, rechazado). Si una moneda no está en el mapa, `enviar-sii` se bloquea con mensaje accionable (no se manda un valor inválido).
+> - La **Guía de Despacho de exportación (DTE 52)** usaba los mismos `'KB'/'KN'` y le faltaba `CodPaisDestin`: se corrigió igual en `embarque-guia-despacho.mapper.ts` (ver `ventas.md` R13).
+> - El CAF/folios no eran el problema: un folio saltado (el que falló) debe anularse en el SII.
+
 ## 0. Contexto
 
 Esta es la **v2** del spec de Cobranza. La v1 asumía que la Nota de Venta facturaba directo; en la práctica el eje real es el **Embarque**: una Nota de Venta puede generar varios embarques, y **cada embarque se factura por separado**, con su propia Proforma, su propio DTE, y sus propias NC/ND.

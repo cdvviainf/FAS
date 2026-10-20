@@ -74,11 +74,15 @@ function buildAduanaGuia(a: AduanaGuiaDespacho): Record<string, unknown> {
     ...(a.codViaTransp ? { CodViaTransp: a.codViaTransp } : {}),
     ...(a.codPtoEmbarque ? { CodPtoEmbarque: a.codPtoEmbarque } : {}),
     ...(a.codPtoDesembarque ? { CodPtoDesemb: a.codPtoDesembarque } : {}),
-    ...(a.pesoBruto != null ? { PesoBruto: a.pesoBruto, CodUnidPesoBruto: 'KB' } : {}),
-    ...(a.pesoNeto != null ? { PesoNeto: a.pesoNeto, CodUnidPesoNeto: 'KN' } : {}),
+    // Unidad de peso = código numérico de 2 dígitos del Anexo 51 de Aduana
+    // (Kilo Bruto = 36, Kilo Neto = 06), no la sigla (el SII rechaza 'KB'/'KN').
+    ...(a.pesoBruto != null ? { PesoBruto: a.pesoBruto, CodUnidPesoBruto: '36' } : {}),
+    ...(a.pesoNeto != null ? { PesoNeto: a.pesoNeto, CodUnidPesoNeto: '06' } : {}),
     ...(a.totItems != null ? { TotItems: a.totItems } : {}),
     ...(a.totBultos != null ? { TotBultos: a.totBultos } : {}),
+    // País receptor y país destino: mismo país del cliente.
     ...(a.paisDestinoCodigo ? { CodPaisRecep: a.paisDestinoCodigo } : {}),
+    ...(a.paisDestinoCodigo ? { CodPaisDestin: a.paisDestinoCodigo } : {}),
   }
 }
 

@@ -60,6 +60,8 @@ describe('mapFacturaExportacionA110', () => {
     expect(aduana.TotClauVenta).toBe(1950)
     expect(aduana.CodPtoEmbarque).toBe('901')
     expect(aduana.CodPtoDesemb).toBe('999')
+    expect(aduana.CodPaisRecep).toBe('563')
+    expect(aduana.CodPaisDestin).toBe('563')
   })
 
   it('mapea cada línea a Detalle con cantidad, precio e IndExe=1 (exento)', () => {
@@ -137,8 +139,18 @@ describe('mapFacturaExportacionA110', () => {
     expect(aduana.NombreCiaTransp).toBe('MEDITERRANEAN SHIPPING COMPANY')
     expect(aduana.NombreTransp).toBe('MSC EUGENIA')
     expect(aduana.Booking).toBe('EBKG16677344')
-    expect(aduana).toMatchObject({ PesoNeto: 18696, CodUnidPesoNeto: 'KN', PesoBruto: 20976, CodUnidPesoBruto: 'KB' })
+    // Unidad de peso = código numérico Anexo 51 (Kilo Bruto 36 / Kilo Neto 06).
+    expect(aduana).toMatchObject({ PesoNeto: 18696, CodUnidPesoNeto: '06', PesoBruto: 20976, CodUnidPesoBruto: '36' })
     expect(aduana.TotBultos).toBe(2280)
+    // País receptor y país destino = mismo país del cliente.
+    expect(aduana.CodPaisRecep).toBe('563')
+    expect(aduana.CodPaisDestin).toBe('563')
+    // Orden del bloque Aduana (secuencia XSD del SII): CodViaTransp antes que
+    // los datos de transporte; TipoBultos antes que TotBultos; CodPaisDestin al final.
+    const keys = Object.keys(aduana)
+    expect(keys.indexOf('CodViaTransp')).toBeLessThan(keys.indexOf('NombreTransp'))
+    expect(keys.indexOf('TipoBultos')).toBeLessThan(keys.indexOf('TotBultos'))
+    expect(keys.indexOf('CodPaisRecep')).toBeLessThan(keys.indexOf('CodPaisDestin'))
     const bultos = aduana.TipoBultos as Array<Record<string, unknown>>
     expect(bultos[0]).toMatchObject({ CodTpoBultos: '22', CantBultos: 2280, IdContainer: 'MSDU9653670' })
     const refs = (dte as Record<string, unknown>).Referencia as Array<Record<string, unknown>>
