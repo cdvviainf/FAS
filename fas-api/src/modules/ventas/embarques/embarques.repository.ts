@@ -1248,6 +1248,7 @@ export async function getEmbarqueParaGuia(embarqueId: number) {
       despachoAnuladoEn: true,
       guiaIndTraslado: true,
       guiaTransporteId: true,
+      guiaChoferChileno: true,
       guiaChoferRut: true,
       guiaChoferNombre: true,
       guiaPatenteCamion: true,
@@ -1304,11 +1305,12 @@ export async function getEmbarqueParaGuia(embarqueId: number) {
           planta: {
             select: {
               razonSocial: true,
+              // TODAS las direcciones de la planta (con id): el popup de la Guía
+              // deja elegir desde cuál dirección de la planta se despacha.
               direcciones: {
                 where: { eliminadoEn: null },
-                select: { direccion: true, comuna: { select: { descripcion: true } } },
+                select: { id: true, direccion: true, comuna: { select: { descripcion: true } } },
                 orderBy: [{ esPorDefecto: 'desc' }, { codigo: 'asc' }],
-                take: 1,
               },
             },
           },
@@ -1335,6 +1337,7 @@ export async function getEmbarqueParaGuia(embarqueId: number) {
 interface DatosGuiaEmbarque {
   guiaIndTraslado: number
   guiaTransporteId: number | null
+  guiaChoferChileno: boolean
   guiaChoferRut: string | null
   guiaChoferNombre: string | null
   guiaPatenteCamion: string | null

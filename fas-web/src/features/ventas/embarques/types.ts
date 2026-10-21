@@ -325,6 +325,7 @@ export interface DocumentoDteResumen {
 export interface GuiaDespachoDatos {
   indTraslado: number | null
   transporteId: number | null
+  choferChileno: boolean
   choferRut: string
   choferNombre: string
   patenteCamion: string
@@ -344,11 +345,19 @@ export interface GuiaExternaResumen {
   emisor: { id: number; razonSocial: string; rut: string | null } | null
 }
 
+export interface GuiaDespachoPlantaDireccion {
+  id: number
+  direccion: string | null
+  comuna: string | null
+}
+
 export interface GuiaDespachoPlanta {
   instructivoHijoId: number
   nombre: string
   direccion: string | null
   comuna: string | null
+  // Todas las direcciones de la planta, para elegir el origen de la guía.
+  direcciones: GuiaDespachoPlantaDireccion[]
 }
 
 export interface GuiaDespachoAgente {
@@ -379,10 +388,13 @@ export interface RegistrarGuiaExternaInput {
 export interface EmitirGuiaDespachoInput {
   indTraslado: number
   transporteId?: number | null
+  choferChileno?: boolean
   choferRut?: string | null
   choferNombre?: string | null
   patenteCamion?: string | null
   patenteRemolque?: string | null
+  instructivoHijoId?: number | null
+  direccionOrigenId?: number | null
   dirOrigen?: string | null
   comunaOrigen?: string | null
   dirDestino?: string | null

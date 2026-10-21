@@ -1,5 +1,6 @@
 import type { TipoEntidad } from '@prisma/client'
 import { ConflictError, NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { validarRutChileno } from '../../../shared/rut-validator.js'
 import * as repo from './embarques.repository.js'
 import * as prefijosService from '../../config/prefijos-codigo/prefijos-codigo.service.js'
 import * as aglAdapter from './agl360.adapter.js'
@@ -655,6 +656,7 @@ function construirDatosGuia(e: EmbarqueParaGuia) {
   return {
     indTraslado: e.guiaIndTraslado,
     transporteId: e.guiaTransporteId,
+    choferChileno: e.guiaChoferChileno,
     choferRut: e.guiaChoferRut ?? '',
     choferNombre: e.guiaChoferNombre ?? '',
     patenteCamion: e.guiaPatenteCamion ?? '',
@@ -682,6 +684,12 @@ export async function obtenerGuiaDespacho(embarqueId: number) {
       nombre: h.planta?.razonSocial ?? 'Planta',
       direccion: h.planta?.direcciones[0]?.direccion ?? null,
       comuna: h.planta?.direcciones[0]?.comuna?.descripcion ?? null,
+      // Todas las direcciones de la planta, para elegir el origen en el popup.
+      direcciones: (h.planta?.direcciones ?? []).map((d) => ({
+        id: d.id,
+        direccion: d.direccion,
+        comuna: d.comuna?.descripcion ?? null,
+      })),
     })),
     // Agente de aduana = receptor en exportación (IndTraslado 8); dirección
     // resuelta según el puerto de zarpe. null si el Embarque no tiene agente.
@@ -713,11 +721,6 @@ export async function obtenerGuiaDespacho(embarqueId: number) {
   }
 }
 
-// Motivos de traslado (IndTraslado SII) que implican una VENTA: requieren
-// receptor comprador y precios reales, que esta Guía todavía no resuelve
-// (FAS-GD-R1-002). Se bloquean hasta definir el flujo comercial; los motivos
-// sin venta (consignación, traslado interno, etc.) sí se soportan.
-const INDTRASLADO_VENTA = new Set([1, 2])
 // Traslado para exportación (no constituye venta): la Guía va dirigida al Agente
 // de Aduana, a $1/caja exento, con bloque Aduana (ejemplo real Agrosan, 2026-10-19).
 const INDTRASLADO_EXPORTACION = 8
@@ -780,8 +783,12 @@ export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDe
   if (!estaDespachadoEfectivo(embarque)) {
     throw new ValidationError('El Embarque debe estar despachado para emitir la Guía de Despacho')
   }
-  if (INDTRASLADO_VENTA.has(input.indTraslado)) {
-    throw new ValidationError('El motivo de traslado de venta aún no está soportado en la Guía de Despacho — usa Traslado interno, Consignación u otro motivo sin venta')
+  // La Guía de Despacho desde el Embarque es SIEMPRE de exportación
+  // (IndTraslado 8, "Traslado para exportación — no venta"): decisión de negocio
+  // (ventas.md R13). Los demás motivos (venta, consignación, traslado interno,
+  // etc.) no aplican a este flujo y se rechazan — el popup ya lo fija no elegible.
+  if (input.indTraslado !== INDTRASLADO_EXPORTACION) {
+    throw new ValidationError('La Guía de Despacho desde el Embarque es siempre de exportación (Traslado para exportación, IndTraslado 8)')
   }
   // Exclusión mutua: no se puede emitir una Guía propia si ya hay una externa
   // registrada (chequeo temprano; el definitivo race-safe está en
@@ -796,6 +803,17 @@ export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDe
     if (!transportista) throw new ValidationError('La empresa de transporte seleccionada no existe')
     if (!transportista.tipos.includes('EMPRESA_TRANSPORTE')) {
       throw new ValidationError('La entidad seleccionada no tiene tipo Empresa de Transporte')
+    }
+  }
+
+  // El RUT del chofer solo se exige/valida si el chofer es chileno (flag del
+  // popup): obligatorio + formato/dígito verificador válido (FAS-GCD-R2-003).
+  if (input.choferChileno) {
+    if (!input.choferRut?.trim()) {
+      throw new ValidationError('El RUT del chofer es obligatorio para un chofer chileno (o marca el chofer como no chileno)')
+    }
+    if (!validarRutChileno(input.choferRut.trim())) {
+      throw new ValidationError('El RUT del chofer no es un RUT chileno válido (revisa el formato y el dígito verificador)')
     }
   }
 
@@ -826,8 +844,37 @@ export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDe
     direccion: input.dirDestino ?? null,
     comuna: input.comunaDestino ?? null,
   }
+  // Origen del transporte. Por defecto los campos libres (legacy); en EXPORTACIÓN
+  // se deriva server-side de la dirección de planta validada (R13 / FAS-GCD-R1-002).
+  let origen: { direccion: string | null; comuna: string | null } = {
+    direccion: input.dirOrigen ?? null,
+    comuna: input.comunaOrigen ?? null,
+  }
 
   if (esExportacion) {
+    // Origen = dirección de una PLANTA del Embarque, validada server-side (no se
+    // confía en el texto libre del popup): se recibe `direccionOrigenId` y se
+    // deriva DirOrigen/CmnaOrigen de esa dirección (FAS-GCD-R1-002).
+    if (input.direccionOrigenId == null) {
+      throw new ValidationError('Selecciona la dirección de origen de la planta antes de emitir la Guía de exportación')
+    }
+    const dirsPlantas = embarque.instructivosHijos.flatMap((h) =>
+      (h.planta?.direcciones ?? []).map((d) => ({
+        instructivoHijoId: h.id,
+        id: d.id,
+        direccion: d.direccion,
+        comuna: d.comuna?.descripcion ?? null,
+      })),
+    )
+    const dirOrigenSel = dirsPlantas.find(
+      (d) =>
+        d.id === input.direccionOrigenId &&
+        (input.instructivoHijoId == null || d.instructivoHijoId === input.instructivoHijoId),
+    )
+    if (!dirOrigenSel) {
+      throw new ValidationError('La dirección de origen no corresponde a ninguna planta del Embarque — elígela desde las direcciones de la planta')
+    }
+    origen = { direccion: dirOrigenSel.direccion, comuna: dirOrigenSel.comuna }
     const agente = embarque.agenteAduana
     if (!agente) {
       throw new ValidationError('El Embarque no tiene Agente de Aduana asignado — complétalo en la Solicitud de Reserva / Instructivo antes de emitir la Guía de exportación')
@@ -865,12 +912,14 @@ export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDe
   const datosGuia = {
     guiaIndTraslado: input.indTraslado,
     guiaTransporteId: input.transporteId ?? null,
+    guiaChoferChileno: input.choferChileno,
     guiaChoferRut: input.choferRut ?? null,
     guiaChoferNombre: input.choferNombre ?? null,
     guiaPatenteCamion: input.patenteCamion ?? null,
     guiaPatenteRemolque: input.patenteRemolque ?? null,
-    guiaDirOrigen: input.dirOrigen ?? null,
-    guiaComunaOrigen: input.comunaOrigen ?? null,
+    // Origen derivado server-side de la dirección de planta validada (no el input).
+    guiaDirOrigen: origen.direccion,
+    guiaComunaOrigen: origen.comuna,
     guiaDirDestino: input.dirDestino ?? null,
     guiaComunaDestino: input.comunaDestino ?? null,
   }
@@ -888,7 +937,7 @@ export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDe
       patenteCamion: input.patenteCamion ?? null,
       patenteRemolque: input.patenteRemolque ?? null,
     },
-    origen: { direccion: input.dirOrigen ?? null, comuna: input.comunaOrigen ?? null },
+    origen,
     destino,
     detalle: detalleGuia,
     aduana,

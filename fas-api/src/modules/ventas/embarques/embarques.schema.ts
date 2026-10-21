@@ -216,10 +216,17 @@ export const embarquePalletParamsSchema = z.object({
 export const emitirGuiaDespachoSchema = z.object({
   indTraslado: z.number().int().min(1).max(9),
   transporteId: z.number().int().positive().optional().nullable(),
+  // Chofer chileno (default true): el RUT solo se exige si es chileno.
+  choferChileno: z.boolean().optional().default(true),
   choferRut: z.string().trim().max(20).optional().nullable(),
   choferNombre: z.string().trim().max(200).optional().nullable(),
   patenteCamion: z.string().trim().max(20).optional().nullable(),
   patenteRemolque: z.string().trim().max(20).optional().nullable(),
+  // Origen = dirección de una planta del Embarque: se envían los IDs y el
+  // service valida + deriva DirOrigen/CmnaOrigen server-side (no confía en el
+  // texto libre). Los campos de texto quedan informativos/legacy.
+  instructivoHijoId: z.number().int().positive().optional().nullable(),
+  direccionOrigenId: z.number().int().positive().optional().nullable(),
   dirOrigen: z.string().trim().max(300).optional().nullable(),
   comunaOrigen: z.string().trim().max(100).optional().nullable(),
   dirDestino: z.string().trim().max(300).optional().nullable(),

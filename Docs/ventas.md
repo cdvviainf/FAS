@@ -505,6 +505,12 @@ Riesgo residual aceptado (deuda documentada, no resuelta con outbox/2PC — desp
 > - **Detalle a $1 por caja, exento** (`PrcItem=1`, `IndExe=1`): no constituye venta, sin IVA.
 > - **Bloque Aduana** (en `Encabezado.Transporte.Aduana`, igual que el DTE 110): `CodModVenta`/`CodClauVenta`/`CodViaTransp`/`CodPtoEmbarque`/`CodPtoDesemb`/`CodPaisRecep` + pesos/totales, derivados de los `codigoAduana` de la Nota de Venta (cláusula, tipo de embarque, país/puerto destino) y del puerto de zarpe. Antes de emitir se **validan los codigoAduana requeridos** (cláusula, vía, puerto de zarpe, país destino); si falta alguno, se bloquea (no se emite un bloque Aduana incompleto). `TotClauVenta` nominal = total de cajas (× $1).
 > - **Snapshot del receptor:** el `rutReceptor` se congela en `DocumentoDte` al emitir el temporal y se **reusa** al firmar y al descargar el PDF — nunca se recalcula desde el Embarque (que sigue editable). Así el timbrado y el PDF corresponden exactamente al temporal revisado (FAS-GDE-R1-001/002).
+>
+> **⚠️ Supersesión 2026-10-21 (decisión de negocio Christian):**
+> - **La Guía de Despacho del Embarque es SIEMPRE exportación (IndTraslado 8).** El popup fija el "Tipo de traslado" como no elegible y el backend **rechaza** cualquier otro motivo (supersede "soporta además los traslados sin venta 3/4/5/6/7" de arriba — ese flujo no se usa desde el Embarque).
+> - **Origen = selección estricta** (supersede "precarga editable"): el usuario elige una **dirección de la planta de origen** desde un select de las direcciones de esa planta (de los `InstructivoHijo`). La UI envía `instructivoHijoId` + `direccionOrigenId`; el backend **valida** que la dirección pertenezca a una planta del Embarque y **deriva** `DirOrigen/CmnaOrigen` server-side (no confía en texto libre — FAS-GCD-R1-002). Si la planta no tiene dirección, o falta la del agente por puerto (destino), **no se puede emitir** (botón bloqueado + validación server-side).
+> - **Chofer chileno (flag, default Sí):** `Embarque.guiaChoferChileno`. El **RUT del chofer solo se exige/valida si el chofer es chileno**; para chofer extranjero el RUT queda opcional.
+> - **PDF tributario:** `GET .../embarques/:id/guia-despacho/pdf` devuelve el **PDF timbrado del SII** cuando la Guía está `GENERADO` (con folio), y el PDF del temporal mientras esté en borrador (ver `cobranza.md` §0.g para el patrón compartido).
 
 ---
 

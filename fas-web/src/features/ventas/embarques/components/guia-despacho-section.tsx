@@ -56,38 +56,59 @@ function EmitirGuiaDialog({
   interface FormState {
     indTraslado: string
     transporteId: string
+    // 'SI' = chofer chileno (RUT obligatorio) / 'NO' = extranjero (RUT opcional).
+    choferChileno: string
     choferRut: string
     choferNombre: string
     patenteCamion: string
     patenteRemolque: string
+    // Planta de origen elegida (instructivoHijoId) y dirección elegida de esa
+    // planta (id de EntidadDireccion); dirOrigen/comunaOrigen se derivan de ella.
+    plantaId: string
+    dirOrigenId: string
     dirOrigen: string
     comunaOrigen: string
     dirDestino: string
     comunaDestino: string
   }
   const [form, setForm] = useState<FormState>({
-    indTraslado: '', transporteId: '', choferRut: '', choferNombre: '', patenteCamion: '',
-    patenteRemolque: '', dirOrigen: '', comunaOrigen: '', dirDestino: '', comunaDestino: '',
+    // Tipo de traslado fijo: la Guía desde Embarque es siempre "Traslado para
+    // exportación (no venta)" — no elegible (decisión de negocio).
+    indTraslado: String(INDTRASLADO_EXPORTACION), transporteId: '', choferChileno: 'SI', choferRut: '', choferNombre: '', patenteCamion: '',
+    patenteRemolque: '', plantaId: '', dirOrigenId: '', dirOrigen: '', comunaOrigen: '', dirDestino: '', comunaDestino: '',
   })
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }))
 
   // Precargar desde los datos guardados/defaults cada vez que se abre.
   useEffect(() => {
     if (!open) return
+    // Si la dirección de origen guardada coincide con una de las direcciones de
+    // alguna planta, se preselecciona esa dirección en el select.
+    const dirGuardada = datos.dirOrigen
+    let plantaIdPre = ''
+    let dirOrigenIdPre = ''
+    for (const p of plantas) {
+      const match = p.direcciones.find((d) => d.direccion === dirGuardada)
+      if (match) { plantaIdPre = String(p.instructivoHijoId); dirOrigenIdPre = String(match.id); break }
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm({
-      indTraslado: datos.indTraslado != null ? String(datos.indTraslado) : '',
+      // Fijo en exportación (no venta) — ver nota en el estado inicial.
+      indTraslado: String(INDTRASLADO_EXPORTACION),
       transporteId: datos.transporteId != null ? String(datos.transporteId) : '',
+      choferChileno: datos.choferChileno === false ? 'NO' : 'SI',
       choferRut: datos.choferRut,
       choferNombre: datos.choferNombre,
       patenteCamion: datos.patenteCamion,
       patenteRemolque: datos.patenteRemolque,
+      plantaId: plantaIdPre,
+      dirOrigenId: dirOrigenIdPre,
       dirOrigen: datos.dirOrigen,
       comunaOrigen: datos.comunaOrigen,
       dirDestino: datos.dirDestino,
       comunaDestino: datos.comunaDestino,
     })
-  }, [open, datos])
+  }, [open, datos, plantas])
 
   const { data: transportistasData } = useQuery({
     queryKey: ['entidades-options', 'EMPRESA_TRANSPORTE'],
@@ -96,15 +117,28 @@ function EmitirGuiaDialog({
   })
   const transportistas = transportistasData?.data ?? []
 
+  const esChileno = form.choferChileno === 'SI'
+  // Planta de origen elegida y sus direcciones (para el select de origen).
+  const plantaSel = plantas.find((p) => String(p.instructivoHijoId) === form.plantaId)
+  const dirsOrigen = plantaSel?.direcciones ?? []
+  // Falta la dirección del agente por puerto (destino): server-side bloquea,
+  // pero se deshabilita el emitir para avisar antes.
+  const faltaDestino = !agente?.direccion
+  const faltaOrigen = !form.dirOrigenId
+  const puedeEmitir = !faltaDestino && !faltaOrigen
+
   const mutation = useMutation({
     mutationFn: () =>
       embarquesService.emitirGuiaDespacho(embarqueId, {
         indTraslado: Number(form.indTraslado),
         transporteId: form.transporteId ? Number(form.transporteId) : null,
+        choferChileno: esChileno,
         choferRut: form.choferRut.trim() || null,
         choferNombre: form.choferNombre.trim() || null,
         patenteCamion: form.patenteCamion.trim() || null,
         patenteRemolque: form.patenteRemolque.trim() || null,
+        instructivoHijoId: form.plantaId ? Number(form.plantaId) : null,
+        direccionOrigenId: form.dirOrigenId ? Number(form.dirOrigenId) : null,
         dirOrigen: form.dirOrigen.trim() || null,
         comunaOrigen: form.comunaOrigen.trim() || null,
         dirDestino: form.dirDestino.trim() || null,
@@ -119,8 +153,16 @@ function EmitirGuiaDialog({
   })
 
   function handleSubmit() {
-    if (!form.indTraslado) {
-      toast.error('Selecciona el tipo de traslado')
+    if (esChileno && !form.choferRut.trim()) {
+      toast.error('El RUT del chofer es obligatorio para un chofer chileno (o marca el chofer como no chileno)')
+      return
+    }
+    if (faltaOrigen) {
+      toast.error('Selecciona la dirección de origen de la planta')
+      return
+    }
+    if (faltaDestino) {
+      toast.error('El Agente de Aduana no tiene una dirección asociada al puerto de zarpe — asóciala antes de emitir')
       return
     }
     mutation.mutate()
@@ -139,15 +181,17 @@ function EmitirGuiaDialog({
 
         <div className='space-y-4 py-2'>
           <div className='space-y-1.5'>
-            <Label>Tipo de traslado <span className='text-destructive'>*</span></Label>
-            <Select value={form.indTraslado} onValueChange={(v) => set('indTraslado', v)}>
+            <Label>Tipo de traslado</Label>
+            {/* Fijo en "Traslado para exportación (no venta)" — no elegible
+                (la Guía desde Embarque siempre es exportación). */}
+            <Select value={form.indTraslado} disabled>
               <SelectTrigger>
-                <SelectValue placeholder='Seleccionar motivo del traslado...' />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {IND_TRASLADO_OPCIONES.map((o) => (
-                  <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
-                ))}
+                <SelectItem value={String(INDTRASLADO_EXPORTACION)}>
+                  {IND_TRASLADO_OPCIONES.find((o) => o.value === INDTRASLADO_EXPORTACION)?.label}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -168,7 +212,7 @@ function EmitirGuiaDialog({
           )}
 
           <div className='grid gap-3 sm:grid-cols-2'>
-            <div className='space-y-1.5 sm:col-span-2'>
+            <div className='space-y-1.5'>
               <Label>Empresa de transporte</Label>
               <Select value={form.transporteId} onValueChange={(v) => set('transporteId', v)}>
                 <SelectTrigger>
@@ -180,15 +224,30 @@ function EmitirGuiaDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <p className='text-muted-foreground text-xs'>El RUT del transportista se toma de la entidad seleccionada.</p>
-            </div>
-            <div className='space-y-1.5'>
-              <Label>RUT del chofer</Label>
-              <Input value={form.choferRut} onChange={(e) => set('choferRut', e.target.value)} placeholder='12.345.678-9' />
             </div>
             <div className='space-y-1.5'>
               <Label>Nombre del chofer</Label>
               <Input value={form.choferNombre} onChange={(e) => set('choferNombre', e.target.value)} placeholder='Nombre completo' />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Chofer chileno</Label>
+              <Select value={form.choferChileno} onValueChange={(v) => set('choferChileno', v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='SI'>Sí</SelectItem>
+                  <SelectItem value='NO'>No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label>RUT del chofer {esChileno && <span className='text-destructive'>*</span>}</Label>
+              <Input
+                value={form.choferRut}
+                onChange={(e) => set('choferRut', e.target.value)}
+                placeholder={esChileno ? '12.345.678-9' : 'Opcional (chofer extranjero)'}
+              />
             </div>
             <div className='space-y-1.5'>
               <Label>Patente del camión</Label>
@@ -198,6 +257,7 @@ function EmitirGuiaDialog({
               <Label>Patente del remolque</Label>
               <Input value={form.patenteRemolque} onChange={(e) => set('patenteRemolque', e.target.value)} placeholder='Si aplica' />
             </div>
+            <p className='text-muted-foreground text-xs sm:col-span-2'>El RUT del transportista se toma de la entidad seleccionada.</p>
           </div>
 
           <div className='grid gap-3 sm:grid-cols-2'>
@@ -205,13 +265,21 @@ function EmitirGuiaDialog({
               <div className='space-y-1.5 sm:col-span-2'>
                 <Label>Planta de origen</Label>
                 <Select
+                  value={form.plantaId}
                   onValueChange={(v) => {
                     const p = plantas.find((x) => String(x.instructivoHijoId) === v)
-                    if (p) setForm((f) => ({ ...f, dirOrigen: p.direccion ?? f.dirOrigen, comunaOrigen: p.comuna ?? f.comunaOrigen }))
+                    const d = p?.direcciones[0]
+                    setForm((f) => ({
+                      ...f,
+                      plantaId: v,
+                      dirOrigenId: d ? String(d.id) : '',
+                      dirOrigen: d?.direccion ?? '',
+                      comunaOrigen: d?.comuna ?? '',
+                    }))
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder='Elegir planta para precargar el origen...' />
+                    <SelectValue placeholder='Elegir planta de origen...' />
                   </SelectTrigger>
                   <SelectContent>
                     {plantas.map((p) => (
@@ -219,16 +287,34 @@ function EmitirGuiaDialog({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className='text-muted-foreground text-xs'>Precarga la dirección/comuna de origen con la de la planta elegida (editable).</p>
               </div>
             )}
             <div className='space-y-1.5'>
-              <Label>Dirección de origen</Label>
-              <Input value={form.dirOrigen} onChange={(e) => set('dirOrigen', e.target.value)} placeholder='Dirección de salida' />
+              <Label>Dirección de origen <span className='text-destructive'>*</span></Label>
+              <Select
+                value={form.dirOrigenId}
+                disabled={!form.plantaId}
+                onValueChange={(v) => {
+                  const d = dirsOrigen.find((x) => String(x.id) === v)
+                  setForm((f) => ({ ...f, dirOrigenId: v, dirOrigen: d?.direccion ?? '', comunaOrigen: d?.comuna ?? '' }))
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={form.plantaId ? 'Elegir dirección de la planta...' : 'Elige primero la planta'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {dirsOrigen.map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>{[d.direccion, d.comuna].filter(Boolean).join(', ') || 'Sin dirección'}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {form.plantaId && dirsOrigen.length === 0 && (
+                <p className='text-destructive text-xs'>La planta no tiene direcciones cargadas — agrégale una en Entidades.</p>
+              )}
             </div>
             <div className='space-y-1.5'>
               <Label>Comuna de origen</Label>
-              <Input value={form.comunaOrigen} onChange={(e) => set('comunaOrigen', e.target.value)} placeholder='Comuna' />
+              <Input value={form.comunaOrigen} disabled placeholder='—' />
             </div>
             <div className='space-y-1.5'>
               <Label>Dirección de destino</Label>
@@ -257,8 +343,15 @@ function EmitirGuiaDialog({
         </div>
 
         <DialogFooter>
+          {!puedeEmitir && (
+            <p className='text-destructive mr-auto self-center text-xs'>
+              {faltaDestino
+                ? 'Falta la dirección del Agente de Aduana asociada al puerto de zarpe.'
+                : 'Selecciona la dirección de origen de la planta.'}
+            </p>
+          )}
           <Button type='button' variant='outline' onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type='button' isLoading={mutation.isPending} onClick={handleSubmit}>
+          <Button type='button' isLoading={mutation.isPending} onClick={handleSubmit} disabled={!puedeEmitir}>
             <Icons.fileTypePdf className='mr-1 h-4 w-4' /> Emitir borrador
           </Button>
         </DialogFooter>

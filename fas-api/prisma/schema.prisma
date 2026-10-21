@@ -3231,6 +3231,9 @@ model Embarque {
   guiaTransporteId    Int? // Entidad tipo EMPRESA_TRANSPORTE (RUT transportista)
   guiaTransporte      Entidad? @relation("EmbarqueGuiaTransporte", fields: [empresaId, guiaTransporteId], references: [empresaId, id])
   guiaChoferRut       String?
+  // Chofer chileno (default true): el RUT del chofer solo se valida/exige si es
+  // chileno; para choferes extranjeros el RUT queda opcional.
+  guiaChoferChileno   Boolean  @default(true)
   guiaChoferNombre    String?
   guiaPatenteCamion   String?
   guiaPatenteRemolque String?
