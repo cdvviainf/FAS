@@ -947,6 +947,18 @@ export async function obtenerPdfGuiaDespacho(embarqueId: number): Promise<Buffer
   const empresaId = getEmpresaIdActual()!
   const empresa = await dteRepo.getEmpresaParaDte(empresaId)
   if (!empresa?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
+  // Timbrada (GENERADO con folio) → PDF tributario oficial del SII (con timbre y
+  // folio); mientras siga en borrador → PDF del DTE temporal. Mismo criterio que
+  // la Factura de Exportación.
+  if (documento.estado === 'GENERADO' && documento.folio != null) {
+    const r = await dteService.obtenerPdfEmitido({
+      tipoDte: TIPO_DTE_GUIA,
+      folio: documento.folio,
+      rutEmisor: empresa.rut,
+    })
+    if (!r.ok) throw new ValidationError(r.error)
+    return r.pdf
+  }
   const r = await dteService.obtenerPdfTemporal({
     tipoDte: TIPO_DTE_GUIA,
     codigo: documento.libredteCodigoTemporal,
