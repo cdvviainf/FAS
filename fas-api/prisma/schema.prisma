@@ -3159,6 +3159,10 @@ model Embarque {
   numeroBookingManual    String?
   naveManual             String?
   numeroContenedorManual String?
+  // Número de sello/precinto del contenedor — requerido por el SII (bloque
+  // Aduana, TipoBultos.Sello) para declarar IdContainer en el DTE de
+  // exportación. EmisorSello se deriva de la naviera (no se tipea aparte).
+  numeroSelloManual      String?
   fechaZarpeManual       DateTime?
 
   // ─── Instructivo de Embarque (2026-09-21, ventas.md R11 + gap analysis
@@ -3378,6 +3382,9 @@ model SolicitudReserva {
   naviera                String?
   nave                   String?
   numeroContenedor       String?
+  // Sello/precinto del contenedor (simetría con numeroContenedor) — el webhook
+  // AGL360 hoy no lo puebla; queda disponible para cuando exista consulta.
+  numeroSello            String?
   fechaZarpe             DateTime?
   fechaRetiroPlanta      DateTime?
   payloadRespuesta       Json?

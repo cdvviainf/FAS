@@ -29,6 +29,7 @@ interface DatosReservaForm {
   numeroBooking: string
   nave: string
   numeroContenedor: string
+  numeroSello: string
   fechaZarpe: string
 }
 
@@ -37,6 +38,8 @@ function formReservaInicial(embarque: EmbarqueDetalle): DatosReservaForm {
     numeroBooking: embarque.numeroBookingManual ?? '',
     nave: embarque.naveManual ?? '',
     numeroContenedor: embarque.numeroContenedorManual ?? '',
+    // Sello operacional: gana el cargado a mano; si no hay, el de AGL360.
+    numeroSello: embarque.numeroSelloManual ?? embarque.solicitudReserva?.numeroSello ?? '',
     fechaZarpe: embarque.fechaZarpeManual ? embarque.fechaZarpeManual.slice(0, 10) : '',
   }
 }
@@ -216,6 +219,9 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
         }
         tareas.push(embarquesService.guardarDatosReservaManual(embarque.id, datosReserva))
       }
+      // El sello se guarda en AMBOS modos (manual y AGL360) por su propio
+      // endpoint — no depende de bookingEditable.
+      tareas.push(embarquesService.actualizarSello(embarque.id, form.numeroSello || null))
       const datosInstructivo: DatosInstructivoInput = {
         puertoZarpeId: formInstructivo.puertoZarpeId ? Number(formInstructivo.puertoZarpeId) : null,
         voyageNumber: formInstructivo.voyageNumber || null,
@@ -304,6 +310,12 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
         <div className='space-y-1.5'>
           <Label>Contenedor</Label>
           {campoBooking(form.numeroContenedor, (v) => setForm((f) => ({ ...f, numeroContenedor: v })), solicitud?.numeroContenedor)}
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Sello / Precinto</Label>
+          {/* Dato operacional editable en AMBOS modos (manual y AGL360): si la
+              API de AGL no lo trae, se completa a mano. Tiene su propio guardado. */}
+          <Input value={form.numeroSello} onChange={(e) => setForm((f) => ({ ...f, numeroSello: e.target.value }))} disabled={!puedeEscribir} />
         </div>
         <div className='space-y-1.5'>
           <Label>Naviera</Label>

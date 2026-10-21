@@ -38,6 +38,12 @@ export async function embarquesRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
     ctrl.guardarDatosReservaManual,
   )
+  // Sello/precinto del contenedor — editable en ambos modos de reserva.
+  app.patch(
+    '/embarques/:id/sello',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    ctrl.actualizarSello,
+  )
   app.patch(
     '/embarques/:id/datos-reserva-base',
     { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },

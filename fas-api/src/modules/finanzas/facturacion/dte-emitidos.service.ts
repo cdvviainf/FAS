@@ -87,6 +87,28 @@ export async function obtenerPdfTemporal(input: {
   return { ok: true, pdf: r.data }
 }
 
+// Rescata el PDF del DTE REAL ya timbrado (con timbre y folio del SII) desde
+// LibreDTE, a partir del folio asignado. En modo mock no hay documento real.
+export async function obtenerPdfEmitido(input: {
+  tipoDte: number
+  folio: number
+  rutEmisor: string
+}): Promise<{ ok: true; pdf: Buffer } | { ok: false; error: string }> {
+  if (env.DTE_PROVIDER !== 'libredte') {
+    return {
+      ok: false,
+      error: 'El PDF timbrado solo está disponible con el proveedor real (DTE_PROVIDER=libredte); en modo mock no hay documento en LibreDTE.',
+    }
+  }
+  const r = await libredte.obtenerPdfEmitido({
+    dte: input.tipoDte,
+    folio: input.folio,
+    emisorSinDv: rutSinDv(input.rutEmisor),
+  })
+  if (!r.ok || !r.data) return { ok: false, error: r.error ?? 'LibreDTE no devolvió el PDF timbrado' }
+  return { ok: true, pdf: r.data }
+}
+
 // RUT sin dígito verificador, numérico (ej. "77089369-0" → 77089369) — formato
 // que exige generarReal() de LibreDTE en `emisor`/`receptor`.
 export function rutSinDv(rut: string): number {

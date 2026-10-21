@@ -157,6 +157,37 @@ export async function obtenerPdfTemporal(input: {
   }
 }
 
+// GET /api/dte/dte_emitidos/pdf/{dte}/{folio}/{emisor} — PDF del DTE REAL ya
+// timbrado (con timbre electrónico y folio del SII). RUT emisor sin DV. Devuelve
+// el PDF binario. papelContinuo=0 → tamaño carta.
+export async function obtenerPdfEmitido(input: {
+  dte: number
+  folio: number
+  emisorSinDv: number
+}): Promise<LibredteResultado<Buffer>> {
+  const creds = await getCredenciales()
+  if ('error' in creds) return { ok: false, error: creds.error }
+  const path = `/api/dte/dte_emitidos/pdf/${input.dte}/${input.folio}/${input.emisorSinDv}`
+  const url = new URL(`${creds.baseUrl}${path}`)
+  url.searchParams.set('_contribuyente_certificacion', paramCertificacion(creds.ambiente))
+  url.searchParams.set('papelContinuo', '0')
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Authorization: authHeader(creds.hash), Accept: 'application/pdf' },
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (!res.ok) {
+      const detalle = await res.text().catch(() => '')
+      return { ok: false, status: res.status, error: detalle || `LibreDTE respondió ${res.status}` }
+    }
+    const pdf = Buffer.from(await res.arrayBuffer())
+    return { ok: true, status: res.status, data: pdf }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Error de red al contactar LibreDTE' }
+  }
+}
+
 // GET /api/dte/contribuyentes/info/{rut} — datos semi-públicos de un contribuyente.
 export async function consultarContribuyente(rut: string): Promise<LibredteResultado> {
   return request(`/api/dte/contribuyentes/info/${encodeURIComponent(rut)}`, 'GET')

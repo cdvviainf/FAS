@@ -318,6 +318,11 @@ export async function guardarDatosReservaManual(embarqueId: number, datos: Datos
   return repo.guardarDatosReservaManual(embarqueId, datos, actualizadoPor)
 }
 
+// Sello/precinto del contenedor — editable en ambos modos (manual y AGL360).
+export async function actualizarSelloContenedor(embarqueId: number, numeroSello: string | null, actualizadoPor: string) {
+  return repo.actualizarSelloContenedor(embarqueId, numeroSello, actualizadoPor)
+}
+
 // Información base de la reserva (2026-09-28) — datos propios del Embarque.
 export async function guardarDatosReservaBase(embarqueId: number, datos: DatosReservaBaseInput, actualizadoPor: string) {
   await obtenerEmbarque(embarqueId)

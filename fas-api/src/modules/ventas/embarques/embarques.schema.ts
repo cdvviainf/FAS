@@ -59,6 +59,14 @@ export const datosReservaManualSchema = z
     message: 'Debes ingresar al menos un dato de la reserva',
   })
 
+// Sello/precinto del contenedor — campo operacional editable en AMBOS modos de
+// reserva (manual y AGL360), por eso tiene su propio endpoint y no va en
+// datosReservaManualSchema (que solo aplica a reserva manual). Sin `.refine`:
+// `null`/vacío es válido y limpia el sello.
+export const actualizarSelloSchema = z.object({
+  numeroSello: z.string().trim().max(50).nullable(),
+})
+
 // Información base de la reserva (2026-09-28): datos propios del Embarque que
 // se capturan en la pestaña de reserva. Los derivados de la NV (Tipo de
 // Embarque, Puerto Destino, Especie, Consignatario) NO se editan acá — se

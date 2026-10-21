@@ -85,6 +85,12 @@ export const facturaExportacionService = {
     const blob = await api.get(`ventas/cobranza/facturas-exportacion/${id}/pdf-borrador`).blob()
     window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer')
   },
+  // Rescata el PDF del DTE 110 REAL ya timbrado (timbre + folio del SII) desde
+  // LibreDTE y lo abre en una pestaña nueva. Requiere la Factura APROBADA.
+  async verPdfTimbrado(id: number): Promise<void> {
+    const blob = await api.get(`ventas/cobranza/facturas-exportacion/${id}/pdf-sii`).blob()
+    window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer')
+  },
   async firmar(id: number): Promise<{ data: FacturaExportacion }> {
     return api.post(`ventas/cobranza/facturas-exportacion/${id}/firmar`).json()
   },

@@ -110,6 +110,10 @@ export const embarquesService = {
     return api.post(`ventas/embarques/${id}/reserva-manual`).json()
   },
 
+  // Sello/precinto del contenedor — editable en ambos modos de reserva.
+  async actualizarSello(id: number, numeroSello: string | null): Promise<{ data: EmbarqueDetalle }> {
+    return api.patch(`ventas/embarques/${id}/sello`, { json: { numeroSello } }).json()
+  },
   async guardarDatosReservaManual(id: number, data: DatosReservaManualInput): Promise<{ data: EmbarqueDetalle }> {
     return api.patch(`ventas/embarques/${id}/datos-reserva`, { json: data }).json()
   },

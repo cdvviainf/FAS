@@ -130,7 +130,7 @@ describe('mapFacturaExportacionA110', () => {
         pesoBruto: 20976,
         totItems: 2,
         totBultos: 2280,
-        tipoBulto: { codTpoBultos: '22', cantBultos: 2280, idContainer: 'MSDU9653670' },
+        tipoBulto: { codTpoBultos: '22', cantBultos: 2280, idContainer: 'MSDU9653670', sello: 'SL-998877', emisorSello: 'MSC' },
       },
       referencias: [{ tpoDocRef: '808', folioRef: 'MEDUW9324551', fecha: '2026-05-09', razonRef: 'B/L' }],
     })
@@ -154,8 +154,43 @@ describe('mapFacturaExportacionA110', () => {
     expect(keys.indexOf('TipoBultos')).toBeLessThan(keys.indexOf('TotBultos'))
     expect(keys.indexOf('CodPaisRecep')).toBeLessThan(keys.indexOf('CodPaisDestin'))
     const bultos = aduana.TipoBultos as Array<Record<string, unknown>>
-    expect(bultos[0]).toMatchObject({ CodTpoBultos: '22', CantBultos: 2280, IdContainer: 'MSDU9653670' })
+    // Contenedor + Sello + EmisorSello (los tres juntos) — el SII los exige
+    // juntos y LibreDTE los lee sin isset() al armar el PDF.
+    expect(bultos[0]).toMatchObject({ CodTpoBultos: '22', CantBultos: 2280, IdContainer: 'MSDU9653670', Sello: 'SL-998877', EmisorSello: 'MSC' })
     const refs = (dte as Record<string, unknown>).Referencia as Array<Record<string, unknown>>
     expect(refs[0]).toMatchObject({ NroLinRef: 1, TpoDocRef: '808', FolioRef: 'MEDUW9324551', FchRef: '2026-05-09' })
+  })
+
+  // El bloque Aduana solo declara IdContainer si vienen Sello Y EmisorSello
+  // (el SII los exige juntos y LibreDTE los lee sin isset() al generar el PDF).
+  function bultoDe(aduanaExtra: Record<string, unknown>) {
+    const dte = mapFacturaExportacionA110({ ...base, aduana: { ...base.aduana, totBultos: 10, ...aduanaExtra } })
+    const transporte = (dte.Encabezado as Record<string, unknown>).Transporte as Record<string, unknown>
+    const aduana = transporte.Aduana as Record<string, unknown>
+    return (aduana.TipoBultos as Array<Record<string, unknown>>)[0]
+  }
+
+  it('declara IdContainer + Sello + EmisorSello cuando vienen los tres', () => {
+    const bulto = bultoDe({ tipoBulto: { codTpoBultos: '22', cantBultos: 10, idContainer: 'ABCU1234567', sello: 'S-1', emisorSello: 'MSC' } })
+    expect(bulto).toMatchObject({ CodTpoBultos: '22', CantBultos: 10, IdContainer: 'ABCU1234567', Sello: 'S-1', EmisorSello: 'MSC' })
+  })
+
+  it('omite IdContainer cuando hay contenedor pero falta el Sello', () => {
+    const bulto = bultoDe({ tipoBulto: { codTpoBultos: '22', cantBultos: 10, idContainer: 'ABCU1234567', sello: null, emisorSello: 'MSC' } })
+    expect(bulto).toMatchObject({ CodTpoBultos: '22', CantBultos: 10 })
+    expect(bulto).not.toHaveProperty('IdContainer')
+    expect(bulto).not.toHaveProperty('Sello')
+  })
+
+  it('omite IdContainer cuando hay contenedor y Sello pero falta el EmisorSello', () => {
+    const bulto = bultoDe({ tipoBulto: { codTpoBultos: '22', cantBultos: 10, idContainer: 'ABCU1234567', sello: 'S-1', emisorSello: null } })
+    expect(bulto).not.toHaveProperty('IdContainer')
+    expect(bulto).not.toHaveProperty('EmisorSello')
+  })
+
+  it('emite el bulto sin IdContainer cuando no hay contenedor', () => {
+    const bulto = bultoDe({ tipoBulto: { codTpoBultos: '22', cantBultos: 10, idContainer: null } })
+    expect(bulto).toMatchObject({ CodTpoBultos: '22', CantBultos: 10 })
+    expect(bulto).not.toHaveProperty('IdContainer')
   })
 })

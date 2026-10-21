@@ -454,6 +454,12 @@ async function construirPayloadDte(
   const nave = embarque.reservaManual ? embarque.naveManual : (embarque.solicitudReserva?.nave ?? null)
   const booking = embarque.reservaManual ? embarque.numeroBookingManual : (embarque.solicitudReserva?.numeroBooking ?? null)
   const contenedor = embarque.reservaManual ? embarque.numeroContenedorManual : (embarque.solicitudReserva?.numeroContenedor ?? null)
+  // Sello/precinto del contenedor (SII: TipoBultos.Sello, obligatorio junto a
+  // IdContainer). Es un dato operacional editable en ambos modos: gana el
+  // cargado a mano (`numeroSelloManual`) y, si no hay, cae al de AGL360
+  // (`solicitudReserva.numeroSello`). EmisorSello se deriva de la naviera.
+  const sello = embarque.numeroSelloManual ?? embarque.solicitudReserva?.numeroSello ?? null
+  const emisorSello = embarque.naviera?.razonSocial ?? null
 
   // TotBultos = total de cajas facturadas (líneas de la Factura).
   const totBultos = factura.lineas.reduce((s, l) => s + Number(l.cantidadCajas), 0)
@@ -537,9 +543,10 @@ async function construirPayloadDte(
       totItems: factura.lineas.length,
       totBultos: totBultos > 0 ? totBultos : null,
       // El bulto es la caja (CantBultos = total de cajas → CodTpoBultos=22
-      // siempre); el contenedor va aparte en IdContainer.
+      // siempre); el contenedor va aparte en IdContainer con su Sello/EmisorSello
+      // (el mapper solo lo emite si hay sello — ver nota en el mapper).
       tipoBulto: totBultos > 0
-        ? { codTpoBultos: COD_TIPO_BULTO_CAJA, cantBultos: totBultos, idContainer: contenedor }
+        ? { codTpoBultos: COD_TIPO_BULTO_CAJA, cantBultos: totBultos, idContainer: contenedor, sello, emisorSello }
         : null,
     },
     // Programación de pagos del cliente → IdDoc.MntPagos (cuotasDte calculadas
@@ -809,6 +816,25 @@ export async function obtenerPdfBorrador(id: number) {
   })
   if (!r.ok) throw new ValidationError(r.error)
   return { pdf: r.pdf, codigo: factura.codigo }
+}
+
+// Rescata desde LibreDTE el PDF del DTE 110 REAL ya timbrado (timbre + folio del
+// SII). Requiere la Factura APROBADA y con folio asignado (firmada).
+export async function obtenerPdfTimbrado(id: number) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
+  if (factura.estado !== 'APROBADA' || factura.folio == null) {
+    throw new ValidationError('El PDF timbrado solo está disponible para una Factura aprobada (timbrada por el SII)')
+  }
+  const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
+  if (!emisor?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
+  const r = await dteService.obtenerPdfEmitido({
+    tipoDte: TIPO_DTE_FACTURA_EXPORTACION,
+    folio: factura.folio,
+    rutEmisor: emisor.rut,
+  })
+  if (!r.ok) throw new ValidationError(r.error)
+  return { pdf: r.pdf, folio: factura.folio }
 }
 
 // Sugiere el tipo de cambio vigente (dólar/euro observado del Banco Central) para

@@ -10,6 +10,7 @@ import {
   embarquePalletParamsSchema,
   aglWebhookConfirmarSchema,
   datosReservaManualSchema,
+  actualizarSelloSchema,
   datosReservaBaseSchema,
   datosInstructivoSchema,
   instructivoHijoUpdateSchema,
@@ -149,6 +150,13 @@ export async function guardarDatosReservaManual(req: FastifyRequest, reply: Fast
   const { id } = embarqueParamsSchema.parse(req.params)
   const body = datosReservaManualSchema.parse(req.body)
   const embarque = await service.guardarDatosReservaManual(id, body, req.fasUserId!)
+  return reply.send({ data: embarque })
+}
+
+export async function actualizarSello(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const { numeroSello } = actualizarSelloSchema.parse(req.body)
+  const embarque = await service.actualizarSelloContenedor(id, numeroSello, req.fasUserId!)
   return reply.send({ data: embarque })
 }
 

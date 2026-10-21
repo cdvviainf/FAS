@@ -53,8 +53,16 @@ export interface AduanaFacturaExportacion {
   pesoBruto: number | null
   totItems: number | null
   totBultos: number | null
-  // Tipo de bulto (SII): código, cantidad y, si hay, el contenedor.
-  tipoBulto: { codTpoBultos: string; cantBultos: number; idContainer: string | null } | null
+  // Tipo de bulto (SII): código, cantidad y, si hay, el contenedor con su sello.
+  // El SII (y LibreDTE al rendear el PDF) exige Sello + EmisorSello cuando se
+  // declara IdContainer; por eso el contenedor solo se emite si trae sello.
+  tipoBulto: {
+    codTpoBultos: string
+    cantBultos: number
+    idContainer: string | null
+    sello?: string | null
+    emisorSello?: string | null
+  } | null
 }
 
 // Referencia del DTE (OC/DUS/BL). TpoDocRef = código SII (808=B/L, 807=DUS,
@@ -143,7 +151,18 @@ function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
             {
               CodTpoBultos: a.tipoBulto.codTpoBultos,
               CantBultos: a.tipoBulto.cantBultos,
-              ...(a.tipoBulto.idContainer ? { IdContainer: a.tipoBulto.idContainer } : {}),
+              // IdContainer solo si además hay Sello Y EmisorSello: el SII exige
+              // los tres juntos, y LibreDTE los lee sin isset() al armar el PDF
+              // (reventaba con "Undefined index: Sello" y dejaba el PDF corrupto).
+              // Faltando cualquiera, se omite el contenedor por completo — así
+              // nunca se emite un tag vacío ni se corrompe el PDF.
+              ...(a.tipoBulto.idContainer && a.tipoBulto.sello && a.tipoBulto.emisorSello
+                ? {
+                    IdContainer: a.tipoBulto.idContainer,
+                    Sello: a.tipoBulto.sello,
+                    EmisorSello: a.tipoBulto.emisorSello,
+                  }
+                : {}),
             },
           ],
         }

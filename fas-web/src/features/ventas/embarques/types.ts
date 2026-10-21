@@ -85,6 +85,7 @@ export interface SolicitudReserva {
   naviera: string | null
   nave: string | null
   numeroContenedor: string | null
+  numeroSello: string | null
   fechaZarpe: string | null
   fechaRetiroPlanta: string | null
   enviadoEn: string
@@ -99,6 +100,7 @@ export interface DatosReservaManual {
   numeroBookingManual: string | null
   naveManual: string | null
   numeroContenedorManual: string | null
+  numeroSelloManual: string | null
   fechaZarpeManual: string | null
 }
 

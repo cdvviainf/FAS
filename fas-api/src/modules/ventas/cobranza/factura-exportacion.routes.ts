@@ -27,6 +27,8 @@ export async function facturaExportacionRoutes(app: FastifyInstance) {
   app.get('/facturas-exportacion/:id/payload-dte', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.previsualizarPayloadDte)
   // Rescata el PDF del borrador (DTE temporal) desde LibreDTE vía API.
   app.get('/facturas-exportacion/:id/pdf-borrador', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.descargarPdfBorrador)
+  // PDF del DTE 110 REAL ya timbrado (timbre + folio del SII) desde LibreDTE.
+  app.get('/facturas-exportacion/:id/pdf-sii', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarPdfTimbrado)
   // Tipo de cambio sugerido (dólar/euro observado del Banco Central) para el editor.
   app.get('/facturas-exportacion/:id/tipo-cambio', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.obtenerTipoCambio)
   app.get('/embarques/:id/factura-exportacion', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.obtenerDelEmbarque)

@@ -924,6 +924,21 @@ export async function guardarDatosReservaManual(embarqueId: number, datos: Datos
   })
 }
 
+// Sello/precinto del contenedor — editable en AMBOS modos de reserva (manual y
+// AGL360), sin tocar `estadoReserva` ni la máquina de estados de la reserva. Es
+// un dato operacional: si la API de AGL360 no lo trae, se completa a mano.
+export async function actualizarSelloContenedor(embarqueId: number, numeroSello: string | null, actualizadoPor: string) {
+  const claim = await prisma.embarque.updateMany({
+    where: { id: embarqueId, eliminadoEn: null },
+    data: { numeroSelloManual: numeroSello, actualizadoPor },
+  })
+  if (claim.count === 0) throw new ValidationError('El Embarque ya no existe')
+  return prisma.embarque.findFirstOrThrow({
+    where: { id: embarqueId },
+    include: { notaVenta: { select: notaVentaRefSelect } },
+  })
+}
+
 // Valida que el tipoBlId sea un Parametro de tipo TIPO_BL vigente (2026-09-28).
 export async function getParametroTipoBl(id: number) {
   return prisma.parametro.findFirst({

@@ -50,6 +50,15 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
       toast.error((e as Error).message || 'No se pudo abrir el PDF de la Proforma')
     }
   }
+  // PDF tributario oficial: el DTE 110 timbrado (timbre + folio del SII) que
+  // devuelve LibreDTE — no el documento comercial propio.
+  async function verPdfTimbrado() {
+    try {
+      await facturaExportacionService.verPdfTimbrado(factura.id)
+    } catch (e) {
+      toast.error((e as Error).message || 'No se pudo abrir el PDF timbrado del SII')
+    }
+  }
   // Desglose de la cláusula de venta: el flete/seguro restan al valor de venta
   // para dar el valor FOB de la mercadería (lo que se timbra en el detalle).
   const montoTotal = Number(factura.montoTotal)
@@ -111,8 +120,8 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
             </Button>
           )}
           {puedeVerPdf && (
-            <Button variant='outline' onClick={() => documentosService.abrirPdf('factura-exportacion', factura.id)}>
-              <Icons.download className='mr-2 h-4 w-4' /> Ver Factura Comercial (PDF)
+            <Button variant='outline' onClick={verPdfTimbrado}>
+              <Icons.download className='mr-2 h-4 w-4' /> Ver DTE Timbrado (SII)
             </Button>
           )}
           {puedeDescargarXml && (
