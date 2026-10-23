@@ -540,7 +540,8 @@ Riesgo residual aceptado (deuda documentada, no resuelta con outbox/2PC — desp
 
 Basadas en el sistema legado (screenshots):
 
-1. **Nota de Venta** — encabezado (Folio, Fecha, Cliente, Tipo Embarque, Mercado, País Destino, Dirección/Detalle, Puerto Destino, Comprador, Notify, Modalidad Venta, Cláusula Venta, Tipo Flete, Forma de Pago —`CondicionPago`, cuotas se muestran como preview snapshot al guardar—, Moneda, Consignatario, Observaciones) → **Continuar**.
+1. **Nota de Venta** — encabezado (Folio, Fecha, Cliente, **Exportador**, Tipo Embarque, Mercado, País Destino, Dirección/Detalle, Puerto Destino, Comprador, Notify, Modalidad Venta, Cláusula Venta, Tipo Flete, Forma de Pago —`CondicionPago`, cuotas se muestran como preview snapshot al guardar—, Moneda, Consignatario, Observaciones) → **Continuar**.
+   > **Exportador (2026-10-21):** `NotaVenta.exportadorId` (Entidad tipo **EXPORTADORA**, opcional). El form lo **precarga por defecto** con la EXPORTADORA cuyo RUT coincide con la empresa activa (Agrosan) vía `GET /ventas/notas-venta/exportador-predeterminado` — **editable**, y "Sin exportador" (`null` explícito) se respeta. El default server-side (`crearNotaVenta`) solo aplica cuando el campo viene **ausente** (consumidores de API), no cuando llega `null`.
 2. **Detalle NV** — línea (Fecha Compromiso, Especie, Variedad, Artículo tipo Embalaje —etiqueta/kg neto/kg bruto heredados del artículo—, Calibre Inicio/Fin, Categoría, Tipo Pallet, Cant. Pallets, Cajas x Pallet, Cajas, Precio por caja) + grilla → **Terminar**.
 3. **Orden de Embarque** — encabezado extenso (incluye **`Folio`** = N° de instructivo, calculado automáticamente y único — R10) + botón **Seleccionar Reserva** (rellena datos logísticos desde la reserva).
 4. **Detalle Orden Embarque** — botón **Contenedor** → campos del contenedor + checks de inspección/fumigación.

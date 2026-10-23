@@ -69,6 +69,7 @@ export async function procesarRecordatorio(solicitudId: number) {
 async function validarReferencias(data: {
   usuarioSolicitanteId?: string
   entidadProductorId?: number
+  plantaId?: number | null
   direccionId?: number
   contactoId?: number | null
   especieId?: number | null
@@ -113,6 +114,10 @@ async function validarReferencias(data: {
   if (data.clienteId != null) {
     const cliente = await repo.getClienteExtranjero(data.clienteId)
     if (!cliente) throw new ValidationError('El cliente seleccionado no existe, está inactivo o no es de tipo Cliente Extranjero')
+  }
+  if (data.plantaId != null) {
+    const planta = await repo.getEntidadPlanta(data.plantaId)
+    if (!planta) throw new ValidationError('La planta seleccionada no existe, está inactiva/eliminada o no es de tipo Planta')
   }
   // especieId/mercadoId efectivos (valor nuevo si viene en el body, si no el vigente)
   // para validar pertenencia de variedad/calibre/categoría/país aunque solo uno

@@ -18,7 +18,7 @@ export default async function Page(props: PageProps) {
       pageTitle='Recepción'
       pageDescription='Editable mientras esté en estado Cargada.'
     >
-      <div className='max-w-3xl'>
+      <div className='max-w-5xl'>
         <RecepcionForm recepcionId={id} />
       </div>
     </PageContainer>

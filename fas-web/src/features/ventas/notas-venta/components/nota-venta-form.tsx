@@ -55,6 +55,7 @@ interface HeaderFields {
   fecha: string
   tipoVenta: 'EXPORTACION' | 'NACIONAL'
   clienteId: number
+  exportadorId: number | null
   compradorContactoId: number | null
   notifyId: number | null
   consignatarioId: number | null
@@ -77,6 +78,7 @@ const HEADER_EMPTY: HeaderFields = {
   fecha: new Date().toISOString().slice(0, 10),
   tipoVenta: 'EXPORTACION',
   clienteId: 0,
+  exportadorId: null,
   compradorContactoId: null,
   notifyId: null,
   consignatarioId: null,
@@ -180,6 +182,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   // — filtrar acá evita elegir una entidad que después falla al guardar
   // (IMP-QA-R1-005).
   const consignatarios = entidades.filter((e) => e.tipos.includes('CONSIGNATARIO'))
+  const exportadores = entidades.filter((e) => e.tipos.includes('EXPORTADORA'))
 
   const { data: tiposEmbarqueData } = useQuery({ queryKey: ['tipos-embarque-options'], queryFn: () => tiposEmbarqueService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const { data: mercadosData } = useQuery({ queryKey: ['mercados-options'], queryFn: () => mercadosService.list({ limit: 200 }), staleTime: 5 * 60_000 })
@@ -230,6 +233,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
         fecha: d.fecha.slice(0, 10),
         tipoVenta: d.tipoVenta ?? 'EXPORTACION',
         clienteId: d.clienteId,
+        exportadorId: d.exportadorId ?? null,
         compradorContactoId: d.compradorContactoId,
         notifyId: d.notifyId,
         consignatarioId: d.consignatarioId,
@@ -272,6 +276,28 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     }
   }, [isEdit, fields.clienteId, clientePlaceholder])
 
+  // Exportador por defecto (2026-10-21): al crear, se precarga la EXPORTADORA de
+  // la empresa activa (Agrosan). Editable. No aplica al editar.
+  const { data: exportadorDefaultData } = useQuery({
+    queryKey: ['exportador-predeterminado'],
+    queryFn: () => notasVentaService.exportadorPredeterminado(),
+    enabled: !isEdit,
+    staleTime: 5 * 60_000,
+  })
+  // Precarga el default UNA sola vez (al llegar el dato), no cada vez que el
+  // campo queda en null — si no, elegir "Sin exportador" (null) se re-pisaría
+  // con el default (AVR-QA-R1-001).
+  const exportadorInitRef = useRef(false)
+  useEffect(() => {
+    if (isEdit || exportadorInitRef.current) return
+    const def = exportadorDefaultData?.data
+    if (def) {
+      exportadorInitRef.current = true
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFields((f) => ({ ...f, exportadorId: def.id }))
+    }
+  }, [isEdit, exportadorDefaultData])
+
   function validate(): boolean {
     const e: Record<string, string> = {}
     if (!fields.fecha) e.fecha = 'La fecha es requerida'
@@ -289,6 +315,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       fecha: fields.fecha,
       tipoVenta: fields.tipoVenta,
       clienteId: fields.clienteId,
+      exportadorId: fields.exportadorId,
       compradorContactoId: fields.compradorContactoId,
       notifyId: fields.notifyId,
       consignatarioId: fields.consignatarioId,
@@ -661,6 +688,17 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 searchPlaceholder='Buscar entidad...'
                 options={[{ value: 'none', label: 'Sin consignatario' }, ...consignatarios.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
               />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Exportador</Label>
+              <Combobox
+                value={fields.exportadorId ? String(fields.exportadorId) : 'none'}
+                onChange={(v) => setFields((f) => ({ ...f, exportadorId: v === 'none' ? null : Number(v) }))}
+                placeholder='Sin exportador'
+                searchPlaceholder='Buscar exportador...'
+                options={[{ value: 'none', label: 'Sin exportador' }, ...exportadores.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
+              />
+              <p className='text-muted-foreground text-xs'>Por defecto, la exportadora de la empresa (Agrosan). Editable.</p>
             </div>
 
             <div className='space-y-1.5'>

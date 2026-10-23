@@ -6,6 +6,9 @@ export const notaVentaCreateSchema = z.object({
   // default del modelo (EXPORTACION) aplica.
   tipoVenta: z.enum(['EXPORTACION', 'NACIONAL']).optional(),
   clienteId: z.number().int().positive('El cliente es requerido'),
+  // Exportador (Entidad tipo EXPORTADORA, opcional). La UI lo precarga con el
+  // exportador por defecto (la EXPORTADORA de la empresa activa, "Agrosan").
+  exportadorId: z.number().int().positive().optional().nullable(),
   compradorContactoId: z.number().int().positive().optional().nullable(),
   notifyId: z.number().int().positive().optional().nullable(),
   consignatarioId: z.number().int().positive().optional().nullable(),

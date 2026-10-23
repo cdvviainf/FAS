@@ -54,9 +54,23 @@ async function validarLinea(linea: InstructivoEmbalajeDetalleInput, index: numbe
   const altura = await repo.getAltura(linea.alturaId)
   if (!altura) throw new ValidationError(`${prefijo} la altura de pallet seleccionada no existe o está bloqueada`)
 
+  // Etiqueta de la línea: una sola, dentro del set permitido del artículo
+  // (principal ∪ adicionales) — misma regla que la Orden de Compra. FIJA (1
+  // permitida) → se autocompleta; DINÁMICA (>1) → debe venir elegida.
+  const permitidas = new Set<number>()
+  if (articulo.etiquetaId != null) permitidas.add(articulo.etiquetaId)
+  for (const a of articulo.etiquetasAdicionales) permitidas.add(a.etiquetaId)
+  if (permitidas.size === 0) {
+    throw new ValidationError(`${prefijo} el artículo "${articulo.descripcion}" no tiene etiqueta configurada — defínela en el maestro de Artículos`)
+  }
   if (linea.etiquetaId != null) {
-    const etiqueta = await repo.getEtiqueta(linea.etiquetaId)
-    if (!etiqueta) throw new ValidationError(`${prefijo} la marca (etiqueta) seleccionada no existe o está bloqueada`)
+    if (!permitidas.has(linea.etiquetaId)) {
+      throw new ValidationError(`${prefijo} la etiqueta seleccionada no está permitida para el artículo "${articulo.descripcion}"`)
+    }
+  } else if (permitidas.size === 1) {
+    linea.etiquetaId = [...permitidas][0] // etiqueta fija heredada del maestro (se persiste)
+  } else {
+    throw new ValidationError(`${prefijo} el artículo "${articulo.descripcion}" tiene etiqueta dinámica — selecciona la marca (etiqueta)`)
   }
 }
 

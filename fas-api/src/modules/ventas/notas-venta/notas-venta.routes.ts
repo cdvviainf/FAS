@@ -6,6 +6,8 @@ const ITEM = 'VENTAS_NV' // "Cierre Comercial"
 
 export async function notasVentaRoutes(app: FastifyInstance) {
   app.get('/notas-venta', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
+  // Exportador por defecto (EXPORTADORA de la empresa activa) para precargar el form.
+  app.get('/notas-venta/exportador-predeterminado', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.exportadorPredeterminado)
   app.get('/notas-venta/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
   app.post('/notas-venta', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)
   app.patch('/notas-venta/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.update)

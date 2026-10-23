@@ -11,7 +11,7 @@ export default function Page() {
       pageTitle='Nueva Recepción'
       pageDescription='Encabezado de la Recepción. El archivo Excel se sube después de crearla.'
     >
-      <div className='max-w-3xl'>
+      <div className='max-w-5xl'>
         <RecepcionForm />
       </div>
     </PageContainer>

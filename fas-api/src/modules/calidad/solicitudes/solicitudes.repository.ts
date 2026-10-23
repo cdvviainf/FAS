@@ -12,6 +12,7 @@ const includeDetalle = {
   temporada: { select: { id: true, codigo: true, descripcion: true } },
   usuarioSolicitante: { select: { id: true, nombre: true, email: true } },
   entidadProductor: { select: { id: true, codigo: true, descripcion: true, razonSocial: true } },
+  planta: { select: { id: true, codigo: true, descripcion: true, razonSocial: true } },
   direccion: {
     select: {
       id: true,
@@ -152,6 +153,7 @@ export async function getSolicitudById(id: number) {
 export interface SolicitudCoreData {
   usuarioSolicitanteId: string
   entidadProductorId: number
+  plantaId?: number | null
   direccionId: number
   contactoId?: number | null
   especieId?: number | null
@@ -472,6 +474,12 @@ export async function getContactoDeEntidad(contactoId: number, entidadId: number
 export async function getEntidadProductor(entidadId: number) {
   return prisma.entidad.findFirst({
     where: { id: entidadId, eliminadoEn: null, activo: true, tipos: { has: 'PRODUCTOR' } },
+  })
+}
+
+export async function getEntidadPlanta(entidadId: number) {
+  return prisma.entidad.findFirst({
+    where: { id: entidadId, eliminadoEn: null, activo: true, tipos: { has: 'PLANTA' } },
   })
 }
 

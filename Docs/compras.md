@@ -176,6 +176,11 @@ La OC es **multilínea**. Cada línea es una combinación completa de caracterí
 > - Artículo **FIJO** (1 permitida): se autocompleta y queda de solo lectura.
 >   Artículo **DINÁMICO** (>1): obligatorio elegirla. El backend resuelve la fija
 >   aunque el request venga sin etiqueta (`ordenes-compra.service.ts`).
+> - **Instructivo de Embalaje (2026-10-21):** la línea del Instructivo
+>   (`InstructivoEmbalajeDetalle.etiquetaId`) usa **la misma regla** — set permitido
+>   del artículo (principal ∪ adicionales), FIJA autocompleta / DINÁMICA obligatoria,
+>   validada y resuelta también en el backend (`instructivo-embalaje.service.ts`),
+>   no solo en la UI.
 > - **Carga de Recepción (modo COMPRA):** la etiqueta del pallet debe coincidir
 >   con la de la línea de OC que matchea; la clave de match incluye la etiqueta
 >   (combo + etiqueta), de modo que dos líneas de igual combo y distinta etiqueta

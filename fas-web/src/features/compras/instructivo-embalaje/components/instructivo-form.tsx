@@ -186,6 +186,17 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
     ? articulos.filter((a) => a.especieId === linea.especieId)
     : []
 
+  // Etiquetas permitidas del embalaje = principal ∪ adicionales (misma lógica
+  // que la OC): 1 → FIJA (read-only); >1 → select restringido a ese conjunto.
+  const articuloSeleccionado = articulos.find((a) => a.id === linea.articuloId)
+  const etiquetasPermitidas = articuloSeleccionado
+    ? [
+        ...(articuloSeleccionado.etiqueta ? [articuloSeleccionado.etiqueta] : []),
+        ...(articuloSeleccionado.etiquetasAdicionales ?? []).map((a) => a.etiqueta),
+      ].filter((e, i, arr) => arr.findIndex((x) => x.id === e.id) === i)
+    : []
+  const etiquetaFija = etiquetasPermitidas.length === 1
+
   const semanaIsoInicioPrograma = fechaInicioPrograma ? getISOWeek(new Date(`${fechaInicioPrograma}T00:00:00`)) : null
 
   // Sin prefijo de código a propósito (2026-08-17): mismo criterio que la
@@ -300,6 +311,9 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
     if (!linea.variedadId) e.variedadId = 'Requerida'
     if (!linea.categoriaId) e.categoriaId = 'Requerida'
     if (linea.calibreIds.length === 0) e.calibreIds = 'Selecciona al menos un calibre'
+    // Etiqueta obligatoria solo si el embalaje admite más de una (dinámico);
+    // si es FIJA (1) se autocompleta y no se pide (misma regla que la OC).
+    if (etiquetasPermitidas.length > 1 && !linea.etiquetaId) e.etiquetaId = 'Selecciona la marca (etiqueta)'
     if (!linea.alturaId) e.alturaId = 'Requerida'
     if (!linea.cantidadPallets || Number(linea.cantidadPallets) <= 0) e.cantidadPallets = 'Debe ser mayor a 0'
     // Cajas por pallet debe venir del mantenedor (sin default 108).
@@ -504,21 +518,25 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
           </CardHeader>
           <CardContent className='space-y-2'>
             {d.detalle.map((linea) => (
-              <div key={linea.id} className='flex flex-wrap items-center gap-2 border-b pb-2 text-sm last:border-b-0 last:pb-0'>
-                <Badge variant='outline' className='text-xs'>{linea.mercado.descripcion}</Badge>
-                <span className='font-medium'>{linea.especie.descripcion} / {linea.variedad.descripcion}</span>
-                {linea.variedadRotulada && <span className='text-muted-foreground'>(rotulada: {linea.variedadRotulada.descripcion})</span>}
-                <span className='text-muted-foreground'>{linea.articulo.descripcion}</span>
-                <span className='text-muted-foreground'>· Marca: {linea.etiqueta?.descripcion ?? linea.articulo.etiqueta?.descripcion ?? '—'}</span>
-                <span className='text-muted-foreground'>· {linea.categoria.descripcion}</span>
-                <span className='text-muted-foreground'>· Altura: {linea.altura.descripcion}</span>
-                <span className='flex flex-wrap items-center gap-1 text-muted-foreground'>
-                  · Calibres:
+              <div key={linea.id} className='space-y-1 border-b pb-2 text-sm last:border-b-0 last:pb-0'>
+                <div className='flex flex-wrap items-center gap-2'>
+                  <Badge variant='outline' className='text-xs'>{linea.mercado.descripcion}</Badge>
+                  <span className='font-medium'>{linea.especie.descripcion} / {linea.variedad.descripcion}</span>
+                  {linea.variedadRotulada && <span className='text-muted-foreground'>(rotulada: {linea.variedadRotulada.descripcion})</span>}
+                  {/* Código del artículo (embalaje) en vez de la descripción, para dar más aire. */}
+                  <span className='text-muted-foreground'>{linea.articulo.codigo}</span>
+                  <span className='text-muted-foreground'>· Marca: {linea.etiqueta?.descripcion ?? linea.articulo.etiqueta?.descripcion ?? '—'}</span>
+                  <span className='text-muted-foreground'>· {linea.categoria.descripcion}</span>
+                  <span className='text-muted-foreground'>· Altura: {linea.altura.descripcion}</span>
+                  <span className='ml-auto text-muted-foreground'>{linea.cantidadPallets} pallets · {linea.cajas} cajas</span>
+                </div>
+                {/* Calibres en su propia fila (full width) — no se aprietan contra el resto. */}
+                <div className='flex flex-wrap items-center gap-1 text-muted-foreground'>
+                  <span className='text-xs'>Calibres:</span>
                   {linea.calibres.map((c) => (
                     <Badge key={c.calibre.id} variant='outline' className='text-xs'>{c.calibre.codigo}</Badge>
                   ))}
-                </span>
-                <span className='ml-auto text-muted-foreground'>{linea.cantidadPallets} pallets · {linea.cajas} cajas</span>
+                </div>
               </div>
             ))}
           </CardContent>
@@ -616,7 +634,17 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
               <Combobox
                 options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
                 value={linea.articuloId ? String(linea.articuloId) : null}
-                onChange={(v) => { const id = Number(v); setLinea((l) => ({ ...l, articuloId: id })); void aplicarTeoricaCajas(id, linea.tipoPalletId) }}
+                onChange={(v) => {
+                  const id = Number(v)
+                  // Autocompleta la etiqueta si el embalaje tiene una sola permitida (FIJA).
+                  const art = articulos.find((a) => a.id === id)
+                  const permit = art
+                    ? [...(art.etiqueta ? [art.etiqueta] : []), ...(art.etiquetasAdicionales ?? []).map((a) => a.etiqueta)]
+                    : []
+                  const etiquetaAuto = permit.length === 1 ? permit[0].id : null
+                  setLinea((l) => ({ ...l, articuloId: id, etiquetaId: etiquetaAuto }))
+                  void aplicarTeoricaCajas(id, linea.tipoPalletId)
+                }}
                 placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'}
                 searchPlaceholder='Buscar embalaje...'
                 disabled={!linea.especieId}
@@ -774,16 +802,26 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
               {lineaErrors.cajas && <p className='text-xs text-destructive'>{lineaErrors.cajas}</p>}
             </div>
             <div className='space-y-1.5'>
-              <Label>Marca (Etiqueta)</Label>
-              <Select value={linea.etiquetaId ? String(linea.etiquetaId) : '__none__'} onValueChange={(v) => setLinea((l) => ({ ...l, etiquetaId: v === '__none__' ? null : Number(v) }))}>
-                <SelectTrigger><SelectValue placeholder='Según el artículo' /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='__none__'>Según el artículo</SelectItem>
-                  {etiquetas.map((et) => (
-                    <SelectItem key={et.id} value={String(et.id)}>{et.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Marca (Etiqueta) {etiquetasPermitidas.length > 1 && <span className='text-destructive'>*</span>}</Label>
+              {/* Solo las marcas permitidas por el embalaje (misma lógica que la OC):
+                  1 permitida → fija (read-only); >1 → select restringido. */}
+              {etiquetaFija ? (
+                <Input value={etiquetasPermitidas[0]?.descripcion ?? ''} disabled readOnly />
+              ) : (
+                <Select
+                  value={linea.etiquetaId ? String(linea.etiquetaId) : ''}
+                  onValueChange={(v) => setLinea((l) => ({ ...l, etiquetaId: Number(v) }))}
+                  disabled={!articuloSeleccionado || etiquetasPermitidas.length === 0}
+                >
+                  <SelectTrigger><SelectValue placeholder={articuloSeleccionado ? 'Seleccionar...' : 'Elige un embalaje primero'} /></SelectTrigger>
+                  <SelectContent>
+                    {etiquetasPermitidas.map((et) => (
+                      <SelectItem key={et.id} value={String(et.id)}>{et.descripcion}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {lineaErrors.etiquetaId && <p className='text-xs text-destructive'>{lineaErrors.etiquetaId}</p>}
             </div>
           </div>
 

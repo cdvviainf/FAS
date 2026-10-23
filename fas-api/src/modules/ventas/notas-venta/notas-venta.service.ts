@@ -27,6 +27,7 @@ const CAMPOS_HEREDADOS_R4: { campo: keyof NotaVentaUpdateInput; label: string }[
 
 interface ReferenciasHeader {
   clienteId: number
+  exportadorId?: number | null
   compradorContactoId?: number | null
   notifyId?: number | null
   consignatarioId?: number | null
@@ -47,7 +48,7 @@ interface ReferenciasHeader {
 // referencia del encabezado, y consistencia cruzada (dirección↔cliente,
 // puerto↔país/tipo de embarque).
 async function validarReferenciasHeader(r: ReferenciasHeader) {
-  const entidadIds = [r.clienteId, r.notifyId, r.consignatarioId].filter(
+  const entidadIds = [r.clienteId, r.exportadorId, r.notifyId, r.consignatarioId].filter(
     (v): v is number => v != null,
   )
   const entidades = await repo.getEntidadTipos(entidadIds)
@@ -55,8 +56,14 @@ async function validarReferenciasHeader(r: ReferenciasHeader) {
   const faltantes = entidadIds.filter((id) => !encontrados.has(id))
   if (faltantes.length > 0) {
     throw new ValidationError(
-      `Una o más entidades (cliente/notify/consignatario) no existen o están inactivas: ${faltantes.join(', ')}`,
+      `Una o más entidades (cliente/exportador/notify/consignatario) no existen o están inactivas: ${faltantes.join(', ')}`,
     )
+  }
+  if (r.exportadorId != null) {
+    const exportador = encontrados.get(r.exportadorId)
+    if (exportador && !exportador.tipos.includes('EXPORTADORA')) {
+      throw new ValidationError('La entidad seleccionada como exportador no tiene tipo Exportador')
+    }
   }
   const cliente = encontrados.get(r.clienteId)
   if (cliente && !cliente.tipos.some((t) => TIPOS_CLIENTE.has(t))) {
@@ -246,7 +253,20 @@ export async function reabrirNotaVenta(id: number, userId: string) {
   return repo.reabrirNotaVenta(id, userId)
 }
 
+// Exportador por defecto (EXPORTADORA de la empresa activa) — para que el form
+// del Cierre lo precargue.
+export async function obtenerExportadorPorDefecto() {
+  return repo.getExportadorPorDefecto()
+}
+
 export async function crearNotaVenta(body: NotaVentaCreateInput, creadoPor: string) {
+  // Si el body OMITE exportador (undefined), se defaultea al de la empresa activa
+  // (Agrosan) para consumidores de API que no lo envíen. Un `null` EXPLÍCITO
+  // ("Sin exportador" en el form) se respeta — no se re-asigna (AVR-QA-R1-001).
+  if (body.exportadorId === undefined) {
+    const porDefecto = await repo.getExportadorPorDefecto()
+    if (porDefecto) body = { ...body, exportadorId: porDefecto.id }
+  }
   await validarReferenciasHeader(body)
   return ejecutarConFkTraducida(() => repo.createNotaVenta(body, creadoPor))
 }

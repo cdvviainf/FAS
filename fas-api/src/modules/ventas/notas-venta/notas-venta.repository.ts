@@ -9,6 +9,7 @@ const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: 
 
 const includeDetalle = {
   cliente: { select: entidadSelect },
+  exportador: { select: entidadSelect },
   compradorContacto: { select: { id: true, nombre: true, email: true, telefono: true, whatsapp: true } },
   notify: { select: entidadSelect },
   consignatario: { select: entidadSelect },
@@ -446,6 +447,23 @@ export async function getEntidadTipos(ids: number[]) {
     where: { id: { in: ids }, eliminadoEn: null, activo: true },
     select: { id: true, tipos: true },
   })
+}
+
+// Exportador por defecto del Cierre: la Entidad EXPORTADORA cuyo RUT coincide con
+// el de la empresa activa (Agrosan). Robusto en multiempresa (AGDry tendría su
+// propia EXPORTADORA). RUT comparado normalizado (sin puntos/guion). null si no hay.
+export async function getExportadorPorDefecto() {
+  const empresaId = getEmpresaIdActual()
+  if (!empresaId) return null
+  const empresa = await prisma.empresa.findUnique({ where: { id: empresaId }, select: { rut: true } })
+  if (!empresa?.rut) return null
+  const norm = (s: string) => s.replace(/[.\-\s]/g, '').toUpperCase()
+  const rutEmpresa = norm(empresa.rut)
+  const exportadoras = await prisma.entidad.findMany({
+    where: { eliminadoEn: null, activo: true, tipos: { has: 'EXPORTADORA' } },
+    select: { id: true, codigo: true, descripcion: true, razonSocial: true, identificador: true },
+  })
+  return exportadoras.find((e) => e.identificador && norm(e.identificador) === rutEmpresa) ?? null
 }
 
 export async function getDireccion(direccionId: number) {

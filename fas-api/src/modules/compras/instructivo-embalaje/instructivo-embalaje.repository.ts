@@ -151,12 +151,19 @@ export async function getExportador(id: number) {
   })
 }
 
-export async function getEtiqueta(id: number) {
-  return prisma.etiqueta.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
-}
-
 export async function getArticuloTipo(articuloId: number) {
-  return prisma.articulo.findUnique({ where: { id: articuloId }, select: { id: true, tipo: true, activo: true } })
+  return prisma.articulo.findUnique({
+    where: { id: articuloId },
+    select: {
+      id: true,
+      tipo: true,
+      activo: true,
+      descripcion: true,
+      // Set de etiquetas permitido = principal ∪ adicionales (misma regla que OC).
+      etiquetaId: true,
+      etiquetasAdicionales: { select: { etiquetaId: true } },
+    },
+  })
 }
 
 export async function getEspecie(especieId: number) {

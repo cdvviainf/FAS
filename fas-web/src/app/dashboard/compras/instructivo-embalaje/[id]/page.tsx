@@ -18,7 +18,7 @@ export default async function Page(props: PageProps) {
       pageTitle='Instructivo de Embalaje'
       pageDescription='Documento que instruye qué embalar.'
     >
-      <div className='max-w-4xl'>
+      <div className='max-w-5xl'>
         <InstructivoEmbalajeForm instructivoId={id} />
       </div>
     </PageContainer>

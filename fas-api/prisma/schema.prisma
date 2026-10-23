@@ -1641,12 +1641,14 @@ model Entidad {
   contactos                      EntidadContacto[]
   solicitudesInspeccion          SolicitudInspeccion[]       @relation("SolicitudInspeccionProductor")
   solicitudesInspeccionCliente   SolicitudInspeccion[]       @relation("SolicitudInspeccionCliente")
+  solicitudesInspeccionPlanta    SolicitudInspeccion[]       @relation("SolicitudInspeccionPlanta")
   movimientos                    Movimiento[]                @relation("MovEntidad")
   movimientosTransporte          Movimiento[]                @relation("MovTransporte")
   predios                        Predio[]                    @relation("PrediosProductor")
   contratos                      ProductorContrato[]         @relation("ContratosProductor")
   movimientosCC                  MovimientoCuentaCorriente[] @relation("CCProductor")
   notasVentaCliente              NotaVenta[]                 @relation("NotaVentaCliente")
+  notasVentaExportador           NotaVenta[]                 @relation("NotaVentaExportador")
   notasVentaNotify               NotaVenta[]                 @relation("NotaVentaNotify")
   notasVentaConsignatario        NotaVenta[]                 @relation("NotaVentaConsignatario")
   ordenesCompraProductor         OrdenCompra[]               @relation("OrdenCompraProductor")
@@ -1792,6 +1794,10 @@ model SolicitudInspeccion {
   mercado               Mercado?                  @relation(fields: [empresaId, mercadoId], references: [empresaId, id])
   clienteId             Int? // Entidad tipo CLIENTE_EXTRANJERO (opcional)
   cliente               Entidad?                  @relation("SolicitudInspeccionCliente", fields: [empresaId, clienteId], references: [empresaId, id])
+  // Planta (Entidad tipo PLANTA, opcional). Se autocompleta en el frontend si el
+  // productor elegido también es planta, pero queda editable (no bloqueado).
+  plantaId              Int?
+  planta                Entidad?                  @relation("SolicitudInspeccionPlanta", fields: [empresaId, plantaId], references: [empresaId, id])
   fechaDespacho         DateTime?                 @db.Date
   cantidadPallets       Int?
   observaciones         String?
@@ -1838,6 +1844,7 @@ model SolicitudInspeccion {
   @@unique([empresaId, id])
   @@index([estado])
   @@index([entidadProductorId])
+  @@index([plantaId])
   @@index([eliminadoEn])
   @@index([empresaId])
   @@map("solicitudes_inspeccion")
@@ -2917,6 +2924,10 @@ model NotaVenta {
   clienteId           Int
   // FK compuesta (empresaId, clienteId) -> Entidad(empresaId, id).
   cliente             Entidad          @relation("NotaVentaCliente", fields: [empresaId, clienteId], references: [empresaId, id])
+  // Exportador (Entidad tipo EXPORTADORA, opcional). Default: la EXPORTADORA
+  // cuyo RUT coincide con la empresa activa (Agrosan), resuelto en el service.
+  exportadorId        Int?
+  exportador          Entidad?         @relation("NotaVentaExportador", fields: [empresaId, exportadorId], references: [empresaId, id])
   // Comprador es un Contacto de la Entidad Cliente (no una Entidad completa) —
   // decisión de negocio, Christian, 2026-07-30.
   compradorContactoId Int?
@@ -2989,6 +3000,7 @@ model NotaVenta {
 
   @@unique([empresaId, id])
   @@index([clienteId])
+  @@index([exportadorId])
   @@index([fecha])
   @@index([condicionPagoId])
   @@index([empresaId])

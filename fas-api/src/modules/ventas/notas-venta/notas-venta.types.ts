@@ -4,6 +4,7 @@ export interface NotaVentaCreateInput {
   fecha: Date
   tipoVenta?: TipoVenta
   clienteId: number
+  exportadorId?: number | null
   compradorContactoId?: number | null
   notifyId?: number | null
   consignatarioId?: number | null

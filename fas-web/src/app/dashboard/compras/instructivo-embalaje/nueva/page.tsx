@@ -11,7 +11,7 @@ export default function Page() {
       pageTitle='Nuevo Instructivo de Embalaje'
       pageDescription='Documento que instruye qué embalar.'
     >
-      <div className='max-w-4xl'>
+      <div className='max-w-5xl'>
         <InstructivoEmbalajeForm />
       </div>
     </PageContainer>

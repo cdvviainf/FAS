@@ -12,6 +12,9 @@ export const solicitudCreateSchema = z.object({
   // cualquier otro consumidor de la API (QA-R2-SI-001).
   usuarioSolicitanteId: z.string().min(1).optional(),
   entidadProductorId: z.number().int().positive('El productor es requerido'),
+  // Planta (Entidad tipo PLANTA, opcional). La UI la autocompleta si el productor
+  // también es planta, pero es editable.
+  plantaId: z.number().int().positive().nullable().optional(),
   direccionId: z.number().int().positive('La dirección es requerida'),
   contactoId: z.number().int().positive().nullable().optional(),
   especieId: z.number().int().positive().nullable().optional(),

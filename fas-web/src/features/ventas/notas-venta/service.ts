@@ -21,6 +21,11 @@ export const notasVentaService = {
     return api.get(`ventas/notas-venta/${id}`).json()
   },
 
+  // Exportador por defecto (EXPORTADORA de la empresa activa) para precargar el form.
+  async exportadorPredeterminado(): Promise<{ data: { id: number; codigo: string; descripcion: string; razonSocial: string } | null }> {
+    return api.get('ventas/notas-venta/exportador-predeterminado').json()
+  },
+
   async create(data: NotaVentaCreateInput): Promise<{ data: NotaVentaDetalle }> {
     return api.post('ventas/notas-venta', { json: data }).json()
   },

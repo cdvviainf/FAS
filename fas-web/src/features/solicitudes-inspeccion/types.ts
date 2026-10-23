@@ -54,6 +54,8 @@ export interface SolicitudInspeccion {
   usuarioSolicitante: { id: string; nombre: string; email: string }
   entidadProductorId: number
   entidadProductor: { id: number; codigo: string; descripcion: string; razonSocial: string }
+  plantaId: number | null
+  planta: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
   direccionId: number
   direccion: {
     id: number
@@ -126,6 +128,7 @@ export interface SolicitudCreateInput {
   temporadaId: number
   usuarioSolicitanteId: string
   entidadProductorId: number
+  plantaId?: number | null
   direccionId: number
   contactoId?: number | null
   especieId?: number | null

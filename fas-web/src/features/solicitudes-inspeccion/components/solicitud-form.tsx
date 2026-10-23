@@ -75,6 +75,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
 
   const [usuarioSolicitanteId, setUsuarioSolicitanteId] = useState<string | null>(null)
   const [productorId, setProductorId] = useState<number | null>(null)
+  const [plantaId, setPlantaId] = useState<number | null>(null)
   const [direccionId, setDireccionId] = useState<number | null>(null)
   const [contactoId, setContactoId] = useState<number | null>(null)
   // Fecha de visita (2026-10-13): ya NO se ingresa al crear — vacía por defecto.
@@ -109,6 +110,12 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     queryFn: () => entidadesService.list({ tipo: 'PRODUCTOR', limit: 500, activo: true }),
     staleTime: 60_000,
   })
+  const { data: plantasData } = useQuery({
+    queryKey: ['plantas-options'],
+    queryFn: () => entidadesService.list({ tipo: 'PLANTA', limit: 500, activo: true }),
+    staleTime: 60_000,
+  })
+  const plantas = plantasData?.data ?? []
   const { data: usuarios } = useQuery({
     queryKey: ['usuarios-options'],
     queryFn: () => usuariosService.list({ limit: 500 }),
@@ -208,6 +215,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación del form al cargar la solicitud
       setUsuarioSolicitanteId(d.usuarioSolicitanteId)
       setProductorId(d.entidadProductorId)
+      setPlantaId(d.plantaId ?? null)
       setDireccionId(d.direccionId)
       setContactoId(d.contactoId)
       setFechaHora(d.fechaHora ? toLocalInput(d.fechaHora) : '')
@@ -284,6 +292,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       temporadaId: temporada?.id ?? 0,
       usuarioSolicitanteId: usuarioSolicitanteId!,
       entidadProductorId: productorId!,
+      plantaId,
       direccionId: direccionId!,
       contactoId,
       fechaHora: fechaHora ? new Date(fechaHora).toISOString() : null,
@@ -405,12 +414,30 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
               <Label>Productor <span className='text-destructive'>*</span></Label>
               <Combobox
                 value={productorId ? String(productorId) : ''}
-                onChange={(v) => { setProductorId(Number(v)); setDireccionId(null); setContactoId(null) }}
+                onChange={(v) => {
+                  const id = Number(v)
+                  setProductorId(id)
+                  setDireccionId(null)
+                  setContactoId(null)
+                  // Si el productor también es planta, autocompleta la planta (editable).
+                  if (plantas.some((p) => p.id === id)) setPlantaId(id)
+                }}
                 placeholder='Seleccionar productor...'
                 searchPlaceholder='Buscar productor...'
                 options={(productores?.data ?? []).map((p) => ({ value: String(p.id), label: p.descripcion }))}
               />
               {errors.productor && <p className='text-xs text-destructive'>{errors.productor}</p>}
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Planta</Label>
+              <Combobox
+                value={plantaId ? String(plantaId) : ''}
+                onChange={(v) => setPlantaId(v ? Number(v) : null)}
+                placeholder='Seleccionar planta...'
+                searchPlaceholder='Buscar planta...'
+                options={plantas.map((p) => ({ value: String(p.id), label: p.descripcion }))}
+              />
+              <p className='text-muted-foreground text-xs'>Se autocompleta si el productor también es planta (editable).</p>
             </div>
             <div className='space-y-1.5'>
               <Label>Dirección <span className='text-destructive'>*</span></Label>

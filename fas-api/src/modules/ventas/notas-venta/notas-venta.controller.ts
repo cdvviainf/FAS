@@ -22,6 +22,11 @@ export async function getById(req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ data: notaVenta })
 }
 
+export async function exportadorPredeterminado(_req: FastifyRequest, reply: FastifyReply) {
+  const exportador = await service.obtenerExportadorPorDefecto()
+  return reply.send({ data: exportador })
+}
+
 export async function create(req: FastifyRequest, reply: FastifyReply) {
   const body = notaVentaCreateSchema.parse(req.body)
   const notaVenta = await service.crearNotaVenta(body, req.fasUserId!)

@@ -8,6 +8,8 @@
 > - **Cierre**: además de comentarios/resultado/adjuntos, ahora se ingresa la **fecha/hora de la visita**, se asigna **quién asiste** (asignados función `ACUDIR`, reemplaza el set validando usuarios activos/con email) y se registran **defectos**.
 > - **Defectos del cierre**: nuevo modelo hijo `SolicitudInspeccionDefecto { solicitudId, grupoDefectoId, defectoId, valor Decimal(7,2) }`. Se elige Grupo → Defecto (filtrado por la `especieId` de la solicitud: genérico o válido para esa especie) → **valor** según la **unidad de medida del defecto**: nuevo campo `Defecto.tipoMedida` (`UNIDADES` = entero; `PORCENTAJE` = decimal 0..100, se ingresa como `12,5` para 12,5%). Al **reabrir** una solicitud cerrada se eliminan estos defectos (evidencia del cierre anulado, mismo criterio que QAS-SI-004). El borrado/bloqueo de un Grupo/Defecto se bloquea si lo referencia el cierre de una solicitud vigente.
 
+> - **Planta (2026-10-21):** `SolicitudInspeccion.plantaId` (Entidad tipo **PLANTA**, opcional). Nuevo selector "Planta" en el form; se **autocompleta** si el Productor elegido también es PLANTA (su `tipos` incluye PLANTA), pero queda **editable** (no bloqueado). El backend valida que, si viene, sea tipo PLANTA (`getEntidadPlanta`). Migración `20261021130000`.
+
 ## 1. Alcance funcional (definido por Christian)
 
 Flujo de **visita de inspección a terreno**:

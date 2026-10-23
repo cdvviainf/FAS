@@ -99,6 +99,8 @@ export interface NotaVentaListItemConEstadoOc extends NotaVentaListItem {
 
 export interface NotaVentaDetalle extends NotaVentaListItem {
   tipoVenta: 'EXPORTACION' | 'NACIONAL'
+  exportadorId: number | null
+  exportador: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
   compradorContactoId: number | null
   compradorContacto: { id: number; nombre: string; email: string | null; telefono: string | null; whatsapp: string | null } | null
   notifyId: number | null
@@ -140,6 +142,7 @@ export interface NotaVentaCreateInput {
   fecha: string
   tipoVenta?: 'EXPORTACION' | 'NACIONAL'
   clienteId: number
+  exportadorId?: number | null
   compradorContactoId?: number | null
   notifyId?: number | null
   consignatarioId?: number | null
