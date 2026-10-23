@@ -559,9 +559,13 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   }
 
   return (
-    <div className='space-y-6'>
+    // min-w-0 en el contenedor y el fieldset: un <fieldset> trae min-inline-size:
+    // min-content por defecto y no se encoge bajo el ancho de la tabla de detalle
+    // (12 columnas nowrap), anulando su overflow-x-auto y desbordando la página al
+    // editar. Con min-w-0 la tabla hace scroll interno y el form respeta el ancho.
+    <div className='min-w-0 space-y-6'>
       {soloLectura && <Badge variant='secondary'>Solo lectura — sin permiso de edición</Badge>}
-      <fieldset disabled={soloLectura} className='m-0 space-y-6 border-0 p-0'>
+      <fieldset disabled={soloLectura} className='m-0 min-w-0 space-y-6 border-0 p-0'>
       <Card>
         <CardHeader>
           <CardTitle className='flex flex-wrap items-center gap-2'>
@@ -912,7 +916,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
                       <TableCell className='font-medium whitespace-nowrap'>{nombre(especies, d.especieId)}</TableCell>
                       <TableCell className='whitespace-nowrap'>{nombre(variedadesTodas, d.variedadId)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{d.variedadRotuladaId ? nombre(variedadesTodas, d.variedadRotuladaId) : '—'}</TableCell>
-                      <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(articulos, d.articuloId)}</TableCell>
+                      <TableCell className='whitespace-nowrap text-muted-foreground' title={articulos.find((a) => a.id === d.articuloId)?.descripcion ?? undefined}>{articulos.find((a) => a.id === d.articuloId)?.codigo ?? String(d.articuloId)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{marcaDe(d)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(categoriasTodas, d.categoriaId)}</TableCell>
                       <TableCell className='max-w-[180px] text-muted-foreground'>

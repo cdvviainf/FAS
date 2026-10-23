@@ -473,7 +473,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
 
           <Separator />
 
-          <div className='grid gap-4 sm:grid-cols-2'>
+          <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Planta <span className='text-destructive'>*</span></Label>
               <Combobox
@@ -481,12 +481,12 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
                 onChange={(v) => setFields((f) => ({ ...f, plantaId: Number(v), direccionPlantaId: 0 }))}
                 placeholder='Seleccionar planta...'
                 searchPlaceholder='Buscar planta...'
-                options={plantas.map((p) => ({ value: String(p.id), label: `${p.descripcion} — ${p.razonSocial}` }))}
+                options={plantas.map((p) => ({ value: String(p.id), label: p.descripcion }))}
                 disabled={soloLectura}
               />
               {errors.plantaId && <p className='text-xs text-destructive'>{errors.plantaId}</p>}
             </div>
-            <div className='space-y-1.5'>
+            <div className='space-y-1.5 sm:col-span-2'>
               <Label>Dirección de Retiro <span className='text-destructive'>*</span></Label>
               <Select
                 value={fields.direccionPlantaId ? String(fields.direccionPlantaId) : ''}

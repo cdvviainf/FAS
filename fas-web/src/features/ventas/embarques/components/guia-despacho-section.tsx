@@ -289,7 +289,7 @@ function EmitirGuiaDialog({
                 </Select>
               </div>
             )}
-            <div className='space-y-1.5'>
+            <div className='space-y-1.5 sm:col-span-2'>
               <Label>Dirección de origen <span className='text-destructive'>*</span></Label>
               <Select
                 value={form.dirOrigenId}
@@ -312,11 +312,11 @@ function EmitirGuiaDialog({
                 <p className='text-destructive text-xs'>La planta no tiene direcciones cargadas — agrégale una en Entidades.</p>
               )}
             </div>
-            <div className='space-y-1.5'>
+            <div className='space-y-1.5 sm:col-span-2'>
               <Label>Comuna de origen</Label>
               <Input value={form.comunaOrigen} disabled placeholder='—' />
             </div>
-            <div className='space-y-1.5'>
+            <div className='space-y-1.5 sm:col-span-2'>
               <Label>Dirección de destino</Label>
               <Input
                 value={Number(form.indTraslado) === INDTRASLADO_EXPORTACION ? (agente?.direccion ?? '') : form.dirDestino}
@@ -325,7 +325,7 @@ function EmitirGuiaDialog({
                 placeholder='Dirección de llegada'
               />
             </div>
-            <div className='space-y-1.5'>
+            <div className='space-y-1.5 sm:col-span-2'>
               <Label>Comuna de destino</Label>
               <Input
                 value={Number(form.indTraslado) === INDTRASLADO_EXPORTACION ? (agente?.comuna ?? '') : form.comunaDestino}
