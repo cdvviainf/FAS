@@ -30,6 +30,9 @@ import { cajasPorPalletService } from '@/features/cajas-por-pallet/service'
 import { CajasPorPalletQuickCreate } from '@/features/cajas-por-pallet/components/cajas-por-pallet-quick-create'
 import { condicionesPagoService } from '@/features/condiciones-pago/service'
 import { FECHA_REFERENCIA_LABELS } from '@/features/condiciones-pago/types'
+import { notasCalidadService } from '@/features/notas-calidad/service'
+import { notasCondicionService } from '@/features/notas-condicion/service'
+import { CalidadesPermitidasInput, type CalidadPermitidaPar } from '@/components/shared/calidades-permitidas-input'
 import { notaVentaDetailOptions, notasVentaKeys } from '../queries'
 import { notasVentaService } from '../service'
 import { CLIENTE_SIN_DEFINIR_CODIGO } from '../constants'
@@ -142,6 +145,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
 
   const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [calidadesPermitidas, setCalidadesPermitidas] = useState<CalidadPermitidaPar[]>([])
   const [linea, setLinea] = useState<NuevaLinea>(LINEA_EMPTY)
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
   // Estado del lookup de cajas por pallet (2026-10-13, CPP-QA-003): distingue
@@ -183,6 +187,10 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   // (IMP-QA-R1-005).
   const consignatarios = entidades.filter((e) => e.tipos.includes('CONSIGNATARIO'))
   const exportadores = entidades.filter((e) => e.tipos.includes('EXPORTADORA'))
+  const { data: notasCalidadData } = useQuery({ queryKey: ['notas-calidad-options'], queryFn: () => notasCalidadService.list(), staleTime: 5 * 60_000 })
+  const { data: notasCondicionData } = useQuery({ queryKey: ['notas-condicion-options'], queryFn: () => notasCondicionService.list(), staleTime: 5 * 60_000 })
+  const notasCalidad = (notasCalidadData?.data ?? []).filter((n) => !n.bloqueado)
+  const notasCondicion = (notasCondicionData?.data ?? []).filter((n) => !n.bloqueado)
 
   const { data: tiposEmbarqueData } = useQuery({ queryKey: ['tipos-embarque-options'], queryFn: () => tiposEmbarqueService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const { data: mercadosData } = useQuery({ queryKey: ['mercados-options'], queryFn: () => mercadosService.list({ limit: 200 }), staleTime: 5 * 60_000 })
@@ -251,6 +259,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
         condicionPagoId: d.condicionPagoId,
         observaciones: d.observaciones ?? '',
       })
+      setCalidadesPermitidas(d.calidadesPermitidas.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })))
     }
   }, [notaVenta])
 
@@ -316,6 +325,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       tipoVenta: fields.tipoVenta,
       clienteId: fields.clienteId,
       exportadorId: fields.exportadorId,
+      calidadesPermitidas,
       compradorContactoId: fields.compradorContactoId,
       notifyId: fields.notifyId,
       consignatarioId: fields.consignatarioId,
@@ -699,6 +709,14 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 options={[{ value: 'none', label: 'Sin exportador' }, ...exportadores.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
               />
               <p className='text-muted-foreground text-xs'>Por defecto, la exportadora de la empresa (Agrosan). Editable.</p>
+            </div>
+            <div className='sm:col-span-2'>
+              <CalidadesPermitidasInput
+                value={calidadesPermitidas}
+                onChange={setCalidadesPermitidas}
+                calidades={notasCalidad.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
+                condiciones={notasCondicion.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
+              />
             </div>
 
             <div className='space-y-1.5'>

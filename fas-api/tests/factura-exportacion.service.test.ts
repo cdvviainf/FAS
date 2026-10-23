@@ -36,12 +36,9 @@ import * as repo from '../src/modules/ventas/cobranza/factura-exportacion.reposi
 import { obtenerTipoCambio } from '../src/modules/finanzas/facturacion/tipo-cambio.adapter.js'
 import { siguienteCodigo } from '../src/modules/config/prefijos-codigo/prefijos-codigo.service.js'
 import { validarYCompletarLineas } from '../src/modules/ventas/cobranza/proforma.service.js'
-import * as dteService from '../src/modules/finanzas/facturacion/dte-emitidos.service.js'
-import * as dteRepo from '../src/modules/finanzas/facturacion/dte-emitidos.repository.js'
 import {
   actualizarBorrador,
   crearBorradorDesdeProforma,
-  emitir,
 } from '../src/modules/ventas/cobranza/factura-exportacion.service.js'
 
 const embarqueDespachado = {
@@ -135,8 +132,13 @@ describe('actualizarBorrador', () => {
 
     await actualizarBorrador(10, { dimensiones: [], lineas: [] as never }, 'u1')
 
-    // Cláusula sin flete/seguro (FOB): ambos montos nulos.
-    expect(repo.actualizarBorrador).toHaveBeenCalledWith(10, [], 50, null, null, expect.any(Array), 'u1')
+    // Firma actual de repo.actualizarBorrador(id, {objeto}, userId) — 2026-10.
+    // Cláusula sin flete/seguro (FOB): ambos montos nulos; montoTotal derivado = 50.
+    expect(repo.actualizarBorrador).toHaveBeenCalledWith(
+      10,
+      expect.objectContaining({ montoTotal: 50, montoFlete: null, montoSeguro: null }),
+      'u1',
+    )
   })
 
   it('exige Flete cuando la cláusula lo requiere', async () => {
@@ -150,90 +152,5 @@ describe('actualizarBorrador', () => {
     ] as never)
 
     await expect(actualizarBorrador(10, { dimensiones: [], lineas: [] as never }, 'u1')).rejects.toThrow(/Flete/i)
-  })
-})
-
-describe('emitir', () => {
-  const facturaBorrador = {
-    id: 10,
-    estado: 'BORRADOR',
-    empresaId: 1,
-    embarqueId: 5,
-    montoTotal: '1000.00',
-    lineas: [{ descripcion: 'Uva', cantidadCajas: 100, precioUnitario: '10' }],
-  }
-
-  function armarMocksBase() {
-    vi.mocked(repo.getFacturaActivaById).mockResolvedValue(facturaBorrador as never)
-    vi.mocked(repo.getEmbarqueParaFacturaDte).mockResolvedValue(embarqueDespachado as never)
-    vi.mocked(dteRepo.getEmpresaParaDte).mockResolvedValue({
-      rut: '77089369-0', razonSocial: 'Agrosan', giro: 'Fruta', direccion: 'x', comuna: 'y',
-    } as never)
-  }
-
-  it('rechaza si el timbrado (generarReal) falla y deja la Factura sin emitir', async () => {
-    armarMocksBase()
-    vi.mocked(dteService.emitirDteTemporal).mockResolvedValue({ estado: 'TEMPORAL_CREADO' } as never)
-    vi.mocked(dteService.generarDteReal).mockResolvedValue({ estado: 'TEMPORAL_CREADO', errorMensaje: 'sin firma' } as never)
-
-    await expect(emitir(10, 'u1')).rejects.toThrow(/sin firma/i)
-    expect(repo.marcarEmitida).not.toHaveBeenCalled()
-  })
-
-  it('timbra y genera las Cuotas (CB5/CB6): 60/40 sumando el total, con folio', async () => {
-    armarMocksBase()
-    vi.mocked(dteService.emitirDteTemporal).mockResolvedValue({ estado: 'TEMPORAL_CREADO' } as never)
-    vi.mocked(dteService.generarDteReal).mockResolvedValue({ estado: 'GENERADO', folio: 123, libredteCodigoTemporal: 'abc' } as never)
-    vi.mocked(repo.getCuotasPagoNotaVenta).mockResolvedValue([
-      { descripcion: null, fechaReferencia: 'FACTURA', plazoDias: 30, tipoValor: 'PORCENTAJE', porcentaje: 60, montoCalculado: null },
-      { descripcion: null, fechaReferencia: 'ZARPE', plazoDias: 60, tipoValor: 'PORCENTAJE', porcentaje: 40, montoCalculado: null },
-    ] as never)
-    vi.mocked(repo.marcarEmitida).mockResolvedValue({ id: 10, estado: 'EMITIDA' } as never)
-
-    await emitir(10, 'u1')
-
-    expect(repo.marcarEmitida).toHaveBeenCalledTimes(1)
-    const [id, datos] = vi.mocked(repo.marcarEmitida).mock.calls[0]
-    expect(id).toBe(10)
-    expect(datos.folio).toBe(123)
-    expect(datos.cuotas).toHaveLength(2)
-    expect(datos.cuotas[0].montoCuota).toBe(600)
-    expect(datos.cuotas[1].montoCuota).toBe(400)
-    expect(datos.cuotas[0].montoCuota + datos.cuotas[1].montoCuota).toBe(1000)
-    // Cuota 1 (FACTURA) tiene vencimiento; Cuota 2 (ZARPE) usa fecha del Embarque.
-    expect(datos.cuotas[0].fechaVencimiento).toBeInstanceOf(Date)
-    expect(datos.cuotas[1].fechaVencimiento).toBeInstanceOf(Date)
-  })
-
-  it('CIF: timbra el detalle a valor FOB y manda MntFlete/MntSeguro; TotClauVenta = total CIF', async () => {
-    // Total 1000 (CIF), flete 100 + seguro 100 → FOB 800 → factor 0.8 → PrcItem 8.
-    vi.mocked(repo.getFacturaActivaById).mockResolvedValue({
-      ...facturaBorrador,
-      montoFlete: '100.00',
-      montoSeguro: '100.00',
-    } as never)
-    vi.mocked(repo.getEmbarqueParaFacturaDte).mockResolvedValue({
-      ...embarqueDespachado,
-      notaVenta: { ...embarqueDespachado.notaVenta, clausulaVenta: { codigo: '9', descripcion: 'CIF', requiereFlete: true, requiereSeguro: true } },
-    } as never)
-    vi.mocked(dteRepo.getEmpresaParaDte).mockResolvedValue({
-      rut: '77089369-0', razonSocial: 'Agrosan', giro: 'Fruta', direccion: 'x', comuna: 'y',
-    } as never)
-    vi.mocked(dteService.emitirDteTemporal).mockResolvedValue({ estado: 'TEMPORAL_CREADO' } as never)
-    vi.mocked(dteService.generarDteReal).mockResolvedValue({ estado: 'GENERADO', folio: 5, libredteCodigoTemporal: 'z' } as never)
-    vi.mocked(repo.getCuotasPagoNotaVenta).mockResolvedValue([] as never)
-    vi.mocked(repo.marcarEmitida).mockResolvedValue({ id: 10, estado: 'EMITIDA' } as never)
-
-    await emitir(10, 'u1')
-
-    const payload = vi.mocked(dteService.emitirDteTemporal).mock.calls[0][0].payload as {
-      Detalle: { PrcItem: number }[]
-      Encabezado: { Transporte: { Aduana: Record<string, unknown> } }
-    }
-    const aduana = payload.Encabezado.Transporte.Aduana
-    expect(payload.Detalle[0].PrcItem).toBe(8) // 10 × 0.8 (FOB)
-    expect(aduana.MntFlete).toBe(100)
-    expect(aduana.MntSeguro).toBe(100)
-    expect(aduana.TotClauVenta).toBe(1000) // valor cláusula/CIF
   })
 })

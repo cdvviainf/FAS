@@ -101,6 +101,7 @@ export interface NotaVentaDetalle extends NotaVentaListItem {
   tipoVenta: 'EXPORTACION' | 'NACIONAL'
   exportadorId: number | null
   exportador: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
+  calidadesPermitidas: { notaCalidad: { id: number; codigo: string; descripcion: string }; notaCondicion: { id: number; codigo: string; descripcion: string } }[]
   compradorContactoId: number | null
   compradorContacto: { id: number; nombre: string; email: string | null; telefono: string | null; whatsapp: string | null } | null
   notifyId: number | null
@@ -143,6 +144,7 @@ export interface NotaVentaCreateInput {
   tipoVenta?: 'EXPORTACION' | 'NACIONAL'
   clienteId: number
   exportadorId?: number | null
+  calidadesPermitidas?: { notaCalidadId: number; notaCondicionId: number }[]
   compradorContactoId?: number | null
   notifyId?: number | null
   consignatarioId?: number | null

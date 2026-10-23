@@ -68,8 +68,7 @@ export function SolicitudInspeccionV1({ d, marcaAgua, marcaAguaFecha }: { d: Sol
         campos={[
           { label: 'Especie', valor: d.especie ?? '—' },
           { label: 'Cantidad de pallets', valor: d.cantidadPallets != null ? fmt.entero(d.cantidadPallets) : '—' },
-          { label: 'Nota de Calidad', valor: d.notaCalidad ?? '—' },
-          { label: 'Nota de Condición', valor: d.notaCondicion ?? '—' },
+          { label: 'Calidades permitidas', valor: d.calidadesPermitidas ?? '—' },
           { label: 'Variedades', valor: listaOGuion(d.variedades) },
           { label: 'Calibres', valor: listaOGuion(d.calibres) },
           { label: 'Categorías', valor: listaOGuion(d.categorias) },

@@ -1,3 +1,5 @@
+import type { ParCalidad } from '../../../shared/calidades-permitidas.js'
+
 export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
 export type ResultadoCierre = 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
 export type FuncionAsignado = 'ACUDIR' | 'NOTIFICAR'
@@ -21,8 +23,7 @@ export interface SolicitudCreateInput {
   clienteId?: number | null
   fechaDespacho?: string | null
   cantidadPallets?: number | null
-  notaCalidadIds?: number[]
-  notaCondicionIds?: number[]
+  calidadesPermitidas?: ParCalidad[]
   variedadIds?: number[]
   calibreIds?: number[]
   categoriaIds?: number[]
@@ -43,8 +44,7 @@ export interface SolicitudUpdateInput {
   clienteId?: number | null
   fechaDespacho?: string | null
   cantidadPallets?: number | null
-  notaCalidadIds?: number[]
-  notaCondicionIds?: number[]
+  calidadesPermitidas?: ParCalidad[]
   variedadIds?: number[]
   calibreIds?: number[]
   categoriaIds?: number[]

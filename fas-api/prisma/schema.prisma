@@ -1832,8 +1832,10 @@ model SolicitudInspeccion {
   // notaCalidadId/notaCondicionId singular, calidad.md): varios valores por
   // solicitud, mismos mantenedores que Pallet (compras.md §4.8), restringidos
   // por `especieId` de esta Solicitud cuando está definido.
-  notasCalidad   SolicitudInspeccionNotaCalidad[]
-  notasCondicion SolicitudInspeccionNotaCondicion[]
+  // Calidades permitidas = pares (NotaCalidad, NotaCondicion) — supersede las dos
+  // listas independientes (notasCalidad/notasCondicion), que permitían el producto
+  // cartesiano. Ahora se definen combinaciones específicas (ej. A1/A2/B1, sin B2).
+  calidadesPermitidas SolicitudInspeccionCalidadPermitida[]
   // Defectos registrados en el cierre (2026-10-13): grupo + defecto + valor
   // (entero o % según Defecto.tipoMedida).
   defectos       SolicitudInspeccionDefecto[]
@@ -1905,26 +1907,48 @@ model SolicitudInspeccionEmbalaje {
   @@map("solicitud_inspeccion_embalajes")
 }
 
-model SolicitudInspeccionNotaCalidad {
-  id            Int                 @id @default(autoincrement())
-  solicitudId   Int
-  solicitud     SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
-  notaCalidadId Int
-  notaCalidad   NotaCalidad         @relation(fields: [notaCalidadId], references: [id])
-
-  @@unique([solicitudId, notaCalidadId])
-  @@map("solicitud_inspeccion_notas_calidad")
-}
-
-model SolicitudInspeccionNotaCondicion {
+// Calidad permitida = par (NotaCalidad, NotaCondicion). Tabla hija simple (como
+// las demás colecciones hijas: parentId + Cascade, FK simples a mantenedores).
+model SolicitudInspeccionCalidadPermitida {
   id              Int                 @id @default(autoincrement())
   solicitudId     Int
   solicitud       SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  notaCalidadId   Int
+  notaCalidad     NotaCalidad         @relation(fields: [notaCalidadId], references: [id])
   notaCondicionId Int
   notaCondicion   NotaCondicion       @relation(fields: [notaCondicionId], references: [id])
 
-  @@unique([solicitudId, notaCondicionId])
-  @@map("solicitud_inspeccion_notas_condicion")
+  @@unique([solicitudId, notaCalidadId, notaCondicionId])
+  @@index([solicitudId])
+  @@map("solicitud_inspeccion_calidades_permitidas")
+}
+
+model NotaVentaCalidadPermitida {
+  id              Int           @id @default(autoincrement())
+  notaVentaId     Int
+  notaVenta       NotaVenta     @relation(fields: [notaVentaId], references: [id], onDelete: Cascade)
+  notaCalidadId   Int
+  notaCalidad     NotaCalidad   @relation(fields: [notaCalidadId], references: [id])
+  notaCondicionId Int
+  notaCondicion   NotaCondicion @relation(fields: [notaCondicionId], references: [id])
+
+  @@unique([notaVentaId, notaCalidadId, notaCondicionId])
+  @@index([notaVentaId])
+  @@map("nota_venta_calidades_permitidas")
+}
+
+model InstructivoEmbalajeCalidadPermitida {
+  id              Int                 @id @default(autoincrement())
+  instructivoId   Int
+  instructivo     InstructivoEmbalaje @relation(fields: [instructivoId], references: [id], onDelete: Cascade)
+  notaCalidadId   Int
+  notaCalidad     NotaCalidad         @relation(fields: [notaCalidadId], references: [id])
+  notaCondicionId Int
+  notaCondicion   NotaCondicion       @relation(fields: [notaCondicionId], references: [id])
+
+  @@unique([instructivoId, notaCalidadId, notaCondicionId])
+  @@index([instructivoId])
+  @@map("instructivo_embalaje_calidades_permitidas")
 }
 
 model SolicitudInspeccionAsignado {
@@ -2843,7 +2867,9 @@ model NotaCalidad {
 
   especies              NotaCalidadEspecie[]
   pallets               Pallet[]
-  solicitudesInspeccion SolicitudInspeccionNotaCalidad[]
+  solicitudesCalidad    SolicitudInspeccionCalidadPermitida[]
+  notasVentaCalidad     NotaVentaCalidadPermitida[]
+  instructivosCalidad   InstructivoEmbalajeCalidadPermitida[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -2879,7 +2905,9 @@ model NotaCondicion {
 
   especies              NotaCondicionEspecie[]
   pallets               Pallet[]
-  solicitudesInspeccion SolicitudInspeccionNotaCondicion[]
+  solicitudesCondicion  SolicitudInspeccionCalidadPermitida[]
+  notasVentaCondicion   NotaVentaCalidadPermitida[]
+  instructivosCondicion InstructivoEmbalajeCalidadPermitida[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -2984,6 +3012,9 @@ model NotaVenta {
   detalles      NotaVentaDetalle[]
   ordenesCompra OrdenCompra[]
   embarques     Embarque[]
+  // Calidades permitidas = pares (NotaCalidad, NotaCondicion). Restringen qué
+  // pallets se pueden reservar al Embarque de este Cierre (ver embarques).
+  calidadesPermitidas NotaVentaCalidadPermitida[]
 
   // Bloqueo del Cierre Comercial (2026-09-28): al cerrar, la NV queda de solo
   // lectura (no se editan encabezado, líneas ni se borra). Reabrir exige el
@@ -4327,6 +4358,8 @@ model InstructivoEmbalaje {
   observaciones       String?
 
   detalle     InstructivoEmbalajeDetalle[]
+  // Calidades permitidas = pares (NotaCalidad, NotaCondicion) — definición documental.
+  calidadesPermitidas InstructivoEmbalajeCalidadPermitida[]
   // Recepciones de Proceso que seleccionaron este instructivo (2026-09-01) —
   // la validación de características contra el detalle es una advertencia
   // aceptable/rechazable, no un bloqueo (2026-09-02, ver Recepcion abajo).

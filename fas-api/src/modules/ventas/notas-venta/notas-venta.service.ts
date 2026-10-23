@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { validarCalidadesPermitidas } from '../../../shared/calidades-permitidas.js'
 import * as repo from './notas-venta.repository.js'
 import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleUpdateInput, NotaVentaUpdateInput } from './notas-venta.types.js'
 
@@ -268,6 +269,7 @@ export async function crearNotaVenta(body: NotaVentaCreateInput, creadoPor: stri
     if (porDefecto) body = { ...body, exportadorId: porDefecto.id }
   }
   await validarReferenciasHeader(body)
+  await validarCalidadesPermitidas(body.calidadesPermitidas ?? [])
   return ejecutarConFkTraducida(() => repo.createNotaVenta(body, creadoPor))
 }
 
@@ -313,6 +315,9 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
     condicionPagoId: body.condicionPagoId !== undefined ? body.condicionPagoId : existente.condicionPagoId,
   }
   await validarReferenciasHeader(efectivo)
+  if (body.calidadesPermitidas !== undefined) {
+    await validarCalidadesPermitidas(body.calidadesPermitidas)
+  }
 
   return ejecutarConFkTraducida(() => repo.updateNotaVenta(id, body, actualizadoPor))
 }

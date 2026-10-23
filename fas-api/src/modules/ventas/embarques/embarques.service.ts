@@ -445,7 +445,7 @@ export async function listarPalletsDisponibles(embarqueId: number) {
   const embarque = await obtenerEmbarque(embarqueId)
   const notaVenta = await repo.getNotaVentaConDetalle(embarque.notaVentaId)
   if (!notaVenta) throw new ValidationError('El Cierre Comercial de este Embarque ya no existe')
-  return repo.getPalletsDisponibles(notaVenta.detalles)
+  return repo.getPalletsDisponibles(notaVenta.detalles, notaVenta.calidadesPermitidas)
 }
 
 // Reclamo atómico en el repositorio (reservarPalletsEnEmbarque) es la
@@ -460,12 +460,12 @@ export async function agregarPallets(embarqueId: number, palletIds: number[]) {
   const notaVenta = await repo.getNotaVentaConDetalle(embarque.notaVentaId)
   if (!notaVenta) throw new ValidationError('El Cierre Comercial de este Embarque ya no existe')
 
-  const disponibles = await repo.getPalletsDisponibles(notaVenta.detalles)
+  const disponibles = await repo.getPalletsDisponibles(notaVenta.detalles, notaVenta.calidadesPermitidas)
   const disponiblesIds = new Set(disponibles.map((p) => p.id))
   const fueraDeAlcance = unicos.filter((id) => !disponiblesIds.has(id))
   if (fueraDeAlcance.length > 0) {
     throw new ValidationError(
-      `Uno o más pallets no están disponibles o no calzan con el detalle de este Cierre Comercial: ${fueraDeAlcance.join(', ')}`,
+      `Uno o más pallets no están disponibles, no calzan con el detalle de este Cierre Comercial o su calidad no está permitida: ${fueraDeAlcance.join(', ')}`,
     )
   }
 

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parCalidadSchema } from '../../../shared/calidades-permitidas.js'
 
 const instructivoEmbalajeDetalleSchema = z.object({
   articuloId: z.number().int().positive('El artículo de embalaje es requerido'),
@@ -27,6 +28,8 @@ export const instructivoEmbalajeCreateSchema = z.object({
   exportadorId: z.number().int().positive().optional().nullable(),
   fechaInicioPrograma: z.coerce.date({ message: 'La fecha de inicio de programa es requerida' }),
   observaciones: z.string().max(5000).trim().optional().nullable(),
+  // Calidades permitidas = pares (NotaCalidad, NotaCondicion).
+  calidadesPermitidas: z.array(parCalidadSchema).optional(),
   detalle: z.array(instructivoEmbalajeDetalleSchema).min(1, 'El instructivo debe tener al menos una línea'),
 })
 
@@ -39,6 +42,7 @@ export const instructivoEmbalajeUpdateSchema = z
     exportadorId: z.number().int().positive().optional().nullable(),
     fechaInicioPrograma: z.coerce.date().optional(),
     observaciones: z.string().max(5000).trim().optional().nullable(),
+    calidadesPermitidas: z.array(parCalidadSchema).optional(),
     detalle: z.array(instructivoEmbalajeDetalleSchema).min(1, 'El instructivo debe tener al menos una línea').optional(),
   })
   .refine(
@@ -47,6 +51,7 @@ export const instructivoEmbalajeUpdateSchema = z
       data.exportadorId !== undefined ||
       data.fechaInicioPrograma !== undefined ||
       data.observaciones !== undefined ||
+      data.calidadesPermitidas !== undefined ||
       data.detalle !== undefined,
     { message: 'Debe incluir al menos un campo a actualizar' },
   )

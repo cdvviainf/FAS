@@ -29,6 +29,9 @@ import { articulosService } from '@/features/materiales/articulos/service'
 import { cajasPorPalletService } from '@/features/cajas-por-pallet/service'
 import { CajasPorPalletQuickCreate } from '@/features/cajas-por-pallet/components/cajas-por-pallet-quick-create'
 import { entidadesService } from '@/features/entidades/service'
+import { notasCalidadService } from '@/features/notas-calidad/service'
+import { notasCondicionService } from '@/features/notas-condicion/service'
+import { CalidadesPermitidasInput, type CalidadPermitidaPar } from '@/components/shared/calidades-permitidas-input'
 import { instructivoEmbalajeDetailOptions, instructivosEmbalajeKeys } from '../queries'
 import { instructivoEmbalajeService } from '../service'
 import type { InstructivoEmbalajeDetalleInput } from '../types'
@@ -101,6 +104,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
 
   const [entidadProductorId, setEntidadProductorId] = useState(0)
   const [exportadorId, setExportadorId] = useState<number | null>(null)
+  const [calidadesPermitidas, setCalidadesPermitidas] = useState<CalidadPermitidaPar[]>([])
   const [fechaInicioPrograma, setFechaInicioPrograma] = useState('')
   const [observaciones, setObservaciones] = useState('')
   const [detalle, setDetalle] = useState<InstructivoEmbalajeDetalleInput[]>([])
@@ -170,6 +174,10 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
 
   const productores = productoresData?.data ?? []
   const exportadores = exportadoresData?.data ?? []
+  const { data: notasCalidadData } = useQuery({ queryKey: ['notas-calidad-options'], queryFn: () => notasCalidadService.list(), staleTime: 5 * 60_000 })
+  const { data: notasCondicionData } = useQuery({ queryKey: ['notas-condicion-options'], queryFn: () => notasCondicionService.list(), staleTime: 5 * 60_000 })
+  const notasCalidad = (notasCalidadData?.data ?? []).filter((n) => !n.bloqueado)
+  const notasCondicion = (notasCondicionData?.data ?? []).filter((n) => !n.bloqueado)
   const mercados = mercadosData?.data ?? []
   const etiquetas = etiquetasData?.data ?? []
   const especies = especiesData?.data ?? []
@@ -280,6 +288,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
       // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación desde la consulta al entrar en modo edición, no un derivado de props/estado local.
       setEntidadProductorId(d.entidadProductorId)
       setExportadorId(d.exportadorId ?? null)
+      setCalidadesPermitidas(d.calidadesPermitidas.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })))
       setFechaInicioPrograma(d.fechaInicioPrograma.slice(0, 10))
       setObservaciones(d.observaciones ?? '')
       setDetalle(
@@ -438,7 +447,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   }
 
   const createMutation = useMutation({
-    mutationFn: () => instructivoEmbalajeService.create({ entidadProductorId, exportadorId, fechaInicioPrograma, observaciones: observaciones.trim() || undefined, detalle }),
+    mutationFn: () => instructivoEmbalajeService.create({ entidadProductorId, exportadorId, fechaInicioPrograma, observaciones: observaciones.trim() || undefined, calidadesPermitidas, detalle }),
     onSuccess: (res) => {
       toast.success(`Instructivo de Embalaje N° ${res.data.numero} creado`)
       queryClient.invalidateQueries({ queryKey: instructivosEmbalajeKeys.all })
@@ -448,7 +457,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   })
 
   const updateMutation = useMutation({
-    mutationFn: () => instructivoEmbalajeService.update(instructivoId!, { entidadProductorId, exportadorId, fechaInicioPrograma, observaciones: observaciones.trim() || null, detalle }),
+    mutationFn: () => instructivoEmbalajeService.update(instructivoId!, { entidadProductorId, exportadorId, fechaInicioPrograma, observaciones: observaciones.trim() || null, calidadesPermitidas, detalle }),
     onSuccess: () => {
       toast.success('Instructivo de Embalaje actualizado')
       queryClient.invalidateQueries({ queryKey: instructivosEmbalajeKeys.all })
@@ -593,6 +602,12 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
             <Label>Observaciones</Label>
             <Textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={2} />
           </div>
+          <CalidadesPermitidasInput
+            value={calidadesPermitidas}
+            onChange={setCalidadesPermitidas}
+            calidades={notasCalidad.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
+            condiciones={notasCondicion.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
+          />
         </CardContent>
       </Card>
 

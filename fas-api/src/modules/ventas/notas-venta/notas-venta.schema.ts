@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parCalidadSchema } from '../../../shared/calidades-permitidas.js'
 
 export const notaVentaCreateSchema = z.object({
   fecha: z.coerce.date(),
@@ -26,6 +27,8 @@ export const notaVentaCreateSchema = z.object({
   condicionPagoId: z.number().int().positive().optional().nullable(),
   monedaId: z.number().int().positive('La moneda es requerida'),
   observaciones: z.string().max(1000).trim().optional().nullable(),
+  // Calidades permitidas = pares (NotaCalidad, NotaCondicion).
+  calidadesPermitidas: z.array(parCalidadSchema).optional(),
 })
 
 export const notaVentaUpdateSchema = notaVentaCreateSchema.partial()

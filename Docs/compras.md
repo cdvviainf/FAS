@@ -181,6 +181,13 @@ La OC es **multilínea**. Cada línea es una combinación completa de caracterí
 >   del artículo (principal ∪ adicionales), FIJA autocompleta / DINÁMICA obligatoria,
 >   validada y resuelta también en el backend (`instructivo-embalaje.service.ts`),
 >   no solo en la UI.
+> - **Calidades permitidas (2026-10-22):** el Instructivo de Embalaje gana
+>   `calidadesPermitidas` = lista de **pares** `(NotaCalidad, NotaCondicion)`
+>   (`InstructivoEmbalajeCalidadPermitida`) — combinaciones específicas admitidas
+>   (ej. A1/A2/B1, sin B2), mismo componente/concepto que el Cierre Comercial y la
+>   Solicitud de Inspección (ver `ventas.md`). En el Instructivo es **definición
+>   documental** (el gate de bloqueo real vive en la selección de pallets del
+>   Embarque, contra los pares del Cierre).
 > - **Carga de Recepción (modo COMPRA):** la etiqueta del pallet debe coincidir
 >   con la de la línea de OC que matchea; la clave de match incluye la etiqueta
 >   (combo + etiqueta), de modo que dos líneas de igual combo y distinta etiqueta

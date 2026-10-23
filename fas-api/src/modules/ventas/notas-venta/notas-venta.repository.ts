@@ -10,6 +10,12 @@ const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: 
 const includeDetalle = {
   cliente: { select: entidadSelect },
   exportador: { select: entidadSelect },
+  calidadesPermitidas: {
+    select: {
+      notaCalidad: { select: { id: true, codigo: true, descripcion: true } },
+      notaCondicion: { select: { id: true, codigo: true, descripcion: true } },
+    },
+  },
   compradorContacto: { select: { id: true, nombre: true, email: true, telefono: true, whatsapp: true } },
   notify: { select: entidadSelect },
   consignatario: { select: entidadSelect },
@@ -280,12 +286,23 @@ export async function createNotaVenta(data: NotaVentaCreateInput, creadoPor: str
     const max = await tx.notaVenta.aggregate({ _max: { folio: true } })
     const folio = (max._max.folio ?? 0) + 1
     const cuotasPago = await cuotasDesdeCondicionPago(tx, data.condicionPagoId, [])
+    // Calidades permitidas (pares) son colección hija — se crean nested, no spread.
+    const { calidadesPermitidas, ...scalar } = data
 
     return tx.notaVenta.create({
       // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
       // este valor con la empresa activa del contexto — se declara aquí solo
       // para satisfacer el tipo requerido por Prisma.
-      data: { empresaId: getEmpresaIdActual()!, ...data, folio, creadoPor, cuotasPago: { create: cuotasPago } },
+      data: {
+        empresaId: getEmpresaIdActual()!,
+        ...scalar,
+        folio,
+        creadoPor,
+        cuotasPago: { create: cuotasPago },
+        ...(calidadesPermitidas && calidadesPermitidas.length > 0
+          ? { calidadesPermitidas: { create: calidadesPermitidas.map((p) => ({ notaCalidadId: p.notaCalidadId, notaCondicionId: p.notaCondicionId })) } }
+          : {}),
+      },
       include: includeDetalle,
     })
   })
@@ -305,9 +322,20 @@ export async function updateNotaVenta(id: number, data: NotaVentaUpdateInput, ac
         await tx.notaVentaCuotaPago.createMany({ data: cuotasPago.map((c) => ({ notaVentaId: id, ...c })) })
       }
     }
+    // Calidades permitidas (pares): colección hija — fuera del spread; si viene,
+    // se reemplaza el set.
+    const { calidadesPermitidas, ...scalar } = data
+    if (calidadesPermitidas !== undefined) {
+      await tx.notaVentaCalidadPermitida.deleteMany({ where: { notaVentaId: id } })
+      if (calidadesPermitidas.length > 0) {
+        await tx.notaVentaCalidadPermitida.createMany({
+          data: calidadesPermitidas.map((p) => ({ notaVentaId: id, notaCalidadId: p.notaCalidadId, notaCondicionId: p.notaCondicionId })),
+        })
+      }
+    }
     return tx.notaVenta.update({
       where: { id },
-      data: { ...data, actualizadoPor },
+      data: { ...scalar, actualizadoPor },
       include: includeDetalle,
     })
   })

@@ -53,6 +53,7 @@ export interface InstructivoEmbalajeListItem {
 
 export interface InstructivoEmbalajeDetalle extends InstructivoEmbalajeListItem {
   observaciones: string | null
+  calidadesPermitidas: { notaCalidad: MantenedorRef; notaCondicion: MantenedorRef }[]
   detalle: InstructivoEmbalajeDetalleItem[]
   creadoPor: string
 }
@@ -84,6 +85,7 @@ export interface InstructivoEmbalajeCreateInput {
   exportadorId?: number | null
   fechaInicioPrograma: string
   observaciones?: string | null
+  calidadesPermitidas?: { notaCalidadId: number; notaCondicionId: number }[]
   detalle: InstructivoEmbalajeDetalleInput[]
 }
 
@@ -98,5 +100,6 @@ export interface InstructivoEmbalajeUpdateInput {
   exportadorId?: number | null
   fechaInicioPrograma?: string
   observaciones?: string | null
+  calidadesPermitidas?: { notaCalidadId: number; notaCondicionId: number }[]
   detalle?: InstructivoEmbalajeDetalleInput[]
 }

@@ -2,6 +2,7 @@ import { prisma } from '../../../lib/prisma.js'
 import type { Prisma } from '@prisma/client'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ConflictError } from '../../../shared/errors.js'
+import type { ParCalidad } from '../../../shared/calidades-permitidas.js'
 import type {
   AsignadoInput,
   EtapaAdjunto,
@@ -31,8 +32,12 @@ const includeDetalle = {
   especie: { select: { id: true, codigo: true, descripcion: true } },
   mercado: { select: { id: true, codigo: true, descripcion: true } },
   cliente: { select: { id: true, codigo: true, descripcion: true, razonSocial: true } },
-  notasCalidad: { select: { notaCalidad: { select: { id: true, codigo: true, descripcion: true } } } },
-  notasCondicion: { select: { notaCondicion: { select: { id: true, codigo: true, descripcion: true } } } },
+  calidadesPermitidas: {
+    select: {
+      notaCalidad: { select: { id: true, codigo: true, descripcion: true } },
+      notaCondicion: { select: { id: true, codigo: true, descripcion: true } },
+    },
+  },
   paises: { select: { pais: { select: { id: true, codigo: true, descripcion: true } } } },
   variedades: { select: { variedad: { select: { id: true, codigo: true, descripcion: true } } } },
   calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
@@ -171,8 +176,7 @@ export interface SolicitudMultiSelects {
   calibreIds: number[]
   categoriaIds: number[]
   articuloIds: number[]
-  notaCalidadIds: number[]
-  notaCondicionIds: number[]
+  calidadesPermitidas: ParCalidad[]
 }
 
 /**
@@ -218,8 +222,7 @@ export async function createSolicitud(
         calibres: { create: multi.calibreIds.map((calibreId) => ({ calibreId })) },
         categorias: { create: multi.categoriaIds.map((categoriaId) => ({ categoriaId })) },
         embalajes: { create: multi.articuloIds.map((articuloId) => ({ articuloId })) },
-        notasCalidad: { create: multi.notaCalidadIds.map((notaCalidadId) => ({ notaCalidadId })) },
-        notasCondicion: { create: multi.notaCondicionIds.map((notaCondicionId) => ({ notaCondicionId })) },
+        calidadesPermitidas: { create: multi.calidadesPermitidas.map((p) => ({ notaCalidadId: p.notaCalidadId, notaCondicionId: p.notaCondicionId })) },
       },
       include: includeDetalle,
     })
@@ -263,13 +266,11 @@ export async function updateSolicitud(
       await tx.solicitudInspeccionEmbalaje.deleteMany({ where: { solicitudId: id } })
       await tx.solicitudInspeccionEmbalaje.createMany({ data: multi.articuloIds.map((articuloId) => ({ solicitudId: id, articuloId })) })
     }
-    if (multi.notaCalidadIds !== undefined) {
-      await tx.solicitudInspeccionNotaCalidad.deleteMany({ where: { solicitudId: id } })
-      await tx.solicitudInspeccionNotaCalidad.createMany({ data: multi.notaCalidadIds.map((notaCalidadId) => ({ solicitudId: id, notaCalidadId })) })
-    }
-    if (multi.notaCondicionIds !== undefined) {
-      await tx.solicitudInspeccionNotaCondicion.deleteMany({ where: { solicitudId: id } })
-      await tx.solicitudInspeccionNotaCondicion.createMany({ data: multi.notaCondicionIds.map((notaCondicionId) => ({ solicitudId: id, notaCondicionId })) })
+    if (multi.calidadesPermitidas !== undefined) {
+      await tx.solicitudInspeccionCalidadPermitida.deleteMany({ where: { solicitudId: id } })
+      await tx.solicitudInspeccionCalidadPermitida.createMany({
+        data: multi.calidadesPermitidas.map((p) => ({ solicitudId: id, notaCalidadId: p.notaCalidadId, notaCondicionId: p.notaCondicionId })),
+      })
     }
     return tx.solicitudInspeccion.update({
       where: { id },

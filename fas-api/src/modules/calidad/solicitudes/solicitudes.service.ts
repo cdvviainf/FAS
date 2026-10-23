@@ -2,6 +2,7 @@ import { NotFoundError, ValidationError, ConflictError, ForbiddenError } from '.
 import { encolarCorreo, encolarCorreoDiferido, cancelarCorreoDiferido } from '../../correos/correos.queue.js'
 import { enviarCorreo } from '../../../lib/mailer.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
+import type { ParCalidad } from '../../../shared/calidades-permitidas.js'
 import * as repo from './solicitudes.repository.js'
 import * as emails from './solicitudes.emails.js'
 import type { SolicitudCreateBody, SolicitudUpdateBody, SolicitudCerrarBody } from './solicitudes.schema.js'
@@ -75,15 +76,14 @@ async function validarReferencias(data: {
   especieId?: number | null
   mercadoId?: number | null
   clienteId?: number | null
-  notaCalidadIds?: number[]
-  notaCondicionIds?: number[]
+  calidadesPermitidas?: ParCalidad[]
   paisIds?: number[]
   variedadIds?: number[]
   calibreIds?: number[]
   categoriaIds?: number[]
   articuloIds?: number[]
   asignados?: { usuarioId: string; funcion: string }[]
-}, entidadIdParaDireccion?: number, especieIdVigente?: number | null, mercadoIdVigente?: number | null, paisIdsVigente?: number[], notaCalidadIdsVigente?: number[], notaCondicionIdsVigente?: number[]) {
+}, entidadIdParaDireccion?: number, especieIdVigente?: number | null, mercadoIdVigente?: number | null, paisIdsVigente?: number[], calidadesPermitidasVigente?: ParCalidad[]) {
   if (data.usuarioSolicitanteId !== undefined) {
     const solicitante = await repo.getUsuarioById(data.usuarioSolicitanteId)
     if (!solicitante) throw new ValidationError('El solicitante seleccionado no existe o fue eliminado')
@@ -127,11 +127,10 @@ async function validarReferencias(data: {
   const especieId = data.especieId !== undefined ? data.especieId : especieIdVigente
   const mercadoId = data.mercadoId !== undefined ? data.mercadoId : mercadoIdVigente
   const paisIdsEfectivos = data.paisIds !== undefined ? data.paisIds : paisIdsVigente
-  // IMP-QA-R1-038: las notas vigentes también se revalidan contra la especie
-  // efectiva aunque el PATCH no las toque — si no, cambiar solo la especie
-  // dejaría notas incompatibles que el propio backend rechazaría al reenviarlas.
-  const notaCalidadIdsEfectivos = data.notaCalidadIds !== undefined ? data.notaCalidadIds : notaCalidadIdsVigente
-  const notaCondicionIdsEfectivos = data.notaCondicionIds !== undefined ? data.notaCondicionIds : notaCondicionIdsVigente
+  // IMP-QA-R1-038: las calidades permitidas vigentes también se revalidan contra
+  // la especie efectiva aunque el PATCH no las toque — si no, cambiar solo la
+  // especie dejaría pares incompatibles que el backend rechazaría al reenviarlos.
+  const calidadesEfectivas = data.calidadesPermitidas !== undefined ? data.calidadesPermitidas : (calidadesPermitidasVigente ?? [])
 
   if (paisIdsEfectivos && paisIdsEfectivos.length > 0) {
     if (mercadoId == null) {
@@ -174,24 +173,33 @@ async function validarReferencias(data: {
       throw new ValidationError('Una o más categorías no pertenecen a la especie seleccionada')
     }
   }
-  if (notaCalidadIdsEfectivos && notaCalidadIdsEfectivos.length > 0) {
-    const notas = await repo.getNotasCalidadActivas(notaCalidadIdsEfectivos)
-    if (notas.length !== new Set(notaCalidadIdsEfectivos).size) {
+  // Calidades permitidas = pares (NotaCalidad, NotaCondicion). Se valida que cada
+  // calidad/condición exista y, si hay especie definida, que pertenezca a ella
+  // (misma regla por especie que antes, ahora sobre el conjunto de pares).
+  if (calidadesEfectivas.length > 0) {
+    // Pares únicos (la BD lo impone con @@unique; se rechaza acá como 422, no 500).
+    const clavesPar = new Set<string>()
+    for (const p of calidadesEfectivas) {
+      const clave = `${p.notaCalidadId}-${p.notaCondicionId}`
+      if (clavesPar.has(clave)) throw new ValidationError('Hay calidades permitidas repetidas (misma combinación Calidad + Condición)')
+      clavesPar.add(clave)
+    }
+    const calidadIds = [...new Set(calidadesEfectivas.map((p) => p.notaCalidadId))]
+    const condicionIds = [...new Set(calidadesEfectivas.map((p) => p.notaCondicionId))]
+    const [calidades, condiciones] = await Promise.all([
+      repo.getNotasCalidadActivas(calidadIds),
+      repo.getNotasCondicionActivas(condicionIds),
+    ])
+    if (calidades.length !== calidadIds.length) {
       throw new ValidationError('Una o más Notas de Calidad seleccionadas no existen o están bloqueadas')
     }
-    // Validez por especie (igual que variedad/calibre/categoría): si la especie
-    // está definida, cada nota debe tener asociación con ella. Las notas sin
-    // ninguna especie asociada solo son válidas cuando no hay especie definida.
-    if (especieId != null && notas.some((n) => !n.especies.some((e) => e.especieId === especieId))) {
-      throw new ValidationError('Una o más Notas de Calidad no pertenecen a la especie seleccionada')
-    }
-  }
-  if (notaCondicionIdsEfectivos && notaCondicionIdsEfectivos.length > 0) {
-    const notas = await repo.getNotasCondicionActivas(notaCondicionIdsEfectivos)
-    if (notas.length !== new Set(notaCondicionIdsEfectivos).size) {
+    if (condiciones.length !== condicionIds.length) {
       throw new ValidationError('Una o más Notas de Condición seleccionadas no existen o están bloqueadas')
     }
-    if (especieId != null && notas.some((n) => !n.especies.some((e) => e.especieId === especieId))) {
+    if (especieId != null && calidades.some((n) => !n.especies.some((e) => e.especieId === especieId))) {
+      throw new ValidationError('Una o más Notas de Calidad no pertenecen a la especie seleccionada')
+    }
+    if (especieId != null && condiciones.some((n) => !n.especies.some((e) => e.especieId === especieId))) {
       throw new ValidationError('Una o más Notas de Condición no pertenecen a la especie seleccionada')
     }
   }
@@ -247,14 +255,14 @@ export async function crearSolicitud(body: SolicitudCreateBody, userId: string) 
   const {
     temporadaId, asignados, fechaHora,
     paisIds = [], variedadIds = [], calibreIds = [], categoriaIds = [], articuloIds = [],
-    notaCalidadIds = [], notaCondicionIds = [],
+    calidadesPermitidas = [],
     ...core
   } = body
   return repo.createSolicitud(
     temporadaId,
     temporada.codigo,
     { ...core, usuarioSolicitanteId, fechaHora: fechaHora ? new Date(fechaHora) : null, fechaDespacho: core.fechaDespacho ? new Date(core.fechaDespacho) : null },
-    { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, notaCalidadIds, notaCondicionIds },
+    { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, calidadesPermitidas },
     asignados,
     userId,
   )
@@ -272,8 +280,7 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
     actual.especieId,
     actual.mercadoId,
     actual.paises.map((p) => p.pais.id),
-    actual.notasCalidad.map((n) => n.notaCalidad.id),
-    actual.notasCondicion.map((n) => n.notaCondicion.id),
+    actual.calidadesPermitidas.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })),
   )
 
   // Si cambia la entidad, la dirección debe venir también (y ya se validó contra la nueva entidad)
@@ -290,7 +297,7 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
   // también a los asignados que puedan ser removidos en esta edición.
   const destinatariosPrevios = actual.estado === 'NOTIFICADA' ? await destinatariosDe(actual) : []
 
-  const { asignados, fechaHora, fechaDespacho, paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, notaCalidadIds, notaCondicionIds, ...core } = body
+  const { asignados, fechaHora, fechaDespacho, paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, calidadesPermitidas, ...core } = body
   const actualizada = await repo.updateSolicitud(
     id,
     {
@@ -300,7 +307,7 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
       ...(fechaDespacho !== undefined ? { fechaDespacho: fechaDespacho ? new Date(fechaDespacho) : null } : {}),
     },
     asignados,
-    { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, notaCalidadIds, notaCondicionIds },
+    { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, calidadesPermitidas },
     userId,
   )
 

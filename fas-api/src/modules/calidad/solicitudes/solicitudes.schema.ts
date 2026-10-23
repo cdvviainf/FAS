@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parCalidadSchema } from '../../../shared/calidades-permitidas.js'
 
 export const asignadoSchema = z.object({
   usuarioId: z.string().min(1),
@@ -26,10 +27,9 @@ export const solicitudCreateSchema = z.object({
   clienteId: z.number().int().positive().nullable().optional(),
   fechaDespacho: z.string().date().nullable().optional(),
   cantidadPallets: z.number().int().positive().nullable().optional(),
-  // Multiselección (2026-10-05, supersede notaCalidadId/notaCondicionId
-  // singular): varias notas de calidad/condición por solicitud.
-  notaCalidadIds: z.array(z.number().int().positive()).optional(),
-  notaCondicionIds: z.array(z.number().int().positive()).optional(),
+  // Calidades permitidas = pares (NotaCalidad, NotaCondicion) — supersede las dos
+  // listas independientes (producto cartesiano). Combinaciones específicas.
+  calidadesPermitidas: z.array(parCalidadSchema).optional(),
   variedadIds: z.array(z.number().int().positive()).optional(),
   calibreIds: z.array(z.number().int().positive()).optional(),
   categoriaIds: z.array(z.number().int().positive()).optional(),

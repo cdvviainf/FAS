@@ -275,7 +275,11 @@ export async function getEmbarqueById(id: number) {
 export async function getNotaVentaConDetalle(id: number) {
   return prisma.notaVenta.findFirst({
     where: { id, eliminadoEn: null },
-    include: { detalles: { include: { calibres: { select: { calibreId: true } } } } },
+    include: {
+      detalles: { include: { calibres: { select: { calibreId: true } } } },
+      // Calidades permitidas (pares): restringen qué pallets se pueden reservar.
+      calidadesPermitidas: { select: { notaCalidadId: true, notaCondicionId: true } },
+    },
   })
 }
 
@@ -284,6 +288,9 @@ export async function getNotaVentaConDetalle(id: number) {
 // es solo de catálogo (embarques.comparacion.ts), sin tope de cantidad.
 export async function getPalletsDisponibles(
   detalleNV: NonNullable<Awaited<ReturnType<typeof getNotaVentaConDetalle>>>['detalles'],
+  // Calidades permitidas (pares) del Cierre: si hay, solo se ofrecen pallets cuya
+  // combinación (notaCalidad, notaCondicion) esté admitida. Vacío = sin restricción.
+  calidadesPermitidas: { notaCalidadId: number; notaCondicionId: number }[] = [],
 ) {
   // 2026-09-28 (decisión de negocio Christian): se muestran TODOS los pallets
   // sin reservar que calzan con el detalle de la NV, calificados o no — el
@@ -297,7 +304,11 @@ export async function getPalletsDisponibles(
     include: palletInclude,
     orderBy: { creadoEn: 'asc' },
   })
-  return pallets.filter((p) => palletCalzaConDetalleNV(p.lineas, detalleNV))
+  const calzan = pallets.filter((p) => palletCalzaConDetalleNV(p.lineas, detalleNV))
+  if (calidadesPermitidas.length === 0) return calzan
+  // Filtro de calidad permitida: la combinación del pallet debe estar en el set.
+  const permitidos = new Set(calidadesPermitidas.map((c) => `${c.notaCalidadId}-${c.notaCondicionId}`))
+  return calzan.filter((p) => p.notaCalidadId != null && p.notaCondicionId != null && permitidos.has(`${p.notaCalidadId}-${p.notaCondicionId}`))
 }
 
 // Reclamo atómico (mismo patrón que folios de Instructivo/Recepción de

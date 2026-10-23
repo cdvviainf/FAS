@@ -1,3 +1,5 @@
+import type { ParCalidad } from '../../../shared/calidades-permitidas.js'
+
 export interface InstructivoEmbalajeDetalleInput {
   articuloId: number
   // Mercado a nivel de línea (2026-10-14, supersede grupoMercadoId).
@@ -24,6 +26,7 @@ export interface InstructivoEmbalajeCreateInput {
   exportadorId?: number | null
   fechaInicioPrograma: Date
   observaciones?: string | null
+  calidadesPermitidas?: ParCalidad[]
   detalle: InstructivoEmbalajeDetalleInput[]
 }
 
@@ -32,5 +35,6 @@ export interface InstructivoEmbalajeUpdateInput {
   exportadorId?: number | null
   fechaInicioPrograma?: Date
   observaciones?: string | null
+  calidadesPermitidas?: ParCalidad[]
   detalle?: InstructivoEmbalajeDetalleInput[]
 }

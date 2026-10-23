@@ -9,6 +9,12 @@ const includeDetalle = {
   entidadProductor: { select: entidadSelect },
   // Exportador (2026-10-05) — Entidad tipo EXPORTADORA, opcional.
   exportador: { select: entidadSelect },
+  calidadesPermitidas: {
+    select: {
+      notaCalidad: { select: { id: true, codigo: true, descripcion: true } },
+      notaCondicion: { select: { id: true, codigo: true, descripcion: true } },
+    },
+  },
   detalle: {
     include: {
       // Mercado a nivel de línea (2026-10-14, supersede grupoMercado).
@@ -72,7 +78,7 @@ export async function softDeleteInstructivo(id: number, eliminadoPor: string) {
 const LOCK_NAMESPACE_INSTRUCTIVO_EMBALAJE = 490235
 
 export async function createInstructivo(body: InstructivoEmbalajeCreateInput, creadoPor: string) {
-  const { detalle, ...resto } = body
+  const { detalle, calidadesPermitidas, ...resto } = body
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_INSTRUCTIVO_EMBALAJE}::int, 0)`
 
@@ -94,6 +100,9 @@ export async function createInstructivo(body: InstructivoEmbalajeCreateInput, cr
             calibres: { create: calibreIds.map((calibreId) => ({ calibreId })) },
           })),
         },
+        ...(calidadesPermitidas && calidadesPermitidas.length > 0
+          ? { calidadesPermitidas: { create: calidadesPermitidas.map((p) => ({ notaCalidadId: p.notaCalidadId, notaCondicionId: p.notaCondicionId })) } }
+          : {}),
       },
       include: includeDetalle,
     })
@@ -107,7 +116,7 @@ export async function createInstructivo(body: InstructivoEmbalajeCreateInput, cr
 // crea/edita como documento completo, no por línea individual (a diferencia
 // de la OC).
 export async function updateInstructivo(id: number, data: InstructivoEmbalajeUpdateInput) {
-  const { detalle, ...resto } = data
+  const { detalle, calidadesPermitidas, ...resto } = data
   return prisma.$transaction(async (tx) => {
     const claim = await tx.instructivoEmbalaje.updateMany({ where: { id, eliminadoEn: null }, data: {} })
     if (claim.count === 0) return null
@@ -124,6 +133,14 @@ export async function updateInstructivo(id: number, data: InstructivoEmbalajeUpd
                   ...linea,
                   calibres: { create: calibreIds.map((calibreId) => ({ calibreId })) },
                 })),
+              },
+            }
+          : {}),
+        ...(calidadesPermitidas !== undefined
+          ? {
+              calidadesPermitidas: {
+                deleteMany: {},
+                create: calidadesPermitidas.map((p) => ({ notaCalidadId: p.notaCalidadId, notaCondicionId: p.notaCondicionId })),
               },
             }
           : {}),

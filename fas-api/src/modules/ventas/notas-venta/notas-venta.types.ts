@@ -1,3 +1,5 @@
+import type { ParCalidad } from '../../../shared/calidades-permitidas.js'
+
 export type TipoVenta = 'EXPORTACION' | 'NACIONAL'
 
 export interface NotaVentaCreateInput {
@@ -5,6 +7,9 @@ export interface NotaVentaCreateInput {
   tipoVenta?: TipoVenta
   clienteId: number
   exportadorId?: number | null
+  // Calidades permitidas = pares (NotaCalidad, NotaCondicion). Restringen qué
+  // pallets se pueden reservar en el Embarque de este Cierre.
+  calidadesPermitidas?: ParCalidad[]
   compradorContactoId?: number | null
   notifyId?: number | null
   consignatarioId?: number | null

@@ -86,8 +86,7 @@ export interface SolicitudInspeccion {
   cliente: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
   fechaDespacho: string | null
   cantidadPallets: number | null
-  notasCalidad: { notaCalidad: { id: number; codigo: string; descripcion: string } }[]
-  notasCondicion: { notaCondicion: { id: number; codigo: string; descripcion: string } }[]
+  calidadesPermitidas: { notaCalidad: { id: number; codigo: string; descripcion: string }; notaCondicion: { id: number; codigo: string; descripcion: string } }[]
   paises: { pais: { id: number; codigo: string; descripcion: string } }[]
   variedades: { variedad: { id: number; codigo: string; descripcion: string } }[]
   calibres: { calibre: { id: number; codigo: string; descripcion: string } }[]
@@ -139,8 +138,7 @@ export interface SolicitudCreateInput {
   clienteId?: number | null
   fechaDespacho?: string | null
   cantidadPallets?: number | null
-  notaCalidadIds?: number[]
-  notaCondicionIds?: number[]
+  calidadesPermitidas?: { notaCalidadId: number; notaCondicionId: number }[]
   variedadIds?: number[]
   calibreIds?: number[]
   categoriaIds?: number[]

@@ -79,9 +79,9 @@ export async function countPalletsConNota(id: number) {
 }
 
 export async function countSolicitudesConNota(id: number) {
-  // Multiselección (2026-10-05): la nota se referencia desde la tabla puente;
-  // contar solicitudes activas que la usan.
-  return prisma.solicitudInspeccionNotaCalidad.count({
-    where: { notaCalidadId: id, solicitud: { eliminadoEn: null } },
+  // Calidades permitidas = pares (2026-10-22): la nota se referencia desde la
+  // tabla de pares; contar solicitudes activas distintas que la usan.
+  return prisma.solicitudInspeccion.count({
+    where: { eliminadoEn: null, calidadesPermitidas: { some: { notaCalidadId: id } } },
   })
 }

@@ -102,11 +102,8 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
             {solicitud.categorias.length > 0 && (
               <Campo label='Categorías'>{solicitud.categorias.map((c) => c.categoria.descripcion).join(', ')}</Campo>
             )}
-            {solicitud.notasCalidad.length > 0 && (
-              <Campo label='Notas de Calidad'>{solicitud.notasCalidad.map((n) => n.notaCalidad.descripcion).join(', ')}</Campo>
-            )}
-            {solicitud.notasCondicion.length > 0 && (
-              <Campo label='Notas de Condición'>{solicitud.notasCondicion.map((n) => n.notaCondicion.descripcion).join(', ')}</Campo>
+            {solicitud.calidadesPermitidas.length > 0 && (
+              <Campo label='Calidades permitidas'>{solicitud.calidadesPermitidas.map((c) => `${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`).join(', ')}</Campo>
             )}
             {solicitud.cantidadPallets != null && <Campo label='Cant. pallets'>{solicitud.cantidadPallets}</Campo>}
             <Campo label='Temporada'>{solicitud.temporada.codigo}</Campo>

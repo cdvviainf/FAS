@@ -33,6 +33,7 @@ import { solicitudesService } from '../service'
 import { FUNCION_LABELS } from '../types'
 import type { AsignadoInput, FuncionAsignado, SolicitudCreateInput } from '../types'
 import { SelectMultiple } from '@/components/shared/select-multiple'
+import { CalidadesPermitidasInput, type CalidadPermitidaPar } from '@/components/shared/calidades-permitidas-input'
 
 const especiesService = createMantenedorService('especies')
 const variedadesService = createMantenedorService('variedades')
@@ -92,8 +93,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const [calibreDesdeId, setCalibreDesdeId] = useState<number | null>(null)
   const [calibreHastaId, setCalibreHastaId] = useState<number | null>(null)
   const [categoriaIds, setCategoriaIds] = useState<number[]>([])
-  const [notaCalidadIds, setNotaCalidadIds] = useState<number[]>([])
-  const [notaCondicionIds, setNotaCondicionIds] = useState<number[]>([])
+  const [calidadesPermitidas, setCalidadesPermitidas] = useState<CalidadPermitidaPar[]>([])
   const [cantidadPallets, setCantidadPallets] = useState('')
   const [asignados, setAsignados] = useState<AsignadoInput[]>([])
   const [observaciones, setObservaciones] = useState('')
@@ -228,8 +228,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       setVariedadIds(d.variedades.map((v) => v.variedad.id))
       setCalibreIds(d.calibres.map((c) => c.calibre.id))
       setCategoriaIds(d.categorias.map((c) => c.categoria.id))
-      setNotaCalidadIds(d.notasCalidad.map((n) => n.notaCalidad.id))
-      setNotaCondicionIds(d.notasCondicion.map((n) => n.notaCondicion.id))
+      setCalidadesPermitidas(d.calidadesPermitidas.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })))
       setCantidadPallets(d.cantidadPallets != null ? String(d.cantidadPallets) : '')
       setAsignados(d.asignados.map((a) => ({ usuarioId: a.usuarioId, funcion: a.funcion })))
       setObservaciones(d.observaciones ?? '')
@@ -305,8 +304,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       variedadIds,
       calibreIds,
       categoriaIds,
-      notaCalidadIds,
-      notaCondicionIds,
+      calidadesPermitidas,
       cantidadPallets: cantidadPallets ? Number(cantidadPallets) : null,
       observaciones: observaciones.trim() || null,
       asignados,
@@ -541,7 +539,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
                   const nuevo = v === 'none' ? null : Number(v)
                   setEspecieId(nuevo)
                   setVariedadIds([]); setCalibreIds([]); setCategoriaIds([])
-                  setNotaCalidadIds([]); setNotaCondicionIds([])
+                  setCalidadesPermitidas([])
                   resetCalibreRango()
                 }}
               >
@@ -644,22 +642,12 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
                 disabled={!especieId}
               />
             </div>
-            <div className='space-y-1.5'>
-              <Label>Notas de Calidad</Label>
-              <SelectMultiple
-                options={notasCalidadValidas.map((n) => ({ id: n.id, label: n.descripcion }))}
-                selectedIds={notaCalidadIds}
-                onChange={setNotaCalidadIds}
-                placeholder='Agregar nota de calidad...'
-              />
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Notas de Condición</Label>
-              <SelectMultiple
-                options={notasCondicionValidas.map((n) => ({ id: n.id, label: n.descripcion }))}
-                selectedIds={notaCondicionIds}
-                onChange={setNotaCondicionIds}
-                placeholder='Agregar nota de condición...'
+            <div className='space-y-1.5 sm:col-span-2'>
+              <CalidadesPermitidasInput
+                value={calidadesPermitidas}
+                onChange={setCalidadesPermitidas}
+                calidades={notasCalidadValidas.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
+                condiciones={notasCondicionValidas.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
               />
             </div>
             <div className='space-y-1.5'>

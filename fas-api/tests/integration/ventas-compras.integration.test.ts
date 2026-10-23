@@ -135,6 +135,7 @@ async function limpiarDatos() {
       "notas_venta",
       "articulos",
       "etiquetas",
+      "tipos_pallet",
       "alturas",
       "calibres",
       "categorias",
@@ -244,6 +245,8 @@ async function crearFixtures() {
     data: { empresaId: empresa.id, tipo: 'EMBALAJE', codigo: 'ART-EMB', descripcion: 'Caja embalaje', unidadId: unidad.id, etiquetaId: etiqueta.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
   const altura = await prisma.altura.create({ data: { empresaId: empresa.id, codigo: 'ALT-1', descripcion: 'Altura 1', creadoPor: 'test' } })
+  // Tipo de pallet (requerido en la línea del Instructivo desde 2026-10-13).
+  const tipoPallet = await prisma.tipoPallet.create({ data: { empresaId: empresa.id, codigo: 'TP-1', descripcion: 'Tipo Pallet 1', creadoPor: 'test' } })
 
   // La OC exige una Inspección de Compra Aprobada del mismo productor
   // (compras.md §4.2) — se crea, notifica y cierra (APROBADA) una acá para
@@ -271,7 +274,7 @@ async function crearFixtures() {
 
   return {
     empresa, pais, cliente, productor, tipoEmbarque, mercado, grupoMercado, moneda, especie, variedad, categoria,
-    calibreChico, calibreGrande, articulo, altura, solicitudInspeccionCompraAprobada,
+    calibreChico, calibreGrande, articulo, altura, tipoPallet, solicitudInspeccionCompraAprobada,
     // Expuestos para crearOtraSolicitudAprobada (Etapa 2, N:M OC↔Solicitud):
     // cada Solicitud solo puede vincularse a una OC, así que los tests que
     // crean más de una OC dentro del mismo `f` necesitan poder generar una
@@ -386,11 +389,12 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
       fechaInicioPrograma: new Date('2026-08-01'),
       detalle: [{
         articuloId: f.articulo.id,
-        grupoMercadoId: f.grupoMercado.id,
+        mercadoId: f.mercado.id,
         especieId: f.especie.id,
         variedadId: f.variedad.id,
         categoriaId: f.categoria.id,
         calibreIds: [f.calibreChico.id, f.calibreGrande.id],
+        tipoPalletId: f.tipoPallet.id,
         alturaId: f.altura.id,
         cantidadPallets: 1,
         cajasPorPallet: 1,
@@ -408,11 +412,12 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
       fechaInicioPrograma: new Date('2026-08-01'),
       detalle: [{
         articuloId: f.articulo.id,
-        grupoMercadoId: f.grupoMercado.id,
+        mercadoId: f.mercado.id,
         especieId: f.especie.id,
         variedadId: f.variedad.id,
         categoriaId: f.categoria.id,
         calibreIds: [f.calibreChico.id, f.calibreGrande.id],
+        tipoPalletId: f.tipoPallet.id,
         alturaId: f.altura.id,
         cantidadPallets: 1,
         cajasPorPallet: 1,

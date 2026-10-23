@@ -1,4 +1,5 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { validarCalidadesPermitidas } from '../../../shared/calidades-permitidas.js'
 import * as repo from './instructivo-embalaje.repository.js'
 import type { InstructivoEmbalajeCreateInput, InstructivoEmbalajeDetalleInput, InstructivoEmbalajeUpdateInput } from './instructivo-embalaje.types.js'
 
@@ -104,6 +105,7 @@ export async function obtenerInstructivo(id: number) {
 
 export async function crearInstructivo(body: InstructivoEmbalajeCreateInput, creadoPor: string) {
   await validarReferenciasHeader(body)
+  await validarCalidadesPermitidas(body.calidadesPermitidas ?? [])
 
   for (const [index, linea] of body.detalle.entries()) {
     await validarLinea(linea, index)
@@ -118,6 +120,9 @@ export async function actualizarInstructivo(id: number, body: InstructivoEmbalaj
   await obtenerInstructivo(id)
 
   await validarReferenciasHeader(body)
+  if (body.calidadesPermitidas !== undefined) {
+    await validarCalidadesPermitidas(body.calidadesPermitidas)
+  }
 
   if (body.detalle) {
     for (const [index, linea] of body.detalle.entries()) {

@@ -123,8 +123,6 @@ async function crearFixtures() {
     data: { empresaId: empresa.id, tipo: 'SERVICIO', codigo: 'ART-SERV', descripcion: 'Servicio', unidadId: unidad.id, tipoCosteo: 'PROMEDIO_PONDERADO' },
   })
 
-  const calificacion = await prisma.calificacion.create({ data: { empresaId: empresa.id, codigo: 'B1', descripcion: 'B1', creadoPor: 'test' } })
-
   const perfil = await prisma.perfil.create({ data: { codigo: 'PERFIL-1', descripcion: 'Perfil de prueba', creadoPor: 'test' } })
   const usuario = await prisma.usuario.create({
     data: { id: 'usuario-1', nombre: 'Usuario Uno', email: 'usuario1@example.invalid', perfilId: perfil.id, creadoPor: 'test' },
@@ -133,7 +131,7 @@ async function crearFixtures() {
   return {
     empresa, chile, usa, productor, direccion, clienteExtranjero, clienteNoExtranjero,
     temporada, especie, otraEspecie, variedad, variedadOtraEspecie, calibre, categoria,
-    grupoMercado, mercado, unidad, embalaje, noEmbalaje, calificacion, usuario,
+    grupoMercado, mercado, unidad, embalaje, noEmbalaje, usuario,
   }
 }
 
@@ -168,7 +166,6 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
       calibreIds: [f.calibre.id],
       categoriaIds: [f.categoria.id],
       articuloIds: [f.embalaje.id],
-      calificacionId: f.calificacion.id,
       cantidadPallets: 12,
     }, 'test')
 
@@ -180,7 +177,6 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
     expect(solicitud.calibres).toHaveLength(1)
     expect(solicitud.categorias).toHaveLength(1)
     expect(solicitud.embalajes).toHaveLength(1)
-    expect(solicitud.calificacionId).toBe(f.calificacion.id)
   })
 
   it('permite editar una solicitud y limpiar los multiselects enviando arreglos vacíos', async () => {
@@ -286,15 +282,7 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
     ).rejects.toMatchObject({ statusCode: 422 })
   })
 
-  it('rechaza calificación bloqueada', async () => {
-    const f = await crearFixtures()
-    await prisma.calificacion.update({ where: { id: f.calificacion.id }, data: { bloqueado: true } })
-    await expect(
-      crearSolicitud(f.empresa.id, { ...payloadBase(f), calificacionId: f.calificacion.id }, 'test'),
-    ).rejects.toMatchObject({ statusCode: 422 })
-  })
-
-  it('QAS-SI-014: bloquea eliminar Mercado, País, Variedad, Calibre, Categoría y Calificación en uso por una solicitud vigente', async () => {
+  it('QAS-SI-014: bloquea eliminar Mercado, País, Variedad, Calibre y Categoría en uso por una solicitud vigente', async () => {
     const f = await crearFixtures()
     await crearSolicitud(f.empresa.id, {
       ...payloadBase(f),
@@ -304,7 +292,6 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
       variedadIds: [f.variedad.id],
       calibreIds: [f.calibre.id],
       categoriaIds: [f.categoria.id],
-      calificacionId: f.calificacion.id,
     }, 'test')
 
     await expect(eliminarMantenedor(f.empresa.id, 'mercado', f.mercado.id)).rejects.toMatchObject({ statusCode: 409 })
@@ -312,7 +299,6 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
     await expect(eliminarMantenedor(f.empresa.id, 'variedad', f.variedad.id)).rejects.toMatchObject({ statusCode: 409 })
     await expect(eliminarMantenedor(f.empresa.id, 'calibre', f.calibre.id)).rejects.toMatchObject({ statusCode: 409 })
     await expect(eliminarMantenedor(f.empresa.id, 'categoria', f.categoria.id)).rejects.toMatchObject({ statusCode: 409 })
-    await expect(eliminarMantenedor(f.empresa.id, 'calificacion', f.calificacion.id)).rejects.toMatchObject({ statusCode: 409 })
   })
 
   it('QAS-SI-014: bloquea eliminar la Entidad usada como Cliente Extranjero de una solicitud vigente', async () => {
@@ -328,10 +314,8 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
     const creada = await crearSolicitud(f.empresa.id, {
       ...payloadBase(f),
       mercadoId: f.mercado.id,
-      calificacionId: f.calificacion.id,
     }, 'test')
     const detalle = await obtenerSolicitud(f.empresa.id, creada.id)
     expect(detalle.mercado?.id).toBe(f.mercado.id)
-    expect(detalle.calificacion?.id).toBe(f.calificacion.id)
   })
 })
