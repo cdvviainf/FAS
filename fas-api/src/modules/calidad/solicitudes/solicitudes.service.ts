@@ -424,12 +424,54 @@ export async function cerrarSolicitud(
     }
   }
 
+  // Características de madurez del cierre (2026-10-26): la característica existe
+  // (tenant, no bloqueada), es válida para la especie de la solicitud (o es
+  // genérica), y el valor concuerda con su tipoDato — numérico para
+  // DECIMAL/PORCENTAJE/ENTERO (ENTERO entero, PORCENTAJE 0..100), texto para TEXTO.
+  // CM-007: según tipoDato solo persiste la columna relevante — se descarta la
+  // columna incompatible aunque el cliente la haya enviado (evita filas con
+  // valorNumerico y valorTexto simultáneos, R6).
+  let caracteristicasNormalizadas: { caracteristicaId: number; valorNumerico: number | null; valorTexto: string | null }[] | undefined
+  if (body.caracteristicas !== undefined) {
+    caracteristicasNormalizadas = []
+    for (const [i, linea] of body.caracteristicas.entries()) {
+      const prefijo = `Característica ${i + 1}:`
+      const caracteristica = await repo.getCaracteristicaMadurezActiva(linea.caracteristicaId)
+      if (!caracteristica) throw new ValidationError(`${prefijo} la característica seleccionada no existe o está bloqueada`)
+      if (
+        solicitud.especieId != null &&
+        caracteristica.especies.length > 0 &&
+        !caracteristica.especies.some((e) => e.especieId === solicitud.especieId)
+      ) {
+        throw new ValidationError(`${prefijo} la característica no es válida para la especie de la solicitud`)
+      }
+      if (caracteristica.tipoDato === 'TEXTO') {
+        if (linea.valorTexto == null || linea.valorTexto.trim() === '') {
+          throw new ValidationError(`${prefijo} debe registrar un valor de texto`)
+        }
+        caracteristicasNormalizadas.push({ caracteristicaId: linea.caracteristicaId, valorNumerico: null, valorTexto: linea.valorTexto.trim() })
+      } else {
+        if (linea.valorNumerico == null) {
+          throw new ValidationError(`${prefijo} debe registrar un valor numérico`)
+        }
+        if (caracteristica.tipoDato === 'ENTERO' && !Number.isInteger(linea.valorNumerico)) {
+          throw new ValidationError(`${prefijo} el valor debe ser un número entero`)
+        }
+        if (caracteristica.tipoDato === 'PORCENTAJE' && linea.valorNumerico > 100) {
+          throw new ValidationError(`${prefijo} el porcentaje no puede superar 100`)
+        }
+        caracteristicasNormalizadas.push({ caracteristicaId: linea.caracteristicaId, valorNumerico: linea.valorNumerico, valorTexto: null })
+      }
+    }
+  }
+
   const cerrada = await repo.cerrarSolicitud(id, {
     comentarios: body.comentarios,
     resultado: body.resultado,
     fechaHora: body.fechaHora ? new Date(body.fechaHora) : undefined,
     asignados: body.asignados,
     defectos: body.defectos,
+    caracteristicas: caracteristicasNormalizadas,
   }, userId)
   await cancelarCorreoDiferido(recordatorioJobId(id))
 

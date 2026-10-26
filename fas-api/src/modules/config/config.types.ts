@@ -15,6 +15,8 @@ export type MantenedorModelo =
   // Con FK
   | 'region'
   | 'defecto'
+  // Características de calidad/madurez (2026-10-26): FK a UnidadMedida + especies N:M
+  | 'caracteristicaMadurez'
   | 'provincia'
   | 'comuna'
   | 'especie'
@@ -89,7 +91,10 @@ export interface MantenedorCreateInput {
   tipoEmbarqueId?: number
   // Catálogo de defectos (2026-10-06)
   grupoDefectoId?: number  // Defecto
-  especieIds?: number[]    // Defecto (N:M, validez por especie)
+  especieIds?: number[]    // Defecto / CaracteristicaMadurez (N:M, validez por especie)
+  // Característica de Madurez (2026-10-26)
+  tipoDato?: 'DECIMAL' | 'PORCENTAJE' | 'ENTERO' | 'TEXTO'  // CaracteristicaMadurez
+  unidadId?: number | null  // CaracteristicaMadurez (FK UnidadMedida)
   orden?: number             // Categoria, Calibre
   control?: string[]         // Categoria, Calibre
   calibreEquivalenteId?: number | null  // Calibre (auto-referencial, misma especie)

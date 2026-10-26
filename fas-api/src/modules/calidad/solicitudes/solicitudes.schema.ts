@@ -81,6 +81,21 @@ export const solicitudDefectoSchema = z.object({
   valor: z.number().min(0, 'El valor no puede ser negativo').max(99999.99, 'El valor es demasiado grande'),
 })
 
+// Línea de característica de madurez del cierre (2026-10-26): según el tipoDato
+// de la característica se envía valorNumerico (DECIMAL/PORCENTAJE/ENTERO) o
+// valorTexto (TEXTO). La validación de cuál corresponde se hace en el service
+// contra CaracteristicaMadurez.tipoDato; acá solo rangos básicos.
+export const solicitudMadurezSchema = z.object({
+  caracteristicaId: z.number().int().positive(),
+  valorNumerico: z
+    .number()
+    .min(0, 'El valor no puede ser negativo')
+    .max(99999999.99, 'El valor es demasiado grande')
+    .optional()
+    .nullable(),
+  valorTexto: z.string().max(500, 'El texto es demasiado largo').optional().nullable(),
+})
+
 export const solicitudCerrarSchema = z.object({
   comentarios: z.string().min(1, 'Los comentarios de cierre son requeridos').max(5000),
   // OBJETADA (2026-08-10): tercer veredicto de cierre, terminal — mismo
@@ -101,6 +116,14 @@ export const solicitudCerrarSchema = z.object({
     .array(solicitudDefectoSchema)
     .refine((ds) => new Set(ds.map((d) => `${d.grupoDefectoId}-${d.defectoId}`)).size === ds.length, {
       message: 'Hay defectos repetidos (mismo grupo y defecto)',
+    })
+    .optional(),
+  // Características de madurez registradas en la visita (2026-10-26): opcionales;
+  // una misma característica no se repite.
+  caracteristicas: z
+    .array(solicitudMadurezSchema)
+    .refine((cs) => new Set(cs.map((c) => c.caracteristicaId)).size === cs.length, {
+      message: 'Hay características de madurez repetidas',
     })
     .optional(),
 })

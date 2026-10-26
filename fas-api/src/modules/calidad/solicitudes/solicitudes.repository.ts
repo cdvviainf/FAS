@@ -63,6 +63,25 @@ const includeDetalle = {
     },
     orderBy: { id: 'asc' as const },
   },
+  // Características de madurez del cierre (2026-10-26): característica + unidad + valor.
+  madurez: {
+    select: {
+      id: true,
+      caracteristicaId: true,
+      valorNumerico: true,
+      valorTexto: true,
+      caracteristica: {
+        select: {
+          id: true,
+          codigo: true,
+          descripcion: true,
+          tipoDato: true,
+          unidad: { select: { id: true, codigo: true, descripcion: true } },
+        },
+      },
+    },
+    orderBy: { id: 'asc' as const },
+  },
   adjuntos: {
     select: { id: true, nombre: true, mime: true, tamano: true, etapa: true, subidoEn: true, subidoPor: true },
     orderBy: { subidoEn: 'asc' as const },
@@ -333,6 +352,8 @@ export interface CierreData {
   asignados?: AsignadoInput[]
   // Si vienen, reemplazan las líneas de defecto del cierre.
   defectos?: { grupoDefectoId: number; defectoId: number; valor: number }[]
+  // Si vienen, reemplazan las características de madurez del cierre (2026-10-26).
+  caracteristicas?: { caracteristicaId: number; valorNumerico?: number | null; valorTexto?: string | null }[]
 }
 
 // Cierre atómico (CAS NOTIFICADA -> resultado) + fecha de visita + asignados +
@@ -368,6 +389,19 @@ export async function cerrarSolicitud(id: number, data: CierreData, userId: stri
         })
       }
     }
+    if (data.caracteristicas !== undefined) {
+      await tx.solicitudInspeccionMadurez.deleteMany({ where: { solicitudId: id } })
+      if (data.caracteristicas.length > 0) {
+        await tx.solicitudInspeccionMadurez.createMany({
+          data: data.caracteristicas.map((c) => ({
+            solicitudId: id,
+            caracteristicaId: c.caracteristicaId,
+            valorNumerico: c.valorNumerico ?? null,
+            valorTexto: c.valorTexto ?? null,
+          })),
+        })
+      }
+    }
     return tx.solicitudInspeccion.findUniqueOrThrow({ where: { id }, include: includeDetalle })
   })
 }
@@ -386,11 +420,22 @@ export async function getDefectoActivo(id: number) {
   })
 }
 
+// Lookup para validar las características de madurez del cierre (2026-10-26):
+// activa (no eliminada ni bloqueada); especies para validez por especie
+// (sin especies = genérica) y tipoDato para validar el tipo de valor.
+export async function getCaracteristicaMadurezActiva(id: number) {
+  return prisma.caracteristicaMadurez.findFirst({
+    where: { id, eliminadoEn: null, bloqueado: false },
+    select: { id: true, tipoDato: true, especies: { select: { especieId: true } } },
+  })
+}
+
 export async function reabrirSolicitud(id: number, userId: string) {
   // QAS-SI-004: al reabrir se limpian los datos de cierre para no dejar una
   // solicitud NOTIFICADA con evidencia de que sigue cerrada — incluye los
-  // defectos registrados en el cierre (2026-10-13), que son evidencia de la
-  // visita cerrada. La `fechaHora` (visita) NO se limpia: es editable y puede
+  // defectos registrados en el cierre (2026-10-13) y las características de
+  // madurez (2026-10-26), que son evidencia de la visita cerrada. La
+  // `fechaHora` (visita) NO se limpia: es editable y puede
   // haberse fijado antes del cierre.
   return prisma.$transaction(async (tx) => {
     const result = await tx.solicitudInspeccion.updateMany({
@@ -403,6 +448,9 @@ export async function reabrirSolicitud(id: number, userId: string) {
       )
     }
     await tx.solicitudInspeccionDefecto.deleteMany({ where: { solicitudId: id } })
+    // Características de madurez capturadas en el cierre (2026-10-26): también
+    // son evidencia de la visita cerrada; se limpian al reabrir (CM-004).
+    await tx.solicitudInspeccionMadurez.deleteMany({ where: { solicitudId: id } })
     return tx.solicitudInspeccion.findUniqueOrThrow({ where: { id }, include: includeDetalle })
   })
 }

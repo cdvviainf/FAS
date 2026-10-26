@@ -103,6 +103,7 @@ const itemsMenu: Array<{ codigo: string; nombre: string; grupo: string; seccion:
   // ── Configuración › Calidad ─────────────────────────────────────────────
   { codigo: 'CONFIG_GRUPOS_DEFECTO', nombre: 'Grupos de Defecto', grupo: 'Configuración', seccion: 'Calidad', ruta: '/dashboard/configuracion/grupos-defecto', tipo: 'PANTALLA', orden: 8410 },
   { codigo: 'CONFIG_DEFECTOS', nombre: 'Defectos', grupo: 'Configuración', seccion: 'Calidad', ruta: '/dashboard/configuracion/defectos', tipo: 'PANTALLA', orden: 8420 },
+  { codigo: 'CONFIG_CARACTERISTICAS_MADUREZ', nombre: 'Características de Madurez', grupo: 'Configuración', seccion: 'Calidad', ruta: '/dashboard/configuracion/caracteristicas-madurez', tipo: 'PANTALLA', orden: 8425 },
   { codigo: 'CONFIG_NOTAS_CALIDAD', nombre: 'Notas de Calidad', grupo: 'Configuración', seccion: 'Calidad', ruta: '/dashboard/configuracion/notas-calidad', tipo: 'PANTALLA', orden: 8430 },
   { codigo: 'CONFIG_NOTAS_CONDICION', nombre: 'Notas de Condición', grupo: 'Configuración', seccion: 'Calidad', ruta: '/dashboard/configuracion/notas-condicion', tipo: 'PANTALLA', orden: 8440 },
   { codigo: 'CONFIG_TIPOS_RECLAMO', nombre: 'Tipos de Reclamo', grupo: 'Configuración', seccion: 'Calidad', ruta: '/dashboard/configuracion/tipos-reclamo', tipo: 'PANTALLA', orden: 8450 },

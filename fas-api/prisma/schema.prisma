@@ -219,6 +219,7 @@ model Empresa {
   tiposProduccion        TipoProduccion[]
   gruposDefecto          GrupoDefecto[]
   defectos               Defecto[]
+  caracteristicasMadurez CaracteristicaMadurez[]
   tiposParametro         TipoParametro[]
   puertos                Puerto[]
   temporadas             Temporada[]
@@ -705,6 +706,7 @@ model UnidadMedida {
   condicionPagoCuotas     CondicionPagoCuota[]
   ordenCompraCuotasPago   OrdenCompraCuotaPago[]
   notaVentaCuotasPago     NotaVentaCuotaPago[]
+  caracteristicasMadurez  CaracteristicaMadurez[]  @relation("CaracteristicaMadurezUnidad")
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -917,6 +919,59 @@ model DefectoEspecie {
   @@map("defectos_especie")
 }
 
+// Características de calidad/madurez (2026-10-26, calidad.md — antes solo spec).
+// Se capturan en el cierre de la Solicitud de Inspección como campos numéricos/
+// texto independientes de los defectos (ej. Firmeza en lb, Brix en °Brix).
+enum TipoDatoMadurez {
+  DECIMAL
+  PORCENTAJE
+  ENTERO
+  TEXTO
+}
+
+model CaracteristicaMadurez {
+  id                    Int             @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa         @relation(fields: [empresaId], references: [id])
+  codigo                String
+  descripcion           String // "Firmeza", "Brix"...
+  descripcionExtranjera String?
+  // Tipo de dato del valor capturado (sin LISTA en esta etapa): define en qué
+  // columna de SolicitudInspeccionMadurez se guarda (valorNumerico/valorTexto).
+  tipoDato              TipoDatoMadurez @default(DECIMAL)
+  // Unidad del valor (ej. lb, °Brix) — mantenedor UnidadMedida. FK compuesta
+  // multiempresa, mismo patrón que Articulo.unidadId. Opcional (TEXTO no la usa).
+  unidadId              Int?
+  unidad                UnidadMedida?   @relation("CaracteristicaMadurezUnidad", fields: [empresaId, unidadId], references: [empresaId, id])
+  bloqueado             Boolean         @default(false)
+  creadoEn              DateTime        @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime?       @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  // Segmentación por especie (R1 calidad.md): sin especies asociadas = genérica.
+  especies                   CaracteristicaMadurezEspecie[]
+  solicitudInspeccionMadurez SolicitudInspeccionMadurez[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  @@map("caracteristicas_madurez")
+}
+
+model CaracteristicaMadurezEspecie {
+  id               Int                   @id @default(autoincrement())
+  caracteristicaId Int
+  caracteristica   CaracteristicaMadurez @relation(fields: [caracteristicaId], references: [id], onDelete: Cascade)
+  especieId        Int
+  especie          Especie               @relation(fields: [especieId], references: [id])
+
+  @@unique([caracteristicaId, especieId])
+  @@index([caracteristicaId])
+  @@map("caracteristicas_madurez_especie")
+}
+
 // Configura, por cada mantenedor/módulo que use campo `codigo`, un prefijo
 // fijo + cantidad de dígitos del correlativo (ej. Entidad: "EN" + 3 dígitos
 // -> EN001, EN002...). El formulario de creación de ese mantenedor consulta
@@ -1078,6 +1133,7 @@ model Especie {
   notasCalidad                NotaCalidadEspecie[]
   notasCondicion              NotaCondicionEspecie[]
   defectos                    DefectoEspecie[]
+  caracteristicasMadurez      CaracteristicaMadurezEspecie[]
   codigosEquivalentes         EspecieCodigoEquivalente[]
 
   @@unique([empresaId, id])
@@ -1840,6 +1896,7 @@ model SolicitudInspeccion {
   // Defectos registrados en el cierre (2026-10-13): grupo + defecto + valor
   // (entero o % según Defecto.tipoMedida).
   defectos       SolicitudInspeccionDefecto[]
+  madurez        SolicitudInspeccionMadurez[]
 
   ordenesCompra OrdenCompraSolicitudInspeccion[]
 
@@ -1982,6 +2039,24 @@ model SolicitudInspeccionDefecto {
   @@index([grupoDefectoId])
   @@index([defectoId])
   @@map("solicitud_inspeccion_defectos")
+}
+
+// Características de calidad/madurez capturadas en el cierre (2026-10-26). Espejo
+// de SolicitudInspeccionDefecto: una fila por característica registrada, con el
+// valor numérico o texto según el tipoDato de la característica.
+model SolicitudInspeccionMadurez {
+  id               Int                   @id @default(autoincrement())
+  solicitudId      Int
+  solicitud        SolicitudInspeccion   @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  caracteristicaId Int
+  caracteristica   CaracteristicaMadurez @relation(fields: [caracteristicaId], references: [id])
+  valorNumerico    Decimal?              @db.Decimal(10, 2)
+  valorTexto       String?
+
+  @@unique([solicitudId, caracteristicaId])
+  @@index([solicitudId])
+  @@index([caracteristicaId])
+  @@map("solicitud_inspeccion_madurez")
 }
 
 // Metadatos del adjunto — el binario vive en tabla aparte para no cargar blobs al listar

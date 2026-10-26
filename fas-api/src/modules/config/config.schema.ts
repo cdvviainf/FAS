@@ -128,6 +128,17 @@ export const defectoBodySchema = mantenedorBaseSchema.extend({
 
 export const defectoUpdateSchema = defectoBodySchema.omit({ codigo: true }).partial()
 
+// ─── Característica de Madurez (calidad, 2026-10-26) ─────────────────────────
+// Firmeza (lb), Brix (°Brix)… Se capturan en el cierre de la Inspección según su
+// tipoDato. Validez por especie (N:M, opcional). Unidad = mantenedor UnidadMedida.
+export const caracteristicaMadurezBodySchema = mantenedorBaseSchema.extend({
+  tipoDato: z.enum(['DECIMAL', 'PORCENTAJE', 'ENTERO', 'TEXTO']).default('DECIMAL'),
+  unidadId: z.number().int().positive().optional().nullable(),
+  especieIds: z.array(z.number().int().positive()).optional(),
+})
+
+export const caracteristicaMadurezUpdateSchema = caracteristicaMadurezBodySchema.omit({ codigo: true }).partial()
+
 // ─── Especie ─────────────────────────────────────────────────────────────────
 
 export const especieBodySchema = mantenedorBaseSchema.extend({

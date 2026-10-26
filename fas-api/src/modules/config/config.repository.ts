@@ -24,6 +24,7 @@ const modelMap: Record<MantenedorModelo, string> = {
   grupoVariedad: 'grupoVariedad',
   variedad: 'variedad',
   defecto: 'defecto',
+  caracteristicaMadurez: 'caracteristicaMadurez',
   categoria: 'categoria',
   calibre: 'calibre',
   parametro: 'parametro',
@@ -63,6 +64,10 @@ const includeMap: Partial<Record<MantenedorModelo, object>> = {
   },
   defecto: {
     grupoDefecto: { select: { id: true, descripcion: true } },
+    especies: { select: { especieId: true, especie: { select: { id: true, descripcion: true } } } },
+  },
+  caracteristicaMadurez: {
+    unidad: { select: { id: true, codigo: true, descripcion: true } },
     especies: { select: { especieId: true, especie: { select: { id: true, descripcion: true } } } },
   },
   parametro: { tipoParametro: { select: { id: true, descripcion: true } } },
@@ -375,6 +380,28 @@ export async function sincronizarDefectoEspecies(defectoId: number, especieIds: 
   })
 }
 
+/**
+ * Sincroniza la validez por especie de una Característica de Madurez (N:M,
+ * 2026-10-26): mismo patrón que sincronizarDefectoEspecies. CaracteristicaMadurezEspecie
+ * es child sin empresaId — el aislamiento lo da la Característica padre.
+ */
+export async function sincronizarCaracteristicaMadurezEspecies(caracteristicaId: number, especieIds: number[]) {
+  const deseados = [...new Set(especieIds)]
+  return prisma.$transaction(async (tx) => {
+    const actuales = await tx.caracteristicaMadurezEspecie.findMany({ where: { caracteristicaId }, select: { especieId: true } })
+    const actualesSet = new Set(actuales.map((a) => a.especieId))
+    const deseadosSet = new Set(deseados)
+    const aBorrar = actuales.map((a) => a.especieId).filter((e) => !deseadosSet.has(e))
+    const aCrear = deseados.filter((e) => !actualesSet.has(e))
+    if (aBorrar.length > 0) {
+      await tx.caracteristicaMadurezEspecie.deleteMany({ where: { caracteristicaId, especieId: { in: aBorrar } } })
+    }
+    if (aCrear.length > 0) {
+      await tx.caracteristicaMadurezEspecie.createMany({ data: aCrear.map((especieId) => ({ caracteristicaId, especieId })) })
+    }
+  })
+}
+
 export async function countPaisesPorMercado(mercadoId: number): Promise<number> {
   // R8: solo países vigentes (no soft-deleted) bloquean el borrado del mercado.
   return prisma.mercadoPais.count({ where: { mercadoId, pais: { eliminadoEn: null } } })
@@ -435,6 +462,7 @@ export async function countActiveReferences(
     | 'solicitudInspeccionCategoria'
     | 'solicitudInspeccionEmbalaje'
     | 'solicitudInspeccionDefecto'
+    | 'solicitudInspeccionMadurez'
     | 'articulo'
     | 'articuloEtiqueta'
     | 'notaVenta'

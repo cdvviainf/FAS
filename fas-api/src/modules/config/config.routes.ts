@@ -44,6 +44,8 @@ const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'grupoVariedad', prefixRuta: 'grupos-variedad', label: 'Grupo de Variedad', itemCodigo: 'CONFIG_GRUPOS_VARIEDAD', schemaKey: 'grupoVariedad' },
   { modelo: 'variedad', prefixRuta: 'variedades', label: 'Variedad', itemCodigo: 'CONFIG_VARIEDADES', schemaKey: 'variedad' },
   { modelo: 'defecto', prefixRuta: 'defectos', label: 'Defecto', itemCodigo: 'CONFIG_DEFECTOS', schemaKey: 'defecto' },
+  // Características de calidad/madurez (2026-10-26): FK UnidadMedida + especies N:M.
+  { modelo: 'caracteristicaMadurez', prefixRuta: 'caracteristicas-madurez', label: 'Característica de Madurez', itemCodigo: 'CONFIG_CARACTERISTICAS_MADUREZ', schemaKey: 'caracteristicaMadurez' },
   { modelo: 'categoria', prefixRuta: 'categorias', label: 'Categoría', itemCodigo: 'CONFIG_CATEGORIAS', schemaKey: 'categoria' },
   { modelo: 'calibre', prefixRuta: 'calibres', label: 'Calibre', itemCodigo: 'CONFIG_CALIBRES', schemaKey: 'calibre' },
   { modelo: 'parametro', prefixRuta: 'parametros', label: 'Parámetro', itemCodigo: 'CONFIG_PARAMETROS', schemaKey: 'parametro' },

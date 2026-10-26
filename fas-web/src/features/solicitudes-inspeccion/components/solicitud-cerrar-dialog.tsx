@@ -30,10 +30,21 @@ import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { solicitudesService } from '../service'
 import { solicitudesKeys } from '../queries'
 import { RESULTADO_CIERRE_LABELS } from '../types'
-import type { SolicitudInspeccion, ResultadoCierre, AsignadoInput, SolicitudDefectoInput, TipoMedidaDefecto } from '../types'
+import type { SolicitudInspeccion, ResultadoCierre, AsignadoInput, SolicitudDefectoInput, TipoMedidaDefecto, SolicitudMadurezInput, TipoDatoMadurez } from '../types'
 
 const gruposDefectoService = createMantenedorService('grupos-defecto')
 const defectosService = createMantenedorService('defectos')
+const caracteristicasMadurezService = createMantenedorService('caracteristicas-madurez')
+
+interface CaracteristicaMadurezOption {
+  id: number
+  codigo: string
+  descripcion: string
+  tipoDato: TipoDatoMadurez
+  unidad?: { id: number; codigo: string; descripcion: string } | null
+  // Validez por especie (N:M); vacío = genérica (toda especie).
+  especies?: { especieId: number }[]
+}
 
 const MAX_BYTES = 10 * 1024 * 1024
 const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.heic'
@@ -77,6 +88,10 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
   const [grupoSel, setGrupoSel] = useState('')
   const [defectoSel, setDefectoSel] = useState('')
   const [valorSel, setValorSel] = useState('')
+  // Características de madurez/calidad (Firmeza, Brix, ...).
+  const [caracteristicas, setCaracteristicas] = useState<SolicitudMadurezInput[]>([])
+  const [caracSel, setCaracSel] = useState('')
+  const [caracValor, setCaracValor] = useState('')
   const [pendientes, setPendientes] = useState<File[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -87,14 +102,22 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
     setFechaHora(solicitud.fechaHora ? toLocalInput(solicitud.fechaHora) : '')
     setAcudeIds(solicitud.asignados.filter((a) => a.funcion === 'ACUDIR').map((a) => a.usuarioId))
     setDefectos(solicitud.defectos.map((d) => ({ grupoDefectoId: d.grupoDefecto.id, defectoId: d.defecto.id, valor: Number(d.valor) })))
+    setCaracteristicas((solicitud.madurez ?? []).map((m) => ({
+      caracteristicaId: m.caracteristicaId,
+      valorNumerico: m.valorNumerico != null ? Number(m.valorNumerico) : null,
+      valorTexto: m.valorTexto ?? null,
+    })))
     setGrupoSel('')
     setDefectoSel('')
     setValorSel('')
+    setCaracSel('')
+    setCaracValor('')
   }, [open, solicitud])
 
   const { data: usuarios } = useQuery({ queryKey: ['usuarios-options'], queryFn: () => usuariosService.list({ limit: 500 }), staleTime: 5 * 60_000, enabled: open })
   const { data: gruposData } = useQuery({ queryKey: ['grupos-defecto-options'], queryFn: () => gruposDefectoService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000, enabled: open })
   const { data: defectosData } = useQuery({ queryKey: ['defectos-options'], queryFn: () => defectosService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000, enabled: open })
+  const { data: caracteristicasData } = useQuery({ queryKey: ['caracteristicas-madurez-options'], queryFn: () => caracteristicasMadurezService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000, enabled: open })
 
   const grupos = gruposData?.data ?? []
   const defectosCatalogo = (defectosData?.data ?? []) as unknown as DefectoOption[]
@@ -109,6 +132,17 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
       })
     : []
   const defectoElegido = defectoSel ? defectosCatalogo.find((d) => d.id === Number(defectoSel)) : undefined
+
+  const caracteristicasCatalogo = (caracteristicasData?.data ?? []) as unknown as CaracteristicaMadurezOption[]
+  // Filtra por especie de la solicitud (misma regla que defectos): genérica
+  // (sin especies) o válida para la especie. Excluye las ya agregadas.
+  const caracteristicasDisponibles = caracteristicasCatalogo.filter((c) => {
+    if (caracteristicas.some((x) => x.caracteristicaId === c.id)) return false
+    if (solicitud.especieId == null) return true
+    const especies = c.especies ?? []
+    return especies.length === 0 || especies.some((e) => e.especieId === solicitud.especieId)
+  })
+  const caracElegida = caracSel ? caracteristicasCatalogo.find((c) => c.id === Number(caracSel)) : undefined
 
   const cerrarMutation = useMutation({
     mutationFn: async () => {
@@ -128,6 +162,7 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
         fechaHora: fechaHora ? new Date(fechaHora).toISOString() : null,
         asignados,
         defectos,
+        caracteristicas,
       })
     },
     onSuccess: () => {
@@ -186,6 +221,42 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
     const sufijo = def?.tipoMedida === 'PORCENTAJE' ? '%' : ' u.'
     const valorFmt = String(d.valor).replace('.', ',')
     return `${grupo?.descripcion ?? d.grupoDefectoId} · ${def?.descripcion ?? d.defectoId}: ${valorFmt}${sufijo}`
+  }
+
+  function agregarCaracteristica() {
+    if (!caracSel || !caracElegida) {
+      toast.error('Selecciona una característica')
+      return
+    }
+    if (caracteristicas.some((c) => c.caracteristicaId === Number(caracSel))) {
+      toast.error('Esa característica ya está agregada')
+      return
+    }
+    if (caracElegida.tipoDato === 'TEXTO') {
+      const texto = caracValor.trim()
+      if (!texto) { toast.error('Ingresa un valor'); return }
+      setCaracteristicas((prev) => [...prev, { caracteristicaId: Number(caracSel), valorTexto: texto }])
+    } else {
+      const valor = Number(caracValor.replace(',', '.'))
+      if (!Number.isFinite(valor) || valor < 0) { toast.error('Ingresa un valor válido'); return }
+      if (caracElegida.tipoDato === 'ENTERO' && !Number.isInteger(valor)) {
+        toast.error('El valor debe ser un número entero'); return
+      }
+      if (caracElegida.tipoDato === 'PORCENTAJE' && valor > 100) {
+        toast.error('El porcentaje no puede superar 100'); return
+      }
+      setCaracteristicas((prev) => [...prev, { caracteristicaId: Number(caracSel), valorNumerico: valor }])
+    }
+    setCaracSel('')
+    setCaracValor('')
+  }
+
+  function etiquetaCaracteristica(c: SolicitudMadurezInput): string {
+    const def = caracteristicasCatalogo.find((x) => x.id === c.caracteristicaId)
+    if (c.valorTexto != null) return `${def?.descripcion ?? c.caracteristicaId}: ${c.valorTexto}`
+    const valorFmt = String(c.valorNumerico ?? '').replace('.', ',')
+    const sufijo = def?.tipoDato === 'PORCENTAJE' ? '%' : def?.unidad ? ` ${def.unidad.codigo}` : ''
+    return `${def?.descripcion ?? c.caracteristicaId}: ${valorFmt}${sufijo}`
   }
 
   function handleCerrar() {
@@ -290,6 +361,50 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
               </Button>
             </div>
             <p className='text-muted-foreground text-xs'>Según el defecto: por unidades (entero) o porcentaje (ej. 12,5).</p>
+          </div>
+
+          {/* Características de madurez/calidad (Firmeza, Brix, ...) */}
+          <div className='space-y-2'>
+            <Label>Características de calidad</Label>
+            {caracteristicas.length > 0 && (
+              <div className='flex flex-wrap gap-1.5'>
+                {caracteristicas.map((c, i) => (
+                  <Badge key={i} variant='secondary' className='gap-1 pr-1'>
+                    {etiquetaCaracteristica(c)}
+                    <button type='button' onClick={() => setCaracteristicas((prev) => prev.filter((_, j) => j !== i))} className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'>
+                      <Icons.close className='h-3 w-3' />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <div className='grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end'>
+              <div className='space-y-1'>
+                <Label className='text-xs'>Característica</Label>
+                <Select value={caracSel} onValueChange={(v) => { setCaracSel(v); setCaracValor('') }}>
+                  <SelectTrigger><SelectValue placeholder='Característica...' /></SelectTrigger>
+                  <SelectContent>
+                    {caracteristicasDisponibles.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className='space-y-1'>
+                <Label className='text-xs'>
+                  {caracElegida?.tipoDato === 'TEXTO' ? 'Valor' : caracElegida?.tipoDato === 'PORCENTAJE' ? 'Valor (%)' : caracElegida?.unidad ? `Valor (${caracElegida.unidad.codigo})` : 'Valor'}
+                </Label>
+                <Input
+                  className='w-28'
+                  value={caracValor}
+                  onChange={(e) => setCaracValor(e.target.value)}
+                  placeholder={caracElegida?.tipoDato === 'TEXTO' ? 'Texto...' : caracElegida?.tipoDato === 'ENTERO' ? '3' : '12,5'}
+                  disabled={!caracSel}
+                />
+              </div>
+              <Button type='button' variant='secondary' onClick={agregarCaracteristica} disabled={!caracSel || !caracValor}>
+                <Icons.add className='mr-1 h-4 w-4' /> Agregar
+              </Button>
+            </div>
+            <p className='text-muted-foreground text-xs'>Opcional. Firmeza, Brix u otras, según el mantenedor de Características de Madurez.</p>
           </div>
 
           <div className='space-y-2'>

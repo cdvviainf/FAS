@@ -56,6 +56,7 @@ type ExternalReferenceDef = {
     | 'solicitudInspeccionCategoria'
     | 'solicitudInspeccionEmbalaje'
     | 'solicitudInspeccionDefecto'
+    | 'solicitudInspeccionMadurez'
     | 'articulo'
     | 'articuloEtiqueta'
     | 'notaVenta'
@@ -120,6 +121,9 @@ const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceD
   ],
   defecto: [
     { delegateName: 'solicitudInspeccionDefecto', parentField: 'defectoId', label: 'defectos de inspección', viaSolicitud: true },
+  ],
+  caracteristicaMadurez: [
+    { delegateName: 'solicitudInspeccionMadurez', parentField: 'caracteristicaId', label: 'características de inspección', viaSolicitud: true },
   ],
 }
 
@@ -232,6 +236,23 @@ export async function crearMantenedor(
     }
   }
 
+  // Característica de Madurez (2026-10-26): unidadId (si viene) y especieIds deben
+  // pertenecer al tenant activo.
+  if (modelo === 'caracteristicaMadurez') {
+    // CM-010: la unidad no aplica a TEXTO — se descarta aunque venga en el body.
+    if (data.tipoDato === 'TEXTO') data.unidadId = null
+    if (data.unidadId) {
+      const unidad = await repo.getMantenedorById('unidadMedida', data.unidadId)
+      if (!unidad) throw new ValidationError('La unidad de medida seleccionada no existe o no pertenece a esta empresa')
+    }
+    if (Array.isArray(data.especieIds)) {
+      for (const especieId of new Set(data.especieIds)) {
+        const especie = await repo.getMantenedorById('especie', especieId)
+        if (!especie) throw new ValidationError('Una o más especies seleccionadas no existen o no pertenecen a esta empresa')
+      }
+    }
+  }
+
   // QAS-MG-L4-004: Bodega — validate active FK comunaId
   if (modelo === 'bodega' && data.comunaId) {
     const comuna = await repo.getMantenedorById('comuna', data.comunaId)
@@ -323,6 +344,11 @@ export async function crearMantenedor(
 
   if (modelo === 'defecto' && Array.isArray(especieIds)) {
     await repo.sincronizarDefectoEspecies(created.id, especieIds)
+    return repo.getMantenedorById(modelo, created.id)
+  }
+
+  if (modelo === 'caracteristicaMadurez' && Array.isArray(especieIds)) {
+    await repo.sincronizarCaracteristicaMadurezEspecies(created.id, especieIds)
     return repo.getMantenedorById(modelo, created.id)
   }
 
@@ -426,6 +452,25 @@ export async function actualizarMantenedor(
     if (data.grupoDefectoId !== undefined) {
       const grupo = await repo.getMantenedorById('grupoDefecto', data.grupoDefectoId)
       if (!grupo) throw new ValidationError('El grupo de defecto seleccionado no existe o no pertenece a esta empresa')
+    }
+    if (data.especieIds !== undefined) {
+      for (const especieId of new Set(data.especieIds)) {
+        const especie = await repo.getMantenedorById('especie', especieId)
+        if (!especie) throw new ValidationError('Una o más especies seleccionadas no existen o no pertenecen a esta empresa')
+      }
+    }
+  }
+
+  // Característica de Madurez (2026-10-26): unidadId/especieIds del tenant (on update).
+  if (modelo === 'caracteristicaMadurez') {
+    // CM-010: si el tipoDato efectivo (body o el ya persistido) es TEXTO, la
+    // unidad se limpia aunque el PATCH no la toque.
+    const current = await repo.getMantenedorById(modelo, id) as { tipoDato?: string } | null
+    const tipoDatoEfectivo = (data.tipoDato as string | undefined) ?? current?.tipoDato
+    if (tipoDatoEfectivo === 'TEXTO') data.unidadId = null
+    if (data.unidadId !== undefined && data.unidadId !== null) {
+      const unidad = await repo.getMantenedorById('unidadMedida', data.unidadId)
+      if (!unidad) throw new ValidationError('La unidad de medida seleccionada no existe o no pertenece a esta empresa')
     }
     if (data.especieIds !== undefined) {
       for (const especieId of new Set(data.especieIds)) {
@@ -544,6 +589,13 @@ export async function actualizarMantenedor(
       await repo.sincronizarDefectoEspecies(id, especieIds)
     }
     // Re-consultar para devolver `especies` reconstruidas vía DefectoEspecie.
+    return repo.getMantenedorById(modelo, id)
+  }
+
+  if (modelo === 'caracteristicaMadurez') {
+    if (especieIds !== undefined) {
+      await repo.sincronizarCaracteristicaMadurezEspecies(id, especieIds)
+    }
     return repo.getMantenedorById(modelo, id)
   }
 

@@ -104,6 +104,30 @@ export interface SolicitudInspeccion {
   adjuntos: SolicitudAdjunto[]
   // Defectos registrados en el cierre (2026-10-13).
   defectos: SolicitudDefecto[]
+  // Características de madurez/calidad capturadas en el cierre (2026-10-26).
+  madurez: SolicitudMadurez[]
+}
+
+export type TipoDatoMadurez = 'DECIMAL' | 'PORCENTAJE' | 'ENTERO' | 'TEXTO'
+
+export interface SolicitudMadurez {
+  id: number
+  caracteristicaId: number
+  valorNumerico: string | null
+  valorTexto: string | null
+  caracteristica: {
+    id: number
+    codigo: string
+    descripcion: string
+    tipoDato: TipoDatoMadurez
+    unidad: { id: number; codigo: string; descripcion: string } | null
+  }
+}
+
+export interface SolicitudMadurezInput {
+  caracteristicaId: number
+  valorNumerico?: number | null
+  valorTexto?: string | null
 }
 
 export type TipoMedidaDefecto = 'UNIDADES' | 'PORCENTAJE'
@@ -159,6 +183,8 @@ export interface SolicitudCerrarInput {
   asignados: AsignadoInput[]
   // Defectos registrados en la visita.
   defectos?: SolicitudDefectoInput[]
+  // Características de madurez/calidad (reemplaza el set completo).
+  caracteristicas?: SolicitudMadurezInput[]
 }
 
 export interface SolicitudListResponse {

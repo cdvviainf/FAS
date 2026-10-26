@@ -32,6 +32,8 @@ const MODELOS_TENANT = new Set([
   // Catálogo de defectos (2026-10-06): 2 niveles GrupoDefecto -> Defecto.
   'GrupoDefecto',
   'Defecto',
+  // Características de madurez/calidad (2026-10-26): Firmeza, Brix, ...
+  'CaracteristicaMadurez',
   // Mantenedor Etiquetas (agosto 2026):
   'Etiqueta',
   // Fase 3, lote Entidades:

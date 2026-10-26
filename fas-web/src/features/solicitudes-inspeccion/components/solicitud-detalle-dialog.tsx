@@ -151,6 +151,28 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
                   </ul>
                 </div>
               )}
+              {(solicitud.madurez ?? []).length > 0 && (
+                <div className='mt-2'>
+                  <p className='text-muted-foreground text-xs font-medium'>Características de calidad</p>
+                  <ul className='mt-1 space-y-0.5 text-sm'>
+                    {solicitud.madurez.map((m) => {
+                      const sufijo = m.valorTexto != null
+                        ? ''
+                        : m.caracteristica.tipoDato === 'PORCENTAJE'
+                          ? '%'
+                          : m.caracteristica.unidad
+                            ? ` ${m.caracteristica.unidad.codigo}`
+                            : ''
+                      const valor = m.valorTexto != null ? m.valorTexto : String(m.valorNumerico ?? '').replace('.', ',')
+                      return (
+                        <li key={m.id}>
+                          {m.caracteristica.descripcion}: {valor}{sufijo}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 
