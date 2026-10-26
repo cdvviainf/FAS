@@ -51,7 +51,7 @@ Permitir a Bernardo: (a) mantener el catálogo de artículos con su costeo y sto
 
 | # | Decisión | Default adoptado |
 |---|---|---|
-| D1 | Tipos de artículo | `EMBALAJE`, `ENVASE`, `MATERIAL_EMBALAJE`, `SERVICIO`. |
+| D1 | Tipos de artículo | `EMBALAJE`, `ENVASE`, `MATERIAL_EMBALAJE`, `SERVICIO`, `GRANEL` **(nuevo, 2026-10-23 — `GRANEL` = fruta por kilos; solo se usa en OC granel, ver §4 enum y `compras.md` §4.2/§4.3)**. |
 | D2 | Costeo y stock | `ESTANDAR` ⇒ exige `valorEstandar` y **no controla stock**. `PROMEDIO_PONDERADO` ⇒ controla stock con PMP móvil. |
 | D3 | Servicios | `SERVICIO` es siempre `ESTANDAR` (no controla stock). |
 | D4 | Componentes de receta | Solo `MATERIAL_EMBALAJE` y `SERVICIO`. (Envase no se incluye por ahora.) |
@@ -74,7 +74,19 @@ enum TipoArticulo {
   ENVASE
   MATERIAL_EMBALAJE
   SERVICIO
+  GRANEL   // (nuevo, 2026-10-23) — fruta comprada a granel (por kilos); ver nota abajo
 }
+
+// (nuevo, 2026-10-23) — Artículo tipo GRANEL: representa fruta comprada a
+// granel (por kilos), NO producto terminado embalado. Reglas:
+// - NO lleva etiqueta ni kg de envase (esos campos siguen siendo exclusivos
+//   de EMBALAJE); puede llevar `especieId` (para filtrarlo en la OC granel).
+// - Queda EXCLUIDO de recetas, stock, notas de venta, instructivo de embalaje y
+//   cajas-por-pallet (todos esos siguen exigiendo EMBALAJE).
+// - Único uso: líneas de Orden de Compra de fruta en modalidad GRANEL
+//   (`compras.md` §4.2/§4.3, `OrdenCompra.modalidad = GRANEL`).
+// - Form de Artículos: el campo Especie se muestra para EMBALAJE **o** GRANEL;
+//   etiqueta/etiquetas adicionales/kg neto/kg bruto siguen solo para EMBALAJE.
 
 // UnidadMedida y Bodega se definen en Configuración (mantenedores-generales.md).
 // Aquí solo se referencian por FK (Int).

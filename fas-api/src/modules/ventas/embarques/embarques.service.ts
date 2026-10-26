@@ -578,7 +578,10 @@ export async function subirPackingList(
     throw new ValidationError('Este Embarque no tiene pallets reservados — no hay nada que reconciliar contra el Packing List')
   }
 
-  const resultado = await reconciliarPackingList(template, archivo.datos, palletsStock)
+  // Emisores válidos de la Guía (2026-10-23): productores/plantas del embarque.
+  const entidadesEmisor = await repo.getEntidadesEmisorEmbarque(embarqueId)
+
+  const resultado = await reconciliarPackingList(template, archivo.datos, palletsStock, entidadesEmisor)
 
   return repo.guardarPackingList(embarqueId, {
     templateCargaId,
@@ -590,6 +593,7 @@ export async function subirPackingList(
     discrepancias: resultado.discrepancias,
     numerosPallet: resultado.numerosPallet,
     termografos: resultado.termografos,
+    guiaPorPallet: resultado.guiaPorPallet,
     cargadoPor: userId,
   })
 }

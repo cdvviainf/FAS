@@ -9,16 +9,39 @@ import type {
   OrdenCompraUpdateInput,
 } from './ordenes-compra.types.js'
 
-async function validarLinea(linea: OrdenCompraLineaInput, index: number) {
+async function validarLinea(linea: OrdenCompraLineaInput, index: number, modalidad: 'CAJAS' | 'GRANEL') {
   const prefijo = `Línea ${index + 1}:`
 
+  // Especie + variedad: aplican en ambas modalidades.
   const especie = await repo.getEspecie(linea.especieId)
   if (!especie) throw new ValidationError(`${prefijo} la especie seleccionada no existe o está bloqueada`)
 
+  const variedad = await repo.getVariedad(linea.variedadId)
+  if (!variedad) throw new ValidationError(`${prefijo} la variedad seleccionada no existe o está bloqueada`)
+  if (variedad.especieId !== linea.especieId) {
+    throw new ValidationError(`${prefijo} la variedad no pertenece a la especie seleccionada`)
+  }
+
   const articulo = await repo.getArticuloTipo(linea.articuloId)
-  if (!articulo) throw new ValidationError(`${prefijo} el artículo de embalaje seleccionado no existe`)
+  if (!articulo) throw new ValidationError(`${prefijo} el artículo seleccionado no existe`)
+  if (!articulo.activo) throw new ValidationError(`${prefijo} el artículo seleccionado está inactivo`)
+
+  // ── Modalidad GRANEL: fruta por kilos, sin categoría/etiqueta/calibre/pallet/cajas.
+  if (modalidad === 'GRANEL') {
+    if (articulo.tipo !== 'GRANEL') {
+      throw new ValidationError(`${prefijo} en modalidad granel el artículo debe ser de tipo Granel`)
+    }
+    if (linea.cantidadKilos == null || linea.cantidadKilos <= 0) {
+      throw new ValidationError(`${prefijo} la cantidad de kilos debe ser mayor a 0`)
+    }
+    if (linea.precioUsdKilo == null || linea.precioUsdKilo < 0) {
+      throw new ValidationError(`${prefijo} el precio USD por kilo no puede ser negativo`)
+    }
+    return { etiquetaId: null as number | null }
+  }
+
+  // ── Modalidad CAJAS: fruta embalada (producto terminado).
   if (articulo.tipo !== 'EMBALAJE') throw new ValidationError(`${prefijo} el artículo debe ser de tipo Embalaje`)
-  if (!articulo.activo) throw new ValidationError(`${prefijo} el artículo de embalaje seleccionado está inactivo`)
 
   // Etiqueta de la línea (2026-10-15): una sola, dentro del set permitido del
   // artículo (principal ∪ adicionales). FIJA (1 permitida) → se autocompleta;
@@ -41,18 +64,16 @@ async function validarLinea(linea: OrdenCompraLineaInput, index: number) {
     throw new ValidationError(`${prefijo} el artículo "${articulo.descripcion}" tiene etiqueta dinámica — selecciona la etiqueta`)
   }
 
-  const variedad = await repo.getVariedad(linea.variedadId)
-  if (!variedad) throw new ValidationError(`${prefijo} la variedad seleccionada no existe o está bloqueada`)
-  if (variedad.especieId !== linea.especieId) {
-    throw new ValidationError(`${prefijo} la variedad no pertenece a la especie seleccionada`)
-  }
-
+  if (linea.categoriaId == null) throw new ValidationError(`${prefijo} la categoría es requerida`)
   const categoria = await repo.getCategoria(linea.categoriaId)
   if (!categoria) throw new ValidationError(`${prefijo} la categoría seleccionada no existe o está bloqueada`)
   if (categoria.especieId !== linea.especieId) {
     throw new ValidationError(`${prefijo} la categoría no pertenece a la especie seleccionada`)
   }
 
+  if (!linea.calibreIds || linea.calibreIds.length === 0) {
+    throw new ValidationError(`${prefijo} selecciona al menos un calibre`)
+  }
   const calibres = await repo.getCalibresActivos(linea.calibreIds)
   if (calibres.length !== new Set(linea.calibreIds).size) {
     throw new ValidationError(`${prefijo} uno o más calibres seleccionados no existen o están bloqueados`)
@@ -61,12 +82,44 @@ async function validarLinea(linea: OrdenCompraLineaInput, index: number) {
     throw new ValidationError(`${prefijo} uno o más calibres no pertenecen a la especie seleccionada`)
   }
 
-  if (linea.tipoPalletId != null) {
-    const tipoPallet = await repo.getTipoPallet(linea.tipoPalletId)
-    if (!tipoPallet) throw new ValidationError(`${prefijo} el tipo de pallet seleccionado no existe o está bloqueado`)
+  if (linea.tipoPalletId == null) throw new ValidationError(`${prefijo} el tipo de pallet es requerido`)
+  const tipoPallet = await repo.getTipoPallet(linea.tipoPalletId)
+  if (!tipoPallet) throw new ValidationError(`${prefijo} el tipo de pallet seleccionado no existe o está bloqueado`)
+
+  if (linea.cantidadPallets == null || linea.cantidadPallets <= 0) {
+    throw new ValidationError(`${prefijo} la cantidad de pallets debe ser mayor a 0`)
+  }
+  if (linea.cajasPorPallet == null || linea.cajasPorPallet <= 0) {
+    throw new ValidationError(`${prefijo} las cajas por pallet deben ser mayor a 0`)
+  }
+  if (linea.cajas == null || linea.cajas <= 0) {
+    throw new ValidationError(`${prefijo} las cajas deben ser mayor a 0`)
+  }
+  if (linea.precioUsdCaja == null || linea.precioUsdCaja < 0) {
+    throw new ValidationError(`${prefijo} el precio por caja no puede ser negativo`)
   }
 
-  return { etiquetaId: etiquetaIdResuelta }
+  return { etiquetaId: etiquetaIdResuelta as number | null }
+}
+
+// Nulifica los campos que no aplican a la modalidad para no persistir datos
+// incoherentes aunque el cliente los mande (el Zod los acepta como opcionales).
+// En GRANEL quedan null los campos de cajas; en CAJAS, los de granel.
+function normalizarLineaPorModalidad(linea: OrdenCompraLineaInput, modalidad: 'CAJAS' | 'GRANEL'): OrdenCompraLineaInput {
+  if (modalidad === 'GRANEL') {
+    return {
+      ...linea,
+      categoriaId: null,
+      etiquetaId: null,
+      calibreIds: [],
+      tipoPalletId: null,
+      cantidadPallets: null,
+      cajasPorPallet: null,
+      cajas: null,
+      precioUsdCaja: null,
+    }
+  }
+  return { ...linea, cantidadKilos: null, precioUsdKilo: null }
 }
 
 // Pre-check amigable (2026-08-23) — lectura NO bloqueada, solo para devolver
@@ -105,8 +158,11 @@ async function resolverLineaDesdeCierre(
   }
   const comprometido = await repo.getCajasComprometidas(notaVentaDetalleId, excluirLineaId)
   const disponible = detalle.cajas - comprometido
-  if (linea.cajas > disponible) {
-    throw new ValidationError(`${prefijo} la línea de Cierre Comercial solo tiene ${disponible} caja(s) disponible(s) (solicitadas: ${linea.cajas})`)
+  // Líneas de Cierre solo existen en modalidad CAJAS (el service bloquea el
+  // Cierre en granel), así que `cajas` siempre viene con valor en este camino.
+  const cajasSolicitadas = linea.cajas ?? 0
+  if (cajasSolicitadas > disponible) {
+    throw new ValidationError(`${prefijo} la línea de Cierre Comercial solo tiene ${disponible} caja(s) disponible(s) (solicitadas: ${cajasSolicitadas})`)
   }
   return {
     ...linea,
@@ -238,6 +294,17 @@ export async function actualizarOrdenCompra(id: number, body: OrdenCompraUpdateI
   if (existente.estado === 'RECEPCIONADA') {
     throw new ValidationError('La Orden de Compra ya fue recepcionada y no puede editarse')
   }
+  // La modalidad (Cajas/Granel) determina qué campos exige cada línea y qué tipo
+  // de artículo se compra — cambiarla con líneas ya cargadas las dejaría
+  // incoherentes. Solo editable en BORRADOR y sin líneas (2026-10-23).
+  if (body.modalidad !== undefined && body.modalidad !== existente.modalidad) {
+    if (existente.estado !== 'BORRADOR') {
+      throw new ValidationError('La modalidad (Cajas/Granel) solo puede cambiarse mientras la Orden de Compra está en Borrador')
+    }
+    if (existente.lineas.length > 0) {
+      throw new ValidationError('No se puede cambiar la modalidad de una Orden de Compra que ya tiene líneas — elimínelas primero')
+    }
+  }
   // FAS-OCNV-001 (QA ronda 1): no se puede cambiar ni quitar el Cierre
   // Comercial de la OC mientras tenga líneas tomadas de él — quedarían
   // huérfanas (notaVentaDetalleId apuntando a un Cierre que la OC ya no dice
@@ -280,11 +347,20 @@ function assertEditable(orden: { estado: string }) {
 export async function agregarLinea(ordenCompraId: number, body: OrdenCompraLineaCreateInput) {
   const orden = await obtenerOrdenCompra(ordenCompraId)
   assertEditable(orden)
+  // El Cierre Comercial es de fruta embalada (cajas): una OC granel no toma
+  // líneas de un Cierre.
+  if (orden.modalidad === 'GRANEL' && body.notaVentaDetalleId != null) {
+    throw new ValidationError('Una Orden de Compra en modalidad granel no puede tomar líneas de un Cierre Comercial')
+  }
   const lineaResuelta = body.notaVentaDetalleId != null
     ? await resolverLineaDesdeCierre(orden.notaVentaId, body.notaVentaDetalleId, body, 0)
     : body
-  const { etiquetaId } = await validarLinea(lineaResuelta, 0)
-  return repo.addLinea(ordenCompraId, { ...lineaResuelta, etiquetaId, notaVentaDetalleId: body.notaVentaDetalleId ?? null })
+  const { etiquetaId } = await validarLinea(lineaResuelta, 0, orden.modalidad)
+  const normalizada = normalizarLineaPorModalidad(lineaResuelta, orden.modalidad)
+  // La modalidad con la que se validó/normalizó viaja al repo: bajo lock se
+  // compara con la fresca para no insertar una línea de la modalidad equivocada
+  // si un PATCH cambió la modalidad en el medio (QA-APL-001).
+  return repo.addLinea(ordenCompraId, { ...normalizada, etiquetaId, notaVentaDetalleId: body.notaVentaDetalleId ?? null }, orden.modalidad)
 }
 
 // La OrdenCompraLinea no es un modelo tenant (tabla hija, decisión #5 de
@@ -310,8 +386,9 @@ export async function actualizarLinea(ordenCompraId: number, lineaId: number, bo
   const lineaResuelta = linea.notaVentaDetalleId != null
     ? await resolverLineaDesdeCierre(orden.notaVentaId, linea.notaVentaDetalleId, body, 0, lineaId)
     : body
-  const { etiquetaId } = await validarLinea(lineaResuelta, 0)
-  return repo.updateLinea(ordenCompraId, lineaId, { ...lineaResuelta, etiquetaId })
+  const { etiquetaId } = await validarLinea(lineaResuelta, 0, orden.modalidad)
+  const normalizada = normalizarLineaPorModalidad(lineaResuelta, orden.modalidad)
+  return repo.updateLinea(ordenCompraId, lineaId, { ...normalizada, etiquetaId }, orden.modalidad)
 }
 
 export async function eliminarLinea(ordenCompraId: number, lineaId: number) {

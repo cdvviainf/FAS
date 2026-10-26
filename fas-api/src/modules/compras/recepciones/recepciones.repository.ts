@@ -172,7 +172,7 @@ export async function getDireccionDeEntidad(direccionId: number, entidadId: numb
 export async function getOrdenCompra(id: number) {
   return prisma.ordenCompra.findFirst({
     where: { id, eliminadoEn: null },
-    select: { id: true, estado: true },
+    select: { id: true, estado: true, modalidad: true },
   })
 }
 

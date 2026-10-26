@@ -10,23 +10,34 @@ import type { OrdenCompraPdfPayload } from '../../../schemas/orden-compra.schema
 
 type Linea = OrdenCompraPdfPayload['lineas'][number]
 
-const columnas: ColumnaTabla<Linea>[] = [
+// Modalidad CAJAS: detalle de fruta embalada (producto terminado).
+const columnasCajas: ColumnaTabla<Linea>[] = [
   { titulo: 'Especie', render: (l) => l.especie },
   { titulo: 'Variedad', render: (l) => l.variedad },
   { titulo: 'Artículo', render: (l) => l.articulo },
   { titulo: 'Etiqueta', render: (l) => l.etiqueta ?? '—' },
-  { titulo: 'Categoría', render: (l) => l.categoria },
+  { titulo: 'Categoría', render: (l) => l.categoria ?? '—' },
   { titulo: 'Calibres', render: (l) => l.calibres },
-  { titulo: 'Pallets', render: (l) => fmt.entero(l.cantidadPallets), numerica: true },
-  { titulo: 'Cajas', render: (l) => fmt.entero(l.cajas), numerica: true },
-  { titulo: 'Precio USD/Caja', render: (l) => fmt.usd(l.precioUsdCaja), numerica: true },
+  { titulo: 'Pallets', render: (l) => fmt.entero(l.cantidadPallets ?? 0), numerica: true },
+  { titulo: 'Cajas', render: (l) => fmt.entero(l.cajas ?? 0), numerica: true },
+  { titulo: 'Precio USD/Caja', render: (l) => fmt.usd(l.precioUsdCaja ?? '0'), numerica: true },
   { titulo: 'Total USD', render: (l) => fmt.usd(l.totalUsd), numerica: true },
   // Kg Envase (feedback Christian, 2026-08-19): dato de catálogo, distinto
   // del Kg Neto/Bruto de más abajo (total de la línea = envase × cajas).
-  { titulo: 'Kg Neto Envase', render: (l) => fmt.kilos(l.kgNetoEnvase), numerica: true },
-  { titulo: 'Kg Bruto Envase', render: (l) => fmt.kilos(l.kgBrutoEnvase), numerica: true },
-  { titulo: 'Kg Neto', render: (l) => fmt.kilos(l.kgNeto), numerica: true },
-  { titulo: 'Kg Bruto', render: (l) => fmt.kilos(l.kgBruto), numerica: true },
+  { titulo: 'Kg Neto Envase', render: (l) => fmt.kilos(l.kgNetoEnvase ?? '0'), numerica: true },
+  { titulo: 'Kg Bruto Envase', render: (l) => fmt.kilos(l.kgBrutoEnvase ?? '0'), numerica: true },
+  { titulo: 'Kg Neto', render: (l) => fmt.kilos(l.kgNeto ?? '0'), numerica: true },
+  { titulo: 'Kg Bruto', render: (l) => fmt.kilos(l.kgBruto ?? '0'), numerica: true },
+]
+
+// Modalidad GRANEL (2026-10-23): fruta por kilos, sin cajas/pallets/calibre.
+const columnasGranel: ColumnaTabla<Linea>[] = [
+  { titulo: 'Especie', render: (l) => l.especie },
+  { titulo: 'Variedad', render: (l) => l.variedad },
+  { titulo: 'Artículo', render: (l) => l.articulo },
+  { titulo: 'Kilos', render: (l) => fmt.kilos(l.cantidadKilos ?? '0'), numerica: true },
+  { titulo: 'Precio USD/Kg', render: (l) => fmt.usd(l.precioUsdKilo ?? '0'), numerica: true },
+  { titulo: 'Total USD', render: (l) => fmt.usd(l.totalUsd), numerica: true },
 ]
 
 // Disclaimer legal de facturación (feedback Christian, 2026-08-19/20) —
@@ -68,6 +79,22 @@ function textoCuota(c: OrdenCompraPdfPayload['cuotas'][number]): string {
 //   documentos.repository.ts#logoDataUri). Sin logo subido, el Encabezado
 //   simplemente no lo pinta (Etapa 4 §12, ya no pendiente).
 export function OrdenCompraV1({ d, marcaAgua, marcaAguaFecha }: { d: OrdenCompraPdfPayload; marcaAgua?: 'BORRADOR' | 'COPIA'; marcaAguaFecha?: string }) {
+  const esGranel = d.modalidad === 'GRANEL'
+  const columnas = esGranel ? columnasGranel : columnasCajas
+  // Fila de totales posicional — debe tener tantas celdas como columnas.
+  const totalesFila = esGranel
+    ? ['', '', 'Total:', fmt.kilos(d.totales.kilos), '', fmt.usd(d.totales.totalUsd)]
+    : [
+        '', '', '', '', '', 'Total:',
+        fmt.entero(d.totales.pallets),
+        fmt.entero(d.totales.cajas),
+        '',
+        fmt.usd(d.totales.totalUsd),
+        '', // Kg Neto Envase — dato de catálogo, no se totaliza
+        '', // Kg Bruto Envase — ídem
+        fmt.kilos(d.totales.kgNeto),
+        fmt.kilos(d.totales.kgBruto),
+      ]
   return (
     <Documento
       titulo={`Orden de Compra ${d.numero}`}
@@ -132,17 +159,7 @@ export function OrdenCompraV1({ d, marcaAgua, marcaAguaFecha }: { d: OrdenCompra
         titulo='Detalle'
         filas={d.lineas}
         columnas={columnas}
-        totales={[
-          '', '', '', '', '', 'Total:',
-          fmt.entero(d.totales.pallets),
-          fmt.entero(d.totales.cajas),
-          '',
-          fmt.usd(d.totales.totalUsd),
-          '', // Kg Neto Envase — dato de catálogo, no se totaliza
-          '', // Kg Bruto Envase — ídem
-          fmt.kilos(d.totales.kgNeto),
-          fmt.kilos(d.totales.kgBruto),
-        ]}
+        totales={totalesFila}
       />
 
       <BloqueTotales

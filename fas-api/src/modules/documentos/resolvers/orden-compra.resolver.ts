@@ -26,55 +26,89 @@ export async function resolverOrdenCompra(id: number, empresaId: number): Promis
     getEntidadParaDocumento(oc.entidadProductorId),
   ])
 
-  // Cálculo en Decimal (CLAUDE.md §12.5) — nunca number de JS. Kg Neto/Bruto
-  // por línea = cajas × kg del envase (Articulo.kgNetoEnvase/kgBrutoEnvase),
-  // mismo cálculo que el ejemplo real (Docs/AGROSAN 002 -OC5.pdf: 240 cajas ×
-  // 2,50 kg = 600 kg neto).
-  const calculadas = oc.lineas.map((l) => {
+  // Cálculo en Decimal (CLAUDE.md §12.5) — nunca number de JS. El detalle
+  // depende de la modalidad (2026-10-23):
+  // - CAJAS: Total = precio/caja × cajas; Kg Neto/Bruto = cajas × kg del envase
+  //   (Articulo.kgNetoEnvase/kgBrutoEnvase), mismo cálculo que el ejemplo real
+  //   (Docs/AGROSAN 002 -OC5.pdf: 240 cajas × 2,50 kg = 600 kg neto).
+  // - GRANEL: Total = precio/kilo × kilos; no hay cajas/pallets/categoría/
+  //   calibre/etiqueta ni kg de envase (se compra al peso).
+  const esGranel = oc.modalidad === 'GRANEL'
+
+  const lineas = oc.lineas.map((l) => {
+    const base = {
+      especie: l.especie.descripcion,
+      variedad: l.variedad.descripcion,
+      articulo: l.articulo.descripcion,
+      // Descripción, no código (feedback Christian, 2026-08-19) — en las 3
+      // plantillas del motor, no solo acá.
+      etiqueta: l.articulo.etiqueta?.descripcion ?? null,
+    }
+    if (esGranel) {
+      const kilos = new Prisma.Decimal(l.cantidadKilos ?? 0)
+      const precioKilo = new Prisma.Decimal(l.precioUsdKilo ?? 0)
+      return {
+        ...base,
+        calibres: '',
+        categoria: null,
+        cantidadPallets: null,
+        cajas: null,
+        precioUsdCaja: null,
+        cantidadKilos: kilos.toString(),
+        precioUsdKilo: precioKilo.toString(),
+        totalUsd: precioKilo.mul(kilos).toString(),
+        kgNetoEnvase: null,
+        kgBrutoEnvase: null,
+        kgNeto: null,
+        kgBruto: null,
+      }
+    }
     const kgNetoEnvase = l.articulo.kgNetoEnvase ? new Prisma.Decimal(l.articulo.kgNetoEnvase) : new Prisma.Decimal(0)
     const kgBrutoEnvase = l.articulo.kgBrutoEnvase ? new Prisma.Decimal(l.articulo.kgBrutoEnvase) : new Prisma.Decimal(0)
+    const cajas = l.cajas ?? 0
+    const precioCaja = new Prisma.Decimal(l.precioUsdCaja ?? 0)
     return {
-      l,
-      kgNetoEnvase,
-      kgBrutoEnvase,
-      totalUsd: new Prisma.Decimal(l.precioUsdCaja).mul(l.cajas),
-      kgNeto: kgNetoEnvase.mul(l.cajas),
-      kgBruto: kgBrutoEnvase.mul(l.cajas),
+      ...base,
+      calibres: l.calibres.map((c) => c.calibre.descripcion).join(', '),
+      categoria: l.categoria?.descripcion ?? null,
+      cantidadPallets: l.cantidadPallets,
+      cajas: l.cajas,
+      precioUsdCaja: precioCaja.toString(),
+      cantidadKilos: null,
+      precioUsdKilo: null,
+      totalUsd: precioCaja.mul(cajas).toString(),
+      // Kg Neto/Bruto Envase: dato de catálogo; Kg Neto/Bruto: total de la
+      // línea (envase × cajas) — se muestran ambos (feedback Christian 2026-08-19).
+      kgNetoEnvase: kgNetoEnvase.toString(),
+      kgBrutoEnvase: kgBrutoEnvase.toString(),
+      kgNeto: kgNetoEnvase.mul(cajas).toString(),
+      kgBruto: kgBrutoEnvase.mul(cajas).toString(),
     }
   })
 
-  // Kg Neto/Bruto Envase (feedback Christian, 2026-08-19): el dato de
-  // catálogo (Articulo.kgNetoEnvase/kgBrutoEnvase), distinto del Kg Neto/
-  // Bruto ya existente (el total de la línea = envase × cajas) — se
-  // muestran ambos.
-  const lineas = calculadas.map(({ l, kgNetoEnvase, kgBrutoEnvase, totalUsd, kgNeto, kgBruto }) => ({
-    especie: l.especie.descripcion,
-    variedad: l.variedad.descripcion,
-    articulo: l.articulo.descripcion,
-    etiqueta: l.articulo.etiqueta?.descripcion ?? null,
-    // Descripción, no código (feedback Christian, 2026-08-19) — en las 3
-    // plantillas del motor, no solo acá.
-    calibres: l.calibres.map((c) => c.calibre.descripcion).join(', '),
-    categoria: l.categoria.descripcion,
-    cantidadPallets: l.cantidadPallets,
-    cajas: l.cajas,
-    precioUsdCaja: new Prisma.Decimal(l.precioUsdCaja).toString(),
-    totalUsd: totalUsd.toString(),
-    kgNetoEnvase: kgNetoEnvase.toString(),
-    kgBrutoEnvase: kgBrutoEnvase.toString(),
-    kgNeto: kgNeto.toString(),
-    kgBruto: kgBruto.toString(),
-  }))
-
-  const totales = calculadas.reduce(
-    (acc, c) => ({
-      pallets: acc.pallets + c.l.cantidadPallets,
-      cajas: acc.cajas + c.l.cajas,
-      totalUsd: acc.totalUsd.add(c.totalUsd),
-      kgNeto: acc.kgNeto.add(c.kgNeto),
-      kgBruto: acc.kgBruto.add(c.kgBruto),
-    }),
-    { pallets: 0, cajas: 0, totalUsd: new Prisma.Decimal(0), kgNeto: new Prisma.Decimal(0), kgBruto: new Prisma.Decimal(0) },
+  const totales = oc.lineas.reduce(
+    (acc, l) => {
+      if (esGranel) {
+        const kilos = new Prisma.Decimal(l.cantidadKilos ?? 0)
+        return {
+          ...acc,
+          kilos: acc.kilos.add(kilos),
+          totalUsd: acc.totalUsd.add(new Prisma.Decimal(l.precioUsdKilo ?? 0).mul(kilos)),
+        }
+      }
+      const cajas = l.cajas ?? 0
+      const kgNetoEnvase = l.articulo.kgNetoEnvase ? new Prisma.Decimal(l.articulo.kgNetoEnvase) : new Prisma.Decimal(0)
+      const kgBrutoEnvase = l.articulo.kgBrutoEnvase ? new Prisma.Decimal(l.articulo.kgBrutoEnvase) : new Prisma.Decimal(0)
+      return {
+        pallets: acc.pallets + (l.cantidadPallets ?? 0),
+        cajas: acc.cajas + cajas,
+        kilos: acc.kilos,
+        totalUsd: acc.totalUsd.add(new Prisma.Decimal(l.precioUsdCaja ?? 0).mul(cajas)),
+        kgNeto: acc.kgNeto.add(kgNetoEnvase.mul(cajas)),
+        kgBruto: acc.kgBruto.add(kgBrutoEnvase.mul(cajas)),
+      }
+    },
+    { pallets: 0, cajas: 0, kilos: new Prisma.Decimal(0), totalUsd: new Prisma.Decimal(0), kgNeto: new Prisma.Decimal(0), kgBruto: new Prisma.Decimal(0) },
   )
 
   return {
@@ -86,6 +120,7 @@ export async function resolverOrdenCompra(id: number, empresaId: number): Promis
       logoDataUri: logoDataUri(empresa?.logo),
     },
     numero: oc.numero,
+    modalidad: oc.modalidad,
     fecha: oc.fecha.toISOString(),
     responsable: oc.responsable?.nombre ?? null,
     productor: {
@@ -111,6 +146,7 @@ export async function resolverOrdenCompra(id: number, empresaId: number): Promis
     totales: {
       pallets: totales.pallets,
       cajas: totales.cajas,
+      kilos: totales.kilos.toString(),
       totalUsd: totales.totalUsd.toString(),
       kgNeto: totales.kgNeto.toString(),
       kgBruto: totales.kgBruto.toString(),

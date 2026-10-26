@@ -538,6 +538,29 @@ export async function getPalletsReservadosParaReconciliar(embarqueId: number) {
   })
 }
 
+// Entidades que pueden figurar como "Emisor de la Guía" del Packing List
+// (2026-10-23): los productores (Pallet.productorId) y las plantas
+// (Pallet.recepcion.plantaId) asociados a los pallets reservados al embarque —
+// así el emisor queda acotado a quienes realmente despacharon fruta a este
+// embarque. Se devuelve id/codigo/descripcion/razonSocial para matchear por
+// texto (mismo criterio que recepcionesRepo.find*ByTexto).
+export async function getEntidadesEmisorEmbarque(embarqueId: number) {
+  const pallets = await prisma.pallet.findMany({
+    where: { embarqueId },
+    select: { productorId: true, recepcion: { select: { plantaId: true } } },
+  })
+  const ids = new Set<number>()
+  for (const p of pallets) {
+    ids.add(p.productorId)
+    ids.add(p.recepcion.plantaId)
+  }
+  if (ids.size === 0) return []
+  return prisma.entidad.findMany({
+    where: { id: { in: [...ids] }, eliminadoEn: null },
+    select: { id: true, codigo: true, descripcion: true, razonSocial: true },
+  })
+}
+
 // Reemplaza la reconciliación vigente por una nueva — cada subida de Excel
 // pisa la anterior (no se conserva historial, ver comentario en el modelo
 // Prisma). Mismo advisory lock que confirmarDespacho/reservarPalletsEnEmbarque
@@ -556,6 +579,11 @@ export async function guardarPackingList(
     discrepancias: string[]
     numerosPallet: string[]
     termografos: string[]
+    // Guía de despacho por pallet resuelta por el motor (2026-10-23): se persiste
+    // en cada Pallet reconciliado (el PL no guarda líneas propias). Solo trae los
+    // pallets que declararon guía/emisor de forma consistente; cada campo es
+    // `undefined` si su columna no se declaró (no se toca ese dato).
+    guiaPorPallet: Array<{ numeroPallet: string; numeroGuia?: string; emisorGuiaId?: number }>
     cargadoPor: string
   },
 ) {
@@ -599,6 +627,28 @@ export async function guardarPackingList(
       },
       select: packingListSelect,
     })
+
+    // Persistir la guía de despacho en los pallets reconciliados (2026-10-23).
+    // Solo si la reconciliación quedó en estado OK (decisión de negocio: nada se
+    // consolida mientras haya discrepancias). El PL es parcializado/acumulativo,
+    // así que solo se tocan los pallets de ESTE archivo (sin solape con otros).
+    // Cada campo se escribe solo si fue declarado (undefined = no tocar, QA-APL-003).
+    // Bajo el mismo lock del despacho — match por (embarqueId, numeroPallet),
+    // único entre los pallets reservados. updateMany porque no hay índice único
+    // declarado en ese par.
+    if (datos.estado === 'OK') {
+      for (const g of datos.guiaPorPallet) {
+        const dataPallet: { numeroGuiaDespacho?: string; emisorGuiaId?: number } = {}
+        if (g.numeroGuia !== undefined) dataPallet.numeroGuiaDespacho = g.numeroGuia
+        if (g.emisorGuiaId !== undefined) dataPallet.emisorGuiaId = g.emisorGuiaId
+        if (Object.keys(dataPallet).length === 0) continue
+        await tx.pallet.updateMany({
+          where: { embarqueId, numeroPallet: g.numeroPallet, eliminadoEn: null },
+          data: dataPallet,
+        })
+      }
+    }
+
     return creado
   })
 }
@@ -629,11 +679,27 @@ export async function eliminarPackingList(embarqueId: number, packingListId: num
     })
     if (!embarque) return 'NO_ENCONTRADO' as const
     if (embarque.despachadoEn && !embarque.despachoAnuladoEn) return 'DESPACHADO' as const
+    // Pallets que cubría este archivo — para limpiar su guía de despacho al
+    // eliminarlo (decisión de negocio 2026-10-23: la guía se consolida desde el
+    // PL; si el archivo que la originó se elimina, se limpia de sus pallets).
+    const pl = await tx.embarquePackingList.findFirst({
+      where: { id: packingListId, embarqueId, eliminadoEn: null },
+      select: { numerosPallet: true },
+    })
+    if (!pl) return 'NO_ENCONTRADO' as const
     const claim = await tx.embarquePackingList.updateMany({
       where: { id: packingListId, embarqueId, eliminadoEn: null },
       data: { eliminadoEn: new Date(), eliminadoPor },
     })
-    return claim.count === 0 ? ('NO_ENCONTRADO' as const) : ('OK' as const)
+    if (claim.count === 0) return 'NO_ENCONTRADO' as const
+    const numeros = (pl.numerosPallet as string[]) ?? []
+    if (numeros.length > 0) {
+      await tx.pallet.updateMany({
+        where: { embarqueId, numeroPallet: { in: numeros }, eliminadoEn: null },
+        data: { numeroGuiaDespacho: null, emisorGuiaId: null },
+      })
+    }
+    return 'OK' as const
   })
 }
 

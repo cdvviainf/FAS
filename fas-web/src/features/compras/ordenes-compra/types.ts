@@ -25,14 +25,24 @@ export const ESTADO_OC_LABELS: Record<EstadoOrdenCompra, string> = {
   RECEPCIONADA: 'Recepcionada',
 }
 
+// Modalidad de compra (2026-10-23): CAJAS (fruta embalada) o GRANEL (por kilos).
+export type ModalidadCompra = 'CAJAS' | 'GRANEL'
+
+export const MODALIDAD_COMPRA_LABELS: Record<ModalidadCompra, string> = {
+  CAJAS: 'Cajas',
+  GRANEL: 'Granel',
+}
+
 export interface OrdenCompraLineaItem {
   id: number
   especieId: number
   especie: MantenedorRef
   variedadId: number
   variedad: MantenedorRef
-  categoriaId: number
-  categoria: MantenedorRef
+  // categoría/cajas nullable desde la modalidad GRANEL (2026-10-23): en granel
+  // la línea solo lleva cantidadKilos/precioUsdKilo.
+  categoriaId: number | null
+  categoria: MantenedorRef | null
   articuloId: number
   articulo: MantenedorRef & { etiqueta: MantenedorRef | null; kgNetoEnvase: string | null; kgBrutoEnvase: string | null }
   // Etiqueta de la línea (2026-10-15).
@@ -41,10 +51,13 @@ export interface OrdenCompraLineaItem {
   calibres: { calibre: MantenedorRef }[]
   tipoPalletId: number | null
   tipoPallet: MantenedorRef | null
-  cantidadPallets: number
-  cajasPorPallet: number
-  cajas: number
-  precioUsdCaja: string
+  cantidadPallets: number | null
+  cajasPorPallet: number | null
+  cajas: number | null
+  precioUsdCaja: string | null
+  // Modalidad GRANEL: kilos comprados y precio USD por kilo.
+  cantidadKilos: string | null
+  precioUsdKilo: string | null
   // Línea tomada de una línea del Cierre Comercial (2026-08-23) — ver
   // NotaVentaDetalleDisponibilidad más abajo.
   notaVentaDetalleId: number | null
@@ -104,6 +117,7 @@ export interface OrdenCompraListItem {
   numero: string
   fecha: string
   estado: EstadoOrdenCompra
+  modalidad: ModalidadCompra
   entidadProductorId: number
   entidadProductor: EntidadRef
   moneda: MantenedorRef
@@ -145,17 +159,21 @@ export interface OrdenCompraListResponse {
 export interface OrdenCompraLineaInput {
   especieId: number
   variedadId: number
-  categoriaId: number
   articuloId: number
-  // Etiqueta de la línea (2026-10-15): opcional en el input — el backend la
-  // resuelve si el artículo tiene etiqueta fija; obligatoria si es dinámica.
-  etiquetaId: number | null
-  calibreIds: number[]
-  tipoPalletId: number | null
-  cantidadPallets: number
-  cajasPorPallet: number
-  cajas: number
-  precioUsdCaja: number
+  // Campos de modalidad CAJAS (opcionales en el input porque no aplican en
+  // GRANEL). El backend los exige según la modalidad de la OC. La etiqueta la
+  // resuelve el backend si el artículo tiene etiqueta fija (2026-10-15).
+  categoriaId?: number | null
+  etiquetaId?: number | null
+  calibreIds?: number[]
+  tipoPalletId?: number | null
+  cantidadPallets?: number | null
+  cajasPorPallet?: number | null
+  cajas?: number | null
+  precioUsdCaja?: number | null
+  // Campos de modalidad GRANEL (2026-10-23): kilos + precio USD por kilo.
+  cantidadKilos?: number | null
+  precioUsdKilo?: number | null
 }
 
 export interface OrdenCompraLineaCreateInput extends OrdenCompraLineaInput {
@@ -166,6 +184,8 @@ export interface OrdenCompraLineaCreateInput extends OrdenCompraLineaInput {
 
 export interface OrdenCompraCreateInput {
   entidadProductorId: number
+  // Modalidad de compra (2026-10-23): CAJAS (default) o GRANEL.
+  modalidad?: ModalidadCompra
   notaVentaId?: number | null
   // N:M (2026-08-22, Etapa 2): ≥1 requerido al crear (validate() en el form
   // lo exige); opcional en el update — si no viene, se conservan los

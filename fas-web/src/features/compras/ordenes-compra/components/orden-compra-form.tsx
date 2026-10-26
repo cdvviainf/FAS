@@ -43,9 +43,10 @@ import type {
   OrdenCompraLineaCreateInput,
   OrdenCompraLineaItem,
   EstadoOrdenCompra,
+  ModalidadCompra,
   NotaVentaDetalleDisponibilidad,
 } from '../types'
-import { ESTADO_OC_LABELS } from '../types'
+import { ESTADO_OC_LABELS, MODALIDAD_COMPRA_LABELS } from '../types'
 
 const monedasService = createMantenedorService('monedas')
 const especiesService = createMantenedorService('especies')
@@ -64,6 +65,7 @@ type Origen = 'CIERRE' | 'MANUAL'
 
 interface HeaderFields {
   origen: Origen
+  modalidad: ModalidadCompra
   entidadProductorId: number
   notaVentaId: number | null
   solicitudInspeccionIds: number[]
@@ -80,6 +82,7 @@ interface HeaderFields {
 
 const HEADER_EMPTY: HeaderFields = {
   origen: 'MANUAL',
+  modalidad: 'CAJAS',
   entidadProductorId: 0,
   notaVentaId: null,
   solicitudInspeccionIds: [],
@@ -106,6 +109,8 @@ const LINEA_EMPTY: OrdenCompraLineaCreateInput = {
   cajasPorPallet: 0,
   cajas: 0,
   precioUsdCaja: 0,
+  cantidadKilos: null,
+  precioUsdKilo: null,
   notaVentaDetalleId: null,
 }
 
@@ -196,13 +201,20 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const { data: formasPagoData } = useQuery({ queryKey: ['formas-pago-options'], queryFn: () => formasPagoService.list({ limit: 200, soloActivos: true }), staleTime: 5 * 60_000 })
   const { data: monedasData } = useQuery({ queryKey: ['monedas-options'], queryFn: () => monedasService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const { data: especiesData } = useQuery({ queryKey: ['especies-options'], queryFn: () => especiesService.list({ limit: 200 }), staleTime: 5 * 60_000 })
-  const { data: articulosData } = useQuery({ queryKey: ['articulos-embalaje-options'], queryFn: () => articulosService.list({ limit: 500, tipo: 'EMBALAJE', activo: true }), staleTime: 60_000 })
+  // Artículos ofrecidos según la modalidad: EMBALAJE en Cajas (producto
+  // terminado), GRANEL en Granel (2026-10-23).
+  const { data: articulosData } = useQuery({ queryKey: ['articulos-oc-options', fields.modalidad], queryFn: () => articulosService.list({ limit: 500, tipo: fields.modalidad === 'GRANEL' ? 'GRANEL' : 'EMBALAJE', activo: true }), staleTime: 60_000 })
   const { data: variedadesData } = useQuery({ queryKey: ['variedades-options', linea.especieId], queryFn: () => variedadesService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
   const { data: categoriasData } = useQuery({ queryKey: ['categorias-options', linea.especieId], queryFn: () => categoriasService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
   const { data: calibresData } = useQuery({ queryKey: ['calibres-options', linea.especieId], queryFn: () => calibresService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
   const { data: tiposPalletData } = useQuery({ queryKey: ['tipos-pallet-options'], queryFn: () => tiposPalletService.list({ limit: 200 }), staleTime: 5 * 60_000 })
 
   const { data: incotermsData } = useQuery({ queryKey: ['clausulas-venta-options'], queryFn: () => clausulasVentaService.list({ limit: 200, soloActivos: true }), staleTime: 5 * 60_000 })
+
+  const esGranel = fields.modalidad === 'GRANEL'
+  // La modalidad (Cajas/Granel) solo se puede cambiar en Borrador y sin líneas
+  // cargadas — cambiarla cambia qué campos exige cada línea (lo revalida el backend).
+  const modalidadBloqueada = (ordenCompra?.data.lineas.length ?? 0) > 0 || fields.estado !== 'BORRADOR'
 
   const productores = productoresData?.data ?? []
   const responsables = responsablesData?.data ?? []
@@ -233,6 +245,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación del form al cargar la OC a editar
       setFields({
         origen: d.notaVentaId ? 'CIERRE' : 'MANUAL',
+        modalidad: d.modalidad,
         entidadProductorId: d.entidadProductorId,
         notaVentaId: d.notaVentaId,
         solicitudInspeccionIds: d.solicitudes.map((s) => s.solicitudInspeccion.id),
@@ -318,6 +331,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   function buildPayload(): OrdenCompraCreateInput {
     return {
       entidadProductorId: fields.entidadProductorId,
+      modalidad: fields.modalidad,
       notaVentaId: fields.origen === 'CIERRE' ? fields.notaVentaId : null,
       solicitudInspeccionIds: fields.solicitudInspeccionIds.length > 0 ? fields.solicitudInspeccionIds : undefined,
       fecha: fields.fecha,
@@ -419,26 +433,44 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     const e: Record<string, string> = {}
     if (!linea.especieId) e.especieId = 'Requerida'
     if (!linea.variedadId) e.variedadId = 'Requerida'
-    if (!linea.categoriaId) e.categoriaId = 'Requerida'
     if (!linea.articuloId) e.articuloId = 'Requerido'
-    // Etiqueta: obligatoria solo si el artículo es dinámico (>1 permitida). Si es
-    // fija, el backend la autocompleta aunque venga null.
-    if (etiquetasPermitidas.length > 1 && !linea.etiquetaId) e.etiquetaId = 'Selecciona la etiqueta'
-    if (linea.calibreIds.length === 0) e.calibreIds = 'Selecciona al menos un calibre'
-    if (!linea.cantidadPallets || linea.cantidadPallets <= 0) e.cantidadPallets = 'Debe ser mayor a 0'
-    // Cajas por pallet debe venir del mantenedor (sin default 108): si falta,
-    // se bloquea el alta con un mensaje claro (lo refuerza el aviso de arriba).
-    if (!linea.cajasPorPallet || linea.cajasPorPallet <= 0) e.cajasPorPallet = 'Falta la cantidad de cajas por pallet (elige tipo de pallet y configúrala)'
-    if (!linea.cajas || linea.cajas <= 0) e.cajas = 'Debe ser mayor a 0'
-    if (linea.precioUsdCaja < 0) e.precioUsdCaja = 'No puede ser negativo'
+    if (esGranel) {
+      // Granel: solo kilos + precio por kilo.
+      if (!linea.cantidadKilos || linea.cantidadKilos <= 0) e.cantidadKilos = 'Debe ser mayor a 0'
+      if ((linea.precioUsdKilo ?? 0) < 0) e.precioUsdKilo = 'No puede ser negativo'
+    } else {
+      if (!linea.categoriaId) e.categoriaId = 'Requerida'
+      // Etiqueta: obligatoria solo si el artículo es dinámico (>1 permitida). Si es
+      // fija, el backend la autocompleta aunque venga null.
+      if (etiquetasPermitidas.length > 1 && !linea.etiquetaId) e.etiquetaId = 'Selecciona la etiqueta'
+      if ((linea.calibreIds?.length ?? 0) === 0) e.calibreIds = 'Selecciona al menos un calibre'
+      if (!linea.cantidadPallets || linea.cantidadPallets <= 0) e.cantidadPallets = 'Debe ser mayor a 0'
+      // Cajas por pallet debe venir del mantenedor (sin default 108): si falta,
+      // se bloquea el alta con un mensaje claro (lo refuerza el aviso de arriba).
+      if (!linea.cajasPorPallet || linea.cajasPorPallet <= 0) e.cajasPorPallet = 'Falta la cantidad de cajas por pallet (elige tipo de pallet y configúrala)'
+      if (!linea.cajas || linea.cajas <= 0) e.cajas = 'Debe ser mayor a 0'
+      if ((linea.precioUsdCaja ?? 0) < 0) e.precioUsdCaja = 'No puede ser negativo'
+    }
     setLineaErrors(e)
     return Object.keys(e).length === 0
   }
 
   function handleGuardarLinea() {
     if (!validarLinea()) return
-    if (editingLineaId) updateLineaMutation.mutate(linea)
-    else addLineaMutation.mutate(linea)
+    // En granel solo se envían los campos de granel; en cajas, los de cajas. Así
+    // no viaja basura de la otra modalidad (el backend igual la nulifica).
+    const payload: OrdenCompraLineaCreateInput = esGranel
+      ? {
+          especieId: linea.especieId,
+          variedadId: linea.variedadId,
+          articuloId: linea.articuloId,
+          cantidadKilos: Number(linea.cantidadKilos),
+          precioUsdKilo: Number(linea.precioUsdKilo ?? 0),
+          notaVentaDetalleId: null,
+        }
+      : { ...linea, notaVentaDetalleId: linea.notaVentaDetalleId ?? null }
+    if (editingLineaId) updateLineaMutation.mutate(payload)
+    else addLineaMutation.mutate(payload)
   }
 
   function handleEditarLinea(l: OrdenCompraLineaItem) {
@@ -454,7 +486,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       cantidadPallets: l.cantidadPallets,
       cajasPorPallet: l.cajasPorPallet,
       cajas: l.cajas,
-      precioUsdCaja: Number(l.precioUsdCaja),
+      precioUsdCaja: l.precioUsdCaja != null ? Number(l.precioUsdCaja) : null,
+      cantidadKilos: l.cantidadKilos != null ? Number(l.cantidadKilos) : null,
+      precioUsdKilo: l.precioUsdKilo != null ? Number(l.precioUsdKilo) : null,
       notaVentaDetalleId: l.notaVentaDetalleId,
     })
     invalidarLookupCajas()
@@ -478,7 +512,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       cantidadPallets: l.cantidadPallets,
       cajasPorPallet: l.cajasPorPallet,
       cajas: l.cajas,
-      precioUsdCaja: Number(l.precioUsdCaja),
+      precioUsdCaja: l.precioUsdCaja != null ? Number(l.precioUsdCaja) : null,
+      cantidadKilos: l.cantidadKilos != null ? Number(l.cantidadKilos) : null,
+      precioUsdKilo: l.precioUsdKilo != null ? Number(l.precioUsdKilo) : null,
       notaVentaDetalleId: l.notaVentaDetalleId,
     })
     invalidarLookupCajas()
@@ -544,7 +580,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
     if (idxDesde === -1 || idxHasta === -1) return
     const [ini, fin] = idxDesde <= idxHasta ? [idxDesde, idxHasta] : [idxHasta, idxDesde]
     const nuevos = lista.slice(ini, fin + 1).map((c) => c.id)
-    setLinea((l) => ({ ...l, calibreIds: Array.from(new Set([...l.calibreIds, ...nuevos])) }))
+    setLinea((l) => ({ ...l, calibreIds: Array.from(new Set([...(l.calibreIds ?? []), ...nuevos])) }))
     resetCalibreRango()
   }
 
@@ -585,13 +621,49 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
           <CardTitle>{isEdit ? `Orden de Compra ${ordenCompra?.data.numero}` : 'Nueva Orden de Compra'}</CardTitle>
         </CardHeader>
         <CardContent className='space-y-4'>
+          {/* Modalidad de compra (Cajas / Granel) */}
+          <div className='grid gap-4 sm:grid-cols-3'>
+            <div className='space-y-1.5'>
+              <Label>Modalidad</Label>
+              <Select
+                value={fields.modalidad}
+                disabled={modalidadBloqueada}
+                onValueChange={(v) => {
+                  const m = v as ModalidadCompra
+                  setFields((f) => ({ ...f, modalidad: m, ...(m === 'GRANEL' ? { origen: 'MANUAL' as Origen, notaVentaId: null } : {}) }))
+                  // Cambiar la modalidad reinicia el formulario de línea (sus
+                  // campos cambian por completo).
+                  setLinea(LINEA_EMPTY)
+                  setEditingLineaId(null)
+                  setLineaErrors({})
+                  resetCalibreRango()
+                  invalidarLookupCajas()
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(MODALIDAD_COMPRA_LABELS) as ModalidadCompra[]).map((m) => (
+                    <SelectItem key={m} value={m}>{MODALIDAD_COMPRA_LABELS[m]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className='text-xs text-muted-foreground'>
+                {modalidadBloqueada
+                  ? 'Solo se puede cambiar en Borrador y sin líneas cargadas.'
+                  : 'Cajas: fruta embalada (producto terminado). Granel: compra por kilos.'}
+              </p>
+            </div>
+          </div>
+
+          <Separator />
+
           {/* Fila 1: Origen + Cierre Comercial (si aplica) + Fecha */}
           <div className={`grid gap-4 sm:grid-cols-2 ${fields.origen === 'CIERRE' ? 'md:grid-cols-3' : ''}`}>
             <div className='space-y-1.5'>
               <Label>Origen</Label>
               <Select
                 value={fields.origen}
-                disabled={tieneLineasDeCierre}
+                disabled={tieneLineasDeCierre || esGranel}
                 onValueChange={(v) => setFields((f) => ({ ...f, origen: v as Origen, notaVentaId: v === 'MANUAL' ? null : f.notaVentaId }))}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -900,12 +972,16 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   {lineaErrors.especieId && <p className='text-xs text-destructive'>{lineaErrors.especieId}</p>}
                 </div>
                 <div className='space-y-1.5'>
-                  <Label>Embalaje <span className='text-destructive'>*</span></Label>
+                  <Label>{esGranel ? 'Artículo (Granel)' : 'Embalaje'} <span className='text-destructive'>*</span></Label>
                   <Combobox
                     options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
                     value={linea.articuloId ? String(linea.articuloId) : null}
                     onChange={(v) => {
                       const id = Number(v)
+                      if (esGranel) {
+                        setLinea((l) => ({ ...l, articuloId: id, etiquetaId: null }))
+                        return
+                      }
                       // Resolver la etiqueta del nuevo artículo: si tiene una sola
                       // permitida (FIJA) se autocompleta; si no, queda a elegir.
                       const art = articulos.find((a) => a.id === id)
@@ -914,36 +990,38 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                         : []
                       const etiquetaAuto = permit.length === 1 ? permit[0].id : null
                       setLinea((l) => ({ ...l, articuloId: id, etiquetaId: etiquetaAuto }))
-                      void aplicarTeoricaCajas(id, linea.tipoPalletId)
+                      void aplicarTeoricaCajas(id, linea.tipoPalletId ?? null)
                     }}
                     placeholder={linea.especieId ? 'Seleccionar...' : 'Elige una especie primero'}
-                    searchPlaceholder='Buscar embalaje...'
+                    searchPlaceholder={esGranel ? 'Buscar artículo...' : 'Buscar embalaje...'}
                     disabled={lineaBloqueadaPorCierre || !linea.especieId}
                   />
                   {lineaErrors.articuloId && <p className='text-xs text-destructive'>{lineaErrors.articuloId}</p>}
                 </div>
-                <div className='space-y-1.5'>
-                  <Label>Etiqueta {etiquetasPermitidas.length > 1 && <span className='text-destructive'>*</span>}</Label>
-                  {etiquetaFija ? (
-                    <Input value={etiquetasPermitidas[0]?.descripcion ?? ''} disabled readOnly />
-                  ) : (
-                    <Select
-                      value={linea.etiquetaId ? String(linea.etiquetaId) : ''}
-                      onValueChange={(v) => setLinea((l) => ({ ...l, etiquetaId: Number(v) }))}
-                      disabled={!articuloSeleccionado || etiquetasPermitidas.length === 0}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={articuloSeleccionado ? 'Seleccionar...' : 'Elige un embalaje primero'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {etiquetasPermitidas.map((e) => (
-                          <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  {lineaErrors.etiquetaId && <p className='text-xs text-destructive'>{lineaErrors.etiquetaId}</p>}
-                </div>
+                {!esGranel && (
+                  <div className='space-y-1.5'>
+                    <Label>Etiqueta {etiquetasPermitidas.length > 1 && <span className='text-destructive'>*</span>}</Label>
+                    {etiquetaFija ? (
+                      <Input value={etiquetasPermitidas[0]?.descripcion ?? ''} disabled readOnly />
+                    ) : (
+                      <Select
+                        value={linea.etiquetaId ? String(linea.etiquetaId) : ''}
+                        onValueChange={(v) => setLinea((l) => ({ ...l, etiquetaId: Number(v) }))}
+                        disabled={!articuloSeleccionado || etiquetasPermitidas.length === 0}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={articuloSeleccionado ? 'Seleccionar...' : 'Elige un embalaje primero'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {etiquetasPermitidas.map((e) => (
+                            <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {lineaErrors.etiquetaId && <p className='text-xs text-destructive'>{lineaErrors.etiquetaId}</p>}
+                  </div>
+                )}
               </div>
 
               {/* Fila 2: Variedad, Categoría */}
@@ -964,24 +1042,28 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   </Select>
                   {lineaErrors.variedadId && <p className='text-xs text-destructive'>{lineaErrors.variedadId}</p>}
                 </div>
-                <div className='space-y-1.5'>
-                  <Label>Categoría <span className='text-destructive'>*</span></Label>
-                  <Select
-                    value={linea.categoriaId ? String(linea.categoriaId) : ''}
-                    onValueChange={(v) => setLinea((l) => ({ ...l, categoriaId: Number(v) }))}
-                    disabled={!linea.especieId || lineaBloqueadaPorCierre}
-                  >
-                    <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
-                    <SelectContent>
-                      {(categoriasData?.data ?? []).map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {lineaErrors.categoriaId && <p className='text-xs text-destructive'>{lineaErrors.categoriaId}</p>}
-                </div>
+                {!esGranel && (
+                  <div className='space-y-1.5'>
+                    <Label>Categoría <span className='text-destructive'>*</span></Label>
+                    <Select
+                      value={linea.categoriaId ? String(linea.categoriaId) : ''}
+                      onValueChange={(v) => setLinea((l) => ({ ...l, categoriaId: Number(v) }))}
+                      disabled={!linea.especieId || lineaBloqueadaPorCierre}
+                    >
+                      <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+                      <SelectContent>
+                        {(categoriasData?.data ?? []).map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {lineaErrors.categoriaId && <p className='text-xs text-destructive'>{lineaErrors.categoriaId}</p>}
+                  </div>
+                )}
               </div>
 
+              {/* Calibres: solo en modalidad CAJAS (en granel no aplican). */}
+              {!esGranel && (<>
               {/* Fila 3: Calibre Inicio, Calibre Fin, Agregar — deshabilitado
                   si la línea viene del Cierre: los calibres ya se precargan
                   completos y solo se pueden QUITAR (mantiene el subconjunto
@@ -1019,16 +1101,16 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
 
               <div className='space-y-1.5'>
                 <Label>Calibres <span className='text-destructive'>*</span></Label>
-                {linea.calibreIds.length > 0 ? (
+                {(linea.calibreIds ?? []).length > 0 ? (
                   <div className='flex flex-wrap gap-1.5'>
-                    {linea.calibreIds.map((id) => {
+                    {(linea.calibreIds ?? []).map((id) => {
                       const opt = (calibresData?.data ?? []).find((c) => c.id === id)
                       return (
                         <Badge key={id} variant='secondary' className='gap-1 pr-1'>
                           {opt?.descripcion ?? id}
                           <button
                             type='button'
-                            onClick={() => setLinea((l) => ({ ...l, calibreIds: l.calibreIds.filter((x) => x !== id) }))}
+                            onClick={() => setLinea((l) => ({ ...l, calibreIds: (l.calibreIds ?? []).filter((x) => x !== id) }))}
                             className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'
                           >
                             <Icons.close className='h-3 w-3' />
@@ -1042,8 +1124,10 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 )}
                 {lineaErrors.calibreIds && <p className='text-xs text-destructive'>{lineaErrors.calibreIds}</p>}
               </div>
+              </>)}
 
-              {/* Fila 4: Tipo Pallet, Cant. Pallets, Cantidad de Cajas */}
+              {/* Fila 4 (CAJAS): Tipo Pallet, Cant. Pallets, Cantidad de Cajas */}
+              {!esGranel && (<>
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
                 <div className='space-y-1.5'>
                   <Label>Tipo Pallet</Label>
@@ -1072,7 +1156,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                       // Usa el cajasPorPallet ya guardado en la línea (el de
                       // la línea del Cierre si viene de ahí, el default si
                       // es manual) — no el default a secas.
-                      setLinea((l) => ({ ...l, cantidadPallets: pallets, cajas: v ? pallets * l.cajasPorPallet : l.cajas }))
+                      setLinea((l) => ({ ...l, cantidadPallets: pallets, cajas: v ? pallets * (l.cajasPorPallet ?? 0) : l.cajas }))
                     }}
                   />
                   {lineaErrors.cantidadPallets && <p className='text-xs text-destructive'>{lineaErrors.cantidadPallets}</p>}
@@ -1097,7 +1181,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 <div className='flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2'>
                   <Icons.alertCircle className='text-destructive h-4 w-4 shrink-0' />
                   <span className='text-destructive text-xs'>No se pudo verificar la cantidad de cajas por pallet.</span>
-                  <Button type='button' variant='outline' size='sm' onClick={() => void aplicarTeoricaCajas(linea.articuloId, linea.tipoPalletId)}>
+                  <Button type='button' variant='outline' size='sm' onClick={() => void aplicarTeoricaCajas(linea.articuloId, linea.tipoPalletId ?? null)}>
                     <Icons.reopen className='mr-1 h-4 w-4' /> Reintentar
                   </Button>
                 </div>
@@ -1124,6 +1208,34 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   {lineaErrors.precioUsdCaja && <p className='text-xs text-destructive'>{lineaErrors.precioUsdCaja}</p>}
                 </div>
               </div>
+              </>)}
+
+              {/* GRANEL: Kilos + Precio USD/Kg (2026-10-23) */}
+              {esGranel && (
+                <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
+                  <div className='space-y-1.5'>
+                    <Label>Kilos <span className='text-destructive'>*</span></Label>
+                    <Input
+                      type='number'
+                      step='0.01'
+                      value={linea.cantidadKilos ?? ''}
+                      onChange={(e) => setLinea((l) => ({ ...l, cantidadKilos: e.target.value ? Number(e.target.value) : null }))}
+                    />
+                    {lineaErrors.cantidadKilos && <p className='text-xs text-destructive'>{lineaErrors.cantidadKilos}</p>}
+                  </div>
+                  <div className='space-y-1.5'>
+                    <Label>Valor (USD/Kg) <span className='text-destructive'>*</span></Label>
+                    <Input
+                      ref={precioInputRef}
+                      type='number'
+                      step='0.0001'
+                      value={linea.precioUsdKilo ?? ''}
+                      onChange={(e) => setLinea((l) => ({ ...l, precioUsdKilo: e.target.value ? Number(e.target.value) : null }))}
+                    />
+                    {lineaErrors.precioUsdKilo && <p className='text-xs text-destructive'>{lineaErrors.precioUsdKilo}</p>}
+                  </div>
+                </div>
+              )}
             </div>
 
             {articuloSeleccionado && (articuloSeleccionado.etiqueta || articuloSeleccionado.kgNetoEnvase) && (
@@ -1131,11 +1243,17 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 Etiqueta: {articuloSeleccionado.etiqueta?.descripcion ?? '—'} · Kg Neto: {articuloSeleccionado.kgNetoEnvase ?? '—'} · Kg Bruto: {articuloSeleccionado.kgBrutoEnvase ?? '—'}
               </p>
             )}
-            {linea.cajas > 0 && (
-              <p className='text-right text-sm text-muted-foreground'>
-                Total: {linea.cajas} cajas × ${linea.precioUsdCaja || 0} = ${(linea.cajas * linea.precioUsdCaja).toFixed(2)}
-              </p>
-            )}
+            {esGranel
+              ? (linea.cantidadKilos ?? 0) > 0 && (
+                  <p className='text-right text-sm text-muted-foreground'>
+                    Total: {linea.cantidadKilos} kg × ${linea.precioUsdKilo || 0} = ${((linea.cantidadKilos ?? 0) * (linea.precioUsdKilo ?? 0)).toFixed(2)}
+                  </p>
+                )
+              : (linea.cajas ?? 0) > 0 && (
+                  <p className='text-right text-sm text-muted-foreground'>
+                    Total: {linea.cajas} cajas × ${linea.precioUsdCaja || 0} = ${((linea.cajas ?? 0) * (linea.precioUsdCaja ?? 0)).toFixed(2)}
+                  </p>
+                )}
 
             <div className='flex justify-end gap-2'>
               {editingLineaId && (
@@ -1171,7 +1289,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                           <TableCell className='font-medium whitespace-nowrap'>{l.especie.descripcion} / {l.variedad.descripcion}</TableCell>
                           <TableCell className='w-[110px] max-w-[110px] truncate text-muted-foreground' title={l.articulo.descripcion}>{l.articulo.codigo}</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{l.etiqueta?.descripcion ?? l.articulo.etiqueta?.descripcion ?? '—'}</TableCell>
-                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.categoria.descripcion}</TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.categoria?.descripcion ?? '—'}</TableCell>
                           <TableCell className='min-w-[240px] text-muted-foreground'>
                             <div className='flex flex-wrap gap-1'>
                               {l.calibres.map((c) => (
@@ -1179,8 +1297,8 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                               ))}
                             </div>
                           </TableCell>
-                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.cantidadPallets} pallets · {l.cajas} cajas</TableCell>
-                          <TableCell className='whitespace-nowrap text-muted-foreground'>${l.precioUsdCaja}/cj</TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.cantidadKilos != null ? `${l.cantidadKilos} kg` : `${l.cantidadPallets} pallets · ${l.cajas} cajas`}</TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.precioUsdKilo != null ? `$${l.precioUsdKilo}/kg` : `$${l.precioUsdCaja}/cj`}</TableCell>
                           <TableCell className='text-right'>
                             <div className='flex justify-end gap-1'>
                               <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleEditarLinea(l)} title='Editar'>

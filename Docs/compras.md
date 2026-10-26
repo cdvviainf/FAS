@@ -120,6 +120,8 @@ Especificación de la compra.
 - `incotermId` (FK → `ClausulaVenta`, nullable) **(reintroducido 2026-08-12, supersedido 2026-09-30)** — supersede el `~~incotermId~~` **eliminado 2026-08-07** por falta de catálogo (`OC-002`, `Docs/Hallazgos/orden-de-compra.md`). Originalmente reutilizaba el catálogo genérico `Parametro`/`INCOTERM` (mismo mecanismo que `NotaVenta.clausulaVentaId`); **⚠️ Supersesión (2026-09-30):** por decisión de Christian, pasa a apuntar al mantenedor dedicado `ClausulaVenta` (`config/clausulas-venta`) — el catch-all `Parametro` no exponía `requiereFlete`/`requiereSeguro` en su listado. Migración `clausula_venta_dedicada` preserva los `id` originales, sin reescribir esta FK.
 - ~~`facturarAId`~~ **(eliminado 2026-07-26)** — decisión de negocio: la OC no factura a una entidad distinta del productor
 - `observaciones` **(nuevo)**
+- `modalidad` (enum `ModalidadCompra { CAJAS | GRANEL }`, default `CAJAS`) **(nuevo, 2026-10-23)** — define si la OC compra fruta **embalada** (CAJAS, producto terminado, comportamiento actual) o fruta **a granel por kilos** (GRANEL). Editable **solo en `BORRADOR` y solo si la OC no tiene líneas** — cambiarla con líneas ya cargadas se rechaza (422), porque el contrato de la línea depende de la modalidad (§4.3). Ver detalle de cada modalidad en §4.3.
+  > **GRANEL (2026-10-23).** (a) Artículo de la línea tipo `GRANEL` (`materiales.md`); la línea exige especie + variedad + artículo + `cantidadKilos` + `precioUsdKilo` (ver §4.3). (b) Las cuotas `MONTO_UNITARIO` (§4.2.1) usan `cantidadKilos` como cantidad real y **deben** estar en unidad `KG` — se rechaza cualquier otra unidad. (c) Una OC granel **NO** puede tomar líneas de un Cierre Comercial (`notaVentaDetalleId`): el Cierre es de fruta embalada. (d) La **Recepción** de una OC granel está **BLOQUEADA** en esta etapa (mensaje "estará disponible en una etapa futura") — por ahora solo se puede crear/emitir la OC granel. (e) El **PDF** de la OC granel muestra columnas Kilos / Precio USD-Kg / Total en vez de cajas/calibre/pallets.
 - `estado` (ver §8)
 - `creadoEn`, `creadoPor`
 
@@ -137,6 +139,10 @@ Snapshot inmutable de las cuotas al momento de crear/editar la OC (se copian des
 
 ### 4.3 OrdenCompraLinea
 La OC es **multilínea**. Cada línea es una combinación completa de características + lista de calibres + cantidades + precio.
+
+> **Modalidad CAJAS vs GRANEL (nuevo, 2026-10-23).** El contrato de la línea depende de `OrdenCompra.modalidad` (§4.2):
+> - **CAJAS** (default) — comportamiento actual: fruta embalada, producto terminado. Artículo tipo `EMBALAJE`; la línea usa categoría / etiqueta / lista de calibres / tipo de pallet / `cantidadPallets` / `cajasPorPallet` / `cajas` / `precioUsdCaja` (todos los campos descritos abajo).
+> - **GRANEL** — fruta por kilos. Artículo tipo `GRANEL` (`materiales.md`); la línea **exige** `especieId` + `variedadId` + `articuloId` + `cantidadKilos` (`Decimal(14,2)`) + `precioUsdKilo` (`Decimal(14,4)`). **NO aplican** categoría / etiqueta / lista de calibres / tipo de pallet / `cantidadPallets` / `cajasPorPallet` / `cajas` / `precioUsdCaja` — quedan `null`. Por eso esas columnas pasaron a **nullable** en `OrdenCompraLinea` (migración aditiva). La línea granel tampoco puede provenir de un Cierre (`notaVentaDetalleId` siempre null; ver §4.2 nota GRANEL).
 
 - `id` (PK)
 - `ordenCompraId` (FK → OrdenCompra)
@@ -229,6 +235,7 @@ Unidad mínima **indivisible** de inventario. Generado por la Recepción. Compue
 - `embarqueId` (FK → Embarque, **nullable**) — se puebla al reservar el pallet a un embarque (Ventas); un pallet pertenece a **un solo** Embarque a la vez
 - `productorId` (FK → Productor)
 - `notaCalidadId` (FK → NotaCalidad, **nullable**), `notaCondicionId` (FK → NotaCondicion, **nullable**), `completo` (Boolean, default `false`) **(nuevo, 2026-09-02 — ver §4.8)**
+- `numeroGuiaDespacho` (String, **nullable**), `emisorGuiaId` (FK → Entidad, **nullable**, relación `"PalletEmisorGuia"`) **(nuevo, 2026-10-23)** — N° y emisor de la guía de despacho del pallet, declarados por el Packing List y persistidos en la reconciliación. El emisor es una Entidad tipo `PRODUCTOR` o `PLANTA`, **acotada** a las asociadas al Embarque del pallet (productores vía `Pallet.productorId`; plantas vía `Pallet.recepcion.plantaId`); un emisor fuera de ese conjunto genera discrepancia. Ver §9.3.
 - `createdAt`
 
 ### 4.6 PalletLinea
@@ -250,6 +257,7 @@ Unidad mínima **indivisible** de inventario. Generado por la Recepción. Compue
 - Pallet `1 — N` PalletLinea
 - Pallet `N — 0..1` Embarque *(reserva; nullable hasta reservar, desvinculable hasta confirmar despacho)*
 - Pallet `N — 0..1` NotaCalidad, Pallet `N — 0..1` NotaCondicion **(nuevo, 2026-09-02 — ver §4.8)**
+- Pallet `N — 0..1` Entidad (emisor de guía, relación `"PalletEmisorGuia"`) **(nuevo, 2026-10-23 — ver §4.5/§9.3)**
 - PalletLinea `N — 1` Etiqueta, PalletLinea `N — 1` Entidad (tipo PACKING) **(nuevo, 2026-09-21 — ver §4.10, ambos obligatorios)**
 
 
@@ -487,11 +495,18 @@ Comparación a **nivel de pallet**, en dos pasos:
 
 Discrepancia → se informan las diferencias y el despacho queda bloqueado (no facturable) hasta cuadrar.
 
-**Formato de carga (2026-09-21).** El Template de Carga tipo `PACKING_LIST` (§9.2) tiene columnas definidas — todas obligatorias (`CAMPOS_POR_TIPO.PACKING_LIST`, `templates-carga.types.ts`): `NUMERO_PALLET`, `ESPECIE`, `VARIEDAD`, `CATEGORIA`, `CALIBRE`, `ARTICULO`, `CAJAS`, `PRODUCTOR`, `ETIQUETA`, `FECHA_EMBALAJE` — mismos campos que Recepción salvo Nota Calidad/Condición/Completo y Packing, que no aplican acá.
+**Formato de carga (2026-09-21).** El Template de Carga tipo `PACKING_LIST` (§9.2) tiene columnas definidas — todas obligatorias (`CAMPOS_POR_TIPO.PACKING_LIST`, `templates-carga.types.ts`): `NUMERO_PALLET`, `ESPECIE`, `VARIEDAD`, `CATEGORIA`, `CALIBRE`, `ARTICULO`, `CAJAS`, `PRODUCTOR`, `ETIQUETA`, `FECHA_EMBALAJE` — mismos campos que Recepción salvo Nota Calidad/Condición/Completo y Packing, que no aplican acá. **(2026-10-23)** Se suman dos columnas **opcionales** `NUMERO_GUIA` y `EMISOR_GUIA` (ver nota "Columnas Guía de Despacho por pallet" más abajo).
 
 > **Implementado (2026-09-22) — cierra EP-QA-003.** Motor de reconciliación construido en `fas-api` (`ventas/embarques/embarques.packing-list.motor.ts` + `embarques.comparacion.ts`): mismas 4 etapas que el motor de Recepción (Template → Filas → Maestros → Comparación), reusando los lookups texto→ID de `recepciones.repository.ts`. A diferencia de Recepción, no inserta nada — los pallets ya existen en Stock; solo compara y persiste el resultado en `EmbarquePackingList` (a lo más una fila vigente por Embarque, cada subida reemplaza la anterior). Errores de formato/mapeo/maestros abortan la subida (nada se guarda, mismo criterio que Recepción); las discrepancias de negocio (Paso 1/2 de arriba) SÍ se guardan como estado `DISCREPANCIA` para que el usuario vea qué corregir y reintente. `Embarque.confirmarDespacho()` exige `EmbarquePackingList.estado = OK` — sin Packing List reconciliado, o con discrepancias, el despacho queda bloqueado. Endpoint `POST /embarques/:id/packing-list` (multipart + `templateCargaId` en query) y `GET /embarques/:id/packing-list/descarga`; pestaña "Despachar" del Embarque en `fas-web`. El **detalle comparado** en el Paso 2 es especie/variedad/categoría/artículo/calibre/cajas (agregado por combo) + productor — Etiqueta/Fecha de Embalaje del Excel se resuelven contra los maestros (validación de calidad de dato) pero no participan de la comparación.
 
 > **Supersesión (2026-09-28, decisión de negocio Christian) — Packing List parcializado.** Pasa de "a lo más una fila vigente por Embarque, cada subida reemplaza la anterior" a **N archivos que se ACUMULAN**, cada uno cubriendo un **subconjunto** de los pallets reservados. Cambios: (1) cada archivo se reconcilia solo contra el subconjunto de pallets que declara (se rechazan los "ajenos" no reservados; el detalle se compara solo contra ese subconjunto, ya no se exige que estén todos); se guarda `numerosPallet` (los N° que cubre). (2) Al subir se rechaza el **solape** con pallets ya cubiertos por otro archivo activo (bajo el mismo advisory lock). (3) El despacho se habilita solo cuando la **unión** de los archivos OK cubre **exactamente** los pallets reservados (todo o nada) — nuevo resultado `PACKING_LIST_INCOMPLETO` si faltan. (4) Se puede **eliminar** un archivo (`DELETE /embarques/:id/packing-list/:packingListId`) para corregir; la descarga admite `?packingListId=`. `EmbarquePackingList` gana la columna `numerosPallet Json`. Migración con backfill: los Packing List OK existentes (que bajo la semántica vieja cubrían todos los reservados) se rellenan con los N° de pallet reservados de su Embarque.
+
+> **Columnas Guía de Despacho por pallet (nuevo, 2026-10-23).** El template `PACKING_LIST` (§9.2) gana dos columnas **OPCIONALES** (no obligatorias, a diferencia del resto de `CAMPOS_POR_TIPO.PACKING_LIST`): `NUMERO_GUIA` ("N° Guía de Despacho") y `EMISOR_GUIA` ("Emisor de la Guía"). Se persisten **por pallet** en `Pallet.numeroGuiaDespacho` / `Pallet.emisorGuiaId` (§4.5). Reglas del motor:
+> - **Emisor acotado server-side:** el `EMISOR_GUIA` debe resolver a una Entidad tipo `PRODUCTOR` o `PLANTA` **asociada al Embarque** — productores vía `Pallet.productorId`, plantas vía `Pallet.recepcion.plantaId`. Un emisor fuera de ese conjunto genera **discrepancia** en la reconciliación (no se persiste ese pallet).
+> - **Consistencia por pallet:** si distintas filas del mismo pallet traen `NUMERO_GUIA` o `EMISOR_GUIA` **distintos** entre sí → discrepancia (ese pallet no se persiste). **Celda vacía = no se declara**: ese campo queda `undefined` y **no se toca** el valor existente del pallet (no se escribe `null` implícito).
+> - **Solo se consolida en estado OK (decisión 2026-10-23):** la guía se persiste en los pallets **solo si la reconciliación del archivo quedó `OK`**. Si el Packing List queda en `DISCREPANCIA` global, **no** se persiste ninguna guía (ni la de los pallets individualmente consistentes). El PL es parcializado/acumulativo, así que un archivo solo toca sus propios pallets. Persistencia **dentro de la misma transacción** de `guardarPackingList`, bajo el lock del despacho.
+> - **Se limpia al eliminar el PL (decisión 2026-10-23):** eliminar (soft delete) un archivo de Packing List **limpia** `numeroGuiaDespacho`/`emisorGuiaId` (`null`) de los pallets que ese archivo cubría — la guía se considera originada por el PL; sin él, se revierte.
+> - **Pendiente opcional:** el **dropdown acotado** del emisor en el Excel generado NO se implementó — la acotación al conjunto del Embarque es **solo server-side** por ahora. *Pendiente opcional.*
 
 ### 9.4 Calidad (`calidad.md`)
 La Solicitud/Informe de Inspección habilita la generación de la OC en la vía de compra directa. La OC referencia el informe (`informeCalidadId` + PDF).

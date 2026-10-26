@@ -54,6 +54,12 @@ async function validarOrdenCompra(ordenCompraId?: number | null) {
   if (ordenCompraId == null) return
   const oc = await repo.getOrdenCompra(ordenCompraId)
   if (!oc) throw new ValidationError('La Orden de Compra seleccionada no existe')
+  // Recepción de OC granel bloqueada en esta etapa (2026-10-23): el flujo de
+  // Recepción/Stock está construido sobre cajas/pallets; la recepción por kilos
+  // es una etapa futura. La OC granel solo se puede crear/emitir por ahora.
+  if (oc.modalidad === 'GRANEL') {
+    throw new ValidationError('La recepción de Órdenes de Compra en modalidad granel estará disponible en una etapa futura')
+  }
   if (oc.estado !== 'EMITIDA') {
     throw new ValidationError('Solo se puede recepcionar una Orden de Compra en estado Emitida')
   }

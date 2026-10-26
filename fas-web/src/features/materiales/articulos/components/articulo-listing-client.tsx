@@ -36,7 +36,7 @@ export function ArticuloListingClient() {
     page: parseAsInteger.withDefault(1),
     perPage: parseAsInteger.withDefault(20),
     q: parseAsString,
-    tipo: parseAsStringEnum<TipoArticulo>(['EMBALAJE', 'ENVASE', 'MATERIAL_EMBALAJE', 'SERVICIO']),
+    tipo: parseAsStringEnum<TipoArticulo>(['EMBALAJE', 'ENVASE', 'MATERIAL_EMBALAJE', 'SERVICIO', 'GRANEL']),
     estado: parseAsStringEnum<'activo' | 'inactivo'>(['activo', 'inactivo']),
     // Mismo nombre/formato de clave que useDataTable (SORT_KEY='sort', JSON
     // [{id,desc}]) — se lee acá como string crudo para pasárselo tal cual al

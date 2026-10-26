@@ -103,20 +103,39 @@ async function lockYVerificarEditable(tx: Tx, ordenCompraId: number): Promise<vo
   }
 }
 
-// Suma cajas totales (columna `cajas`, no `cantidadPallets × cajasPorPallet`
-// — cajasPorPallet es solo referencial, ver comentario en el schema/form) de
-// las líneas. Si la unidad de la cuota es "KG", convierte a kilos usando el
-// kgNetoEnvase del artículo (embalaje) de cada línea — rechaza (422) si algún
-// artículo involucrado no tiene peso cargado, en vez de valorizar en cero en
-// silencio (FAS-PMQ-R1-003).
+// Cantidad real de la OC para las cuotas MONTO_UNITARIO (valorUnitario ×
+// cantidad). Depende de la modalidad:
+//
+// - CAJAS: suma cajas totales (columna `cajas`, no `cantidadPallets ×
+//   cajasPorPallet` — cajasPorPallet es solo referencial). Si la unidad de la
+//   cuota es "KG", convierte a kilos usando el kgNetoEnvase del artículo
+//   (embalaje) de cada línea — rechaza (422) si algún artículo no tiene peso
+//   cargado, en vez de valorizar en cero en silencio (FAS-PMQ-R1-003).
+// - GRANEL (2026-10-23): la fruta se compra por kilos; la cantidad real = suma
+//   de `cantidadKilos`. En granel una cuota MONTO_UNITARIO solo tiene sentido en
+//   Kilo (no hay cajas) — se rechaza cualquier otra unidad.
 async function calcularCantidadReal(
   tx: Tx,
-  lineas: { cajas: number; articuloId: number }[],
+  lineas: { cajas: number | null; cantidadKilos: Prisma.Decimal | null; articuloId: number }[],
   unidadId: number,
+  modalidad: 'CAJAS' | 'GRANEL',
 ): Promise<Prisma.Decimal> {
-  const totalCajas = lineas.reduce((acc, l) => acc + l.cajas, 0)
-
   const unidad = await tx.unidadMedida.findUnique({ where: { id: unidadId }, select: { codigo: true } })
+
+  if (modalidad === 'GRANEL') {
+    if (unidad?.codigo !== 'KG') {
+      throw new ValidationError(
+        'En modalidad granel la cuota por monto unitario debe estar expresada en Kilo (KG) — la compra es por kilos, no por cajas',
+      )
+    }
+    let total = new Prisma.Decimal(0)
+    for (const l of lineas) {
+      total = total.plus(l.cantidadKilos ?? new Prisma.Decimal(0))
+    }
+    return total
+  }
+
+  const totalCajas = lineas.reduce((acc, l) => acc + (l.cajas ?? 0), 0)
   if (unidad?.codigo !== 'KG') return new Prisma.Decimal(totalCajas)
 
   const articuloIds = [...new Set(lineas.map((l) => l.articuloId))]
@@ -134,7 +153,7 @@ async function calcularCantidadReal(
         `No se puede calcular la cuota en Kilo: el artículo de una línea no tiene kg neto de envase cargado (id ${l.articuloId})`,
       )
     }
-    total = total.plus(peso.mul(l.cajas))
+    total = total.plus(peso.mul(l.cajas ?? 0))
   }
   return total
 }
@@ -147,7 +166,8 @@ async function calcularCantidadReal(
 async function cuotasDesdeCondicionPago(
   tx: Tx,
   condicionPagoId: number | null | undefined,
-  lineas: { cajas: number; articuloId: number }[],
+  lineas: { cajas: number | null; cantidadKilos: Prisma.Decimal | null; articuloId: number }[],
+  modalidad: 'CAJAS' | 'GRANEL',
 ) {
   if (!condicionPagoId) return []
   const condicionPago = await tx.condicionPago.findFirst({
@@ -161,7 +181,7 @@ async function cuotasDesdeCondicionPago(
     condicionPago.cuotas.map(async (c: any) => {
       const montoCalculado =
         c.tipoValor === 'MONTO_UNITARIO'
-          ? (c.valorUnitario as Prisma.Decimal).mul(await calcularCantidadReal(tx, lineas, c.unidadId))
+          ? (c.valorUnitario as Prisma.Decimal).mul(await calcularCantidadReal(tx, lineas, c.unidadId, modalidad))
           : null
       return {
         fechaReferencia: c.fechaReferencia,
@@ -189,14 +209,17 @@ async function recalcularCuotasMontoUnitario(tx: Tx, ordenCompraId: number) {
   })
   if (cuotasMontoUnitario.length === 0) return
 
+  const orden = await tx.ordenCompra.findUniqueOrThrow({ where: { id: ordenCompraId }, select: { modalidad: true } })
   const lineas = await tx.ordenCompraLinea.findMany({
     where: { ordenCompraId },
-    select: { cajas: true, articuloId: true },
+    select: { cajas: true, cantidadKilos: true, articuloId: true },
   })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const cuota of cuotasMontoUnitario as any[]) {
-    const montoCalculado = (cuota.valorUnitario as Prisma.Decimal).mul(await calcularCantidadReal(tx, lineas, cuota.unidadId))
+    const montoCalculado = (cuota.valorUnitario as Prisma.Decimal).mul(
+      await calcularCantidadReal(tx, lineas, cuota.unidadId, orden.modalidad),
+    )
     await tx.ordenCompraCuotaPago.update({ where: { id: cuota.id }, data: { montoCalculado } })
   }
 }
@@ -213,7 +236,7 @@ export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor:
     const numero = `${prefijo}${String(total + 1).padStart(4, '0')}`
     // Sin líneas al crear (se agregan de a una después, ver addLinea) —
     // mismo patrón que createNotaVenta.
-    const cuotasPago = await cuotasDesdeCondicionPago(tx, data.condicionPagoId, [])
+    const cuotasPago = await cuotasDesdeCondicionPago(tx, data.condicionPagoId, [], data.modalidad ?? 'CAJAS')
 
     return tx.ordenCompra.create({
       data: {
@@ -241,33 +264,53 @@ export async function updateOrdenCompra(id: number, data: OrdenCompraUpdateInput
   const { solicitudInspeccionIds, ...resto } = data
   return prisma.$transaction(async (tx) => {
     await lockYVerificarEditable(tx, id)
-    // FAS-OCNV-001 (QA ronda 1): autoridad real bajo el mismo lock por
-    // ordenCompraId que addLinea/updateLinea (LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO)
-    // — serializa este chequeo contra una línea de Cierre agregándose en
-    // paralelo. El service ya hizo un pre-check amigable no bloqueado.
-    if (data.notaVentaId !== undefined) {
-      const actual = await tx.ordenCompra.findUniqueOrThrow({ where: { id }, select: { notaVentaId: true } })
-      if (data.notaVentaId !== actual.notaVentaId) {
-        const lineasDeCierre = await tx.ordenCompraLinea.count({ where: { ordenCompraId: id, notaVentaDetalleId: { not: null } } })
-        if (lineasDeCierre > 0) {
-          throw new ValidationError(
-            'No se puede cambiar el Cierre Comercial de la Orden de Compra: tiene líneas tomadas de un Cierre Comercial — elimínelas primero',
-          )
-        }
+    // Autoridad bajo lock (lee estado/modalidad/condición/notaVenta una sola vez):
+    // el service ya hizo pre-checks amigables no bloqueados, pero la verdad para
+    // mutar sale de acá, serializada contra addLinea/updateLinea por el mismo
+    // LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO.
+    const actual = await tx.ordenCompra.findUniqueOrThrow({
+      where: { id },
+      select: { notaVentaId: true, condicionPagoId: true, modalidad: true, estado: true },
+    })
+    const cambiaModalidad = data.modalidad !== undefined && data.modalidad !== actual.modalidad
+    const cambiaCondicion = data.condicionPagoId !== undefined && data.condicionPagoId !== actual.condicionPagoId
+
+    // QA-APL-001: cambiar la modalidad (Cajas/Granel) solo en BORRADOR y sin
+    // líneas — revalidado BAJO LOCK para que una línea agregada entre el
+    // pre-check del service y este punto no deje una OC GRANEL con líneas CAJAS.
+    if (cambiaModalidad) {
+      if (actual.estado !== 'BORRADOR') {
+        throw new ValidationError('La modalidad (Cajas/Granel) solo puede cambiarse mientras la Orden de Compra está en Borrador')
+      }
+      const lineasCount = await tx.ordenCompraLinea.count({ where: { ordenCompraId: id } })
+      if (lineasCount > 0) {
+        throw new ValidationError('No se puede cambiar la modalidad de una Orden de Compra que ya tiene líneas — elimínelas primero')
       }
     }
-    if (data.condicionPagoId !== undefined) {
-      // El snapshot es inmutable (mismo patrón que Cierre Comercial): solo se
-      // regenera si condicionPagoId realmente cambió respecto del valor
-      // persistido — el formulario puede reenviarlo sin cambios en cualquier
-      // PATCH (ej. al editar Observaciones).
-      const actual = await tx.ordenCompra.findUniqueOrThrow({ where: { id }, select: { condicionPagoId: true } })
-      if (data.condicionPagoId !== actual.condicionPagoId) {
-        const lineasActuales = await tx.ordenCompraLinea.findMany({ where: { ordenCompraId: id } })
-        const cuotasPago = await cuotasDesdeCondicionPago(tx, data.condicionPagoId, lineasActuales)
-        await tx.ordenCompraCuotaPago.deleteMany({ where: { ordenCompraId: id } })
-        await tx.ordenCompraCuotaPago.createMany({ data: cuotasPago.map((c) => ({ ordenCompraId: id, ...c })) })
+
+    // FAS-OCNV-001 (QA ronda 1): no cambiar el Cierre Comercial con líneas tomadas.
+    if (data.notaVentaId !== undefined && data.notaVentaId !== actual.notaVentaId) {
+      const lineasDeCierre = await tx.ordenCompraLinea.count({ where: { ordenCompraId: id, notaVentaDetalleId: { not: null } } })
+      if (lineasDeCierre > 0) {
+        throw new ValidationError(
+          'No se puede cambiar el Cierre Comercial de la Orden de Compra: tiene líneas tomadas de un Cierre Comercial — elimínelas primero',
+        )
       }
+    }
+
+    // QA-APL-002: regenerar/validar las cuotas cuando cambie la condición de pago
+    // O la modalidad, usando SIEMPRE los valores EFECTIVOS finales. Así pasar a
+    // GRANEL revalida las cuotas MONTO_UNITARIO contra la nueva modalidad (deben
+    // estar en KG) aunque no se toque la condición. El snapshot es inmutable: solo
+    // se regenera si algo relevante cambió (reenviar la condición sin cambios no
+    // reescribe las cuotas).
+    if (cambiaCondicion || cambiaModalidad) {
+      const condicionObjetivo = data.condicionPagoId ?? actual.condicionPagoId
+      const modalidadObjetivo = data.modalidad ?? actual.modalidad
+      const lineasActuales = await tx.ordenCompraLinea.findMany({ where: { ordenCompraId: id } })
+      const cuotasPago = await cuotasDesdeCondicionPago(tx, condicionObjetivo, lineasActuales, modalidadObjetivo)
+      await tx.ordenCompraCuotaPago.deleteMany({ where: { ordenCompraId: id } })
+      await tx.ordenCompraCuotaPago.createMany({ data: cuotasPago.map((c) => ({ ordenCompraId: id, ...c })) })
     }
     return tx.ordenCompra.update({
       where: { id },
@@ -383,21 +426,37 @@ async function resolverEtiquetaBajoLock(tx: Prisma.TransactionClient, articuloId
   throw new ValidationError(`El artículo "${nombre}" tiene etiqueta dinámica — selecciona la etiqueta`)
 }
 
-export async function addLinea(ordenCompraId: number, data: OrdenCompraLineaCreateInput) {
+export async function addLinea(ordenCompraId: number, data: OrdenCompraLineaCreateInput, modalidadEsperada: 'CAJAS' | 'GRANEL') {
   const { calibreIds, notaVentaDetalleId, ...resto } = data
   return prisma.$transaction(async (tx) => {
     await lockYVerificarEditable(tx, ordenCompraId)
+    const orden = await tx.ordenCompra.findUniqueOrThrow({ where: { id: ordenCompraId }, select: { notaVentaId: true, modalidad: true } })
+    // QA-APL-001 (árbitro ronda 2): compare-and-swap de modalidad BAJO LOCK. El
+    // service validó y normalizó la línea con la modalidad leída antes de la
+    // transacción; si cambió entre medio (un PATCH que pasó la OC a la otra
+    // modalidad tomó el lock primero), la línea normalizada ya no corresponde —
+    // se rechaza en vez de insertar una línea con el contrato de la otra modalidad.
+    if (orden.modalidad !== modalidadEsperada) {
+      throw new ValidationError('La modalidad de la Orden de Compra cambió mientras agregabas la línea. Recarga e inténtalo de nuevo.')
+    }
+    // Defensa bajo lock: una OC granel nunca toma líneas de un Cierre Comercial.
+    if (orden.modalidad === 'GRANEL' && notaVentaDetalleId != null) {
+      throw new ValidationError('Una Orden de Compra en modalidad granel no puede tomar líneas de un Cierre Comercial')
+    }
     // camposCierre pisa cualquier especie/variedad/categoría/artículo/
     // tipoPallet que el caller haya resuelto antes del lock — la fuente de
     // verdad es exclusivamente la lectura fresca de acá (FAS-OCNV-001/004).
+    // Solo aplica en CAJAS (el Cierre Comercial es de fruta embalada; el
+    // service bloquea líneas de Cierre en granel).
     let camposCierre: Partial<typeof resto> = {}
     if (notaVentaDetalleId != null) {
-      const orden = await tx.ordenCompra.findUniqueOrThrow({ where: { id: ordenCompraId }, select: { notaVentaId: true } })
-      camposCierre = await resolverLineaCierreBajoLock(tx, orden.notaVentaId, notaVentaDetalleId, calibreIds, resto.cajas)
+      camposCierre = await resolverLineaCierreBajoLock(tx, orden.notaVentaId, notaVentaDetalleId, calibreIds, resto.cajas ?? 0)
     }
-    // Re-resolver la etiqueta contra el artículo FINAL bajo lock (FAS-EOCSP-004).
-    const articuloFinal = camposCierre.articuloId ?? resto.articuloId
-    const etiquetaFinal = await resolverEtiquetaBajoLock(tx, articuloFinal, resto.etiquetaId ?? null)
+    // Etiqueta: solo en CAJAS. En GRANEL el artículo no lleva etiqueta (FAS-EOCSP-004
+    // re-resuelve la etiqueta contra el artículo FINAL bajo lock solo para cajas).
+    const etiquetaFinal = orden.modalidad === 'GRANEL'
+      ? null
+      : await resolverEtiquetaBajoLock(tx, camposCierre.articuloId ?? resto.articuloId, resto.etiquetaId ?? null)
     const linea = await tx.ordenCompraLinea.create({
       data: {
         ...resto,
@@ -421,7 +480,7 @@ export async function getLineaById(id: number) {
   })
 }
 
-export async function updateLinea(ordenCompraId: number, id: number, data: OrdenCompraLineaUpdateInput) {
+export async function updateLinea(ordenCompraId: number, id: number, data: OrdenCompraLineaUpdateInput, modalidadEsperada: 'CAJAS' | 'GRANEL') {
   const { calibreIds, ...resto } = data
   return prisma.$transaction(async (tx) => {
     await lockYVerificarEditable(tx, ordenCompraId)
@@ -429,14 +488,20 @@ export async function updateLinea(ordenCompraId: number, id: number, data: Orden
     // ver ordenes-compra.types.ts) — se lee la línea vigente para saber si
     // corresponde revalidar el disponible.
     const lineaActual = await tx.ordenCompraLinea.findUnique({ where: { id }, select: { notaVentaDetalleId: true } })
+    const orden = await tx.ordenCompra.findUniqueOrThrow({ where: { id: ordenCompraId }, select: { notaVentaId: true, modalidad: true } })
+    // QA-APL-001 (árbitro ronda 2): compare-and-swap de modalidad bajo lock —
+    // la línea se normalizó con la modalidad leída por el service antes de la tx.
+    if (orden.modalidad !== modalidadEsperada) {
+      throw new ValidationError('La modalidad de la Orden de Compra cambió mientras editabas la línea. Recarga e inténtalo de nuevo.')
+    }
     let camposCierre: Partial<typeof resto> = {}
     if (lineaActual?.notaVentaDetalleId != null) {
-      const orden = await tx.ordenCompra.findUniqueOrThrow({ where: { id: ordenCompraId }, select: { notaVentaId: true } })
-      camposCierre = await resolverLineaCierreBajoLock(tx, orden.notaVentaId, lineaActual.notaVentaDetalleId, calibreIds, resto.cajas, id)
+      camposCierre = await resolverLineaCierreBajoLock(tx, orden.notaVentaId, lineaActual.notaVentaDetalleId, calibreIds, resto.cajas ?? 0, id)
     }
-    // Re-resolver la etiqueta contra el artículo FINAL bajo lock (FAS-EOCSP-004).
-    const articuloFinal = camposCierre.articuloId ?? resto.articuloId
-    const etiquetaFinal = await resolverEtiquetaBajoLock(tx, articuloFinal, resto.etiquetaId ?? null)
+    // Etiqueta: solo en CAJAS (ver addLinea). En GRANEL queda null.
+    const etiquetaFinal = orden.modalidad === 'GRANEL'
+      ? null
+      : await resolverEtiquetaBajoLock(tx, camposCierre.articuloId ?? resto.articuloId, resto.etiquetaId ?? null)
     const linea = await tx.ordenCompraLinea.update({
       where: { id },
       data: {
@@ -466,11 +531,20 @@ export async function removeLinea(id: number, ordenCompraId: number) {
 // y dos emisiones concurrentes del mismo documento no la "re-emiten". La
 // dispara documentos.service.emitirDocumento tras congelar el PDF.
 export async function marcarOrdenCompraEmitida(id: number, actualizadoPor: string): Promise<number> {
-  const result = await prisma.ordenCompra.updateMany({
-    where: { id, estado: 'BORRADOR', eliminadoEn: null },
-    data: { estado: 'EMITIDA', actualizadoPor },
+  return prisma.$transaction(async (tx) => {
+    // QA-APL-001 (árbitro ronda 2): toma el mismo advisory lock por OC que
+    // updateOrdenCompra/addLinea/updateLinea. Serializa la emisión contra un
+    // cambio de modalidad en curso — sin esto, una emisión podía completarse
+    // entre la lectura "estado = BORRADOR" del PATCH de modalidad y su escritura,
+    // dejando que el cambio de modalidad aterrizara sobre una OC ya EMITIDA. El
+    // updateMany con estado=BORRADOR en el where sigue siendo el compare-and-swap.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO}::int, ${id}::int)`
+    const result = await tx.ordenCompra.updateMany({
+      where: { id, estado: 'BORRADOR', eliminadoEn: null },
+      data: { estado: 'EMITIDA', actualizadoPor },
+    })
+    return result.count
   })
-  return result.count
 }
 
 export async function softDeleteOrdenCompra(id: number, eliminadoPor: string) {

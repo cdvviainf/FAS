@@ -1,4 +1,4 @@
-export type TipoArticulo = 'EMBALAJE' | 'ENVASE' | 'MATERIAL_EMBALAJE' | 'SERVICIO'
+export type TipoArticulo = 'EMBALAJE' | 'ENVASE' | 'MATERIAL_EMBALAJE' | 'SERVICIO' | 'GRANEL'
 export type TipoCosteo = 'PROMEDIO_PONDERADO' | 'ESTANDAR'
 
 export interface CodigoEquivalenteInput {

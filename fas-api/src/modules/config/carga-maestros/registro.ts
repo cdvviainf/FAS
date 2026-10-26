@@ -14,7 +14,7 @@ import type { HojaSpec } from '../../../lib/carga-maestros/tipos.js'
 // externo, lo provee el cliente) y `Predios.codigo` es único por productor.
 
 // Listas cerradas (enums de Prisma) — también alimentan los dropdowns.
-export const ENUM_TIPO_ARTICULO = ['EMBALAJE', 'ENVASE', 'MATERIAL_EMBALAJE', 'SERVICIO']
+export const ENUM_TIPO_ARTICULO = ['EMBALAJE', 'ENVASE', 'MATERIAL_EMBALAJE', 'SERVICIO', 'GRANEL']
 export const ENUM_TIPO_COSTEO = ['PROMEDIO_PONDERADO', 'ESTANDAR']
 export const ENUM_TIPO_ENTIDAD = [
   'CLIENTE_NACIONAL',

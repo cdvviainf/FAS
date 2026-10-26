@@ -1,4 +1,4 @@
-export type TipoArticulo = 'EMBALAJE' | 'ENVASE' | 'MATERIAL_EMBALAJE' | 'SERVICIO'
+export type TipoArticulo = 'EMBALAJE' | 'ENVASE' | 'MATERIAL_EMBALAJE' | 'SERVICIO' | 'GRANEL'
 export type TipoCosteo = 'PROMEDIO_PONDERADO' | 'ESTANDAR'
 
 export const TIPO_ARTICULO_LABELS: Record<TipoArticulo, string> = {
@@ -6,6 +6,7 @@ export const TIPO_ARTICULO_LABELS: Record<TipoArticulo, string> = {
   ENVASE: 'Envase',
   MATERIAL_EMBALAJE: 'Material de Embalaje',
   SERVICIO: 'Servicio',
+  GRANEL: 'Granel',
 }
 
 export const TIPO_COSTEO_LABELS: Record<TipoCosteo, string> = {

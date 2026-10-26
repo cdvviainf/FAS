@@ -1,23 +1,29 @@
 export interface OrdenCompraLineaInput {
   especieId: number
   variedadId: number
-  categoriaId: number
   articuloId: number
-  // Etiqueta de la línea (opcional en el input: el service la resuelve si el
-  // artículo tiene etiqueta fija). 2026-10-15.
+  // Campos de modalidad CAJAS: opcionales en el input porque no aplican en
+  // GRANEL. El service los exige según la modalidad de la OC. En CAJAS la
+  // etiqueta la resuelve el service si el artículo tiene etiqueta fija (2026-10-15).
+  categoriaId?: number | null
   etiquetaId?: number | null
   calibreIds: number[]
   tipoPalletId?: number | null
-  cantidadPallets: number
-  cajasPorPallet: number
-  cajas: number
-  precioUsdCaja: number
+  cantidadPallets?: number | null
+  cajasPorPallet?: number | null
+  cajas?: number | null
+  precioUsdCaja?: number | null
+  // Campos de modalidad GRANEL (2026-10-23): kilos + precio USD por kilo.
+  cantidadKilos?: number | null
+  precioUsdKilo?: number | null
 }
 
 export interface OrdenCompraCreateInput {
   entidadProductorId: number
   notaVentaId?: number | null
   solicitudInspeccionIds: number[]
+  // Modalidad de compra (2026-10-23): CAJAS (default) o GRANEL.
+  modalidad?: 'CAJAS' | 'GRANEL'
   fecha?: Date
   formaPagoId?: number | null
   condicionPagoId?: number | null

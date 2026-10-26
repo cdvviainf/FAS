@@ -156,7 +156,9 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
         etiquetaIdsAdicionales: tipo === 'EMBALAJE' ? etiquetaIdsAdicionales.filter((id) => id !== etiquetaId) : [],
         kgNetoEnvase: tipo === 'EMBALAJE' && kgNetoEnvase ? Number(kgNetoEnvase) : null,
         kgBrutoEnvase: tipo === 'EMBALAJE' && kgBrutoEnvase ? Number(kgBrutoEnvase) : null,
-        especieId: tipo === 'EMBALAJE' ? especieId : null,
+        // Especie: aplica a EMBALAJE (agrupa Cajas por Pallet) y a GRANEL (filtra
+        // el artículo por especie en la Orden de Compra). 2026-10-23.
+        especieId: tipo === 'EMBALAJE' || tipo === 'GRANEL' ? especieId : null,
         codigosEquivalentes: codigosEquivalentes
           .map((c) => ({ codigo: c.codigo.trim(), descripcion: c.descripcion.trim() || null }))
           .filter((c) => c.codigo.length > 0),
@@ -195,7 +197,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       <SheetContent className='flex w-full flex-col sm:max-w-lg'>
         <SheetHeader>
           <SheetTitle>{isEdit ? `Editar artículo ${item?.codigo}` : 'Nuevo artículo'}</SheetTitle>
-          <SheetDescription>Embalajes, envases, materiales de embalaje y servicios.</SheetDescription>
+          <SheetDescription>Embalajes, envases, materiales de embalaje, servicios y granel.</SheetDescription>
         </SheetHeader>
 
         <div className='flex-1 space-y-4 overflow-auto px-1 py-2'>
@@ -333,18 +335,6 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
                 </p>
               </div>
 
-              <div className='space-y-1.5'>
-                <Label>Especie</Label>
-                <Select value={especieId ? String(especieId) : ''} onValueChange={(v) => setEspecieId(parseInt(v))}>
-                  <SelectTrigger><SelectValue placeholder='Seleccionar especie...' /></SelectTrigger>
-                  <SelectContent>
-                    {(especies?.data ?? []).map((e) => (
-                      <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className='text-muted-foreground text-xs'>Opcional. Agrupa el embalaje en el editor de Cajas por Pallet.</p>
-              </div>
               <div className='grid grid-cols-2 gap-3'>
                 <div className='space-y-1.5'>
                   <Label>Kg Neto envase</Label>
@@ -356,6 +346,23 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
                 </div>
               </div>
             </>
+          )}
+
+          {(tipo === 'EMBALAJE' || tipo === 'GRANEL') && (
+            <div className='space-y-1.5'>
+              <Label>Especie</Label>
+              <Select value={especieId ? String(especieId) : ''} onValueChange={(v) => setEspecieId(parseInt(v))}>
+                <SelectTrigger><SelectValue placeholder='Seleccionar especie...' /></SelectTrigger>
+                <SelectContent>
+                  {(especies?.data ?? []).map((e) => (
+                    <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className='text-muted-foreground text-xs'>
+                Opcional. En embalajes agrupa el editor de Cajas por Pallet; en granel permite filtrar el artículo por especie en la Orden de Compra.
+              </p>
+            </div>
           )}
 
           <div className='space-y-2'>

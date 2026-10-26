@@ -24,13 +24,16 @@ export interface FilaParaComparar {
 export interface LineaOcParaComparar {
   especieId: number
   variedadId: number
-  categoriaId: number
+  // categoriaId/cantidadPallets/cajas son nullable desde que existe la modalidad
+  // GRANEL (2026-10-23), pero la Recepción solo opera OCs de CAJAS (la de granel
+  // está bloqueada), así que en la práctica nunca llegan en null acá.
+  categoriaId: number | null
   articuloId: number
   // Etiqueta de la línea de OC (2026-10-15): null en OCs históricas → no se
   // valida acá (el motor igual exige que la etiqueta esté en el set del artículo).
   etiquetaId: number | null
-  cantidadPallets: number
-  cajas: number
+  cantidadPallets: number | null
+  cajas: number | null
   calibres: Array<{ calibreId: number }>
 }
 
@@ -63,8 +66,8 @@ export function compararLineasOcConExcel(lineas: LineaOcParaComparar[], filas: F
   // del mismo combo no se solapan (FAS-EOCSP-005); y líneas duplicadas
   // indistinguibles no se rechazan por el orden (FAS-EOCSP-006).
   const evaluarGrupo = (grupoLineas: LineaOcParaComparar[], filasGrupo: FilaParaComparar[], label: string) => {
-    const palletsEsperados = grupoLineas.reduce((a, l) => a + l.cantidadPallets, 0)
-    const cajasEsperadas = grupoLineas.reduce((a, l) => a + l.cajas, 0)
+    const palletsEsperados = grupoLineas.reduce((a, l) => a + (l.cantidadPallets ?? 0), 0)
+    const cajasEsperadas = grupoLineas.reduce((a, l) => a + (l.cajas ?? 0), 0)
 
     const palletsExcel = new Set(filasGrupo.map((f) => f.numeroPallet)).size
     if (palletsExcel !== palletsEsperados) {

@@ -471,6 +471,7 @@ describe('Orden de Compra contra PostgreSQL', () => {
       categoriaId: f.categoria.id,
       articuloId: f.articulo.id,
       calibreIds: [f.calibreChico.id, f.calibreGrande.id],
+      tipoPalletId: f.tipoPallet.id,
       cantidadPallets: 40,
       cajasPorPallet: 114,
       cajas: 40 * 114,
@@ -610,6 +611,7 @@ describe('Orden de Compra ↔ Cierre Comercial: línea tomada de una línea del 
       categoriaId: f.categoria.id,
       articuloId: f.articulo.id,
       calibreIds: [f.calibreChico.id, f.calibreGrande.id],
+      tipoPalletId: f.tipoPallet.id,
       cantidadPallets: 40,
       cajasPorPallet: 114,
       cajas: 40 * 114,
@@ -632,6 +634,7 @@ describe('Orden de Compra ↔ Cierre Comercial: línea tomada de una línea del 
       cajas: 456,
       precio: 12,
       calibreIds: [f.calibreChico.id, f.calibreGrande.id],
+      tipoPalletId: f.tipoPallet.id,
       ...overrides,
     })
     return { nv, detalle }
@@ -802,6 +805,7 @@ describe('Orden de Compra ↔ Cierre Comercial: línea tomada de una línea del 
       cajas: 456,
       precio: 12,
       calibreIds: [f.calibreChico.id, f.calibreGrande.id],
+      tipoPalletId: f.tipoPallet.id,
     })
     expect(detalleSinCategoria.categoriaId).toBeNull()
 
@@ -836,6 +840,7 @@ describe('Orden de Compra ↔ Cierre Comercial: línea tomada de una línea del 
       variedadId: f.variedad.id,
       articuloId: f.articulo.id,
       categoriaId: f.categoria.id,
+      tipoPalletId: f.tipoPallet.id,
       cantidadPallets: 4,
       cajasPorPallet: 114,
       cajas: 456,

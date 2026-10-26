@@ -1658,6 +1658,7 @@ model Entidad {
   instructivosEmbalajeExportador InstructivoEmbalaje[]       @relation("InstructivoEmbalajeExportador")
   recepcionesPlanta              Recepcion[]                 @relation("RecepcionPlanta")
   palletsProductor               Pallet[]                    @relation("PalletProductor")
+  palletsEmisorGuia              Pallet[]                    @relation("PalletEmisorGuia")
   palletLineasPacking            PalletLinea[]               @relation("PalletLineaPacking")
   embarquesGestorLogistico       Embarque[]                  @relation("EmbarqueGestorLogistico")
   integracionesGestorLogistico   Integracion[]               @relation("IntegracionGestorLogistico")
@@ -2122,6 +2123,11 @@ enum TipoArticulo {
   ENVASE
   MATERIAL_EMBALAJE
   SERVICIO
+  // Fruta comprada a granel (2026-10-23): se compra por kilos, sin embalaje/
+  // etiqueta/pallet. Solo se usa en Órdenes de Compra en modalidad GRANEL; queda
+  // excluido de recetas/stock/notas-venta/instructivo (que siguen exigiendo
+  // EMBALAJE). Puede llevar `especieId` para filtrarlo por especie en la OC.
+  GRANEL
 }
 
 enum TipoCosteo {
@@ -4450,6 +4456,16 @@ enum EstadoOrdenCompra {
   RECEPCIONADA
 }
 
+// Modalidad de compra de la OC (2026-10-23). CAJAS = fruta embalada (producto
+// terminado, tipo EMBALAJE): la línea razona en cajas/pallets/calibre/etiqueta.
+// GRANEL = fruta a granel (tipo GRANEL): la línea razona en kilos + precio/kg,
+// sin categoría/etiqueta/calibre/tipo-pallet/cajas. La recepción de OC GRANEL
+// está bloqueada en esta etapa (solo creación/emisión de la OC).
+enum ModalidadCompra {
+  CAJAS
+  GRANEL
+}
+
 model OrdenCompra {
   id        Int     @id @default(autoincrement())
   empresaId Int
@@ -4491,6 +4507,10 @@ model OrdenCompra {
   incoterm         ClausulaVenta?    @relation("OrdenCompraIncoterm", fields: [empresaId, incotermId], references: [empresaId, id])
   observaciones    String?
   estado           EstadoOrdenCompra @default(BORRADOR)
+  // Modalidad de compra (2026-10-23): CAJAS (default, fruta embalada) o GRANEL
+  // (fruta a granel por kilos). Determina qué campos exige cada línea y qué tipo
+  // de artículo se compra (EMBALAJE vs GRANEL). Editable solo en BORRADOR.
+  modalidad        ModalidadCompra   @default(CAJAS)
 
   lineas      OrdenCompraLinea[]
   cuotasPago  OrdenCompraCuotaPago[]
@@ -4657,9 +4677,13 @@ model OrdenCompraLinea {
   especie      Especie     @relation(fields: [especieId], references: [id])
   variedadId   Int
   variedad     Variedad    @relation(fields: [variedadId], references: [id])
-  categoriaId  Int
-  categoria    Categoria   @relation(fields: [categoriaId], references: [id])
-  articuloId   Int // FK → Artículo tipo EMBALAJE (pesos se leen del artículo)
+  // categoriaId nullable (2026-10-23): requerido en modalidad CAJAS, no aplica
+  // en GRANEL (la fruta a granel no se categoriza en la compra).
+  categoriaId  Int?
+  categoria    Categoria?  @relation(fields: [categoriaId], references: [id])
+  // articuloId: en CAJAS es un Artículo tipo EMBALAJE (pesos se leen del
+  // artículo); en GRANEL es un Artículo tipo GRANEL. Requerido en ambas.
+  articuloId   Int
   articulo     Articulo    @relation(fields: [articuloId], references: [id])
   // Etiqueta de la línea (2026-10-15): una sola por línea, dentro del set
   // permitido del artículo (principal ∪ adicionales). Si el artículo es FIJA se
@@ -4671,10 +4695,20 @@ model OrdenCompraLinea {
   tipoPalletId Int?
   tipoPallet   TipoPallet? @relation(fields: [tipoPalletId], references: [id])
 
-  cantidadPallets Int
-  cajasPorPallet  Int
-  cajas           Int
-  precioUsdCaja   Decimal @db.Decimal(14, 4)
+  // Campos de modalidad CAJAS (2026-10-23): nullable en columna porque en GRANEL
+  // no aplican. La validación por modalidad (ordenes-compra.service.ts) los exige
+  // (> 0) solo en CAJAS. `cajas` es la cantidad real usada en cálculos (no se
+  // recalcula desde cantidadPallets × cajasPorPallet; cajasPorPallet es teórico).
+  cantidadPallets Int?
+  cajasPorPallet  Int?
+  cajas           Int?
+  precioUsdCaja   Decimal? @db.Decimal(14, 4)
+
+  // Campos de modalidad GRANEL (2026-10-23): la fruta se compra por kilos a un
+  // precio USD por kilo. Nullable porque en CAJAS no aplican; exigidos (> 0) solo
+  // en GRANEL. En GRANEL la cantidad real para cuotas/liquidación = cantidadKilos.
+  cantidadKilos   Decimal? @db.Decimal(14, 2)
+  precioUsdKilo   Decimal? @db.Decimal(14, 4)
 
   // Multiselect de calibres (antes: rango calibreMinId/calibreMaxId — ver
   // supersesión 2026-08-15, mismo patrón que NotaVentaDetalleCalibre).
@@ -4882,6 +4916,14 @@ model Pallet {
   notaCondicion   NotaCondicion? @relation(fields: [empresaId, notaCondicionId], references: [empresaId, id])
   completo        Boolean        @default(false)
 
+  // Guía de despacho con que llegó la fruta del productor/planta (2026-10-23,
+  // columnas del Packing List): número de guía + emisor. El emisor es una Entidad
+  // tipo PRODUCTOR o PLANTA asociada al embarque (se valida en la reconciliación
+  // del PL). FK compuesta multiempresa, mismo patrón que productorId/recepcionId.
+  numeroGuiaDespacho String?
+  emisorGuiaId       Int?
+  emisorGuia         Entidad? @relation("PalletEmisorGuia", fields: [empresaId, emisorGuiaId], references: [empresaId, id])
+
   creadoEn DateTime @default(now())
 
   // Soft delete (2026-10-12): eliminar un pallet desde Edición de Stock
@@ -4898,6 +4940,7 @@ model Pallet {
   @@index([empresaId])
   @@index([notaCalidadId])
   @@index([notaCondicionId])
+  @@index([emisorGuiaId])
   @@index([eliminadoEn])
   @@map("pallets")
 }

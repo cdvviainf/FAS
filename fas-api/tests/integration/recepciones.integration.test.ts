@@ -81,6 +81,7 @@ async function limpiarDatos() {
       "entidad_direcciones",
       "entidades",
       "etiquetas",
+      "tipos_pallet",
       "paises",
       "temporadas",
       "usuarios",
@@ -128,6 +129,7 @@ async function crearFixtures() {
   const categoria = await prisma.categoria.create({ data: { empresaId: empresa.id, codigo: 'CAT1', descripcion: 'Categoría 1', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
   const calibreChico = await prisma.calibre.create({ data: { empresaId: empresa.id, codigo: 'XL', descripcion: 'XL', especieId: especie.id, orden: 1, control: [], creadoPor: 'test' } })
   const calibreGrande = await prisma.calibre.create({ data: { empresaId: empresa.id, codigo: 'XXL', descripcion: 'XXL', especieId: especie.id, orden: 2, control: [], creadoPor: 'test' } })
+  const tipoPallet = await prisma.tipoPallet.create({ data: { empresaId: empresa.id, codigo: 'TP-1', descripcion: 'Tipo Pallet 1', creadoPor: 'test' } })
   const unidad = await prisma.unidadMedida.upsert({
     where: { id: 1 },
     update: {},
@@ -166,7 +168,7 @@ async function crearFixtures() {
   await notificarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'test')
   const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'APROBADA', 'test', usuarioInspector.id)
 
-  return { empresa, pais, productor, predioProductor, planta, direccionPlanta, especie, variedad, categoria, calibreChico, calibreGrande, articulo, etiqueta, packing, solicitudInspeccionCompraAprobada }
+  return { empresa, pais, productor, predioProductor, planta, direccionPlanta, especie, variedad, categoria, calibreChico, calibreGrande, tipoPallet, articulo, etiqueta, packing, solicitudInspeccionCompraAprobada }
 }
 
 // TemplateCarga con cabecera (título de columna = nombre del campo, simple
@@ -269,6 +271,7 @@ describe('Motor de validación de Recepción contra PostgreSQL (compras.md §7)'
       categoriaId: f.categoria.id,
       articuloId: f.articulo.id,
       calibreIds: [f.calibreChico.id],
+      tipoPalletId: f.tipoPallet.id,
       cantidadPallets,
       cajasPorPallet: 100,
       cajas,

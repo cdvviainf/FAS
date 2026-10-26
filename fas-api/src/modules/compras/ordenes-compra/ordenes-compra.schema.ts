@@ -13,22 +13,28 @@ const solicitudInspeccionIdsSchema = z
     message: 'No se puede repetir la misma inspección de compra',
   })
 
+// Línea de OC: la validación FUERTE por modalidad vive en el service
+// (ordenes-compra.service.ts), que conoce la modalidad de la OC (cabecera) — por
+// eso acá los campos condicionales son opcionales. En CAJAS se exigen categoría/
+// calibres/tipo-pallet/pallets/cajas/precio-caja; en GRANEL, kilos/precio-kilo.
 const lineaSchema = z.object({
   especieId: z.number().int().positive('La especie es requerida'),
   variedadId: z.number().int().positive('La variedad es requerida'),
-  categoriaId: z.number().int().positive('La categoría es requerida'),
-  articuloId: z.number().int().positive('El artículo de embalaje es requerido'),
-  // Etiqueta de la línea (2026-10-15): opcional en el request — si el artículo
-  // tiene etiqueta FIJA se resuelve en el service; si es DINÁMICA debe venir.
+  articuloId: z.number().int().positive('El artículo es requerido'),
+  // Campos de modalidad CAJAS.
+  categoriaId: z.number().int().positive().optional().nullable(),
+  // Etiqueta de la línea (2026-10-15): opcional en el request — en CAJAS, si el
+  // artículo tiene etiqueta FIJA se resuelve en el service; si es DINÁMICA debe venir.
   etiquetaId: z.number().int().positive().optional().nullable(),
-  calibreIds: z.array(z.number().int().positive()).min(1, 'Selecciona al menos un calibre'),
-  // Requerido (2026-10-13): la cantidad de cajas por pallet sale del mantenedor
-  // CajasPorPallet (embalaje + tipo de pallet); sin tipo de pallet no hay cifra.
-  tipoPalletId: z.number().int().positive('El tipo de pallet es requerido'),
-  cantidadPallets: z.number().int().positive('La cantidad de pallets debe ser mayor a 0'),
-  cajasPorPallet: z.number().int().positive('Las cajas por pallet deben ser mayor a 0'),
-  cajas: z.number().int().positive('Las cajas deben ser mayor a 0'),
-  precioUsdCaja: z.number().nonnegative('El precio no puede ser negativo'),
+  calibreIds: z.array(z.number().int().positive()).optional().default([]),
+  tipoPalletId: z.number().int().positive().optional().nullable(),
+  cantidadPallets: z.number().int().positive().optional().nullable(),
+  cajasPorPallet: z.number().int().positive().optional().nullable(),
+  cajas: z.number().int().positive().optional().nullable(),
+  precioUsdCaja: z.number().nonnegative().optional().nullable(),
+  // Campos de modalidad GRANEL (2026-10-23): kilos + precio USD por kilo.
+  cantidadKilos: z.number().positive().optional().nullable(),
+  precioUsdKilo: z.number().nonnegative().optional().nullable(),
 })
 
 export const ordenCompraCreateSchema = z.object({
@@ -38,6 +44,8 @@ export const ordenCompraCreateSchema = z.object({
   // Solicitudes de Inspección. Ya NO es requerida (2026-09-15) — opcional,
   // default vacío.
   solicitudInspeccionIds: solicitudInspeccionIdsSchema.optional().default([]),
+  // Modalidad de compra (2026-10-23): CAJAS (fruta embalada) o GRANEL (por kilos).
+  modalidad: z.enum(['CAJAS', 'GRANEL']).optional().default('CAJAS'),
   fecha: z.coerce.date().optional(),
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
@@ -54,6 +62,9 @@ export const ordenCompraUpdateSchema = z.object({
   // Si viene, reemplaza el conjunto completo (mismo patrón que calibreIds en
   // OrdenCompraLinea) — no se puede enviar vacío, mismo criterio que crear.
   solicitudInspeccionIds: solicitudInspeccionIdsSchema.optional(),
+  // Modalidad editable solo en BORRADOR y solo si la OC no tiene líneas (se
+  // valida en el service): cambiarla cambia qué campos exige cada línea.
+  modalidad: z.enum(['CAJAS', 'GRANEL']).optional(),
   fecha: z.coerce.date().optional(),
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),

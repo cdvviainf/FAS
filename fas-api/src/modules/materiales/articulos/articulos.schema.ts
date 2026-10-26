@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const articuloCreateSchema = z.object({
-  tipo: z.enum(['EMBALAJE', 'ENVASE', 'MATERIAL_EMBALAJE', 'SERVICIO']),
+  tipo: z.enum(['EMBALAJE', 'ENVASE', 'MATERIAL_EMBALAJE', 'SERVICIO', 'GRANEL']),
   codigo: z.string().min(1, 'El código es requerido').max(50).trim(),
   descripcion: z.string().min(1, 'La descripción es requerida').max(200).trim(),
   descripcionExtranjera: z.string().max(200).trim().optional().nullable(),
@@ -44,7 +44,7 @@ export const articuloParamsSchema = z.object({
 
 export const articuloListQuerySchema = z.object({
   q: z.string().max(200).optional(),
-  tipo: z.enum(['EMBALAJE', 'ENVASE', 'MATERIAL_EMBALAJE', 'SERVICIO']).optional(),
+  tipo: z.enum(['EMBALAJE', 'ENVASE', 'MATERIAL_EMBALAJE', 'SERVICIO', 'GRANEL']).optional(),
   // Filtra embalajes por especie (incluye los genéricos sin especie) — 2026-10-05.
   especieId: z.coerce.number().int().positive().optional(),
   // z.coerce.boolean() convierte cualquier string no vacío (incluido "false") a true;
