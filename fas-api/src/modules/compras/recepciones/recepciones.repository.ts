@@ -577,6 +577,10 @@ export async function crearPalletsYValidar(
     // de cabecera concurrente sobre la misma OC. Con el lock tomado, se
     // relee la OC (no se reutiliza lo que el motor leyó antes de la
     // transacción) y se recompara desde cero.
+    // Advertencias (de cantidad en COMPRA, o de Instructivo en PROCESO) aceptadas
+    // por el usuario — se auditan en la Recepción al final (2026-10-26: se unifica
+    // la auditoría de ambos orígenes en esta variable).
+    let advertenciasAceptadasDetalle: string[] = []
     if (origen === 'COMPRA' && ordenCompraId != null) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO}::int, ${ordenCompraId}::int)`
       // eliminadoEn: null — QA-RCV-007 (ronda 4): sin este filtro, una OC
@@ -590,10 +594,17 @@ export async function crearPalletsYValidar(
       if (ocFresca.estado !== 'EMITIDA') {
         throw new ValidationError('La Orden de Compra ya no está en estado Emitida — no se pudo recepcionar')
       }
-      const diferencias = compararLineasOcConExcel(ocFresca.lineas, filas)
-      if (diferencias.length > 0) {
-        throw new ValidationError('No coincide la OC con la carga', { diferencias })
+      const { advertencias, errores } = compararLineasOcConExcel(ocFresca.lineas, filas)
+      // Estructurales (calibre/fruta no en la OC) → siempre bloquean.
+      if (errores.length > 0) {
+        throw new ValidationError('No coincide la OC con la carga', { diferencias: errores })
       }
+      // Cantidades distintas → advertencia aceptable (2026-10-26): se recepciona
+      // igual si el usuario las aceptó; si no, se devuelven para que las confirme.
+      if (advertencias.length > 0 && !opciones.aceptarAdvertencias) {
+        throw new ValidationError('La carga tiene diferencias de cantidad con la Orden de Compra', { advertencias })
+      }
+      advertenciasAceptadasDetalle = advertencias
     }
 
     // Etapa 3 (2026-09-02): re-chequeo bajo lock, mismo motivo que el bloque
@@ -603,7 +614,6 @@ export async function crearPalletsYValidar(
     // atómicamente (a diferencia de la versión anterior) — la única defensa
     // necesaria es releer el detalle fresco y decidir si las advertencias ya
     // fueron aceptadas.
-    let advertenciasProceso: string[] = []
     if (origen === 'PROCESO') {
       const detalle = await getDetalleInstructivosTx(tx, instructivoIds)
       const filasParaComparar: FilaInstructivoParaComparar[] = pallets.flatMap((p) =>
@@ -616,10 +626,10 @@ export async function crearPalletsYValidar(
           calibreId: l.calibreId,
         })),
       )
-      advertenciasProceso = compararInstructivoConExcel(detalle, filasParaComparar)
-      if (advertenciasProceso.length > 0 && !opciones.aceptarAdvertencias) {
+      advertenciasAceptadasDetalle = compararInstructivoConExcel(detalle, filasParaComparar)
+      if (advertenciasAceptadasDetalle.length > 0 && !opciones.aceptarAdvertencias) {
         throw new ValidationError('La carga no coincide con los Instructivos de Embalaje seleccionados', {
-          advertencias: advertenciasProceso,
+          advertencias: advertenciasAceptadasDetalle,
         })
       }
     }
@@ -648,13 +658,14 @@ export async function crearPalletsYValidar(
       where: { id: recepcionId },
       data: {
         estado: estadoFinal,
-        // Auditoría (2026-09-02): solo se marca si de verdad hubo
-        // advertencias y el usuario las aceptó — una carga PROCESO limpia
-        // (sin diferencias) no toca estos campos.
-        ...(advertenciasProceso.length > 0
+        // Auditoría (2026-09-02; unificada COMPRA/PROCESO 2026-10-26): solo se
+        // marca si de verdad hubo advertencias y el usuario las aceptó — las
+        // diferencias de cantidad aceptadas en COMPRA o las de Instructivo en
+        // PROCESO. Una carga limpia (sin diferencias) no toca estos campos.
+        ...(advertenciasAceptadasDetalle.length > 0
           ? {
               advertenciasAceptadas: true,
-              advertenciasDetalle: advertenciasProceso,
+              advertenciasDetalle: advertenciasAceptadasDetalle,
               advertenciasAceptadasEn: new Date(),
               advertenciasAceptadasPor: opciones.userId,
             }

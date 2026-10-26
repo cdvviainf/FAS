@@ -406,7 +406,7 @@ function agruparEnPallets(filas: FilaResuelta[]) {
 // editándose entre este chequeo y la transacción de creación de pallets, así
 // que repo.crearPalletsYValidar vuelve a leer la OC y a comparar (misma
 // función pura) bajo lock antes de confirmar (QA-RCV-007).
-async function compararContraOc(ordenCompraId: number, filas: FilaResuelta[]): Promise<string[]> {
+async function compararContraOc(ordenCompraId: number, filas: FilaResuelta[]) {
   const oc = await repo.getOrdenCompraConLineas(ordenCompraId)
   if (!oc) throw new ValidationError('La Orden de Compra de esta Recepción ya no existe')
   return compararLineasOcConExcel(oc.lineas, filas)
@@ -479,9 +479,16 @@ export async function procesarCargaExcel(
   const origen = recepcion.origen
 
   if (origen === 'COMPRA' && recepcion.ordenCompraId) {
-    const diferencias = await compararContraOc(recepcion.ordenCompraId, filas)
-    if (diferencias.length > 0) {
-      throw new ValidationError('Etapa 3 — No coincide la OC con la carga', { diferencias })
+    const { advertencias, errores } = await compararContraOc(recepcion.ordenCompraId, filas)
+    // Estructurales (calibre fuera de lista, fruta no en la OC) → siempre abortan.
+    if (errores.length > 0) {
+      throw new ValidationError('Etapa 3 — No coincide la OC con la carga', { diferencias: errores })
+    }
+    // Cantidades (pallets/cajas de más o de menos) → advertencia aceptable:
+    // "recepcionar cantidades distintas a la OC" (2026-10-26). Se avisa y, si el
+    // usuario acepta, se recepciona igual (mismo flujo que PROCESO).
+    if (!opciones.aceptarAdvertencias && advertencias.length > 0) {
+      throw new ValidationError('La carga tiene diferencias de cantidad con la Orden de Compra', { advertencias })
     }
   }
 

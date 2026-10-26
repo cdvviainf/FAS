@@ -221,7 +221,8 @@ export async function subirAdjunto(
     // que falta es dejar la Recepción en RECHAZADA para que quede claro que
     // este intento no generó pallets y habilitar el reintento.
     await repo.marcarRechazada(recepcionId)
-    // Si el único problema fueron advertencias (modo PROCESO, 2026-09-02),
+    // Si el único problema fueron advertencias (PROCESO: características vs
+    // Instructivo, 2026-09-02; COMPRA: diferencias de cantidad vs OC, 2026-10-26),
     // el frontend necesita el adjuntoId para poder confirmar sin volver a
     // subir el archivo (ver confirmarAdvertencias) — se agrega al detalle
     // del mismo error en vez de uno nuevo, para no perder el resto del
@@ -233,11 +234,11 @@ export async function subirAdjunto(
   }
 }
 
-// Reprocesa un adjunto ya guardado (modo PROCESO) aceptando las advertencias
-// de características contra el/los Instructivo(s) de Embalaje — el usuario
-// ya las vio y decidió cargar igual (todo o nada, compras.md §4.4). No
-// requiere volver a subir el archivo: se relee el mismo contenido guardado
-// en subirAdjunto().
+// Reprocesa un adjunto ya guardado aceptando las advertencias — en PROCESO, las
+// de características contra el/los Instructivo(s) de Embalaje; en COMPRA, las
+// diferencias de cantidad contra la OC (2026-10-26). El usuario ya las vio y
+// decidió cargar igual (todo o nada, compras.md §4.4/§7.2). No requiere volver a
+// subir el archivo: se relee el mismo contenido guardado en subirAdjunto().
 export async function confirmarAdvertencias(recepcionId: number, adjuntoId: number, userId: string) {
   const recepcion = await obtenerRecepcion(recepcionId)
   if (!(await puedeModificarse(recepcion))) {

@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import ExcelJS from 'exceljs'
 import { prisma } from '../../src/lib/prisma.js'
 import { empresaContext } from '../../src/lib/empresa-context.js'
-import { crearRecepcion as crearRecepcionSvc, subirAdjunto as subirAdjuntoSvc, obtenerRecepcion as obtenerRecepcionSvc } from '../../src/modules/compras/recepciones/recepciones.service.js'
+import { crearRecepcion as crearRecepcionSvc, subirAdjunto as subirAdjuntoSvc, obtenerRecepcion as obtenerRecepcionSvc, confirmarAdvertencias as confirmarAdvertenciasSvc } from '../../src/modules/compras/recepciones/recepciones.service.js'
 import {
   crearOrdenCompra as crearOrdenCompraSvc,
   actualizarOrdenCompra as actualizarOrdenCompraSvc,
@@ -21,6 +21,9 @@ async function crearRecepcion(empresaId: number, body: RecepcionCreateInput, use
 }
 async function subirAdjunto(empresaId: number, recepcionId: number, archivo: { nombre: string; mime: string; datos: Buffer }, userId: string) {
   return empresaContext.run({ empresaId }, () => subirAdjuntoSvc(recepcionId, archivo, userId))
+}
+async function confirmarAdvertencias(empresaId: number, recepcionId: number, adjuntoId: number, userId: string) {
+  return empresaContext.run({ empresaId }, () => confirmarAdvertenciasSvc(recepcionId, adjuntoId, userId))
 }
 async function obtenerRecepcion(empresaId: number, id: number) {
   return empresaContext.run({ empresaId }, () => obtenerRecepcionSvc(id))
@@ -373,7 +376,7 @@ describe('Motor de validación de Recepción contra PostgreSQL (compras.md §7)'
     expect(resultado.resumen).toEqual({ pallets: 1, cajas: 100 })
   })
 
-  it('modo COMPRA: rechaza todo-o-nada si las cajas no cuadran, y no genera ningún pallet', async () => {
+  it('modo COMPRA: una diferencia de cantidad (cajas) es una advertencia aceptable — se recepciona con las cantidades del Excel al confirmar', async () => {
     const f = await crearFixtures()
     const oc = await crearOcEmitida(f, 100, 1)
     const template = await crearTemplateCarga(f.empresa.id)
@@ -384,18 +387,33 @@ describe('Motor de validación de Recepción contra PostgreSQL (compras.md §7)'
       templateCargaId: template.id,
     }, 'test')
 
-    const excel = await armarExcel([filaBase(f, { cajas: 80 })]) // OC pide 100
-    await expect(
-      subirAdjunto(f.empresa.id, recepcion.id, { nombre: 'recepcion.xlsx', mime: MIME_XLSX, datos: excel }, 'test'),
-    ).rejects.toMatchObject({
-      statusCode: 422,
-      details: { diferencias: [expect.stringContaining('Cajas')] },
-    })
+    // El Excel trae 80 cajas; la OC pide 100 → diferencia de CANTIDAD: advertencia
+    // (no bloquea), devuelve `advertencias` + `adjuntoId` para confirmar.
+    const excel = await armarExcel([filaBase(f, { cajas: 80 })])
+    let adjuntoId: number | undefined
+    try {
+      await subirAdjunto(f.empresa.id, recepcion.id, { nombre: 'recepcion.xlsx', mime: MIME_XLSX, datos: excel }, 'test')
+      throw new Error('subirAdjunto debió devolver advertencias de cantidad')
+    } catch (e) {
+      const err = e as { statusCode?: number; details?: { advertencias?: string[]; adjuntoId?: number } }
+      expect(err.statusCode).toBe(422)
+      expect(err.details?.advertencias).toEqual([expect.stringContaining('Cajas')])
+      adjuntoId = err.details?.adjuntoId
+      expect(typeof adjuntoId).toBe('number')
+    }
 
-    const pallets = await prisma.pallet.count({ where: { recepcionId: recepcion.id } })
-    expect(pallets).toBe(0)
+    // Antes de confirmar: no se generan pallets y la Recepción queda RECHAZADA.
+    expect(await prisma.pallet.count({ where: { recepcionId: recepcion.id } })).toBe(0)
+    expect((await obtenerRecepcion(f.empresa.id, recepcion.id)).estado).toBe('RECHAZADA')
+
+    // Confirmar la advertencia → se recepciona con las cantidades REALES del Excel
+    // (80 cajas, no las 100 de la OC) y queda auditada la aceptación.
+    const resultado = await confirmarAdvertencias(f.empresa.id, recepcion.id, adjuntoId!, 'test')
+    expect(resultado.recepcion.estado).toBe('VALIDADA')
+    expect(resultado.resumen).toEqual({ pallets: 1, cajas: 80 })
     const recepcionFinal = await obtenerRecepcion(f.empresa.id, recepcion.id)
-    expect(recepcionFinal.estado).toBe('RECHAZADA')
+    expect(recepcionFinal.advertenciasAceptadas).toBe(true)
+    expect(recepcionFinal.advertenciasDetalle).toEqual([expect.stringContaining('Cajas')])
   })
 
   it('modo COMPRA: rechaza un calibre fuera de la lista permitida de la OC', async () => {

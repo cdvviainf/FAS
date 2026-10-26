@@ -408,7 +408,7 @@ A diferencia de Nota de Calidad/Condición/Completo (§4.8, a nivel de **Pallet 
 La OC **no** se genera desde el Instructivo de Embalaje. El instructivo instruye qué embalar; Calidad verifica lo embalado; la OC nace de lo que efectivamente se embaló y fue aprobado. Los dos documentos no se referencian entre sí. La trazabilidad Compras↔Calidad corre por el **informe de inspección** (`informeCalidadId` en la OC), no por el instructivo.
 
 ### 6.2 OC editable hasta la recepción
-Como las cantidades son validación dura (§7), la OC debe poder editarse hasta que la Recepción cuadre. La reconciliación final OC↔carga es manual: se ajusta la OC o la carga hasta que coincidan.
+La OC debe poder editarse hasta la Recepción. Desde 2026-10-26 (§7.2/§7.3) las diferencias de **cantidad** ya no bloquean (son advertencias aceptables), pero las **estructurales** (calibre/fruta fuera de la OC) sí — para esas, la reconciliación OC↔carga es manual: se ajusta la OC o la carga hasta que coincidan.
 
 ### 6.3 Destino de liquidación según origen
 - **Fruta `COMPRA` (con OC):** precio fijo pactado en la línea de OC → es **costo de compra** → alimenta **Costos**. **No aplica Liquidación a Productor.**
@@ -442,17 +442,19 @@ Agrupar las líneas del Excel por la combinación **especie + variedad + categor
 ### 7.2 Validaciones por línea de OC
 Para cada línea de OC, contra el grupo correspondiente del Excel:
 
-1. **N° de pallets:** total OC = total Excel.
-2. **Cajas:** total OC (**campo `cajas` de la línea**, no `cantidadPallets × cajasPorPallet` — ver nota en §4.3, 2026-08-07) = total Excel.
-3. **Calibre (pertenencia a la lista):** **(Supersesión, 2026-08-15 — reemplaza la validación por rango)** **ningún** calibre del Excel puede quedar fuera de la **lista** de calibres de la línea (`OrdenCompraLineaCalibre`, §4.3). Ej.: OC permite calibres {3, 5, 7, 8} → si aparece 1, 2, 4 o 6 en el Excel, rechazo (ya no basta con estar "dentro del rango" 3–8, debe **pertenecer a la lista** exacta). La distribución entre pallets no bloquea; lo que bloquea es un calibre no listado en los totales.
-4. **Cobertura:** cualquier combinación/característica del Excel que **no** corresponda a ninguna línea de OC → diferencia reportada.
+> **⚠️ Supersesión (2026-10-26) — cantidades distintas se permiten (avisando).** Las diferencias de **cantidad** (N° de pallets y cajas, de más o de menos) dejan de ser un error que bloquea: pasan a ser **ADVERTENCIAS aceptables** — "recepcionar cantidades distintas a la OC". El backend las devuelve en `advertencias` (+ `adjuntoId`), el frontend las muestra y el usuario puede **recepcionar de todas formas**; se audita en `Recepcion.advertenciasAceptadas`/`advertenciasDetalle` (mismo flujo que las advertencias de PROCESO contra el Instructivo). Los pallets se generan desde el **Excel** (lo realmente recibido); la OC **no** se modifica. Las validaciones **estructurales** (puntos 3 y 4) siguen bloqueando: la fruta que no corresponde a la OC no es una diferencia de cantidad.
+
+1. **N° de pallets:** diferencia OC vs Excel → **advertencia** (se puede recepcionar igual).
+2. **Cajas** (**campo `cajas` de la línea**, no `cantidadPallets × cajasPorPallet` — ver nota en §4.3, 2026-08-07): diferencia OC vs Excel → **advertencia** (se puede recepcionar igual).
+3. **Calibre (pertenencia a la lista):** **(Supersesión, 2026-08-15 — reemplaza la validación por rango)** **ningún** calibre del Excel puede quedar fuera de la **lista** de calibres de la línea (`OrdenCompraLineaCalibre`, §4.3). Ej.: OC permite calibres {3, 5, 7, 8} → si aparece 1, 2, 4 o 6 en el Excel, **rechazo** (error que bloquea). La distribución entre pallets no bloquea; lo que bloquea es un calibre no listado.
+4. **Cobertura:** cualquier combinación/característica del Excel que **no** corresponda a ninguna línea de OC → **error que bloquea** (la fruta no está en la OC).
 
 ### 7.3 Resultado
-- **Todo cuadra** → se cargan los pallets a Stock (con `origen = COMPRA`).
-- **Algo falla** → **rechazo total** de la carga. Mensaje: *"No coincide la OC con la carga"* + lista de diferencias, referenciando las líneas del Excel:
+- **Todo cuadra** (o solo hay diferencias de cantidad aceptadas) → se cargan los pallets a Stock (con `origen = COMPRA`), con las cantidades **del Excel** (lo realmente recibido).
+- **Diferencia de cantidad** (N° de pallets / cajas) → **advertencia** (⚠️ supersesión 2026-10-26): no bloquea. El backend responde con `advertencias` + `adjuntoId`; el usuario puede **recepcionar de todas formas** (se audita `advertenciasAceptadas`/`advertenciasDetalle`). Ej.: *"Suma de cajas: hay `X` cajas de más del calibre/línea `AB` respecto de la OC."*
+- **Error estructural** (la fruta no corresponde a la OC) → **rechazo total** de la carga. Mensaje: *"No coincide la OC con la carga"* + lista de diferencias:
   - *Embalaje / categoría / variedad `XXXX` de las líneas `w,x,y,z` del Excel no está en la OC.*
   - *Calibre `N` de las líneas `a,b,c` del Excel no está en la lista de calibres de la OC.*
-  - *Suma de cajas: hay `X` cajas de más del calibre/línea `AB` y `J` de menos del calibre/línea `CD` respecto de la OC.*
 
 > El detalle de diferencias existe para que la planta corrija y reenvíe el archivo.
 

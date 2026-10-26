@@ -402,7 +402,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
           {recepcion?.data.advertenciasAceptadas && (
             <div className='space-y-1 rounded-md border border-amber-600/30 bg-amber-600/5 p-3 text-sm'>
               <p className='font-medium'>
-                Cargada aceptando diferencias contra el/los Instructivo(s) — {recepcion.data.advertenciasAceptadasPor}
+                Cargada aceptando diferencias {recepcion.data.origen === 'COMPRA' ? 'de cantidad contra la Orden de Compra' : 'contra el/los Instructivo(s)'} — {recepcion.data.advertenciasAceptadasPor}
                 {recepcion.data.advertenciasAceptadasEn
                   ? ` el ${new Date(recepcion.data.advertenciasAceptadasEn).toLocaleString('es-CL')}`
                   : ''}
@@ -618,8 +618,12 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
       )}
 
       <Modal
-        title='La carga no coincide con el Instructivo de Embalaje'
-        description='Las siguientes filas no calzan con las características de los Instructivos seleccionados. Puedes corregir el Excel y volver a subirlo, o cargar de todas formas — se guardará como advertencia aceptada.'
+        title={fields.modo === 'OC' ? 'La carga tiene diferencias de cantidad con la Orden de Compra' : 'La carga no coincide con el Instructivo de Embalaje'}
+        description={
+          fields.modo === 'OC'
+            ? 'La cantidad de pallets/cajas del Excel difiere de la Orden de Compra. Puedes corregir el Excel y volver a subirlo, o recepcionar de todas formas — se guardará como advertencia aceptada.'
+            : 'Las siguientes filas no calzan con las características de los Instructivos seleccionados. Puedes corregir el Excel y volver a subirlo, o cargar de todas formas — se guardará como advertencia aceptada.'
+        }
         isOpen={!!advertencias}
         onClose={() => setAdvertencias(null)}
       >

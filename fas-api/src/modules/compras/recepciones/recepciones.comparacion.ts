@@ -37,7 +37,19 @@ export interface LineaOcParaComparar {
   calibres: Array<{ calibreId: number }>
 }
 
-export function compararLineasOcConExcel(lineas: LineaOcParaComparar[], filas: FilaParaComparar[]): string[] {
+// Diferencias Excel↔OC separadas (2026-10-26): las de CANTIDAD (N° de pallets y
+// cajas, de más o de menos) son ADVERTENCIAS aceptables — "recepcionar
+// cantidades distintas a la OC" (avisar pero permitir). Las ESTRUCTURALES
+// (calibre fuera de la lista de la OC, fruta/combo que no está en la OC) siguen
+// siendo errores que bloquean (no es una diferencia de cantidad: la fruta no
+// corresponde a la OC).
+export interface DiferenciasOc {
+  advertencias: string[]
+  errores: string[]
+}
+
+export function compararLineasOcConExcel(lineas: LineaOcParaComparar[], filas: FilaParaComparar[]): DiferenciasOc {
+  const advertencias: string[] = []
   const errores: string[] = []
 
   // Agrupar filas del Excel por combo (especie+variedad+categoria+articulo).
@@ -71,12 +83,14 @@ export function compararLineasOcConExcel(lineas: LineaOcParaComparar[], filas: F
 
     const palletsExcel = new Set(filasGrupo.map((f) => f.numeroPallet)).size
     if (palletsExcel !== palletsEsperados) {
-      errores.push(`N° de pallets de "${label}": la OC indica ${palletsEsperados} y el Excel trae ${palletsExcel}`)
+      // Diferencia de cantidad → advertencia (se puede recepcionar igual).
+      advertencias.push(`N° de pallets de "${label}": la OC indica ${palletsEsperados} y el Excel trae ${palletsExcel}`)
     }
     const cajasExcel = filasGrupo.reduce((a, f) => a + f.cajas, 0)
     if (cajasExcel !== cajasEsperadas) {
       const diff = cajasExcel - cajasEsperadas
-      errores.push(
+      // Diferencia de cantidad → advertencia (se puede recepcionar igual).
+      advertencias.push(
         `Cajas de "${label}": la OC indica ${cajasEsperadas} y el Excel trae ${cajasExcel} (${diff > 0 ? `${diff} de más` : `${-diff} de menos`})`,
       )
     }
@@ -138,7 +152,7 @@ export function compararLineasOcConExcel(lineas: LineaOcParaComparar[], filas: F
     errores.push(`"${grupo[0].comboLabel}${etqTxt}" de las filas ${filasTxt} del Excel no está en la Orden de Compra`)
   }
 
-  return errores
+  return { advertencias, errores }
 }
 
 // ─── Comparación pura Excel↔Instructivo de Embalaje (2026-09-02) ──────────
