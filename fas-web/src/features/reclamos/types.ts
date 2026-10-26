@@ -117,6 +117,7 @@ export interface Reclamo {
     id: number
     numeroInstructivo: string
     numeroContenedorManual: string | null
+    fechaArribo: string | null
     solicitudReserva: { numeroContenedor: string | null } | null
   }
   clienteId: number
@@ -127,6 +128,12 @@ export interface Reclamo {
   tipoReclamo: TipoReclamoRef | null
   fechaReclamo: string
   resumenCliente: string | null
+  // Contexto del reclamo (2026-10-25): Sí/No (ingreso desde Ventas).
+  tieneTermografos: boolean
+  tieneReporte: boolean
+  // Derivado en el backend: días entre fechaArribo del Embarque y fechaReclamo
+  // (null si el Embarque no tiene fecha de arribo). Solo lectura.
+  diasRecepcionNotificacion: number | null
   estado: EstadoReclamo
   procedencia: Procedencia | null
   comentarioCalidad: string | null
@@ -176,6 +183,8 @@ export interface ReclamoCreateInput {
   tipoReclamoId: number
   resumenCliente?: string | null
   temporadaId?: number | null
+  tieneTermografos?: boolean
+  tieneReporte?: boolean
   lineas: { palletLineaId: number; cantidadCajas: number }[]
   provision?: ProvisionInput | null
 }
@@ -186,6 +195,8 @@ export interface ReclamoUpdateInput {
   tipoReclamoId?: number
   resumenCliente?: string | null
   temporadaId?: number | null
+  tieneTermografos?: boolean
+  tieneReporte?: boolean
   lineas?: { palletLineaId: number; cantidadCajas: number }[]
 }
 

@@ -124,6 +124,14 @@ model Reclamo {
   fechaReclamo   DateTime  @db.Date                  // fecha en que el cliente reclamó (obligatoria, 2026-09-23)
   resumenCliente String?                             // resumen breve de lo reclamado
 
+  // Contexto del reclamo (2026-10-25), capturado al ingresar desde Ventas (Sí/No,
+  // default No). "Días desde la recepción hasta la notificación" NO se persiste:
+  // se DERIVA en la respuesta (detalle y listados) como diferencia en días
+  // CALENDARIO entre la fecha de arribo del Embarque y fechaReclamo (null si el
+  // Embarque no tiene fecha de arribo); ambas fechas se normalizan a su fecha UTC.
+  tieneTermografos Boolean @default(false)           // ¿hay información de termógrafos?
+  tieneReporte     Boolean @default(false)           // ¿existe un reporte?
+
   estado        EstadoReclamo @default(INGRESADO)
   procedencia   Procedencia?                         // requerido para cerrar (R5b)
 

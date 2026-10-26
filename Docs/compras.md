@@ -70,6 +70,7 @@ Instrucción de qué embalar. **Sin FK a OC** (la relación es inexistente; ver 
 > - **Duplicar línea**: la UI permite clonar una línea del detalle como nueva (para ajustarla y agregarla). Extendido (2026-10-14) a los formularios de **Orden de Compra** y **Cierre Comercial/Nota de Venta** además del Instructivo: el botón "Duplicar" de cada fila **precarga el formulario de línea con los datos de esa fila SIN agregarla ni marcar edición** — al "Agregar" se crea una línea nueva; el usuario ajusta solo lo que necesita.
 > - El selector de Embalaje se **filtra ESTRICTAMENTE por la especie de la línea** (⚠️ supersede 2026-10-14: ya **no** incluye los genéricos sin especie) — ver §4.3.
 > - El PDF del Instructivo refleja estos cambios: Exportador en el bloque de Programa (cabecera), y columnas Mercado / Marca / Observaciones en el detalle (⚠️ Mercado desde 2026-10-14, antes Grupo Mercado).
+> - **Presentación (2026-10-25):** el **selector de Exportador** del formulario muestra solo el **nombre** (`descripcion`), no `"descripción — razón social"`. El **PDF** del Instructivo muestra el **código** del artículo (no la descripción), igual que la tabla de detalle de la pantalla.
 
 - `id` (PK)
 - `numero` (correlativo propio)

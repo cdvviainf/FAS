@@ -52,6 +52,8 @@ export async function crearReclamo(embarqueId: number, body: ReclamoCreateInput,
       fechaReclamo: body.fechaReclamo,
       resumenCliente: body.resumenCliente,
       temporadaId: body.temporadaId,
+      tieneTermografos: body.tieneTermografos,
+      tieneReporte: body.tieneReporte,
       lineas: body.lineas,
     },
     body.provision,
@@ -77,13 +79,14 @@ export async function actualizarReclamo(id: number, embarqueId: number, body: Re
 }
 
 export async function listarReclamosPorEmbarque(embarqueId: number) {
-  return repo.listReclamosPorEmbarque(embarqueId)
+  const reclamos = await repo.listReclamosPorEmbarque(embarqueId)
+  return reclamos.map(conDiasRecepcionNotificacion)
 }
 
 export async function listarReclamos(filters: ReclamoListFilters) {
   const { page = 1, limit = 20 } = filters
   const { data, total } = await repo.listReclamos(filters)
-  return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
+  return { data: data.map(conDiasRecepcionNotificacion), meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
 // BRT-R2-004: la separación Calidad/Comercial no puede depender de que el
@@ -94,6 +97,26 @@ function reclamoNoAnalizableEsInvisible(reclamo: { tipoReclamo: { generaAnalisis
   return !reclamo.tipoReclamo?.generaAnalisisCalidad
 }
 
+// "Días desde la recepción hasta la notificación del reclamo" (2026-10-25):
+// campo DERIVADO (no se persiste) = fechaReclamo − fechaArribo del Embarque, en
+// días CALENDARIO. null si el Embarque todavía no tiene fecha de arribo cargada.
+// Se agrega a la respuesta del detalle y de los listados como campo de solo
+// lectura. `fechaReclamo` es @db.Date (medianoche UTC) y `fechaArribo` es
+// DateTime (con hora): ambas se normalizan a su fecha UTC antes de restar, así
+// la diferencia es exacta en días y no depende de la hora del arribo.
+const MS_POR_DIA = 86_400_000
+function conDiasRecepcionNotificacion<T extends { fechaReclamo: Date; embarque: { fechaArribo: Date | null } }>(reclamo: T) {
+  const arribo = reclamo.embarque.fechaArribo
+  let diasRecepcionNotificacion: number | null = null
+  if (arribo != null) {
+    const r = reclamo.fechaReclamo
+    const diaReclamo = Date.UTC(r.getUTCFullYear(), r.getUTCMonth(), r.getUTCDate())
+    const diaArribo = Date.UTC(arribo.getUTCFullYear(), arribo.getUTCMonth(), arribo.getUTCDate())
+    diasRecepcionNotificacion = Math.round((diaReclamo - diaArribo) / MS_POR_DIA)
+  }
+  return { ...reclamo, diasRecepcionNotificacion }
+}
+
 export async function obtenerReclamo(id: number, soloAnalizables = false) {
   const reclamo = await repo.getReclamoById(id)
   if (!reclamo) throw new NotFoundError('Reclamo', String(id))
@@ -102,7 +125,7 @@ export async function obtenerReclamo(id: number, soloAnalizables = false) {
   if (soloAnalizables && reclamoNoAnalizableEsInvisible(reclamo)) {
     throw new NotFoundError('Reclamo', String(id))
   }
-  return reclamo
+  return conDiasRecepcionNotificacion(reclamo)
 }
 
 // El claim (existe + no CERRADO -> 403, R9/CA10) vive en el repository,

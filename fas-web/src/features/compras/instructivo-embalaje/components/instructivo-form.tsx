@@ -593,7 +593,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
                 onChange={(v) => setExportadorId(v ? Number(v) : null)}
                 placeholder='Seleccionar exportador...'
                 searchPlaceholder='Buscar exportador...'
-                options={exportadores.map((x) => ({ value: String(x.id), label: `${x.descripcion} — ${x.razonSocial}` }))}
+                options={exportadores.map((x) => ({ value: String(x.id), label: x.descripcion }))}
               />
             </div>
             <div className='space-y-1.5'>

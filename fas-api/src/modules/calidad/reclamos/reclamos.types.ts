@@ -20,6 +20,8 @@ export interface ReclamoCreateInput {
   tipoReclamoId: number
   resumenCliente?: string | null
   temporadaId?: number | null
+  tieneTermografos?: boolean
+  tieneReporte?: boolean
   lineas: ReclamoLineaInput[]
   provision?: ProvisionInput | null
 }
@@ -31,6 +33,8 @@ export interface ReclamoUpdateInput {
   tipoReclamoId?: number
   resumenCliente?: string | null
   temporadaId?: number | null
+  tieneTermografos?: boolean
+  tieneReporte?: boolean
   lineas?: ReclamoLineaInput[]
 }
 

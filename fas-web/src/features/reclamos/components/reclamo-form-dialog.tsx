@@ -48,6 +48,8 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
   const [fechaReclamo, setFechaReclamo] = useState('')
   const [tipoReclamoId, setTipoReclamoId] = useState<number | null>(null)
   const [resumenCliente, setResumenCliente] = useState('')
+  const [tieneTermografos, setTieneTermografos] = useState(false)
+  const [tieneReporte, setTieneReporte] = useState(false)
   const [seleccion, setSeleccion] = useState<SeleccionLineas>(new Map())
   const [conProvision, setConProvision] = useState(false)
   const [provision, setProvision] = useState<ProvisionInput>(PROVISION_VACIA)
@@ -88,6 +90,8 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
     setFechaReclamo(reclamoParaEditar?.fechaReclamo?.slice(0, 10) ?? '')
     setTipoReclamoId(reclamoParaEditar?.tipoReclamoId ?? null)
     setResumenCliente(reclamoParaEditar?.resumenCliente ?? '')
+    setTieneTermografos(reclamoParaEditar?.tieneTermografos ?? false)
+    setTieneReporte(reclamoParaEditar?.tieneReporte ?? false)
     setSeleccion(new Map(reclamoParaEditar?.lineas.map((l) => [l.palletLineaId, l.cantidadCajas]) ?? []))
     setConProvision(false)
     setProvision(PROVISION_VACIA)
@@ -104,6 +108,8 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
           fechaReclamo,
           tipoReclamoId: tipoReclamoId!,
           resumenCliente: resumenCliente.trim() || null,
+          tieneTermografos,
+          tieneReporte,
           lineas,
         })
       }
@@ -111,6 +117,8 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
         fechaReclamo,
         tipoReclamoId: tipoReclamoId!,
         resumenCliente: resumenCliente.trim() || null,
+        tieneTermografos,
+        tieneReporte,
         lineas,
         provision: conProvision ? provision : null,
       })
@@ -182,6 +190,17 @@ export function ReclamoFormDialog({ embarqueId, open, onOpenChange, reclamoParaE
           <div className='space-y-1.5'>
             <Label>Resumen del cliente</Label>
             <Textarea value={resumenCliente} onChange={(e) => setResumenCliente(e.target.value)} rows={2} />
+          </div>
+
+          <div className='flex flex-wrap gap-6'>
+            <div className='flex items-center gap-2'>
+              <Switch id='tiene-termografos' checked={tieneTermografos} onCheckedChange={setTieneTermografos} />
+              <Label htmlFor='tiene-termografos'>Información de termógrafos</Label>
+            </div>
+            <div className='flex items-center gap-2'>
+              <Switch id='tiene-reporte' checked={tieneReporte} onCheckedChange={setTieneReporte} />
+              <Label htmlFor='tiene-reporte'>Existe un reporte</Label>
+            </div>
           </div>
 
           <div className='space-y-1.5'>

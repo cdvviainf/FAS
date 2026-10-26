@@ -85,6 +85,12 @@ export function ReclamoVentasDetailClient({ id }: { id: number }) {
             {numeroContenedorDeReclamo(reclamo) && <> · Contenedor {numeroContenedorDeReclamo(reclamo)}</>}
             {' '}· {reclamo.cliente.descripcion} · {reclamo.moneda.codigo} · {formatFechaCorta(reclamo.fechaReclamo)}
           </p>
+          <p className='text-muted-foreground mt-1 text-sm'>
+            Días recepción → notificación:{' '}
+            <span className='text-foreground font-medium'>{reclamo.diasRecepcionNotificacion ?? '—'}</span>
+            {' '}· Termógrafos: <span className='text-foreground font-medium'>{reclamo.tieneTermografos ? 'Sí' : 'No'}</span>
+            {' '}· Reporte: <span className='text-foreground font-medium'>{reclamo.tieneReporte ? 'Sí' : 'No'}</span>
+          </p>
           {reclamo.resumenCliente && <p className='mt-1 text-sm'>{reclamo.resumenCliente}</p>}
         </div>
       </div>

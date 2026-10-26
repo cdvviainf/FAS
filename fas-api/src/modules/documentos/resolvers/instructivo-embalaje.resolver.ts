@@ -26,7 +26,7 @@ export async function resolverInstructivoEmbalaje(id: number, empresaId: number)
     variedad: d.variedad.descripcion,
     variedadRotulada: d.variedadRotulada?.descripcion ?? null,
     categoria: d.categoria.descripcion,
-    articulo: d.articulo.descripcion,
+    articulo: d.articulo.codigo,
     // Marca (Etiqueta) por línea (2026-10-05): si la línea fijó una, manda;
     // si no, cae a la etiqueta del artículo (comportamiento previo).
     etiqueta: d.etiqueta?.descripcion ?? d.articulo.etiqueta?.descripcion ?? null,

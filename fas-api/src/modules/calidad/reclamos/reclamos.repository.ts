@@ -27,6 +27,9 @@ const reclamoInclude = {
       id: true,
       numeroInstructivo: true,
       numeroContenedorManual: true,
+      // fechaArribo: base para derivar "días desde la recepción hasta la
+      // notificación del reclamo" (2026-10-25) en la respuesta del detalle.
+      fechaArribo: true,
       solicitudReserva: { select: { numeroContenedor: true } },
     },
   },
@@ -176,6 +179,8 @@ interface DatosReclamo {
   fechaReclamo: Date
   resumenCliente?: string | null
   temporadaId?: number | null
+  tieneTermografos?: boolean
+  tieneReporte?: boolean
   lineas: ReclamoLineaInput[]
 }
 
@@ -280,6 +285,8 @@ export async function crearReclamoTransaccional(
         fechaReclamo: datos.fechaReclamo,
         resumenCliente: datos.resumenCliente ?? undefined,
         temporadaId: datos.temporadaId ?? undefined,
+        tieneTermografos: datos.tieneTermografos ?? false,
+        tieneReporte: datos.tieneReporte ?? false,
         creadoPor,
         lineas: {
           create: datos.lineas.map((l) => ({ palletLineaId: l.palletLineaId, cantidadCajas: l.cantidadCajas })),
@@ -315,6 +322,8 @@ interface DatosReclamoUpdate {
   tipoReclamoId?: number
   resumenCliente?: string | null
   temporadaId?: number | null
+  tieneTermografos?: boolean
+  tieneReporte?: boolean
   lineas?: ReclamoLineaInput[]
 }
 
@@ -406,6 +415,8 @@ export async function actualizarReclamoTransaccional(
         ...(datos.tipoReclamoId !== undefined ? { tipoReclamoId: datos.tipoReclamoId } : {}),
         ...(datos.resumenCliente !== undefined ? { resumenCliente: datos.resumenCliente } : {}),
         ...(datos.temporadaId !== undefined ? { temporadaId: datos.temporadaId } : {}),
+        ...(datos.tieneTermografos !== undefined ? { tieneTermografos: datos.tieneTermografos } : {}),
+        ...(datos.tieneReporte !== undefined ? { tieneReporte: datos.tieneReporte } : {}),
         actualizadoPor,
       },
     })
