@@ -7,16 +7,20 @@ import * as recetasRepo from '../recetas/recetas.repository.js'
 import { crearReceta } from '../recetas/recetas.service.js'
 import { recetaCreateSchema } from '../recetas/recetas.schema.js'
 
-// Carga dedicada de recetas. A diferencia del motor genérico de Carga Masiva,
-// valida TODO (existencia tenant-scoped del embalaje/componentes, reglas R13 y
-// mínimo de un componente) tanto en dry-run como en commit — así "Validar" es
-// fiable sin escribir en la base. El commit reutiliza `crearReceta` (que vuelve
-// a validar). Las cantidades se persisten como number (el schema del service
-// las convierte a Decimal).
+// Carga dedicada de recetas — formato de UNA sola hoja (una fila por
+// componente). Las columnas de cabecera (Embalaje, Descripción, Cantidad a
+// Producir) se repiten en cada fila de la misma receta; se agrupa por "Receta
+// (código)". Valida TODO (existencia tenant-scoped del embalaje/componentes,
+// R13, consistencia de cabecera, mínimo un componente, cantidades positivas)
+// tanto en dry-run como en commit. El commit reutiliza `crearReceta`.
 
 const COMPONENTES_VALIDOS = new Set(['MATERIAL_EMBALAJE', 'SERVICIO'])
+const COL_RECETA = 'Receta (código)'
 const COL_EMBALAJE = 'Embalaje (código de Artículo tipo EMBALAJE)'
+const COL_DESCRIPCION = 'Descripción'
+const COL_CANT_PRODUCIR = 'Cantidad a Producir'
 const COL_COMPONENTE = 'Componente (código de Artículo)'
+const COL_CANT_CONSUMIR = 'Cantidad a Consumir'
 
 export interface OpcionesCargaRecetas {
   empresaId: number
@@ -31,6 +35,8 @@ export interface ResultadoCargaRecetas {
   errores: ErrorFila[]
 }
 
+const texto = (v: unknown): string => (v == null ? '' : String(v).trim())
+
 export async function cargarRecetas(
   rutaOBuffer: string | Buffer,
   opciones: OpcionesCargaRecetas,
@@ -41,41 +47,28 @@ export async function cargarRecetas(
   const errores: ErrorFila[] = [
     ...parseo.errores,
     ...Object.values(parseo.hojas).flatMap((h) => h.errores),
-    // FKs internas: valida que cada detalle referencie un código de receta
-    // declarado en la hoja Recetas, y detecta códigos de receta duplicados.
     ...validarReferenciasInternas(parseo, REGISTRO_RECETAS),
   ]
 
-  const filasRecetas = parseo.hojas['Recetas']?.filas ?? []
-  const filasDetalle = parseo.hojas['RecetasDetalle']?.filas ?? []
+  const filas = parseo.hojas['Recetas']?.filas ?? []
+
+  // Agrupa por código de receta, preservando el orden de aparición. Las filas
+  // sin código ya fueron marcadas como requerido por el parser.
+  const grupos = new Map<string, Array<{ fila: number; valores: Record<string, unknown> }>>()
+  for (const f of filas) {
+    const cod = texto(f.valores['recetaCod'])
+    if (!cod) continue
+    const lista = grupos.get(cod) ?? []
+    lista.push({ fila: f.fila, valores: f.valores })
+    grupos.set(cod, lista)
+  }
+
   const resumen = {
-    Recetas: { filas: filasRecetas.length, creados: 0 },
-    RecetasDetalle: { filas: filasDetalle.length, creados: 0 },
+    Recetas: { filas: grupos.size, creados: 0 },
+    Componentes: { filas: filas.length, creados: 0 },
   }
 
   await empresaContext.run({ empresaId }, async () => {
-    // Detalle agrupado por código de receta (tal cual viene en la celda).
-    const detallePorReceta = new Map<string, Array<{ fila: number; componenteCod: string; cantidad: number }>>()
-    for (const f of filasDetalle) {
-      const rc = String(f.valores['recetaId'] ?? '')
-      if (!rc) continue
-      const lista = detallePorReceta.get(rc) ?? []
-      lista.push({ fila: f.fila, componenteCod: String(f.valores['componenteId'] ?? ''), cantidad: Number(f.valores['cantidadAConsumir']) })
-      detallePorReceta.set(rc, lista)
-    }
-
-    // Códigos de receta repetidos dentro de la hoja: el detalle se agrupa solo
-    // por código, así que una cabecera duplicada vuelve ambigua la asociación.
-    // Se bloquean TODAS las filas con un código repetido — no solo la 2ª que
-    // marca el parser — para no persistir ninguna (CR-QA-008).
-    const conteoCodigos = new Map<string, number>()
-    for (const fr of filasRecetas) {
-      const c = String(fr.valores['codigo'] ?? '')
-      if (c) conteoCodigos.set(c, (conteoCodigos.get(c) ?? 0) + 1)
-    }
-    const codigosDuplicados = new Set([...conteoCodigos].filter(([, n]) => n > 1).map(([c]) => c))
-
-    // Resolución de artículos cacheada (código -> {id, tipo} | null).
     const artCache = new Map<string, { id: number; tipo: string } | null>()
     const resolver = async (cod: string) => {
       if (artCache.has(cod)) return artCache.get(cod)!
@@ -85,118 +78,108 @@ export async function cargarRecetas(
       return v
     }
 
-    for (const fr of filasRecetas) {
-      const codReceta = String(fr.valores['codigo'] ?? '')
-      const embalajeCod = String(fr.valores['embalajeId'] ?? '')
+    for (const [codReceta, rows] of grupos) {
+      const repFila = rows[0].fila // fila representativa para errores de cabecera
+      const grupoFilas = new Set(rows.map((r) => r.fila))
       let bloqueada = false
-      const err = (columna: string | undefined, codigo: string, mensaje: string) => {
-        errores.push({ hoja: 'Recetas', fila: fr.fila, columna, codigo, mensaje })
+      const errFila = (fila: number, columna: string | undefined, codigo: string, mensaje: string) => {
+        errores.push({ hoja: 'Recetas', fila, columna, codigo, mensaje })
         bloqueada = true
       }
 
-      // Código repetido en la hoja: bloquea esta cabecera (el parser solo marca
-      // la 2ª aparición; aquí se flagan todas para no crear ninguna).
-      if (codReceta && codigosDuplicados.has(codReceta)) {
-        const yaMarcada = errores.some((e) => e.hoja === 'Recetas' && e.fila === fr.fila && e.codigo === 'CODIGO_DUPLICADO')
-        if (yaMarcada) bloqueada = true
-        else err('Código', 'CODIGO_DUPLICADO', `El código de receta "${codReceta}" está repetido en la hoja.`)
+      // Consistencia de cabecera: el valor de la receta es el primero no vacío;
+      // cualquier fila con un valor distinto es un conflicto.
+      const valorCabecera = (campo: string, columna: string): string => {
+        let elegido = ''
+        for (const r of rows) {
+          const v = texto(r.valores[campo])
+          if (v === '') continue
+          if (elegido === '') elegido = v
+          else if (v !== elegido) errFila(r.fila, columna, 'CABECERA_INCONSISTENTE', `El valor de "${columna}" difiere dentro de la receta "${codReceta}".`)
+        }
+        return elegido
       }
+      // Las 3 columnas de cabecera son requeridas por fila (el parser marca los
+      // faltantes); aquí solo se toma el valor y se valida la consistencia.
+      const embalajeCod = valorCabecera('embalajeCod', COL_EMBALAJE)
+      const descripcion = valorCabecera('descripcion', COL_DESCRIPCION)
+      const cantProducirStr = valorCabecera('cantidadAProducir', COL_CANT_PRODUCIR)
 
-      // Embalaje (cabecera): debe existir y ser tipo EMBALAJE (R13).
+      // Embalaje: existe y es tipo EMBALAJE (R13).
       let embalajeId: number | null = null
       if (embalajeCod) {
         const emb = await resolver(embalajeCod)
-        if (!emb) err(COL_EMBALAJE, 'FK_NO_RESUELTA', `No existe el artículo "${embalajeCod}".`)
-        else if (emb.tipo !== 'EMBALAJE') err(COL_EMBALAJE, 'TIPO_INVALIDO', `El artículo "${embalajeCod}" no es tipo EMBALAJE (R13).`)
+        if (!emb) errFila(repFila, COL_EMBALAJE, 'FK_NO_RESUELTA', `No existe el artículo "${embalajeCod}".`)
+        else if (emb.tipo !== 'EMBALAJE') errFila(repFila, COL_EMBALAJE, 'TIPO_INVALIDO', `El artículo "${embalajeCod}" no es tipo EMBALAJE (R13).`)
         else embalajeId = emb.id
       }
 
       // Código ya existente en BD (la carga crea, no actualiza).
-      if (codReceta) {
-        const existente = await recetasRepo.findRecetaByCodigo(codReceta)
-        if (existente) err('Código', 'CODIGO_EXISTENTE', `Ya existe una receta con código "${codReceta}".`)
-      }
+      const existente = await recetasRepo.findRecetaByCodigo(codReceta)
+      if (existente) errFila(repFila, COL_RECETA, 'CODIGO_EXISTENTE', `Ya existe una receta con código "${codReceta}".`)
 
-      // Componentes: existen y son MATERIAL_EMBALAJE o SERVICIO (R13). Mínimo 1.
-      const dets = detallePorReceta.get(codReceta) ?? []
-      const detFilas = new Set(dets.map((d) => d.fila))
-      if (dets.length === 0) {
-        err(undefined, 'SIN_DETALLE', `La receta "${codReceta || '(sin código)'}" no tiene componentes (mínimo 1).`)
-      }
+      // Componentes: una fila cada uno. Existen y son MATERIAL_EMBALAJE/SERVICIO,
+      // sin repetir el mismo componente dentro de la receta, cantidad > 0.
       const detalleInput: { componenteId: number; cantidadAConsumir: number }[] = []
-      // Un componente no puede repetirse en la misma receta: el contrato de
-      // `crearReceta` lo rechaza en el commit (compara cantidades de ids), así
-      // que lo bloqueamos también en dry-run para que ambos sean consistentes
-      // (CR-QA-007). Si en el futuro se decide consolidar, se cambia aquí.
       const componentesVistos = new Set<string>()
-      for (const d of dets) {
-        if (!d.componenteCod) continue
-        if (componentesVistos.has(d.componenteCod)) {
-          errores.push({ hoja: 'RecetasDetalle', fila: d.fila, columna: COL_COMPONENTE, codigo: 'COMPONENTE_DUPLICADO', mensaje: `El componente "${d.componenteCod}" está repetido en la receta "${codReceta}".` })
-          bloqueada = true
+      for (const r of rows) {
+        const compCod = texto(r.valores['componenteCod'])
+        if (!compCod) continue // requerido ya marcado por el parser
+        if (componentesVistos.has(compCod)) {
+          errFila(r.fila, COL_COMPONENTE, 'COMPONENTE_DUPLICADO', `El componente "${compCod}" está repetido en la receta "${codReceta}".`)
           continue
         }
-        componentesVistos.add(d.componenteCod)
-        const comp = await resolver(d.componenteCod)
+        componentesVistos.add(compCod)
+        const comp = await resolver(compCod)
         if (!comp) {
-          errores.push({ hoja: 'RecetasDetalle', fila: d.fila, columna: COL_COMPONENTE, codigo: 'FK_NO_RESUELTA', mensaje: `No existe el artículo "${d.componenteCod}".` })
-          bloqueada = true
+          errFila(r.fila, COL_COMPONENTE, 'FK_NO_RESUELTA', `No existe el artículo "${compCod}".`)
         } else if (!COMPONENTES_VALIDOS.has(comp.tipo)) {
-          errores.push({ hoja: 'RecetasDetalle', fila: d.fila, columna: COL_COMPONENTE, codigo: 'TIPO_INVALIDO', mensaje: `El artículo "${d.componenteCod}" no es Material de Embalaje ni Servicio (R13).` })
-          bloqueada = true
-        } else if (!(d.cantidad > 0)) {
-          errores.push({ hoja: 'RecetasDetalle', fila: d.fila, columna: 'Cantidad a Consumir', codigo: 'VALOR_INVALIDO', mensaje: 'La cantidad a consumir debe ser mayor a 0.' })
-          bloqueada = true
+          errFila(r.fila, COL_COMPONENTE, 'TIPO_INVALIDO', `El artículo "${compCod}" no es Material de Embalaje ni Servicio (R13).`)
         } else {
-          detalleInput.push({ componenteId: comp.id, cantidadAConsumir: d.cantidad })
+          const cant = Number(r.valores['cantidadAConsumir'])
+          if (!(cant > 0)) errFila(r.fila, COL_CANT_CONSUMIR, 'VALOR_INVALIDO', 'La cantidad a consumir debe ser mayor a 0.')
+          else detalleInput.push({ componenteId: comp.id, cantidadAConsumir: cant })
         }
       }
 
-      // Contrato completo de POST /recetas vía su mismo schema (CR-QA-005):
-      // descripción no vacía, cantidad a producir > 0, longitudes. Se deduplican
-      // las celdas ya reportadas por el parser estructural o las validaciones
-      // anteriores. embalajeId/detalle se validan arriba y se omiten aquí.
+      // Contrato completo de POST /recetas vía su schema (descripción, cantidad
+      // a producir > 0, longitudes). Se deduplican las celdas ya reportadas.
       const candidato = {
         embalajeId: embalajeId ?? 0,
         codigo: codReceta,
-        descripcion: String(fr.valores['descripcion'] ?? ''),
-        cantidadAProducir: Number(fr.valores['cantidadAProducir']),
+        descripcion,
+        cantidadAProducir: Number(cantProducirStr),
         activo: true,
         detalle: detalleInput,
       }
       const parsed = recetaCreateSchema.safeParse(candidato)
       if (!parsed.success) {
-        const columnaPorCampo: Record<string, string> = { descripcion: 'Descripción', cantidadAProducir: 'Cantidad a Producir', codigo: 'Código' }
-        const celdasReportadas = new Set(errores.filter((e) => e.hoja === 'Recetas' && e.fila === fr.fila).map((e) => e.columna))
+        const columnaPorCampo: Record<string, string> = { descripcion: COL_DESCRIPCION, cantidadAProducir: COL_CANT_PRODUCIR, codigo: COL_RECETA }
+        const celdasReportadas = new Set(errores.filter((e) => e.hoja === 'Recetas' && e.fila === repFila).map((e) => e.columna))
         for (const issue of parsed.error.issues) {
           const columna = columnaPorCampo[String(issue.path[0] ?? '')]
           if (!columna) continue // embalajeId / detalle se manejan aparte
           bloqueada = true
-          if (celdasReportadas.has(columna)) continue // ya reportado (no duplicar)
-          errores.push({ hoja: 'Recetas', fila: fr.fila, columna, codigo: 'VALOR_INVALIDO', mensaje: issue.message })
+          if (celdasReportadas.has(columna)) continue
+          errores.push({ hoja: 'Recetas', fila: repFila, columna, codigo: 'VALOR_INVALIDO', mensaje: issue.message })
         }
       }
 
-      // Red de seguridad: nunca persistir una fila que tenga CUALQUIER error
-      // (estructural del parser incluido) en su cabecera o su detalle.
-      if (!bloqueada && errores.some((e) => (e.hoja === 'Recetas' && e.fila === fr.fila) || (e.hoja === 'RecetasDetalle' && detFilas.has(e.fila)))) {
+      // Red de seguridad (CRF-001): nunca persistir una receta si CUALQUIERA de
+      // sus filas tiene algún error (estructural del parser incluido). Garantiza
+      // la unidad de éxito/error POR RECETA.
+      if (!bloqueada && errores.some((e) => e.hoja === 'Recetas' && grupoFilas.has(e.fila))) {
         bloqueada = true
       }
 
-      // Commit: solo filas sin errores. `crearReceta` revalida (defensa en profundidad).
+      // Commit: solo recetas sin ningún error, con embalaje resuelto y ≥1 componente.
       if (!dryRun && !bloqueada && embalajeId != null && detalleInput.length > 0) {
         try {
-          await crearReceta({
-            embalajeId,
-            codigo: codReceta,
-            descripcion: String(fr.valores['descripcion'] ?? ''),
-            cantidadAProducir: Number(fr.valores['cantidadAProducir']),
-            detalle: detalleInput,
-          })
+          await crearReceta({ embalajeId, codigo: codReceta, descripcion, cantidadAProducir: Number(cantProducirStr), detalle: detalleInput })
           resumen.Recetas.creados++
-          resumen.RecetasDetalle.creados += detalleInput.length
+          resumen.Componentes.creados += detalleInput.length
         } catch (error) {
-          errores.push({ hoja: 'Recetas', fila: fr.fila, codigo: 'ERROR_CREACION', mensaje: error instanceof Error ? error.message : String(error) })
+          errores.push({ hoja: 'Recetas', fila: repFila, codigo: 'ERROR_CREACION', mensaje: error instanceof Error ? error.message : String(error) })
         }
       }
     }

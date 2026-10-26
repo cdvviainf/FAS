@@ -16,7 +16,7 @@ function descargarBlob(blob: Blob, nombre: string) {
 }
 
 export const cargaRecetasService = {
-  // Descarga el Excel base (2 hojas: Recetas + RecetasDetalle).
+  // Descarga el Excel base (una hoja Recetas, una fila por componente).
   async descargarTemplate(): Promise<void> {
     const blob = await api.get('materiales/carga-recetas/template').blob()
     descargarBlob(blob, 'Carga_Recetas_base.xlsx')

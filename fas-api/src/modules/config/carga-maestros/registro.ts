@@ -288,19 +288,9 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
       { encabezado: 'Longitud', campo: 'longitud', tipo: 'decimal' },
     ],
   },
-  {
-    hoja: 'Recetas',
-    modelo: 'receta',
-    titulo: 'Recetas',
-    descripcion: 'Recetas de producción, asociadas a un Artículo de tipo EMBALAJE.',
-    dependeDe: ['Articulos'],
-    columnas: [
-      { encabezado: 'Embalaje (código de Artículo tipo EMBALAJE)', campo: 'embalajeId', tipo: 'fk', requerido: true, fk: { hoja: 'Articulos' } },
-      { encabezado: 'Código', campo: 'codigo', tipo: 'texto', autogenerar: true },
-      COL_DESCRIPCION,
-      { encabezado: 'Cantidad a Producir', campo: 'cantidadAProducir', tipo: 'decimal', requerido: true },
-    ],
-  },
+  // Recetas y su detalle se cargan con la herramienta dedicada "Carga de
+  // Recetas" (formato propio de una sola hoja, ver REGISTRO_RECETAS); por eso
+  // ya NO forman parte del template general de maestros (2026-10-26).
   {
     hoja: 'CajasPorPallet',
     modelo: 'cajasPorPallet',
@@ -313,53 +303,37 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
       { encabezado: 'Cajas por Pallet', campo: 'cajasPorPallet', tipo: 'entero', requerido: true },
     ],
   },
-  {
-    hoja: 'RecetasDetalle',
-    modelo: 'recetaDetalle',
-    titulo: 'Detalle de Recetas',
-    descripcion: 'Componentes que consume cada receta.',
-    dependeDe: ['Recetas', 'Articulos'],
-    columnas: [
-      { encabezado: 'Receta (código)', campo: 'recetaId', tipo: 'fk', requerido: true, fk: { hoja: 'Recetas' } },
-      { encabezado: 'Componente (código de Artículo)', campo: 'componenteId', tipo: 'fk', requerido: true, fk: { hoja: 'Articulos' } },
-      { encabezado: 'Cantidad a Consumir', campo: 'cantidadAConsumir', tipo: 'decimal', requerido: true },
-    ],
-  },
 ]
 
-// ─── Registro acotado: Carga de SOLO Recetas ────────────────────────────────
+// ─── Registro: Carga de SOLO Recetas (formato de una sola hoja) ──────────────
 //
-// Cargador dedicado de recetas (feature "Carga de Recetas"): el archivo trae
-// solo 2 hojas (Recetas + RecetasDetalle). A diferencia del registro general,
-// el Embalaje (cabecera) y los Componentes se resuelven contra ARTÍCULOS YA
-// EXISTENTES en BD (FK `externo`), no contra una hoja Articulos del archivo. El
-// código de receta del detalle sí resuelve contra la hoja Recetas (FK interna).
-// Reutiliza el mismo motor `cargarMaestros` pasándolo como `registro`.
+// Cargador dedicado de recetas (feature "Carga de Recetas"). Formato NUEVO
+// (2026-10-26): UNA sola hoja "Recetas", una fila por componente. Las columnas
+// de cabecera (Embalaje, Descripción, Cantidad a Producir) se repiten en cada
+// fila de la misma receta; el cargador agrupa por "Receta (código)". El
+// Embalaje (tipo EMBALAJE) y los Componentes YA DEBEN EXISTIR como Artículos y
+// se resuelven contra la BD. No se reutiliza el motor genérico: la validación y
+// la agrupación viven en `carga-recetas.service.ts`.
+//
+// Campos SIN `fk` a propósito (se resuelven en el service, no por el motor) y
+// `codigoUnicoGlobal: false` porque el código de receta se repite por diseño.
 export const REGISTRO_RECETAS: HojaSpec[] = [
   {
     hoja: 'Recetas',
     modelo: 'receta',
     titulo: 'Recetas',
-    descripcion: 'Recetas de producción. El Embalaje (cabecera) y los componentes YA DEBEN EXISTIR como Artículos.',
+    descripcion:
+      'Una fila por componente. Repite el código de receta y los datos de cabecera (Embalaje, Descripción, Cantidad a Producir) en cada fila de la misma receta. El Embalaje (tipo EMBALAJE) y los Componentes YA DEBEN EXISTIR como Artículos.',
     dependeDe: [],
+    codigoUnicoGlobal: false,
     columnas: [
-      { encabezado: 'Embalaje (código de Artículo tipo EMBALAJE)', campo: 'embalajeId', tipo: 'fk', requerido: true, fk: { externo: true, modelo: 'articulo' }, ayuda: 'Artículo tipo EMBALAJE ya existente en el sistema.' },
-      // Código OBLIGATORIO (no autogenerable): es la clave que enlaza cada fila
-      // de RecetasDetalle con su cabecera. Sin él, el detalle no se puede asociar.
-      { encabezado: 'Código', campo: 'codigo', tipo: 'texto', requerido: true, ayuda: 'Debe coincidir con la columna "Receta (código)" de la hoja Detalle de Recetas.' },
-      COL_DESCRIPCION,
-      { encabezado: 'Cantidad a Producir', campo: 'cantidadAProducir', tipo: 'decimal', requerido: true },
-    ],
-  },
-  {
-    hoja: 'RecetasDetalle',
-    modelo: 'recetaDetalle',
-    titulo: 'Detalle de Recetas',
-    descripcion: 'Componentes que consume cada receta. El Componente YA DEBE EXISTIR como Artículo (Material de Embalaje o Servicio).',
-    dependeDe: ['Recetas'],
-    columnas: [
-      { encabezado: 'Receta (código)', campo: 'recetaId', tipo: 'fk', requerido: true, fk: { hoja: 'Recetas' } },
-      { encabezado: 'Componente (código de Artículo)', campo: 'componenteId', tipo: 'fk', requerido: true, fk: { externo: true, modelo: 'articulo' } },
+      { encabezado: 'Receta (código)', campo: 'recetaCod', tipo: 'texto', requerido: true, ayuda: 'Identifica la receta. Se repite en todas sus filas de componentes.' },
+      // Cabecera: debe repetirse (y ser consistente) en CADA fila de la receta
+      // → requerida a nivel de fila (CRF-002).
+      { encabezado: 'Embalaje (código de Artículo tipo EMBALAJE)', campo: 'embalajeCod', tipo: 'texto', requerido: true, ayuda: 'Artículo tipo EMBALAJE ya existente. Repetir igual en todas las filas de la receta.' },
+      { encabezado: 'Descripción', campo: 'descripcion', tipo: 'texto', requerido: true, ayuda: 'Repetir igual en todas las filas de la receta.' },
+      { encabezado: 'Cantidad a Producir', campo: 'cantidadAProducir', tipo: 'decimal', requerido: true, ayuda: 'Repetir igual en todas las filas de la receta.' },
+      { encabezado: 'Componente (código de Artículo)', campo: 'componenteCod', tipo: 'texto', requerido: true, ayuda: 'Material de Embalaje o Servicio ya existente.' },
       { encabezado: 'Cantidad a Consumir', campo: 'cantidadAConsumir', tipo: 'decimal', requerido: true },
     ],
   },

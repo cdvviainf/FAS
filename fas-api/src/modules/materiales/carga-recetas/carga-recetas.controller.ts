@@ -21,7 +21,7 @@ async function bufferDeArchivo(req: FastifyRequest): Promise<Buffer> {
   return archivo.toBuffer()
 }
 
-// GET /carga-recetas/template → descarga el Excel base (2 hojas).
+// GET /carga-recetas/template → descarga el Excel base (una hoja Recetas).
 export async function descargarTemplate(_req: FastifyRequest, reply: FastifyReply) {
   const buffer = await generarTemplate(REGISTRO_RECETAS, {
     listasEnum: {},

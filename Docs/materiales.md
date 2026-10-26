@@ -626,17 +626,18 @@ Reemplaza la nota de D8/"NO construye" original ("emisión real fuera de alcance
 
 **Carga masiva de Recetas** (ítem de menú `MATERIALES_CARGA_RECETAS`; implementado 2026-10-26)
 
-Cargador dedicado para poblar recetas desde un Excel de 2 hojas (`Recetas` + `RecetasDetalle`). El Embalaje (cabecera) y los Componentes **ya deben existir** como Artículos — este cargador **no crea artículos**. Reglas aplicadas (idénticas en dry-run y commit, reusando `recetaCreateSchema` + R13):
+Cargador dedicado para poblar recetas desde un Excel de **una sola hoja** `Recetas` (formato nuevo 2026-10-26): **una fila por componente**, con las columnas `Receta (código)` · `Embalaje (código)` · `Descripción` · `Cantidad a Producir` · `Componente (código)` · `Cantidad a Consumir`. Las columnas de cabecera (Embalaje, Descripción, Cantidad a Producir) **se repiten en cada fila** de la misma receta; el cargador **agrupa por `Receta (código)`** y exige que esos valores sean **consistentes** dentro del grupo (si difieren → error). Recetas y detalle **ya no forman parte del template general de Carga Masiva de Maestros**. El Embalaje (cabecera) y los Componentes **ya deben existir** como Artículos — este cargador **no crea artículos**. Reglas aplicadas (idénticas en dry-run y commit, reusando `recetaCreateSchema` + R13):
 
 - Embalaje: artículo existente tipo `EMBALAJE`; Componentes: artículos existentes `MATERIAL_EMBALAJE`/`SERVICIO`; mínimo 1 componente.
-- Código de receta **obligatorio** (enlaza ambas hojas); si ya existe en BD → error (la carga **crea, no actualiza**); si está repetido dentro de la hoja → se bloquean **todas** sus cabeceras (ninguna se crea).
+- Código de receta **obligatorio** en cada fila; si ya existe en BD → error (la carga **crea, no actualiza**).
+- **Cabecera consistente**: Embalaje / Descripción / Cantidad a Producir deben ser iguales en todas las filas de una misma receta (si difieren → error).
 - Un componente no puede repetirse dentro de una misma receta → error.
 - Cantidades `> 0`, descripción no vacía.
 - **Éxito parcial por receta**: cada receta se procesa de forma independiente; las válidas se crean y las erróneas se reportan (mismo criterio que la Carga Masiva de Maestros). No es atómico por archivo.
 
 | Método | Ruta | Notas |
 |---|---|---|
-| GET | `/carga-recetas/template` | descarga el Excel base (2 hojas) — nivel `LECTURA` |
+| GET | `/carga-recetas/template` | descarga el Excel base (1 hoja) — nivel `LECTURA` |
 | POST | `/carga-recetas/validar` | dry-run: valida sin escribir — nivel `LECTURA` |
 | POST | `/carga-recetas` | carga a la base — nivel `TOTAL` |
 | POST | `/carga-recetas/reporte` | Excel con el detalle de errores de una validación — nivel `LECTURA` |

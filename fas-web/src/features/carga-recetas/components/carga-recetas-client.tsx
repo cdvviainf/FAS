@@ -38,7 +38,7 @@ export function CargaRecetasClient() {
     onSuccess: (data, commit) => {
       setResultado(data)
       const recetas = data.resumen.Recetas?.creados ?? 0
-      const detalles = data.resumen.RecetasDetalle?.creados ?? 0
+      const detalles = data.resumen.Componentes?.creados ?? 0
       if (commit) toast.success(`Carga completada: ${recetas} recetas (${detalles} componentes), ${data.errores.length} con error`)
       else toast.info(`Validación: ${data.errores.length} problemas encontrados`)
     },
@@ -59,8 +59,9 @@ export function CargaRecetasClient() {
         <CardHeader>
           <CardTitle>1. Plantilla</CardTitle>
           <CardDescription>
-            Descarga el Excel base (hojas Recetas y Detalle de Recetas). El Embalaje (cabecera) y los componentes
-            deben existir previamente como Artículos. El código de receta es obligatorio y debe coincidir en ambas hojas.
+            Descarga el Excel base (una sola hoja, una fila por componente). Repite el código de receta y los datos
+            de cabecera (Embalaje, Descripción, Cantidad a Producir) en cada fila de la misma receta. El Embalaje y los
+            componentes deben existir previamente como Artículos.
           </CardDescription>
         </CardHeader>
         <CardContent>

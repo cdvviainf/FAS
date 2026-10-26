@@ -5,7 +5,7 @@ import * as ctrl from './carga-recetas.controller.js'
 const ITEM = 'MATERIALES_CARGA_RECETAS'
 
 export async function cargaRecetasRoutes(app: FastifyInstance) {
-  // Descargar el Excel base (2 hojas: Recetas + RecetasDetalle).
+  // Descargar el Excel base (una hoja Recetas, una fila por componente).
   app.get('/carga-recetas/template', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarTemplate)
 
   // Validar (dry-run, no escribe): nivel LECTURA.
