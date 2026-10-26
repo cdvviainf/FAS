@@ -95,6 +95,20 @@ export const embarquesService = {
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
   },
 
+  // Emisión del Packing List (reporte Excel, 2026-10-25): descarga el .xlsx
+  // generado por FAS con el estado actual de los pallets del Embarque.
+  async emitirPackingList(id: number, nombreArchivo: string): Promise<void> {
+    const blob = await api.get(`ventas/embarques/${id}/packing-list/emitir`).blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombreArchivo
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  },
+
   // Packing parcializado (2026-09-28): eliminar un archivo de la carga.
   async eliminarPackingList(id: number, packingListId: number): Promise<{ data: EmbarqueDetalle }> {
     return api.delete(`ventas/embarques/${id}/packing-list/${packingListId}`).json()

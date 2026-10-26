@@ -27,6 +27,8 @@ export interface FilaPackingListCruda {
   // Termógrafo (2026-10-12): opcional, dato del contenedor (puede repetirse
   // por fila o variar entre pallets). La celda puede venir vacía.
   termografo: string
+  // Temperatura (°C) por pallet (2026-10-25): opcional, la celda puede venir vacía.
+  temperatura: string
   // Guía de despacho por pallet (2026-10-23): N° de guía + emisor (productor/
   // planta del embarque). Opcionales: la celda puede venir vacía.
   numeroGuia: string
@@ -74,6 +76,7 @@ export function leerFilasPackingList(
       etiqueta: valores.ETIQUETA,
       fechaEmbalaje: valores.FECHA_EMBALAJE,
       termografo: valores.TERMOGRAFO,
+      temperatura: valores.TEMPERATURA,
       numeroGuia: valores.NUMERO_GUIA,
       emisorGuia: valores.EMISOR_GUIA,
     })

@@ -193,6 +193,16 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
             </span>
           </div>
         ))}
+        <div>
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            onClick={() => embarquesService.emitirPackingList(embarque.id, `packing-list-${embarque.numeroInstructivo}.xlsx`).catch((err: Error) => toast.error(err.message || 'No se pudo emitir el Packing List'))}
+          >
+            <Icons.download className='mr-1 h-4 w-4' /> Emitir Packing List
+          </Button>
+        </div>
         <AnularDespachoDialog embarque={embarque} open={anulando} onOpenChange={setAnulando} />
       </div>
     )
@@ -215,6 +225,16 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
           {embarque.pallets.length} pallet{embarque.pallets.length === 1 ? '' : 's'} reservado
           {embarque.pallets.length === 1 ? '' : 's'} a este Embarque.
         </p>
+        <div className='flex justify-center'>
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            onClick={() => embarquesService.emitirPackingList(embarque.id, `packing-list-${embarque.numeroInstructivo}.xlsx`).catch((err: Error) => toast.error(err.message || 'No se pudo emitir el Packing List'))}
+          >
+            <Icons.download className='mr-1 h-4 w-4' /> Emitir Packing List
+          </Button>
+        </div>
 
         {puedeEscribir && (
           <div className='space-y-2'>

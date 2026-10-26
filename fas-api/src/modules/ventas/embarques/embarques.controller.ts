@@ -114,6 +114,16 @@ export async function subirPackingList(req: FastifyRequest, reply: FastifyReply)
   return reply.status(201).send({ data: resultado })
 }
 
+export async function emitirPackingList(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const { buffer, nombreArchivo } = await service.emitirPackingList(id)
+  return reply
+    .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    .header('Content-Disposition', `attachment; filename="${encodeURIComponent(nombreArchivo)}"`)
+    .header('Content-Length', String(buffer.length))
+    .send(buffer)
+}
+
 export async function descargarPackingList(req: FastifyRequest, reply: FastifyReply) {
   const { id } = embarqueParamsSchema.parse(req.params)
   const { packingListId } = packingListDescargaQuerySchema.parse(req.query)

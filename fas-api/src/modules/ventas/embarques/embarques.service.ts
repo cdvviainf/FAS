@@ -7,6 +7,8 @@ import * as aglAdapter from './agl360.adapter.js'
 import * as integracionesRepo from '../../config/integraciones/integraciones.repository.js'
 import * as templatesCargaRepo from '../../config/templates-carga/templates-carga.repository.js'
 import { reconciliarPackingList } from './embarques.packing-list.motor.js'
+import { generarPackingListExcel } from './embarques.packing-list-emision.js'
+import { getEmpresaParaDocumento } from '../../documentos/documentos.repository.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
@@ -593,7 +595,7 @@ export async function subirPackingList(
     discrepancias: resultado.discrepancias,
     numerosPallet: resultado.numerosPallet,
     termografos: resultado.termografos,
-    guiaPorPallet: resultado.guiaPorPallet,
+    datosPorPallet: resultado.datosPorPallet,
     cargadoPor: userId,
   })
 }
@@ -603,6 +605,20 @@ export async function descargarPackingList(embarqueId: number, packingListId?: n
   const resultado = await repo.getPackingListParaDescarga(embarqueId, packingListId)
   if (!resultado) throw new NotFoundError('Packing List', String(embarqueId))
   return resultado
+}
+
+// Emisión del Packing List (reporte Excel, 2026-10-25): genera el .xlsx con los
+// datos del Embarque (cabecera + pallets/líneas). No depende de que se haya
+// subido un Packing List — emite el estado actual de los pallets reservados.
+export async function emitirPackingList(embarqueId: number) {
+  const datos = await repo.getDatosEmisionPackingList(embarqueId)
+  if (!datos) throw new NotFoundError('Embarque', String(embarqueId))
+  const empresa = await getEmpresaParaDocumento(datos.empresaId)
+  const buffer = await generarPackingListExcel(datos, {
+    razonSocial: empresa?.razonSocial ?? '—',
+    rut: empresa?.rut ?? null,
+  })
+  return { buffer, nombreArchivo: `packing-list-${datos.numeroInstructivo}.xlsx` }
 }
 
 export async function eliminarPackingList(embarqueId: number, packingListId: number, userId: string) {

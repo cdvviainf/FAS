@@ -4930,6 +4930,13 @@ model Pallet {
   emisorGuiaId       Int?
   emisorGuia         Entidad? @relation("PalletEmisorGuia", fields: [empresaId, emisorGuiaId], references: [empresaId, id])
 
+  // Temperatura (°C) y termógrafo por pallet (2026-10-25, columnas del Packing
+  // List): capturados en la reconciliación, por pallet. Alimentan la emisión del
+  // Packing List (reporte Excel). El termógrafo supersede, para el reporte, a la
+  // lista `EmbarquePackingList.termografos` (que se mantiene por compatibilidad).
+  temperatura Decimal? @db.Decimal(5, 2)
+  termografo  String?
+
   creadoEn DateTime @default(now())
 
   // Soft delete (2026-10-12): eliminar un pallet desde Edición de Stock

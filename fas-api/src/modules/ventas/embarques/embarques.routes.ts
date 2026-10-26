@@ -145,6 +145,13 @@ export async function embarquesRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
     ctrl.descargarPackingList,
   )
+  // Emisión del Packing List (reporte Excel, 2026-10-25) — lectura, igual que la
+  // descarga del archivo subido.
+  app.get(
+    '/embarques/:id/packing-list/emitir',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    ctrl.emitirPackingList,
+  )
   app.delete(
     '/embarques/:id/packing-list/:packingListId',
     { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },

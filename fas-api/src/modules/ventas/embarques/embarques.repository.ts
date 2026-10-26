@@ -9,6 +9,7 @@ import {
   LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION,
 } from '../../../shared/advisory-locks.js'
 import { palletCalzaConDetalleNV } from './embarques.comparacion.js'
+import type { DatoPalletReconciliado } from './embarques.packing-list.motor.js'
 import type { DatosReservaManualInput, DatosReservaBaseInput, DatosInstructivoInput, InstructivoHijoUpdateInput, DatosContenedorInput } from './embarques.types.js'
 
 // 502: la integración externa (no FAS) fue la que falló — distingue este
@@ -579,11 +580,12 @@ export async function guardarPackingList(
     discrepancias: string[]
     numerosPallet: string[]
     termografos: string[]
-    // Guía de despacho por pallet resuelta por el motor (2026-10-23): se persiste
-    // en cada Pallet reconciliado (el PL no guarda líneas propias). Solo trae los
-    // pallets que declararon guía/emisor de forma consistente; cada campo es
-    // `undefined` si su columna no se declaró (no se toca ese dato).
-    guiaPorPallet: Array<{ numeroPallet: string; numeroGuia?: string; emisorGuiaId?: number }>
+    // Datos por pallet resueltos por el motor (guía 2026-10-23; termógrafo/
+    // temperatura 2026-10-25): se persisten en cada Pallet reconciliado (el PL no
+    // guarda líneas propias). Solo trae los pallets que declararon algún dato de
+    // forma consistente; cada campo es `undefined` si su columna no se declaró
+    // (no se toca ese dato).
+    datosPorPallet: DatoPalletReconciliado[]
     cargadoPor: string
   },
 ) {
@@ -628,19 +630,21 @@ export async function guardarPackingList(
       select: packingListSelect,
     })
 
-    // Persistir la guía de despacho en los pallets reconciliados (2026-10-23).
-    // Solo si la reconciliación quedó en estado OK (decisión de negocio: nada se
-    // consolida mientras haya discrepancias). El PL es parcializado/acumulativo,
-    // así que solo se tocan los pallets de ESTE archivo (sin solape con otros).
-    // Cada campo se escribe solo si fue declarado (undefined = no tocar, QA-APL-003).
-    // Bajo el mismo lock del despacho — match por (embarqueId, numeroPallet),
-    // único entre los pallets reservados. updateMany porque no hay índice único
-    // declarado en ese par.
+    // Persistir los datos por pallet reconciliados (guía 2026-10-23; termógrafo/
+    // temperatura 2026-10-25). Solo si la reconciliación quedó en estado OK
+    // (decisión de negocio: nada se consolida mientras haya discrepancias). El PL
+    // es parcializado/acumulativo, así que solo se tocan los pallets de ESTE
+    // archivo (sin solape con otros). Cada campo se escribe solo si fue declarado
+    // (undefined = no tocar, QA-APL-003). Bajo el mismo lock del despacho — match
+    // por (embarqueId, numeroPallet), único entre los pallets reservados.
+    // updateMany porque no hay índice único declarado en ese par.
     if (datos.estado === 'OK') {
-      for (const g of datos.guiaPorPallet) {
-        const dataPallet: { numeroGuiaDespacho?: string; emisorGuiaId?: number } = {}
+      for (const g of datos.datosPorPallet) {
+        const dataPallet: { numeroGuiaDespacho?: string; emisorGuiaId?: number; termografo?: string; temperatura?: number } = {}
         if (g.numeroGuia !== undefined) dataPallet.numeroGuiaDespacho = g.numeroGuia
         if (g.emisorGuiaId !== undefined) dataPallet.emisorGuiaId = g.emisorGuiaId
+        if (g.termografo !== undefined) dataPallet.termografo = g.termografo
+        if (g.temperatura !== undefined) dataPallet.temperatura = g.temperatura
         if (Object.keys(dataPallet).length === 0) continue
         await tx.pallet.updateMany({
           where: { embarqueId, numeroPallet: g.numeroPallet, eliminadoEn: null },
@@ -696,10 +700,95 @@ export async function eliminarPackingList(embarqueId: number, packingListId: num
     if (numeros.length > 0) {
       await tx.pallet.updateMany({
         where: { embarqueId, numeroPallet: { in: numeros }, eliminadoEn: null },
-        data: { numeroGuiaDespacho: null, emisorGuiaId: null },
+        data: { numeroGuiaDespacho: null, emisorGuiaId: null, termografo: null, temperatura: null },
       })
     }
     return 'OK' as const
+  })
+}
+
+// Datos para EMITIR el Packing List (reporte Excel, 2026-10-25): cabecera del
+// Embarque + pallets reservados (no eliminados) con sus líneas, productor (con
+// predios para CSG/GGN) y planta (CSP). CSG/GGN se resuelven best-effort en el
+// generador: solo si el productor tiene UN único Predio (el Pallet no enlaza a
+// un Predio puntual).
+export async function getDatosEmisionPackingList(embarqueId: number) {
+  const comunaSel = { select: { descripcion: true, provincia: { select: { descripcion: true } } } }
+  return prisma.embarque.findFirst({
+    where: { id: embarqueId, eliminadoEn: null },
+    select: {
+      id: true,
+      empresaId: true,
+      numeroInstructivo: true,
+      reservaManual: true,
+      naveManual: true,
+      numeroContenedorManual: true,
+      fechaZarpeManual: true,
+      awbBl: true,
+      fechaArribo: true,
+      puertoZarpe: { select: { descripcion: true } },
+      naviera: { select: { razonSocial: true } },
+      solicitudReserva: { select: { nave: true, numeroContenedor: true, fechaZarpe: true } },
+      notaVenta: {
+        select: {
+          cliente: { select: { razonSocial: true, taxId: true, identificador: true } },
+          consignatario: { select: { razonSocial: true } },
+          puertoDestino: { select: { descripcion: true } },
+          // Exportador efectivo de la NV (EXPORTADORA, FAS-PLE-R2-003): si existe,
+          // manda sobre la empresa activa para la cabecera Exporter + RUT.
+          exportador: { select: { razonSocial: true, identificador: true } },
+        },
+      },
+      pallets: {
+        where: { eliminadoEn: null },
+        orderBy: { numeroPallet: 'asc' },
+        select: {
+          numeroPallet: true,
+          temperatura: true,
+          termografo: true,
+          numeroGuiaDespacho: true,
+          emisorGuia: { select: { razonSocial: true } },
+          productor: {
+            select: {
+              razonSocial: true,
+              // Solo predios VIGENTES (FAS-PLE-R1-001): la regla best-effort de
+              // CSG/GGN (predio único) se evalúa sobre los no eliminados.
+              predios: { where: { eliminadoEn: null }, select: { codigoCsg: true, codigoGgn: true, comuna: comunaSel } },
+            },
+          },
+          recepcion: {
+            select: {
+              planta: {
+                select: {
+                  razonSocial: true,
+                  csp: true,
+                  // Dirección VIGENTE, determinista (FAS-PLE-R1-002): la marcada
+                  // por defecto y, a igualdad, por código.
+                  direcciones: {
+                    where: { eliminadoEn: null },
+                    orderBy: [{ esPorDefecto: 'desc' }, { codigo: 'asc' }],
+                    take: 1,
+                    select: { comuna: comunaSel },
+                  },
+                },
+              },
+            },
+          },
+          lineas: {
+            select: {
+              cajas: true,
+              fechaEmbalaje: true,
+              especie: { select: { descripcion: true } },
+              variedad: { select: { descripcion: true } },
+              categoria: { select: { descripcion: true } },
+              calibre: { select: { descripcion: true } },
+              articulo: { select: { codigo: true, descripcion: true, kgNetoEnvase: true } },
+              etiqueta: { select: { descripcion: true } },
+            },
+          },
+        },
+      },
+    },
   })
 }
 

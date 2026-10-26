@@ -42,6 +42,9 @@ export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
     'ETIQUETA',
     'FECHA_EMBALAJE',
     'TERMOGRAFO',
+    // Temperatura (°C) por pallet (2026-10-25): opcional. Se persiste por pallet
+    // y alimenta la emisión del Packing List.
+    'TEMPERATURA',
     // Guía de despacho por pallet (2026-10-23): N° de guía + emisor (opcionales;
     // el emisor se acota a productores/plantas del embarque al reconciliar).
     'NUMERO_GUIA',
@@ -53,7 +56,7 @@ export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
 // §4.8) — espejo de CAMPOS_OPCIONALES_POR_TIPO en el backend.
 export const CAMPOS_OPCIONALES_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
   RECEPCION: ['NOTA_CALIDAD', 'NOTA_CONDICION', 'COMPLETO'],
-  PACKING_LIST: ['TERMOGRAFO', 'NUMERO_GUIA', 'EMISOR_GUIA'],
+  PACKING_LIST: ['TERMOGRAFO', 'TEMPERATURA', 'NUMERO_GUIA', 'EMISOR_GUIA'],
 }
 
 export const CAMPO_TEMPLATE_CARGA_LABELS: Record<string, string> = {
@@ -72,6 +75,7 @@ export const CAMPO_TEMPLATE_CARGA_LABELS: Record<string, string> = {
   ETIQUETA: 'Etiqueta',
   PACKING: 'Packing',
   TERMOGRAFO: 'Termógrafo',
+  TEMPERATURA: 'Temperatura (°C)',
   NUMERO_GUIA: 'N° Guía de Despacho',
   EMISOR_GUIA: 'Emisor de la Guía',
 }

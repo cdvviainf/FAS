@@ -52,13 +52,24 @@ export interface ResultadoReconciliacion {
   // usa para validar la unión de archivos al despachar (packing parcializado).
   numerosPallet: string[]
   // Termógrafos declarados en el archivo (2026-10-12): valores distintos no
-  // vacíos de la columna Termógrafo (opcional, puede variar por pallet).
+  // vacíos de la columna Termógrafo (opcional, puede variar por pallet). Se
+  // conserva por compatibilidad; el dato por pallet vive en datosPorPallet.
   termografos: string[]
-  // Guía de despacho por pallet (2026-10-23): N° de guía + emisor resuelto,
-  // consistente dentro del pallet. Solo pallets que declararon guía/emisor; cada
-  // campo es `undefined` cuando su columna no se declaró (no se toca ese dato).
-  // El repositorio lo persiste SOLO si la reconciliación quedó en estado OK.
-  guiaPorPallet: Array<{ numeroPallet: string; numeroGuia?: string; emisorGuiaId?: number }>
+  // Datos por pallet declarados en el archivo (guía/emisor 2026-10-23;
+  // termógrafo/temperatura 2026-10-25), consistentes dentro del pallet. Solo
+  // pallets que declararon algún dato; cada campo es `undefined` cuando su
+  // columna no se declaró (no se toca ese dato). El repositorio lo persiste SOLO
+  // si la reconciliación quedó en estado OK.
+  datosPorPallet: DatoPalletReconciliado[]
+}
+
+// Datos capturados por pallet en la reconciliación del Packing List.
+export interface DatoPalletReconciliado {
+  numeroPallet: string
+  numeroGuia?: string
+  emisorGuiaId?: number
+  termografo?: string
+  temperatura?: number
 }
 
 // ─── Etapa 2: filas completas y con datos válidos (sin BD) ────────────────
@@ -179,20 +190,19 @@ async function resolverContraMaestros(filas: FilaPackingListCruda[]): Promise<{ 
   return { filas: resueltas, errores }
 }
 
-// ─── Guía de despacho por pallet (2026-10-23) ─────────────────────────────
-// Resuelve, para cada pallet, el N° de guía y el emisor declarados en el Excel.
-// El emisor se matchea contra las entidades (productores/plantas) del embarque
-// —acotado a quienes despacharon a este embarque—; si el texto no corresponde a
-// ninguna, es discrepancia. Ambas columnas son opcionales (celda vacía = no se
-// declara). Dentro de un mismo pallet deben ser consistentes: si distintas filas
-// traen N° de guía o emisor distintos, es discrepancia (no se persiste ese pallet).
-// Cada columna es independiente: `undefined` = NO declarada en el Excel (no se
+// ─── Datos por pallet (guía 2026-10-23; termógrafo/temperatura 2026-10-25) ───
+// Resuelve, para cada pallet, los datos declarados en el Excel: N° de guía,
+// emisor (acotado a los productores/plantas del embarque), termógrafo y
+// temperatura. Todas las columnas son opcionales (celda vacía = no se declara).
+// Dentro de un mismo pallet deben ser consistentes: si distintas filas traen
+// valores distintos de una misma columna, es discrepancia (ese pallet no se
+// persiste). Cada columna es independiente: `undefined` = NO declarada (no se
 // toca el valor existente del pallet); un valor = declarada. Nunca se escribe
 // null implícito por una celda vacía (QA-APL-003).
-function resolverGuiaDespacho(
+function resolverDatosPorPallet(
   filas: FilaPackingListCruda[],
   entidadesEmisor: EntidadEmisorEmbarque[],
-): { guiaPorPallet: Array<{ numeroPallet: string; numeroGuia?: string; emisorGuiaId?: number }>; errores: string[] } {
+): { datosPorPallet: DatoPalletReconciliado[]; errores: string[] } {
   const errores: string[] = []
 
   const norm = (s: string) => s.trim().toLowerCase()
@@ -208,6 +218,10 @@ function resolverGuiaDespacho(
     )
   }
 
+  // Valores distintos no vacíos de una columna dentro del pallet.
+  const distintos = (filasPallet: FilaPackingListCruda[], get: (f: FilaPackingListCruda) => string) =>
+    new Set(filasPallet.map((f) => (get(f) ?? '').trim()).filter(Boolean))
+
   // Agrupar las filas por pallet para exigir consistencia dentro del pallet.
   const porPallet = new Map<string, FilaPackingListCruda[]>()
   for (const f of filas) {
@@ -216,21 +230,32 @@ function resolverGuiaDespacho(
     porPallet.set(f.numeroPallet, arr)
   }
 
-  const guiaPorPallet: Array<{ numeroPallet: string; numeroGuia?: string; emisorGuiaId?: number }> = []
+  const datosPorPallet: DatoPalletReconciliado[] = []
 
   for (const [numeroPallet, filasPallet] of porPallet) {
-    const numerosGuia = new Set(filasPallet.map((f) => (f.numeroGuia ?? '').trim()).filter(Boolean))
-    const emisoresTexto = new Set(filasPallet.map((f) => (f.emisorGuia ?? '').trim()).filter(Boolean))
+    const numerosGuia = distintos(filasPallet, (f) => f.numeroGuia)
+    const emisoresTexto = distintos(filasPallet, (f) => f.emisorGuia)
+    const termografosPallet = distintos(filasPallet, (f) => f.termografo)
+    const temperaturasTexto = distintos(filasPallet, (f) => f.temperatura)
 
-    if (numerosGuia.size === 0 && emisoresTexto.size === 0) continue // pallet sin guía declarada
+    if (
+      numerosGuia.size === 0 && emisoresTexto.size === 0 &&
+      termografosPallet.size === 0 && temperaturasTexto.size === 0
+    ) continue // pallet sin ningún dato declarado
 
-    if (numerosGuia.size > 1) {
-      errores.push(`Pallet "${numeroPallet}": el Packing List trae N° de Guía distintos en sus filas (${[...numerosGuia].join(', ')})`)
+    // Consistencia: una sola columna con valor único por pallet.
+    let inconsistente = false
+    const exigirUnico = (set: Set<string>, etiqueta: string) => {
+      if (set.size > 1) {
+        errores.push(`Pallet "${numeroPallet}": el Packing List trae ${etiqueta} distintos en sus filas (${[...set].join(', ')})`)
+        inconsistente = true
+      }
     }
-    if (emisoresTexto.size > 1) {
-      errores.push(`Pallet "${numeroPallet}": el Packing List trae Emisores de la Guía distintos en sus filas (${[...emisoresTexto].join(', ')})`)
-    }
-    if (numerosGuia.size > 1 || emisoresTexto.size > 1) continue
+    exigirUnico(numerosGuia, 'N° de Guía')
+    exigirUnico(emisoresTexto, 'Emisores de la Guía')
+    exigirUnico(termografosPallet, 'Termógrafos')
+    exigirUnico(temperaturasTexto, 'Temperaturas')
+    if (inconsistente) continue
 
     let emisorGuiaId: number | undefined
     if (emisoresTexto.size === 1) {
@@ -243,15 +268,28 @@ function resolverGuiaDespacho(
       emisorGuiaId = emisor.id
     }
 
+    let temperatura: number | undefined
+    if (temperaturasTexto.size === 1) {
+      // Acepta coma o punto decimal (ej. "0,5" o "-0.5").
+      const n = Number([...temperaturasTexto][0].replace(',', '.'))
+      if (!Number.isFinite(n)) {
+        errores.push(`Pallet "${numeroPallet}": la Temperatura "${[...temperaturasTexto][0]}" no es un número válido`)
+        continue
+      }
+      temperatura = n
+    }
+
     // Solo se incluye lo declarado: columna vacía → undefined → no se toca.
-    guiaPorPallet.push({
+    datosPorPallet.push({
       numeroPallet,
       numeroGuia: numerosGuia.size === 1 ? [...numerosGuia][0] : undefined,
       emisorGuiaId,
+      termografo: termografosPallet.size === 1 ? [...termografosPallet][0] : undefined,
+      temperatura,
     })
   }
 
-  return { guiaPorPallet, errores }
+  return { datosPorPallet, errores }
 }
 
 // ─── Entrada principal ─────────────────────────────────────────────────────
@@ -311,13 +349,14 @@ export async function reconciliarPackingList(
   }
   discrepancias.push(...compararDetallePalletsConStock(filasPorPallet, stockDeclarado))
 
-  // Guía de despacho por pallet (2026-10-23): resuelve N° de guía + emisor
-  // (acotado a productores/plantas del embarque). Sus inconsistencias se suman
-  // como discrepancias; solo los pallets consistentes se devuelven para persistir.
-  const { guiaPorPallet, errores: erroresGuia } = resolverGuiaDespacho(filasCrudas, entidadesEmisor)
-  discrepancias.push(...erroresGuia)
+  // Datos por pallet (2026-10-23/25): guía + emisor (acotado a productores/
+  // plantas del embarque) + termógrafo + temperatura. Sus inconsistencias se
+  // suman como discrepancias; solo los pallets consistentes se devuelven para
+  // persistir.
+  const { datosPorPallet, errores: erroresDatos } = resolverDatosPorPallet(filasCrudas, entidadesEmisor)
+  discrepancias.push(...erroresDatos)
 
   return discrepancias.length > 0
-    ? { estado: 'DISCREPANCIA', discrepancias, numerosPallet: numerosExcel, termografos, guiaPorPallet }
-    : { estado: 'OK', discrepancias: [], numerosPallet: numerosExcel, termografos, guiaPorPallet }
+    ? { estado: 'DISCREPANCIA', discrepancias, numerosPallet: numerosExcel, termografos, datosPorPallet }
+    : { estado: 'OK', discrepancias: [], numerosPallet: numerosExcel, termografos, datosPorPallet }
 }
