@@ -624,6 +624,23 @@ Reemplaza la nota de D8/"NO construye" original ("emisión real fuera de alcance
 | GET | `/recetas/:id` | cabecera + detalle |
 | PATCH | `/recetas/:id` | edita cabecera/detalle |
 
+**Carga masiva de Recetas** (ítem de menú `MATERIALES_CARGA_RECETAS`; implementado 2026-10-26)
+
+Cargador dedicado para poblar recetas desde un Excel de 2 hojas (`Recetas` + `RecetasDetalle`). El Embalaje (cabecera) y los Componentes **ya deben existir** como Artículos — este cargador **no crea artículos**. Reglas aplicadas (idénticas en dry-run y commit, reusando `recetaCreateSchema` + R13):
+
+- Embalaje: artículo existente tipo `EMBALAJE`; Componentes: artículos existentes `MATERIAL_EMBALAJE`/`SERVICIO`; mínimo 1 componente.
+- Código de receta **obligatorio** (enlaza ambas hojas); si ya existe en BD → error (la carga **crea, no actualiza**); si está repetido dentro de la hoja → se bloquean **todas** sus cabeceras (ninguna se crea).
+- Un componente no puede repetirse dentro de una misma receta → error.
+- Cantidades `> 0`, descripción no vacía.
+- **Éxito parcial por receta**: cada receta se procesa de forma independiente; las válidas se crean y las erróneas se reportan (mismo criterio que la Carga Masiva de Maestros). No es atómico por archivo.
+
+| Método | Ruta | Notas |
+|---|---|---|
+| GET | `/carga-recetas/template` | descarga el Excel base (2 hojas) — nivel `LECTURA` |
+| POST | `/carga-recetas/validar` | dry-run: valida sin escribir — nivel `LECTURA` |
+| POST | `/carga-recetas` | carga a la base — nivel `TOTAL` |
+| POST | `/carga-recetas/reporte` | Excel con el detalle de errores de una validación — nivel `LECTURA` |
+
 **Tipos de movimiento (mantenedor)**
 | Método | Ruta | Notas |
 |---|---|---|

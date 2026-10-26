@@ -327,6 +327,44 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   },
 ]
 
+// ─── Registro acotado: Carga de SOLO Recetas ────────────────────────────────
+//
+// Cargador dedicado de recetas (feature "Carga de Recetas"): el archivo trae
+// solo 2 hojas (Recetas + RecetasDetalle). A diferencia del registro general,
+// el Embalaje (cabecera) y los Componentes se resuelven contra ARTÍCULOS YA
+// EXISTENTES en BD (FK `externo`), no contra una hoja Articulos del archivo. El
+// código de receta del detalle sí resuelve contra la hoja Recetas (FK interna).
+// Reutiliza el mismo motor `cargarMaestros` pasándolo como `registro`.
+export const REGISTRO_RECETAS: HojaSpec[] = [
+  {
+    hoja: 'Recetas',
+    modelo: 'receta',
+    titulo: 'Recetas',
+    descripcion: 'Recetas de producción. El Embalaje (cabecera) y los componentes YA DEBEN EXISTIR como Artículos.',
+    dependeDe: [],
+    columnas: [
+      { encabezado: 'Embalaje (código de Artículo tipo EMBALAJE)', campo: 'embalajeId', tipo: 'fk', requerido: true, fk: { externo: true, modelo: 'articulo' }, ayuda: 'Artículo tipo EMBALAJE ya existente en el sistema.' },
+      // Código OBLIGATORIO (no autogenerable): es la clave que enlaza cada fila
+      // de RecetasDetalle con su cabecera. Sin él, el detalle no se puede asociar.
+      { encabezado: 'Código', campo: 'codigo', tipo: 'texto', requerido: true, ayuda: 'Debe coincidir con la columna "Receta (código)" de la hoja Detalle de Recetas.' },
+      COL_DESCRIPCION,
+      { encabezado: 'Cantidad a Producir', campo: 'cantidadAProducir', tipo: 'decimal', requerido: true },
+    ],
+  },
+  {
+    hoja: 'RecetasDetalle',
+    modelo: 'recetaDetalle',
+    titulo: 'Detalle de Recetas',
+    descripcion: 'Componentes que consume cada receta. El Componente YA DEBE EXISTIR como Artículo (Material de Embalaje o Servicio).',
+    dependeDe: ['Recetas'],
+    columnas: [
+      { encabezado: 'Receta (código)', campo: 'recetaId', tipo: 'fk', requerido: true, fk: { hoja: 'Recetas' } },
+      { encabezado: 'Componente (código de Artículo)', campo: 'componenteId', tipo: 'fk', requerido: true, fk: { externo: true, modelo: 'articulo' } },
+      { encabezado: 'Cantidad a Consumir', campo: 'cantidadAConsumir', tipo: 'decimal', requerido: true },
+    ],
+  },
+]
+
 /** Orden topológico de carga (respeta `dependeDe`). */
 export function ordenTopologico(hojas: HojaSpec[] = REGISTRO_MAESTROS): HojaSpec[] {
   const porNombre = new Map(hojas.map((h) => [h.hoja, h]))

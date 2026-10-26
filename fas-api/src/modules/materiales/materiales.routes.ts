@@ -6,10 +6,12 @@ import { movimientosRoutes } from './movimientos/movimientos.routes.js'
 import { kardexRoutes } from './kardex/kardex.routes.js'
 import { ordenesCompraMaterialRoutes } from './ordenes-compra/ordenes-compra.routes.js'
 import { proformasVentaMaterialRoutes } from './proformas-venta/proformas-venta.routes.js'
+import { cargaRecetasRoutes } from './carga-recetas/carga-recetas.routes.js'
 
 export async function materialesRoutes(app: FastifyInstance) {
   await app.register(articulosRoutes)
   await app.register(recetasRoutes)
+  await app.register(cargaRecetasRoutes)
   await app.register(tiposMovimientoRoutes)
   await app.register(movimientosRoutes)
   await app.register(kardexRoutes)

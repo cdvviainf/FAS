@@ -93,6 +93,7 @@ const itemsMenu: Array<{ codigo: string; nombre: string; grupo: string; seccion:
   { codigo: 'MATERIALES_ARTICULOS', nombre: 'Artículos', grupo: 'Configuración', seccion: 'Materiales', ruta: '/dashboard/configuracion/articulos', tipo: 'PANTALLA', orden: 8210 },
   { codigo: 'MATERIALES_RECETAS', nombre: 'Recetas', grupo: 'Configuración', seccion: 'Materiales', ruta: '/dashboard/configuracion/recetas', tipo: 'PANTALLA', orden: 8220 },
   { codigo: 'CONFIG_CAJAS_POR_PALLET', nombre: 'Cajas por Pallet', grupo: 'Configuración', seccion: 'Materiales', ruta: '/dashboard/configuracion/cajas-por-pallet', tipo: 'PANTALLA', orden: 8230 },
+  { codigo: 'MATERIALES_CARGA_RECETAS', nombre: 'Carga de Recetas', grupo: 'Configuración', seccion: 'Materiales', ruta: '/dashboard/configuracion/carga-recetas', tipo: 'PANTALLA', orden: 8240 },
 
   // ── Configuración › Operaciones ─────────────────────────────────────────
   { codigo: 'CONFIG_TIPOS_MOVIMIENTO', nombre: 'Tipos de Movimiento', grupo: 'Configuración', seccion: 'Operaciones', ruta: '/dashboard/configuracion/tipos-movimiento', tipo: 'PANTALLA', orden: 8250 },
