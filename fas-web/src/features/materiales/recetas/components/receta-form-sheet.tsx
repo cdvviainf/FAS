@@ -25,14 +25,16 @@ import { Icons } from '@/components/icons'
 import { articulosService } from '../../articulos/service'
 import { prefijosCodigoService } from '@/features/prefijos-codigo/service'
 import { recetasService } from '../service'
+import { recetasKeys } from '../queries'
 import type { Receta, RecetaDetalleInput } from '../types'
 
 interface RecetaFormSheetProps {
-  embalajeId: number
+  // Embalaje fijo (vista por embalaje). Si se omite, al crear se elige en el form.
+  embalajeId?: number | null
   item?: Receta
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSaved: () => void
+  onSaved?: () => void
 }
 
 export function RecetaFormSheet({ embalajeId, item, open, onOpenChange, onSaved }: RecetaFormSheetProps) {
@@ -42,8 +44,14 @@ export function RecetaFormSheet({ embalajeId, item, open, onOpenChange, onSaved 
   const [codigo, setCodigo] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [cantidadAProducir, setCantidadAProducir] = useState('')
+  const [embalajeSel, setEmbalajeSel] = useState('')
   const [detalle, setDetalle] = useState<RecetaDetalleInput[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // Embalaje efectivo: al editar es el de la receta; con embalaje fijo (vista por
+  // embalaje) ese; si no, el elegido en el selector.
+  const embalajeFijo = isEdit ? item!.embalajeId : embalajeId ?? null
+  const mostrarSelectorEmbalaje = !isEdit && embalajeFijo == null
 
   const { data: componentes } = useQuery({
     queryKey: ['articulos-componentes-options'],
@@ -55,18 +63,28 @@ export function RecetaFormSheet({ embalajeId, item, open, onOpenChange, onSaved 
     (a) => a.tipo === 'MATERIAL_EMBALAJE' || a.tipo === 'SERVICIO',
   )
 
+  const { data: embalajes } = useQuery({
+    queryKey: ['embalajes-options'],
+    queryFn: () => articulosService.list({ tipo: 'EMBALAJE', activo: true, limit: 500 }),
+    staleTime: 60_000,
+    enabled: open && mostrarSelectorEmbalaje,
+  })
+
   useEffect(() => {
     if (!open) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación al abrir
     setErrors({})
     if (item) {
       setCodigo(item.codigo)
       setDescripcion(item.descripcion)
       setCantidadAProducir(item.cantidadAProducir)
+      setEmbalajeSel(String(item.embalajeId))
       setDetalle(item.detalle.map((d) => ({ componenteId: d.componenteId, cantidadAConsumir: Number(d.cantidadAConsumir) })))
     } else {
       setCodigo('')
       setDescripcion('')
       setCantidadAProducir('')
+      setEmbalajeSel('')
       setDetalle([])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -93,12 +111,14 @@ export function RecetaFormSheet({ embalajeId, item, open, onOpenChange, onSaved 
         detalle,
       }
       if (isEdit) return recetasService.update(item!.id, payload)
-      return recetasService.create({ ...payload, embalajeId, codigo: codigo.trim() })
+      const embId = embalajeFijo ?? Number(embalajeSel)
+      return recetasService.create({ ...payload, embalajeId: embId, codigo: codigo.trim() })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recetas-de-embalaje', embalajeId] })
+      queryClient.invalidateQueries({ queryKey: recetasKeys.all })
+      if (embalajeFijo != null) queryClient.invalidateQueries({ queryKey: ['recetas-de-embalaje', embalajeFijo] })
       toast.success(isEdit ? 'Receta actualizada' : 'Receta creada')
-      onSaved()
+      onSaved?.()
       onOpenChange(false)
     },
     onError: (e: Error) => toast.error(e.message || 'Error al guardar la receta'),
@@ -121,6 +141,7 @@ export function RecetaFormSheet({ embalajeId, item, open, onOpenChange, onSaved 
 
   function validar(): boolean {
     const e: Record<string, string> = {}
+    if (mostrarSelectorEmbalaje && !embalajeSel) e.embalaje = 'El embalaje es requerido'
     if (!isEdit && !codigo.trim()) e.codigo = 'El código es requerido'
     if (!descripcion.trim()) e.descripcion = 'La descripción es requerida'
     if (!cantidadAProducir || Number(cantidadAProducir) <= 0) e.cantidadAProducir = 'Debe ser mayor a 0'
@@ -143,6 +164,26 @@ export function RecetaFormSheet({ embalajeId, item, open, onOpenChange, onSaved 
         </SheetHeader>
 
         <div className='flex-1 space-y-4 overflow-auto px-1 py-2'>
+          {mostrarSelectorEmbalaje ? (
+            <div className='space-y-1.5'>
+              <Label>Embalaje <span className='text-destructive'>*</span></Label>
+              <Select value={embalajeSel} onValueChange={setEmbalajeSel}>
+                <SelectTrigger><SelectValue placeholder='Selecciona un embalaje...' /></SelectTrigger>
+                <SelectContent>
+                  {(embalajes?.data ?? []).map((e) => (
+                    <SelectItem key={e.id} value={String(e.id)}>{e.codigo} — {e.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.embalaje && <p className='text-xs text-destructive'>{errors.embalaje}</p>}
+            </div>
+          ) : isEdit ? (
+            <div className='space-y-1.5'>
+              <Label>Embalaje</Label>
+              <p className='text-sm text-muted-foreground'>{item!.embalaje.codigo} — {item!.embalaje.descripcion}</p>
+            </div>
+          ) : null}
+
           <div className='grid grid-cols-2 gap-3'>
             <div className='space-y-1.5'>
               <Label>Código <span className='text-destructive'>*</span></Label>

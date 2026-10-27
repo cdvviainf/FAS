@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { RecetaCreateInput, RecetaUpdateInput } from './recetas.types.js'
@@ -17,6 +18,33 @@ export async function listRecetasPorEmbalaje(embalajeId: number) {
     include: includeDetalle,
     orderBy: { codigo: 'asc' },
   })
+}
+
+// Listado plano de todas las recetas (tenant-scoped por la extensión Prisma),
+// con búsqueda por código/descripción propia o del embalaje, y paginación.
+export async function listRecetas(filters: { q?: string; page?: number; limit?: number }) {
+  const { q, page = 1, limit = 20 } = filters
+  const where: Prisma.RecetaWhereInput = q
+    ? {
+        OR: [
+          { codigo: { contains: q, mode: 'insensitive' } },
+          { descripcion: { contains: q, mode: 'insensitive' } },
+          { embalaje: { codigo: { contains: q, mode: 'insensitive' } } },
+          { embalaje: { descripcion: { contains: q, mode: 'insensitive' } } },
+        ],
+      }
+    : {}
+  const [data, total] = await Promise.all([
+    prisma.receta.findMany({
+      where,
+      include: includeDetalle,
+      orderBy: { codigo: 'asc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.receta.count({ where }),
+  ])
+  return { data, total }
 }
 
 export async function getRecetaById(id: number) {

@@ -619,10 +619,13 @@ Reemplaza la nota de D8/"NO construye" original ("emisión real fuera de alcance
 **Recetas**
 | Método | Ruta | Notas |
 |---|---|---|
-| GET | `/articulos/:id/recetas` | recetas del embalaje |
+| GET | `/recetas` | **listado global** paginado `?q=&page=&limit=` (busca por código/descripción propios o del embalaje); incluye embalaje + detalle. `LECTURA`. |
+| GET | `/articulos/:id/recetas` | recetas del embalaje (se conserva) |
 | POST | `/recetas` | `{ embalajeId, codigo, descripcion, cantidadAProducir, detalle:[{componenteId, cantidadAConsumir}] }` (R13) |
 | GET | `/recetas/:id` | cabecera + detalle |
 | PATCH | `/recetas/:id` | edita cabecera/detalle |
+
+> **⚠️ Supersesión (2026-10-26) — pantalla de Recetas como mantenedor global.** Por decisión de Christian, la pantalla `Recetas` deja de usar el flujo "selector de embalaje → recetas de ese embalaje" (decisión M8) y pasa a ser un **mantenedor estándar**: tabla global de todas las recetas (código, embalaje, descripción, cantidad a producir, nº de componentes) con **búsqueda** y **paginación** server-side (`GET /recetas`), botón **Nueva Receta** (el embalaje se elige en el formulario) y **editar**. El **detalle** (grilla componente + cantidad consumida exigida por el spec) se consulta en una **vista de solo lectura** (acción "ver", disponible con nivel `LECTURA`), de modo que un usuario de solo lectura sigue viendo las cantidades por componente sin necesidad del formulario de edición (`TOTAL`).
 
 **Carga masiva de Recetas** (ítem de menú `MATERIALES_CARGA_RECETAS`; implementado 2026-10-26)
 

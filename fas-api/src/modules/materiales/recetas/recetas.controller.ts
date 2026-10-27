@@ -3,9 +3,16 @@ import {
   recetaCreateSchema,
   recetaUpdateSchema,
   recetaParamsSchema,
+  recetaListQuerySchema,
   articuloParamsSchema,
 } from './recetas.schema.js'
 import * as service from './recetas.service.js'
+
+export async function list(req: FastifyRequest, reply: FastifyReply) {
+  const query = recetaListQuerySchema.parse(req.query)
+  const result = await service.listarRecetas(query)
+  return reply.send(result)
+}
 
 export async function listPorEmbalaje(req: FastifyRequest, reply: FastifyReply) {
   const { id } = articuloParamsSchema.parse(req.params)

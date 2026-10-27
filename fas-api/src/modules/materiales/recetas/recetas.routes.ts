@@ -5,6 +5,7 @@ import * as ctrl from './recetas.controller.js'
 const ITEM = 'MATERIALES_RECETAS'
 
 export async function recetasRoutes(app: FastifyInstance) {
+  app.get('/recetas', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
   app.get('/articulos/:id/recetas', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listPorEmbalaje)
   app.get('/recetas/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
   app.post('/recetas', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)

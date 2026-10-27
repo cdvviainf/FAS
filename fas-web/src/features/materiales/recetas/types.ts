@@ -38,3 +38,14 @@ export interface RecetaCreateInput {
 }
 
 export type RecetaUpdateInput = Partial<Omit<RecetaCreateInput, 'embalajeId'>>
+
+export interface RecetaListFilters {
+  q?: string
+  page?: number
+  limit?: number
+}
+
+export interface RecetaListResponse {
+  data: Receta[]
+  meta: { total: number; page: number; limit: number; totalPages: number }
+}

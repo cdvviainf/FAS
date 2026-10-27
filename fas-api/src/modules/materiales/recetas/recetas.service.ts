@@ -29,6 +29,12 @@ export async function listarRecetasPorEmbalaje(embalajeId: number) {
   return repo.listRecetasPorEmbalaje(embalajeId)
 }
 
+export async function listarRecetas(filters: { q?: string; page?: number; limit?: number }) {
+  const { data, total } = await repo.listRecetas(filters)
+  const { page = 1, limit = 20 } = filters
+  return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
+}
+
 export async function obtenerReceta(id: number) {
   const receta = await repo.getRecetaById(id)
   if (!receta) throw new NotFoundError('Receta', String(id))

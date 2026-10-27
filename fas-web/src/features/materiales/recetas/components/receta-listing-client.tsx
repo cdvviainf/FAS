@@ -1,101 +1,138 @@
 'use client'
 
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { useMemo, useState } from 'react'
+import type { ColumnDef } from '@tanstack/react-table'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useQueryStates, parseAsInteger, parseAsString } from 'nuqs'
+import { DataTable } from '@/components/ui/table/data-table'
+import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-header'
+import { DataTableSkeleton } from '@/components/ui/table/data-table-skeleton'
+import { useDataTable } from '@/hooks/use-data-table'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
-import { articulosService } from '../../articulos/service'
-import { recetasService } from '../service'
+import { recetasListOptions } from '../queries'
 import type { Receta } from '../types'
 import { RecetaFormSheet } from './receta-form-sheet'
+import { RecetaDetalleDialog } from './receta-detalle-dialog'
 
 const ITEM = 'MATERIALES_RECETAS'
 
 export function RecetaListingClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)
-  const [embalajeId, setEmbalajeId] = useState<number | null>(null)
+
+  const [params, setParams] = useQueryStates({
+    page: parseAsInteger.withDefault(1),
+    perPage: parseAsInteger.withDefault(20),
+    q: parseAsString,
+  })
+
   const [editItem, setEditItem] = useState<Receta | undefined>()
   const [formOpen, setFormOpen] = useState(false)
+  const [verItem, setVerItem] = useState<Receta | undefined>()
+  const [verOpen, setVerOpen] = useState(false)
 
-  const { data: embalajes } = useQuery({
-    queryKey: ['embalajes-options'],
-    queryFn: () => articulosService.list({ tipo: 'EMBALAJE', activo: true, limit: 500 }),
-    staleTime: 60_000,
-  })
+  const filters = {
+    page: params.page,
+    limit: params.perPage,
+    ...(params.q ? { q: params.q } : {}),
+  }
 
-  const { data: recetas, isPending } = useQuery({
-    queryKey: ['recetas-de-embalaje', embalajeId],
-    queryFn: () => recetasService.listPorEmbalaje(embalajeId!),
-    enabled: !!embalajeId,
-  })
+  const { data, isPending } = useQuery({ ...recetasListOptions(filters), placeholderData: keepPreviousData })
 
-  return (
-    <div className='space-y-4'>
-      <div className='max-w-sm space-y-1.5'>
-        <Label>Embalaje</Label>
-        <Select value={embalajeId ? String(embalajeId) : ''} onValueChange={(v) => setEmbalajeId(parseInt(v))}>
-          <SelectTrigger><SelectValue placeholder='Selecciona un embalaje...' /></SelectTrigger>
-          <SelectContent>
-            {(embalajes?.data ?? []).map((e) => (
-              <SelectItem key={e.id} value={String(e.id)}>{e.codigo} — {e.descripcion}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {embalajeId && (
-        <>
+  const columns = useMemo<ColumnDef<Receta>[]>(() => [
+    {
+      accessorKey: 'codigo',
+      header: ({ column }) => <DataTableColumnHeader column={column} title='Código' />,
+      enableSorting: false,
+      cell: ({ row }) => <span className='font-medium'>{row.original.codigo}</span>,
+    },
+    {
+      id: 'embalaje',
+      header: () => 'Embalaje',
+      enableSorting: false,
+      cell: ({ row }) => `${row.original.embalaje.codigo} — ${row.original.embalaje.descripcion}`,
+    },
+    {
+      accessorKey: 'descripcion',
+      header: () => 'Descripción',
+      enableSorting: false,
+    },
+    {
+      id: 'cantidadAProducir',
+      header: () => 'Cant. a producir',
+      enableSorting: false,
+      cell: ({ row }) => row.original.cantidadAProducir,
+    },
+    {
+      id: 'componentes',
+      header: () => 'Componentes',
+      enableSorting: false,
+      cell: ({ row }) => <Badge variant='outline'>{row.original.detalle.length}</Badge>,
+    },
+    {
+      id: 'actions',
+      cell: ({ row }) => (
+        <div className='flex items-center gap-1'>
+          <Button variant='ghost' size='icon' className='h-8 w-8' title='Ver detalle' onClick={() => { setVerItem(row.original); setVerOpen(true) }}>
+            <Icons.search className='h-4 w-4' />
+          </Button>
           {puedeEscribir && (
-            <Button onClick={() => { setEditItem(undefined); setFormOpen(true) }}>
-              <Icons.add className='mr-2 h-4 w-4' /> Nueva Receta
+            <Button variant='ghost' size='icon' className='h-8 w-8' title='Editar' onClick={() => { setEditItem(row.original); setFormOpen(true) }}>
+              <Icons.edit className='h-4 w-4' />
             </Button>
           )}
+        </div>
+      ),
+    },
+  ], [puedeEscribir])
 
-          {isPending ? (
-            <p className='text-sm text-muted-foreground'>Cargando...</p>
-          ) : (recetas?.data ?? []).length === 0 ? (
-            <p className='text-sm text-muted-foreground'>Este embalaje no tiene recetas.</p>
-          ) : (
-            <div className='space-y-3'>
-              {recetas!.data.map((r) => (
-                <div key={r.id} className='rounded-md border p-3'>
-                  <div className='flex items-center justify-between'>
-                    <p className='font-medium'>{r.codigo} — {r.descripcion}</p>
-                    {puedeEscribir && (
-                      <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => { setEditItem(r); setFormOpen(true) }}>
-                        <Icons.edit className='h-4 w-4' />
-                      </Button>
-                    )}
-                  </div>
-                  <p className='text-xs text-muted-foreground'>Produce {r.cantidadAProducir} unidades</p>
-                  <ul className='ml-4 mt-1 list-disc text-sm'>
-                    {r.detalle.map((d) => (
-                      <li key={d.id}>{d.componente.codigo} — {d.componente.descripcion}: {d.cantidadAConsumir}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          )}
+  const pageCount = data ? Math.ceil(data.meta.total / params.perPage) : 0
+  const { table } = useDataTable({
+    data: data?.data ?? [],
+    columns,
+    pageCount,
+    shallow: true,
+    debounceMs: 500,
+    // pageSize alineado con el `perPage` que se envía a la API y con el que se
+    // calcula pageCount (REC-LIST-003): evita que la tabla muestre 10 mientras
+    // el servidor devuelve 20.
+    initialState: { pagination: { pageIndex: params.page - 1, pageSize: params.perPage }, columnPinning: { right: ['actions'] } },
+  })
 
-          <RecetaFormSheet
-            embalajeId={embalajeId}
-            item={editItem}
-            open={formOpen}
-            onOpenChange={(v) => { setFormOpen(v); if (!v) setEditItem(undefined) }}
-            onSaved={() => {}}
-          />
-        </>
-      )}
+  if (isPending) return <DataTableSkeleton columnCount={6} rowCount={10} />
+
+  return (
+    <div className='flex flex-1 flex-col space-y-3'>
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <Input
+          placeholder='Buscar código, descripción o embalaje...'
+          value={params.q ?? ''}
+          onChange={(e) => setParams({ q: e.target.value || null, page: 1 })}
+          className='h-9 w-[320px]'
+        />
+        {puedeEscribir && (
+          <Button onClick={() => { setEditItem(undefined); setFormOpen(true) }}>
+            <Icons.add className='mr-2 h-4 w-4' /> Nueva Receta
+          </Button>
+        )}
+      </div>
+
+      <DataTable table={table} />
+
+      <RecetaFormSheet
+        item={editItem}
+        open={formOpen}
+        onOpenChange={(v) => { setFormOpen(v); if (!v) setEditItem(undefined) }}
+      />
+
+      <RecetaDetalleDialog
+        receta={verItem}
+        open={verOpen}
+        onOpenChange={(v) => { setVerOpen(v); if (!v) setVerItem(undefined) }}
+      />
     </div>
   )
 }
