@@ -145,6 +145,11 @@ export interface OrdenCompraDetalle extends OrdenCompraListItem {
   incotermId: number | null
   incoterm: MantenedorRef | null
   observaciones: string | null
+  // Condiciones comerciales de compra a GRANEL (2026-10-27). Null en CAJAS.
+  porcentajeMinExportacion: string | null
+  modalidadEntregaGranel: 'PUESTA_EN_CAMPO' | 'ENTREGADA_EN_PLANTA' | null
+  envasesProporcionadosPor: 'PRODUCTOR' | 'EXPORTADORA' | null
+  encargadoDescartePor: 'PRODUCTOR' | 'EXPORTADORA' | null
   lineas: OrdenCompraLineaItem[]
   cuotasPago: OrdenCompraCuotaPagoItem[]
   creadoEn: string
@@ -199,6 +204,11 @@ export interface OrdenCompraCreateInput {
   responsableId?: string | null
   incotermId?: number | null
   observaciones?: string | null
+  // Condiciones comerciales de compra a GRANEL (2026-10-27).
+  porcentajeMinExportacion?: number | null
+  modalidadEntregaGranel?: 'PUESTA_EN_CAMPO' | 'ENTREGADA_EN_PLANTA' | null
+  envasesProporcionadosPor?: 'PRODUCTOR' | 'EXPORTADORA' | null
+  encargadoDescartePor?: 'PRODUCTOR' | 'EXPORTADORA' | null
 }
 
 export type OrdenCompraUpdateInput = Partial<OrdenCompraCreateInput> & {

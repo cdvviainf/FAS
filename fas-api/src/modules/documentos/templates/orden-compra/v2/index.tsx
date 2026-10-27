@@ -24,6 +24,8 @@ interface Labels {
   etiqueta: string; categoria: string; calibres: string; pallets: string; cajas: string; precioCaja: string
   totalUsd: string; kgNetoEnvase: string; kgBrutoEnvase: string; kgNeto: string; kgBruto: string; kilos: string
   precioKilo: string; pie: string; fechaRef: Record<string, string>
+  condicionesGranel: string; minExport: string; modalidadEntrega: string; envasesPor: string; descartePor: string
+  entregaGranel: Record<string, string>; respOpc: Record<string, string>
 }
 
 const T: Record<Idioma, Labels> = {
@@ -40,6 +42,10 @@ const T: Record<Idioma, Labels> = {
     kilos: 'Kilos', precioKilo: 'Precio USD/Kg',
     pie: 'Frutera Agrosan · Documento generado electrónicamente',
     fechaRef: { FACTURA: 'Factura', ZARPE: 'Zarpe', ENVIO_DOCUMENTOS: 'Envío de documentos', ARRIBO: 'Arribo' },
+    condicionesGranel: 'Condiciones de granel', minExport: '% mín. de exportación', modalidadEntrega: 'Modalidad de entrega',
+    envasesPor: 'Envases proporcionados por', descartePor: 'Encargado de descarte',
+    entregaGranel: { PUESTA_EN_CAMPO: 'Fruta puesta en campo, con retiro por la exportadora', ENTREGADA_EN_PLANTA: 'Fruta entregada en la planta de proceso' },
+    respOpc: { PRODUCTOR: 'Productor', EXPORTADORA: 'Exportadora' },
   },
   EN: {
     titulo: 'Purchase Order',
@@ -54,10 +60,27 @@ const T: Record<Idioma, Labels> = {
     kilos: 'Kilos', precioKilo: 'USD Price/Kg',
     pie: 'Frutera Agrosan · Electronically generated document',
     fechaRef: { FACTURA: 'Invoice', ZARPE: 'Departure', ENVIO_DOCUMENTOS: 'Document dispatch', ARRIBO: 'Arrival' },
+    condicionesGranel: 'Bulk terms', minExport: 'Min. export %', modalidadEntrega: 'Delivery mode',
+    envasesPor: 'Packaging provided by', descartePor: 'Discard handling by',
+    entregaGranel: { PUESTA_EN_CAMPO: 'Fruit left in field, picked up by the exporter', ENTREGADA_EN_PLANTA: 'Fruit delivered at the processing plant' },
+    respOpc: { PRODUCTOR: 'Producer', EXPORTADORA: 'Exporter' },
   },
 }
 
-function columnasCajas(L: Labels): ColumnaTabla<Linea>[] {
+// Etiquetas de precio/total según la moneda de la cabecera (2026-10-27): ya no
+// fijo "USD". fmt.usd solo formatea el número (sin símbolo), el código de moneda
+// va en el encabezado de la columna.
+function etiquetasMoneda(mon: string, idioma: Idioma) {
+  return {
+    precioCaja: idioma === 'EN' ? `${mon} Price/Box` : `Precio ${mon}/Caja`,
+    precioKilo: idioma === 'EN' ? `${mon} Price/Kg` : `Precio ${mon}/Kg`,
+    total: `Total ${mon}`,
+    totalNeto: idioma === 'EN' ? `Net Total ${mon}` : `Total Neto ${mon}`,
+  }
+}
+
+function columnasCajas(L: Labels, mon: string, idioma: Idioma): ColumnaTabla<Linea>[] {
+  const m = etiquetasMoneda(mon, idioma)
   return [
     { titulo: L.especie, render: (l) => l.especie },
     { titulo: L.variedad, render: (l) => l.variedad },
@@ -67,8 +90,8 @@ function columnasCajas(L: Labels): ColumnaTabla<Linea>[] {
     { titulo: L.calibres, render: (l) => l.calibres },
     { titulo: L.pallets, render: (l) => fmt.entero(l.cantidadPallets ?? 0), numerica: true },
     { titulo: L.cajas, render: (l) => fmt.entero(l.cajas ?? 0), numerica: true },
-    { titulo: L.precioCaja, render: (l) => fmt.usd(l.precioUsdCaja ?? '0'), numerica: true },
-    { titulo: L.totalUsd, render: (l) => fmt.usd(l.totalUsd), numerica: true },
+    { titulo: m.precioCaja, render: (l) => fmt.usd(l.precioUsdCaja ?? '0'), numerica: true },
+    { titulo: m.total, render: (l) => fmt.usd(l.totalUsd), numerica: true },
     { titulo: L.kgNetoEnvase, render: (l) => fmt.kilos(l.kgNetoEnvase ?? '0'), numerica: true },
     { titulo: L.kgBrutoEnvase, render: (l) => fmt.kilos(l.kgBrutoEnvase ?? '0'), numerica: true },
     { titulo: L.kgNeto, render: (l) => fmt.kilos(l.kgNeto ?? '0'), numerica: true },
@@ -76,14 +99,15 @@ function columnasCajas(L: Labels): ColumnaTabla<Linea>[] {
   ]
 }
 
-function columnasGranel(L: Labels): ColumnaTabla<Linea>[] {
+function columnasGranel(L: Labels, mon: string, idioma: Idioma): ColumnaTabla<Linea>[] {
+  const m = etiquetasMoneda(mon, idioma)
   return [
     { titulo: L.especie, render: (l) => l.especie },
     { titulo: L.variedad, render: (l) => l.variedad },
     { titulo: L.articulo, render: (l) => l.articulo },
     { titulo: L.kilos, render: (l) => fmt.kilos(l.cantidadKilos ?? '0'), numerica: true },
-    { titulo: L.precioKilo, render: (l) => fmt.usd(l.precioUsdKilo ?? '0'), numerica: true },
-    { titulo: L.totalUsd, render: (l) => fmt.usd(l.totalUsd), numerica: true },
+    { titulo: m.precioKilo, render: (l) => fmt.usd(l.precioUsdKilo ?? '0'), numerica: true },
+    { titulo: m.total, render: (l) => fmt.usd(l.totalUsd), numerica: true },
   ]
 }
 
@@ -114,7 +138,7 @@ export function OrdenCompraV2({ d, marcaAgua, marcaAguaFecha }: { d: OrdenCompra
   const idioma: Idioma = d.idioma
   const L = T[idioma]
   const esGranel = d.modalidad === 'GRANEL'
-  const columnas = esGranel ? columnasGranel(L) : columnasCajas(L)
+  const columnas = esGranel ? columnasGranel(L, d.moneda, idioma) : columnasCajas(L, d.moneda, idioma)
   const totalesFila = esGranel
     ? ['', '', L.total, fmt.kilos(d.totales.kilos), '', fmt.usd(d.totales.totalUsd)]
     : [
@@ -185,6 +209,18 @@ export function OrdenCompraV2({ d, marcaAgua, marcaAguaFecha }: { d: OrdenCompra
         />
       </div>
 
+      {esGranel && (
+        <GrupoCampos
+          titulo={L.condicionesGranel}
+          campos={[
+            { label: L.minExport, valor: d.porcentajeMinExportacion != null ? `${d.porcentajeMinExportacion}%` : '—' },
+            { label: L.modalidadEntrega, valor: d.modalidadEntregaGranel ? L.entregaGranel[d.modalidadEntregaGranel] : '—' },
+            { label: L.envasesPor, valor: d.envasesProporcionadosPor ? L.respOpc[d.envasesProporcionadosPor] : '—' },
+            { label: L.descartePor, valor: d.encargadoDescartePor ? L.respOpc[d.encargadoDescartePor] : '—' },
+          ]}
+        />
+      )}
+
       {d.observaciones && (
         <GrupoCampos titulo={L.observaciones} campos={[{ label: '', valor: d.observaciones }]} />
       )}
@@ -198,7 +234,7 @@ export function OrdenCompraV2({ d, marcaAgua, marcaAguaFecha }: { d: OrdenCompra
 
       <BloqueTotales
         lineas={[]}
-        neto={{ etiqueta: L.totalNeto, valor: fmt.usd(d.totales.totalUsd) }}
+        neto={{ etiqueta: etiquetasMoneda(d.moneda, idioma).totalNeto, valor: fmt.usd(d.totales.totalUsd) }}
       />
 
       <PieFirma

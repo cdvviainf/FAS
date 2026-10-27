@@ -37,6 +37,11 @@ export const ordenCompraPdfPayloadSchema = z.object({
   moneda: z.string(),
   incoterm: z.string().nullable(),
   destinoMercado: z.string().nullable(),
+  // Condiciones comerciales de compra a GRANEL (2026-10-27). Null en CAJAS.
+  porcentajeMinExportacion: z.string().nullable(),
+  modalidadEntregaGranel: z.enum(['PUESTA_EN_CAMPO', 'ENTREGADA_EN_PLANTA']).nullable(),
+  envasesProporcionadosPor: z.enum(['PRODUCTOR', 'EXPORTADORA']).nullable(),
+  encargadoDescartePor: z.enum(['PRODUCTOR', 'EXPORTADORA']).nullable(),
   // Snapshot de OrdenCompra.cuotasPago (no la plantilla CondicionPago viva —
   // ver Docs/compras.md §4.2.1, mismo criterio de inmutabilidad que el PDF).
   // Piezas crudas, sin formatear — la plantilla arma el texto con fmt.* (Etapa

@@ -54,6 +54,12 @@ export const ordenCompraCreateSchema = z.object({
   responsableId: z.string().min(1).optional().nullable(),
   incotermId: z.number().int().positive().optional().nullable(),
   observaciones: z.string().max(2000).trim().optional().nullable(),
+  // Condiciones comerciales de compra a GRANEL (2026-10-27). Solo aplican a
+  // modalidad GRANEL; el service las limpia si la OC es CAJAS.
+  porcentajeMinExportacion: z.number().min(0).max(100).optional().nullable(),
+  modalidadEntregaGranel: z.enum(['PUESTA_EN_CAMPO', 'ENTREGADA_EN_PLANTA']).optional().nullable(),
+  envasesProporcionadosPor: z.enum(['PRODUCTOR', 'EXPORTADORA']).optional().nullable(),
+  encargadoDescartePor: z.enum(['PRODUCTOR', 'EXPORTADORA']).optional().nullable(),
 })
 
 export const ordenCompraUpdateSchema = z.object({
@@ -73,6 +79,11 @@ export const ordenCompraUpdateSchema = z.object({
   responsableId: z.string().min(1).optional().nullable(),
   incotermId: z.number().int().positive().optional().nullable(),
   observaciones: z.string().max(2000).trim().optional().nullable(),
+  // Condiciones comerciales de compra a GRANEL (2026-10-27).
+  porcentajeMinExportacion: z.number().min(0).max(100).optional().nullable(),
+  modalidadEntregaGranel: z.enum(['PUESTA_EN_CAMPO', 'ENTREGADA_EN_PLANTA']).optional().nullable(),
+  envasesProporcionadosPor: z.enum(['PRODUCTOR', 'EXPORTADORA']).optional().nullable(),
+  encargadoDescartePor: z.enum(['PRODUCTOR', 'EXPORTADORA']).optional().nullable(),
   // RECEPCIONADA queda fuera de las transiciones manuales: solo la
   // asignará el futuro flujo de Recepción de Stock (compras.md §4.4/§8),
   // no este endpoint (OC-001).

@@ -314,10 +314,19 @@ export async function updateOrdenCompra(id: number, data: OrdenCompraUpdateInput
       await tx.ordenCompraCuotaPago.deleteMany({ where: { ordenCompraId: id } })
       await tx.ordenCompraCuotaPago.createMany({ data: cuotasPago.map((c) => ({ ordenCompraId: id, ...c })) })
     }
+    // OC-GRANEL-A-001: las condiciones comerciales de granel solo valen en
+    // modalidad GRANEL. Se nulifican BAJO LOCK contra la modalidad autoritativa
+    // final (no la leída por el service fuera de la transacción), para que una
+    // edición concurrente que pase la OC a CAJAS no deje condiciones de granel.
+    const modalidadFinal = data.modalidad ?? actual.modalidad
+    const condicionesGranelNulas = modalidadFinal === 'CAJAS'
+      ? { porcentajeMinExportacion: null, modalidadEntregaGranel: null, envasesProporcionadosPor: null, encargadoDescartePor: null }
+      : {}
     return tx.ordenCompra.update({
       where: { id },
       data: {
         ...resto,
+        ...condicionesGranelNulas,
         actualizadoPor,
         // N:M (2026-08-22, Etapa 2): si viene, reemplaza el conjunto completo
         // (mismo patrón que calibres en updateLinea) — si no viene, se

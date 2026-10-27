@@ -78,6 +78,12 @@ interface HeaderFields {
   monedaId: number
   observaciones: string
   estado: EstadoOrdenCompra
+  // Condiciones comerciales de compra a GRANEL (2026-10-27). Solo se usan y
+  // muestran cuando la modalidad es Granel.
+  porcentajeMinExportacion: string
+  modalidadEntregaGranel: 'PUESTA_EN_CAMPO' | 'ENTREGADA_EN_PLANTA' | null
+  envasesProporcionadosPor: 'PRODUCTOR' | 'EXPORTADORA' | null
+  encargadoDescartePor: 'PRODUCTOR' | 'EXPORTADORA' | null
 }
 
 const HEADER_EMPTY: HeaderFields = {
@@ -95,6 +101,10 @@ const HEADER_EMPTY: HeaderFields = {
   monedaId: 0,
   observaciones: '',
   estado: 'BORRADOR',
+  porcentajeMinExportacion: '',
+  modalidadEntregaGranel: null,
+  envasesProporcionadosPor: null,
+  encargadoDescartePor: null,
 }
 
 const LINEA_EMPTY: OrdenCompraLineaCreateInput = {
@@ -212,6 +222,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const { data: incotermsData } = useQuery({ queryKey: ['clausulas-venta-options'], queryFn: () => clausulasVentaService.list({ limit: 200, soloActivos: true }), staleTime: 5 * 60_000 })
 
   const esGranel = fields.modalidad === 'GRANEL'
+  // Código de la moneda elegida (CLP/USD/…) para las etiquetas de valor por
+  // caja/kilo (2026-10-27) — ya no fijo "USD".
+  const monedaCod = (monedasData?.data ?? []).find((m) => m.id === fields.monedaId)?.codigo || 'USD'
   // La modalidad (Cajas/Granel) solo se puede cambiar en Borrador y sin líneas
   // cargadas — cambiarla cambia qué campos exige cada línea (lo revalida el backend).
   const modalidadBloqueada = (ordenCompra?.data.lineas.length ?? 0) > 0 || fields.estado !== 'BORRADOR'
@@ -258,6 +271,10 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
         monedaId: d.monedaId,
         observaciones: d.observaciones ?? '',
         estado: d.estado,
+        porcentajeMinExportacion: d.porcentajeMinExportacion != null ? String(d.porcentajeMinExportacion) : '',
+        modalidadEntregaGranel: d.modalidadEntregaGranel ?? null,
+        envasesProporcionadosPor: d.envasesProporcionadosPor ?? null,
+        encargadoDescartePor: d.encargadoDescartePor ?? null,
       })
     }
   }, [ordenCompra])
@@ -342,6 +359,12 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       incotermId: fields.incotermId,
       monedaId: fields.monedaId,
       observaciones: fields.observaciones.trim() || undefined,
+      // Condiciones de granel: solo se envían con valor en modalidad Granel; en
+      // Cajas van null (el backend igual las nulifica).
+      porcentajeMinExportacion: esGranel && fields.porcentajeMinExportacion.trim() !== '' ? Number(fields.porcentajeMinExportacion) : null,
+      modalidadEntregaGranel: esGranel ? fields.modalidadEntregaGranel : null,
+      envasesProporcionadosPor: esGranel ? fields.envasesProporcionadosPor : null,
+      encargadoDescartePor: esGranel ? fields.encargadoDescartePor : null,
     }
   }
 
@@ -830,6 +853,60 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
             </div>
           )}
 
+          {/* Condiciones comerciales de compra a Granel (2026-10-27) */}
+          {esGranel && (
+            <>
+              <Separator />
+              <div className='grid gap-4 sm:grid-cols-2'>
+                <div className='space-y-1.5'>
+                  <Label>% mínimo de exportación</Label>
+                  <Input
+                    type='number'
+                    min={0}
+                    max={100}
+                    step='0.01'
+                    value={fields.porcentajeMinExportacion}
+                    onChange={(e) => setFields((f) => ({ ...f, porcentajeMinExportacion: e.target.value }))}
+                    placeholder='Ej: 80'
+                  />
+                </div>
+                <div className='space-y-1.5'>
+                  <Label>Modalidad de entrega</Label>
+                  <Select value={fields.modalidadEntregaGranel ?? '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, modalidadEntregaGranel: v === '__none__' ? null : (v as HeaderFields['modalidadEntregaGranel']) }))}>
+                    <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='__none__'>— Sin definir —</SelectItem>
+                      <SelectItem value='PUESTA_EN_CAMPO'>Fruta puesta en campo, con retiro por la exportadora</SelectItem>
+                      <SelectItem value='ENTREGADA_EN_PLANTA'>Fruta entregada en la planta de proceso</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className='space-y-1.5'>
+                  <Label>Envases proporcionados por</Label>
+                  <Select value={fields.envasesProporcionadosPor ?? '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, envasesProporcionadosPor: v === '__none__' ? null : (v as HeaderFields['envasesProporcionadosPor']) }))}>
+                    <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='__none__'>— Sin definir —</SelectItem>
+                      <SelectItem value='PRODUCTOR'>Productor</SelectItem>
+                      <SelectItem value='EXPORTADORA'>Exportadora</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className='space-y-1.5'>
+                  <Label>Encargado de descarte</Label>
+                  <Select value={fields.encargadoDescartePor ?? '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, encargadoDescartePor: v === '__none__' ? null : (v as HeaderFields['encargadoDescartePor']) }))}>
+                    <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='__none__'>— Sin definir —</SelectItem>
+                      <SelectItem value='PRODUCTOR'>Productor</SelectItem>
+                      <SelectItem value='EXPORTADORA'>Exportadora</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </>
+          )}
+
           <Separator />
 
           {/* Fila 4: Observaciones */}
@@ -1203,7 +1280,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
               {/* Fila 5: Valor USD/Caja */}
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
                 <div className='space-y-1.5'>
-                  <Label>Valor (USD/Caja)</Label>
+                  <Label>Valor ({monedaCod}/Caja)</Label>
                   <Input ref={precioInputRef} type='number' step='0.01' value={linea.precioUsdCaja || ''} onChange={(e) => setLinea((l) => ({ ...l, precioUsdCaja: Number(e.target.value) }))} />
                   {lineaErrors.precioUsdCaja && <p className='text-xs text-destructive'>{lineaErrors.precioUsdCaja}</p>}
                 </div>
@@ -1224,7 +1301,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                     {lineaErrors.cantidadKilos && <p className='text-xs text-destructive'>{lineaErrors.cantidadKilos}</p>}
                   </div>
                   <div className='space-y-1.5'>
-                    <Label>Valor (USD/Kg) <span className='text-destructive'>*</span></Label>
+                    <Label>Valor ({monedaCod}/Kg) <span className='text-destructive'>*</span></Label>
                     <Input
                       ref={precioInputRef}
                       type='number'

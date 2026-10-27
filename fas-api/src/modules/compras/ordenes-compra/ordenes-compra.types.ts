@@ -32,6 +32,12 @@ export interface OrdenCompraCreateInput {
   responsableId?: string | null
   incotermId?: number | null
   observaciones?: string | null
+  // Condiciones comerciales de compra a GRANEL (2026-10-27). Solo aplican a
+  // modalidad GRANEL; el service las limpia en CAJAS.
+  porcentajeMinExportacion?: number | null
+  modalidadEntregaGranel?: 'PUESTA_EN_CAMPO' | 'ENTREGADA_EN_PLANTA' | null
+  envasesProporcionadosPor?: 'PRODUCTOR' | 'EXPORTADORA' | null
+  encargadoDescartePor?: 'PRODUCTOR' | 'EXPORTADORA' | null
 }
 
 export type OrdenCompraUpdateInput = Partial<OrdenCompraCreateInput> & {

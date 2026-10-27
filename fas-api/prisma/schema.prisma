@@ -4564,6 +4564,17 @@ enum ModalidadCompra {
   GRANEL
 }
 
+// Condiciones comerciales de la compra a GRANEL (2026-10-27). Listas cerradas.
+enum ModalidadEntregaGranel {
+  PUESTA_EN_CAMPO // Fruta puesta en campo, con retiro por parte de la exportadora
+  ENTREGADA_EN_PLANTA // Fruta entregada en la planta de proceso
+}
+
+enum ResponsableProductorExportadora {
+  PRODUCTOR
+  EXPORTADORA
+}
+
 model OrdenCompra {
   id        Int     @id @default(autoincrement())
   empresaId Int
@@ -4609,6 +4620,13 @@ model OrdenCompra {
   // (fruta a granel por kilos). Determina qué campos exige cada línea y qué tipo
   // de artículo se compra (EMBALAJE vs GRANEL). Editable solo en BORRADOR.
   modalidad        ModalidadCompra   @default(CAJAS)
+
+  // Condiciones comerciales de compra a GRANEL (2026-10-27). Solo aplican a la
+  // modalidad GRANEL (nullable; se limpian si la OC es CAJAS).
+  porcentajeMinExportacion Decimal?                          @db.Decimal(5, 2) // % mínimo de exportación
+  modalidadEntregaGranel   ModalidadEntregaGranel?
+  envasesProporcionadosPor ResponsableProductorExportadora?
+  encargadoDescartePor     ResponsableProductorExportadora?
 
   lineas      OrdenCompraLinea[]
   cuotasPago  OrdenCompraCuotaPago[]

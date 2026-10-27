@@ -151,6 +151,10 @@ export async function resolverOrdenCompra(id: number, empresaId: number, opcione
     moneda: oc.moneda.codigo,
     incoterm: valorIdioma(oc.incoterm, idioma),
     destinoMercado: valorIdioma(oc.destinoMercado, idioma),
+    porcentajeMinExportacion: oc.porcentajeMinExportacion != null ? oc.porcentajeMinExportacion.toString() : null,
+    modalidadEntregaGranel: oc.modalidadEntregaGranel,
+    envasesProporcionadosPor: oc.envasesProporcionadosPor,
+    encargadoDescartePor: oc.encargadoDescartePor,
     cuotas: oc.cuotasPago.map((c) => ({
       plazoDias: c.plazoDias,
       fechaReferencia: c.fechaReferencia,

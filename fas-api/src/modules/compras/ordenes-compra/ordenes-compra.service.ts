@@ -262,12 +262,26 @@ export async function obtenerOrdenCompra(id: number) {
   return orden
 }
 
+// Las condiciones comerciales de granel solo aplican a modalidad GRANEL; en
+// CAJAS se limpian para no persistir datos que no corresponden (2026-10-27,
+// mismo criterio que normalizarLineaPorModalidad).
+function normalizarCondicionesGranel<T extends OrdenCompraUpdateInput>(body: T, modalidad: 'CAJAS' | 'GRANEL'): T {
+  if (modalidad === 'GRANEL') return body
+  return {
+    ...body,
+    porcentajeMinExportacion: null,
+    modalidadEntregaGranel: null,
+    envasesProporcionadosPor: null,
+    encargadoDescartePor: null,
+  }
+}
+
 export async function crearOrdenCompra(body: OrdenCompraCreateInput, creadoPor: string) {
   // La Inspección de Compra ya NO es requerida (2026-09-15): la OC puede
   // crearse sin solicitudes. Si se envían, validarReferenciasHeader las valida.
   await validarReferenciasHeader(body)
   try {
-    return await repo.createOrdenCompra(body, creadoPor)
+    return await repo.createOrdenCompra(normalizarCondicionesGranel(body, body.modalidad ?? 'CAJAS'), creadoPor)
   } catch (e) {
     throw traducirColisionSolicitud(e)
   }
@@ -324,7 +338,8 @@ export async function actualizarOrdenCompra(id: number, body: OrdenCompraUpdateI
     ordenCompraId: id,
   })
   try {
-    return await repo.updateOrdenCompra(id, body, actualizadoPor)
+    const modalidadEfectiva = body.modalidad ?? existente.modalidad
+    return await repo.updateOrdenCompra(id, normalizarCondicionesGranel(body, modalidadEfectiva), actualizadoPor)
   } catch (e) {
     throw traducirColisionSolicitud(e)
   }
