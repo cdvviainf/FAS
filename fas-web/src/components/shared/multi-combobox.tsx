@@ -33,6 +33,10 @@ interface MultiComboboxProps {
   searchPlaceholder?: string;
   emptyText?: string;
   countSuffix?: string;
+  /** Oculta el número de cada opción sin perder la cascada: el `count` se
+   * sigue usando para deshabilitar opciones en 0, pero no se muestra el badge
+   * (declutter pedido en Stock de Fruta / Calificación de Pallets, 2026-10-27). */
+  hideCount?: boolean;
   disabled?: boolean;
   className?: string;
 }
@@ -48,6 +52,7 @@ export function MultiCombobox({
   searchPlaceholder = 'Buscar...',
   emptyText = 'Sin resultados.',
   countSuffix,
+  hideCount,
   disabled,
   className
 }: MultiComboboxProps) {
@@ -108,7 +113,7 @@ export function MultiCombobox({
                   >
                     <Icons.check className={cn('mr-2 h-4 w-4', isSelected ? 'opacity-100' : 'opacity-0')} />
                     <span className='flex-1 truncate'>{option.label}</span>
-                    {option.count !== undefined && (
+                    {option.count !== undefined && !hideCount && (
                       <span className='text-muted-foreground ml-2 text-xs tabular-nums'>
                         {option.count.toLocaleString('es-CL')}{countSuffix ? ` ${countSuffix}` : ''}
                       </span>

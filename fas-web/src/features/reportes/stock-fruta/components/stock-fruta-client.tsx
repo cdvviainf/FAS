@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 import { MultiCombobox } from '@/components/shared/multi-combobox'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { stockFrutaService } from '../service'
-import { ESTADO_STOCK_LABELS, ANTIGUEDAD_LABELS, diasAntiguedad, bucketAntiguedad } from '../types'
+import { ANTIGUEDAD_LABELS, diasAntiguedad, bucketAntiguedad } from '../types'
 import type { StockDetalleRow, AntiguedadBucket } from '../types'
 
 // Sentinel para "sin nota asignada" — un pallet sin Nota Calidad/Condición
@@ -38,7 +38,6 @@ interface Filters {
   variedadIds: string[]
   calibreIds: string[]
   categoriaIds: string[]
-  estados: string[]
   productorIds: string[]
   plantaIds: string[]
   packingIds: string[]
@@ -48,7 +47,7 @@ interface Filters {
 }
 
 const FILTROS_VACIOS: Filters = {
-  especieIds: [], articuloIds: [], variedadIds: [], calibreIds: [], categoriaIds: [], estados: [], productorIds: [],
+  especieIds: [], articuloIds: [], variedadIds: [], calibreIds: [], categoriaIds: [], productorIds: [],
   plantaIds: [], packingIds: [],
   notaCalidadIds: [], notaCondicionIds: [], completos: [],
 }
@@ -68,7 +67,6 @@ const FACETS: {
   { key: 'variedadIds', label: 'Variedad', getValue: (r) => String(r.variedadId), getLabel: (r) => r.variedad.descripcion },
   { key: 'calibreIds', label: 'Calibre', getValue: (r) => String(r.calibreId), getLabel: (r) => r.calibre.descripcion },
   { key: 'categoriaIds', label: 'Categoría', getValue: (r) => String(r.categoriaId), getLabel: (r) => r.categoria.descripcion },
-  { key: 'estados', label: 'Estado', getValue: (r) => r.estado, getLabel: (r) => ESTADO_STOCK_LABELS[r.estado] },
   { key: 'productorIds', label: 'Productor', getValue: (r) => String(r.productorId), getLabel: (r) => r.productor.descripcion },
   { key: 'plantaIds', label: 'Planta', getValue: (r) => String(r.plantaId), getLabel: (r) => r.planta.descripcion },
   { key: 'packingIds', label: 'Packing', getValue: (r) => r.packingId != null ? String(r.packingId) : SIN_NOTA, getLabel: (r) => r.packing?.descripcion ?? 'Sin packing' },
@@ -301,13 +299,12 @@ export function StockFrutaClient() {
       </section>
 
       {/* Filtros */}
-      <Card className='py-3'>
+      {/* Filtros — sticky para no perderlos al expandir el detalle (2026-10-27) */}
+      <Card className='sticky top-0 z-20 py-3'>
         <CardContent className='flex flex-wrap items-end gap-3'>
-          {FACETS.map((facet) => {
-            // El catálogo de opciones sale de TODO el dataset (rows), no solo
-            // de `scoped` — si no, una opción sin cajas bajo los demás
-            // filtros activos desaparecería en vez de quedar deshabilitada
-            // (QAS-STK-005, QA ronda 2). Los contadores sí salen de `scoped`.
+          {/* Cascada: cada opción trae su count (cajas bajo los demás filtros) para
+             deshabilitar combinaciones sin datos; el número se oculta (2026-10-27). */}
+          {FACETS.filter((f) => f.key !== 'plantaIds').map((facet) => {
             const scoped = rows.filter((r) => matches(r, filters, facet.key))
             const counts = new Map<string, number>()
             scoped.forEach((row) => {
@@ -329,12 +326,42 @@ export function StockFrutaClient() {
                   options={options}
                   selected={filters[facet.key]}
                   onChange={(values) => setFilters((f) => ({ ...f, [facet.key]: values }))}
-                  countSuffix='caj.'
+                  hideCount
                   className='h-8'
                 />
               </div>
             )
           })}
+          {/* Salto de línea: Planta + búsqueda + antigüedad van en la 2ª fila. */}
+          <div className='basis-full' />
+          {(() => {
+            const scoped = rows.filter((r) => matches(r, filters, 'plantaIds'))
+            const counts = new Map<string, number>()
+            scoped.forEach((row) => {
+              const v = String(row.plantaId)
+              counts.set(v, (counts.get(v) ?? 0) + row.cajas)
+            })
+            const labels = new Map<string, string>()
+            rows.forEach((row) => {
+              const v = String(row.plantaId)
+              if (!labels.has(v)) labels.set(v, row.planta.descripcion)
+            })
+            const options = [...labels.entries()]
+              .map(([value, label]) => ({ value, label, count: counts.get(value) ?? 0 }))
+              .sort((a, b) => a.label.localeCompare(b.label))
+            return (
+              <div className='min-w-[160px] flex-1 space-y-1'>
+                <Label className='text-[10.5px] tracking-wide uppercase'>Planta</Label>
+                <MultiCombobox
+                  options={options}
+                  selected={filters.plantaIds}
+                  onChange={(values) => setFilters((f) => ({ ...f, plantaIds: values }))}
+                  hideCount
+                  className='h-8'
+                />
+              </div>
+            )
+          })()}
           <div className='min-w-[140px] space-y-1'>
             <Label className='text-[10.5px] tracking-wide uppercase'>N° Pallet</Label>
             <Input
@@ -345,8 +372,8 @@ export function StockFrutaClient() {
               className='h-8'
             />
           </div>
-          <div className='min-w-[110px] space-y-1'>
-            <Label className='text-[10.5px] tracking-wide uppercase'>Antigüedad desde</Label>
+          <div className='w-20 space-y-1'>
+            <Label className='text-[10.5px] tracking-wide uppercase'>Días desde</Label>
             <Input
               type='number'
               min={0}
@@ -357,8 +384,8 @@ export function StockFrutaClient() {
               className='h-8'
             />
           </div>
-          <div className='min-w-[110px] space-y-1'>
-            <Label className='text-[10.5px] tracking-wide uppercase'>Antigüedad hasta</Label>
+          <div className='w-20 space-y-1'>
+            <Label className='text-[10.5px] tracking-wide uppercase'>Días hasta</Label>
             <Input
               type='number'
               min={0}
@@ -412,7 +439,6 @@ export function StockFrutaClient() {
                 <TableHead>Calibre</TableHead>
                 <TableHead>Categoría</TableHead>
                 <TableHead className='text-right'>Cajas</TableHead>
-                <TableHead className='text-right'>Kilos</TableHead>
                 {/* Nota Calidad/Condición/Completo son por línea (Pallet), no
                     por grupo — la fila de grupo siempre las deja vacías; solo
                     tienen sentido al abrir el grupo, donde ya aparece su
@@ -432,7 +458,7 @@ export function StockFrutaClient() {
             <TableBody>
               {grupos.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={14} className='text-muted-foreground text-center'>Sin combinaciones para estos filtros.</TableCell>
+                  <TableCell colSpan={13} className='text-muted-foreground text-center'>Sin combinaciones para estos filtros.</TableCell>
                 </TableRow>
               )}
               {grupos.map((g) => {
@@ -457,7 +483,6 @@ export function StockFrutaClient() {
                       <TableCell>{g.calibre}</TableCell>
                       <TableCell>{g.categoria}</TableCell>
                       <TableCell className='text-right tabular-nums'>{g.cajas.toLocaleString('es-CL')}</TableCell>
-                      <TableCell className='text-right tabular-nums'>{Math.round(g.kg).toLocaleString('es-CL')}</TableCell>
                       <TableCell></TableCell>
                       <TableCell></TableCell>
                       <TableCell></TableCell>
@@ -475,9 +500,8 @@ export function StockFrutaClient() {
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Folio</TableCell>
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Productor</TableCell>
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Antigüedad</TableCell>
-                          <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Estado</TableCell>
+                          <TableCell></TableCell>
                           <TableCell className='text-foreground text-right text-[10px] font-semibold tracking-wide uppercase'>Cajas</TableCell>
-                          <TableCell className='text-foreground text-right text-[10px] font-semibold tracking-wide uppercase'>Kilos</TableCell>
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Nota Calidad</TableCell>
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Nota Condición</TableCell>
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Completo</TableCell>
@@ -523,11 +547,8 @@ export function StockFrutaClient() {
                                 <TableCell>
                                   <Badge variant='outline' className={AGING_BADGE_VARIANT[bucket]}>{dias} d</Badge>
                                 </TableCell>
-                                <TableCell>
-                                  <Badge variant={row.estado === 'VALIDADA' ? 'default' : 'secondary'}>{ESTADO_STOCK_LABELS[row.estado]}</Badge>
-                                </TableCell>
+                                <TableCell></TableCell>
                                 <TableCell className='text-right tabular-nums'>{row.cajas.toLocaleString('es-CL')}</TableCell>
-                                <TableCell className='text-right tabular-nums'>{Math.round(row.kg).toLocaleString('es-CL')}</TableCell>
                                 <TableCell>{row.notaCalidad?.descripcion ?? '—'}</TableCell>
                                 <TableCell>{row.notaCondicion?.descripcion ?? '—'}</TableCell>
                                 <TableCell>

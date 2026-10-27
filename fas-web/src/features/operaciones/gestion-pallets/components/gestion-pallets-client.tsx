@@ -221,8 +221,8 @@ export function GestionPalletsClient() {
 
   return (
     <div className='space-y-6'>
-      {/* Filtros */}
-      <Card className='py-3'>
+      {/* Filtros — sticky para que no se pierdan al expandir el detalle. */}
+      <Card className='sticky top-0 z-20 py-3'>
         <CardContent className='flex flex-wrap items-end gap-3'>
           {FACETS.map((facet) => {
             const scoped = rows.filter((r) => matches(r, filters, facet.key))
@@ -246,7 +246,7 @@ export function GestionPalletsClient() {
                   options={options}
                   selected={filters[facet.key]}
                   onChange={(values) => setFilters((f) => ({ ...f, [facet.key]: values }))}
-                  countSuffix='caj.'
+                  hideCount
                   className='h-8'
                 />
               </div>

@@ -593,9 +593,16 @@ Por especie: cajas totales, kilos totales, y apertura por **antigüedad** en 3 t
 
 Fila cabecera agrupada por **Especie / Variedad / Calibre / Categoría** (cajas + kilos de la combinación), expandible a las líneas de Pallet individuales que la componen: **Folio** (`numeroPallet`) / Productor / Antigüedad (días) / Estado / Cajas / Kilos / **Nota Calidad / Nota Condición / Completo** (nuevo, 2026-09-02, §4.8 — a nivel de Pallet, se repiten idénticas en todas las líneas de un mismo pallet; solo lectura acá, editables en Operaciones → Gestión de Pallets). Sin porcentajes.
 
+> **Supersesión (2026-10-27, decisión de negocio, Christian) — solo este reporte de Stock de Fruta (§11), NO Calificación de Pallets.** En el **reporte de Stock de Fruta** se retiran **Estado** y **Kilos** del detalle (y Kilos de la fila agrupada): la pantalla queda centrada en cajas y clasificación. **Calificación de Pallets (Gestión de Pallets, §4.8) conserva Estado y Kilos** tanto en filtro como en columnas — la simetría §4.8 ↔ §11 deja de ser total a partir de esta fecha (asimetría intencional). Las cajas de la fila agrupada y del detalle se mantienen en ambas.
+
 ### 11.4 Filtros
 
 Multiselect, en este orden fijo: **Especie, Variedad, Calibre, Categoría, Estado, Productor, Nota Calidad, Nota Condición, Completo** (los 3 últimos, nuevo 2026-09-02). En cascada: las opciones de cada filtro se calculan sobre el dataset ya acotado por los demás filtros activos (excluyéndose a sí mismo) — una opción sin cajas bajo la selección actual se deshabilita en vez de ocultarse, para que se entienda por qué no está disponible. No hay filtro de origen ni de rango de fecha (decisión de negocio, Christian, 2026-08-24 — el origen sigue viajando en cada fila por si se necesita más adelante, solo no se expone como filtro ni columna).
+
+> **Supersesión (2026-10-27, decisión de negocio, Christian):**
+> - **Filtro Estado:** se **retira del reporte de Stock de Fruta** (queda: Especie, Variedad, Calibre, Categoría, Productor, Nota Calidad, Nota Condición, Completo). **Calificación de Pallets conserva el filtro Estado.**
+> - **Conteo de cajas en los filtros:** el número por opción (`X caj.`) deja de mostrarse en **ambas** pantallas (declutter). La **cascada se mantiene intacta**: el conteo se sigue calculando internamente para **deshabilitar** las opciones que quedan en 0 bajo la selección actual; solo se oculta el badge numérico (`MultiCombobox hideCount`).
+> - **Stock de Fruta** ubica **Planta** en una 2ª fila de filtros y reduce el ancho de los inputs de días (desde/hasta). Los filtros van en una tarjeta **sticky** (ambas pantallas) para no perderlos al expandir el detalle.
 
 ### 11.5 Notas de implementación
 
