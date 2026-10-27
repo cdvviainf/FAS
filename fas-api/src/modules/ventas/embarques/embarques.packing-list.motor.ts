@@ -86,6 +86,10 @@ function validarFilasCompletas(filas: FilaPackingListCruda[]): string[] {
     if (!f.productor) errores.push(`Fila ${f.fila}: falta el Productor`)
     if (!f.etiqueta) errores.push(`Fila ${f.fila}: falta la Etiqueta`)
     if (!f.fechaEmbalaje) errores.push(`Fila ${f.fila}: falta la Fecha de Embalaje`)
+    // N° de Guía y Emisor OBLIGATORIOS por fila (2026-10-27) — como el resto de
+    // las columnas requeridas, una celda vacía aborta la carga.
+    if (!f.numeroGuia) errores.push(`Fila ${f.fila}: falta el N° de Guía`)
+    if (!f.emisorGuia) errores.push(`Fila ${f.fila}: falta el Emisor de la Guía`)
 
     if (!f.cajas) {
       errores.push(`Fila ${f.fila}: faltan las Cajas`)

@@ -274,24 +274,27 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
               >
                 <Icons.upload className='mr-1 h-4 w-4' /> Subir Excel
               </Button>
+              {/* Formato base para ingresar el Packing List: baja el Excel del
+                  template seleccionado para llenarlo y subirlo (2026-10-27). */}
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                disabled={!templateCargaId}
+                onClick={() => {
+                  const t = templates.find((x) => x.id === Number(templateCargaId))
+                  if (!t) { toast.error('Selecciona un Template de Carga'); return }
+                  templatesCargaService
+                    .descargarFormatoBase(t.id, `formato-packing-list-${t.codigo}.xlsx`)
+                    .catch((e: Error) => toast.error(e.message || 'No se pudo descargar el formato base'))
+                }}
+              >
+                <Icons.download className='mr-1 h-4 w-4' /> Descargar formato base
+              </Button>
             </div>
             <p className='text-muted-foreground text-xs'>Solo .xlsx. Máx. 10 MB.</p>
           </div>
         )}
-
-        {/* Reporte de Packing List en Excel (2026-10-06): placeholder — el
-            formato del reporte queda pendiente de definir, por ahora solo el
-            botón/ícono de descarga. */}
-        <div>
-          <Button
-            type='button'
-            variant='outline'
-            size='sm'
-            onClick={() => toast.info('Reporte de Packing List en Excel: pendiente de definir')}
-          >
-            <Icons.fileTypeXls className='mr-1 h-4 w-4' /> Descargar Packing List (Excel)
-          </Button>
-        </div>
 
         {erroresCarga && (
           <div className='space-y-1.5 rounded-md border border-destructive/40 bg-destructive/5 p-3'>

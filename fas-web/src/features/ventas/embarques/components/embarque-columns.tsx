@@ -49,11 +49,13 @@ async function abrirGuiaDespacho(embarqueId: number) {
   }
 }
 
-async function descargarPackingList(embarqueId: number, packingListId: number, nombreArchivo: string) {
+// Descarga el Packing List GENERADO POR EL SISTEMA (reporte Excel), no los
+// archivos subidos para la reconciliación (2026-10-27).
+async function descargarPackingListSistema(embarqueId: number, numeroInstructivo: string) {
   try {
-    await embarquesService.descargarPackingList(embarqueId, packingListId, nombreArchivo)
+    await embarquesService.emitirPackingList(embarqueId, `packing-list-${numeroInstructivo}.xlsx`)
   } catch (e) {
-    toast.error((e as Error).message || 'No se pudo descargar el Packing List')
+    toast.error((e as Error).message || 'No se pudo generar el Packing List')
   }
 }
 
@@ -69,7 +71,6 @@ function EmbarqueCellAction({ embarque }: { embarque: Embarque }) {
     staleTime: 30_000,
   })
   const instructivos = detalle?.data.instructivosHijos ?? []
-  const packingLists = detalle?.data.packingLists ?? []
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -102,20 +103,9 @@ function EmbarqueCellAction({ embarque }: { embarque: Embarque }) {
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Packing List</DropdownMenuLabel>
-        {isLoading ? (
-          <DropdownMenuItem disabled>Cargando…</DropdownMenuItem>
-        ) : packingLists.length === 0 ? (
-          <DropdownMenuItem disabled>Sin packing list</DropdownMenuItem>
-        ) : (
-          packingLists.map((pl) => (
-            <DropdownMenuItem
-              key={pl.id}
-              onSelect={(e) => { e.preventDefault(); descargarPackingList(embarque.id, pl.id, pl.nombreArchivo) }}
-            >
-              <Icons.download className='mr-2 h-4 w-4' /> {pl.nombreArchivo}
-            </DropdownMenuItem>
-          ))
-        )}
+        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); descargarPackingListSistema(embarque.id, embarque.numeroInstructivo) }}>
+          <Icons.fileTypeXls className='mr-2 h-4 w-4' /> Descargar Packing List
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

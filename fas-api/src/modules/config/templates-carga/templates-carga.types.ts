@@ -72,9 +72,12 @@ export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
 // existentes que no las contemplaban.
 export const CAMPOS_OPCIONALES_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
   RECEPCION: ['NOTA_CALIDAD', 'NOTA_CONDICION', 'COMPLETO'],
-  // TERMOGRAFO (2026-10-12): opcional tanto de mapear (no rompe templates
-  // PACKING_LIST ya creados) como de valor (la celda puede venir vacía).
-  PACKING_LIST: ['TERMOGRAFO', 'TEMPERATURA', 'NUMERO_GUIA', 'EMISOR_GUIA'],
+  // TERMOGRAFO/TEMPERATURA (2026-10-12/25): opcionales tanto de mapear (no
+  // rompen templates PACKING_LIST ya creados) como de valor (la celda puede
+  // venir vacía). NUMERO_GUIA y EMISOR_GUIA pasaron a OBLIGATORIOS (2026-10-27):
+  // deben mapearse en el template y traer valor en la carga (los templates
+  // existentes sin esas columnas deben actualizarse).
+  PACKING_LIST: ['TERMOGRAFO', 'TEMPERATURA'],
 }
 
 export const CAMPO_TEMPLATE_CARGA_LABELS: Record<string, string> = {

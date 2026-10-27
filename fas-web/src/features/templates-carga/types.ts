@@ -56,7 +56,9 @@ export const CAMPOS_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
 // §4.8) — espejo de CAMPOS_OPCIONALES_POR_TIPO en el backend.
 export const CAMPOS_OPCIONALES_POR_TIPO: Record<TipoTemplateCarga, readonly string[]> = {
   RECEPCION: ['NOTA_CALIDAD', 'NOTA_CONDICION', 'COMPLETO'],
-  PACKING_LIST: ['TERMOGRAFO', 'TEMPERATURA', 'NUMERO_GUIA', 'EMISOR_GUIA'],
+  // NUMERO_GUIA y EMISOR_GUIA pasaron a OBLIGATORIOS (2026-10-27) — espejo del
+  // backend (templates-carga.types.ts). Solo TERMOGRAFO/TEMPERATURA opcionales.
+  PACKING_LIST: ['TERMOGRAFO', 'TEMPERATURA'],
 }
 
 export const CAMPO_TEMPLATE_CARGA_LABELS: Record<string, string> = {
