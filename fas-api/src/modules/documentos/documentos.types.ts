@@ -6,6 +6,16 @@ export interface OpcionesPaginaDocumento {
   margen: string
 }
 
+// Idioma de emisión del PDF (2026-10-26). Se elige al previsualizar/descargar/
+// emitir (?idioma=). El resolver lo incorpora al payload (d.idioma) para que la
+// plantilla traduzca sus etiquetas. Default ES. Documentos que guardan su
+// propio idioma (Proforma/Factura Exportación) lo usan como valor por defecto.
+export type IdiomaDocumento = 'ES' | 'EN'
+
+export interface ResolverOpciones {
+  idioma: IdiomaDocumento
+}
+
 // Un documento del catálogo (Etapa 4 §4 "Registro central de documentos").
 // `Payload` es el tipo del dato ya resuelto y validado con Zod — el mismo
 // tipo que la plantilla recibe, así el compilador avisa si uno de los dos
@@ -14,7 +24,7 @@ export interface DocumentDefinition<Payload = unknown> {
   titulo: string
   // Arma el payload desde la base de datos — SIN lógica de presentación
   // (Etapa 4 §4, paso "Resolver"). Lanza NotFoundError si el id no existe.
-  resolver: (id: number, empresaId: number) => Promise<Payload>
+  resolver: (id: number, empresaId: number, opciones: ResolverOpciones) => Promise<Payload>
   schema: ZodType<Payload>
   plantillaActual: string // clave dentro de `plantillas`, ej. 'v1'
   plantillas: Record<string, (props: { d: Payload; marcaAgua?: 'BORRADOR' | 'COPIA'; marcaAguaFecha?: string }) => React.ReactElement>

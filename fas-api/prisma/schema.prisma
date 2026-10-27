@@ -1135,10 +1135,27 @@ model Especie {
   defectos                    DefectoEspecie[]
   caracteristicasMadurez      CaracteristicaMadurezEspecie[]
   codigosEquivalentes         EspecieCodigoEquivalente[]
+  // Imagen de la especie (2026-10-26): banner de los PDF (mitad derecha). Una
+  // por especie, mismo patrón que EmpresaLogo.
+  imagen                      EspecieImagen?
 
   @@unique([empresaId, id])
   @@index([empresaId])
   @@map("especies")
+}
+
+// Imagen de la especie para el encabezado (banner) de los documentos PDF.
+// Una por especie (sin historial), Bytes en Postgres — mismo criterio que
+// EmpresaLogo (sin S3/MinIO en esta etapa).
+model EspecieImagen {
+  especieId Int      @id
+  especie   Especie  @relation(fields: [especieId], references: [id], onDelete: Cascade)
+  mime      String
+  datos     Bytes
+  subidoEn  DateTime @default(now())
+  subidoPor String
+
+  @@map("especie_imagenes")
 }
 
 // Códigos alternativos de una Especie (2026-10-14): mismo patrón que

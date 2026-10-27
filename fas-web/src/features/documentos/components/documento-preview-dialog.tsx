@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/components/icons'
-import { documentosService } from '../service'
+import { documentosService, type IdiomaDocumento } from '../service'
 
 interface DocumentoPreviewDialogProps {
   tipo: string
@@ -55,6 +55,12 @@ interface DocumentoPreviewDialogProps {
 const PAGINA_A4_PORTRAIT = { ancho: 794, alto: 1123 }
 const PAGINA_A4_LANDSCAPE = { ancho: 1123, alto: 794 }
 
+// Tipos de documento que soportan selección de idioma ES/EN (2026-10-26). Se
+// amplía a medida que cada plantilla migra a su v2 bilingüe. Los demás (incluidos
+// Proforma/Factura, que usan el idioma guardado en su registro) no muestran el
+// toggle para no prometer un cambio que no ocurre (FAS-DOC-IDI-R1-001).
+const TIPOS_CON_IDIOMA = new Set(['orden-compra'])
+
 // Motor de Documentos — visor de preview (Etapa 4 §9, Sprint A: "iframe con
 // páginas A4 y sombra"). Es el MISMO HTML que Playwright fotografía para el
 // PDF (§1: "el preview es el PDF") — se pide vía ky (documentosService, ver
@@ -68,6 +74,8 @@ const PAGINA_A4_LANDSCAPE = { ancho: 1123, alto: 794 }
 export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, puedeEmitir, controlCopia = true, orientacion = 'portrait', onEmitido }: DocumentoPreviewDialogProps) {
   const contenedorRef = useRef<HTMLDivElement>(null)
   const [escala, setEscala] = useState(1)
+  // Idioma del PDF (2026-10-26): ES por defecto; el preview refetchea al cambiar.
+  const [idioma, setIdioma] = useState<IdiomaDocumento>('ES')
   const { ancho: paginaAncho, alto: paginaAlto } = orientacion === 'landscape' ? PAGINA_A4_LANDSCAPE : PAGINA_A4_PORTRAIT
 
   useEffect(() => {
@@ -86,8 +94,8 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
   // diálogo para otro id, sin el patrón "sincronizar prop a state" que
   // react-hooks/set-state-in-effect bloquea en este proyecto.
   const { data: html, isPending, isError } = useQuery({
-    queryKey: ['documento-preview', tipo, id],
-    queryFn: () => documentosService.previewHtml(tipo, id),
+    queryKey: ['documento-preview', tipo, id, idioma],
+    queryFn: () => documentosService.previewHtml(tipo, id, idioma),
     enabled: open,
     staleTime: 0,
     placeholderData: keepPreviousData,
@@ -97,7 +105,7 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
   async function descargar() {
     setDescargando(true)
     try {
-      await documentosService.abrirPdf(tipo, id)
+      await documentosService.abrirPdf(tipo, id, idioma)
     } catch {
       toast.error('No se pudo descargar el PDF')
     } finally {
@@ -109,7 +117,7 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
   async function emitir() {
     setEmitiendo(true)
     try {
-      const { blob, documentoEmitidoId } = await documentosService.emitir(tipo, id)
+      const { blob, documentoEmitidoId } = await documentosService.emitir(tipo, id, idioma)
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank', 'noopener,noreferrer')
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
@@ -156,7 +164,23 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
           )}
         </div>
 
-        <div className='flex justify-end gap-2'>
+        <div className='flex items-center justify-end gap-2'>
+          {/* Idioma del PDF (2026-10-26): afecta preview, descarga y emisión.
+              Solo para documentos cuya plantilla ya consume el idioma. */}
+          {TIPOS_CON_IDIOMA.has(tipo) && (
+            <div className='mr-auto inline-flex overflow-hidden rounded-md border'>
+              {(['ES', 'EN'] as const).map((l) => (
+                <button
+                  key={l}
+                  type='button'
+                  onClick={() => setIdioma(l)}
+                  className={`px-3 py-1.5 text-xs font-medium ${idioma === l ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+                >
+                  {l === 'ES' ? 'Español' : 'English'}
+                </button>
+              ))}
+            </div>
+          )}
           <Button variant='outline' onClick={() => onOpenChange(false)}>Cerrar</Button>
           <Button variant='outline' onClick={descargar} isLoading={descargando}>
             <Icons.download className='mr-1 h-4 w-4' /> {controlCopia ? 'Descargar borrador' : 'Descargar PDF'}

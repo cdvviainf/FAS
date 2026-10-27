@@ -1,7 +1,8 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError } from '../../../shared/errors.js'
 import { getOrdenCompraById } from '../../compras/ordenes-compra/ordenes-compra.repository.js'
-import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
+import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri, getEspecieImagenDataUri } from '../documentos.repository.js'
+import type { ResolverOpciones } from '../documentos.types.js'
 import type { OrdenCompraPdfPayload } from '../schemas/orden-compra.schema.js'
 
 export const FECHA_REFERENCIA_LABEL: Record<string, string> = {
@@ -11,19 +12,34 @@ export const FECHA_REFERENCIA_LABEL: Record<string, string> = {
   ARRIBO: 'Arribo',
 }
 
+// Valor de un mantenedor en el idioma del documento: descripcionExtranjera en
+// EN (si existe), descripcion en ES o cuando no hay traducción.
+type Traducible = { descripcion: string; descripcionExtranjera?: string | null }
+function valorIdioma(o: Traducible | null | undefined, idioma: 'ES' | 'EN'): string | null {
+  if (!o) return null
+  return idioma === 'EN' ? (o.descripcionExtranjera?.trim() || o.descripcion) : o.descripcion
+}
+
 // Resolver de Orden de Compra — Etapa 4 §4: "consulta la base y arma un
 // payload tipado con Zod. Nada de lógica de presentación." Reusa
 // ordenes-compra.repository.ts (repository pattern, CLAUDE.md §12.2) en vez
 // de duplicar la query; getEmpresaParaDocumento/getEntidadParaDocumento
 // (documentos.repository.ts) cubren solo lo que el PDF necesita y el
 // endpoint normal de OC no expone (RUT, dirección por defecto).
-export async function resolverOrdenCompra(id: number, empresaId: number): Promise<OrdenCompraPdfPayload> {
+export async function resolverOrdenCompra(id: number, empresaId: number, opciones: ResolverOpciones): Promise<OrdenCompraPdfPayload> {
   const oc = await getOrdenCompraById(id)
   if (!oc) throw new NotFoundError('Orden de Compra', String(id))
 
-  const [empresa, productor] = await Promise.all([
+  const idioma = opciones.idioma
+  // Imagen de la "primera especie por ID" entre las líneas (menor id del
+  // maestro) para el banner del encabezado.
+  const especieIds = oc.lineas.map((l) => l.especie.id)
+  const primeraEspecieId = especieIds.length ? Math.min(...especieIds) : null
+
+  const [empresa, productor, especieImagenDataUri] = await Promise.all([
     getEmpresaParaDocumento(empresaId),
     getEntidadParaDocumento(oc.entidadProductorId),
+    getEspecieImagenDataUri(primeraEspecieId),
   ])
 
   // Cálculo en Decimal (CLAUDE.md §12.5) — nunca number de JS. El detalle
@@ -37,12 +53,12 @@ export async function resolverOrdenCompra(id: number, empresaId: number): Promis
 
   const lineas = oc.lineas.map((l) => {
     const base = {
-      especie: l.especie.descripcion,
-      variedad: l.variedad.descripcion,
-      articulo: l.articulo.descripcion,
+      especie: valorIdioma(l.especie, idioma)!,
+      variedad: valorIdioma(l.variedad, idioma)!,
+      articulo: valorIdioma(l.articulo, idioma)!,
       // Descripción, no código (feedback Christian, 2026-08-19) — en las 3
       // plantillas del motor, no solo acá.
-      etiqueta: l.articulo.etiqueta?.descripcion ?? null,
+      etiqueta: valorIdioma(l.articulo.etiqueta, idioma),
     }
     if (esGranel) {
       const kilos = new Prisma.Decimal(l.cantidadKilos ?? 0)
@@ -69,8 +85,8 @@ export async function resolverOrdenCompra(id: number, empresaId: number): Promis
     const precioCaja = new Prisma.Decimal(l.precioUsdCaja ?? 0)
     return {
       ...base,
-      calibres: l.calibres.map((c) => c.calibre.descripcion).join(', '),
-      categoria: l.categoria?.descripcion ?? null,
+      calibres: l.calibres.map((c) => valorIdioma(c.calibre, idioma)).join(', '),
+      categoria: valorIdioma(l.categoria, idioma),
       cantidadPallets: l.cantidadPallets,
       cajas: l.cajas,
       precioUsdCaja: precioCaja.toString(),
@@ -112,6 +128,8 @@ export async function resolverOrdenCompra(id: number, empresaId: number): Promis
   )
 
   return {
+    idioma,
+    especieImagenDataUri,
     empresa: {
       codigo: empresa?.codigo ?? '',
       razonSocial: empresa?.razonSocial ?? '—',
@@ -129,17 +147,17 @@ export async function resolverOrdenCompra(id: number, empresaId: number): Promis
       direccion: productor?.direcciones[0]?.direccion ?? null,
       contacto: productor?.contactos[0]?.nombre ?? null,
     },
-    formaPago: oc.formaPago?.descripcion ?? null,
+    formaPago: valorIdioma(oc.formaPago, idioma),
     moneda: oc.moneda.codigo,
-    incoterm: oc.incoterm?.descripcion ?? null,
-    destinoMercado: oc.destinoMercado?.descripcion ?? null,
+    incoterm: valorIdioma(oc.incoterm, idioma),
+    destinoMercado: valorIdioma(oc.destinoMercado, idioma),
     cuotas: oc.cuotasPago.map((c) => ({
       plazoDias: c.plazoDias,
       fechaReferencia: c.fechaReferencia,
       tipoValor: c.tipoValor,
       porcentaje: c.porcentaje ? c.porcentaje.toString() : null,
       valorUnitario: c.valorUnitario ? c.valorUnitario.toString() : null,
-      unidad: c.unidad?.descripcion ?? null,
+      unidad: valorIdioma(c.unidad, idioma),
     })),
     observaciones: oc.observaciones,
     lineas,

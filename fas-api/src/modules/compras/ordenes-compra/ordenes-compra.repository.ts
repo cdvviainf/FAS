@@ -11,7 +11,9 @@ import type {
 } from './ordenes-compra.types.js'
 
 const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: true }
-const mantenedorSelect = { id: true, codigo: true, descripcion: true }
+// descripcionExtranjera: la usa el PDF de la OC para emitir en inglés
+// (2026-10-26); es un campo extra inofensivo para los demás consumidores.
+const mantenedorSelect = { id: true, codigo: true, descripcion: true, descripcionExtranjera: true }
 
 const includeDetalle = {
   entidadProductor: { select: entidadSelect },
@@ -34,7 +36,7 @@ const includeDetalle = {
       especie: { select: mantenedorSelect },
       variedad: { select: mantenedorSelect },
       categoria: { select: mantenedorSelect },
-      articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+      articulo: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
       etiqueta: { select: mantenedorSelect },
       calibres: { select: { calibre: { select: mantenedorSelect } } },
       tipoPallet: { select: mantenedorSelect },

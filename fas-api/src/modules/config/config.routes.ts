@@ -17,6 +17,7 @@ import { integracionesRoutes } from './integraciones/integraciones.routes.js'
 import { cargaMaestrosRoutes } from './carga-maestros/carga-maestros.routes.js'
 import { cargaEntidadesDetalleRoutes } from './carga-entidades-detalle/carga-entidades-detalle.routes.js'
 import { cajasPorPalletRoutes } from './cajas-por-pallet/cajas-por-pallet.routes.js'
+import { especiesImagenRoutes } from './especies-imagen/especies-imagen.routes.js'
 
 // Un permiso (ItemMenu) por mantenedor (2026-10-07): `itemCodigo` reemplaza al
 // genérico CONFIG_MANTENEDORES. Los códigos coinciden con el seed de ItemMenu.
@@ -79,6 +80,7 @@ export async function configRoutes(app: FastifyInstance) {
   await app.register(cargaMaestrosRoutes)
   await app.register(cargaEntidadesDetalleRoutes)
   await app.register(cajasPorPalletRoutes)
+  await app.register(especiesImagenRoutes)
 
   // Menú accesible del usuario autenticado
   app.get('/me/menu', { preHandler: [requireAuth] }, getMiMenu)

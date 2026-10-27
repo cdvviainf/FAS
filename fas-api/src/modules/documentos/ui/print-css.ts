@@ -72,6 +72,26 @@ export function printCss(pagina: { formato: 'A4' | 'Letter'; orientacion: 'portr
     .doc-header .doc-folio .doc-titulo { font-size: 16pt; font-weight: 700; margin-bottom: 1mm; }
     .doc-header .doc-folio .doc-numero { font-size: 13pt; font-weight: 700; color: ${T.tinta}; }
 
+    /* Encabezado tipo BANNER (2026-10-26, EncabezadoBanner.tsx) — banda superior
+       con el logo a la izquierda (50%) y la imagen de la especie a la derecha
+       (50%), con espacio blanco al centro; debajo, la fila de info del
+       documento. Clases nuevas, independientes de .doc-header (que siguen
+       usando las plantillas v1 ya emitidas). */
+    .doc-encabezado { margin-bottom: 4mm; }
+    .doc-banner { display: flex; justify-content: space-between; align-items: center; gap: 4mm; }
+    .doc-banner-logo, .doc-banner-especie { width: 48%; height: 22mm; overflow: hidden; display: flex; align-items: center; }
+    .doc-banner-logo { justify-content: flex-start; }
+    .doc-banner-especie { justify-content: flex-end; }
+    .doc-banner-logo img { max-width: 100%; max-height: 22mm; object-fit: contain; }
+    .doc-banner-especie img { width: 100%; height: 22mm; object-fit: cover; }
+    .doc-info {
+      display: flex; flex-direction: column; align-items: flex-end; text-align: right;
+      border-bottom: 2px solid ${T.acento}; padding-bottom: 3mm; margin-top: 2mm;
+      font-size: 9pt; color: ${T.acento};
+    }
+    .doc-info .doc-titulo { font-size: 16pt; font-weight: 700; margin-bottom: 1mm; }
+    .doc-info .doc-numero { font-size: 13pt; font-weight: 700; color: ${T.tinta}; }
+
     .doc-grupo { break-inside: avoid; margin-bottom: 4mm; }
     .doc-grupo-titulo {
       font-size: 8.5pt;

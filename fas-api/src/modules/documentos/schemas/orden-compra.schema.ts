@@ -4,6 +4,11 @@ import { z } from 'zod'
 // §5): este schema es el contrato entre el resolver y la plantilla. Montos
 // como string decimal (CLAUDE.md §7), nunca number.
 export const ordenCompraPdfPayloadSchema = z.object({
+  // Idioma de emisión (2026-10-26): la plantilla traduce etiquetas según esto.
+  idioma: z.enum(['ES', 'EN']),
+  // Imagen de la especie (primera por ID entre las líneas) para el banner del
+  // encabezado — data URI embebido, null si la especie no tiene imagen.
+  especieImagenDataUri: z.string().nullable(),
   empresa: z.object({
     // codigo (2026-08-20): decide en la plantilla si aplica el disclaimer
     // legal de facturación de Agrosan (ver DISCLAIMER_FACTURACION_AGROSAN,

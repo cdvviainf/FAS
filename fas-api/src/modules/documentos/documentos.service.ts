@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { NotFoundError, ValidationError } from '../../shared/errors.js'
 import { renderPdf } from '../../shared/pdf/render.js'
 import { getDocumentDefinition } from './documentos.registry.js'
+import type { IdiomaDocumento } from './documentos.types.js'
 import * as repo from './documentos.repository.js'
 import { marcarOrdenCompraEmitida } from '../compras/ordenes-compra/ordenes-compra.repository.js'
 import { fmt } from './ui/formato.js'
@@ -18,9 +19,9 @@ function getDefinicionOFallar(tipo: string) {
   return def
 }
 
-async function resolverYValidar(tipo: string, id: number, empresaId: number) {
+async function resolverYValidar(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES') {
   const def = getDefinicionOFallar(tipo)
-  const payload = await def.resolver(id, empresaId)
+  const payload = await def.resolver(id, empresaId, { idioma })
   const parsed = def.schema.safeParse(payload)
   if (!parsed.success) {
     // No debería pasar en producción (el resolver ya arma el shape del
@@ -48,14 +49,14 @@ function armarHtml(
 // Mismo HTML que se fotografía para el PDF; se sirve crudo para mostrarlo en
 // un iframe en el ERP antes de emitir. Siempre con marca BORRADOR — nada
 // generado por esta vía queda registrado como oficial.
-export async function obtenerPreviewHtml(tipo: string, id: number, empresaId: number): Promise<string> {
-  const { def, payload } = await resolverYValidar(tipo, id, empresaId)
+export async function obtenerPreviewHtml(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES'): Promise<string> {
+  const { def, payload } = await resolverYValidar(tipo, id, empresaId, idioma)
   return armarHtml(def, payload, def.plantillaActual, def.controlCopia ? 'BORRADOR' : undefined)
 }
 
 // ─── PDF bajo demanda (sin emitir) ─────────────────────────────────────────
-export async function obtenerPdf(tipo: string, id: number, empresaId: number): Promise<{ buffer: Buffer; nombreArchivo: string }> {
-  const { def, payload } = await resolverYValidar(tipo, id, empresaId)
+export async function obtenerPdf(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES'): Promise<{ buffer: Buffer; nombreArchivo: string }> {
+  const { def, payload } = await resolverYValidar(tipo, id, empresaId, idioma)
   const html = armarHtml(def, payload, def.plantillaActual, def.controlCopia ? 'BORRADOR' : undefined)
   const buffer = await renderPdf(html, def.pagina)
   return { buffer, nombreArchivo: def.nombreArchivo(payload) }
@@ -89,8 +90,9 @@ export async function emitirDocumento(
   id: number,
   empresaId: number,
   creadoPor: string,
+  idioma: IdiomaDocumento = 'ES',
 ): Promise<{ id: number; buffer: Buffer; nombreArchivo: string }> {
-  const { def, payload } = await resolverYValidar(tipo, id, empresaId)
+  const { def, payload } = await resolverYValidar(tipo, id, empresaId, idioma)
   // Defensa en profundidad — documentos.routes.ts ya bloquea /emitir para un
   // `tipo` sin control de copia (404 antes de llegar acá); este segundo
   // chequeo evita que un llamado directo al service (ej. un test futuro)

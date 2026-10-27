@@ -39,6 +39,15 @@ export function logoDataUri(logo: { mime: string; datos: Buffer } | null | undef
   return `data:${logo.mime};base64,${logo.datos.toString('base64')}`
 }
 
+// Imagen de la especie para el banner del encabezado (mitad derecha) — data URI
+// listo para <img src>. null si la especie no tiene imagen cargada. El resolver
+// pasa la "primera especie por ID" del documento (menor id del maestro).
+export async function getEspecieImagenDataUri(especieId: number | null | undefined): Promise<string | null> {
+  if (especieId == null) return null
+  const img = await prisma.especieImagen.findUnique({ where: { especieId }, select: { mime: true, datos: true } })
+  return img ? `data:${img.mime};base64,${Buffer.from(img.datos).toString('base64')}` : null
+}
+
 export async function getEntidadParaDocumento(id: number) {
   return prisma.entidad.findFirst({
     where: { id, eliminadoEn: null },

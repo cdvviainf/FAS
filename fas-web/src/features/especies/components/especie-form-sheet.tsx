@@ -34,6 +34,7 @@ import { createMantenedorQueries } from '@/features/mantenedor-simple/queries'
 import { createCodigoValidator } from '@/features/mantenedor-simple/service'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 import { UnidadMedidaQuickCreate } from '@/features/unidades-medida/components/unidad-medida-quick-create'
+import { EspecieImagenUpload } from './especie-imagen-upload'
 
 const especieSchema = z.object({
   codigo: z.string().min(1, 'Requerido').max(50).trim(),
@@ -206,6 +207,12 @@ export function EspecieFormSheet({ item, open, onOpenChange }: EspecieFormSheetP
               )}
             </form.Form>
           </form.AppForm>
+
+          {isEdit && (
+            <div className='mt-4 border-t px-1 pt-4'>
+              <EspecieImagenUpload especieId={item.id} />
+            </div>
+          )}
         </div>
 
         <SheetFooter>
