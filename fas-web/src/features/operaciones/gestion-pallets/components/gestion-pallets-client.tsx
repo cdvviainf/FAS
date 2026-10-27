@@ -17,7 +17,7 @@ import { formatFechaCorta } from '@/lib/format'
 import { notasCalidadService } from '@/features/notas-calidad/service'
 import { notasCondicionService } from '@/features/notas-condicion/service'
 import { gestionPalletsService } from '../service'
-import { ESTADO_STOCK_LABELS, diasAntiguedad, bucketAntiguedad } from '@/features/reportes/stock-fruta/types'
+import { diasAntiguedad, bucketAntiguedad } from '@/features/reportes/stock-fruta/types'
 import type { AntiguedadBucket } from '@/features/reportes/stock-fruta/types'
 import type { StockDetalleRow } from '../types'
 
@@ -32,7 +32,6 @@ interface Filters {
   variedadIds: string[]
   calibreIds: string[]
   categoriaIds: string[]
-  estados: string[]
   productorIds: string[]
   notaCalidadIds: string[]
   notaCondicionIds: string[]
@@ -42,7 +41,7 @@ interface Filters {
 }
 
 const FILTROS_VACIOS: Filters = {
-  especieIds: [], variedadIds: [], calibreIds: [], categoriaIds: [], estados: [], productorIds: [],
+  especieIds: [], variedadIds: [], calibreIds: [], categoriaIds: [], productorIds: [],
   notaCalidadIds: [], notaCondicionIds: [], completos: [], fechaEmbalaje: [], packingIds: [],
 }
 
@@ -56,7 +55,6 @@ const FACETS: {
   { key: 'variedadIds', label: 'Variedad', getValue: (r) => String(r.variedadId), getLabel: (r) => r.variedad.descripcion },
   { key: 'calibreIds', label: 'Calibre', getValue: (r) => String(r.calibreId), getLabel: (r) => r.calibre.descripcion },
   { key: 'categoriaIds', label: 'Categoría', getValue: (r) => String(r.categoriaId), getLabel: (r) => r.categoria.descripcion },
-  { key: 'estados', label: 'Estado', getValue: (r) => r.estado, getLabel: (r) => ESTADO_STOCK_LABELS[r.estado] },
   { key: 'productorIds', label: 'Productor', getValue: (r) => String(r.productorId), getLabel: (r) => r.productor.descripcion },
   { key: 'notaCalidadIds', label: 'Nota Calidad', getValue: (r) => r.notaCalidadId != null ? String(r.notaCalidadId) : SIN_NOTA, getLabel: (r) => r.notaCalidad?.descripcion ?? 'Sin nota' },
   { key: 'notaCondicionIds', label: 'Nota Condición', getValue: (r) => r.notaCondicionId != null ? String(r.notaCondicionId) : SIN_NOTA, getLabel: (r) => r.notaCondicion?.descripcion ?? 'Sin nota' },
@@ -284,7 +282,6 @@ export function GestionPalletsClient() {
                 <TableHead>Calibre</TableHead>
                 <TableHead>Categoría</TableHead>
                 <TableHead className='text-right'>Cajas</TableHead>
-                <TableHead className='text-right'>Kilos</TableHead>
                 <TableHead>Nota Calidad</TableHead>
                 <TableHead>Nota Condición</TableHead>
                 <TableHead>Completo</TableHead>
@@ -295,7 +292,7 @@ export function GestionPalletsClient() {
             <TableBody>
               {grupos.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={12} className='text-muted-foreground text-center'>Sin pallets para estos filtros.</TableCell>
+                  <TableCell colSpan={11} className='text-muted-foreground text-center'>Sin pallets para estos filtros.</TableCell>
                 </TableRow>
               )}
               {grupos.map((g) => {
@@ -309,7 +306,6 @@ export function GestionPalletsClient() {
                       <TableCell>{g.calibre}</TableCell>
                       <TableCell>{g.categoria}</TableCell>
                       <TableCell className='text-right tabular-nums'>{g.cajas.toLocaleString('es-CL')}</TableCell>
-                      <TableCell className='text-right tabular-nums'>{Math.round(g.kg).toLocaleString('es-CL')}</TableCell>
                       <TableCell></TableCell>
                       <TableCell></TableCell>
                       <TableCell></TableCell>
@@ -323,9 +319,8 @@ export function GestionPalletsClient() {
                           <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Folio</TableCell>
                           <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Productor</TableCell>
                           <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Antigüedad</TableCell>
-                          <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Estado</TableCell>
+                          <TableCell></TableCell>
                           <TableCell className='text-muted-foreground text-right text-[10px] tracking-wide uppercase'>Cajas</TableCell>
-                          <TableCell className='text-muted-foreground text-right text-[10px] tracking-wide uppercase'>Kilos</TableCell>
                           <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Nota Calidad</TableCell>
                           <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Nota Condición</TableCell>
                           <TableCell className='text-muted-foreground text-[10px] tracking-wide uppercase'>Completo</TableCell>
@@ -358,11 +353,8 @@ export function GestionPalletsClient() {
                                 <TableCell>
                                   <Badge variant='outline' className={AGING_BADGE_VARIANT[bucket]}>{dias} d</Badge>
                                 </TableCell>
-                                <TableCell>
-                                  <Badge variant={row.estado === 'VALIDADA' ? 'default' : 'secondary'}>{ESTADO_STOCK_LABELS[row.estado]}</Badge>
-                                </TableCell>
+                                <TableCell></TableCell>
                                 <TableCell className='text-muted-foreground text-right tabular-nums'>{row.cajas.toLocaleString('es-CL')}</TableCell>
-                                <TableCell className='text-muted-foreground text-right tabular-nums'>{Math.round(row.kg).toLocaleString('es-CL')}</TableCell>
                                 {esPrimeraFilaDelPallet ? (
                                   <>
                                     <TableCell>
