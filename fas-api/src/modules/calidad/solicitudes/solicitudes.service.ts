@@ -161,6 +161,10 @@ async function validarLineas(lineas: { especieId: number; articuloId: number; va
     if (!articulo) throw new ValidationError(`${prefijo} el embalaje no existe`)
     if (articulo.tipo !== 'EMBALAJE') throw new ValidationError(`${prefijo} el embalaje debe ser un artículo de tipo Embalaje`)
     if (!articulo.activo) throw new ValidationError(`${prefijo} el embalaje está inactivo`)
+    // El embalaje debe ser de la especie de la línea o genérico (sin especie).
+    if (articulo.especieId != null && articulo.especieId !== linea.especieId) {
+      throw new ValidationError(`${prefijo} el embalaje no pertenece a la especie`)
+    }
 
     if (linea.categoriaIds && linea.categoriaIds.length > 0) {
       const categorias = await repo.getCategoriasActivas(linea.categoriaIds)

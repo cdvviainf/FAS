@@ -620,7 +620,9 @@ export async function getCategoriasActivas(ids: number[]) {
 }
 
 export async function getArticulosEmbalaje(ids: number[]) {
-  return prisma.articulo.findMany({ where: { id: { in: ids } }, select: { id: true, tipo: true, activo: true } })
+  // especieId: los embalajes pueden ser específicos de una especie o genéricos
+  // (null) — la validación por línea acepta ambos (mismo criterio que la OC).
+  return prisma.articulo.findMany({ where: { id: { in: ids } }, select: { id: true, tipo: true, activo: true, especieId: true } })
 }
 
 // ─── Conteo de referencias (para bloquear soft delete de maestros, QAS-SI-001) ─

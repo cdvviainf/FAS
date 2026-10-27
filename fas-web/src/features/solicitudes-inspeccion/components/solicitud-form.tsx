@@ -150,11 +150,6 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     queryFn: () => entidadesService.list({ tipo: 'CLIENTE_EXTRANJERO', limit: 500, activo: true }),
     staleTime: 60_000,
   })
-  const { data: articulosEmbalaje } = useQuery({
-    queryKey: ['articulos-embalaje-options-solicitud'],
-    queryFn: () => articulosService.list({ tipo: 'EMBALAJE', activo: true, limit: 500 }),
-    staleTime: 60_000,
-  })
   const { data: notasCalidad } = useQuery({
     queryKey: ['notas-calidad'],
     queryFn: () => notasCalidadService.list(),
@@ -527,7 +522,6 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
                 index={i}
                 linea={linea}
                 especies={(especies?.data ?? []).map((e) => ({ id: e.id, descripcion: e.descripcion }))}
-                articulosEmbalaje={(articulosEmbalaje?.data ?? []).map((a) => ({ id: a.id, codigo: a.codigo, descripcion: a.descripcion }))}
                 notasCalidad={notasCalidad?.data ?? []}
                 notasCondicion={notasCondicion?.data ?? []}
                 onChange={(cambios) => actualizarLinea(i, cambios)}
@@ -656,15 +650,22 @@ interface LineaEditorProps {
   index: number
   linea: LineaForm
   especies: { id: number; descripcion: string }[]
-  articulosEmbalaje: { id: number; codigo: string; descripcion: string }[]
   notasCalidad: NotaConEspecies[]
   notasCondicion: NotaConEspecies[]
   onChange: (cambios: Partial<LineaForm>) => void
   onRemove: () => void
 }
 
-function LineaEditor({ index, linea, especies, articulosEmbalaje, notasCalidad, notasCondicion, onChange, onRemove }: LineaEditorProps) {
+function LineaEditor({ index, linea, especies, notasCalidad, notasCondicion, onChange, onRemove }: LineaEditorProps) {
   const especieId = linea.especieId
+  // Embalajes filtrados por la especie de la línea (el backend incluye los
+  // genéricos sin especie, mismo criterio que la Orden de Compra).
+  const { data: embalajesData } = useQuery({
+    queryKey: ['articulos-embalaje-options-solicitud', especieId],
+    queryFn: () => articulosService.list({ tipo: 'EMBALAJE', activo: true, especieId: especieId!, limit: 500 }),
+    staleTime: 60_000,
+    enabled: !!especieId,
+  })
   const { data: variedadesData } = useQuery({
     queryKey: ['variedades-options-solicitud', especieId],
     queryFn: () => variedadesService.list({ limit: 500, especieId: especieId! }),
@@ -709,7 +710,7 @@ function LineaEditor({ index, linea, especies, articulosEmbalaje, notasCalidad, 
           <Label>Especie <span className='text-destructive'>*</span></Label>
           <Select
             value={especieId ? String(especieId) : ''}
-            onValueChange={(v) => onChange({ especieId: Number(v), variedadId: null, categoriaIds: [], calibreIds: [], calidadesPermitidas: [] })}
+            onValueChange={(v) => onChange({ especieId: Number(v), articuloId: null, variedadId: null, categoriaIds: [], calibreIds: [], calidadesPermitidas: [] })}
           >
             <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
             <SelectContent>
@@ -722,9 +723,10 @@ function LineaEditor({ index, linea, especies, articulosEmbalaje, notasCalidad, 
           <Combobox
             value={linea.articuloId ? String(linea.articuloId) : ''}
             onChange={(v) => onChange({ articuloId: v ? Number(v) : null })}
-            placeholder='Seleccionar embalaje...'
+            placeholder={especieId ? 'Seleccionar embalaje...' : 'Elige especie primero'}
             searchPlaceholder='Buscar embalaje...'
-            options={articulosEmbalaje.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+            disabled={!especieId}
+            options={(embalajesData?.data ?? []).map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
           />
         </div>
         <div className='space-y-1.5'>
