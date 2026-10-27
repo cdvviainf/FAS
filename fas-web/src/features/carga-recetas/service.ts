@@ -16,10 +16,14 @@ function descargarBlob(blob: Blob, nombre: string) {
 }
 
 export const cargaRecetasService = {
-  // Descarga el Excel base (una hoja Recetas, una fila por componente).
-  async descargarTemplate(): Promise<void> {
-    const blob = await api.get('materiales/carga-recetas/template').blob()
-    descargarBlob(blob, 'Carga_Recetas_base.xlsx')
+  // Descarga el Excel base: hoja Recetas + hoja de referencia Embalajes
+  // (dropdown en la columna Embalaje). Con `conEjemplo` trae filas de ejemplo
+  // con códigos reales de la empresa.
+  async descargarTemplate(conEjemplo = false): Promise<void> {
+    const blob = await api
+      .get('materiales/carga-recetas/template', conEjemplo ? { searchParams: { ejemplo: 'true' } } : undefined)
+      .blob()
+    descargarBlob(blob, conEjemplo ? 'Carga_Recetas_ejemplo.xlsx' : 'Carga_Recetas_base.xlsx')
   },
 
   // Valida (dryRun, nivel LECTURA) o carga (commit, nivel TOTAL) el archivo.

@@ -29,7 +29,7 @@ export function CargaRecetasClient() {
   const [resultado, setResultado] = useState<ResultadoCarga | null>(null)
 
   const templateMut = useMutation({
-    mutationFn: () => cargaRecetasService.descargarTemplate(),
+    mutationFn: (conEjemplo: boolean) => cargaRecetasService.descargarTemplate(conEjemplo),
     onError: (e: Error) => toast.error(e.message || 'No se pudo descargar la plantilla'),
   })
 
@@ -59,15 +59,34 @@ export function CargaRecetasClient() {
         <CardHeader>
           <CardTitle>1. Plantilla</CardTitle>
           <CardDescription>
-            Descarga el Excel base (una sola hoja, una fila por componente). Repite el código de receta y los datos
-            de cabecera (Embalaje, Descripción, Cantidad a Producir) en cada fila de la misma receta. El Embalaje y los
-            componentes deben existir previamente como Artículos.
+            Descarga el Excel base (una fila por componente). Repite el código de receta y los datos
+            de cabecera (Embalaje, Descripción, Cantidad a Producir) en cada fila de la misma receta. Incluye una
+            hoja de referencia <strong>Embalajes</strong> con los artículos existentes y un desplegable en la columna
+            Embalaje. El Embalaje y los componentes deben existir previamente como Artículos.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Button variant='outline' onClick={() => templateMut.mutate()} disabled={templateMut.isPending}>
-            <Icons.download className='mr-2 h-4 w-4' />
+        <CardContent className='flex flex-wrap gap-3'>
+          <Button
+            variant='outline'
+            onClick={() => templateMut.mutate(false)}
+            disabled={templateMut.isPending}
+          >
+            {templateMut.isPending && templateMut.variables === false && (
+              <Icons.spinner className='mr-2 h-4 w-4 animate-spin' />
+            )}
+            {!(templateMut.isPending && templateMut.variables === false) && <Icons.download className='mr-2 h-4 w-4' />}
             Descargar plantilla
+          </Button>
+          <Button
+            variant='ghost'
+            onClick={() => templateMut.mutate(true)}
+            disabled={templateMut.isPending}
+          >
+            {templateMut.isPending && templateMut.variables === true && (
+              <Icons.spinner className='mr-2 h-4 w-4 animate-spin' />
+            )}
+            {!(templateMut.isPending && templateMut.variables === true) && <Icons.download className='mr-2 h-4 w-4' />}
+            Descargar con ejemplo
           </Button>
         </CardContent>
       </Card>

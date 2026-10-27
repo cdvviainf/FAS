@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
-import type { Prisma } from '@prisma/client'
+import type { Prisma, TipoArticulo } from '@prisma/client'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ArticuloCreateInput, ArticuloUpdateInput, ArticuloListFilters } from './articulos.types.js'
 
@@ -96,6 +96,20 @@ export async function getArticuloById(id: number) {
 
 export async function findArticuloByCodigo(codigo: string) {
   return prisma.articulo.findFirst({ where: { codigo } })
+}
+
+// Artículos de ciertos tipos para las hojas de referencia / dropdowns y el
+// ejemplo del template de Carga de Recetas: solo código + descripción + tipo,
+// ordenados por código. NO filtra por `activo` a propósito: el cargador de
+// recetas acepta cualquier artículo del tipo correcto sin mirar su estado, así
+// que la referencia debe mostrar lo mismo que el loader admite (FAS-REC-TPL-002).
+// Tenant-scoped vía el Prisma Client Extension.
+export async function findArticulosParaReferencia(tipos: TipoArticulo[]) {
+  return prisma.articulo.findMany({
+    where: { tipo: { in: tipos } },
+    select: { codigo: true, descripcion: true, tipo: true },
+    orderBy: { codigo: 'asc' },
+  })
 }
 
 // ART-04: valida que la unidad de medida exista, no esté eliminada ni bloqueada

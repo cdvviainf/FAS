@@ -37,6 +37,42 @@ export interface ResultadoCargaRecetas {
 
 const texto = (v: unknown): string => (v == null ? '' : String(v).trim())
 
+// Arma los datos a precargar en el template (hoja de referencia Embalajes y, si
+// `conEjemplo`, filas de ejemplo en la hoja Recetas). Se corre en el contexto de
+// empresa para que las consultas queden tenant-scoped. El ejemplo usa códigos
+// REALES de la empresa (primer embalaje + hasta 2 componentes); si no hay
+// artículos aún, cae a placeholders que el usuario debe reemplazar.
+export async function construirDatosPlantillaRecetas(
+  empresaId: number,
+  conEjemplo: boolean,
+): Promise<Record<string, Array<Record<string, unknown>>>> {
+  return empresaContext.run({ empresaId }, async () => {
+    const embalajes = await articulosRepo.findArticulosParaReferencia(['EMBALAJE'])
+    const datosPorHoja: Record<string, Array<Record<string, unknown>>> = {
+      Embalajes: embalajes.map((e) => ({ codigo: e.codigo, descripcion: e.descripcion })),
+    }
+
+    if (conEjemplo) {
+      const componentes = await articulosRepo.findArticulosParaReferencia(['MATERIAL_EMBALAJE', 'SERVICIO'])
+      const embalajeCod = embalajes[0]?.codigo ?? 'COD-EMBALAJE'
+      // Hasta 2 componentes distintos (para ilustrar la cabecera repetida en
+      // varias filas); placeholders solo si la empresa no tiene componentes.
+      const compCods = componentes.slice(0, 2).map((c) => c.codigo)
+      if (compCods.length === 0) compCods.push('COD-COMPONENTE-1', 'COD-COMPONENTE-2')
+      datosPorHoja.Recetas = compCods.map((componenteCod, i) => ({
+        recetaCod: 'RECETA-EJEMPLO',
+        embalajeCod,
+        descripcion: 'Receta de ejemplo (reemplazar)',
+        cantidadAProducir: 1000,
+        componenteCod,
+        cantidadAConsumir: i + 1,
+      }))
+    }
+
+    return datosPorHoja
+  })
+}
+
 export async function cargarRecetas(
   rutaOBuffer: string | Buffer,
   opciones: OpcionesCargaRecetas,

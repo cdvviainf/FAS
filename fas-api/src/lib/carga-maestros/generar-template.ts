@@ -95,7 +95,7 @@ function agregarHojaMaestro(
   wb: ExcelJS.Workbook,
   hoja: HojaSpec,
   rangos: Record<string, string>,
-  letraCodigoPorHoja: Record<string, string>,
+  nombreRangoPorHoja: Record<string, string>,
   datos?: Array<Record<string, unknown>>,
 ) {
   const ws = wb.addWorksheet(
@@ -119,7 +119,7 @@ function agregarHojaMaestro(
     ws.getColumn(idx).width = Math.min(42, Math.max(16, col.encabezado.length + 2))
 
     // Las hojas de solo-referencia no llevan validaciones (son de lectura).
-    if (!hoja.soloReferencia) aplicarValidacion(ws, letra, col, rangos, letraCodigoPorHoja)
+    if (!hoja.soloReferencia) aplicarValidacion(ws, letra, col, rangos, nombreRangoPorHoja)
   })
 
   // Datos precargados (hojas de referencia): una fila por registro de la BD,
@@ -143,7 +143,7 @@ function aplicarValidacion(
   letra: string,
   col: ColumnaSpec,
   rangos: Record<string, string>,
-  letraCodigoPorHoja: Record<string, string>,
+  nombreRangoPorHoja: Record<string, string>,
 ) {
   const rango = `${letra}2:${letra}${FILAS_VALIDACION}`
   if (col.tipo === 'booleanSiNo') {
@@ -160,12 +160,16 @@ function aplicarValidacion(
   // enumMulti: Excel no soporta multiselección nativa; se deja texto libre y la
   // lista de valores permitidos va en el comentario del encabezado.
   if (col.tipo === 'fk' && col.fk?.hoja) {
-    const codeLetra = letraCodigoPorHoja[col.fk.hoja]
-    if (codeLetra) {
+    // Se apunta a un RANGO CON NOMBRE (definedName) en vez de a una referencia
+    // directa entre hojas: es la forma portable de un dropdown desde otra hoja
+    // (Excel viejo repara/pierde la validación con referencias directas) —
+    // FAS-REC-TPL-001. El definedName lo registra `generarTemplate`.
+    const nombre = nombreRangoPorHoja[col.fk.hoja]
+    if (nombre) {
       (ws as any).dataValidations.add(rango, {
         type: 'list',
         allowBlank: !col.requerido,
-        formulae: [`'${col.fk.hoja}'!$${codeLetra}$2:$${codeLetra}$${FILAS_VALIDACION}`],
+        formulae: [nombre],
       })
     }
   }
@@ -210,11 +214,29 @@ export async function generarTemplate(hojas: HojaSpec[], opciones: OpcionesGener
   )
   const rangos = construirListasFijas(wb, listas)
 
-  // Letra de la columna 'codigo' por hoja, para dropdowns de FK interna.
+  // Letra de la columna 'codigo' por hoja, para apuntar los dropdowns de FK.
   const letraCodigoPorHoja: Record<string, string> = {}
   for (const h of hojas) letraCodigoPorHoja[h.hoja] = letraColumna(indiceColumnaCodigo(h))
 
-  for (const h of hojas) agregarHojaMaestro(wb, h, rangos, letraCodigoPorHoja, opciones.datosPorHoja?.[h.hoja])
+  // Rangos con nombre (definedName) por hoja referenciada por alguna FK: un
+  // dropdown que lee otra hoja es más portable apuntando a un nombre que a una
+  // referencia directa entre hojas (FAS-REC-TPL-001).
+  const hojasReferenciadas = new Set<string>()
+  for (const h of hojas) for (const c of h.columnas) if (c.tipo === 'fk' && c.fk?.hoja) hojasReferenciadas.add(c.fk.hoja)
+  const nombreRangoPorHoja: Record<string, string> = {}
+  let refIdx = 0
+  for (const nombreHoja of hojasReferenciadas) nombreRangoPorHoja[nombreHoja] = `_ref_${++refIdx}`
+
+  for (const h of hojas) agregarHojaMaestro(wb, h, rangos, nombreRangoPorHoja, opciones.datosPorHoja?.[h.hoja])
+
+  // Registrar cada definedName apuntando a la columna 'codigo' de su hoja.
+  for (const nombreHoja of hojasReferenciadas) {
+    const letra = letraCodigoPorHoja[nombreHoja]
+    const nombre = nombreRangoPorHoja[nombreHoja]
+    if (letra && nombre) {
+      wb.definedNames.add(`'${nombreHoja}'!$${letra}$2:$${letra}$${FILAS_VALIDACION}`, nombre)
+    }
+  }
 
   return wb.xlsx.writeBuffer()
 }

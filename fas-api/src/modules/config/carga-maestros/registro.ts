@@ -339,6 +339,41 @@ export const REGISTRO_RECETAS: HojaSpec[] = [
   },
 ]
 
+// ─── Registro SOLO para GENERAR el template de Recetas (con dropdown) ────────
+//
+// Agrega una hoja de SOLO REFERENCIA "Embalajes" (la llena el generador con los
+// artículos tipo EMBALAJE de la empresa) y convierte la columna Embalaje de la
+// hoja Recetas en un dropdown (`fk` externo que apunta a esa hoja). NO se usa
+// para parsear: el parseo sigue con `REGISTRO_RECETAS` (solo hoja Recetas), de
+// modo que la hoja de referencia NO es obligatoria al subir el archivo (si el
+// usuario la borra o reutiliza un template viejo, la carga no falla). El parser
+// trata `fk` igual que `texto` y las FK `externo` no se validan contra el
+// archivo, así que el cargador resuelve el embalaje contra la BD igual que antes.
+export const HOJA_REF_EMBALAJES: HojaSpec = {
+  hoja: 'Embalajes',
+  titulo: 'Embalajes (referencia)',
+  descripcion: 'Artículos tipo EMBALAJE existentes. Copia el "Código" en la columna Embalaje de la hoja Recetas. No la edites.',
+  dependeDe: [],
+  soloReferencia: true,
+  codigoUnicoGlobal: false,
+  columnas: [
+    { encabezado: 'Código', campo: 'codigo', tipo: 'texto' },
+    { encabezado: 'Descripción', campo: 'descripcion', tipo: 'texto' },
+  ],
+}
+
+export const REGISTRO_RECETAS_TEMPLATE: HojaSpec[] = [
+  {
+    ...REGISTRO_RECETAS[0],
+    columnas: REGISTRO_RECETAS[0].columnas.map((c) =>
+      c.campo === 'embalajeCod'
+        ? { ...c, tipo: 'fk', fk: { hoja: 'Embalajes', externo: true, modelo: 'articulo' } }
+        : c,
+    ),
+  },
+  HOJA_REF_EMBALAJES,
+]
+
 /** Orden topológico de carga (respeta `dependeDe`). */
 export function ordenTopologico(hojas: HojaSpec[] = REGISTRO_MAESTROS): HojaSpec[] {
   const porNombre = new Map(hojas.map((h) => [h.hoja, h]))

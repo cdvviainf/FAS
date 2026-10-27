@@ -638,9 +638,13 @@ Cargador dedicado para poblar recetas desde un Excel de **una sola hoja** `Recet
 - Cantidades `> 0`, descripción no vacía.
 - **Éxito parcial por receta**: cada receta se procesa de forma independiente; las válidas se crean y las erróneas se reportan (mismo criterio que la Carga Masiva de Maestros). No es atómico por archivo.
 
+**Template con referencia de Embalajes + ejemplo (2026-10-27).** El Excel descargado agrega una hoja de **SOLO REFERENCIA** `Embalajes` (pestaña gris, Código · Descripción) poblada con los artículos **tipo EMBALAJE** de la empresa activa, y la columna *Embalaje* de la hoja `Recetas` se emite como **desplegable** (dropdown) que apunta a esa hoja. `GET /carga-recetas/template?ejemplo=true` descarga además **filas de ejemplo** en la hoja `Recetas` (misma receta, hasta 2 componentes, para ilustrar la cabecera repetida) usando **códigos reales** de la empresa (primer embalaje + hasta 2 componentes; placeholders solo si aún no hay artículos). Notas de diseño:
+- El dropdown es **ayuda visual**, no validación dura (Excel solo advierte si el valor no está en la lista); la validación real sigue en el cargador (existe + tipo `EMBALAJE`, R13).
+- El **parseo del archivo subido NO exige la hoja `Embalajes`**: se usa un registro de generación aparte (con la hoja de referencia + la columna `fk`), mientras que el parseo sigue con el registro de una sola hoja. Así, reutilizar un template viejo o borrar la hoja de referencia **no rompe la carga**. Las FK `externo` no se validan contra el archivo; el embalaje se resuelve contra la BD como siempre.
+
 | Método | Ruta | Notas |
 |---|---|---|
-| GET | `/carga-recetas/template` | descarga el Excel base (1 hoja) — nivel `LECTURA` |
+| GET | `/carga-recetas/template` | descarga el Excel base: hoja `Recetas` + hoja de referencia `Embalajes` (dropdown en la columna Embalaje). `?ejemplo=true` agrega filas de ejemplo con códigos reales — nivel `LECTURA` |
 | POST | `/carga-recetas/validar` | dry-run: valida sin escribir — nivel `LECTURA` |
 | POST | `/carga-recetas` | carga a la base — nivel `TOTAL` |
 | POST | `/carga-recetas/reporte` | Excel con el detalle de errores de una validación — nivel `LECTURA` |
