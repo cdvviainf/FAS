@@ -112,6 +112,18 @@ export async function findArticulosParaReferencia(tipos: TipoArticulo[]) {
   })
 }
 
+// Artículos ACTIVOS para la hoja de referencia / dropdown del template de
+// importación de líneas de Movimiento: solo código + descripción, ordenados por
+// código. Filtra `activo: true` porque el alta de línea de Movimiento rechaza
+// artículos inactivos (la referencia = lo que el import acepta). Tenant-scoped.
+export async function findArticulosActivosParaReferencia() {
+  return prisma.articulo.findMany({
+    where: { activo: true },
+    select: { codigo: true, descripcion: true },
+    orderBy: { codigo: 'asc' },
+  })
+}
+
 // ART-04: valida que la unidad de medida exista, no esté eliminada ni bloqueada
 export async function getUnidadMedidaActiva(unidadId: number) {
   return prisma.unidadMedida.findFirst({

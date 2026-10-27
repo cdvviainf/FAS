@@ -102,6 +102,22 @@ export interface MovimientoListResponse {
   meta: { total: number; page: number; limit: number; totalPages: number }
 }
 
+// Error de una fila al importar líneas desde Excel (espejo de ErrorFila del
+// motor de carga masiva del backend).
+export interface ErrorImportacionFila {
+  hoja: string
+  fila: number
+  columna?: string
+  codigo: string
+  mensaje: string
+}
+
+export interface ImportacionDetalleResultado {
+  importadas: number
+  total: number
+  errores: ErrorImportacionFila[]
+}
+
 export interface MovimientoListFilters {
   tipoMovimientoId?: number
   estado?: EstadoMovimiento

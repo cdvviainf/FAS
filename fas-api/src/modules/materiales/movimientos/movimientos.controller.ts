@@ -10,6 +10,9 @@ import {
 } from './movimientos.schema.js'
 import * as service from './movimientos.service.js'
 import { z } from 'zod'
+import { ValidationError } from '../../../shared/errors.js'
+import { generarTemplate } from '../../../lib/carga-maestros/generar-template.js'
+import { REGISTRO_MOVIMIENTO_DETALLE_TEMPLATE } from '../../config/carga-maestros/registro.js'
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
   const query = movimientoListQuerySchema.parse(req.query)
@@ -60,6 +63,35 @@ export async function removeLinea(req: FastifyRequest, reply: FastifyReply) {
   const { id, detalleId } = movimientoDetalleParamsSchema.parse(req.params)
   await service.eliminarLinea(id, detalleId)
   return reply.status(204).send()
+}
+
+// ─── Importación de líneas desde Excel (carga inicial de stock) ──────────────
+
+// GET /movimientos/plantilla-detalle → Excel base: hoja Lineas + hoja de
+// referencia Articulos (dropdown en la columna Artículo).
+export async function descargarPlantillaDetalle(_req: FastifyRequest, reply: FastifyReply) {
+  const datosPorHoja = await service.construirDatosPlantillaDetalle()
+  const buffer = await generarTemplate(REGISTRO_MOVIMIENTO_DETALLE_TEMPLATE, {
+    listasEnum: {},
+    datosPorHoja,
+    titulo: 'IMPORTAR LÍNEAS DE MOVIMIENTO — FRUTERA AGROSAN',
+    fueraDeAlcance: ['Artículos: deben existir previamente'],
+  })
+  return reply
+    .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    .header('Content-Disposition', 'attachment; filename="Movimiento_Lineas_base.xlsx"')
+    .send(Buffer.from(buffer))
+}
+
+// POST /movimientos/:id/detalle/importar (multipart) → inserta las líneas
+// válidas del Excel en el detalle del movimiento en BORRADOR.
+export async function importarDetalle(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = movimientoParamsSchema.parse(req.params)
+  const archivo = await req.file()
+  if (!archivo) throw new ValidationError('No se recibió ningún archivo')
+  const buffer = await archivo.toBuffer()
+  const resultado = await service.importarLineasDetalle(id, buffer)
+  return reply.send({ data: resultado })
 }
 
 export async function confirmar(req: FastifyRequest, reply: FastifyReply) {

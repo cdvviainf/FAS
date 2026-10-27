@@ -8,6 +8,7 @@ import type {
   MovimientoListResponse,
   MovimientoListFilters,
   GuiaDespachoDte,
+  ImportacionDetalleResultado,
 } from './types'
 
 export const movimientosService = {
@@ -52,5 +53,26 @@ export const movimientosService = {
   },
   async emitirGuiaDespacho(id: number): Promise<{ data: GuiaDespachoDte }> {
     return api.post(`materiales/movimientos/${id}/guia-despacho/emitir`).json()
+  },
+
+  // Descarga el Excel base para importar líneas (hoja Líneas + referencia
+  // Artículos con dropdown).
+  async descargarPlantillaDetalle(): Promise<void> {
+    const blob = await api.get('materiales/movimientos/plantilla-detalle').blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'Movimiento_Lineas_base.xlsx'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  },
+
+  // Importa líneas al detalle de un movimiento en BORRADOR desde un Excel.
+  async importarDetalle(id: number, archivo: File): Promise<{ data: ImportacionDetalleResultado }> {
+    const form = new FormData()
+    form.append('archivo', archivo)
+    return api.post(`materiales/movimientos/${id}/detalle/importar`, { body: form, timeout: 120_000 }).json()
   },
 }

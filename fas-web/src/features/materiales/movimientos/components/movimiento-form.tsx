@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -31,7 +31,7 @@ import { ordenesCompraMaterialKeys } from '../../ordenes-compra/queries'
 import { movimientosService } from '../service'
 import { movimientosKeys, movimientoDetailOptions } from '../queries'
 import { ESTADO_MOVIMIENTO_LABELS } from '../types'
-import type { MovimientoDetalleInput, MovimientoDetalleItem, MovimientoUpdateInput } from '../types'
+import type { MovimientoDetalleInput, MovimientoDetalleItem, MovimientoUpdateInput, ErrorImportacionFila } from '../types'
 
 const bodegasService = createMantenedorService('bodegas')
 
@@ -94,6 +94,8 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
   const [confirmarOpen, setConfirmarOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [anularOpen, setAnularOpen] = useState(false)
+  const importInputRef = useRef<HTMLInputElement>(null)
+  const [importErrores, setImportErrores] = useState<ErrorImportacionFila[]>([])
 
   const { data: movimientoRes, isLoading } = useQuery({ ...movimientoDetailOptions(movimientoId ?? 0), enabled: isEdit })
   const movimiento = movimientoRes?.data
@@ -291,6 +293,31 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
     },
     onError: (e: Error) => toast.error(e.message || 'Error al eliminar la línea'),
   })
+
+  const plantillaDetalleMutation = useMutation({
+    mutationFn: () => movimientosService.descargarPlantillaDetalle(),
+    onError: (e: Error) => toast.error(e.message || 'No se pudo descargar la plantilla'),
+  })
+
+  const importarDetalleMutation = useMutation({
+    mutationFn: (archivo: File) => movimientosService.importarDetalle(movimientoId!, archivo),
+    onSuccess: ({ data }) => {
+      setImportErrores(data.errores)
+      queryClient.invalidateQueries({ queryKey: movimientosKeys.detail(movimientoId!) })
+      if (data.errores.length === 0) {
+        toast.success(`${data.importadas} de ${data.total} líneas importadas`)
+      } else {
+        toast.warning(`${data.importadas} de ${data.total} líneas importadas — ${data.errores.length} con error`)
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al importar el archivo'),
+  })
+
+  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // permite re-subir el mismo archivo
+    if (file) importarDetalleMutation.mutate(file)
+  }
 
   const confirmarMutation = useMutation({
     mutationFn: () => movimientosService.confirmar(movimientoId!),
@@ -529,12 +556,49 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
             </Button>
           </CardContent>
         </Card>
+      </fieldset>
 
-        <Card>
-          <CardHeader>
+      {/* Detalle fuera del fieldset: la plantilla (LECTURA) debe poder
+          descargarse aunque el movimiento esté confirmado o el usuario sea de
+          solo lectura; los controles de edición se deshabilitan por separado. */}
+      <Card>
+        <CardHeader className='flex flex-row items-center justify-between gap-2 space-y-0'>
             <CardTitle>Detalle</CardTitle>
+            <div className='flex flex-wrap gap-2'>
+              <input ref={importInputRef} type='file' accept='.xlsx' className='hidden' onChange={handleImportFile} />
+              <Button
+                type='button' variant='outline' size='sm'
+                onClick={() => plantillaDetalleMutation.mutate()}
+                isLoading={plantillaDetalleMutation.isPending}
+              >
+                <Icons.download className='mr-1 h-4 w-4' /> Descargar plantilla
+              </Button>
+              <Button
+                type='button' variant='secondary' size='sm'
+                onClick={() => importInputRef.current?.click()}
+                isLoading={importarDetalleMutation.isPending}
+                disabled={soloLectura}
+              >
+                <Icons.upload className='mr-1 h-4 w-4' /> Importar desde Excel
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className='space-y-4'>
+            {importErrores.length > 0 && (
+              <div className='border-destructive/40 bg-destructive/5 max-h-64 overflow-auto rounded-md border p-2 text-sm'>
+                <p className='text-destructive mb-1 font-medium'>{importErrores.length} fila(s) con error en la importación:</p>
+                <ul className='space-y-0.5'>
+                  {importErrores.map((e, i) => (
+                    <li key={i} className='text-muted-foreground'>
+                      Fila {e.fila}{e.columna ? ` · ${e.columna}` : ''}: {e.mensaje}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {/* Controles de edición: deshabilitados en solo lectura / confirmado
+                (display:contents para no alterar el layout). */}
+            <fieldset disabled={soloLectura} className='contents'>
             {movimiento.detalle.length > 0 && (
               <Table>
                 <TableHeader>
@@ -604,9 +668,9 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
                 <Button type='button' variant='outline' onClick={handleCancelarEdicionLinea}>Cancelar</Button>
               )}
             </div>
+            </fieldset>
           </CardContent>
         </Card>
-      </fieldset>
 
       {!soloLectura && (
         <div className='flex justify-between'>

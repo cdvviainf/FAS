@@ -191,6 +191,27 @@ export async function addLineaDetalle(movimientoId: number, data: MovimientoDeta
   })
 }
 
+// Inserción en bloque de líneas (importación desde Excel): un solo lock +
+// re-verificación de BORRADOR y luego `createMany`, para que la carga masiva sea
+// atómica respecto de un "confirmar" concurrente (mismo lock que addLineaDetalle).
+export async function addLineasDetalleBulk(
+  movimientoId: number,
+  lineas: Array<{ articuloId: number; cantidad: number; precioUnitario: number | null }>,
+) {
+  if (lineas.length === 0) return { count: 0 }
+  return prisma.$transaction(async (tx) => {
+    await lockYVerificarBorrador(tx, movimientoId)
+    return tx.movimientoDetalle.createMany({
+      data: lineas.map((l) => ({
+        movimientoId,
+        articuloId: l.articuloId,
+        cantidad: l.cantidad,
+        precioUnitario: l.precioUnitario ?? null,
+      })),
+    })
+  })
+}
+
 export async function getLineaDetalleById(detalleId: number) {
   return prisma.movimientoDetalle.findUnique({ where: { id: detalleId } })
 }

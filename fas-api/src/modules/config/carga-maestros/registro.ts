@@ -374,6 +374,60 @@ export const REGISTRO_RECETAS_TEMPLATE: HojaSpec[] = [
   HOJA_REF_EMBALAJES,
 ]
 
+// ─── Importación de líneas de un Movimiento (carga inicial de stock) ─────────
+//
+// Excel para llenar el DETALLE de un Movimiento (tipo ENTRADA, caso típico de
+// carga inicial de stock) dejado en BORRADOR, para revisar y confirmar en la
+// pantalla del Movimiento. UNA hoja `Lineas`, una fila por artículo:
+// Artículo (código) · Cantidad · Precio Unitario. El artículo YA DEBE EXISTIR;
+// el precio es obligatorio solo si el Tipo de Movimiento lo exige (se valida al
+// importar, contra el movimiento real, no en el template).
+export const REGISTRO_MOVIMIENTO_DETALLE: HojaSpec[] = [
+  {
+    hoja: 'Lineas',
+    modelo: 'movimientoDetalle',
+    titulo: 'Líneas',
+    descripcion:
+      'Una fila por artículo. El Artículo YA DEBE EXISTIR. El Precio Unitario es obligatorio solo si el Tipo de Movimiento lo exige.',
+    dependeDe: [],
+    codigoUnicoGlobal: false,
+    columnas: [
+      { encabezado: 'Artículo (código)', campo: 'articuloCod', tipo: 'texto', requerido: true, ayuda: 'Código de un Artículo ya existente.' },
+      { encabezado: 'Cantidad', campo: 'cantidad', tipo: 'decimal', requerido: true, ayuda: 'Mayor a 0.' },
+      { encabezado: 'Precio Unitario', campo: 'precioUnitario', tipo: 'decimal', ayuda: 'Obligatorio solo si el Tipo de Movimiento exige precio.' },
+    ],
+  },
+]
+
+// Registro SOLO para GENERAR el template (con dropdown + hoja de referencia
+// Articulos). El parseo sigue usando `REGISTRO_MOVIMIENTO_DETALLE` (solo hoja
+// Lineas), así la hoja de referencia NO es obligatoria al subir — mismo criterio
+// que `REGISTRO_RECETAS_TEMPLATE`.
+export const HOJA_REF_ARTICULOS: HojaSpec = {
+  hoja: 'Articulos',
+  titulo: 'Artículos (referencia)',
+  descripcion: 'Artículos existentes. Copia el "Código" en la columna Artículo de la hoja Líneas. No la edites.',
+  dependeDe: [],
+  soloReferencia: true,
+  codigoUnicoGlobal: false,
+  columnas: [
+    { encabezado: 'Código', campo: 'codigo', tipo: 'texto' },
+    { encabezado: 'Descripción', campo: 'descripcion', tipo: 'texto' },
+  ],
+}
+
+export const REGISTRO_MOVIMIENTO_DETALLE_TEMPLATE: HojaSpec[] = [
+  {
+    ...REGISTRO_MOVIMIENTO_DETALLE[0],
+    columnas: REGISTRO_MOVIMIENTO_DETALLE[0].columnas.map((c) =>
+      c.campo === 'articuloCod'
+        ? { ...c, tipo: 'fk', fk: { hoja: 'Articulos', externo: true, modelo: 'articulo' } }
+        : c,
+    ),
+  },
+  HOJA_REF_ARTICULOS,
+]
+
 /** Orden topológico de carga (respeta `dependeDe`). */
 export function ordenTopologico(hojas: HojaSpec[] = REGISTRO_MAESTROS): HojaSpec[] {
   const porNombre = new Map(hojas.map((h) => [h.hoja, h]))

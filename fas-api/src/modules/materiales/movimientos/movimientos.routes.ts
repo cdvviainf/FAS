@@ -11,11 +11,14 @@ const ITEM_REPORTE = 'REPORTES_STOCK_MATERIALES'
 
 export async function movimientosRoutes(app: FastifyInstance) {
   app.get('/movimientos', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
+  // Ruta estática ANTES de /movimientos/:id (find-my-way prioriza la estática).
+  app.get('/movimientos/plantilla-detalle', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarPlantillaDetalle)
   app.get('/movimientos/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
   app.post('/movimientos', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)
   app.patch('/movimientos/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.update)
   app.delete('/movimientos/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.remove)
   app.post('/movimientos/:id/detalle', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.addLinea)
+  app.post('/movimientos/:id/detalle/importar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.importarDetalle)
   app.patch('/movimientos/:id/detalle/:detalleId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.updateLinea)
   app.delete('/movimientos/:id/detalle/:detalleId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.removeLinea)
   app.post('/movimientos/:id/confirmar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.confirmar)

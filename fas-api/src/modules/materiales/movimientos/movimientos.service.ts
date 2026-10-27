@@ -1,5 +1,9 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
+import { parsearLibro } from '../../../lib/carga-maestros/parsear.js'
+import type { ErrorFila } from '../../../lib/carga-maestros/tipos.js'
+import { REGISTRO_MOVIMIENTO_DETALLE } from '../../config/carga-maestros/registro.js'
+import * as articulosRepo from '../articulos/articulos.repository.js'
 import * as repo from './movimientos.repository.js'
 import { StockInsuficienteError } from './movimientos.repository.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
@@ -110,6 +114,123 @@ async function validarArticuloDeLinea(articuloId: number) {
   const articulos = await repo.getArticulosPorIds([articuloId])
   if (articulos.length === 0) throw new ValidationError('El artículo seleccionado no existe')
   if (!articulos[0].activo) throw new ValidationError('El artículo seleccionado está inactivo')
+}
+
+// ─── Importación de líneas desde Excel (carga inicial de stock) ──────────────
+
+// Datos a precargar en el template: la hoja de referencia Articulos (artículos
+// activos de la empresa, para el dropdown de la columna Artículo).
+export async function construirDatosPlantillaDetalle(): Promise<Record<string, Array<Record<string, unknown>>>> {
+  const articulos = await articulosRepo.findArticulosActivosParaReferencia()
+  return { Articulos: articulos.map((a) => ({ codigo: a.codigo, descripcion: a.descripcion })) }
+}
+
+export interface ResultadoImportacionDetalle {
+  importadas: number
+  total: number
+  errores: ErrorFila[]
+}
+
+// Valida que un valor decimal (el parser ya lo coaccionó a string normalizado,
+// ej. "100.5") sea finito y quepa en Decimal(enteros + decimales) de Postgres;
+// devuelve el número o null si no es representable. Evita que una fila fuera de
+// rango haga fallar el `createMany` masivo y pierda el éxito parcial (QA-E-MOV-003).
+function decimalEnRango(valor: unknown, enteros: number, decimales: number): number | null {
+  const s = String(valor).trim()
+  const n = Number(s)
+  if (!Number.isFinite(n)) return null
+  const m = /^-?(\d+)(?:\.(\d+))?$/.exec(s)
+  if (!m) return null // notación científica u otro formato no soportado
+  if (m[1].replace(/^0+(?=\d)/, '').length > enteros) return null
+  if ((m[2]?.length ?? 0) > decimales) return null
+  return n
+}
+
+// Importa líneas al detalle de un Movimiento en BORRADOR desde un Excel
+// (Artículo código · Cantidad · Precio Unitario). Éxito parcial: inserta las
+// filas válidas y reporta las erróneas (mismo criterio que la Carga de Recetas).
+// El precio se exige solo si el Tipo de Movimiento lo requiere (R9), igual que
+// el alta manual de línea.
+export async function importarLineasDetalle(movimientoId: number, buffer: Buffer): Promise<ResultadoImportacionDetalle> {
+  const movimiento = await obtenerMovimiento(movimientoId)
+  assertBorrador(movimiento)
+  const requierePrecio = movimiento.tipoMovimiento.requierePrecio
+
+  const parseo = await parsearLibro(buffer, REGISTRO_MOVIMIENTO_DETALLE)
+  const errores: ErrorFila[] = [
+    ...parseo.errores,
+    ...Object.values(parseo.hojas).flatMap((h) => h.errores),
+  ]
+
+  const filas = parseo.hojas['Lineas']?.filas ?? []
+  const total = filas.length
+
+  const cache = new Map<string, { id: number; activo: boolean } | null>()
+  const resolver = async (cod: string) => {
+    if (cache.has(cod)) return cache.get(cod)!
+    const a = (await articulosRepo.findArticuloByCodigo(cod)) as { id: number; activo: boolean } | null
+    const v = a ? { id: a.id, activo: a.activo } : null
+    cache.set(cod, v)
+    return v
+  }
+
+  const COL_ART = 'Artículo (código)'
+  const COL_CANT = 'Cantidad'
+  const COL_PRECIO = 'Precio Unitario'
+  const lineasValidas: Array<{ articuloId: number; cantidad: number; precioUnitario: number | null }> = []
+
+  for (const f of filas) {
+    const filaErrores: ErrorFila[] = []
+    const err = (columna: string, codigo: string, mensaje: string) =>
+      filaErrores.push({ hoja: 'Lineas', fila: f.fila, columna, codigo, mensaje })
+
+    // Artículo: requerido ya marcado por el parser si falta; acá se resuelve.
+    const artCod = f.valores['articuloCod'] != null ? String(f.valores['articuloCod']).trim() : ''
+    let articuloId: number | null = null
+    if (artCod) {
+      const art = await resolver(artCod)
+      if (!art) err(COL_ART, 'FK_NO_RESUELTA', `No existe el artículo "${artCod}".`)
+      else if (!art.activo) err(COL_ART, 'ARTICULO_INACTIVO', `El artículo "${artCod}" está inactivo.`)
+      else articuloId = art.id
+    }
+
+    // Cantidad: finita, dentro de Decimal(14,3) y > 0.
+    let cantidad: number | null = null
+    if (f.valores['cantidad'] != null) {
+      const c = decimalEnRango(f.valores['cantidad'], 11, 3)
+      if (c == null) err(COL_CANT, 'VALOR_INVALIDO', 'La cantidad no es un número válido o excede el máximo permitido (14,3).')
+      else if (!(c > 0)) err(COL_CANT, 'VALOR_INVALIDO', 'La cantidad debe ser mayor a 0.')
+      else cantidad = c
+    }
+
+    // Precio: opcional salvo que el tipo lo exija; finito, dentro de
+    // Decimal(14,4) y nunca negativo.
+    let precioUnitario: number | null = null
+    if (f.valores['precioUnitario'] != null) {
+      const p = decimalEnRango(f.valores['precioUnitario'], 10, 4)
+      if (p == null) err(COL_PRECIO, 'VALOR_INVALIDO', 'El precio unitario no es un número válido o excede el máximo permitido (14,4).')
+      else if (!(p >= 0)) err(COL_PRECIO, 'VALOR_INVALIDO', 'El precio unitario no puede ser negativo.')
+      else precioUnitario = p
+    }
+    if (requierePrecio && precioUnitario == null) {
+      err(COL_PRECIO, 'FALTA_REQUERIDO', 'Este tipo de movimiento exige precio unitario en todas las líneas (R9).')
+    }
+
+    // Solo se inserta la fila si NO tiene ningún error (ni del parser ni de
+    // negocio) y resolvió artículo + cantidad.
+    const tieneErrorDelParser = errores.some((e) => e.hoja === 'Lineas' && e.fila === f.fila)
+    if (filaErrores.length === 0 && !tieneErrorDelParser && articuloId != null && cantidad != null) {
+      lineasValidas.push({ articuloId, cantidad, precioUnitario })
+    } else {
+      errores.push(...filaErrores)
+    }
+  }
+
+  if (lineasValidas.length > 0) {
+    await repo.addLineasDetalleBulk(movimientoId, lineasValidas)
+  }
+
+  return { importadas: lineasValidas.length, total, errores }
 }
 
 export async function agregarLinea(movimientoId: number, body: MovimientoDetalleInput) {
