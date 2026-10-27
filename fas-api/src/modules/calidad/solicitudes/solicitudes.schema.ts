@@ -6,6 +6,21 @@ export const asignadoSchema = z.object({
   funcion: z.enum(['ACUDIR', 'NOTIFICAR']),
 })
 
+// Línea de producto de la Solicitud (2026-10-27): especie + embalaje + variedad
+// (uno cada uno) + categorías/calibres/calidades (varios) + cantidad de pallets.
+// Reemplaza el especieId único y las listas planas de cabecera. Las categorías/
+// calibres/calidades se validan en el service contra la especie de SU línea.
+export const solicitudLineaSchema = z.object({
+  especieId: z.number().int().positive('La especie es requerida'),
+  articuloId: z.number().int().positive('El embalaje es requerido'),
+  variedadId: z.number().int().positive('La variedad es requerida'),
+  categoriaIds: z.array(z.number().int().positive()).optional(),
+  calibreIds: z.array(z.number().int().positive()).optional(),
+  // Calidades permitidas = pares (NotaCalidad, NotaCondicion), por línea.
+  calidadesPermitidas: z.array(parCalidadSchema).optional(),
+  cantidadPallets: z.number().int().positive().nullable().optional(),
+})
+
 export const solicitudCreateSchema = z.object({
   temporadaId: z.number().int().positive('La temporada es requerida'),
   // Opcional: si se omite, el service lo defaultea al usuario autenticado
@@ -18,7 +33,6 @@ export const solicitudCreateSchema = z.object({
   plantaId: z.number().int().positive().nullable().optional(),
   direccionId: z.number().int().positive('La dirección es requerida'),
   contactoId: z.number().int().positive().nullable().optional(),
-  especieId: z.number().int().positive().nullable().optional(),
   // Fecha/hora de la VISITA (2026-10-13): ya NO se ingresa al crear — se fija
   // al editar la visita o en el cierre. Opcional/nullable acá.
   fechaHora: z.string().datetime({ offset: true, message: 'Fecha/hora inválida (ISO 8601)' }).nullable().optional(),
@@ -26,14 +40,9 @@ export const solicitudCreateSchema = z.object({
   paisIds: z.array(z.number().int().positive()).optional(),
   clienteId: z.number().int().positive().nullable().optional(),
   fechaDespacho: z.string().date().nullable().optional(),
-  cantidadPallets: z.number().int().positive().nullable().optional(),
-  // Calidades permitidas = pares (NotaCalidad, NotaCondicion) — supersede las dos
-  // listas independientes (producto cartesiano). Combinaciones específicas.
-  calidadesPermitidas: z.array(parCalidadSchema).optional(),
-  variedadIds: z.array(z.number().int().positive()).optional(),
-  calibreIds: z.array(z.number().int().positive()).optional(),
-  categoriaIds: z.array(z.number().int().positive()).optional(),
-  articuloIds: z.array(z.number().int().positive()).optional(),
+  // Detalle de producto por línea (especie, embalaje, variedad, categorías,
+  // calibres, calidades, cantidad de pallets). Mínimo una línea.
+  lineas: z.array(solicitudLineaSchema).min(1, 'Debe agregar al menos una línea de producto'),
   observaciones: z.string().max(5000).nullable().optional(),
   // 2026-10-05: ya no se exige un asignado con función ACUDIR — basta con al
   // menos un asignado (puede ser solo NOTIFICAR). El refine de ACUDIR obligatorio
@@ -128,6 +137,7 @@ export const solicitudCerrarSchema = z.object({
     .optional(),
 })
 
+export type SolicitudLineaBody = z.infer<typeof solicitudLineaSchema>
 export type SolicitudCreateBody = z.infer<typeof solicitudCreateSchema>
 export type SolicitudUpdateBody = z.infer<typeof solicitudUpdateSchema>
 export type SolicitudCerrarBody = z.infer<typeof solicitudCerrarSchema>

@@ -24,15 +24,19 @@ export const solicitudInspeccionPdfPayloadSchema = z.object({
   }),
   mercado: z.string().nullable(),
   cliente: z.string().nullable(),
-  especie: z.string().nullable(),
   fechaDespacho: z.string().nullable(), // ISO
-  cantidadPallets: z.number().int().nullable(),
-  calidadesPermitidas: z.string().nullable(),
-  variedades: z.array(z.string()),
-  calibres: z.array(z.string()),
-  categorias: z.array(z.string()),
-  articulos: z.array(z.string()),
   paises: z.array(z.string()),
+  // Detalle de producto por línea (2026-10-27): especie + embalaje + variedad +
+  // categorías/calibres/calidades + cantidad de pallets. Labels/listas ya resueltos.
+  lineas: z.array(z.object({
+    especie: z.string(),
+    embalaje: z.string(),
+    variedad: z.string(),
+    categorias: z.array(z.string()),
+    calibres: z.array(z.string()),
+    calidadesPermitidas: z.string().nullable(),
+    cantidadPallets: z.number().int().nullable(),
+  })),
   asignados: z.array(z.object({
     nombre: z.string(),
     funcion: z.string(), // label ya resuelto

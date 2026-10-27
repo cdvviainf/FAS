@@ -1,5 +1,6 @@
 'use client'
 
+import { Fragment } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -89,23 +90,27 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
             {solicitud.fechaDespacho && (
               <Campo label='Fecha despacho'>{new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium' }).format(new Date(solicitud.fechaDespacho))}</Campo>
             )}
-            {solicitud.especie && <Campo label='Especie'>{solicitud.especie.descripcion}</Campo>}
-            {solicitud.embalajes.length > 0 && (
-              <Campo label='Embalaje'>{solicitud.embalajes.map((e) => e.articulo.descripcion).join(', ')}</Campo>
-            )}
-            {solicitud.variedades.length > 0 && (
-              <Campo label='Variedades'>{solicitud.variedades.map((v) => v.variedad.descripcion).join(', ')}</Campo>
-            )}
-            {solicitud.calibres.length > 0 && (
-              <Campo label='Calibres'>{solicitud.calibres.map((c) => c.calibre.descripcion).join(', ')}</Campo>
-            )}
-            {solicitud.categorias.length > 0 && (
-              <Campo label='Categorías'>{solicitud.categorias.map((c) => c.categoria.descripcion).join(', ')}</Campo>
-            )}
-            {solicitud.calidadesPermitidas.length > 0 && (
-              <Campo label='Calidades permitidas'>{solicitud.calidadesPermitidas.map((c) => `${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`).join(', ')}</Campo>
-            )}
-            {solicitud.cantidadPallets != null && <Campo label='Cant. pallets'>{solicitud.cantidadPallets}</Campo>}
+            {/* Detalle de producto por línea (2026-10-27). */}
+            {solicitud.lineas.map((l, i) => {
+              const pref = solicitud.lineas.length > 1 ? `L${i + 1} · ` : ''
+              return (
+                <Fragment key={l.id}>
+                  <Campo label={`${pref}Especie`}>{l.especie.descripcion}</Campo>
+                  <Campo label={`${pref}Embalaje`}>{l.articulo.descripcion}</Campo>
+                  <Campo label={`${pref}Variedad`}>{l.variedad.descripcion}</Campo>
+                  {l.categorias.length > 0 && (
+                    <Campo label={`${pref}Categorías`}>{l.categorias.map((c) => c.categoria.descripcion).join(', ')}</Campo>
+                  )}
+                  {l.calibres.length > 0 && (
+                    <Campo label={`${pref}Calibres`}>{l.calibres.map((c) => c.calibre.descripcion).join(', ')}</Campo>
+                  )}
+                  {l.calidades.length > 0 && (
+                    <Campo label={`${pref}Calidades permitidas`}>{l.calidades.map((c) => `${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`).join(', ')}</Campo>
+                  )}
+                  {l.cantidadPallets != null && <Campo label={`${pref}Cant. pallets`}>{l.cantidadPallets}</Campo>}
+                </Fragment>
+              )
+            })}
             <Campo label='Temporada'>{solicitud.temporada.codigo}</Campo>
             {solicitud.observaciones && (
               <Campo label='Observaciones'>

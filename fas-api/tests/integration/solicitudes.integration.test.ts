@@ -39,13 +39,15 @@ if (databaseName !== 'fas_test') {
 }
 
 async function limpiarDatos() {
+  // Detalle por línea (2026-10-27): el TRUNCATE de solicitudes_inspeccion
+  // cascada a líneas y sus hijas, pero se listan explícitas por claridad.
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      "solicitud_inspeccion_linea_categorias",
+      "solicitud_inspeccion_linea_calibres",
+      "solicitud_inspeccion_linea_calidades",
+      "solicitud_inspeccion_lineas",
       "solicitud_inspeccion_paises",
-      "solicitud_inspeccion_variedades",
-      "solicitud_inspeccion_calibres",
-      "solicitud_inspeccion_categorias",
-      "solicitud_inspeccion_embalajes",
       "solicitud_inspeccion_asignados",
       "solicitudes_inspeccion",
       "articulos",
@@ -135,25 +137,40 @@ async function crearFixtures() {
   }
 }
 
-function payloadBase(f: Awaited<ReturnType<typeof crearFixtures>>) {
+type Fixtures = Awaited<ReturnType<typeof crearFixtures>>
+
+// Línea de producto base (especie Uva + sus variedad/calibre/categoría + embalaje).
+function lineaBase(f: Fixtures) {
+  return {
+    especieId: f.especie.id,
+    articuloId: f.embalaje.id,
+    variedadId: f.variedad.id,
+    categoriaIds: [f.categoria.id],
+    calibreIds: [f.calibre.id],
+    cantidadPallets: 12,
+  }
+}
+
+function payloadBase(f: Fixtures): SolicitudCreateBody {
   return {
     temporadaId: f.temporada.id,
     usuarioSolicitanteId: f.usuario.id,
     entidadProductorId: f.productor.id,
     direccionId: f.direccion.id,
     fechaHora: new Date('2026-08-01T15:00:00Z').toISOString(),
+    lineas: [lineaBase(f)],
     asignados: [{ usuarioId: f.usuario.id, funcion: 'ACUDIR' as const }],
   }
 }
 
-describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
+describe('Solicitud de Inspección — cabecera + detalle (especie por línea) contra PostgreSQL', () => {
   beforeEach(limpiarDatos)
   afterAll(async () => {
     await limpiarDatos()
     await prisma.$disconnect()
   })
 
-  it('crea una solicitud con todos los campos del Documento 107 y los persiste', async () => {
+  it('crea una solicitud con cabecera + una línea de producto y las persiste', async () => {
     const f = await crearFixtures()
     const solicitud = await crearSolicitud(f.empresa.id, {
       ...payloadBase(f),
@@ -161,67 +178,80 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
       paisIds: [f.usa.id],
       clienteId: f.clienteExtranjero.id,
       fechaDespacho: '2026-09-01',
-      especieId: f.especie.id,
-      variedadIds: [f.variedad.id],
-      calibreIds: [f.calibre.id],
-      categoriaIds: [f.categoria.id],
-      articuloIds: [f.embalaje.id],
-      cantidadPallets: 12,
     }, 'test')
 
     expect(solicitud.mercadoId).toBe(f.mercado.id)
     expect(solicitud.paises).toHaveLength(1)
     expect(solicitud.clienteId).toBe(f.clienteExtranjero.id)
-    expect(solicitud.cantidadPallets).toBe(12)
-    expect(solicitud.variedades).toHaveLength(1)
-    expect(solicitud.calibres).toHaveLength(1)
-    expect(solicitud.categorias).toHaveLength(1)
-    expect(solicitud.embalajes).toHaveLength(1)
+    expect(solicitud.lineas).toHaveLength(1)
+    const linea = solicitud.lineas[0]
+    expect(linea.especie.id).toBe(f.especie.id)
+    expect(linea.articulo.id).toBe(f.embalaje.id)
+    expect(linea.variedad.id).toBe(f.variedad.id)
+    expect(linea.cantidadPallets).toBe(12)
+    expect(linea.calibres).toHaveLength(1)
+    expect(linea.categorias).toHaveLength(1)
   })
 
-  it('permite editar una solicitud y limpiar los multiselects enviando arreglos vacíos', async () => {
+  it('acepta múltiples líneas con especies distintas', async () => {
     const f = await crearFixtures()
-    const creada = await crearSolicitud(f.empresa.id, {
+    const solicitud = await crearSolicitud(f.empresa.id, {
       ...payloadBase(f),
-      especieId: f.especie.id,
-      variedadIds: [f.variedad.id],
-      calibreIds: [f.calibre.id],
-      categoriaIds: [f.categoria.id],
-      mercadoId: f.mercado.id,
-      paisIds: [f.usa.id],
+      lineas: [
+        lineaBase(f),
+        // Segunda especie (Cereza): variedad de su especie, sin calibres/categorías.
+        { especieId: f.otraEspecie.id, articuloId: f.embalaje.id, variedadId: f.variedadOtraEspecie.id, categoriaIds: [], calibreIds: [], cantidadPallets: 5 },
+      ],
     }, 'test')
 
+    expect(solicitud.lineas).toHaveLength(2)
+    const especies = solicitud.lineas.map((l) => l.especie.id).sort()
+    expect(especies).toEqual([f.especie.id, f.otraEspecie.id].sort())
+  })
+
+  it('exige al menos una línea de producto', async () => {
+    const f = await crearFixtures()
+    await expect(crearSolicitud(f.empresa.id, { ...payloadBase(f), lineas: [] }, 'test'))
+      .rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('reemplaza por completo las líneas al editar (replace-all)', async () => {
+    const f = await crearFixtures()
+    const creada = await crearSolicitud(f.empresa.id, { ...payloadBase(f), paisIds: [f.usa.id], mercadoId: f.mercado.id }, 'test')
+    expect(creada.lineas[0].calibres).toHaveLength(1)
+    expect(creada.lineas[0].categorias).toHaveLength(1)
+
     const editada = await actualizarSolicitud(f.empresa.id, creada.id, {
-      variedadIds: [],
-      calibreIds: [],
-      categoriaIds: [],
+      // Una sola línea sin calibres ni categorías.
+      lineas: [{ especieId: f.especie.id, articuloId: f.embalaje.id, variedadId: f.variedad.id, categoriaIds: [], calibreIds: [] }],
       paisIds: [],
     }, 'test')
 
-    expect(editada.variedades).toHaveLength(0)
-    expect(editada.calibres).toHaveLength(0)
-    expect(editada.categorias).toHaveLength(0)
+    expect(editada.lineas).toHaveLength(1)
+    expect(editada.lineas[0].calibres).toHaveLength(0)
+    expect(editada.lineas[0].categorias).toHaveLength(0)
     expect(editada.paises).toHaveLength(0)
   })
 
-  it('no toca los multiselects si no vienen en el body de edición', async () => {
+  it('no toca las líneas si no vienen en el body de edición', async () => {
     const f = await crearFixtures()
-    const creada = await crearSolicitud(f.empresa.id, {
-      ...payloadBase(f),
-      especieId: f.especie.id,
-      variedadIds: [f.variedad.id],
-    }, 'test')
+    const creada = await crearSolicitud(f.empresa.id, payloadBase(f), 'test')
+    const editada = await actualizarSolicitud(f.empresa.id, creada.id, { observaciones: 'sin tocar líneas' }, 'test')
+    expect(editada.lineas).toHaveLength(1)
+    expect(editada.lineas[0].variedad.id).toBe(f.variedad.id)
+  })
 
-    const editada = await actualizarSolicitud(f.empresa.id, creada.id, { observaciones: 'sin tocar variedades' }, 'test')
-    expect(editada.variedades).toHaveLength(1)
+  it('rechaza dejar la solicitud sin líneas al editar', async () => {
+    const f = await crearFixtures()
+    const creada = await crearSolicitud(f.empresa.id, payloadBase(f), 'test')
+    await expect(actualizarSolicitud(f.empresa.id, creada.id, { lineas: [] }, 'test'))
+      .rejects.toMatchObject({ statusCode: 422 })
   })
 
   it('rechaza mercado inexistente y cliente que no es Cliente Extranjero', async () => {
     const f = await crearFixtures()
-
     await expect(crearSolicitud(f.empresa.id, { ...payloadBase(f), mercadoId: 999999 }, 'test'))
       .rejects.toMatchObject({ statusCode: 422 })
-
     await expect(crearSolicitud(f.empresa.id, { ...payloadBase(f), clienteId: f.clienteNoExtranjero.id }, 'test'))
       .rejects.toMatchObject({ statusCode: 422 })
   })
@@ -229,73 +259,49 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
   it('QAS-SI-020: rechaza países que no pertenecen al mercado indicado al crear', async () => {
     const f = await crearFixtures()
     const otroMercado = await prisma.mercado.create({
-      data: {
-        empresaId: f.empresa.id,
-        codigo: 'MK2',
-        descripcion: 'Mercado 2',
-        grupoMercadoId: f.grupoMercado.id,
-        creadoPor: 'test',
-      },
+      data: { empresaId: f.empresa.id, codigo: 'MK2', descripcion: 'Mercado 2', grupoMercadoId: f.grupoMercado.id, creadoPor: 'test' },
     })
-
     await expect(
-      crearSolicitud(f.empresa.id, {
-        ...payloadBase(f),
-        mercadoId: otroMercado.id,
-        paisIds: [f.usa.id],
-      }, 'test'),
+      crearSolicitud(f.empresa.id, { ...payloadBase(f), mercadoId: otroMercado.id, paisIds: [f.usa.id] }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
   })
 
   it('QAS-SI-020: rechaza cambiar solo el mercado si los países vigentes pertenecen al anterior', async () => {
     const f = await crearFixtures()
-    const creada = await crearSolicitud(f.empresa.id, {
-      ...payloadBase(f),
-      mercadoId: f.mercado.id,
-      paisIds: [f.usa.id],
-    }, 'test')
+    const creada = await crearSolicitud(f.empresa.id, { ...payloadBase(f), mercadoId: f.mercado.id, paisIds: [f.usa.id] }, 'test')
     const otroMercado = await prisma.mercado.create({
-      data: {
-        empresaId: f.empresa.id,
-        codigo: 'MK2',
-        descripcion: 'Mercado 2',
-        grupoMercadoId: f.grupoMercado.id,
-        creadoPor: 'test',
-      },
+      data: { empresaId: f.empresa.id, codigo: 'MK2', descripcion: 'Mercado 2', grupoMercadoId: f.grupoMercado.id, creadoPor: 'test' },
     })
-
     await expect(
       actualizarSolicitud(f.empresa.id, creada.id, { mercadoId: otroMercado.id }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
   })
 
-  it('rechaza un embalaje que no es artículo tipo EMBALAJE', async () => {
-    const f = await crearFixtures()
-    await expect(crearSolicitud(f.empresa.id, { ...payloadBase(f), articuloIds: [f.noEmbalaje.id] }, 'test'))
-      .rejects.toMatchObject({ statusCode: 422 })
-  })
-
-  it('rechaza variedad/calibre/categoría que no pertenecen a la especie seleccionada', async () => {
+  it('rechaza una línea cuyo embalaje no es artículo tipo EMBALAJE', async () => {
     const f = await crearFixtures()
     await expect(
-      crearSolicitud(f.empresa.id, { ...payloadBase(f), especieId: f.especie.id, variedadIds: [f.variedadOtraEspecie.id] }, 'test'),
+      crearSolicitud(f.empresa.id, { ...payloadBase(f), lineas: [{ ...lineaBase(f), articuloId: f.noEmbalaje.id }] }, 'test'),
+    ).rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('rechaza una línea con variedad que no pertenece a la especie de la línea', async () => {
+    const f = await crearFixtures()
+    await expect(
+      crearSolicitud(f.empresa.id, {
+        ...payloadBase(f),
+        lineas: [{ especieId: f.especie.id, articuloId: f.embalaje.id, variedadId: f.variedadOtraEspecie.id, categoriaIds: [], calibreIds: [] }],
+      }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
   })
 
   it('QAS-SI-014: bloquea eliminar Mercado, País, Variedad, Calibre y Categoría en uso por una solicitud vigente', async () => {
     const f = await crearFixtures()
-    await crearSolicitud(f.empresa.id, {
-      ...payloadBase(f),
-      mercadoId: f.mercado.id,
-      paisIds: [f.usa.id],
-      especieId: f.especie.id,
-      variedadIds: [f.variedad.id],
-      calibreIds: [f.calibre.id],
-      categoriaIds: [f.categoria.id],
-    }, 'test')
+    await crearSolicitud(f.empresa.id, { ...payloadBase(f), mercadoId: f.mercado.id, paisIds: [f.usa.id] }, 'test')
 
     await expect(eliminarMantenedor(f.empresa.id, 'mercado', f.mercado.id)).rejects.toMatchObject({ statusCode: 409 })
     await expect(eliminarMantenedor(f.empresa.id, 'pais', f.usa.id)).rejects.toMatchObject({ statusCode: 409 })
+    // Especie/variedad vía SolicitudInspeccionLinea; categoría/calibre vía las nietas (viaLinea).
+    await expect(eliminarMantenedor(f.empresa.id, 'especie', f.especie.id)).rejects.toMatchObject({ statusCode: 409 })
     await expect(eliminarMantenedor(f.empresa.id, 'variedad', f.variedad.id)).rejects.toMatchObject({ statusCode: 409 })
     await expect(eliminarMantenedor(f.empresa.id, 'calibre', f.calibre.id)).rejects.toMatchObject({ statusCode: 409 })
     await expect(eliminarMantenedor(f.empresa.id, 'categoria', f.categoria.id)).rejects.toMatchObject({ statusCode: 409 })
@@ -305,17 +311,15 @@ describe('Solicitud de Inspección — Documento 107 contra PostgreSQL', () => {
     const f = await crearFixtures()
     const creada = await crearSolicitud(f.empresa.id, { ...payloadBase(f), clienteId: f.clienteExtranjero.id }, 'test')
     expect(creada.clienteId).toBe(f.clienteExtranjero.id)
-
     await expect(eliminarEntidad(f.empresa.id, f.clienteExtranjero.id, 'test')).rejects.toMatchObject({ statusCode: 409 })
   })
 
-  it('obtenerSolicitud devuelve el detalle completo con las relaciones nuevas', async () => {
+  it('obtenerSolicitud devuelve el detalle completo con las líneas anidadas', async () => {
     const f = await crearFixtures()
-    const creada = await crearSolicitud(f.empresa.id, {
-      ...payloadBase(f),
-      mercadoId: f.mercado.id,
-    }, 'test')
+    const creada = await crearSolicitud(f.empresa.id, { ...payloadBase(f), mercadoId: f.mercado.id }, 'test')
     const detalle = await obtenerSolicitud(f.empresa.id, creada.id)
     expect(detalle.mercado?.id).toBe(f.mercado.id)
+    expect(detalle.lineas).toHaveLength(1)
+    expect(detalle.lineas[0].especie.id).toBe(f.especie.id)
   })
 })

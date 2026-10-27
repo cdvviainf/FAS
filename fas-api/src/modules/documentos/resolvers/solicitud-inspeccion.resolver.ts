@@ -59,17 +59,19 @@ export async function resolverSolicitudInspeccion(id: number, empresaId: number)
     },
     mercado: solicitud.mercado?.descripcion ?? null,
     cliente: solicitud.cliente?.descripcion ?? null,
-    especie: solicitud.especie?.descripcion ?? null,
     fechaDespacho: solicitud.fechaDespacho ? solicitud.fechaDespacho.toISOString() : null,
-    cantidadPallets: solicitud.cantidadPallets,
-    calidadesPermitidas: solicitud.calidadesPermitidas.map((c) => `${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`).join(', ') || null,
-    variedades: solicitud.variedades.map((v) => v.variedad.descripcion),
-    // Descripción, no código (feedback Christian, 2026-08-19) — en las 3
-    // plantillas del motor, no solo acá.
-    calibres: solicitud.calibres.map((c) => c.calibre.descripcion),
-    categorias: solicitud.categorias.map((c) => c.categoria.descripcion),
-    articulos: solicitud.embalajes.map((e) => e.articulo.descripcion),
     paises: solicitud.paises.map((p) => p.pais.descripcion),
+    // Detalle de producto por línea (2026-10-27). Descripción, no código
+    // (feedback Christian, 2026-08-19).
+    lineas: solicitud.lineas.map((l) => ({
+      especie: l.especie.descripcion,
+      embalaje: l.articulo.descripcion,
+      variedad: l.variedad.descripcion,
+      categorias: l.categorias.map((c) => c.categoria.descripcion),
+      calibres: l.calibres.map((c) => c.calibre.descripcion),
+      calidadesPermitidas: l.calidades.map((c) => `${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`).join(', ') || null,
+      cantidadPallets: l.cantidadPallets,
+    })),
     asignados: solicitud.asignados.map((a) => ({
       nombre: a.usuario.nombre,
       funcion: FUNCION_LABELS[a.funcion] ?? a.funcion,

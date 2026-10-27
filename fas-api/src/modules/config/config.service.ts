@@ -51,10 +51,9 @@ type ExternalReferenceDef = {
     | 'bodegaContacto'
     | 'solicitudInspeccion'
     | 'solicitudInspeccionPais'
-    | 'solicitudInspeccionVariedad'
-    | 'solicitudInspeccionCalibre'
-    | 'solicitudInspeccionCategoria'
-    | 'solicitudInspeccionEmbalaje'
+    | 'solicitudInspeccionLinea'
+    | 'solicitudInspeccionLineaCategoria'
+    | 'solicitudInspeccionLineaCalibre'
     | 'solicitudInspeccionDefecto'
     | 'solicitudInspeccionMadurez'
     | 'articulo'
@@ -65,6 +64,7 @@ type ExternalReferenceDef = {
   label: string
   usesSoftDelete?: boolean
   viaSolicitud?: boolean
+  viaLinea?: boolean
 }
 const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceDef[]>> = {
   pais: [
@@ -83,9 +83,11 @@ const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceD
       usesSoftDelete: false,
     },
   ],
-  // QAS-SI-001/QAS-SI-014: maestros usados por solicitudes de inspección vigentes
+  // QAS-SI-001/QAS-SI-014: maestros usados por solicitudes de inspección vigentes.
+  // Desde 2026-10-27 especie/variedad/categoría/calibre viven en la LÍNEA
+  // (SolicitudInspeccionLinea y sus hijas), no en la cabecera.
   especie: [
-    { delegateName: 'solicitudInspeccion', parentField: 'especieId', label: 'solicitudes de inspección' },
+    { delegateName: 'solicitudInspeccionLinea', parentField: 'especieId', label: 'solicitudes de inspección', viaSolicitud: true },
   ],
   temporada: [
     { delegateName: 'solicitudInspeccion', parentField: 'temporadaId', label: 'solicitudes de inspección' },
@@ -94,13 +96,13 @@ const externalReferencesMap: Partial<Record<MantenedorModelo, ExternalReferenceD
     { delegateName: 'solicitudInspeccion', parentField: 'mercadoId', label: 'solicitudes de inspección' },
   ],
   variedad: [
-    { delegateName: 'solicitudInspeccionVariedad', parentField: 'variedadId', label: 'solicitudes de inspección', viaSolicitud: true },
+    { delegateName: 'solicitudInspeccionLinea', parentField: 'variedadId', label: 'solicitudes de inspección', viaSolicitud: true },
   ],
   calibre: [
-    { delegateName: 'solicitudInspeccionCalibre', parentField: 'calibreId', label: 'solicitudes de inspección', viaSolicitud: true },
+    { delegateName: 'solicitudInspeccionLineaCalibre', parentField: 'calibreId', label: 'solicitudes de inspección', viaLinea: true },
   ],
   categoria: [
-    { delegateName: 'solicitudInspeccionCategoria', parentField: 'categoriaId', label: 'solicitudes de inspección', viaSolicitud: true },
+    { delegateName: 'solicitudInspeccionLineaCategoria', parentField: 'categoriaId', label: 'solicitudes de inspección', viaLinea: true },
   ],
   etiqueta: [
     { delegateName: 'articulo', parentField: 'etiquetaId', label: 'artículos', usesSoftDelete: false },
@@ -652,6 +654,7 @@ export async function eliminarMantenedor(
       reference.parentField,
       reference.usesSoftDelete,
       reference.viaSolicitud,
+      reference.viaLinea,
     )
     if (count > 0) {
       throw new ConflictError(

@@ -15,17 +15,20 @@ interface SolicitudParaCorreo {
     comuna?: { descripcion: string } | null
   }
   contacto?: { nombre: string; telefono?: string | null; whatsapp?: string | null; email?: string | null } | null
-  especie?: { descripcion: string } | null
   mercado?: { descripcion: string } | null
   cliente?: { razonSocial: string } | null
   fechaDespacho?: Date | null
-  cantidadPallets?: number | null
-  calidadesPermitidas?: { notaCalidad: { descripcion: string }; notaCondicion: { descripcion: string } }[]
   paises?: { pais: { descripcion: string } }[]
-  variedades?: { variedad: { descripcion: string } }[]
-  calibres?: { calibre: { descripcion: string } }[]
-  categorias?: { categoria: { descripcion: string } }[]
-  embalajes?: { articulo: { descripcion: string } }[]
+  // Detalle de producto por línea (2026-10-27).
+  lineas?: {
+    especie: { descripcion: string }
+    variedad: { descripcion: string }
+    articulo: { descripcion: string }
+    cantidadPallets?: number | null
+    categorias: { categoria: { descripcion: string } }[]
+    calibres: { calibre: { descripcion: string } }[]
+    calidades: { notaCalidad: { descripcion: string }; notaCondicion: { descripcion: string } }[]
+  }[]
   asignados: { funcion: string; usuario: { nombre: string; email: string } }[]
 }
 
@@ -69,16 +72,27 @@ ${s.mercado ? fila('Mercado', esc(s.mercado.descripcion)) : ''}
 ${s.paises && s.paises.length > 0 ? fila('Países', s.paises.map((p) => esc(p.pais.descripcion)).join(', ')) : ''}
 ${s.cliente ? fila('Cliente', esc(s.cliente.razonSocial)) : ''}
 ${s.fechaDespacho ? fila('Fecha de despacho', fmtFechaCorta.format(s.fechaDespacho)) : ''}
-${s.especie ? fila('Especie', esc(s.especie.descripcion)) : ''}
-${s.embalajes && s.embalajes.length > 0 ? fila('Embalaje', s.embalajes.map((e) => esc(e.articulo.descripcion)).join(', ')) : ''}
-${s.variedades && s.variedades.length > 0 ? fila('Variedades', s.variedades.map((v) => esc(v.variedad.descripcion)).join(', ')) : ''}
-${s.calibres && s.calibres.length > 0 ? fila('Calibres', s.calibres.map((c) => esc(c.calibre.descripcion)).join(', ')) : ''}
-${s.categorias && s.categorias.length > 0 ? fila('Categorías', s.categorias.map((c) => esc(c.categoria.descripcion)).join(', ')) : ''}
-${s.calidadesPermitidas && s.calidadesPermitidas.length > 0 ? fila('Calidades permitidas', s.calidadesPermitidas.map((c) => esc(`${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`)).join(', ')) : ''}
-${s.cantidadPallets != null ? fila('Cant. pallets', String(s.cantidadPallets)) : ''}
 ${acuden ? fila('Debe(n) acudir', acuden) : ''}
 ${s.observaciones ? fila('Observaciones', esc(s.observaciones).replace(/\n/g, '<br>')) : ''}
-</table>`
+</table>${bloqueLineas(s.lineas)}`
+}
+
+// Detalle de producto por línea (2026-10-27): una tabla por línea.
+function bloqueLineas(lineas: SolicitudParaCorreo['lineas']): string {
+  if (!lineas || lineas.length === 0) return ''
+  const bloques = lineas.map((l, i) => {
+    const filas = [
+      fila('Especie', esc(l.especie.descripcion)),
+      fila('Embalaje', esc(l.articulo.descripcion)),
+      fila('Variedad', esc(l.variedad.descripcion)),
+      l.categorias.length > 0 ? fila('Categorías', l.categorias.map((c) => esc(c.categoria.descripcion)).join(', ')) : '',
+      l.calibres.length > 0 ? fila('Calibres', l.calibres.map((c) => esc(c.calibre.descripcion)).join(', ')) : '',
+      l.calidades.length > 0 ? fila('Calidades permitidas', l.calidades.map((c) => esc(`${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`)).join(', ')) : '',
+      l.cantidadPallets != null ? fila('Cant. pallets', String(l.cantidadPallets)) : '',
+    ].join('')
+    return `<h4 style="margin:12px 0 4px">Línea ${i + 1}</h4><table style="border-collapse:collapse;font-size:14px">${filas}</table>`
+  })
+  return `<div style="margin-top:8px"><h4 style="margin:12px 0 4px">Detalle de producto</h4>${bloques.join('')}</div>`
 }
 
 function envolver(titulo: string, contenido: string): string {

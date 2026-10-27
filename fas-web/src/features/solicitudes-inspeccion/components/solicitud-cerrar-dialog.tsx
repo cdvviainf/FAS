@@ -120,27 +120,29 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
   const { data: caracteristicasData } = useQuery({ queryKey: ['caracteristicas-madurez-options'], queryFn: () => caracteristicasMadurezService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000, enabled: open })
 
   const grupos = gruposData?.data ?? []
+  // Especies presentes en las líneas (2026-10-27): defectos/madurez válidos si
+  // son genéricos o pertenecen a CUALQUIER especie de la solicitud. Conjunto
+  // vacío (sin líneas) = no se filtra por especie.
+  const especiesSolicitud = new Set(solicitud.lineas.map((l) => l.especie.id))
   const defectosCatalogo = (defectosData?.data ?? []) as unknown as DefectoOption[]
-  // Filtra por grupo y por especie de la solicitud: si la solicitud tiene
-  // especie, solo defectos genéricos (sin especies) o válidos para esa especie.
   const defectosDelGrupo = grupoSel
     ? defectosCatalogo.filter((d) => {
         if (d.grupoDefecto?.id !== Number(grupoSel)) return false
-        if (solicitud.especieId == null) return true
+        if (especiesSolicitud.size === 0) return true
         const especies = d.especies ?? []
-        return especies.length === 0 || especies.some((e) => e.especieId === solicitud.especieId)
+        return especies.length === 0 || especies.some((e) => especiesSolicitud.has(e.especieId))
       })
     : []
   const defectoElegido = defectoSel ? defectosCatalogo.find((d) => d.id === Number(defectoSel)) : undefined
 
   const caracteristicasCatalogo = (caracteristicasData?.data ?? []) as unknown as CaracteristicaMadurezOption[]
   // Filtra por especie de la solicitud (misma regla que defectos): genérica
-  // (sin especies) o válida para la especie. Excluye las ya agregadas.
+  // (sin especies) o válida para alguna especie. Excluye las ya agregadas.
   const caracteristicasDisponibles = caracteristicasCatalogo.filter((c) => {
     if (caracteristicas.some((x) => x.caracteristicaId === c.id)) return false
-    if (solicitud.especieId == null) return true
+    if (especiesSolicitud.size === 0) return true
     const especies = c.especies ?? []
-    return especies.length === 0 || especies.some((e) => e.especieId === solicitud.especieId)
+    return especies.length === 0 || especies.some((e) => especiesSolicitud.has(e.especieId))
   })
   const caracElegida = caracSel ? caracteristicasCatalogo.find((c) => c.id === Number(caracSel)) : undefined
 

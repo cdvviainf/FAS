@@ -76,8 +76,6 @@ export interface SolicitudInspeccion {
     whatsapp: string | null
     tipo: string | null
   } | null
-  especieId: number | null
-  especie: { id: number; codigo: string; descripcion: string } | null
   // Fecha de visita: nullable (2026-10-13) — se fija al editar la visita o en el cierre.
   fechaHora: string | null
   mercadoId: number | null
@@ -85,13 +83,10 @@ export interface SolicitudInspeccion {
   clienteId: number | null
   cliente: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
   fechaDespacho: string | null
-  cantidadPallets: number | null
-  calidadesPermitidas: { notaCalidad: { id: number; codigo: string; descripcion: string }; notaCondicion: { id: number; codigo: string; descripcion: string } }[]
   paises: { pais: { id: number; codigo: string; descripcion: string } }[]
-  variedades: { variedad: { id: number; codigo: string; descripcion: string } }[]
-  calibres: { calibre: { id: number; codigo: string; descripcion: string } }[]
-  categorias: { categoria: { id: number; codigo: string; descripcion: string } }[]
-  embalajes: { articulo: { id: number; codigo: string; descripcion: string } }[]
+  // Detalle de producto por línea (2026-10-27): reemplaza especie única y las
+  // listas planas de cabecera.
+  lineas: SolicitudLinea[]
   observaciones: string | null
   estado: EstadoSolicitud
   notificadaEn: string | null
@@ -106,6 +101,28 @@ export interface SolicitudInspeccion {
   defectos: SolicitudDefecto[]
   // Características de madurez/calidad capturadas en el cierre (2026-10-26).
   madurez: SolicitudMadurez[]
+}
+
+// Línea de producto de la solicitud (2026-10-27).
+export interface SolicitudLinea {
+  id: number
+  cantidadPallets: number | null
+  especie: { id: number; codigo: string; descripcion: string }
+  variedad: { id: number; codigo: string; descripcion: string }
+  articulo: { id: number; codigo: string; descripcion: string }
+  categorias: { categoria: { id: number; codigo: string; descripcion: string } }[]
+  calibres: { calibre: { id: number; codigo: string; descripcion: string } }[]
+  calidades: { notaCalidad: { id: number; codigo: string; descripcion: string }; notaCondicion: { id: number; codigo: string; descripcion: string } }[]
+}
+
+export interface SolicitudLineaInput {
+  especieId: number
+  articuloId: number
+  variedadId: number
+  categoriaIds?: number[]
+  calibreIds?: number[]
+  calidadesPermitidas?: { notaCalidadId: number; notaCondicionId: number }[]
+  cantidadPallets?: number | null
 }
 
 export type TipoDatoMadurez = 'DECIMAL' | 'PORCENTAJE' | 'ENTERO' | 'TEXTO'
@@ -154,19 +171,14 @@ export interface SolicitudCreateInput {
   plantaId?: number | null
   direccionId: number
   contactoId?: number | null
-  especieId?: number | null
   // Opcional (2026-10-13): la fecha de visita ya no se ingresa al crear.
   fechaHora?: string | null
   mercadoId?: number | null
   paisIds?: number[]
   clienteId?: number | null
   fechaDespacho?: string | null
-  cantidadPallets?: number | null
-  calidadesPermitidas?: { notaCalidadId: number; notaCondicionId: number }[]
-  variedadIds?: number[]
-  calibreIds?: number[]
-  categoriaIds?: number[]
-  articuloIds?: number[]
+  // Detalle de producto por línea (2026-10-27). Mínimo una línea.
+  lineas: SolicitudLineaInput[]
   observaciones?: string | null
   asignados: AsignadoInput[]
 }

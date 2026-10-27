@@ -67,23 +67,20 @@ export async function procesarRecordatorio(solicitudId: number) {
 
 // ─── Validaciones comunes ────────────────────────────────────────────────────
 
+// Validación de CABECERA (2026-10-27): especie/variedad/calibre/categoría/
+// embalaje/calidades se movieron a la línea (ver validarLineas). Países/mercado
+// siguen en cabecera.
 async function validarReferencias(data: {
   usuarioSolicitanteId?: string
   entidadProductorId?: number
   plantaId?: number | null
   direccionId?: number
   contactoId?: number | null
-  especieId?: number | null
   mercadoId?: number | null
   clienteId?: number | null
-  calidadesPermitidas?: ParCalidad[]
   paisIds?: number[]
-  variedadIds?: number[]
-  calibreIds?: number[]
-  categoriaIds?: number[]
-  articuloIds?: number[]
   asignados?: { usuarioId: string; funcion: string }[]
-}, entidadIdParaDireccion?: number, especieIdVigente?: number | null, mercadoIdVigente?: number | null, paisIdsVigente?: number[], calidadesPermitidasVigente?: ParCalidad[]) {
+}, entidadIdParaDireccion?: number, mercadoIdVigente?: number | null, paisIdsVigente?: number[]) {
   if (data.usuarioSolicitanteId !== undefined) {
     const solicitante = await repo.getUsuarioById(data.usuarioSolicitanteId)
     if (!solicitante) throw new ValidationError('El solicitante seleccionado no existe o fue eliminado')
@@ -103,10 +100,6 @@ async function validarReferencias(data: {
     const contacto = await repo.getContactoDeEntidad(data.contactoId, entidadId)
     if (!contacto) throw new ValidationError('El contacto seleccionado no pertenece a la entidad productora o fue eliminado')
   }
-  if (data.especieId != null) {
-    const especie = await repo.getEspecieActiva(data.especieId)
-    if (!especie) throw new ValidationError('La especie seleccionada no existe o fue eliminada')
-  }
   if (data.mercadoId != null) {
     const mercado = await repo.getMercadoActivo(data.mercadoId)
     if (!mercado) throw new ValidationError('El mercado seleccionado no existe o está bloqueado')
@@ -119,18 +112,10 @@ async function validarReferencias(data: {
     const planta = await repo.getEntidadPlanta(data.plantaId)
     if (!planta) throw new ValidationError('La planta seleccionada no existe, está inactiva/eliminada o no es de tipo Planta')
   }
-  // especieId/mercadoId efectivos (valor nuevo si viene en el body, si no el vigente)
-  // para validar pertenencia de variedad/calibre/categoría/país aunque solo uno
-  // de los dos campos relacionados cambie (QAS-SI-020). paisIds efectivo: si el
-  // PATCH no toca países, se revalidan los vigentes contra el mercado nuevo —
-  // si no, un cambio de mercado sin tocar países deja la solicitud incoherente.
-  const especieId = data.especieId !== undefined ? data.especieId : especieIdVigente
+  // mercadoId efectivo + paisIds efectivos: si el PATCH no toca países, se
+  // revalidan los vigentes contra el mercado nuevo (QAS-SI-020).
   const mercadoId = data.mercadoId !== undefined ? data.mercadoId : mercadoIdVigente
   const paisIdsEfectivos = data.paisIds !== undefined ? data.paisIds : paisIdsVigente
-  // IMP-QA-R1-038: las calidades permitidas vigentes también se revalidan contra
-  // la especie efectiva aunque el PATCH no las toque — si no, cambiar solo la
-  // especie dejaría pares incompatibles que el backend rechazaría al reenviarlos.
-  const calidadesEfectivas = data.calidadesPermitidas !== undefined ? data.calidadesPermitidas : (calidadesPermitidasVigente ?? [])
 
   if (paisIdsEfectivos && paisIdsEfectivos.length > 0) {
     if (mercadoId == null) {
@@ -146,75 +131,6 @@ async function validarReferencias(data: {
       throw new ValidationError('Uno o más países seleccionados no pertenecen al mercado indicado')
     }
   }
-  if (data.variedadIds && data.variedadIds.length > 0) {
-    const variedades = await repo.getVariedadesActivas(data.variedadIds)
-    if (variedades.length !== new Set(data.variedadIds).size) {
-      throw new ValidationError('Una o más variedades seleccionadas no existen o están bloqueadas')
-    }
-    if (especieId != null && variedades.some((v) => v.especieId !== especieId)) {
-      throw new ValidationError('Una o más variedades no pertenecen a la especie seleccionada')
-    }
-  }
-  if (data.calibreIds && data.calibreIds.length > 0) {
-    const calibres = await repo.getCalibresActivos(data.calibreIds)
-    if (calibres.length !== new Set(data.calibreIds).size) {
-      throw new ValidationError('Uno o más calibres seleccionados no existen o están bloqueados')
-    }
-    if (especieId != null && calibres.some((c) => c.especieId !== especieId)) {
-      throw new ValidationError('Uno o más calibres no pertenecen a la especie seleccionada')
-    }
-  }
-  if (data.categoriaIds && data.categoriaIds.length > 0) {
-    const categorias = await repo.getCategoriasActivas(data.categoriaIds)
-    if (categorias.length !== new Set(data.categoriaIds).size) {
-      throw new ValidationError('Una o más categorías seleccionadas no existen o están bloqueadas')
-    }
-    if (especieId != null && categorias.some((c) => c.especieId !== especieId)) {
-      throw new ValidationError('Una o más categorías no pertenecen a la especie seleccionada')
-    }
-  }
-  // Calidades permitidas = pares (NotaCalidad, NotaCondicion). Se valida que cada
-  // calidad/condición exista y, si hay especie definida, que pertenezca a ella
-  // (misma regla por especie que antes, ahora sobre el conjunto de pares).
-  if (calidadesEfectivas.length > 0) {
-    // Pares únicos (la BD lo impone con @@unique; se rechaza acá como 422, no 500).
-    const clavesPar = new Set<string>()
-    for (const p of calidadesEfectivas) {
-      const clave = `${p.notaCalidadId}-${p.notaCondicionId}`
-      if (clavesPar.has(clave)) throw new ValidationError('Hay calidades permitidas repetidas (misma combinación Calidad + Condición)')
-      clavesPar.add(clave)
-    }
-    const calidadIds = [...new Set(calidadesEfectivas.map((p) => p.notaCalidadId))]
-    const condicionIds = [...new Set(calidadesEfectivas.map((p) => p.notaCondicionId))]
-    const [calidades, condiciones] = await Promise.all([
-      repo.getNotasCalidadActivas(calidadIds),
-      repo.getNotasCondicionActivas(condicionIds),
-    ])
-    if (calidades.length !== calidadIds.length) {
-      throw new ValidationError('Una o más Notas de Calidad seleccionadas no existen o están bloqueadas')
-    }
-    if (condiciones.length !== condicionIds.length) {
-      throw new ValidationError('Una o más Notas de Condición seleccionadas no existen o están bloqueadas')
-    }
-    if (especieId != null && calidades.some((n) => !n.especies.some((e) => e.especieId === especieId))) {
-      throw new ValidationError('Una o más Notas de Calidad no pertenecen a la especie seleccionada')
-    }
-    if (especieId != null && condiciones.some((n) => !n.especies.some((e) => e.especieId === especieId))) {
-      throw new ValidationError('Una o más Notas de Condición no pertenecen a la especie seleccionada')
-    }
-  }
-  if (data.articuloIds && data.articuloIds.length > 0) {
-    const articulos = await repo.getArticulosEmbalaje(data.articuloIds)
-    if (articulos.length !== new Set(data.articuloIds).size) {
-      throw new ValidationError('Uno o más embalajes seleccionados no existen')
-    }
-    if (articulos.some((a) => a.tipo !== 'EMBALAJE')) {
-      throw new ValidationError('Todos los embalajes seleccionados deben ser artículos de tipo Embalaje')
-    }
-    if (articulos.some((a) => !a.activo)) {
-      throw new ValidationError('Uno o más embalajes seleccionados están inactivos')
-    }
-  }
   if (data.asignados !== undefined) {
     const ids = data.asignados.map((a) => a.usuarioId)
     const usuarios = await repo.getUsuariosActivos(ids)
@@ -224,6 +140,55 @@ async function validarReferencias(data: {
     const sinEmail = usuarios.filter((u) => !u.email)
     if (sinEmail.length > 0) {
       throw new ValidationError(`Usuarios sin email registrado: ${sinEmail.map((u) => u.nombre).join(', ')}`)
+    }
+  }
+}
+
+// Validación de LÍNEAS (2026-10-27): por cada línea, especie activa; variedad +
+// embalaje (1 c/u) y categorías/calibres/calidades (varios) válidos y
+// pertenecientes a la especie de SU línea.
+async function validarLineas(lineas: { especieId: number; articuloId: number; variedadId: number; categoriaIds?: number[]; calibreIds?: number[]; calidadesPermitidas?: ParCalidad[] }[]) {
+  for (const [i, linea] of lineas.entries()) {
+    const prefijo = `Línea ${i + 1}:`
+    const especie = await repo.getEspecieActiva(linea.especieId)
+    if (!especie) throw new ValidationError(`${prefijo} la especie seleccionada no existe o fue eliminada`)
+
+    const [variedad] = await repo.getVariedadesActivas([linea.variedadId])
+    if (!variedad) throw new ValidationError(`${prefijo} la variedad no existe o está bloqueada`)
+    if (variedad.especieId !== linea.especieId) throw new ValidationError(`${prefijo} la variedad no pertenece a la especie`)
+
+    const [articulo] = await repo.getArticulosEmbalaje([linea.articuloId])
+    if (!articulo) throw new ValidationError(`${prefijo} el embalaje no existe`)
+    if (articulo.tipo !== 'EMBALAJE') throw new ValidationError(`${prefijo} el embalaje debe ser un artículo de tipo Embalaje`)
+    if (!articulo.activo) throw new ValidationError(`${prefijo} el embalaje está inactivo`)
+
+    if (linea.categoriaIds && linea.categoriaIds.length > 0) {
+      const categorias = await repo.getCategoriasActivas(linea.categoriaIds)
+      if (categorias.length !== new Set(linea.categoriaIds).size) throw new ValidationError(`${prefijo} una o más categorías no existen o están bloqueadas`)
+      if (categorias.some((c) => c.especieId !== linea.especieId)) throw new ValidationError(`${prefijo} una o más categorías no pertenecen a la especie`)
+    }
+    if (linea.calibreIds && linea.calibreIds.length > 0) {
+      const calibres = await repo.getCalibresActivos(linea.calibreIds)
+      if (calibres.length !== new Set(linea.calibreIds).size) throw new ValidationError(`${prefijo} uno o más calibres no existen o están bloqueados`)
+      if (calibres.some((c) => c.especieId !== linea.especieId)) throw new ValidationError(`${prefijo} uno o más calibres no pertenecen a la especie`)
+    }
+    if (linea.calidadesPermitidas && linea.calidadesPermitidas.length > 0) {
+      const clavesPar = new Set<string>()
+      for (const p of linea.calidadesPermitidas) {
+        const clave = `${p.notaCalidadId}-${p.notaCondicionId}`
+        if (clavesPar.has(clave)) throw new ValidationError(`${prefijo} hay calidades permitidas repetidas (misma Calidad + Condición)`)
+        clavesPar.add(clave)
+      }
+      const calidadIds = [...new Set(linea.calidadesPermitidas.map((p) => p.notaCalidadId))]
+      const condicionIds = [...new Set(linea.calidadesPermitidas.map((p) => p.notaCondicionId))]
+      const [calidades, condiciones] = await Promise.all([
+        repo.getNotasCalidadActivas(calidadIds),
+        repo.getNotasCondicionActivas(condicionIds),
+      ])
+      if (calidades.length !== calidadIds.length) throw new ValidationError(`${prefijo} una o más Notas de Calidad no existen o están bloqueadas`)
+      if (condiciones.length !== condicionIds.length) throw new ValidationError(`${prefijo} una o más Notas de Condición no existen o están bloqueadas`)
+      if (calidades.some((n) => !n.especies.some((e) => e.especieId === linea.especieId))) throw new ValidationError(`${prefijo} una o más Notas de Calidad no pertenecen a la especie`)
+      if (condiciones.some((n) => !n.especies.some((e) => e.especieId === linea.especieId))) throw new ValidationError(`${prefijo} una o más Notas de Condición no pertenecen a la especie`)
     }
   }
 }
@@ -250,22 +215,45 @@ export async function crearSolicitud(body: SolicitudCreateBody, userId: string) 
   // igual que ya hace la UI, pero también para cualquier otro consumidor de
   // la API (QA-R2-SI-001). Sigue siendo editable a otro usuario.
   const usuarioSolicitanteId = body.usuarioSolicitanteId ?? userId
-  await validarReferencias({ ...body, usuarioSolicitanteId })
+  await validarReferencias({
+    usuarioSolicitanteId,
+    entidadProductorId: body.entidadProductorId,
+    plantaId: body.plantaId,
+    direccionId: body.direccionId,
+    contactoId: body.contactoId,
+    mercadoId: body.mercadoId,
+    clienteId: body.clienteId,
+    paisIds: body.paisIds,
+    asignados: body.asignados,
+  })
+  // Mínimo una línea (defensa en profundidad: el zod del controller ya lo exige,
+  // pero el service también se invoca directo, ej. tests/integración).
+  if (body.lineas.length === 0) throw new ValidationError('Debe agregar al menos una línea de producto')
+  await validarLineas(body.lineas)
 
-  const {
-    temporadaId, asignados, fechaHora,
-    paisIds = [], variedadIds = [], calibreIds = [], categoriaIds = [], articuloIds = [],
-    calidadesPermitidas = [],
-    ...core
-  } = body
+  const { temporadaId, asignados, fechaHora, paisIds = [], lineas, ...core } = body
   return repo.createSolicitud(
     temporadaId,
     temporada.codigo,
     { ...core, usuarioSolicitanteId, fechaHora: fechaHora ? new Date(fechaHora) : null, fechaDespacho: core.fechaDespacho ? new Date(core.fechaDespacho) : null },
-    { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, calidadesPermitidas },
+    { paisIds, lineas: lineas.map(normalizarLinea) },
     asignados,
     userId,
   )
+}
+
+// Normaliza una línea del body (campos opcionales con default []) al input del
+// repository.
+function normalizarLinea(l: SolicitudCreateBody['lineas'][number]): repo.SolicitudLineaInput {
+  return {
+    especieId: l.especieId,
+    articuloId: l.articuloId,
+    variedadId: l.variedadId,
+    categoriaIds: l.categoriaIds ?? [],
+    calibreIds: l.calibreIds ?? [],
+    calidadesPermitidas: l.calidadesPermitidas ?? [],
+    cantidadPallets: l.cantidadPallets ?? null,
+  }
 }
 
 export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody, userId: string) {
@@ -275,13 +263,25 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
   }
 
   await validarReferencias(
-    body,
+    {
+      usuarioSolicitanteId: body.usuarioSolicitanteId,
+      entidadProductorId: body.entidadProductorId,
+      plantaId: body.plantaId,
+      direccionId: body.direccionId,
+      contactoId: body.contactoId,
+      mercadoId: body.mercadoId,
+      clienteId: body.clienteId,
+      paisIds: body.paisIds,
+      asignados: body.asignados,
+    },
     body.entidadProductorId ?? actual.entidadProductorId,
-    actual.especieId,
     actual.mercadoId,
     actual.paises.map((p) => p.pais.id),
-    actual.calidadesPermitidas.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })),
   )
+  if (body.lineas !== undefined) {
+    if (body.lineas.length === 0) throw new ValidationError('La solicitud debe mantener al menos una línea de producto')
+    await validarLineas(body.lineas)
+  }
 
   // Si cambia la entidad, la dirección debe venir también (y ya se validó contra la nueva entidad)
   const cambiaEntidad = body.entidadProductorId !== undefined && body.entidadProductorId !== actual.entidadProductorId
@@ -297,7 +297,7 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
   // también a los asignados que puedan ser removidos en esta edición.
   const destinatariosPrevios = actual.estado === 'NOTIFICADA' ? await destinatariosDe(actual) : []
 
-  const { asignados, fechaHora, fechaDespacho, paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, calidadesPermitidas, ...core } = body
+  const { asignados, fechaHora, fechaDespacho, paisIds, lineas, ...core } = body
   const actualizada = await repo.updateSolicitud(
     id,
     {
@@ -307,7 +307,7 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
       ...(fechaDespacho !== undefined ? { fechaDespacho: fechaDespacho ? new Date(fechaDespacho) : null } : {}),
     },
     asignados,
-    { paisIds, variedadIds, calibreIds, categoriaIds, articuloIds, calidadesPermitidas },
+    { paisIds, lineas: lineas?.map(normalizarLinea) },
     userId,
   )
 
@@ -397,8 +397,14 @@ export async function cerrarSolicitud(
     throw new ValidationError('Debe registrar al menos una persona que asiste (función Acudir)')
   }
 
+  // Especies presentes en las líneas (2026-10-27): la validez por especie de
+  // defectos/madurez del cierre se evalúa contra este conjunto (default: válido
+  // si pertenece a CUALQUIER especie de las líneas). Vacío (legacy sin líneas) =
+  // no se restringe por especie.
+  const especiesSolicitud = new Set(solicitud.lineas.map((l) => l.especie.id))
+
   // Defectos del cierre (2026-10-13): grupo/defecto existen (tenant), el defecto
-  // pertenece a su grupo y es válido para la especie de la solicitud (o es
+  // pertenece a su grupo y es válido para alguna especie de la solicitud (o es
   // genérico); el valor respeta la unidad de medida (UNIDADES = entero ≥ 0;
   // PORCENTAJE = decimal 0..100).
   if (body.defectos !== undefined) {
@@ -411,10 +417,11 @@ export async function cerrarSolicitud(
       if (defecto.grupoDefectoId !== linea.grupoDefectoId) {
         throw new ValidationError(`${prefijo} el defecto no pertenece al grupo seleccionado`)
       }
-      // Validez por especie (calidad.md): si la solicitud tiene especie y el
-      // defecto declara especies, debe incluirla; un defecto sin especies es genérico.
-      if (solicitud.especieId != null && defecto.especies.length > 0 && !defecto.especies.some((e) => e.especieId === solicitud.especieId)) {
-        throw new ValidationError(`${prefijo} el defecto no es válido para la especie de la solicitud`)
+      // Validez por especie (calidad.md): si la solicitud tiene especies (en sus
+      // líneas) y el defecto declara especies, debe incluir al menos una; un
+      // defecto sin especies es genérico.
+      if (especiesSolicitud.size > 0 && defecto.especies.length > 0 && !defecto.especies.some((e) => especiesSolicitud.has(e.especieId))) {
+        throw new ValidationError(`${prefijo} el defecto no es válido para las especies de la solicitud`)
       }
       if (defecto.tipoMedida === 'PORCENTAJE') {
         if (linea.valor > 100) throw new ValidationError(`${prefijo} el porcentaje no puede superar 100`)
@@ -439,11 +446,11 @@ export async function cerrarSolicitud(
       const caracteristica = await repo.getCaracteristicaMadurezActiva(linea.caracteristicaId)
       if (!caracteristica) throw new ValidationError(`${prefijo} la característica seleccionada no existe o está bloqueada`)
       if (
-        solicitud.especieId != null &&
+        especiesSolicitud.size > 0 &&
         caracteristica.especies.length > 0 &&
-        !caracteristica.especies.some((e) => e.especieId === solicitud.especieId)
+        !caracteristica.especies.some((e) => especiesSolicitud.has(e.especieId))
       ) {
-        throw new ValidationError(`${prefijo} la característica no es válida para la especie de la solicitud`)
+        throw new ValidationError(`${prefijo} la característica no es válida para las especies de la solicitud`)
       }
       if (caracteristica.tipoDato === 'TEXTO') {
         if (linea.valorTexto == null || linea.valorTexto.trim() === '') {

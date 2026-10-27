@@ -63,18 +63,27 @@ export function SolicitudInspeccionV1({ d, marcaAgua, marcaAguaFecha }: { d: Sol
         ]}
       />
 
-      <GrupoCampos
-        titulo='Producto a Inspeccionar'
-        campos={[
-          { label: 'Especie', valor: d.especie ?? '—' },
-          { label: 'Cantidad de pallets', valor: d.cantidadPallets != null ? fmt.entero(d.cantidadPallets) : '—' },
-          { label: 'Calidades permitidas', valor: d.calidadesPermitidas ?? '—' },
-          { label: 'Variedades', valor: listaOGuion(d.variedades) },
-          { label: 'Calibres', valor: listaOGuion(d.calibres) },
-          { label: 'Categorías', valor: listaOGuion(d.categorias) },
-          { label: 'Artículos', valor: listaOGuion(d.articulos) },
-        ]}
-      />
+      {/* Producto a inspeccionar por LÍNEA (2026-10-27): especie + embalaje +
+          variedad + categorías/calibres/calidades + cantidad de pallets. */}
+      {d.lineas.length > 0 ? (
+        d.lineas.map((l, i) => (
+          <GrupoCampos
+            key={i}
+            titulo={d.lineas.length > 1 ? `Producto a Inspeccionar — Línea ${i + 1}` : 'Producto a Inspeccionar'}
+            campos={[
+              { label: 'Especie', valor: l.especie },
+              { label: 'Embalaje', valor: l.embalaje },
+              { label: 'Variedad', valor: l.variedad },
+              { label: 'Cantidad de pallets', valor: l.cantidadPallets != null ? fmt.entero(l.cantidadPallets) : '—' },
+              { label: 'Calidades permitidas', valor: l.calidadesPermitidas ?? '—' },
+              { label: 'Calibres', valor: listaOGuion(l.calibres) },
+              { label: 'Categorías', valor: listaOGuion(l.categorias) },
+            ]}
+          />
+        ))
+      ) : (
+        <GrupoCampos titulo='Producto a Inspeccionar' campos={[{ label: 'Producto', valor: '—' }]} />
+      )}
 
       <GrupoCampos
         titulo='Asignados'

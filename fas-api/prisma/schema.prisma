@@ -619,7 +619,7 @@ model GrupoMercado {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  mercados                    Mercado[]
+  mercados Mercado[]
 
   // Target de la FK compuesta de Mercado (empresaId, grupoMercadoId) — hace
   // estructuralmente imposible que un Mercado y su GrupoMercado pertenezcan a
@@ -876,22 +876,22 @@ enum TipoMedidaDefecto {
 }
 
 model Defecto {
-  id                    Int          @id @default(autoincrement())
+  id                    Int               @id @default(autoincrement())
   empresaId             Int
-  empresa               Empresa      @relation(fields: [empresaId], references: [id])
+  empresa               Empresa           @relation(fields: [empresaId], references: [id])
   codigo                String
   descripcion           String
   descripcionExtranjera String?
   grupoDefectoId        Int
   // FK compuesta (empresaId, grupoDefectoId) -> GrupoDefecto(empresaId, id).
-  grupoDefecto          GrupoDefecto @relation(fields: [empresaId, grupoDefectoId], references: [empresaId, id])
+  grupoDefecto          GrupoDefecto      @relation(fields: [empresaId, grupoDefectoId], references: [empresaId, id])
   // Unidad de medida del valor (2026-10-13): determina si el valor es entero
   // (UNIDADES) o decimal porcentual (PORCENTAJE) en el cierre de la Inspección.
   tipoMedida            TipoMedidaDefecto @default(UNIDADES)
-  bloqueado             Boolean      @default(false)
-  creadoEn              DateTime     @default(now())
+  bloqueado             Boolean           @default(false)
+  creadoEn              DateTime          @default(now())
   creadoPor             String
-  actualizadoEn         DateTime?    @updatedAt
+  actualizadoEn         DateTime?         @updatedAt
   actualizadoPor        String?
   eliminadoEn           DateTime?
   eliminadoPor          String?
@@ -1121,7 +1121,7 @@ model Especie {
   categorias                  Categoria[]
   calibres                    Calibre[]
   articulos                   Articulo[]
-  solicitudesInspeccion       SolicitudInspeccion[]
+  solicitudesInspeccion       SolicitudInspeccionLinea[]
   conceptosLiquidacion        ConceptoLiquidacionEspecie[]
   notaVentaDetalles           NotaVentaDetalle[]
   proformaLineas              ProformaLinea[]
@@ -1222,11 +1222,11 @@ model Variedad {
   eliminadoPor          String?
 
   notaVentaDetalles                   NotaVentaDetalle[]
-  instructivoEmbalajeDetalles         InstructivoEmbalajeDetalle[]  @relation("InstructivoEmbalajeDetalleVariedad")
-  instructivoEmbalajeDetallesRotulada InstructivoEmbalajeDetalle[]  @relation("InstructivoEmbalajeDetalleVariedadRotulada")
+  instructivoEmbalajeDetalles         InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeDetalleVariedad")
+  instructivoEmbalajeDetallesRotulada InstructivoEmbalajeDetalle[] @relation("InstructivoEmbalajeDetalleVariedadRotulada")
   ordenCompraLineas                   OrdenCompraLinea[]
   contratoProductorLineas             ProductorContratoLinea[]
-  solicitudesInspeccion               SolicitudInspeccionVariedad[]
+  solicitudesInspeccion               SolicitudInspeccionLinea[]
   palletLineas                        PalletLinea[]
   proformaLineas                      ProformaLinea[]
   facturaExportacionLineas            FacturaExportacionLinea[]
@@ -1260,7 +1260,7 @@ model Categoria {
   instructivoEmbalajeDetalles InstructivoEmbalajeDetalle[]
   ordenCompraLineas           OrdenCompraLinea[]
   contratoProductorLineas     ProductorContratoLinea[]
-  solicitudesInspeccion       SolicitudInspeccionCategoria[]
+  solicitudesInspeccion       SolicitudInspeccionLineaCategoria[]
   palletLineas                PalletLinea[]
   proformaLineas              ProformaLinea[]
   facturaExportacionLineas    FacturaExportacionLinea[]
@@ -1302,7 +1302,7 @@ model Calibre {
   ordenCompraLineaCalibres           OrdenCompraLineaCalibre[]
   contratoProductorLineaDesde        ProductorContratoLinea[]            @relation("ProductorContratoCalibreDesde")
   contratoProductorLineaHasta        ProductorContratoLinea[]            @relation("ProductorContratoCalibreHasta")
-  solicitudesInspeccion              SolicitudInspeccionCalibre[]
+  solicitudesInspeccion              SolicitudInspeccionLineaCalibre[]
   proformaLineas                     ProformaLinea[]
   facturaExportacionLineas           FacturaExportacionLinea[]
   palletLineas                       PalletLinea[]
@@ -1370,10 +1370,10 @@ model Parametro {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  notasVentaModalidad   NotaVenta[]   @relation("NotaVentaModalidadVenta")
-  notasVentaTipoFlete   NotaVenta[]   @relation("NotaVentaTipoFlete")
-  notasVentaTipoBl      NotaVenta[]   @relation("NotaVentaTipoBl")
-  embarquesTipoBl       Embarque[]    @relation("EmbarqueTipoBl")
+  notasVentaModalidad NotaVenta[] @relation("NotaVentaModalidadVenta")
+  notasVentaTipoFlete NotaVenta[] @relation("NotaVentaTipoFlete")
+  notasVentaTipoBl    NotaVenta[] @relation("NotaVentaTipoBl")
+  embarquesTipoBl     Embarque[]  @relation("EmbarqueTipoBl")
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1508,7 +1508,7 @@ model Puerto {
   eliminadoPor          String?
 
   notasVenta     NotaVenta[]
-  embarquesZarpe Embarque[]  @relation("EmbarquePuertoZarpe")
+  embarquesZarpe Embarque[]         @relation("EmbarquePuertoZarpe")
   direcciones    EntidadDireccion[]
 
   @@unique([empresaId, id])
@@ -1857,8 +1857,9 @@ model SolicitudInspeccion {
   direccion             EntidadDireccion          @relation(fields: [direccionId], references: [id])
   contactoId            Int? // EntidadContacto de la entidad productora (opcional)
   contacto              EntidadContacto?          @relation(fields: [contactoId], references: [id])
-  especieId             Int?
-  especie               Especie?                  @relation(fields: [empresaId, especieId], references: [empresaId, id])
+  // Especie dejó de ser un campo único de cabecera (2026-10-27): ahora va por
+  // LÍNEA (SolicitudInspeccionLinea), junto a embalaje/variedad/categorías/
+  // calibres/calidades/cantidad de pallets. Ver `lineas`.
   // Fecha y hora de la VISITA. Nullable desde 2026-10-13: ya no se ingresa al
   // crear la solicitud (lo que importa al crear es `creadoEn` = ingreso); se
   // fija al editar la visita (dispara el recordatorio 24h) o en el cierre.
@@ -1873,7 +1874,7 @@ model SolicitudInspeccion {
   plantaId              Int?
   planta                Entidad?                  @relation("SolicitudInspeccionPlanta", fields: [empresaId, plantaId], references: [empresaId, id])
   fechaDespacho         DateTime?                 @db.Date
-  cantidadPallets       Int?
+  // cantidadPallets se movió a la línea (SolicitudInspeccionLinea) — 2026-10-27.
   observaciones         String?
   // Solicitante de negocio (2026-08-14): distinto de `creadoPor` (auditoría
   // pura, "quién hizo el request"). Por defecto es el usuario de sesión al
@@ -1895,25 +1896,19 @@ model SolicitudInspeccion {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  asignados  SolicitudInspeccionAsignado[]
-  adjuntos   SolicitudInspeccionAdjunto[]
-  paises     SolicitudInspeccionPais[]
-  variedades SolicitudInspeccionVariedad[]
-  calibres   SolicitudInspeccionCalibre[]
-  categorias SolicitudInspeccionCategoria[]
-  embalajes  SolicitudInspeccionEmbalaje[]
-  // Nota(s) de Calidad / Condición (multiselección, 2026-10-05 — supersede el
-  // notaCalidadId/notaCondicionId singular, calidad.md): varios valores por
-  // solicitud, mismos mantenedores que Pallet (compras.md §4.8), restringidos
-  // por `especieId` de esta Solicitud cuando está definido.
-  // Calidades permitidas = pares (NotaCalidad, NotaCondicion) — supersede las dos
-  // listas independientes (notasCalidad/notasCondicion), que permitían el producto
-  // cartesiano. Ahora se definen combinaciones específicas (ej. A1/A2/B1, sin B2).
-  calidadesPermitidas SolicitudInspeccionCalidadPermitida[]
+  asignados SolicitudInspeccionAsignado[]
+  adjuntos  SolicitudInspeccionAdjunto[]
+  paises    SolicitudInspeccionPais[]
+  // Detalle de producto por LÍNEA (2026-10-27): cada línea lleva especie +
+  // embalaje + variedad + categorías + calibres + calidades + cantidad de
+  // pallets. Reemplaza las listas planas de cabecera (variedades/calibres/
+  // categorías/embalajes/calidadesPermitidas) y el `especieId`/`cantidadPallets`
+  // de cabecera. Mínimo 1 línea al crear/editar.
+  lineas    SolicitudInspeccionLinea[]
   // Defectos registrados en el cierre (2026-10-13): grupo + defecto + valor
   // (entero o % según Defecto.tipoMedida).
-  defectos       SolicitudInspeccionDefecto[]
-  madurez        SolicitudInspeccionMadurez[]
+  defectos  SolicitudInspeccionDefecto[]
+  madurez   SolicitudInspeccionMadurez[]
 
   ordenesCompra OrdenCompraSolicitudInspeccion[]
 
@@ -1938,64 +1933,67 @@ model SolicitudInspeccionPais {
   @@map("solicitud_inspeccion_paises")
 }
 
-model SolicitudInspeccionVariedad {
-  id          Int                 @id @default(autoincrement())
-  solicitudId Int
-  solicitud   SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
-  variedadId  Int
-  variedad    Variedad            @relation(fields: [variedadId], references: [id])
-
-  @@unique([solicitudId, variedadId])
-  @@map("solicitud_inspeccion_variedades")
-}
-
-model SolicitudInspeccionCalibre {
-  id          Int                 @id @default(autoincrement())
-  solicitudId Int
-  solicitud   SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
-  calibreId   Int
-  calibre     Calibre             @relation(fields: [calibreId], references: [id])
-
-  @@unique([solicitudId, calibreId])
-  @@map("solicitud_inspeccion_calibres")
-}
-
-model SolicitudInspeccionCategoria {
-  id          Int                 @id @default(autoincrement())
-  solicitudId Int
-  solicitud   SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
-  categoriaId Int
-  categoria   Categoria           @relation(fields: [categoriaId], references: [id])
-
-  @@unique([solicitudId, categoriaId])
-  @@map("solicitud_inspeccion_categorias")
-}
-
-model SolicitudInspeccionEmbalaje {
-  id          Int                 @id @default(autoincrement())
-  solicitudId Int
-  solicitud   SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
-  articuloId  Int
-  articulo    Articulo            @relation(fields: [articuloId], references: [id])
-
-  @@unique([solicitudId, articuloId])
-  @@map("solicitud_inspeccion_embalajes")
-}
-
-// Calidad permitida = par (NotaCalidad, NotaCondicion). Tabla hija simple (como
-// las demás colecciones hijas: parentId + Cascade, FK simples a mantenedores).
-model SolicitudInspeccionCalidadPermitida {
+// Línea de detalle de producto (2026-10-27): especie + embalaje + variedad
+// (uno cada uno) + cantidad de pallets. Categorías, calibres y calidades van en
+// tablas hijas de la línea (varios por línea). Reemplaza las listas planas de
+// cabecera y el especieId/cantidadPallets de cabecera. Mismo patrón que
+// OrdenCompraLinea (FK simples por id; sin empresaId, aislamiento vía el padre).
+model SolicitudInspeccionLinea {
   id              Int                 @id @default(autoincrement())
   solicitudId     Int
   solicitud       SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
-  notaCalidadId   Int
-  notaCalidad     NotaCalidad         @relation(fields: [notaCalidadId], references: [id])
-  notaCondicionId Int
-  notaCondicion   NotaCondicion       @relation(fields: [notaCondicionId], references: [id])
+  especieId       Int
+  especie         Especie             @relation(fields: [especieId], references: [id])
+  variedadId      Int
+  variedad        Variedad            @relation(fields: [variedadId], references: [id])
+  articuloId      Int // Artículo tipo EMBALAJE
+  articulo        Articulo            @relation(fields: [articuloId], references: [id])
+  cantidadPallets Int?
 
-  @@unique([solicitudId, notaCalidadId, notaCondicionId])
+  categorias SolicitudInspeccionLineaCategoria[]
+  calibres   SolicitudInspeccionLineaCalibre[]
+  calidades  SolicitudInspeccionLineaCalidad[]
+
   @@index([solicitudId])
-  @@map("solicitud_inspeccion_calidades_permitidas")
+  @@index([especieId])
+  @@map("solicitud_inspeccion_lineas")
+}
+
+model SolicitudInspeccionLineaCategoria {
+  id          Int                      @id @default(autoincrement())
+  lineaId     Int
+  linea       SolicitudInspeccionLinea @relation(fields: [lineaId], references: [id], onDelete: Cascade)
+  categoriaId Int
+  categoria   Categoria                @relation(fields: [categoriaId], references: [id])
+
+  @@unique([lineaId, categoriaId])
+  @@map("solicitud_inspeccion_linea_categorias")
+}
+
+model SolicitudInspeccionLineaCalibre {
+  id        Int                      @id @default(autoincrement())
+  lineaId   Int
+  linea     SolicitudInspeccionLinea @relation(fields: [lineaId], references: [id], onDelete: Cascade)
+  calibreId Int
+  calibre   Calibre                  @relation(fields: [calibreId], references: [id])
+
+  @@unique([lineaId, calibreId])
+  @@map("solicitud_inspeccion_linea_calibres")
+}
+
+// Calidad permitida = par (NotaCalidad, NotaCondicion), ahora por LÍNEA.
+model SolicitudInspeccionLineaCalidad {
+  id              Int                      @id @default(autoincrement())
+  lineaId         Int
+  linea           SolicitudInspeccionLinea @relation(fields: [lineaId], references: [id], onDelete: Cascade)
+  notaCalidadId   Int
+  notaCalidad     NotaCalidad              @relation(fields: [notaCalidadId], references: [id])
+  notaCondicionId Int
+  notaCondicion   NotaCondicion            @relation(fields: [notaCondicionId], references: [id])
+
+  @@unique([lineaId, notaCalidadId, notaCondicionId])
+  @@index([lineaId])
+  @@map("solicitud_inspeccion_linea_calidades")
 }
 
 model NotaVentaCalidadPermitida {
@@ -2248,9 +2246,9 @@ enum EstadoMovimiento {
 }
 
 model Articulo {
-  id                    Int          @id @default(autoincrement())
+  id                    Int                @id @default(autoincrement())
   empresaId             Int
-  empresa               Empresa      @relation(fields: [empresaId], references: [id])
+  empresa               Empresa            @relation(fields: [empresaId], references: [id])
   tipo                  TipoArticulo
   codigo                String
   descripcion           String
@@ -2258,12 +2256,12 @@ model Articulo {
   unidadId              Int
   // FK compuesta (empresaId, unidadId) -> UnidadMedida(empresaId, id): mismo
   // patrón que Mercado↔GrupoMercado (Fase 2a).
-  unidad                UnidadMedida @relation(fields: [empresaId, unidadId], references: [empresaId, id])
+  unidad                UnidadMedida       @relation(fields: [empresaId, unidadId], references: [empresaId, id])
   tipoCosteo            TipoCosteo
-  valorEstandar         Decimal?     @db.Decimal(14, 4) // requerido si ESTANDAR (R3)
-  controlaStock         Boolean      @default(true) // false si ESTANDAR (R3)
-  stockCritico          Decimal?     @db.Decimal(14, 3)
-  activo                Boolean      @default(true)
+  valorEstandar         Decimal?           @db.Decimal(14, 4) // requerido si ESTANDAR (R3)
+  controlaStock         Boolean            @default(true) // false si ESTANDAR (R3)
+  stockCritico          Decimal?           @db.Decimal(14, 3)
+  activo                Boolean            @default(true)
   // Atributos físicos del embalaje (Orden de Compra hereda estos valores del
   // artículo elegido en la línea, no los duplica — ver compras.md §4.3).
   // Etiqueta PRINCIPAL (por defecto) del embalaje. Requerida solo si tipo =
@@ -2273,24 +2271,24 @@ model Articulo {
   etiquetaId            Int?
   // FK compuesta (empresaId, etiquetaId) -> Etiqueta(empresaId, id): mismo
   // patrón que Articulo.unidadId.
-  etiqueta              Etiqueta?    @relation(fields: [empresaId, etiquetaId], references: [empresaId, id])
+  etiqueta              Etiqueta?          @relation(fields: [empresaId, etiquetaId], references: [empresaId, id])
   // Etiquetas ADICIONALES permitidas (2026-10-12): el conjunto permitido del
   // embalaje = etiquetaId (principal) ∪ estas. Vacío = etiqueta FIJA (se hereda
   // en Stock y no es editable); con ≥1 adicional = DINÁMICA (la etiqueta es
   // obligatoria en la carga de Stock y sólo puede ser una del conjunto, y en la
   // edición de Stock sólo se puede cambiar dentro del conjunto permitido).
   etiquetasAdicionales  ArticuloEtiqueta[]
-  kgNetoEnvase          Decimal?     @db.Decimal(10, 3)
-  kgBrutoEnvase         Decimal?     @db.Decimal(10, 3)
+  kgNetoEnvase          Decimal?           @db.Decimal(10, 3)
+  kgBrutoEnvase         Decimal?           @db.Decimal(10, 3)
   // Especie del embalaje (opcional): agrupa los embalajes por especie en el
   // editor de Cajas por Pallet. FK compuesta (empresaId, especieId) ->
   // Especie(empresaId, id), mismo patrón que unidad/etiqueta.
   especieId             Int?
-  especie               Especie?     @relation(fields: [empresaId, especieId], references: [empresaId, id])
+  especie               Especie?           @relation(fields: [empresaId, especieId], references: [empresaId, id])
 
   documentos                  DocumentoArticulo[]
-  recetas                     Receta[]                      @relation("EmbalajeRecetas")
-  comoComponente              RecetaDetalle[]               @relation("ComponenteRecetas")
+  recetas                     Receta[]                     @relation("EmbalajeRecetas")
+  comoComponente              RecetaDetalle[]              @relation("ComponenteRecetas")
   saldos                      SaldoArticulo[]
   movimientosDetalle          MovimientoDetalle[]
   notaVentaDetalles           NotaVentaDetalle[]
@@ -2299,7 +2297,7 @@ model Articulo {
   ordenCompraMaterialLineas   OrdenCompraMaterialLinea[]
   proformaMaterialLineas      ProformaMaterialLinea[]
   contratoProductorLineas     ProductorContratoLinea[]
-  solicitudesInspeccion       SolicitudInspeccionEmbalaje[]
+  solicitudesInspeccion       SolicitudInspeccionLinea[]
   palletLineas                PalletLinea[]
   cajasPorPallet              CajasPorPallet[]
   proformaLineas              ProformaLinea[]
@@ -2681,8 +2679,8 @@ model ProformaMaterial {
   observaciones   String?
   estado          EstadoProformaMaterial @default(BORRADOR)
 
-  lineas     ProformaMaterialLinea[]
-  cuotasPago ProformaMaterialCuotaPago[]
+  lineas           ProformaMaterialLinea[]
+  cuotasPago       ProformaMaterialCuotaPago[]
   facturasNacional FacturaNacional[]
 
   creadoEn       DateTime  @default(now())
@@ -2963,11 +2961,11 @@ model NotaCalidad {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  especies              NotaCalidadEspecie[]
-  pallets               Pallet[]
-  solicitudesCalidad    SolicitudInspeccionCalidadPermitida[]
-  notasVentaCalidad     NotaVentaCalidadPermitida[]
-  instructivosCalidad   InstructivoEmbalajeCalidadPermitida[]
+  especies            NotaCalidadEspecie[]
+  pallets             Pallet[]
+  solicitudesCalidad  SolicitudInspeccionLineaCalidad[]
+  notasVentaCalidad   NotaVentaCalidadPermitida[]
+  instructivosCalidad InstructivoEmbalajeCalidadPermitida[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -3003,7 +3001,7 @@ model NotaCondicion {
 
   especies              NotaCondicionEspecie[]
   pallets               Pallet[]
-  solicitudesCondicion  SolicitudInspeccionCalidadPermitida[]
+  solicitudesCondicion  SolicitudInspeccionLineaCalidad[]
   notasVentaCondicion   NotaVentaCalidadPermitida[]
   instructivosCondicion InstructivoEmbalajeCalidadPermitida[]
 
@@ -3082,16 +3080,16 @@ model NotaVenta {
   // genérico Parametro (mantenedores-generales.md), cada uno filtrado por su
   // propio TipoParametro (ver seed).
   modalidadVentaId Int?
-  modalidadVenta   Parametro? @relation("NotaVentaModalidadVenta", fields: [empresaId, modalidadVentaId], references: [empresaId, id])
+  modalidadVenta   Parametro?     @relation("NotaVentaModalidadVenta", fields: [empresaId, modalidadVentaId], references: [empresaId, id])
   clausulaVentaId  Int?
   clausulaVenta    ClausulaVenta? @relation("NotaVentaClausulaVenta", fields: [empresaId, clausulaVentaId], references: [empresaId, id])
   tipoFleteId      Int?
-  tipoFlete        Parametro? @relation("NotaVentaTipoFlete", fields: [empresaId, tipoFleteId], references: [empresaId, id])
+  tipoFlete        Parametro?     @relation("NotaVentaTipoFlete", fields: [empresaId, tipoFleteId], references: [empresaId, id])
   // Tipo de BL (2026-09-30): se propone al generar cada Embarque (Solicitud de
   // Reserva) como valor por defecto — editable por contenedor, ver
   // Embarque.tipoBlId ("EmbarqueTipoBl").
   tipoBlId         Int?
-  tipoBl           Parametro? @relation("NotaVentaTipoBl", fields: [empresaId, tipoBlId], references: [empresaId, id])
+  tipoBl           Parametro?     @relation("NotaVentaTipoBl", fields: [empresaId, tipoBlId], references: [empresaId, id])
 
   // Forma de pago: condición de pago con cuotas (% + plazo en días), mismo
   // modelo que Compras (CondicionPago). No existe un campo de "saldo pago"
@@ -3107,9 +3105,9 @@ model NotaVenta {
 
   observaciones String?
 
-  detalles      NotaVentaDetalle[]
-  ordenesCompra OrdenCompra[]
-  embarques     Embarque[]
+  detalles            NotaVentaDetalle[]
+  ordenesCompra       OrdenCompra[]
+  embarques           Embarque[]
   // Calidades permitidas = pares (NotaCalidad, NotaCondicion). Restringen qué
   // pallets se pueden reservar al Embarque de este Cierre (ver embarques).
   calidadesPermitidas NotaVentaCalidadPermitida[]
@@ -3658,7 +3656,7 @@ model Reclamo {
   // generado al crear vía PrefijoCodigo (modelo='reclamo', prefijo p.ej. "REC").
   // Unicidad real por índice parcial (empresaId, codigo) WHERE eliminadoEn IS
   // NULL (ver migration.sql — no representable en el DSL de Prisma).
-  codigo     String
+  codigo String
 
   embarqueId Int
   // FK compuesta (empresaId, embarqueId) -> Embarque(empresaId, id).
@@ -3874,11 +3872,11 @@ model Proforma {
   // cerrado DENTRO del total: restan al valor de venta para obtener el valor
   // FOB de la mercadería (unitario FOB = unitario × (montoTotal − flete −
   // seguro) / montoTotal). El total y las cuotas siguen sobre `montoTotal`.
-  montoFlete            Decimal?            @db.Decimal(14, 2)
-  montoSeguro           Decimal?            @db.Decimal(14, 2)
+  montoFlete  Decimal? @db.Decimal(14, 2)
+  montoSeguro Decimal? @db.Decimal(14, 2)
 
-  estado       EstadoProforma @default(EMITIDA)
-  fechaEmision DateTime       @default(now())
+  estado         EstadoProforma @default(EMITIDA)
+  fechaEmision   DateTime       @default(now())
   // Fecha del documento (editable al emitir) — si null, se muestra fechaEmision.
   fechaDocumento DateTime?
   // Observaciones libres del documento (editable al emitir; se muestran en el PDF).
@@ -4003,8 +4001,8 @@ model FacturaExportacion {
   // obtener el valor FOB de la mercadería. Se hereda de la Proforma al crear el
   // borrador y es editable mientras la Factura esté en BORRADOR. En el DTE 110
   // van como MntFlete/MntSeguro; TotClauVenta = montoTotal (CIF).
-  montoFlete            Decimal?            @db.Decimal(14, 2)
-  montoSeguro           Decimal?            @db.Decimal(14, 2)
+  montoFlete  Decimal? @db.Decimal(14, 2)
+  montoSeguro Decimal? @db.Decimal(14, 2)
 
   // Idioma del documento (ES/EN) — heredado de la Proforma, editable en
   // BORRADOR. Afecta las descripciones (descripcion vs descripcionExtranjera)
@@ -4020,12 +4018,12 @@ model FacturaExportacion {
   tipoCambio      Decimal?  @db.Decimal(14, 4)
   fechaTipoCambio DateTime?
 
-  estado EstadoFacturaExportacion @default(BORRADOR)
+  estado          EstadoFacturaExportacion @default(BORRADOR)
   // Fecha del documento (FchEmis del DTE) — editable en BORRADOR; si queda null
   // al firmar, se usa la fecha de firma. También es la referencia FACTURA de las
   // cuotas.
-  fechaDocumento DateTime?
-  fechaEmision   DateTime? // se fija al timbrar el DTE (firma real)
+  fechaDocumento  DateTime?
+  fechaEmision    DateTime? // se fija al timbrar el DTE (firma real)
   // Observaciones libres del documento (editable en BORRADOR; se muestran en el PDF/detalle).
   observaciones   String?
   // Motivo de rechazo del SII/LibreDTE cuando estado = RECHAZADA.
@@ -4107,7 +4105,7 @@ model FacturaExportacionCuota {
   // Cobranza (Ciclo 1, 2026-10-19): pago acumulado y saldo pendiente de la cuota
   // (CB7: saldoPendiente = montoCuota - montoPagado - ΣNC + ΣND, ≥0). Backfill en
   // la migración = montoCuota / 0 para cuotas existentes.
-  montoPagado      Decimal                       @db.Decimal(14, 2) @default(0)
+  montoPagado      Decimal                       @default(0) @db.Decimal(14, 2)
   saldoPendiente   Decimal                       @db.Decimal(14, 2)
   estado           EstadoCuotaFacturaExportacion @default(PENDIENTE)
 
@@ -4146,27 +4144,27 @@ model FacturaNacional {
 
   // Origen del documento: PROFORMA_MATERIAL o VENTA_NACIONAL (Embarque con
   // Cierre tipoVenta=NACIONAL). Alimenta la columna "origen" del listado.
-  origenClase OrigenFacturaNacional @default(PROFORMA_MATERIAL)
+  origenClase        OrigenFacturaNacional @default(PROFORMA_MATERIAL)
   // Proforma de Materiales de origen. A lo más una Factura activa por Proforma
   // → índice único parcial WHERE eliminadoEn IS NULL (ver migración).
   proformaMaterialId Int?
-  proformaMaterial   ProformaMaterial? @relation(fields: [proformaMaterialId], references: [id])
+  proformaMaterial   ProformaMaterial?     @relation(fields: [proformaMaterialId], references: [id])
   // Embarque de origen (VENTA_NACIONAL). A lo más una Factura activa por Embarque
   // → índice único parcial WHERE eliminadoEn IS NULL (ver migración).
-  embarqueId Int?
-  embarque   Embarque? @relation("FacturaNacionalEmbarque", fields: [empresaId, embarqueId], references: [empresaId, id])
+  embarqueId         Int?
+  embarque           Embarque?             @relation("FacturaNacionalEmbarque", fields: [empresaId, embarqueId], references: [empresaId, id])
 
   codigo String // autogenerado vía PrefijoCodigo (modelo='facturaNacional')
 
   // Receptor nacional: Entidad tipo CLIENTE_NACIONAL (RUT = identificador).
   // En VENTA_NACIONAL el cliente es la exportadora (CLIENTE_NACIONAL + EXPORTADORA).
-  clienteId Int
-  cliente   Entidad @relation("FacturaNacionalCliente", fields: [empresaId, clienteId], references: [empresaId, id])
+  clienteId       Int
+  cliente         Entidad   @relation("FacturaNacionalCliente", fields: [empresaId, clienteId], references: [empresaId, id])
   // Siempre CLP (se factura convertido). tipoCambio/fechaTipoCambio aplican a
   // VENTA_NACIONAL: precio de la fruta viene en USD y se convierte a CLP con
   // este tipo de cambio (sugerido por fecha, editable antes de emitir).
-  monedaId  Int
-  moneda    Moneda  @relation(fields: [monedaId], references: [id])
+  monedaId        Int
+  moneda          Moneda    @relation(fields: [monedaId], references: [id])
   tipoCambio      Decimal?  @db.Decimal(14, 4)
   fechaTipoCambio DateTime?
 
@@ -4227,14 +4225,14 @@ model FacturaNacionalLinea {
   articuloId  Int?
   articulo    Articulo? @relation(fields: [articuloId], references: [id])
 
-  cantidad       Decimal @db.Decimal(14, 3)
-  precioUnitario Decimal @db.Decimal(14, 4) // en CLP (ya convertido en VENTA_NACIONAL)
+  cantidad             Decimal  @db.Decimal(14, 3)
+  precioUnitario       Decimal  @db.Decimal(14, 4) // en CLP (ya convertido en VENTA_NACIONAL)
   // Precio unitario en la moneda de origen (USD) para VENTA_NACIONAL — permite
   // reconvertir a CLP si se edita el tipo de cambio. Null en otros orígenes.
   precioUnitarioOrigen Decimal? @db.Decimal(14, 4)
   // Línea exenta de IVA (afecta por defecto). Define 33 (hay afectas) vs 34.
-  exento         Boolean @default(false)
-  montoLinea     Decimal @db.Decimal(14, 2)
+  exento               Boolean  @default(false)
+  montoLinea           Decimal  @db.Decimal(14, 2)
 
   @@index([facturaNacionalId])
   @@map("factura_nacional_lineas")
@@ -4288,7 +4286,7 @@ model FacturaNacionalCuota {
   plazoDias        Int
   montoCuota       Decimal                    @db.Decimal(14, 2)
   fechaVencimiento DateTime?
-  montoPagado      Decimal                    @db.Decimal(14, 2) @default(0)
+  montoPagado      Decimal                    @default(0) @db.Decimal(14, 2)
   saldoPendiente   Decimal                    @db.Decimal(14, 2)
   estado           EstadoCuotaFacturaNacional @default(PENDIENTE)
 
@@ -4347,7 +4345,7 @@ model PagoAplicacionDocumento {
   facturaNacionalId    Int?
   facturaNacional      FacturaNacional?    @relation("PagoAplicFacturaNacional", fields: [empresaId, facturaNacionalId], references: [empresaId, id])
 
-  tipoCambioAplicado Decimal  @db.Decimal(14, 6) @default(1)
+  tipoCambioAplicado Decimal  @default(1) @db.Decimal(14, 6)
   montoAplicado      Decimal  @db.Decimal(14, 2)
   fecha              DateTime @default(now())
 
@@ -4450,24 +4448,24 @@ model InstructivoEmbalaje {
   // el flujo real nunca lo ató a una NV), así que se ancla al productor en
   // vez de a la venta.
   entidadProductorId  Int
-  entidadProductor    Entidad      @relation("InstructivoEmbalajeProductor", fields: [empresaId, entidadProductorId], references: [empresaId, id])
+  entidadProductor    Entidad  @relation("InstructivoEmbalajeProductor", fields: [empresaId, entidadProductorId], references: [empresaId, id])
   // Exportador (2026-10-05) — Entidad tipo EXPORTADORA. FK compuesta
   // (empresaId, exportadorId) -> Entidad(empresaId, id).
   exportadorId        Int?
-  exportador          Entidad?     @relation("InstructivoEmbalajeExportador", fields: [empresaId, exportadorId], references: [empresaId, id])
+  exportador          Entidad? @relation("InstructivoEmbalajeExportador", fields: [empresaId, exportadorId], references: [empresaId, id])
   // El Mercado va a nivel de línea (2026-10-14, antes Grupo de Mercado; y antes
   // de 2026-10-05 estaba en cabecera): cada línea del instructivo puede
   // destinarse a un mercado distinto — ver InstructivoEmbalajeDetalle.mercadoId.
   fechaInicioPrograma DateTime
   observaciones       String?
 
-  detalle     InstructivoEmbalajeDetalle[]
+  detalle             InstructivoEmbalajeDetalle[]
   // Calidades permitidas = pares (NotaCalidad, NotaCondicion) — definición documental.
   calidadesPermitidas InstructivoEmbalajeCalidadPermitida[]
   // Recepciones de Proceso que seleccionaron este instructivo (2026-09-01) —
   // la validación de características contra el detalle es una advertencia
   // aceptable/rechazable, no un bloqueo (2026-09-02, ver Recepcion abajo).
-  recepciones RecepcionInstructivoEmbalaje[]
+  recepciones         RecepcionInstructivoEmbalaje[]
 
   creadoEn     DateTime  @default(now())
   creadoPor    String
@@ -4623,7 +4621,7 @@ model OrdenCompra {
 
   // Condiciones comerciales de compra a GRANEL (2026-10-27). Solo aplican a la
   // modalidad GRANEL (nullable; se limpian si la OC es CAJAS).
-  porcentajeMinExportacion Decimal?                          @db.Decimal(5, 2) // % mínimo de exportación
+  porcentajeMinExportacion Decimal?                         @db.Decimal(5, 2) // % mínimo de exportación
   modalidadEntregaGranel   ModalidadEntregaGranel?
   envasesProporcionadosPor ResponsableProductorExportadora?
   encargadoDescartePor     ResponsableProductorExportadora?
@@ -4823,8 +4821,8 @@ model OrdenCompraLinea {
   // Campos de modalidad GRANEL (2026-10-23): la fruta se compra por kilos a un
   // precio USD por kilo. Nullable porque en CAJAS no aplican; exigidos (> 0) solo
   // en GRANEL. En GRANEL la cantidad real para cuotas/liquidación = cantidadKilos.
-  cantidadKilos   Decimal? @db.Decimal(14, 2)
-  precioUsdKilo   Decimal? @db.Decimal(14, 4)
+  cantidadKilos Decimal? @db.Decimal(14, 2)
+  precioUsdKilo Decimal? @db.Decimal(14, 4)
 
   // Multiselect de calibres (antes: rango calibreMinId/calibreMaxId — ver
   // supersesión 2026-08-15, mismo patrón que NotaVentaDetalleCalibre).
@@ -5280,7 +5278,7 @@ model AuditLog {
   datosAntes   Json? // snapshot previo (EDITAR/ELIMINAR), campos sensibles enmascarados
   datosDespues Json? // snapshot posterior (CREAR/EDITAR), campos sensibles enmascarados
   // Resumen de operaciones masivas (updateMany/deleteMany): { criterio, cantidad }
-  resumen Json?
+  resumen      Json?
 
   ip        String?
   userAgent String?

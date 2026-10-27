@@ -61,6 +61,22 @@ function toLocalInput(iso: string): string {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16)
 }
 
+// Línea de producto del formulario (2026-10-27): especie + embalaje + variedad
+// (uno c/u) + categorías/calibres/calidades (varios) + cantidad de pallets.
+interface LineaForm {
+  especieId: number | null
+  articuloId: number | null
+  variedadId: number | null
+  categoriaIds: number[]
+  calibreIds: number[]
+  calidadesPermitidas: CalidadPermitidaPar[]
+  cantidadPallets: string
+}
+const LINEA_VACIA: LineaForm = {
+  especieId: null, articuloId: null, variedadId: null,
+  categoriaIds: [], calibreIds: [], calidadesPermitidas: [], cantidadPallets: '',
+}
+
 interface SolicitudFormProps {
   solicitudId?: number
 }
@@ -86,15 +102,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const [paisIds, setPaisIds] = useState<number[]>([])
   const [clienteId, setClienteId] = useState<number | null>(null)
   const [fechaDespacho, setFechaDespacho] = useState('')
-  const [especieId, setEspecieId] = useState<number | null>(null)
-  const [articuloIds, setArticuloIds] = useState<number[]>([])
-  const [variedadIds, setVariedadIds] = useState<number[]>([])
-  const [calibreIds, setCalibreIds] = useState<number[]>([])
-  const [calibreDesdeId, setCalibreDesdeId] = useState<number | null>(null)
-  const [calibreHastaId, setCalibreHastaId] = useState<number | null>(null)
-  const [categoriaIds, setCategoriaIds] = useState<number[]>([])
-  const [calidadesPermitidas, setCalidadesPermitidas] = useState<CalidadPermitidaPar[]>([])
-  const [cantidadPallets, setCantidadPallets] = useState('')
+  const [lineas, setLineas] = useState<LineaForm[]>([])
   const [asignados, setAsignados] = useState<AsignadoInput[]>([])
   const [observaciones, setObservaciones] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -157,38 +165,6 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     queryFn: () => notasCondicionService.list(),
     staleTime: 5 * 60_000,
   })
-  // Restringidas por la especie de la solicitud (si está definida), igual
-  // que en Calidad > Calificación de Pallets — sin especie, se muestra el
-  // catálogo completo sin filtrar.
-  const notasCalidadValidas = useMemo(() => {
-    const todas = (notasCalidad?.data ?? []).filter((n) => !n.bloqueado)
-    if (especieId == null) return todas
-    return todas.filter((n) => n.especies.some((e) => e.especieId === especieId))
-  }, [notasCalidad, especieId])
-  const notasCondicionValidas = useMemo(() => {
-    const todas = (notasCondicion?.data ?? []).filter((n) => !n.bloqueado)
-    if (especieId == null) return todas
-    return todas.filter((n) => n.especies.some((e) => e.especieId === especieId))
-  }, [notasCondicion, especieId])
-  const { data: variedadesData } = useQuery({
-    queryKey: ['variedades-options-solicitud', especieId],
-    queryFn: () => variedadesService.list({ limit: 500, especieId: especieId! }),
-    staleTime: 60_000,
-    enabled: !!especieId,
-  })
-  const { data: calibresData } = useQuery({
-    queryKey: ['calibres-options-solicitud', especieId],
-    queryFn: () => calibresService.list({ limit: 500, especieId: especieId! }),
-    staleTime: 60_000,
-    enabled: !!especieId,
-  })
-  const { data: categoriasData } = useQuery({
-    queryKey: ['categorias-options-solicitud', especieId],
-    queryFn: () => categoriasService.list({ limit: 500, especieId: especieId! }),
-    staleTime: 60_000,
-    enabled: !!especieId,
-  })
-
   // Direcciones/contactos del productor seleccionado
   const { data: productorDetalle } = useQuery({
     queryKey: ['entidad-detalle', productorId],
@@ -223,13 +199,15 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       setPaisIds(d.paises.map((p) => p.pais.id))
       setClienteId(d.clienteId)
       setFechaDespacho(d.fechaDespacho?.slice(0, 10) ?? '')
-      setEspecieId(d.especieId)
-      setArticuloIds(d.embalajes.map((e) => e.articulo.id))
-      setVariedadIds(d.variedades.map((v) => v.variedad.id))
-      setCalibreIds(d.calibres.map((c) => c.calibre.id))
-      setCategoriaIds(d.categorias.map((c) => c.categoria.id))
-      setCalidadesPermitidas(d.calidadesPermitidas.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })))
-      setCantidadPallets(d.cantidadPallets != null ? String(d.cantidadPallets) : '')
+      setLineas(d.lineas.map((l) => ({
+        especieId: l.especie.id,
+        articuloId: l.articulo.id,
+        variedadId: l.variedad.id,
+        categoriaIds: l.categorias.map((c) => c.categoria.id),
+        calibreIds: l.calibres.map((c) => c.calibre.id),
+        calidadesPermitidas: l.calidades.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })),
+        cantidadPallets: l.cantidadPallets != null ? String(l.cantidadPallets) : '',
+      })))
       setAsignados(d.asignados.map((a) => ({ usuarioId: a.usuarioId, funcion: a.funcion })))
       setObservaciones(d.observaciones ?? '')
     }
@@ -253,22 +231,15 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     return usuarios?.data.find((u) => u.id === id)?.nombre ?? id
   }
 
-  function resetCalibreRango() {
-    setCalibreDesdeId(null)
-    setCalibreHastaId(null)
+  // ── Líneas ──
+  function agregarLinea() {
+    setLineas((prev) => [...prev, { ...LINEA_VACIA }])
   }
-
-  function agregarRangoCalibres() {
-    if (!calibreDesdeId) return
-    const lista = calibresData?.data ?? []
-    const hastaId = calibreHastaId ?? calibreDesdeId
-    const idxDesde = lista.findIndex((c) => c.id === calibreDesdeId)
-    const idxHasta = lista.findIndex((c) => c.id === hastaId)
-    if (idxDesde === -1 || idxHasta === -1) return
-    const [ini, fin] = idxDesde <= idxHasta ? [idxDesde, idxHasta] : [idxHasta, idxDesde]
-    const nuevos = lista.slice(ini, fin + 1).map((c) => c.id)
-    setCalibreIds((prev) => Array.from(new Set([...prev, ...nuevos])))
-    resetCalibreRango()
+  function actualizarLinea(index: number, cambios: Partial<LineaForm>) {
+    setLineas((prev) => prev.map((l, i) => (i === index ? { ...l, ...cambios } : l)))
+  }
+  function quitarLinea(index: number) {
+    setLineas((prev) => prev.filter((_, i) => i !== index))
   }
 
   function validate(): boolean {
@@ -282,6 +253,12 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     // 2026-10-05: ya no se exige un asignado con función Acudir — basta con al
     // menos un asignado (puede ser solo Notificar).
     if (asignados.length === 0) e.asignados = 'Debe asignar al menos un usuario'
+    // Detalle de producto (2026-10-27): al menos una línea y cada línea con
+    // especie, embalaje y variedad.
+    if (lineas.length === 0) e.lineas = 'Debe agregar al menos una línea de producto'
+    else if (lineas.some((l) => !l.especieId || !l.articuloId || !l.variedadId)) {
+      e.lineas = 'Cada línea requiere especie, embalaje y variedad'
+    }
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -299,13 +276,15 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       paisIds,
       clienteId,
       fechaDespacho: fechaDespacho || null,
-      especieId,
-      articuloIds,
-      variedadIds,
-      calibreIds,
-      categoriaIds,
-      calidadesPermitidas,
-      cantidadPallets: cantidadPallets ? Number(cantidadPallets) : null,
+      lineas: lineas.map((l) => ({
+        especieId: l.especieId!,
+        articuloId: l.articuloId!,
+        variedadId: l.variedadId!,
+        categoriaIds: l.categoriaIds,
+        calibreIds: l.calibreIds,
+        calidadesPermitidas: l.calidadesPermitidas,
+        cantidadPallets: l.cantidadPallets ? Number(l.cantidadPallets) : null,
+      })),
       observaciones: observaciones.trim() || null,
       asignados,
     }
@@ -529,131 +508,33 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
             </div>
           </div>
 
-          {/* Fila 4: Especie, Embalaje, Variedades */}
-          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
-            <div className='space-y-1.5'>
-              <Label>Especie</Label>
-              <Select
-                value={especieId ? String(especieId) : 'none'}
-                onValueChange={(v) => {
-                  const nuevo = v === 'none' ? null : Number(v)
-                  setEspecieId(nuevo)
-                  setVariedadIds([]); setCalibreIds([]); setCategoriaIds([])
-                  setCalidadesPermitidas([])
-                  resetCalibreRango()
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder='Sin especie...' /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='none'>Sin especie</SelectItem>
-                  {(especies?.data ?? []).map((e) => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Embalaje</Label>
-              <SelectMultiple
-                options={(articulosEmbalaje?.data ?? []).map((a) => ({ id: a.id, label: `${a.codigo} — ${a.descripcion}` }))}
-                selectedIds={articuloIds}
-                onChange={setArticuloIds}
-                placeholder='Agregar embalaje...'
-              />
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Variedades</Label>
-              <SelectMultiple
-                options={(variedadesData?.data ?? []).map((v) => ({ id: v.id, label: v.descripcion }))}
-                selectedIds={variedadIds}
-                onChange={setVariedadIds}
-                placeholder={especieId ? 'Agregar variedad...' : 'Selecciona una especie primero'}
-                disabled={!especieId}
-              />
-            </div>
-          </div>
-
-          {/* Fila 4b: Calibre Inicio, Calibre Fin, Agregar */}
-          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
-            <div className='space-y-1.5'>
-              <Label>Calibre Inicio</Label>
-              <Select value={calibreDesdeId ? String(calibreDesdeId) : ''} onValueChange={(v) => setCalibreDesdeId(Number(v))} disabled={!especieId}>
-                <SelectTrigger><SelectValue placeholder={especieId ? 'Seleccionar...' : 'Selecciona una especie primero'} /></SelectTrigger>
-                <SelectContent>
-                  {(calibresData?.data ?? []).map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Calibre Fin</Label>
-              <Select value={calibreHastaId ? String(calibreHastaId) : ''} onValueChange={(v) => setCalibreHastaId(Number(v))} disabled={!especieId}>
-                <SelectTrigger><SelectValue placeholder='Igual a inicio' /></SelectTrigger>
-                <SelectContent>
-                  {(calibresData?.data ?? []).map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='space-y-1.5'>
-              <Label className='invisible'>Agregar</Label>
-              <Button type='button' variant='secondary' className='w-full' onClick={agregarRangoCalibres} disabled={!especieId || !calibreDesdeId}>
-                <Icons.add className='mr-1 h-4 w-4' /> Agregar
+          {/* Detalle de producto por LÍNEA (2026-10-27): cada línea con su
+              especie, embalaje, variedad, categorías, calibres, calidades y
+              cantidad de pallets. La especie de la línea gobierna sus opciones. */}
+          <div className='space-y-3'>
+            <div className='flex items-center justify-between'>
+              <Label>Detalle de producto <span className='text-destructive'>*</span></Label>
+              <Button type='button' variant='secondary' size='sm' onClick={agregarLinea}>
+                <Icons.add className='mr-1 h-4 w-4' /> Agregar línea
               </Button>
             </div>
-          </div>
-
-          <div className='space-y-1.5'>
-            <Label>Calibres</Label>
-            {calibreIds.length > 0 ? (
-              <div className='flex flex-wrap gap-1.5'>
-                {calibreIds.map((id) => {
-                  const opt = (calibresData?.data ?? []).find((c) => c.id === id)
-                  return (
-                    <Badge key={id} variant='secondary' className='gap-1 pr-1'>
-                      {opt?.descripcion ?? id}
-                      <button
-                        type='button'
-                        onClick={() => setCalibreIds((prev) => prev.filter((x) => x !== id))}
-                        className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'
-                      >
-                        <Icons.close className='h-3 w-3' />
-                      </button>
-                    </Badge>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className='text-xs text-muted-foreground'>Selecciona Calibre Inicio / Fin arriba y agrega.</p>
+            {lineas.length === 0 && (
+              <p className='text-xs text-muted-foreground'>Agrega al menos una línea de producto.</p>
             )}
-          </div>
-
-          {/* Fila 5: Categorías, Nota Calidad, Nota Condición, Cantidad de pallet */}
-          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-4'>
-            <div className='space-y-1.5'>
-              <Label>Categorías</Label>
-              <SelectMultiple
-                options={(categoriasData?.data ?? []).map((c) => ({ id: c.id, label: c.descripcion }))}
-                selectedIds={categoriaIds}
-                onChange={setCategoriaIds}
-                placeholder={especieId ? 'Agregar categoría...' : 'Selecciona una especie primero'}
-                disabled={!especieId}
+            {lineas.map((linea, i) => (
+              <LineaEditor
+                key={i}
+                index={i}
+                linea={linea}
+                especies={(especies?.data ?? []).map((e) => ({ id: e.id, descripcion: e.descripcion }))}
+                articulosEmbalaje={(articulosEmbalaje?.data ?? []).map((a) => ({ id: a.id, codigo: a.codigo, descripcion: a.descripcion }))}
+                notasCalidad={notasCalidad?.data ?? []}
+                notasCondicion={notasCondicion?.data ?? []}
+                onChange={(cambios) => actualizarLinea(i, cambios)}
+                onRemove={() => quitarLinea(i)}
               />
-            </div>
-            <div className='space-y-1.5 sm:col-span-2'>
-              <CalidadesPermitidasInput
-                value={calidadesPermitidas}
-                onChange={setCalidadesPermitidas}
-                calidades={notasCalidadValidas.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
-                condiciones={notasCondicionValidas.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
-              />
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Cantidad de pallets</Label>
-              <Input type='number' value={cantidadPallets} onChange={(e) => setCantidadPallets(e.target.value)} />
-            </div>
+            ))}
+            {errors.lineas && <p className='text-xs text-destructive'>{errors.lineas}</p>}
           </div>
 
           {/* Fila 6: Personas asignadas */}
@@ -757,6 +638,137 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
           </Button>
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── Editor de una línea de producto (2026-10-27) ────────────────────────────
+// Cada línea trae su propia especie, que gobierna variedad/calibres/categorías/
+// calidades. Es un componente aparte para que sus useQuery por especie puedan
+// usar hooks (una instancia por línea).
+interface NotaConEspecies {
+  id: number
+  descripcion: string
+  bloqueado: boolean
+  especies: { especieId: number }[]
+}
+interface LineaEditorProps {
+  index: number
+  linea: LineaForm
+  especies: { id: number; descripcion: string }[]
+  articulosEmbalaje: { id: number; codigo: string; descripcion: string }[]
+  notasCalidad: NotaConEspecies[]
+  notasCondicion: NotaConEspecies[]
+  onChange: (cambios: Partial<LineaForm>) => void
+  onRemove: () => void
+}
+
+function LineaEditor({ index, linea, especies, articulosEmbalaje, notasCalidad, notasCondicion, onChange, onRemove }: LineaEditorProps) {
+  const especieId = linea.especieId
+  const { data: variedadesData } = useQuery({
+    queryKey: ['variedades-options-solicitud', especieId],
+    queryFn: () => variedadesService.list({ limit: 500, especieId: especieId! }),
+    staleTime: 60_000,
+    enabled: !!especieId,
+  })
+  const { data: calibresData } = useQuery({
+    queryKey: ['calibres-options-solicitud', especieId],
+    queryFn: () => calibresService.list({ limit: 500, especieId: especieId! }),
+    staleTime: 60_000,
+    enabled: !!especieId,
+  })
+  const { data: categoriasData } = useQuery({
+    queryKey: ['categorias-options-solicitud', especieId],
+    queryFn: () => categoriasService.list({ limit: 500, especieId: especieId! }),
+    staleTime: 60_000,
+    enabled: !!especieId,
+  })
+
+  // Notas restringidas por la especie de ESTA línea (si está definida).
+  const notasCalidadValidas = useMemo(() => {
+    const todas = notasCalidad.filter((n) => !n.bloqueado)
+    if (especieId == null) return todas
+    return todas.filter((n) => n.especies.some((e) => e.especieId === especieId))
+  }, [notasCalidad, especieId])
+  const notasCondicionValidas = useMemo(() => {
+    const todas = notasCondicion.filter((n) => !n.bloqueado)
+    if (especieId == null) return todas
+    return todas.filter((n) => n.especies.some((e) => e.especieId === especieId))
+  }, [notasCondicion, especieId])
+
+  return (
+    <div className='space-y-3 rounded-md border p-3'>
+      <div className='flex items-center justify-between'>
+        <span className='text-sm font-medium'>Línea {index + 1}</span>
+        <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={onRemove}>
+          <Icons.trash className='h-4 w-4' />
+        </Button>
+      </div>
+      <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
+        <div className='space-y-1.5'>
+          <Label>Especie <span className='text-destructive'>*</span></Label>
+          <Select
+            value={especieId ? String(especieId) : ''}
+            onValueChange={(v) => onChange({ especieId: Number(v), variedadId: null, categoriaIds: [], calibreIds: [], calidadesPermitidas: [] })}
+          >
+            <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+            <SelectContent>
+              {especies.map((e) => <SelectItem key={e.id} value={String(e.id)}>{e.descripcion}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Embalaje <span className='text-destructive'>*</span></Label>
+          <Combobox
+            value={linea.articuloId ? String(linea.articuloId) : ''}
+            onChange={(v) => onChange({ articuloId: v ? Number(v) : null })}
+            placeholder='Seleccionar embalaje...'
+            searchPlaceholder='Buscar embalaje...'
+            options={articulosEmbalaje.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+          />
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Variedad <span className='text-destructive'>*</span></Label>
+          <Select value={linea.variedadId ? String(linea.variedadId) : ''} onValueChange={(v) => onChange({ variedadId: Number(v) })} disabled={!especieId}>
+            <SelectTrigger><SelectValue placeholder={especieId ? 'Seleccionar...' : 'Elige especie primero'} /></SelectTrigger>
+            <SelectContent>
+              {(variedadesData?.data ?? []).map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.descripcion}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
+        <div className='space-y-1.5'>
+          <Label>Categorías</Label>
+          <SelectMultiple
+            options={(categoriasData?.data ?? []).map((c) => ({ id: c.id, label: c.descripcion }))}
+            selectedIds={linea.categoriaIds}
+            onChange={(ids) => onChange({ categoriaIds: ids })}
+            placeholder={especieId ? 'Agregar categoría...' : 'Elige especie primero'}
+            disabled={!especieId}
+          />
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Calibres</Label>
+          <SelectMultiple
+            options={(calibresData?.data ?? []).map((c) => ({ id: c.id, label: c.descripcion }))}
+            selectedIds={linea.calibreIds}
+            onChange={(ids) => onChange({ calibreIds: ids })}
+            placeholder={especieId ? 'Agregar calibre...' : 'Elige especie primero'}
+            disabled={!especieId}
+          />
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Cantidad de pallets</Label>
+          <Input type='number' value={linea.cantidadPallets} onChange={(e) => onChange({ cantidadPallets: e.target.value })} />
+        </div>
+      </div>
+      <CalidadesPermitidasInput
+        value={linea.calidadesPermitidas}
+        onChange={(v) => onChange({ calidadesPermitidas: v })}
+        calidades={notasCalidadValidas.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
+        condiciones={notasCondicionValidas.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
+      />
     </div>
   )
 }

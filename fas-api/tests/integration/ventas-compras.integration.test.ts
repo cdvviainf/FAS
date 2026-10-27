@@ -267,6 +267,8 @@ async function crearFixtures() {
     entidadProductorId: productor.id,
     direccionId: direccionProductor.id,
     fechaHora: new Date('2026-08-01T15:00:00Z').toISOString(),
+    // Detalle de producto por línea (2026-10-27).
+    lineas: [{ especieId: especie.id, articuloId: articulo.id, variedadId: variedad.id, categoriaIds: [categoria.id], calibreIds: [calibreChico.id], cantidadPallets: 10 }],
     asignados: [{ usuarioId: usuarioInspector.id, funcion: 'ACUDIR' }],
   }, 'test')
   await notificarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'test')
@@ -290,6 +292,8 @@ async function crearOtraSolicitudAprobada(f: Awaited<ReturnType<typeof crearFixt
     entidadProductorId: f.productor.id,
     direccionId: f.direccionProductor.id,
     fechaHora: new Date('2026-08-02T15:00:00Z').toISOString(),
+    // Detalle de producto por línea (2026-10-27).
+    lineas: [{ especieId: f.especie.id, articuloId: f.articulo.id, variedadId: f.variedad.id, categoriaIds: [f.categoria.id], calibreIds: [f.calibreChico.id], cantidadPallets: 10 }],
     asignados: [{ usuarioId: f.usuarioInspector.id, funcion: 'ACUDIR' }],
   }, 'test')
   await notificarSolicitudInspeccion(f.empresa.id, solicitud.id, 'test')

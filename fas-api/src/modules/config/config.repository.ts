@@ -457,10 +457,9 @@ export async function countActiveReferences(
     | 'bodegaContacto'
     | 'solicitudInspeccion'
     | 'solicitudInspeccionPais'
-    | 'solicitudInspeccionVariedad'
-    | 'solicitudInspeccionCalibre'
-    | 'solicitudInspeccionCategoria'
-    | 'solicitudInspeccionEmbalaje'
+    | 'solicitudInspeccionLinea'
+    | 'solicitudInspeccionLineaCategoria'
+    | 'solicitudInspeccionLineaCalibre'
     | 'solicitudInspeccionDefecto'
     | 'solicitudInspeccionMadurez'
     | 'articulo'
@@ -473,6 +472,9 @@ export async function countActiveReferences(
   // Tablas intermedias (join) no tienen softdelete propio: la vigencia se
   // valida contra la solicitud relacionada (QAS-SI-014).
   viaSolicitud = false,
+  // Tablas nietas de la solicitud (hijas de la LÍNEA, 2026-10-27): la vigencia
+  // se valida contra la solicitud a través de la línea (linea.solicitud).
+  viaLinea = false,
 ): Promise<number> {
   const delegate = (prisma as unknown as Record<string, {
     count(args: { where: Record<string, unknown> }): Promise<number>
@@ -481,9 +483,11 @@ export async function countActiveReferences(
   return delegate.count({
     where: {
       [parentField]: parentId,
-      ...(viaSolicitud
-        ? { solicitud: { eliminadoEn: null } }
-        : usesSoftDelete ? { eliminadoEn: null } : {}),
+      ...(viaLinea
+        ? { linea: { solicitud: { eliminadoEn: null } } }
+        : viaSolicitud
+          ? { solicitud: { eliminadoEn: null } }
+          : usesSoftDelete ? { eliminadoEn: null } : {}),
     },
   })
 }

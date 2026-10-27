@@ -29,20 +29,29 @@ const includeDetalle = {
   contacto: {
     select: { id: true, nombre: true, email: true, telefono: true, whatsapp: true, tipo: true },
   },
-  especie: { select: { id: true, codigo: true, descripcion: true } },
   mercado: { select: { id: true, codigo: true, descripcion: true } },
   cliente: { select: { id: true, codigo: true, descripcion: true, razonSocial: true } },
-  calidadesPermitidas: {
-    select: {
-      notaCalidad: { select: { id: true, codigo: true, descripcion: true } },
-      notaCondicion: { select: { id: true, codigo: true, descripcion: true } },
-    },
-  },
   paises: { select: { pais: { select: { id: true, codigo: true, descripcion: true } } } },
-  variedades: { select: { variedad: { select: { id: true, codigo: true, descripcion: true } } } },
-  calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
-  categorias: { select: { categoria: { select: { id: true, codigo: true, descripcion: true } } } },
-  embalajes: { select: { articulo: { select: { id: true, codigo: true, descripcion: true } } } },
+  // Detalle de producto por línea (2026-10-27): especie + embalaje + variedad +
+  // categorías/calibres/calidades + cantidad de pallets.
+  lineas: {
+    select: {
+      id: true,
+      cantidadPallets: true,
+      especie: { select: { id: true, codigo: true, descripcion: true } },
+      variedad: { select: { id: true, codigo: true, descripcion: true } },
+      articulo: { select: { id: true, codigo: true, descripcion: true } },
+      categorias: { select: { categoria: { select: { id: true, codigo: true, descripcion: true } } } },
+      calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
+      calidades: {
+        select: {
+          notaCalidad: { select: { id: true, codigo: true, descripcion: true } },
+          notaCondicion: { select: { id: true, codigo: true, descripcion: true } },
+        },
+      },
+    },
+    orderBy: { id: 'asc' as const },
+  },
   asignados: {
     select: {
       id: true,
@@ -180,22 +189,41 @@ export interface SolicitudCoreData {
   plantaId?: number | null
   direccionId: number
   contactoId?: number | null
-  especieId?: number | null
   fechaHora: Date | null
   mercadoId?: number | null
   clienteId?: number | null
   fechaDespacho?: Date | null
-  cantidadPallets?: number | null
   observaciones?: string | null
+}
+
+// Línea de producto (2026-10-27): especie + embalaje + variedad + categorías/
+// calibres/calidades + cantidad de pallets.
+export interface SolicitudLineaInput {
+  especieId: number
+  articuloId: number
+  variedadId: number
+  categoriaIds: number[]
+  calibreIds: number[]
+  calidadesPermitidas: ParCalidad[]
+  cantidadPallets?: number | null
 }
 
 export interface SolicitudMultiSelects {
   paisIds: number[]
-  variedadIds: number[]
-  calibreIds: number[]
-  categoriaIds: number[]
-  articuloIds: number[]
-  calidadesPermitidas: ParCalidad[]
+  lineas: SolicitudLineaInput[]
+}
+
+// Prisma nested-create de una línea (especie/variedad/embalaje + hijas).
+function lineaCreateData(l: SolicitudLineaInput) {
+  return {
+    especieId: l.especieId,
+    variedadId: l.variedadId,
+    articuloId: l.articuloId,
+    cantidadPallets: l.cantidadPallets ?? null,
+    categorias: { create: l.categoriaIds.map((categoriaId) => ({ categoriaId })) },
+    calibres: { create: l.calibreIds.map((calibreId) => ({ calibreId })) },
+    calidades: { create: l.calidadesPermitidas.map((p) => ({ notaCalidadId: p.notaCalidadId, notaCondicionId: p.notaCondicionId })) },
+  }
 }
 
 /**
@@ -237,11 +265,7 @@ export async function createSolicitud(
         creadoPor: userId,
         asignados: { create: asignados },
         paises: { create: multi.paisIds.map((paisId) => ({ paisId })) },
-        variedades: { create: multi.variedadIds.map((variedadId) => ({ variedadId })) },
-        calibres: { create: multi.calibreIds.map((calibreId) => ({ calibreId })) },
-        categorias: { create: multi.categoriaIds.map((categoriaId) => ({ categoriaId })) },
-        embalajes: { create: multi.articuloIds.map((articuloId) => ({ articuloId })) },
-        calidadesPermitidas: { create: multi.calidadesPermitidas.map((p) => ({ notaCalidadId: p.notaCalidadId, notaCondicionId: p.notaCondicionId })) },
+        lineas: { create: multi.lineas.map(lineaCreateData) },
       },
       include: includeDetalle,
     })
@@ -269,27 +293,14 @@ export async function updateSolicitud(
       await tx.solicitudInspeccionPais.deleteMany({ where: { solicitudId: id } })
       await tx.solicitudInspeccionPais.createMany({ data: multi.paisIds.map((paisId) => ({ solicitudId: id, paisId })) })
     }
-    if (multi.variedadIds !== undefined) {
-      await tx.solicitudInspeccionVariedad.deleteMany({ where: { solicitudId: id } })
-      await tx.solicitudInspeccionVariedad.createMany({ data: multi.variedadIds.map((variedadId) => ({ solicitudId: id, variedadId })) })
-    }
-    if (multi.calibreIds !== undefined) {
-      await tx.solicitudInspeccionCalibre.deleteMany({ where: { solicitudId: id } })
-      await tx.solicitudInspeccionCalibre.createMany({ data: multi.calibreIds.map((calibreId) => ({ solicitudId: id, calibreId })) })
-    }
-    if (multi.categoriaIds !== undefined) {
-      await tx.solicitudInspeccionCategoria.deleteMany({ where: { solicitudId: id } })
-      await tx.solicitudInspeccionCategoria.createMany({ data: multi.categoriaIds.map((categoriaId) => ({ solicitudId: id, categoriaId })) })
-    }
-    if (multi.articuloIds !== undefined) {
-      await tx.solicitudInspeccionEmbalaje.deleteMany({ where: { solicitudId: id } })
-      await tx.solicitudInspeccionEmbalaje.createMany({ data: multi.articuloIds.map((articuloId) => ({ solicitudId: id, articuloId })) })
-    }
-    if (multi.calidadesPermitidas !== undefined) {
-      await tx.solicitudInspeccionCalidadPermitida.deleteMany({ where: { solicitudId: id } })
-      await tx.solicitudInspeccionCalidadPermitida.createMany({
-        data: multi.calidadesPermitidas.map((p) => ({ solicitudId: id, notaCalidadId: p.notaCalidadId, notaCondicionId: p.notaCondicionId })),
-      })
+    // Líneas (replace-all): borra las existentes — el Cascade elimina sus
+    // categorías/calibres/calidades — y recrea cada una con sus hijas anidadas
+    // (createMany no soporta writes anidados, por eso el create por línea).
+    if (multi.lineas !== undefined) {
+      await tx.solicitudInspeccionLinea.deleteMany({ where: { solicitudId: id } })
+      for (const l of multi.lineas) {
+        await tx.solicitudInspeccionLinea.create({ data: { solicitudId: id, ...lineaCreateData(l) } })
+      }
     }
     return tx.solicitudInspeccion.update({
       where: { id },
@@ -615,7 +626,7 @@ export async function getArticulosEmbalaje(ids: number[]) {
 // ─── Conteo de referencias (para bloquear soft delete de maestros, QAS-SI-001) ─
 
 export async function countSolicitudesPorCampo(
-  campo: 'temporadaId' | 'especieId' | 'entidadProductorId' | 'direccionId' | 'contactoId',
+  campo: 'temporadaId' | 'entidadProductorId' | 'direccionId' | 'contactoId',
   valor: number,
 ): Promise<number> {
   return prisma.solicitudInspeccion.count({
