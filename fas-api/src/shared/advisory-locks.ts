@@ -118,6 +118,24 @@ export const LOCK_NAMESPACE_EMBARQUE_CORRELATIVO = 490252
 // para que dos reclamos del mismo prefijo no generen el mismo `codigo`.
 export const LOCK_NAMESPACE_RECLAMO_CORRELATIVO = 490253
 
+// Cobranza — aplicación de pagos / saldo a favor a una Factura (Ciclo 2,
+// cobranza.md §5): serializa el read-modify-write del saldo de las cuotas de
+// UNA factura entre dos pagos (o un pago y una aplicación de saldo a favor)
+// concurrentes — sin esto, dos aplicaciones podrían leer el mismo
+// saldoPendiente y sobre-aplicar (doble pago). Clave:
+// hashtext(tipoFactura || ':' || facturaId); cada factura destino se toma en
+// orden ascendente de (tipo, id) para no arriesgar deadlock cuando un pago
+// cubre varias facturas a la vez.
+export const LOCK_NAMESPACE_COBRANZA_PAGO = 490254
+
+// Cobranza — emisión de Nota de Crédito de anulación (Ciclo 4, FAS-COB-NC-R1-001):
+// serializa la creación de la NC de UNA factura entre dos "anular-con-nc"
+// concurrentes. Sin esto, ambos verían "sin NC", crearían filas distintas y
+// timbrarían dos folios (el lock del motor DTE es por nc.id, distinto en cada
+// una). Clave: hashtext(tipoFactura || ':' || facturaId). Cubre el check+create
+// dentro de la misma transacción; el índice único parcial por FK es el backstop.
+export const LOCK_NAMESPACE_COBRANZA_NOTA_CREDITO = 490255
+
 // 490251 se usó brevemente para "Generar Instructivos" y se retiró
 // (2026-09-21, FAS-IE-QA-005, QA ronda 4): esa operación ahora comparte
 // LOCK_NAMESPACE_EMBARQUE_DESPACHO con reservarPalletsEnEmbarque/

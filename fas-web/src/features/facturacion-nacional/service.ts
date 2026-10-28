@@ -70,6 +70,25 @@ export const facturaNacionalService = {
   async anular(id: number): Promise<{ data: FacturaNacional }> {
     return api.post(`ventas/cobranza/facturas-nacional/${id}/anular`).json()
   },
+  // Anula una Factura APROBADA emitiendo una Nota de Crédito nacional (DTE 61).
+  async anularConNc(id: number): Promise<{ data: { id: number; codigo: string; folio: number | null } }> {
+    return api.post(`ventas/cobranza/facturas-nacional/${id}/anular-con-nc`).json()
+  },
+  async verPdfNc(ncId: number): Promise<void> {
+    const blob = await api.get(`ventas/cobranza/notas-credito/${ncId}/pdf`).blob()
+    window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer')
+  },
+  async descargarXmlNc(ncId: number, nombreArchivo: string): Promise<void> {
+    const blob = await api.get(`ventas/cobranza/notas-credito/${ncId}/xml`).blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombreArchivo
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  },
   // Rescata el PDF del borrador (DTE temporal) desde LibreDTE y lo abre en una
   // pestaña nueva. Requiere haber enviado el borrador al SII.
   async verPdfBorrador(id: number): Promise<void> {

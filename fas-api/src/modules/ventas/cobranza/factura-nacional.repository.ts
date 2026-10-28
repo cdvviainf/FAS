@@ -1,9 +1,14 @@
 import { Prisma } from '@prisma/client'
+import type { EstadoCobranza } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION, LOCK_NAMESPACE_EMBARQUE_DESPACHO } from '../../../shared/advisory-locks.js'
+import type { CuotaCalculada } from './cobranza-estado.js'
 import type { FacturasNacionalListFilters } from './factura-nacional.types.js'
+
+// Forma de una cuota a persistir al firmar (= CuotaCalculada del helper).
+export type CuotaCobranzaPersistir = CuotaCalculada
 
 // origenTipo del DocumentoDte de una Factura Nacional (debe calzar con el service).
 const ORIGEN_TIPO_DTE = 'factura-nacional'
@@ -45,6 +50,12 @@ const facturaInclude = {
       montoLinea: true,
     },
     orderBy: { id: 'asc' as const },
+  },
+  // Nota de Crédito de anulación (Ciclo 4).
+  notasCredito: {
+    where: { eliminadoEn: null },
+    select: { id: true, codigo: true, tipoDte: true, estado: true, folio: true },
+    orderBy: { id: 'desc' as const },
   },
 } satisfies Prisma.FacturaNacionalInclude
 
@@ -183,6 +194,31 @@ export async function listEmbarquesFacturables(filters: { page?: number; limit?:
 
 export async function getFacturaActivaById(id: number) {
   return prisma.facturaNacional.findFirst({ where: { id, eliminadoEn: null }, include: facturaInclude })
+}
+
+// Cuotas de la CondicionPago para generar las FacturaNacionalCuota al firmar
+// (Ciclo 2). Orden estable por id = numeroCuota.
+export async function getCuotasCondicionPago(condicionPagoId: number) {
+  return prisma.condicionPagoCuota.findMany({
+    where: { condicionPagoId },
+    select: { fechaReferencia: true, plazoDias: true, tipoValor: true, porcentaje: true, valorUnitario: true },
+    orderBy: { id: 'asc' },
+  })
+}
+
+// Fechas del Embarque para resolver los vencimientos (VENTA_NACIONAL). Null si
+// no hay embarque (PROFORMA_MATERIAL) — esas cuotas quedan sin fecha salvo las
+// de referencia FACTURA.
+export async function getFechasEmbarque(embarqueId: number) {
+  return prisma.embarque.findUnique({
+    where: { id: embarqueId },
+    select: {
+      reservaManual: true,
+      fechaZarpeManual: true,
+      fechaArribo: true,
+      solicitudReserva: { select: { fechaZarpe: true } },
+    },
+  })
 }
 
 export async function getFacturaByIdConHistorial(id: number) {
@@ -328,11 +364,19 @@ export async function actualizarBorrador(id: number, data: ActualizarBorradorDat
   })
 }
 
-// Timbrada: marca APROBADA con folio y mueve la Proforma de origen a FACTURADA,
-// atómicamente.
+// Timbrada: marca APROBADA con folio, mueve la Proforma de origen a FACTURADA y
+// crea las Cuotas de cartera (Ciclo 2), todo atómicamente.
 export async function marcarFirmada(
   id: number,
-  datos: { folio: number; trackIdSii: string | null; fechaEmision: Date; fechaDocumento: Date; proformaMaterialId: number | null },
+  datos: {
+    folio: number
+    trackIdSii: string | null
+    fechaEmision: Date
+    fechaDocumento: Date
+    proformaMaterialId: number | null
+    cuotas: CuotaCobranzaPersistir[]
+    estadoCobranza: EstadoCobranza
+  },
   userId: string,
 ) {
   return prisma.$transaction(async (tx) => {
@@ -350,6 +394,9 @@ export async function marcarFirmada(
       // Ya confirmada por otra ejecución concurrente — idempotente.
       return tx.facturaNacional.findUnique({ where: { id }, include: facturaInclude })
     }
+    // Idempotente ante reconciliación tras éxito parcial: borra cuotas previas
+    // antes de recrearlas (mismo criterio que la Factura de Exportación).
+    await tx.facturaNacionalCuota.deleteMany({ where: { facturaNacionalId: id } })
     const factura = await tx.facturaNacional.update({
       where: { id },
       data: {
@@ -361,6 +408,18 @@ export async function marcarFirmada(
         emitidoPorId: userId,
         emitidoEn: datos.fechaEmision,
         errorMensajeSii: null,
+        estadoCobranza: datos.estadoCobranza,
+        cuotas: {
+          create: datos.cuotas.map((c) => ({
+            numeroCuota: c.numeroCuota,
+            fechaReferencia: c.fechaReferencia,
+            plazoDias: c.plazoDias,
+            montoCuota: c.montoCuota,
+            fechaVencimiento: c.fechaVencimiento ?? undefined,
+            // Al crear la cuota nada está pagado aún → saldoPendiente = montoCuota.
+            saldoPendiente: c.montoCuota,
+          })),
+        },
       },
       include: facturaInclude,
     })

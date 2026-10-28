@@ -1,16 +1,32 @@
 'use client'
 
 import { toast } from 'sonner'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Icons } from '@/components/icons'
 import { formatMonto, formatFechaCorta } from '@/lib/format'
+import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { documentosService } from '@/features/documentos/service'
 import { facturaExportacionService } from '../service'
+import { facturasKeys, embarquesExportacionKeys } from '../queries'
 import { FECHA_REFERENCIA_LABELS } from '../types'
 import type { EstadoFacturaExportacion, FacturaExportacion } from '../types'
+
+const ITEM = 'FACT_EXPORTACION'
 
 const ESTADO_BADGE: Record<EstadoFacturaExportacion, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   BORRADOR: { label: 'Borrador', variant: 'outline' },
@@ -21,11 +37,43 @@ const ESTADO_BADGE: Record<EstadoFacturaExportacion, { label: string; variant: '
 
 // Vista de solo lectura de una Factura de Exportación (aprobada o anulada).
 export function FacturaDetalleView({ factura }: { factura: FacturaExportacion }) {
+  const queryClient = useQueryClient()
+  const puedeEscribir = usePuedeEscribir(ITEM)
   const badge = ESTADO_BADGE[factura.estado]
   const puedeDescargarXml = factura.estado === 'APROBADA' && (factura.dte?.tieneXml ?? false)
   // Defensa extra (FAS-EXP-IE-QA-003): el backend ya no debería dejar una
   // Factura APROBADA sin folio, pero se exige explícitamente igual.
   const puedeVerPdf = factura.estado === 'APROBADA' && factura.folio != null
+  // NC de anulación aprobada (cuando la factura está ANULADA).
+  const ncAprobada = factura.notasCredito?.find((n) => n.estado === 'APROBADA') ?? null
+
+  const anularConNc = useMutation({
+    mutationFn: () => facturaExportacionService.anularConNc(factura.id),
+    onSuccess: (r) => {
+      toast.success(`Factura anulada con Nota de Crédito ${r.data.codigo}${r.data.folio ? ` (folio ${r.data.folio})` : ''}`)
+      queryClient.invalidateQueries({ queryKey: facturasKeys.detalle(factura.id) })
+      queryClient.invalidateQueries({ queryKey: facturasKeys.all })
+      queryClient.invalidateQueries({ queryKey: embarquesExportacionKeys.all })
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo anular la Factura con Nota de Crédito'),
+  })
+
+  async function verPdfNc() {
+    if (!ncAprobada) return
+    try {
+      await facturaExportacionService.verPdfNc(ncAprobada.id)
+    } catch (e) {
+      toast.error((e as Error).message || 'No se pudo abrir el PDF de la Nota de Crédito')
+    }
+  }
+  async function descargarXmlNc() {
+    if (!ncAprobada) return
+    try {
+      await facturaExportacionService.descargarXmlNc(ncAprobada.id, `${ncAprobada.codigo}${ncAprobada.folio ? `-folio-${ncAprobada.folio}` : ''}.xml`)
+    } catch (e) {
+      toast.error((e as Error).message || 'No se pudo descargar el XML de la Nota de Crédito')
+    }
+  }
 
   async function descargarXml() {
     try {
@@ -129,8 +177,48 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
               <Icons.download className='mr-2 h-4 w-4' /> Descargar XML
             </Button>
           )}
+          {/* Anular una factura timbrada con Nota de Crédito (DTE 112). */}
+          {factura.estado === 'APROBADA' && puedeEscribir && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant='destructive' isLoading={anularConNc.isPending}>
+                  <Icons.trash className='mr-2 h-4 w-4' /> Anular con Nota de Crédito
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Anular factura {factura.codigo} con Nota de Crédito</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Se emitirá y timbrará ante el SII una Nota de Crédito de Exportación (DTE 112) que anula esta
+                    factura. La factura quedará ANULADA. Esta acción no se puede deshacer.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => anularConNc.mutate()}>Emitir NC y anular</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          {ncAprobada && (
+            <>
+              <Button variant='outline' onClick={verPdfNc}>
+                <Icons.download className='mr-2 h-4 w-4' /> Ver NC Timbrada (SII)
+              </Button>
+              <Button variant='outline' onClick={descargarXmlNc}>
+                <Icons.download className='mr-2 h-4 w-4' /> Descargar XML NC
+              </Button>
+            </>
+          )}
         </div>
       </div>
+
+      {ncAprobada && (
+        <p className='text-muted-foreground text-sm'>
+          Anulada con Nota de Crédito <span className='font-medium'>{ncAprobada.codigo}</span>
+          {ncAprobada.folio != null && <> · DTE {ncAprobada.tipoDte} folio {ncAprobada.folio}</>}
+        </p>
+      )}
 
       <Card>
         <CardHeader><CardTitle className='text-sm'>Líneas</CardTitle></CardHeader>

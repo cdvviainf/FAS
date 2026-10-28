@@ -26,8 +26,18 @@ export interface LineaFacturaNacional {
   exento: boolean
 }
 
+// Referencia a otro DTE (IdDoc.Referencia). La Nota de Crédito nacional (61) la
+// usa para referenciar la factura 33/34 que anula (CodRef=1).
+export interface ReferenciaFacturaNacional {
+  tpoDocRef: string // código SII del documento referenciado (33/34)
+  folioRef: string
+  fecha: string // YYYY-MM-DD (FchRef)
+  codRef?: number // 1=anula, 2=corrige texto, 3=corrige montos
+  razonRef?: string
+}
+
 export interface FacturaNacionalMapeo {
-  // 33 (Afecta) o 34 (Exenta) — lo decide el service según las líneas.
+  // 33 (Afecta) o 34 (Exenta) para la factura; 61 para la Nota de Crédito.
   tipoDte: number
   fechaEmision: Date
   emisor: EmisorFacturaNacional
@@ -37,6 +47,7 @@ export interface FacturaNacionalMapeo {
   fmaPago?: number | null
   // Observaciones libres → IdDoc.TermPagoGlosa (glosa en el PDF).
   observaciones?: string | null
+  referencias?: ReferenciaFacturaNacional[]
 }
 
 function fmtFecha(d: Date): string {
@@ -80,5 +91,18 @@ export function mapFacturaNacionalADte(data: FacturaNacionalMapeo): LibredteDteP
       // Línea exenta: IndExe=1 (sin IVA). Afecta: se omite y LibreDTE le aplica IVA.
       ...(l.exento ? { IndExe: 1 } : {}),
     })),
+    // Referencias (p. ej. la NC 61 referencia la factura 33/34 que anula).
+    ...((data.referencias ?? []).length > 0
+      ? {
+          Referencia: (data.referencias ?? []).map((r, i) => ({
+            NroLinRef: i + 1,
+            TpoDocRef: r.tpoDocRef,
+            FolioRef: r.folioRef,
+            FchRef: r.fecha,
+            ...(r.codRef != null ? { CodRef: r.codRef } : {}),
+            ...(r.razonRef ? { RazonRef: r.razonRef } : {}),
+          })),
+        }
+      : {}),
   }
 }

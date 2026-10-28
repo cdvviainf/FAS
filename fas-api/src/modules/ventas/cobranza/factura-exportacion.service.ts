@@ -5,9 +5,11 @@ import { siguienteCodigo } from '../../config/prefijos-codigo/prefijos-codigo.se
 import { validarYCompletarLineas } from './proforma.service.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
-import { mapFacturaExportacionA110 } from '../../finanzas/facturacion/mappers/factura-exportacion.mapper.js'
+import { mapFacturaExportacionA110, type ReferenciaFacturaExportacion } from '../../finanzas/facturacion/mappers/factura-exportacion.mapper.js'
 import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
 import { factorFob, resolverFleteSeguro, unitarioFob } from './clausula-flete-seguro.js'
+import { derivarEstadoCobranza, inicioDeHoy } from './cobranza-estado.js'
+import * as ncService from './nota-credito.service.js'
 import { descripcionLinea, faltantesDescripcionExtranjera, type Idioma, type LineaConMantenedores } from './descripcion-idioma.js'
 import * as repo from './factura-exportacion.repository.js'
 import type {
@@ -412,11 +414,22 @@ const MONEDA_ADUANA_SII: Record<string, string> = {
   CLP: 'PESO CL',
 }
 
-async function construirPayloadDte(
+// Opciones para reusar este builder en la Nota de Crédito de Exportación (112):
+// cambia el tipo de DTE, agrega la referencia de anulación a la 110 y omite las
+// cuotas (una NC no lleva programación de pagos).
+export interface ConstruirPayloadDteOpts {
+  tipoDte?: number // default 110
+  incluirCuotas?: boolean // default true
+  incluirReferenciasFactura?: boolean // default true (B/L, Instructivo)
+  referenciasExtra?: ReferenciaFacturaExportacion[]
+}
+
+export async function construirPayloadDte(
   factura: NonNullable<Awaited<ReturnType<typeof repo.getFacturaActivaById>>>,
   embarque: NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>,
   emisor: { rut: string; razonSocial: string; giro: string | null; direccion: string | null; comuna: string | null },
   idioma: Idioma,
+  opts?: ConstruirPayloadDteOpts,
 ) {
   const nv = embarque.notaVenta
   const monedaAduana = MONEDA_ADUANA_SII[nv.moneda.codigo.toUpperCase()]
@@ -441,7 +454,10 @@ async function construirPayloadDte(
   // persistidas (se guardan al confirmar el timbrado), así que leerlas daría un
   // DTE temporal sin MntPagos. Se usa el mismo construirCuotas que la persistencia
   // → el payload timbrado y el guardado coinciden. Tope SII: 30 repeticiones.
-  const cuotasDte = await construirCuotas(embarque.notaVentaId, montoTotalNum, fechaDocumento, embarque)
+  // La NC de anulación (112) no lleva programación de pagos.
+  const cuotasDte = (opts?.incluirCuotas ?? true)
+    ? await construirCuotas(embarque.notaVentaId, montoTotalNum, fechaDocumento, embarque)
+    : []
   if (cuotasDte.length > 30) {
     throw new ValidationError(
       `La Condición de Pago genera ${cuotasDte.length} cuotas y el DTE 110 admite máximo 30 (MntPagos). ` +
@@ -477,25 +493,31 @@ async function construirPayloadDte(
   const pesoNeto = pesoNetoAcum > 0 ? redondea(pesoNetoAcum) : null
   const pesoBruto = pesoBrutoAcum > 0 ? redondea(pesoBrutoAcum) : null
 
-  // Referencias: B/L (código SII 808) si el Embarque lo tiene.
-  const referencias: Array<{ tpoDocRef: string; folioRef: string; fecha: string; razonRef?: string }> = []
-  if (embarque.awbBl?.trim()) {
-    referencias.push({ tpoDocRef: '808', folioRef: embarque.awbBl.trim(), fecha: fechaRef, razonRef: 'B/L' })
+  // Referencias: B/L (código SII 808) + Instructivo. La NC de anulación las
+  // omite (incluirReferenciasFactura=false) y usa solo su referencia de anulación
+  // a la 110 (referenciasExtra, CodRef=1).
+  const referencias: ReferenciaFacturaExportacion[] = []
+  if (opts?.incluirReferenciasFactura ?? true) {
+    if (embarque.awbBl?.trim()) {
+      referencias.push({ tpoDocRef: '808', folioRef: embarque.awbBl.trim(), fecha: fechaRef, razonRef: 'B/L' })
+    }
+    // Instructivo de Embarque (2026-10-13): identificación operativa del documento.
+    // El Instructivo no es un documento tributario y no tiene código SII propio;
+    // se envía como referencia con código libre (TPO_DOC_REF_INSTRUCTIVO) y el
+    // significado en RazonRef. LibreDTE lo pasa tal cual (no valida TpoDocRef).
+    if (embarque.numeroInstructivo?.trim()) {
+      referencias.push({
+        tpoDocRef: TPO_DOC_REF_INSTRUCTIVO,
+        folioRef: embarque.numeroInstructivo.trim(),
+        fecha: fechaRef,
+        razonRef: 'Instructivo de Embarque',
+      })
+    }
   }
-  // Instructivo de Embarque (2026-10-13): identificación operativa del documento.
-  // El Instructivo no es un documento tributario y no tiene código SII propio;
-  // se envía como referencia con código libre (TPO_DOC_REF_INSTRUCTIVO) y el
-  // significado en RazonRef. LibreDTE lo pasa tal cual (no valida TpoDocRef).
-  if (embarque.numeroInstructivo?.trim()) {
-    referencias.push({
-      tpoDocRef: TPO_DOC_REF_INSTRUCTIVO,
-      folioRef: embarque.numeroInstructivo.trim(),
-      fecha: fechaRef,
-      razonRef: 'Instructivo de Embarque',
-    })
-  }
+  if (opts?.referenciasExtra?.length) referencias.push(...opts.referenciasExtra)
 
   return mapFacturaExportacionA110({
+    tipoDte: opts?.tipoDte ?? 110,
     fechaEmision: fechaDocumento,
     monedaAduana,
     tipoCambio: factura.tipoCambio == null ? null : Number(factura.tipoCambio),
@@ -767,8 +789,14 @@ export async function firmar(id: number, userId: string) {
   const fechaDocumento = factura.fechaDocumento ?? fechaEmision
   // La referencia FACTURA de las cuotas usa la fecha del documento.
   const cuotas = await construirCuotas(embarque.notaVentaId, Number(factura.montoTotal), fechaDocumento, embarque)
+  // Estado de cartera inicial (Ciclo 2): nada pagado aún → PENDIENTE (o VENCIDA si
+  // alguna cuota ya nace vencida; SIN_CUOTAS si la condición no genera cuotas).
+  const estadoCobranza = derivarEstadoCobranza(
+    cuotas.map((c) => ({ montoCuota: c.montoCuota, saldoPendiente: c.montoCuota, fechaVencimiento: c.fechaVencimiento })),
+    inicioDeHoy(),
+  )
 
-  return repo.marcarFirmada(factura.id, { folio, trackIdSii, fechaEmision, fechaDocumento, cuotas }, userId)
+  return repo.marcarFirmada(factura.id, { folio, trackIdSii, fechaEmision, fechaDocumento, cuotas, estadoCobranza }, userId)
 }
 
 // ─── Lecturas / anulación ────────────────────────────────────────────────────
@@ -886,8 +914,75 @@ export async function anularFactura(id: number, userId: string) {
   if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
   if (factura.estado === 'APROBADA') {
     throw new ValidationError(
-      'No se puede anular una Factura ya aprobada (timbrada ante el SII) — requiere una Nota de Crédito de anulación (próxima fase)',
+      'No se puede anular directamente una Factura ya aprobada (timbrada ante el SII) — usa "Anular con Nota de Crédito"',
     )
   }
   return repo.anularFactura(id, userId)
+}
+
+// ─── Anular una Factura APROBADA con Nota de Crédito de Exportación (DTE 112) ──
+const ORIGEN_TIPO_NC = 'nota-credito-exportacion'
+const TIPO_DTE_NC_EXPORTACION = 112
+
+export async function anularConNotaCredito(id: number, userId: string) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
+  if (factura.estado !== 'APROBADA' || factura.folio == null) {
+    throw new ValidationError('Solo se puede anular con Nota de Crédito una Factura aprobada (timbrada ante el SII)')
+  }
+
+  const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(factura.embarqueId))
+  // La NC 112 lleva el mismo bloque Aduana que la 110 → mismos guards.
+  validarCodigosAduana(embarque)
+
+  const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
+  if (!emisor?.rut) {
+    throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas')
+  }
+  const idioma = normalizarIdioma(factura.idioma)
+  requireIdiomaEmitible(idioma, factura.lineas)
+
+  const codigo = await siguienteCodigo('notaCredito')
+  if (!codigo) {
+    throw new ValidationError('No hay un prefijo de código configurado para Notas de Crédito (Configuración › Prefijos de Código)')
+  }
+
+  const fechaFactura = factura.fechaEmision ?? factura.fechaDocumento ?? new Date()
+  const payload = await construirPayloadDte(
+    factura,
+    embarque,
+    { rut: emisor.rut, razonSocial: emisor.razonSocial, giro: emisor.giro, direccion: emisor.direccion, comuna: emisor.comuna },
+    idioma,
+    {
+      tipoDte: TIPO_DTE_NC_EXPORTACION,
+      incluirCuotas: false,
+      incluirReferenciasFactura: false,
+      referenciasExtra: [
+        {
+          tpoDocRef: String(TIPO_DTE_FACTURA_EXPORTACION),
+          folioRef: String(factura.folio),
+          fecha: fechaFactura.toISOString().slice(0, 10),
+          codRef: 1, // anula documento de referencia
+          razonRef: `Anula factura ${factura.codigo}`,
+        },
+      ],
+    },
+  )
+
+  return ncService.emitirNcAnulacion({
+    tipoFactura: 'EXPORTACION',
+    facturaId: factura.id,
+    tipoDteNc: TIPO_DTE_NC_EXPORTACION,
+    origenTipo: ORIGEN_TIPO_NC,
+    clienteId: factura.clienteId,
+    monedaId: factura.monedaId,
+    montoTotal: factura.montoTotal,
+    idioma: factura.idioma,
+    codigo,
+    payload,
+    rutEmisor: emisor.rut,
+    rutReceptor: RUT_RECEPTOR_EXTRANJERO,
+    userId,
+  })
 }

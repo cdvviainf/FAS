@@ -176,8 +176,18 @@ export interface FacturaExportacion {
   trackIdSii: string | null
   lineas: FacturaExportacionLinea[]
   cuotas: FacturaExportacionCuota[]
+  // Notas de Crédito de anulación emitidas sobre esta factura (Ciclo 4).
+  notasCredito?: NotaCreditoRef[]
   // Estado del DocumentoDte (solo en el detalle) — habilita Enviar/Firmar/XML.
   dte?: { estado: string; folio: number | null; tieneXml: boolean } | null
+}
+
+export interface NotaCreditoRef {
+  id: number
+  codigo: string
+  tipoDte: number
+  estado: 'BORRADOR' | 'APROBADA' | 'RECHAZADA'
+  folio: number | null
 }
 
 // Fila del listado embarque-céntrico (landing de Exportación).

@@ -1,6 +1,9 @@
+import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { logger } from '../../../lib/logger.js'
 import { siguienteCodigo } from '../../config/prefijos-codigo/prefijos-codigo.service.js'
+import { construirCuotasDesdeCondicion, derivarEstadoCobranza, inicioDeHoy } from './cobranza-estado.js'
+import * as ncService from './nota-credito.service.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
 import { mapFacturaNacionalADte } from '../../finanzas/facturacion/mappers/factura-nacional.mapper.js'
@@ -504,7 +507,54 @@ export async function firmar(id: number, userId: string) {
 
   const fechaEmision = new Date()
   const fechaDocumento = factura.fechaDocumento ?? fechaEmision
-  return repo.marcarFirmada(factura.id, { folio, trackIdSii, fechaEmision, fechaDocumento, proformaMaterialId: factura.proformaMaterialId }, userId)
+  // Cuotas de cartera (Ciclo 2): se generan al firmar desde la CondicionPago,
+  // espejo de la Factura de Exportación (que las toma del Cierre Comercial).
+  const cuotas = await construirCuotasNacional(factura, fechaDocumento)
+  const estadoCobranza = derivarEstadoCobranza(
+    cuotas.map((c) => ({ montoCuota: c.montoCuota, saldoPendiente: c.montoCuota, fechaVencimiento: c.fechaVencimiento })),
+    inicioDeHoy(),
+  )
+  return repo.marcarFirmada(
+    factura.id,
+    { folio, trackIdSii, fechaEmision, fechaDocumento, proformaMaterialId: factura.proformaMaterialId, cuotas, estadoCobranza },
+    userId,
+  )
+}
+
+// Arma las cuotas de la Factura Nacional desde su CondicionPago. Sin condición
+// configurada → sin cuotas (estadoCobranza SIN_CUOTAS). FACTURA usa la fecha del
+// documento; ZARPE/ARRIBO usan las del Embarque (solo VENTA_NACIONAL);
+// ENVIO_DOCUMENTOS queda sin fecha (sin fuente aún, igual que en exportación).
+async function construirCuotasNacional(
+  factura: { id: number; condicionPagoId: number | null; embarqueId: number | null; lineas: Array<{ cantidad: Prisma.Decimal | number }>; montoTotal: Prisma.Decimal | number },
+  fechaDocumento: Date,
+) {
+  if (factura.condicionPagoId == null) return []
+  const cuotasCondicion = await repo.getCuotasCondicionPago(factura.condicionPagoId)
+  if (cuotasCondicion.length === 0) return []
+
+  let fechaZarpe: Date | null = null
+  let fechaArribo: Date | null = null
+  if (factura.embarqueId != null) {
+    const emb = await repo.getFechasEmbarque(factura.embarqueId)
+    if (emb) {
+      fechaZarpe = emb.reservaManual ? emb.fechaZarpeManual : emb.solicitudReserva?.fechaZarpe ?? null
+      fechaArribo = emb.fechaArribo
+    }
+  }
+  const cantidadTotal = factura.lineas.reduce((acc, l) => acc + Number(l.cantidad), 0)
+  return construirCuotasDesdeCondicion(
+    cuotasCondicion.map((c) => ({
+      fechaReferencia: c.fechaReferencia,
+      plazoDias: c.plazoDias,
+      tipoValor: c.tipoValor,
+      porcentaje: c.porcentaje != null ? Number(c.porcentaje) : null,
+      valorUnitario: c.valorUnitario != null ? Number(c.valorUnitario) : null,
+    })),
+    Number(factura.montoTotal),
+    cantidadTotal,
+    { FACTURA: fechaDocumento, ZARPE: fechaZarpe, ARRIBO: fechaArribo, ENVIO_DOCUMENTOS: null },
+  )
 }
 
 // ─── Lecturas / anulación ─────────────────────────────────────────────────────
@@ -587,7 +637,81 @@ export async function anularFactura(id: number, userId: string) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura Nacional', String(id))
   if (factura.estado === 'APROBADA') {
-    throw new ValidationError('No se puede anular una Factura ya aprobada (timbrada) — requiere una Nota de Crédito (próxima fase)')
+    throw new ValidationError('No se puede anular directamente una Factura ya aprobada (timbrada) — usa "Anular con Nota de Crédito"')
   }
   return repo.anularFactura(id, userId)
+}
+
+// ─── Anular una Factura Nacional APROBADA con Nota de Crédito (DTE 61) ─────────
+const ORIGEN_TIPO_NC = 'nota-credito-nacional'
+const TIPO_DTE_NC_NACIONAL = 61
+
+export async function anularConNotaCredito(id: number, userId: string) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura Nacional', String(id))
+  if (factura.estado !== 'APROBADA' || factura.folio == null) {
+    throw new ValidationError('Solo se puede anular con Nota de Crédito una Factura aprobada (timbrada ante el SII)')
+  }
+
+  const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
+  if (!emisor?.rut) {
+    throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas')
+  }
+  const rutReceptor = factura.cliente.identificador?.trim()
+  if (!rutReceptor) {
+    throw new ValidationError('El cliente no tiene RUT (identificador) configurado — complétalo en Entidades')
+  }
+  const dirCliente = factura.cliente.direcciones[0]
+
+  const codigo = await siguienteCodigo('notaCredito')
+  if (!codigo) {
+    throw new ValidationError('No hay un prefijo de código configurado para Notas de Crédito (Configuración › Prefijos de Código)')
+  }
+
+  const fechaFactura = factura.fechaEmision ?? factura.fechaDocumento ?? new Date()
+  const payload = mapFacturaNacionalADte({
+    // NC nacional = DTE 61 (sirve para anular tanto 33 como 34).
+    tipoDte: TIPO_DTE_NC_NACIONAL,
+    fechaEmision: new Date(),
+    emisor: { rut: emisor.rut, razonSocial: emisor.razonSocial, giro: emisor.giro, direccion: emisor.direccion, comuna: emisor.comuna },
+    receptor: {
+      rut: rutReceptor,
+      razonSocial: factura.cliente.razonSocial,
+      giro: factura.cliente.giro,
+      direccion: dirCliente?.direccion ?? null,
+      comuna: dirCliente?.comuna?.descripcion ?? null,
+    },
+    lineas: factura.lineas.map((l) => ({
+      descripcion: l.descripcion,
+      cantidad: Number(l.cantidad),
+      precioUnitario: Number(l.precioUnitario),
+      exento: l.exento,
+    })),
+    observaciones: `Anula factura ${factura.codigo}`,
+    referencias: [
+      {
+        tpoDocRef: String(factura.tipoDte), // 33 o 34
+        folioRef: String(factura.folio),
+        fecha: fechaFactura.toISOString().slice(0, 10),
+        codRef: 1, // anula documento de referencia
+        razonRef: `Anula factura ${factura.codigo}`,
+      },
+    ],
+  })
+
+  return ncService.emitirNcAnulacion({
+    tipoFactura: 'NACIONAL',
+    facturaId: factura.id,
+    tipoDteNc: TIPO_DTE_NC_NACIONAL,
+    origenTipo: ORIGEN_TIPO_NC,
+    clienteId: factura.clienteId,
+    monedaId: factura.monedaId,
+    montoTotal: factura.montoTotal,
+    idioma: factura.idioma,
+    codigo,
+    payload,
+    rutEmisor: emisor.rut,
+    rutReceptor,
+    userId,
+  })
 }

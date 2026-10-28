@@ -17,6 +17,8 @@ export async function facturaNacionalRoutes(app: FastifyInstance) {
   app.post('/facturas-nacional/:id/firmar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.firmar)
   app.post('/facturas-nacional/:id/reabrir', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.reabrir)
   app.post('/facturas-nacional/:id/anular', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.anular)
+  // Anular una factura APROBADA (timbrada) emitiendo una Nota de Crédito nacional (DTE 61).
+  app.post('/facturas-nacional/:id/anular-con-nc', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.anularConNc)
 
   // Listados (estáticos antes de la paramétrica :id).
   app.get('/facturas-nacional', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)

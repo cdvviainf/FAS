@@ -72,6 +72,9 @@ export interface ReferenciaFacturaExportacion {
   folioRef: string
   fecha: string // YYYY-MM-DD
   razonRef?: string
+  // Código de referencia SII (IdDoc.Referencia.CodRef): 1=anula documento,
+  // 2=corrige texto, 3=corrige montos. Se usa en la NC de anulación (CodRef=1).
+  codRef?: number
 }
 
 // Cuota de la programación de pagos del cliente → IdDoc.MntPagos (SII campos
@@ -103,6 +106,9 @@ export interface FacturaExportacionMapeo {
   // como IdDoc.MntPagos; FchVenc de cabecera = vencimiento de la última cuota.
   cuotas?: CuotaFacturaExportacion[]
   referencias?: ReferenciaFacturaExportacion[]
+  // Tipo de DTE (default 110). La Nota de Crédito de Exportación usa 112 con el
+  // mismo cuerpo del documento + una Referencia a la factura (CodRef=1).
+  tipoDte?: number
   // Observaciones libres del documento. Se emiten como IdDoc.TermPagoGlosa, el
   // campo que LibreDTE imprime como glosa/observaciones en el PDF (máx. 100
   // caracteres según el SII; el schema de entrada ya lo acota).
@@ -188,7 +194,7 @@ export function mapFacturaExportacionA110(data: FacturaExportacionMapeo): Libred
   return {
     Encabezado: {
       IdDoc: {
-        TipoDTE: 110,
+        TipoDTE: data.tipoDte ?? 110,
         FchEmis: fmtFecha(data.fechaEmision),
         // Forma de pago genérica (1=contado, 2=crédito, 3=sin costo). Se omite
         // si no se pudo derivar (sin condición de pago).
@@ -259,6 +265,7 @@ export function mapFacturaExportacionA110(data: FacturaExportacionMapeo): Libred
             TpoDocRef: r.tpoDocRef,
             FolioRef: r.folioRef,
             FchRef: r.fecha,
+            ...(r.codRef != null ? { CodRef: r.codRef } : {}),
             ...(r.razonRef ? { RazonRef: r.razonRef } : {}),
           })),
         }

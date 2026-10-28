@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client'
+import type { EstadoCobranza } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION } from '../../../shared/advisory-locks.js'
@@ -70,6 +71,13 @@ const facturaInclude = {
       estado: true,
     },
     orderBy: { numeroCuota: 'asc' as const },
+  },
+  // Nota de Crédito de anulación (Ciclo 4): para mostrar su folio/estado y
+  // habilitar la descarga del DTE timbrado cuando la factura queda ANULADA.
+  notasCredito: {
+    where: { eliminadoEn: null },
+    select: { id: true, codigo: true, tipoDte: true, estado: true, folio: true },
+    orderBy: { id: 'desc' as const },
   },
 } satisfies Prisma.FacturaExportacionInclude
 
@@ -371,7 +379,7 @@ export interface CuotaPersistir {
 // posible errorMensajeSii de un intento previo rechazado.
 export async function marcarFirmada(
   id: number,
-  datos: { folio: number | null; trackIdSii: string | null; fechaEmision: Date; fechaDocumento: Date; cuotas: CuotaPersistir[] },
+  datos: { folio: number | null; trackIdSii: string | null; fechaEmision: Date; fechaDocumento: Date; cuotas: CuotaPersistir[]; estadoCobranza: EstadoCobranza },
   emitidoPorId: string,
 ) {
   return prisma.$transaction(async (tx) => {
@@ -389,6 +397,7 @@ export async function marcarFirmada(
         errorMensajeSii: null,
         emitidoPorId,
         emitidoEn: new Date(),
+        estadoCobranza: datos.estadoCobranza,
         cuotas: {
           create: datos.cuotas.map((c) => ({
             numeroCuota: c.numeroCuota,

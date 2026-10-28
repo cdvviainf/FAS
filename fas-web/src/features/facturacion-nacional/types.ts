@@ -95,8 +95,18 @@ export interface FacturaNacional {
   actualizadoEn: string | null
   creadoEn: string
   lineas: FacturaNacionalLinea[]
+  // Notas de Crédito de anulación emitidas sobre esta factura (Ciclo 4).
+  notasCredito?: NotaCreditoNacionalRef[]
   // Solo en el detalle (obtenerFactura).
   dte?: FacturaNacionalDteEstado | null
+}
+
+export interface NotaCreditoNacionalRef {
+  id: number
+  codigo: string
+  tipoDte: number
+  estado: 'BORRADOR' | 'APROBADA' | 'RECHAZADA'
+  folio: number | null
 }
 
 export interface FacturaNacionalActualizarInput {

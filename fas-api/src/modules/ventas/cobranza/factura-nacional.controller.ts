@@ -74,6 +74,11 @@ export async function anular(req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ data: await service.anularFactura(id, req.fasUserId!) })
 }
 
+export async function anularConNc(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = facturaNacionalParamsSchema.parse(req.params)
+  return reply.send({ data: await service.anularConNotaCredito(id, req.fasUserId!) })
+}
+
 export async function descargarPdfBorrador(req: FastifyRequest, reply: FastifyReply) {
   const { id } = facturaNacionalParamsSchema.parse(req.params)
   const { pdf, codigo } = await service.obtenerPdfBorrador(id)

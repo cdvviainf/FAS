@@ -271,6 +271,7 @@ model Empresa {
   embarqueStackingRangos EmbarqueStackingRango[]
   pagos                  Pago[]
   saldosAFavor           SaldoAFavorCliente[]
+  notasCredito           NotaCredito[]
 
   @@map("empresas")
 }
@@ -1545,6 +1546,7 @@ model Moneda {
   facturasNacional      FacturaNacional[]
   pagos                 Pago[]
   saldosAFavor          SaldoAFavorCliente[]
+  notasCredito          NotaCredito[]
 
   @@map("monedas")
 }
@@ -1741,6 +1743,7 @@ model Entidad {
   facturasNacionalCliente        FacturaNacional[]           @relation("FacturaNacionalCliente")
   pagos                          Pago[]                      @relation("PagoCliente")
   saldosAFavor                   SaldoAFavorCliente[]        @relation("SaldoAFavorCliente")
+  notasCredito                   NotaCredito[]               @relation("NotaCreditoCliente")
   // Instructivo de Embarque (2026-09-21, ventas.md R11).
   embarquesAgenteAduana          Embarque[]                  @relation("EmbarqueAgenteAduana")
   embarquesEmbarcador            Embarque[]                  @relation("EmbarqueEmbarcador")
@@ -4042,6 +4045,7 @@ model FacturaExportacion {
   estadoCobranza          EstadoCobranza?
   aplicacionesPago        PagoAplicacionDocumento[] @relation("PagoAplicFacturaExport")
   aplicacionesSaldoAFavor SaldoAFavorAplicacion[]   @relation("SaldoAplicFacturaExport")
+  notasCredito            NotaCredito[]             @relation("NotaCreditoFacturaExport")
 
   creadoPorId   String
   creadoEn      DateTime  @default(now())
@@ -4199,6 +4203,7 @@ model FacturaNacional {
   estadoCobranza          EstadoCobranza?
   aplicacionesPago        PagoAplicacionDocumento[] @relation("PagoAplicFacturaNacional")
   aplicacionesSaldoAFavor SaldoAFavorAplicacion[]   @relation("SaldoAplicFacturaNacional")
+  notasCredito            NotaCredito[]             @relation("NotaCreditoFacturaNacional")
 
   creadoPorId   String
   creadoEn      DateTime  @default(now())
@@ -4264,6 +4269,22 @@ enum EstadoCobranza {
   PARCIAL
   PAGADA
   VENCIDA
+  // Factura anulada con Nota de Crédito (Ciclo 4): sale de la cartera activa.
+  ANULADA
+}
+
+// Nota de Crédito (Ciclo 4, cobranza.md). Primera entrega: NC de ANULACIÓN total
+// (DTE 112 de exportación / DTE 61 nacional) que referencia la factura con CodRef=1.
+enum EstadoNotaCredito {
+  BORRADOR
+  APROBADA
+  RECHAZADA
+}
+
+enum MotivoNotaCredito {
+  ANULA_DOCUMENTO
+  CORRIGE_MONTO
+  OTRO
 }
 
 enum EstadoCuotaFacturaNacional {
@@ -4429,6 +4450,59 @@ model SaldoAFavorAplicacion {
   @@index([facturaExportacionId])
   @@index([facturaNacionalId])
   @@map("saldo_a_favor_aplicacion")
+}
+
+// Nota de Crédito (Ciclo 4). Primera entrega: NC de ANULACIÓN total de una factura
+// ya timbrada (DTE 112 de exportación que referencia la 110, o DTE 61 nacional que
+// referencia la 33/34; CodRef=1). Aplicación POLIMÓRFICA (una factura export O
+// nacional, CHECK XOR). El Detalle del DTE se deriva de las líneas de la factura
+// referenciada al emitir (no se persiste detalle propio: siempre es anulación
+// total). Mismo motor DocumentoDte que las facturas (origenTipo distinto).
+model NotaCredito {
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  codigo    String // autogenerado vía PrefijoCodigo (modelo='notaCredito', prefijo NC)
+
+  facturaExportacionId Int?
+  facturaExportacion   FacturaExportacion? @relation("NotaCreditoFacturaExport", fields: [empresaId, facturaExportacionId], references: [empresaId, id])
+  facturaNacionalId    Int?
+  facturaNacional      FacturaNacional?    @relation("NotaCreditoFacturaNacional", fields: [empresaId, facturaNacionalId], references: [empresaId, id])
+
+  // DTE: 112 (exportación) o 61 (nacional).
+  tipoDte Int
+  motivo  MotivoNotaCredito @default(ANULA_DOCUMENTO)
+
+  // Heredados de la factura referenciada (no editables).
+  clienteId  Int
+  cliente    Entidad @relation("NotaCreditoCliente", fields: [empresaId, clienteId], references: [empresaId, id])
+  monedaId   Int
+  moneda     Moneda  @relation(fields: [monedaId], references: [id])
+  montoTotal Decimal @db.Decimal(14, 2)
+  idioma     String  @default("ES")
+
+  estado          EstadoNotaCredito @default(BORRADOR)
+  fechaEmision    DateTime?
+  observaciones   String?
+  errorMensajeSii String?
+
+  folio      Int?
+  trackIdSii String?
+
+  creadoPorId   String
+  creadoEn      DateTime  @default(now())
+  emitidoPorId  String?
+  emitidoEn     DateTime?
+  actualizadoEn DateTime? @updatedAt
+  eliminadoEn   DateTime?
+  eliminadoPor  String?
+
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  @@index([facturaExportacionId])
+  @@index([facturaNacionalId])
+  @@index([clienteId])
+  @@map("notas_credito")
 }
 
 // ─── Compras — Instructivo de Embalaje (Docs/compras.md §4.1) ───────────────

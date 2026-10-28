@@ -448,6 +448,9 @@ async function main() {
     { modelo: 'facturaNacional', prefijo: 'FNA', digitos: 4 },
     // Pago / Cobranza (2026-10-19, cobranza.md §0.e).
     { modelo: 'pago', prefijo: 'PAG', digitos: 4 },
+    // Nota de Crédito de anulación (2026-10-28, cobranza.md §0.j). Un solo
+    // prefijo para export y nacional (el modelo NotaCredito es polimórfico).
+    { modelo: 'notaCredito', prefijo: 'NC', digitos: 4 },
     // Reclamo (2026-10-06) — correlativo propio. Mismo prefijo visible que
     // Receta ('REC'), pero son modelos distintos (la unicidad de PrefijoCodigo
     // es por (empresaId, modelo)); aquí 4 dígitos.

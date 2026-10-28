@@ -113,3 +113,9 @@ export async function anular(req: FastifyRequest, reply: FastifyReply) {
   const factura = await service.anularFactura(id, req.fasUserId!)
   return reply.send({ data: factura })
 }
+
+export async function anularConNc(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = facturaParamsSchema.parse(req.params)
+  const nc = await service.anularConNotaCredito(id, req.fasUserId!)
+  return reply.send({ data: nc })
+}

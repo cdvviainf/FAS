@@ -100,6 +100,27 @@ export const facturaExportacionService = {
   async anular(id: number): Promise<{ data: FacturaExportacion }> {
     return api.post(`ventas/cobranza/facturas-exportacion/${id}/anular`).json()
   },
+  // Anula una Factura APROBADA emitiendo una Nota de Crédito de Exportación (112).
+  async anularConNc(id: number): Promise<{ data: { id: number; codigo: string; folio: number | null } }> {
+    return api.post(`ventas/cobranza/facturas-exportacion/${id}/anular-con-nc`).json()
+  },
+  // Abre el PDF timbrado de una Nota de Crédito en una pestaña nueva.
+  async verPdfNc(ncId: number): Promise<void> {
+    const blob = await api.get(`ventas/cobranza/notas-credito/${ncId}/pdf`).blob()
+    window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer')
+  },
+  // Descarga el XML timbrado de una Nota de Crédito.
+  async descargarXmlNc(ncId: number, nombreArchivo: string): Promise<void> {
+    const blob = await api.get(`ventas/cobranza/notas-credito/${ncId}/xml`).blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombreArchivo
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  },
   // Descarga el XML timbrado (vía ky para adjuntar el contexto de empresa),
   // disparando la descarga en el navegador.
   async descargarXml(id: number, nombreArchivo: string): Promise<void> {

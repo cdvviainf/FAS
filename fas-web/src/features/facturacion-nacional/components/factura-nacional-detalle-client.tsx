@@ -87,6 +87,7 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
   const [dirty, setDirty] = useState(false)
   const [confirmarFirma, setConfirmarFirma] = useState(false)
   const [confirmarAnular, setConfirmarAnular] = useState(false)
+  const [confirmarAnularNc, setConfirmarAnularNc] = useState(false)
 
   const dte = factura.dte
   const borradorEnviado = dte?.estado === 'TEMPORAL_CREADO' || dte?.estado === 'GENERADO'
@@ -206,6 +207,31 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
     onError: (e: Error) => toast.error(e.message || 'No se pudo obtener el PDF del borrador'),
   })
 
+  // NC de anulación aprobada (cuando la factura está ANULADA).
+  const ncAprobada = factura.notasCredito?.find((n) => n.estado === 'APROBADA') ?? null
+
+  const anularConNc = useMutation({
+    mutationFn: () => facturaNacionalService.anularConNc(factura.id),
+    onSuccess: (r) => {
+      toast.success(`Factura anulada con Nota de Crédito ${r.data.codigo}${r.data.folio ? ` (folio ${r.data.folio})` : ''}`)
+      invalidar()
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo anular la Factura con Nota de Crédito'),
+    onSettled: () => setConfirmarAnularNc(false),
+  })
+  const verNcPdf = useMutation({
+    mutationFn: () => facturaNacionalService.verPdfNc(ncAprobada!.id),
+    onError: (e: Error) => toast.error(e.message || 'No se pudo abrir el PDF de la Nota de Crédito'),
+  })
+  async function descargarNcXml() {
+    if (!ncAprobada) return
+    try {
+      await facturaNacionalService.descargarXmlNc(ncAprobada.id, `${ncAprobada.codigo}${ncAprobada.folio ? `-folio-${ncAprobada.folio}` : ''}.xml`)
+    } catch (e) {
+      toast.error((e as Error).message || 'No se pudo descargar el XML de la Nota de Crédito')
+    }
+  }
+
   function handleEnviarSii() {
     if (!fechaDocumento) {
       toast.error('La fecha del documento es obligatoria')
@@ -296,8 +322,34 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
               Anular
             </Button>
           )}
+          {/* Anular una factura timbrada con Nota de Crédito (DTE 61). */}
+          {factura.estado === 'APROBADA' && puedeEscribir && (
+            <Button variant='destructive' isLoading={anularConNc.isPending} onClick={() => setConfirmarAnularNc(true)}>
+              <Icons.trash className='mr-1 h-4 w-4' />
+              Anular con Nota de Crédito
+            </Button>
+          )}
+          {ncAprobada && (
+            <>
+              <Button variant='outline' disabled={verNcPdf.isPending} onClick={() => verNcPdf.mutate()}>
+                <Icons.download className='mr-1 h-4 w-4' />
+                Ver NC Timbrada (SII)
+              </Button>
+              <Button variant='outline' onClick={descargarNcXml}>
+                <Icons.download className='mr-1 h-4 w-4' />
+                Descargar XML NC
+              </Button>
+            </>
+          )}
         </div>
       </div>
+
+      {ncAprobada && (
+        <p className='text-muted-foreground text-sm'>
+          Anulada con Nota de Crédito <span className='font-medium'>{ncAprobada.codigo}</span>
+          {ncAprobada.folio != null && <> · DTE {ncAprobada.tipoDte} folio {ncAprobada.folio}</>}
+        </p>
+      )}
 
       {factura.estado === 'RECHAZADA' && factura.errorMensajeSii && (
         <div className='border-destructive/50 bg-destructive/10 text-destructive rounded-md border p-3 text-sm'>
@@ -500,6 +552,24 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
             <AlertDialogCancel disabled={anular.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={() => anular.mutate()} disabled={anular.isPending}>
               Anular
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmarAnularNc} onOpenChange={setConfirmarAnularNc}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Anular factura {factura.codigo} con Nota de Crédito</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se emitirá y timbrará ante el SII una Nota de Crédito (DTE 61) que anula esta factura. La factura quedará
+              ANULADA. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={anularConNc.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => anularConNc.mutate()} disabled={anularConNc.isPending}>
+              Emitir NC y anular
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
