@@ -613,8 +613,9 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
           <CardTitle>{isEdit ? `Cierre Comercial — Folio ${notaVenta?.data.folio}` : 'Nuevo Cierre Comercial'}</CardTitle>
         </CardHeader>
         <CardContent className='space-y-4'>
-          {/* Línea 1: Fecha + Tipo de Venta (Exportación/Nacional, 2026-10-06). */}
-          <div className='grid max-w-xl gap-4 sm:grid-cols-2'>
+          {/* Línea 1: Fecha + Tipo de Venta (Exportación/Nacional, 2026-10-06)
+              + Contrato naviero Agrosan (Sí/No). */}
+          <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Fecha <span className='text-destructive'>*</span></Label>
               <Input type='date' value={fields.fecha} onChange={(e) => setFields((f) => ({ ...f, fecha: e.target.value }))} />
@@ -629,6 +630,17 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                   <SelectItem value='NACIONAL'>Nacional</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label htmlFor='contratoNavieroAgrosan'>Contrato naviero Agrosan</Label>
+              <div className='flex h-9 items-center gap-2'>
+                <Switch
+                  id='contratoNavieroAgrosan'
+                  checked={fields.contratoNavieroAgrosan}
+                  onCheckedChange={(v) => setFields((f) => ({ ...f, contratoNavieroAgrosan: v }))}
+                />
+                <span className='text-sm text-muted-foreground'>{fields.contratoNavieroAgrosan ? 'Sí' : 'No'}</span>
+              </div>
             </div>
           </div>
 
@@ -667,7 +679,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
             </div>
           </div>
 
-          <div className='grid gap-4 sm:grid-cols-2'>
+          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Comprador (Contacto del Cliente)</Label>
               <Select
@@ -715,7 +727,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               />
               <p className='text-muted-foreground text-xs'>Por defecto, la exportadora de la empresa (Agrosan). Editable.</p>
             </div>
-            <div className='sm:col-span-2'>
+            <div className='sm:col-span-2 lg:col-span-3'>
               <CalidadesPermitidasInput
                 value={calidadesPermitidas}
                 onChange={setCalidadesPermitidas}
@@ -866,17 +878,6 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
           <div className='space-y-1.5'>
             <Label>Observaciones</Label>
             <Textarea value={fields.observaciones} onChange={(e) => setFields((f) => ({ ...f, observaciones: e.target.value }))} rows={3} />
-          </div>
-
-          <div className='flex items-center gap-3'>
-            <Switch
-              id='contratoNavieroAgrosan'
-              checked={fields.contratoNavieroAgrosan}
-              onCheckedChange={(v) => setFields((f) => ({ ...f, contratoNavieroAgrosan: v }))}
-            />
-            <Label htmlFor='contratoNavieroAgrosan' className='font-medium'>
-              Contrato naviero Agrosan
-            </Label>
           </div>
 
           <div className='flex justify-end gap-2'>

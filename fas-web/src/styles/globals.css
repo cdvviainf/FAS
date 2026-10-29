@@ -40,10 +40,14 @@
     background-color: var(--muted-foreground);
   }
 
-  /* Barra de desplazamiento más ancha para el menú del sidebar */
+  /* Barra de desplazamiento más ancha y siempre visible para el menú del
+     sidebar. Reseteamos las props estándar a `auto` (su valor inicial) para
+     que Chrome use los pseudo-elementos ::-webkit-scrollbar; si se dejan en un
+     valor distinto (como el `thin` global) Chrome los ignora y cae en la barra
+     estándar fina/overlay que no se puede agarrar con el mouse. */
   [data-sidebar='content'] {
     scrollbar-width: auto;
-    scrollbar-color: var(--border) transparent;
+    scrollbar-color: auto;
   }
 
   [data-sidebar='content']::-webkit-scrollbar {
@@ -51,8 +55,19 @@
     height: 14px;
   }
 
+  [data-sidebar='content']::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
   [data-sidebar='content']::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 9999px;
     border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  [data-sidebar='content']::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
   }
 }
 
