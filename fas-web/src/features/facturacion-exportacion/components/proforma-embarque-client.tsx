@@ -139,7 +139,7 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   }
 
   return (
-    <div className='max-w-3xl space-y-4'>
+    <div className='max-w-5xl space-y-4'>
       <h2 className='text-xl font-semibold'>Emitir Proforma</h2>
 
       <Card>

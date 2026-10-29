@@ -11,7 +11,7 @@ export default function Page() {
       pageTitle='Nueva Empresa'
       pageDescription='Completa los datos de la nueva empresa.'
     >
-      <div className='max-w-4xl'>
+      <div className='max-w-5xl'>
         <EmpresaForm />
       </div>
     </PageContainer>

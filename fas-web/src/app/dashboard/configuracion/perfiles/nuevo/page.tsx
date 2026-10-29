@@ -11,7 +11,7 @@ export default function Page() {
       pageTitle='Nuevo Perfil'
       pageDescription='Crea un nuevo perfil de acceso con su matriz de permisos.'
     >
-      <div className='max-w-4xl'>
+      <div className='max-w-5xl'>
         <PerfilForm />
       </div>
     </PageContainer>

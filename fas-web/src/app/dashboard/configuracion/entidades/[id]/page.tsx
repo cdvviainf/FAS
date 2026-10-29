@@ -18,7 +18,7 @@ export default async function Page(props: PageProps) {
       pageTitle='Editar Entidad'
       pageDescription='Modifica los datos de la entidad.'
     >
-      <div className='max-w-4xl'>
+      <div className='max-w-5xl'>
         <EntidadForm entidadId={id} />
       </div>
     </PageContainer>

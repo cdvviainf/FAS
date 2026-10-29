@@ -11,7 +11,7 @@ export default function Page() {
       pageTitle='Nuevo Movimiento'
       pageDescription='Elige el tipo y la fecha. Podrás agregar el detalle después de crear el borrador.'
     >
-      <div className='max-w-3xl'>
+      <div className='max-w-5xl'>
         <MovimientoForm />
       </div>
     </PageContainer>

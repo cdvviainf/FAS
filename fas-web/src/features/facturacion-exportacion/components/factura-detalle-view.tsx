@@ -118,7 +118,7 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
   const subtotalFob = Math.round((montoTotal - reduccion) * 100) / 100
   const moneda = factura.moneda.codigo
   return (
-    <div className='max-w-3xl space-y-4'>
+    <div className='max-w-5xl space-y-4'>
       <div className='flex items-start justify-between gap-3'>
         <div>
           <h2 className='flex items-center gap-2 text-xl font-semibold'>

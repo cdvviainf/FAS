@@ -273,7 +273,7 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   }
 
   return (
-    <div className='max-w-3xl space-y-4'>
+    <div className='max-w-5xl space-y-4'>
       <div className='flex items-start justify-between'>
         <div>
           <h2 className='flex items-center gap-2 text-xl font-semibold'>

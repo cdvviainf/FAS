@@ -11,7 +11,7 @@ export default function Page() {
       pageTitle='Nuevo Cierre Comercial'
       pageDescription='Completa el encabezado. Podrás agregar las líneas de fruta después de crearla.'
     >
-      <div className='max-w-4xl'>
+      <div className='max-w-5xl'>
         <NotaVentaForm />
       </div>
     </PageContainer>

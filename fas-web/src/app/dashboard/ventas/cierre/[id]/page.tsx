@@ -18,7 +18,7 @@ export default async function Page(props: PageProps) {
       pageTitle='Cierre Comercial'
       pageDescription='Modifica el encabezado o agrega líneas de fruta comprometida.'
     >
-      <div className='max-w-4xl'>
+      <div className='max-w-5xl'>
         <NotaVentaForm notaVentaId={id} />
       </div>
     </PageContainer>

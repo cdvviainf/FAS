@@ -17,7 +17,7 @@ export default async function Page(props: PageProps) {
       pageTitle='Editar Usuario'
       pageDescription='Modifica los datos del usuario.'
     >
-      <div className='max-w-3xl'>
+      <div className='max-w-5xl'>
         <UsuarioForm usuarioId={params.id} />
       </div>
     </PageContainer>

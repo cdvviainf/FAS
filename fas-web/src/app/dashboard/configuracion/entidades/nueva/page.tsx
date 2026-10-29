@@ -11,7 +11,7 @@ export default function Page() {
       pageTitle='Nueva Entidad'
       pageDescription='Completa los datos de la nueva entidad.'
     >
-      <div className='max-w-4xl'>
+      <div className='max-w-5xl'>
         <EntidadForm />
       </div>
     </PageContainer>

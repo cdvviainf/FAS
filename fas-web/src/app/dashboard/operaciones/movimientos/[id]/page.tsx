@@ -15,7 +15,7 @@ export default async function Page(props: PageProps) {
 
   return (
     <PageContainer pageTitle='Movimiento' pageDescription='Editable mientras esté en borrador.'>
-      <div className='max-w-3xl'>
+      <div className='max-w-5xl'>
         <MovimientoForm movimientoId={id} />
       </div>
     </PageContainer>

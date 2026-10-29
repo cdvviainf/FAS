@@ -262,7 +262,7 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
   const trabajando = guardar.isPending || enviarSii.isPending || firmar.isPending || reabrir.isPending || anular.isPending
 
   return (
-    <div className='max-w-4xl space-y-4'>
+    <div className='max-w-5xl space-y-4'>
       {/* ── Encabezado ── */}
       <div className='flex flex-wrap items-start justify-between gap-3'>
         <div>

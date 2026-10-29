@@ -18,7 +18,7 @@ export default async function Page(props: PageProps) {
       pageTitle='Editar Perfil'
       pageDescription='Modifica el perfil de acceso y su matriz de permisos.'
     >
-      <div className='max-w-4xl'>
+      <div className='max-w-5xl'>
         <PerfilForm perfilId={perfilId} />
       </div>
     </PageContainer>

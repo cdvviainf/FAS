@@ -11,7 +11,7 @@ export default function Page() {
       pageTitle='Nuevo Usuario'
       pageDescription='Crea un nuevo usuario y asígnale un perfil de acceso.'
     >
-      <div className='max-w-3xl'>
+      <div className='max-w-5xl'>
         <UsuarioForm />
       </div>
     </PageContainer>
