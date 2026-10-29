@@ -26,6 +26,7 @@ export interface NotaVentaCreateInput {
   condicionPagoId?: number | null
   monedaId: number
   observaciones?: string | null
+  contratoNavieroAgrosan?: boolean
 }
 
 export type NotaVentaUpdateInput = Partial<NotaVentaCreateInput>

@@ -3108,6 +3108,10 @@ model NotaVenta {
 
   observaciones String?
 
+  // Contrato naviero Agrosan (2026-10-29): indica si el flete marítimo se
+  // contrata bajo el contrato naviero propio de Agrosan (Sí/No).
+  contratoNavieroAgrosan Boolean @default(false)
+
   detalles            NotaVentaDetalle[]
   ordenesCompra       OrdenCompra[]
   embarques           Embarque[]

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -75,6 +76,7 @@ interface HeaderFields {
   tipoBlId: number | null
   condicionPagoId: number | null
   observaciones: string
+  contratoNavieroAgrosan: boolean
 }
 
 const HEADER_EMPTY: HeaderFields = {
@@ -98,6 +100,7 @@ const HEADER_EMPTY: HeaderFields = {
   tipoBlId: null,
   condicionPagoId: null,
   observaciones: '',
+  contratoNavieroAgrosan: false,
 }
 
 // Cajas por pallet: cifra teórica del mantenedor CajasPorPallet (embalaje +
@@ -258,6 +261,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
         tipoBlId: d.tipoBlId,
         condicionPagoId: d.condicionPagoId,
         observaciones: d.observaciones ?? '',
+        contratoNavieroAgrosan: d.contratoNavieroAgrosan ?? false,
       })
       setCalidadesPermitidas(d.calidadesPermitidas.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })))
     }
@@ -342,6 +346,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       tipoBlId: fields.tipoBlId,
       condicionPagoId: fields.condicionPagoId,
       observaciones: fields.observaciones.trim() || undefined,
+      contratoNavieroAgrosan: fields.contratoNavieroAgrosan,
     }
   }
 
@@ -861,6 +866,17 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
           <div className='space-y-1.5'>
             <Label>Observaciones</Label>
             <Textarea value={fields.observaciones} onChange={(e) => setFields((f) => ({ ...f, observaciones: e.target.value }))} rows={3} />
+          </div>
+
+          <div className='flex items-center gap-3'>
+            <Switch
+              id='contratoNavieroAgrosan'
+              checked={fields.contratoNavieroAgrosan}
+              onCheckedChange={(v) => setFields((f) => ({ ...f, contratoNavieroAgrosan: v }))}
+            />
+            <Label htmlFor='contratoNavieroAgrosan' className='font-medium'>
+              Contrato naviero Agrosan
+            </Label>
           </div>
 
           <div className='flex justify-end gap-2'>
