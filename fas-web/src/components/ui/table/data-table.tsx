@@ -23,7 +23,11 @@ export function DataTable<TData>({ table, actionBar, children }: DataTableProps<
       {children}
       <div className='relative flex flex-1'>
         <div className='absolute inset-0 flex overflow-hidden rounded-lg border'>
-          <div className='h-full w-full overflow-auto'>
+          {/* min-w-0/min-h-0: sin esto, el scroller (ítem flex) toma min-width
+              auto y crece al ancho del contenido en vez de quedarse en el del
+              padre, por lo que overflow-auto nunca muestra la barra horizontal
+              y el abuelo (overflow-hidden) recorta las columnas. */}
+          <div className='h-full w-full min-h-0 min-w-0 overflow-auto'>
             <Table containerClassName='overflow-x-visible'>
               <TableHeader className='bg-muted sticky top-0 z-10'>
                 {table.getHeaderGroups().map((headerGroup) => (
