@@ -703,6 +703,8 @@ export async function anularConNotaCredito(id: number, userId: string) {
     tipoFactura: 'NACIONAL',
     facturaId: factura.id,
     tipoDteNc: TIPO_DTE_NC_NACIONAL,
+    facturaTipoDte: factura.tipoDte,
+    facturaFolio: factura.folio,
     origenTipo: ORIGEN_TIPO_NC,
     clienteId: factura.clienteId,
     monedaId: factura.monedaId,

@@ -1,13 +1,47 @@
 import type { Prisma } from '@prisma/client'
+import { env } from '../../../config/env.js'
+import { logger } from '../../../lib/logger.js'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
+import { rutSinDv } from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
+import * as libredte from '../../finanzas/facturacion/libredte.adapter.js'
 import type { LibredteDtePayload } from '../../finanzas/facturacion/libredte.types.js'
 import * as ncRepo from './nota-credito.repository.js'
 
 // origenTipo del DocumentoDte de una NC según el tipo de factura que anula.
 function origenTipoDeNc(nc: { facturaExportacionId: number | null }): string {
   return nc.facturaExportacionId != null ? 'nota-credito-exportacion' : 'nota-credito-nacional'
+}
+
+// Indicadores de rechazo del SII en la respuesta de estado de LibreDTE (códigos
+// de revisión de envío del SII + glosas). Si aparecen, el documento está
+// rechazado y no puede ser referenciado por una NC.
+const RECHAZO_SII = /rechaz|"rch"|"rfr"|"rct"|"rlv"|no v[aá]lid|anulad/i
+
+// Pre-chequeo (FAS-COB-NC, rechazo real del SII): un DTE que el SII rechazó ya es
+// inválido y LibreDTE no permite referenciarlo desde una NC. Se consulta el
+// estado real en el SII para dar un error accionable ANTES de intentar la NC, en
+// vez de fallar recién en LibreDTE. FAIL-OPEN a propósito: si no se puede
+// determinar (mock, sin folio, error de red, formato inesperado) NO bloquea —
+// LibreDTE sigue siendo la última barrera.
+async function verificarFacturaNoRechazadaSii(facturaTipoDte: number, folio: number | null, rutEmisor: string) {
+  if (env.DTE_PROVIDER !== 'libredte' || folio == null) return
+  let r
+  try {
+    r = await libredte.consultarEstadoEmitido(facturaTipoDte, folio, rutSinDv(rutEmisor))
+  } catch (err) {
+    logger.warn({ facturaTipoDte, folio, err: err instanceof Error ? err.message : String(err) }, 'NC: no se pudo consultar el estado SII de la factura (se continúa)')
+    return
+  }
+  if (!r.ok || r.data == null) return
+  const texto = JSON.stringify(r.data)
+  logger.debug({ facturaTipoDte, folio, estadoSii: texto.slice(0, 1000) }, 'NC: estado SII de la factura referenciada')
+  if (RECHAZO_SII.test(texto)) {
+    throw new ValidationError(
+      `La factura (DTE ${facturaTipoDte} folio ${folio}) fue RECHAZADA por el SII — un documento rechazado ya es inválido y no se puede anular con Nota de Crédito. Reemite una factura corregida.`,
+    )
+  }
 }
 
 // Nota de Crédito de anulación (Ciclo 4) — orquestación común a export/nacional.
@@ -20,6 +54,10 @@ export interface EmitirNcAnulacionInput {
   tipoFactura: ncRepo.TipoFacturaNc
   facturaId: number
   tipoDteNc: number // 112 export / 61 nacional
+  // DTE y folio de la FACTURA referenciada (110 / 33 / 34) — para el pre-chequeo
+  // de estado SII y la referencia de anulación.
+  facturaTipoDte: number
+  facturaFolio: number | null
   origenTipo: string // 'nota-credito-exportacion' / 'nota-credito-nacional'
   clienteId: number
   monedaId: number
@@ -33,6 +71,10 @@ export interface EmitirNcAnulacionInput {
 }
 
 export async function emitirNcAnulacion(input: EmitirNcAnulacionInput) {
+  // Si la factura referenciada fue rechazada por el SII, LibreDTE no permite la
+  // NC — se bloquea con un error accionable antes de crear la NC (fail-open).
+  await verificarFacturaNoRechazadaSii(input.facturaTipoDte, input.facturaFolio, input.rutEmisor)
+
   const nc = await ncRepo.crearOReusarNc({
     tipoFactura: input.tipoFactura,
     facturaId: input.facturaId,
