@@ -15,6 +15,13 @@ export async function list(req: FastifyRequest, reply: FastifyReply) {
   return reply.send(result)
 }
 
+// Landing movimiento-céntrico: Movimientos que requieren proforma + su estado.
+export async function listMovimientos(req: FastifyRequest, reply: FastifyReply) {
+  const { page, limit } = proformaMaterialListQuerySchema.parse(req.query)
+  const result = await service.listarMovimientosRequierenProforma({ page, limit })
+  return reply.send(result)
+}
+
 export async function getById(req: FastifyRequest, reply: FastifyReply) {
   const { id } = proformaMaterialParamsSchema.parse(req.params)
   const proforma = await service.obtenerProformaMaterial(id)

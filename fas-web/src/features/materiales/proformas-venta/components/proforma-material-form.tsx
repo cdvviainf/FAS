@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -64,8 +64,11 @@ const ITEM = 'MATERIALES_PROFORMA'
 export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFormProps) {
   const isEdit = !!proformaMaterialId
   const router = useRouter()
+  const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const puedeEscribir = usePuedeEscribir(ITEM)
+  // Prefill del movimiento al venir desde el landing ("Emitir Proforma").
+  const movimientoIdParam = Number(searchParams.get('movimientoId')) || 0
 
   function agregarAOpciones(queryKey: unknown[], item: MantenedorSimple) {
     queryClient.setQueryData<MantenedorSimpleListResponse>(queryKey, (old) =>
@@ -73,7 +76,9 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
     )
   }
 
-  const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
+  const [fields, setFields] = useState<HeaderFields>(() =>
+    proformaMaterialId ? HEADER_EMPTY : { ...HEADER_EMPTY, movimientoId: movimientoIdParam },
+  )
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [preciosPorLinea, setPreciosPorLinea] = useState<Record<number, string>>({})
   const [anularOpen, setAnularOpen] = useState(false)

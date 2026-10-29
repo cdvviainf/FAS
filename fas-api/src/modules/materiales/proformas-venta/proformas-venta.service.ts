@@ -38,6 +38,18 @@ export async function listarProformasMaterial(filters: ProformaMaterialListFilte
   return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
+// Landing movimiento-céntrico: Movimientos que requieren proforma + estado de su
+// proforma (Pendiente / estado de la proforma activa).
+export async function listarMovimientosRequierenProforma(filters: { page?: number; limit?: number }) {
+  const { page = 1, limit = 20 } = filters
+  const { data, total } = await repo.listMovimientosRequierenProforma(page, limit)
+  const filas = data.map(({ proformasMaterial, ...mov }) => ({
+    ...mov,
+    proforma: proformasMaterial[0] ?? null,
+  }))
+  return { data: filas, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
+}
+
 export async function obtenerProformaMaterial(id: number) {
   const proforma = await repo.getProformaMaterialById(id)
   if (!proforma) throw new NotFoundError('Proforma de Venta de Materiales', String(id))

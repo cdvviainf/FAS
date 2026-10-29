@@ -56,6 +56,43 @@ export async function listProformasMaterial(page: number, limit: number, entidad
   return { data, total }
 }
 
+// Landing movimiento-céntrico (igual que Facturación Exportación): lista los
+// Movimientos que REQUIEREN proforma (CONFIRMADO + clase SALIDA + generaProforma)
+// con el estado de emisión de su proforma — a diferencia de `elegibleProforma`
+// del módulo de Movimientos, NO excluye los que ya tienen una proforma activa:
+// los muestra con su proforma (numero/estado) para poder "Ver". `take: 1` sobre
+// las no anuladas (a lo más una activa por el índice parcial).
+export async function listMovimientosRequierenProforma(page: number, limit: number) {
+  const where: Prisma.MovimientoWhereInput = {
+    eliminadoEn: null,
+    estado: 'CONFIRMADO',
+    tipoMovimiento: { clase: 'SALIDA', generaProforma: true },
+  }
+  const [data, total] = await Promise.all([
+    prisma.movimiento.findMany({
+      where,
+      select: {
+        id: true,
+        fechaMovimiento: true,
+        guiaReferencia: true,
+        entidad: { select: entidadSelect },
+        bodegaOrigen: { select: mantenedorSelect },
+        tipoMovimiento: { select: { id: true, codigo: true, descripcion: true } },
+        proformasMaterial: {
+          where: { estado: { not: 'ANULADA' } },
+          select: { id: true, numero: true, estado: true },
+          take: 1,
+        },
+      },
+      orderBy: { fechaMovimiento: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.movimiento.count({ where }),
+  ])
+  return { data, total }
+}
+
 export async function getProformaMaterialById(id: number) {
   return prisma.proformaMaterial.findUnique({ where: { id }, include: includeDetalle })
 }

@@ -104,3 +104,20 @@ export interface ProformaMaterialListFilters {
   entidadId?: number
   estado?: EstadoProformaMaterial
 }
+
+// Landing movimiento-céntrico: Movimiento que requiere proforma + estado de su
+// proforma (null = pendiente de emitir).
+export interface MovimientoRequiereProforma {
+  id: number
+  fechaMovimiento: string
+  guiaReferencia: string | null
+  entidad: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
+  bodegaOrigen: { id: number; codigo: string; descripcion: string } | null
+  tipoMovimiento: { id: number; codigo: string; descripcion: string }
+  proforma: { id: number; numero: string; estado: EstadoProformaMaterial } | null
+}
+
+export interface MovimientosRequierenProformaResponse {
+  data: MovimientoRequiereProforma[]
+  meta: { total: number; page: number; limit: number; totalPages: number }
+}

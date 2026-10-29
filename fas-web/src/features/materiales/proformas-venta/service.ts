@@ -7,6 +7,7 @@ import type {
   ProformaMaterialLineaUpdateInput,
   ProformaMaterialLineaItem,
   ProformaMaterialListFilters,
+  MovimientosRequierenProformaResponse,
 } from './types'
 
 export const proformasVentaMaterialService = {
@@ -17,6 +18,14 @@ export const proformasVentaMaterialService = {
     if (params.entidadId) sp.entidadId = String(params.entidadId)
     if (params.estado) sp.estado = params.estado
     return api.get('materiales/proformas', { searchParams: sp }).json()
+  },
+
+  // Landing: Movimientos que requieren proforma + estado de emisión.
+  async listMovimientos(params: { page?: number; limit?: number } = {}): Promise<MovimientosRequierenProformaResponse> {
+    const sp: Record<string, string> = {}
+    if (params.page) sp.page = String(params.page)
+    if (params.limit) sp.limit = String(params.limit)
+    return api.get('materiales/proformas/movimientos', { searchParams: sp }).json()
   },
 
   async getById(id: number): Promise<{ data: ProformaMaterialDetalle }> {

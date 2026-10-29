@@ -5,7 +5,16 @@ import type { ProformaMaterialListFilters } from './types'
 export const proformasVentaMaterialKeys = {
   all: ['proformas-venta-material'] as const,
   list: (filters: object) => ['proformas-venta-material', 'list', filters] as const,
+  movimientos: (filters: object) => ['proformas-venta-material', 'movimientos', filters] as const,
   detail: (id: number) => ['proformas-venta-material', 'detail', id] as const,
+}
+
+export function movimientosRequierenProformaOptions(filters: { page?: number; limit?: number } = {}) {
+  return queryOptions({
+    queryKey: proformasVentaMaterialKeys.movimientos(filters),
+    queryFn: () => proformasVentaMaterialService.listMovimientos(filters),
+    staleTime: 15_000,
+  })
 }
 
 export function proformasVentaMaterialListOptions(filters: ProformaMaterialListFilters = {}) {
