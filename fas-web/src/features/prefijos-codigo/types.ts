@@ -40,6 +40,8 @@ export const MODELOS_CON_CODIGO_OPTIONS: { value: string; label: string }[] = [
   { value: 'templateCarga', label: 'Template de Carga' },
   { value: 'proforma', label: 'Proforma' },
   { value: 'facturaExportacion', label: 'Factura de Exportación' },
+  { value: 'facturaNacional', label: 'Factura Nacional' },
+  { value: 'pago', label: 'Pago' },
 ]
 
 // 'embarque' es un caso especial (2026-08-13, ventas.md R10): no tiene campo
