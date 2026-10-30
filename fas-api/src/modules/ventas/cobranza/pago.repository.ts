@@ -4,6 +4,7 @@ import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { LOCK_NAMESPACE_COBRANZA_PAGO } from '../../../shared/advisory-locks.js'
+import { esFacturaTimbrada } from './sii-estado.js'
 import {
   derivarEstadoCobranza,
   distribuirEnCuotas,
@@ -267,8 +268,8 @@ export async function crearPagoTransaccional(input: CrearPagoInput, codigo: stri
     const plan: Array<{ ap: PagoAplicacionInput; factura: FacturaCartera }> = []
     for (const ap of input.aplicaciones) {
       const factura = await cargarFacturaCartera(tx, ap.tipoFactura, ap.facturaId)
-      if (factura.estadoSii !== 'APROBADA') {
-        throw new ValidationError(`La factura ${factura.codigo} no está aprobada (timbrada) — no admite pagos`)
+      if (!esFacturaTimbrada(factura.estadoSii)) {
+        throw new ValidationError(`La factura ${factura.codigo} no está timbrada ante el SII — no admite pagos`)
       }
       if (factura.clienteId !== input.clienteId) {
         throw new ValidationError(`La factura ${factura.codigo} pertenece a otro cliente (CB11)`)
@@ -407,7 +408,7 @@ export async function aplicarSaldoAFavorTransaccional(
     if (disponible <= 0) throw new ValidationError('El saldo a favor no tiene monto disponible')
 
     const factura = await cargarFacturaCartera(tx, tipoFactura, facturaId)
-    if (factura.estadoSii !== 'APROBADA') throw new ValidationError(`La factura ${factura.codigo} no está aprobada — no admite aplicaciones`)
+    if (!esFacturaTimbrada(factura.estadoSii)) throw new ValidationError(`La factura ${factura.codigo} no está timbrada ante el SII — no admite aplicaciones`)
     if (factura.clienteId !== saldo.clienteId) throw new ValidationError('El saldo a favor pertenece a otro cliente (CB13)')
     if (factura.monedaId !== saldo.monedaId) throw new ValidationError('El saldo a favor está en otra moneda que la factura (CB13)')
     if (factura.cuotas.length === 0) throw new ValidationError(`La factura ${factura.codigo} no tiene cuotas de cartera`)

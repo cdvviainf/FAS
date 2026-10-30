@@ -373,10 +373,12 @@ export interface CuotaPersistir {
   fechaVencimiento: Date | null
 }
 
-// Marca la Factura como APROBADA (timbrada) con el folio/trackId del DTE y crea
-// sus Cuotas, todo en una transacción (los efectos de negocio son atómicos; la
-// llamada a LibreDTE ya ocurrió antes, fuera de la transacción). Limpia un
-// posible errorMensajeSii de un intento previo rechazado.
+// Marca la Factura como ENVIADA_SII (timbrada con folio, enviada al SII pero sin
+// veredicto confirmado) con el folio/trackId del DTE y crea sus Cuotas, todo en
+// una transacción (los efectos de negocio son atómicos; la llamada a LibreDTE ya
+// ocurrió antes, fuera de la transacción). Limpia un posible errorMensajeSii de
+// un intento previo rechazado. El paso a APROBADA/RECHAZADA lo hace la
+// reconciliación on-demand con el SII (ver sii-estado.ts / consultarEstadoSii).
 export async function marcarFirmada(
   id: number,
   datos: { folio: number | null; trackIdSii: string | null; fechaEmision: Date; fechaDocumento: Date; cuotas: CuotaPersistir[]; estadoCobranza: EstadoCobranza },
@@ -389,7 +391,7 @@ export async function marcarFirmada(
     await tx.facturaExportacion.update({
       where: { id },
       data: {
-        estado: 'APROBADA',
+        estado: 'ENVIADA_SII',
         folio: datos.folio,
         trackIdSii: datos.trackIdSii,
         fechaEmision: datos.fechaEmision,
@@ -413,6 +415,16 @@ export async function marcarFirmada(
       },
     })
     return tx.facturaExportacion.findFirst({ where: { id }, include: facturaInclude })
+  })
+}
+
+// Marca la Factura como APROBADA (el SII aceptó el documento timbrado). La usa
+// la reconciliación on-demand con el SII; limpia cualquier errorMensajeSii.
+export async function marcarAprobada(id: number) {
+  return prisma.facturaExportacion.update({
+    where: { id },
+    data: { estado: 'APROBADA', errorMensajeSii: null },
+    include: facturaInclude,
   })
 }
 

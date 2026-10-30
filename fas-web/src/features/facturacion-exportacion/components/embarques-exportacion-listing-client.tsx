@@ -18,6 +18,7 @@ const PROFORMA_BADGE = { EMITIDA: { label: 'Emitida', variant: 'default' }, ANUL
 
 const SII_BADGE: Record<EstadoFacturaExportacion, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
   BORRADOR: { label: 'Borrador', variant: 'outline' },
+  ENVIADA_SII: { label: 'Enviada al SII', variant: 'secondary' },
   APROBADA: { label: 'Aprobada', variant: 'default' },
   RECHAZADA: { label: 'Rechazada', variant: 'destructive' },
   ANULADA: { label: 'Anulada', variant: 'secondary' },

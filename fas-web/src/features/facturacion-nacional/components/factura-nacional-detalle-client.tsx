@@ -33,9 +33,16 @@ const ITEM = 'FACT_NACIONAL'
 
 const ESTADO_VARIANT: Record<EstadoFacturaNacional, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   BORRADOR: 'secondary',
+  ENVIADA_SII: 'secondary',
   APROBADA: 'default',
   RECHAZADA: 'destructive',
   ANULADA: 'outline',
+}
+
+// Timbrada (folio real), con veredicto del SII pendiente (ENVIADA_SII) o
+// confirmado (APROBADA): habilita PDF/XML/anulación y la consulta al SII.
+function esTimbrada(estado: EstadoFacturaNacional) {
+  return estado === 'ENVIADA_SII' || estado === 'APROBADA'
 }
 
 type LineaEdit = {
@@ -192,6 +199,19 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
     onError: (e: Error) => toast.error(e.message || 'Error al reabrir la Factura'),
   })
 
+  // Reconciliación on-demand del veredicto real del SII (FAS-COB-SII).
+  const consultarSii = useMutation({
+    mutationFn: () => facturaNacionalService.consultarSii(factura.id),
+    onSuccess: (r) => {
+      const { veredicto, glosa } = r.data.sii
+      if (veredicto === 'ACEPTADO') toast.success('El SII aceptó la factura — estado: Aprobada')
+      else if (veredicto === 'RECHAZADO') toast.error(`El SII rechazó la factura: ${glosa}`)
+      else toast.info('El SII aún no entrega veredicto — la factura sigue "Enviada al SII"')
+      invalidar()
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo consultar el estado en el SII'),
+  })
+
   const anular = useMutation({
     mutationFn: () => facturaNacionalService.anular(factura.id),
     onSuccess: () => {
@@ -310,7 +330,13 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
               Reabrir
             </Button>
           )}
-          {factura.estado === 'APROBADA' && dte?.tieneXml && (
+          {esTimbrada(factura.estado) && puedeEscribir && (
+            <Button variant='outline' disabled={consultarSii.isPending} onClick={() => consultarSii.mutate()}>
+              <Icons.search className='mr-1 h-4 w-4' />
+              Consultar estado SII
+            </Button>
+          )}
+          {esTimbrada(factura.estado) && dte?.tieneXml && (
             <Button variant='outline' onClick={() => facturaNacionalService.descargarXml(factura.id, `${factura.codigo}.xml`)}>
               <Icons.download className='mr-1 h-4 w-4' />
               Descargar XML
@@ -323,7 +349,7 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
             </Button>
           )}
           {/* Anular una factura timbrada con Nota de Crédito (DTE 61). */}
-          {factura.estado === 'APROBADA' && puedeEscribir && (
+          {esTimbrada(factura.estado) && puedeEscribir && (
             <Button variant='destructive' isLoading={anularConNc.isPending} onClick={() => setConfirmarAnularNc(true)}>
               <Icons.trash className='mr-1 h-4 w-4' />
               Anular con Nota de Crédito

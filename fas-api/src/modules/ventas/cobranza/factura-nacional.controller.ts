@@ -69,6 +69,11 @@ export async function reabrir(req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ data: await service.reabrirFactura(id) })
 }
 
+export async function consultarSii(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = facturaNacionalParamsSchema.parse(req.params)
+  return reply.send({ data: await service.consultarEstadoSii(id) })
+}
+
 export async function anular(req: FastifyRequest, reply: FastifyReply) {
   const { id } = facturaNacionalParamsSchema.parse(req.params)
   return reply.send({ data: await service.anularFactura(id, req.fasUserId!) })

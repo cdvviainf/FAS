@@ -41,6 +41,12 @@ export async function reabrir(req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ data: factura })
 }
 
+export async function consultarSii(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = facturaParamsSchema.parse(req.params)
+  const data = await service.consultarEstadoSii(id)
+  return reply.send({ data })
+}
+
 export async function descargarXml(req: FastifyRequest, reply: FastifyReply) {
   const { id } = facturaParamsSchema.parse(req.params)
   const { xml, codigo, folio } = await service.obtenerXmlFactura(id)

@@ -2,7 +2,7 @@ import type { DimensionProforma, ProformaLineaInput } from './proforma.types.js'
 
 export type { DimensionProforma, ProformaLineaInput }
 
-export type EstadoFacturaExportacion = 'BORRADOR' | 'APROBADA' | 'RECHAZADA' | 'ANULADA'
+export type EstadoFacturaExportacion = 'BORRADOR' | 'ENVIADA_SII' | 'APROBADA' | 'RECHAZADA' | 'ANULADA'
 
 export interface FacturaExportacionActualizarInput {
   dimensiones: DimensionProforma[]

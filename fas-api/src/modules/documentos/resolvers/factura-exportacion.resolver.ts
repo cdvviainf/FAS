@@ -2,6 +2,7 @@ import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { getFacturaActivaById } from '../../ventas/cobranza/factura-exportacion.repository.js'
 import { factorFob, unitarioFob } from '../../ventas/cobranza/clausula-flete-seguro.js'
 import { descripcionLinea } from '../../ventas/cobranza/descripcion-idioma.js'
+import { esFacturaTimbrada } from '../../ventas/cobranza/sii-estado.js'
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
 import type { ProformaPdfPayload } from '../schemas/proforma.schema.js'
 
@@ -16,10 +17,10 @@ export async function resolverFacturaExportacion(id: number, empresaId: number):
   const factura = await getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
   // Gate de estado (FAS-EXP-IE-QA-002): la Factura Comercial solo se genera para
-  // una Factura APROBADA (timbrada, con folio) — no en BORRADOR/RECHAZADA, ni
-  // siquiera por acceso directo al endpoint.
-  if (factura.estado !== 'APROBADA' || factura.folio == null) {
-    throw new ValidationError('La Factura Comercial solo está disponible para una Factura aprobada (timbrada)')
+  // una Factura ya timbrada con folio (ENVIADA_SII o APROBADA) — no en
+  // BORRADOR/RECHAZADA, ni siquiera por acceso directo al endpoint.
+  if (!esFacturaTimbrada(factura.estado) || factura.folio == null) {
+    throw new ValidationError('La Factura Comercial solo está disponible para una Factura ya timbrada (con folio)')
   }
 
   const [empresa, cliente] = await Promise.all([

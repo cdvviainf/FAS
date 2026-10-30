@@ -55,7 +55,7 @@ export const facturasExportacionListQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).default(20),
   embarqueId: z.coerce.number().int().positive().optional(),
   clienteId: z.coerce.number().int().positive().optional(),
-  estado: z.enum(['BORRADOR', 'APROBADA', 'RECHAZADA', 'ANULADA']).optional(),
+  estado: z.enum(['BORRADOR', 'ENVIADA_SII', 'APROBADA', 'RECHAZADA', 'ANULADA']).optional(),
   folio: z.string().trim().min(1).optional(),
 })
 

@@ -3953,11 +3953,17 @@ model ProformaLinea {
 // entidad. `codigo` vía PrefijoCodigo (modelo='facturaExportacion', prefijo FEX).
 // Firma SII en dos pasos (2026-09-29): BORRADOR (editable; opcionalmente ya
 // enviada como borrador temporal a LibreDTE, lo cual se sabe por el DocumentoDte
-// TEMPORAL_CREADO) → APROBADA (timbrada, folio real) o RECHAZADA (el SII/LibreDTE
-// rechazó el timbrado; se puede reintentar). ANULADA = soft delete (solo desde
-// BORRADOR en esta fase; anular una APROBADA exige Nota de Crédito — fase 2).
+// TEMPORAL_CREADO) → ENVIADA_SII (timbrada con folio real; enviada al SII pero el
+// veredicto aún no se confirma) → APROBADA (el SII aceptó) o RECHAZADA (el
+// SII/LibreDTE rechazó). El veredicto real del SII se reconcilia on-demand con
+// el botón "Consultar estado SII" (2026-10-30, FAS-COB-SII): antes el sistema
+// equiparaba "timbrada con folio" a APROBADA y nunca reflejaba un rechazo
+// posterior del SII. ENVIADA_SII se trata como timbrada válida (PDF, cobranza,
+// anulación con NC). ANULADA = soft delete (solo desde BORRADOR en esta fase;
+// anular una timbrada exige Nota de Crédito).
 enum EstadoFacturaExportacion {
   BORRADOR
+  ENVIADA_SII
   APROBADA
   RECHAZADA
   ANULADA
@@ -4134,6 +4140,7 @@ model FacturaExportacionCuota {
 // Nacional) ya contemplados en `origenClase` pero sin implementar.
 enum EstadoFacturaNacional {
   BORRADOR
+  ENVIADA_SII
   APROBADA
   RECHAZADA
   ANULADA

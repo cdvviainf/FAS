@@ -16,6 +16,8 @@ export async function facturaNacionalRoutes(app: FastifyInstance) {
   app.post('/facturas-nacional/:id/enviar-sii', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.enviarSii)
   app.post('/facturas-nacional/:id/firmar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.firmar)
   app.post('/facturas-nacional/:id/reabrir', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.reabrir)
+  // Consulta el veredicto real del SII y reconcilia el estado (ENVIADA_SII → APROBADA/RECHAZADA).
+  app.post('/facturas-nacional/:id/consultar-sii', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.consultarSii)
   app.post('/facturas-nacional/:id/anular', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.anular)
   // Anular una factura APROBADA (timbrada) emitiendo una Nota de Crédito nacional (DTE 61).
   app.post('/facturas-nacional/:id/anular-con-nc', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.anularConNc)

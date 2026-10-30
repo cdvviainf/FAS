@@ -1,4 +1,4 @@
-export type EstadoFacturaNacional = 'BORRADOR' | 'APROBADA' | 'RECHAZADA' | 'ANULADA'
+export type EstadoFacturaNacional = 'BORRADOR' | 'ENVIADA_SII' | 'APROBADA' | 'RECHAZADA' | 'ANULADA'
 export type OrigenFacturaNacional = 'PROFORMA_MATERIAL' | 'PROFORMA_PRODUCTOR' | 'VENTA_NACIONAL'
 
 // Línea editable del borrador (el usuario ajusta descripción/precio/exento).

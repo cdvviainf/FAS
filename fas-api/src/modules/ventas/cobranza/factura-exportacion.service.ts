@@ -1,10 +1,13 @@
 import { Prisma } from '@prisma/client'
+import { env } from '../../../config/env.js'
 import { BusinessError, NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { logger } from '../../../lib/logger.js'
 import { siguienteCodigo } from '../../config/prefijos-codigo/prefijos-codigo.service.js'
 import { validarYCompletarLineas } from './proforma.service.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
+import * as libredte from '../../finanzas/facturacion/libredte.adapter.js'
+import { esFacturaTimbrada, interpretarEstadoSii } from './sii-estado.js'
 import { mapFacturaExportacionA110, type ReferenciaFacturaExportacion } from '../../finanzas/facturacion/mappers/factura-exportacion.mapper.js'
 import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
 import { factorFob, resolverFleteSeguro, unitarioFob } from './clausula-flete-seguro.js'
@@ -799,6 +802,42 @@ export async function firmar(id: number, userId: string) {
   return repo.marcarFirmada(factura.id, { folio, trackIdSii, fechaEmision, fechaDocumento, cuotas, estadoCobranza }, userId)
 }
 
+// ─── Reconciliación on-demand del veredicto real del SII (FAS-COB-SII) ────────
+// El timbrado deja la Factura en ENVIADA_SII; el SII emite su veredicto después,
+// de forma asíncrona. Esta consulta pregunta el estado real al SII y mueve la
+// Factura a APROBADA (aceptada) o RECHAZADA (rechazada, guardando la glosa). Si
+// el SII aún no se pronuncia, la deja en ENVIADA_SII. Reemplaza el supuesto
+// previo de "timbrada = aprobada", que dejaba facturas rechazadas por el SII
+// marcadas como aprobadas en el listado.
+export async function consultarEstadoSii(id: number) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
+  if (!esFacturaTimbrada(factura.estado) || factura.folio == null) {
+    throw new ValidationError('Solo se puede consultar el estado SII de una Factura ya timbrada (con folio)')
+  }
+  if (env.DTE_PROVIDER !== 'libredte') {
+    throw new ValidationError('La consulta de estado SII requiere el proveedor LibreDTE configurado')
+  }
+  const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
+  if (!emisor?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
+
+  const r = await libredte.consultarEstadoEmitido(TIPO_DTE_FACTURA_EXPORTACION, factura.folio, dteService.rutSinDv(emisor.rut))
+  if (!r.ok || r.data == null) {
+    throw new ValidationError(`No se pudo consultar el estado en el SII: ${r.error ?? 'respuesta vacía de LibreDTE'}`)
+  }
+  const { veredicto, glosa } = interpretarEstadoSii(r.data)
+  logger.info({ facturaId: id, folio: factura.folio, veredicto }, 'Factura exportación: estado SII consultado')
+  if (veredicto === 'RECHAZADO') {
+    const actualizada = await repo.marcarRechazada(factura.id, glosa)
+    return { factura: actualizada, sii: { veredicto, glosa } }
+  }
+  if (veredicto === 'ACEPTADO') {
+    const actualizada = await repo.marcarAprobada(factura.id)
+    return { factura: actualizada, sii: { veredicto, glosa } }
+  }
+  return { factura, sii: { veredicto, glosa } }
+}
+
 // ─── Lecturas / anulación ────────────────────────────────────────────────────
 export async function obtenerPorEmbarque(embarqueId: number) {
   return repo.getFacturaActivaPorEmbarque(embarqueId)
@@ -851,8 +890,8 @@ export async function obtenerPdfBorrador(id: number) {
 export async function obtenerPdfTimbrado(id: number) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
-  if (factura.estado !== 'APROBADA' || factura.folio == null) {
-    throw new ValidationError('El PDF timbrado solo está disponible para una Factura aprobada (timbrada por el SII)')
+  if (!esFacturaTimbrada(factura.estado) || factura.folio == null) {
+    throw new ValidationError('El PDF timbrado solo está disponible para una Factura ya timbrada (con folio del SII)')
   }
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
   if (!emisor?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
@@ -912,9 +951,9 @@ export async function reabrirFactura(id: number) {
 export async function anularFactura(id: number, userId: string) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
-  if (factura.estado === 'APROBADA') {
+  if (esFacturaTimbrada(factura.estado)) {
     throw new ValidationError(
-      'No se puede anular directamente una Factura ya aprobada (timbrada ante el SII) — usa "Anular con Nota de Crédito"',
+      'No se puede anular directamente una Factura ya timbrada ante el SII — usa "Anular con Nota de Crédito"',
     )
   }
   return repo.anularFactura(id, userId)
@@ -927,8 +966,8 @@ const TIPO_DTE_NC_EXPORTACION = 112
 export async function anularConNotaCredito(id: number, userId: string) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
-  if (factura.estado !== 'APROBADA' || factura.folio == null) {
-    throw new ValidationError('Solo se puede anular con Nota de Crédito una Factura aprobada (timbrada ante el SII)')
+  if (!esFacturaTimbrada(factura.estado) || factura.folio == null) {
+    throw new ValidationError('Solo se puede anular con Nota de Crédito una Factura ya timbrada ante el SII')
   }
 
   const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)

@@ -15,6 +15,8 @@ export async function facturaExportacionRoutes(app: FastifyInstance) {
   app.post('/facturas-exportacion/:id/enviar-sii', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.enviarSii)
   app.post('/facturas-exportacion/:id/firmar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.firmar)
   app.post('/facturas-exportacion/:id/reabrir', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.reabrir)
+  // Consulta el veredicto real del SII y reconcilia el estado (ENVIADA_SII → APROBADA/RECHAZADA).
+  app.post('/facturas-exportacion/:id/consultar-sii', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.consultarSii)
   app.post('/facturas-exportacion/:id/anular', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.anular)
   // Anular una factura APROBADA (timbrada) emitiendo una Nota de Crédito de Exportación (DTE 112).
   app.post('/facturas-exportacion/:id/anular-con-nc', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.anularConNc)

@@ -22,6 +22,7 @@ const ITEM = 'FACT_NACIONAL'
 
 const ESTADO_VARIANT: Record<EstadoFacturaNacional, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   BORRADOR: 'secondary',
+  ENVIADA_SII: 'secondary',
   APROBADA: 'default',
   RECHAZADA: 'destructive',
   ANULADA: 'outline',

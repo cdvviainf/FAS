@@ -6,6 +6,7 @@ import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION, LOCK_NAMESPACE_EMBARQUE_DESPACHO } from '../../../shared/advisory-locks.js'
 import type { CuotaCalculada } from './cobranza-estado.js'
 import type { FacturasNacionalListFilters } from './factura-nacional.types.js'
+import { esFacturaTimbrada } from './sii-estado.js'
 
 // Forma de una cuota a persistir al firmar (= CuotaCalculada del helper).
 export type CuotaCobranzaPersistir = CuotaCalculada
@@ -364,8 +365,10 @@ export async function actualizarBorrador(id: number, data: ActualizarBorradorDat
   })
 }
 
-// Timbrada: marca APROBADA con folio, mueve la Proforma de origen a FACTURADA y
-// crea las Cuotas de cartera (Ciclo 2), todo atómicamente.
+// Timbrada: marca ENVIADA_SII con folio (timbrada; veredicto del SII pendiente),
+// mueve la Proforma de origen a FACTURADA y crea las Cuotas de cartera (Ciclo 2),
+// todo atómicamente. El paso a APROBADA/RECHAZADA lo hace la reconciliación
+// on-demand con el SII (ver sii-estado.ts / consultarEstadoSii).
 export async function marcarFirmada(
   id: number,
   datos: {
@@ -390,8 +393,8 @@ export async function marcarFirmada(
     if (!actual || actual.eliminadoEn) {
       throw new ValidationError('La Factura Nacional fue anulada — no se puede confirmar la firma')
     }
-    if (actual.estado === 'APROBADA') {
-      // Ya confirmada por otra ejecución concurrente — idempotente.
+    if (esFacturaTimbrada(actual.estado)) {
+      // Ya timbrada por otra ejecución concurrente — idempotente.
       return tx.facturaNacional.findUnique({ where: { id }, include: facturaInclude })
     }
     // Idempotente ante reconciliación tras éxito parcial: borra cuotas previas
@@ -400,7 +403,7 @@ export async function marcarFirmada(
     const factura = await tx.facturaNacional.update({
       where: { id },
       data: {
-        estado: 'APROBADA',
+        estado: 'ENVIADA_SII',
         folio: datos.folio,
         trackIdSii: datos.trackIdSii,
         fechaEmision: datos.fechaEmision,
@@ -444,8 +447,13 @@ export async function marcarFirmada(
   })
 }
 
+// El SII aceptó el documento timbrado (reconciliación on-demand). Limpia glosa.
+export async function marcarAprobada(id: number) {
+  return prisma.facturaNacional.update({ where: { id }, data: { estado: 'APROBADA', errorMensajeSii: null }, include: facturaInclude })
+}
+
 export async function marcarRechazada(id: number, errorMensajeSii: string) {
-  return prisma.facturaNacional.update({ where: { id }, data: { estado: 'RECHAZADA', errorMensajeSii } })
+  return prisma.facturaNacional.update({ where: { id }, data: { estado: 'RECHAZADA', errorMensajeSii }, include: facturaInclude })
 }
 
 export async function reabrirBorrador(id: number) {

@@ -113,7 +113,7 @@ export interface ProformasListResponse {
 
 // ─── Factura de Exportación (DTE 110) ────────────────────────────────────────
 
-export type EstadoFacturaExportacion = 'BORRADOR' | 'APROBADA' | 'RECHAZADA' | 'ANULADA'
+export type EstadoFacturaExportacion = 'BORRADOR' | 'ENVIADA_SII' | 'APROBADA' | 'RECHAZADA' | 'ANULADA'
 
 export interface FacturaExportacionLinea {
   id: number

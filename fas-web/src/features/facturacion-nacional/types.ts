@@ -1,11 +1,12 @@
 // Factura Nacional (DTE 33 Afecta / 34 Exenta). Primera entrega: origen =
 // Proforma de Materiales. Ver Docs/cobranza.md (supersesión Factura Nacional).
 
-export type EstadoFacturaNacional = 'BORRADOR' | 'APROBADA' | 'RECHAZADA' | 'ANULADA'
+export type EstadoFacturaNacional = 'BORRADOR' | 'ENVIADA_SII' | 'APROBADA' | 'RECHAZADA' | 'ANULADA'
 export type OrigenFacturaNacional = 'PROFORMA_MATERIAL' | 'PROFORMA_PRODUCTOR' | 'VENTA_NACIONAL'
 
 export const ESTADO_FN_LABELS: Record<EstadoFacturaNacional, string> = {
   BORRADOR: 'Borrador',
+  ENVIADA_SII: 'Enviada al SII',
   APROBADA: 'Aprobada',
   RECHAZADA: 'Rechazada',
   ANULADA: 'Anulada',

@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client'
+import { env } from '../../../config/env.js'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { logger } from '../../../lib/logger.js'
 import { siguienteCodigo } from '../../config/prefijos-codigo/prefijos-codigo.service.js'
@@ -6,6 +7,8 @@ import { construirCuotasDesdeCondicion, derivarEstadoCobranza, inicioDeHoy } fro
 import * as ncService from './nota-credito.service.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
+import * as libredte from '../../finanzas/facturacion/libredte.adapter.js'
+import { esFacturaTimbrada, interpretarEstadoSii } from './sii-estado.js'
 import { mapFacturaNacionalADte } from '../../finanzas/facturacion/mappers/factura-nacional.mapper.js'
 import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
 import * as proformaService from './proforma.service.js'
@@ -633,11 +636,44 @@ export async function reabrirFactura(id: number) {
   return repo.reabrirBorrador(id)
 }
 
+// ─── Reconciliación on-demand del veredicto real del SII (FAS-COB-SII) ────────
+// El timbrado deja la Factura en ENVIADA_SII; esta consulta pregunta el veredicto
+// real al SII y la mueve a APROBADA (aceptada) o RECHAZADA (rechazada, con glosa).
+// Si el SII aún no se pronuncia, la deja en ENVIADA_SII.
+export async function consultarEstadoSii(id: number) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura Nacional', String(id))
+  if (!esFacturaTimbrada(factura.estado) || factura.folio == null) {
+    throw new ValidationError('Solo se puede consultar el estado SII de una Factura ya timbrada (con folio)')
+  }
+  if (env.DTE_PROVIDER !== 'libredte') {
+    throw new ValidationError('La consulta de estado SII requiere el proveedor LibreDTE configurado')
+  }
+  const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
+  if (!emisor?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
+
+  const r = await libredte.consultarEstadoEmitido(factura.tipoDte, factura.folio, dteService.rutSinDv(emisor.rut))
+  if (!r.ok || r.data == null) {
+    throw new ValidationError(`No se pudo consultar el estado en el SII: ${r.error ?? 'respuesta vacía de LibreDTE'}`)
+  }
+  const { veredicto, glosa } = interpretarEstadoSii(r.data)
+  logger.info({ facturaId: id, folio: factura.folio, veredicto }, 'Factura nacional: estado SII consultado')
+  if (veredicto === 'RECHAZADO') {
+    const actualizada = await repo.marcarRechazada(factura.id, glosa)
+    return { factura: actualizada, sii: { veredicto, glosa } }
+  }
+  if (veredicto === 'ACEPTADO') {
+    const actualizada = await repo.marcarAprobada(factura.id)
+    return { factura: actualizada, sii: { veredicto, glosa } }
+  }
+  return { factura, sii: { veredicto, glosa } }
+}
+
 export async function anularFactura(id: number, userId: string) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura Nacional', String(id))
-  if (factura.estado === 'APROBADA') {
-    throw new ValidationError('No se puede anular directamente una Factura ya aprobada (timbrada) — usa "Anular con Nota de Crédito"')
+  if (esFacturaTimbrada(factura.estado)) {
+    throw new ValidationError('No se puede anular directamente una Factura ya timbrada ante el SII — usa "Anular con Nota de Crédito"')
   }
   return repo.anularFactura(id, userId)
 }
@@ -649,8 +685,8 @@ const TIPO_DTE_NC_NACIONAL = 61
 export async function anularConNotaCredito(id: number, userId: string) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura Nacional', String(id))
-  if (factura.estado !== 'APROBADA' || factura.folio == null) {
-    throw new ValidationError('Solo se puede anular con Nota de Crédito una Factura aprobada (timbrada ante el SII)')
+  if (!esFacturaTimbrada(factura.estado) || factura.folio == null) {
+    throw new ValidationError('Solo se puede anular con Nota de Crédito una Factura ya timbrada ante el SII')
   }
 
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)

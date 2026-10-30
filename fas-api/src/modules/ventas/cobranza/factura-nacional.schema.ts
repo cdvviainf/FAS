@@ -62,7 +62,7 @@ export const tipoCambioQuerySchema = z.object({
 export const facturasNacionalListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  estado: z.enum(['BORRADOR', 'APROBADA', 'RECHAZADA', 'ANULADA']).optional(),
+  estado: z.enum(['BORRADOR', 'ENVIADA_SII', 'APROBADA', 'RECHAZADA', 'ANULADA']).optional(),
   q: z.string().max(200).optional(),
 })
 

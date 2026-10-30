@@ -67,6 +67,10 @@ export const facturaNacionalService = {
   async reabrir(id: number): Promise<{ data: FacturaNacional }> {
     return api.post(`ventas/cobranza/facturas-nacional/${id}/reabrir`).json()
   },
+  // Reconcilia el estado con el veredicto real del SII (ENVIADA_SII → APROBADA/RECHAZADA).
+  async consultarSii(id: number): Promise<{ data: { factura: FacturaNacional; sii: { veredicto: 'ACEPTADO' | 'RECHAZADO' | 'PENDIENTE'; glosa: string } } }> {
+    return api.post(`ventas/cobranza/facturas-nacional/${id}/consultar-sii`).json()
+  },
   async anular(id: number): Promise<{ data: FacturaNacional }> {
     return api.post(`ventas/cobranza/facturas-nacional/${id}/anular`).json()
   },

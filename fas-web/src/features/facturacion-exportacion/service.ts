@@ -97,6 +97,10 @@ export const facturaExportacionService = {
   async reabrir(id: number): Promise<{ data: FacturaExportacion }> {
     return api.post(`ventas/cobranza/facturas-exportacion/${id}/reabrir`).json()
   },
+  // Reconcilia el estado con el veredicto real del SII (ENVIADA_SII → APROBADA/RECHAZADA).
+  async consultarSii(id: number): Promise<{ data: { factura: FacturaExportacion; sii: { veredicto: 'ACEPTADO' | 'RECHAZADO' | 'PENDIENTE'; glosa: string } } }> {
+    return api.post(`ventas/cobranza/facturas-exportacion/${id}/consultar-sii`).json()
+  },
   async anular(id: number): Promise<{ data: FacturaExportacion }> {
     return api.post(`ventas/cobranza/facturas-exportacion/${id}/anular`).json()
   },

@@ -30,9 +30,16 @@ const ITEM = 'FACT_EXPORTACION'
 
 const ESTADO_BADGE: Record<EstadoFacturaExportacion, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   BORRADOR: { label: 'Borrador', variant: 'outline' },
+  ENVIADA_SII: { label: 'Enviada al SII', variant: 'secondary' },
   APROBADA: { label: 'Aprobada', variant: 'default' },
   RECHAZADA: { label: 'Rechazada', variant: 'destructive' },
   ANULADA: { label: 'Anulada', variant: 'secondary' },
+}
+
+// Timbrada (folio real) pero el veredicto del SII puede estar pendiente
+// (ENVIADA_SII) o confirmado (APROBADA). Habilita PDF/XML/anulación igual.
+function esTimbrada(estado: EstadoFacturaExportacion) {
+  return estado === 'ENVIADA_SII' || estado === 'APROBADA'
 }
 
 // Vista de solo lectura de una Factura de Exportación (aprobada o anulada).
@@ -40,12 +47,28 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
   const queryClient = useQueryClient()
   const puedeEscribir = usePuedeEscribir(ITEM)
   const badge = ESTADO_BADGE[factura.estado]
-  const puedeDescargarXml = factura.estado === 'APROBADA' && (factura.dte?.tieneXml ?? false)
+  const puedeDescargarXml = esTimbrada(factura.estado) && (factura.dte?.tieneXml ?? false)
   // Defensa extra (FAS-EXP-IE-QA-003): el backend ya no debería dejar una
-  // Factura APROBADA sin folio, pero se exige explícitamente igual.
-  const puedeVerPdf = factura.estado === 'APROBADA' && factura.folio != null
+  // Factura timbrada sin folio, pero se exige explícitamente igual.
+  const puedeVerPdf = esTimbrada(factura.estado) && factura.folio != null
   // NC de anulación aprobada (cuando la factura está ANULADA).
   const ncAprobada = factura.notasCredito?.find((n) => n.estado === 'APROBADA') ?? null
+
+  // Reconciliación on-demand del veredicto real del SII (FAS-COB-SII): mueve la
+  // factura de ENVIADA_SII a APROBADA/RECHAZADA según lo que responde el SII.
+  const consultarSii = useMutation({
+    mutationFn: () => facturaExportacionService.consultarSii(factura.id),
+    onSuccess: (r) => {
+      const { veredicto, glosa } = r.data.sii
+      if (veredicto === 'ACEPTADO') toast.success('El SII aceptó la factura — estado: Aprobada')
+      else if (veredicto === 'RECHAZADO') toast.error(`El SII rechazó la factura: ${glosa}`)
+      else toast.info('El SII aún no entrega veredicto — la factura sigue "Enviada al SII"')
+      queryClient.invalidateQueries({ queryKey: facturasKeys.detalle(factura.id) })
+      queryClient.invalidateQueries({ queryKey: facturasKeys.all })
+      queryClient.invalidateQueries({ queryKey: embarquesExportacionKeys.all })
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo consultar el estado en el SII'),
+  })
 
   const anularConNc = useMutation({
     mutationFn: () => facturaExportacionService.anularConNc(factura.id),
@@ -167,6 +190,11 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
               <Icons.billing className='mr-2 h-4 w-4' /> Ver Proforma {factura.proforma.codigo}
             </Button>
           )}
+          {esTimbrada(factura.estado) && puedeEscribir && (
+            <Button variant='outline' onClick={() => consultarSii.mutate()} isLoading={consultarSii.isPending}>
+              <Icons.search className='mr-2 h-4 w-4' /> Consultar estado SII
+            </Button>
+          )}
           {puedeVerPdf && (
             <Button variant='outline' onClick={verPdfTimbrado}>
               <Icons.download className='mr-2 h-4 w-4' /> Ver DTE Timbrado (SII)
@@ -178,7 +206,7 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
             </Button>
           )}
           {/* Anular una factura timbrada con Nota de Crédito (DTE 112). */}
-          {factura.estado === 'APROBADA' && puedeEscribir && (
+          {esTimbrada(factura.estado) && puedeEscribir && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant='destructive' isLoading={anularConNc.isPending}>
