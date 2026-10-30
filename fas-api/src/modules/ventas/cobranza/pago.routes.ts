@@ -10,6 +10,8 @@ export async function pagoRoutes(app: FastifyInstance) {
   // propio ítem VENTAS_COBRANZA — no exige permisos de los mantenedores de
   // Config (FAS-COB-PAG-R1-003). Estáticas antes de las paramétricas.
   app.get('/clientes', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listClientes)
+  // Landing de Pagos: cartera por cliente (facturado/pagado/pendiente/vencido en USD).
+  app.get('/clientes/cartera-resumen', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.carteraResumen)
   app.get('/monedas', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listMonedas)
 
   // Lecturas para armar la pantalla de aplicación de pago.

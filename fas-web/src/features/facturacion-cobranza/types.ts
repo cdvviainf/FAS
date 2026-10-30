@@ -102,3 +102,24 @@ export interface ClienteOption {
   descripcion: string
   razonSocial: string | null
 }
+
+// ─── Cartera por cliente (landing de Pagos, montos en USD) ────────────────────
+export type EstadoDeuda = 'AL_DIA' | 'PENDIENTE' | 'VENCIDA'
+
+export interface CarteraClienteRow {
+  clienteId: number
+  cliente: { id: number; codigo: string; descripcion: string; razonSocial: string }
+  facturado: number
+  pagado: number
+  pendiente: number
+  vencido: number
+  estado: EstadoDeuda
+}
+
+export interface CarteraResumenResponse {
+  data: CarteraClienteRow[]
+  moneda: string // 'USD'
+  tipoCambioUsd: number
+  fechaTipoCambio: string
+  monedasSinTipoCambio: string[]
+}

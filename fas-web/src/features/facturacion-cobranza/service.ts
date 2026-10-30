@@ -1,6 +1,7 @@
 import { api } from '@/lib/api'
 import type {
   AplicarSaldoInput,
+  CarteraResumenResponse,
   ClienteOption,
   CrearPagoInput,
   DocumentoPendiente,
@@ -37,6 +38,10 @@ export const cobranzaService = {
   },
   async aplicarSaldo(saldoId: number, body: AplicarSaldoInput): Promise<{ data: unknown }> {
     return api.post(`ventas/cobranza/saldo-a-favor/${saldoId}/aplicar`, { json: body }).json()
+  },
+  // Cartera por cliente (landing): facturado/pagado/pendiente/vencido en USD.
+  async carteraResumen(): Promise<CarteraResumenResponse> {
+    return api.get('ventas/cobranza/clientes/cartera-resumen').json()
   },
   // Clientes para el selector — endpoint propio de Cobranza (bajo VENTAS_COBRANZA,
   // no exige CONFIG_ENTIDADES).

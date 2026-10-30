@@ -116,12 +116,17 @@ const cuotaSelect = {
 // para armar la pantalla de aplicación de pago. Filtra por estadoCobranza activo
 // y, opcionalmente, por moneda.
 const ESTADOS_CARTERA_ACTIVOS: EstadoCobranza[] = ['PENDIENTE', 'PARCIAL', 'VENCIDA']
+// Estados SII "timbrada" (folio real): la factura ya genera cuotas de cartera
+// aunque el SII aún no confirme. Mismo criterio que esFacturaTimbrada.
+const ESTADOS_FACTURA_TIMBRADA: ('ENVIADA_SII' | 'APROBADA')[] = ['ENVIADA_SII', 'APROBADA']
 
 export async function getDocumentosPendientesCliente(clienteId: number, monedaId?: number) {
   const whereBase = {
     clienteId,
     eliminadoEn: null,
-    estado: 'APROBADA' as const,
+    // Timbradas (ENVIADA_SII o APROBADA) entran a cartera — una factura con
+    // folio ya genera cuotas, aunque el SII aún no confirme (FAS-COB-SII).
+    estado: { in: ESTADOS_FACTURA_TIMBRADA },
     estadoCobranza: { in: ESTADOS_CARTERA_ACTIVOS },
     ...(monedaId ? { monedaId } : {}),
   }
@@ -171,6 +176,54 @@ export async function getDocumentosPendientesCliente(clienteId: number, monedaId
     }
   }
   return [...exp.map(normalizar('EXPORTACION')), ...(nac as typeof exp).map(normalizar('NACIONAL'))]
+}
+
+// ─── Cartera por cliente (landing de Pagos) ───────────────────────────────────
+export interface CarteraFacturaRaw {
+  clienteId: number
+  cliente: { id: number; codigo: string; descripcion: string; razonSocial: string }
+  monedaCodigo: string
+  montoTotal: number
+  saldoPendiente: number
+  vencido: number
+}
+
+// Todas las facturas timbradas (ENVIADA_SII/APROBADA) no eliminadas de todos los
+// clientes, con sus montos por factura. El estado ANULADA (anulada con NC) ya
+// queda fuera por el filtro de `estado`. El service agrega por cliente y
+// convierte a USD. `vencido` = saldo de cuotas con vencimiento < hoy.
+export async function getCarteraFacturasRaw(): Promise<CarteraFacturaRaw[]> {
+  const hoy = inicioDeHoy()
+  const where = {
+    eliminadoEn: null,
+    estado: { in: ESTADOS_FACTURA_TIMBRADA },
+  }
+  const carteraSelect = {
+    clienteId: true,
+    cliente: { select: { id: true, codigo: true, descripcion: true, razonSocial: true } },
+    moneda: { select: { codigo: true } },
+    montoTotal: true,
+    cuotas: { select: { saldoPendiente: true, fechaVencimiento: true } },
+  } as const
+  const [exp, nac] = await Promise.all([
+    prisma.facturaExportacion.findMany({ where, select: carteraSelect }),
+    prisma.facturaNacional.findMany({ where, select: carteraSelect }),
+  ])
+  const mapFila = (f: (typeof exp)[number]): CarteraFacturaRaw => {
+    const saldo = sumarMontos(f.cuotas.map((c) => Number(c.saldoPendiente)))
+    const vencido = sumarMontos(
+      f.cuotas.filter((c) => c.fechaVencimiento != null && c.fechaVencimiento < hoy).map((c) => Number(c.saldoPendiente)),
+    )
+    return {
+      clienteId: f.clienteId,
+      cliente: f.cliente,
+      monedaCodigo: f.moneda.codigo,
+      montoTotal: Number(f.montoTotal),
+      saldoPendiente: saldo,
+      vencido,
+    }
+  }
+  return [...exp.map(mapFila), ...(nac as typeof exp).map(mapFila)]
 }
 
 // ─── Lectura transaccional de una factura con sus cuotas (bajo lock) ──────────

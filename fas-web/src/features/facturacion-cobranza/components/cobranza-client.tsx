@@ -12,12 +12,13 @@ import { Icons } from '@/components/icons'
 import { formatFechaCorta, formatMonto } from '@/lib/format'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import {
+  carteraResumenOptions,
   clientesOptions,
   documentosPendientesOptions,
   pagosListOptions,
   saldosAFavorOptions,
 } from '../queries'
-import type { EstadoCobranza, SaldoAFavor } from '../types'
+import type { EstadoCobranza, EstadoDeuda, SaldoAFavor } from '../types'
 import { RegistrarPagoDialog } from './registrar-pago-dialog'
 import { AplicarSaldoDialog } from './aplicar-saldo-dialog'
 
@@ -38,6 +39,12 @@ const MEDIO_LABEL: Record<string, string> = {
   OTRO: 'Otro',
 }
 
+const ESTADO_DEUDA_BADGE: Record<EstadoDeuda, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
+  AL_DIA: { label: 'Al día', variant: 'secondary' },
+  PENDIENTE: { label: 'Pendiente', variant: 'outline' },
+  VENCIDA: { label: 'Vencida', variant: 'destructive' },
+}
+
 export function CobranzaClient() {
   const puedeEscribir = usePuedeEscribir(ITEM)
   const [clienteId, setClienteId] = useState<number>(0)
@@ -53,6 +60,9 @@ export function CobranzaClient() {
     const c = (clientes ?? []).find((x) => x.id === clienteId)
     return c ? c.razonSocial || c.descripcion : ''
   }, [clientes, clienteId])
+
+  const { data: carteraResp, isPending: carteraLoading } = useQuery(carteraResumenOptions())
+  const cartera = carteraResp?.data ?? []
 
   const { data: docsResp, isPending: docsLoading } = useQuery(documentosPendientesOptions(clienteId))
   const { data: saldosResp } = useQuery(saldosAFavorOptions(clienteId))
@@ -76,18 +86,73 @@ export function CobranzaClient() {
             emptyText='Sin clientes.'
           />
         </div>
-        {puedeEscribir && clienteId > 0 && (
-          <Button onClick={() => setPagoOpen(true)}>
-            <Icons.billing className='mr-1 h-4 w-4' />
-            Registrar Pago
-          </Button>
+        {clienteId > 0 && (
+          <div className='flex gap-2'>
+            <Button variant='outline' onClick={() => setClienteId(0)}>
+              <Icons.chevronLeft className='mr-1 h-4 w-4' />
+              Volver a clientes
+            </Button>
+            {puedeEscribir && (
+              <Button onClick={() => setPagoOpen(true)}>
+                <Icons.billing className='mr-1 h-4 w-4' />
+                Registrar Pago
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
       {clienteId === 0 ? (
-        <p className='text-muted-foreground rounded-md border border-dashed p-8 text-center text-sm'>
-          Selecciona un cliente para ver su cartera, saldos a favor y pagos.
-        </p>
+        <div className='space-y-2'>
+          <p className='text-muted-foreground text-sm'>
+            Cartera por cliente — montos en USD
+            {carteraResp?.tipoCambioUsd
+              ? ` (dólar observado $${formatMonto(carteraResp.tipoCambioUsd)}${carteraResp.fechaTipoCambio ? ` al ${formatFechaCorta(carteraResp.fechaTipoCambio)}` : ''})`
+              : ''}
+            . Elige un cliente para ver su detalle (cartera, saldos a favor y pagos).
+          </p>
+          <div className='overflow-x-auto rounded-md border'>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead className='text-right'>Facturado</TableHead>
+                  <TableHead className='text-right'>Pagado</TableHead>
+                  <TableHead className='text-right'>Pendiente</TableHead>
+                  <TableHead className='text-right'>Vencido</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className='text-right'>Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {carteraLoading ? (
+                  <TableRow><TableCell colSpan={7} className='text-muted-foreground py-8 text-center'>Cargando…</TableCell></TableRow>
+                ) : cartera.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className='text-muted-foreground py-8 text-center'>No hay cartera con facturas timbradas.</TableCell></TableRow>
+                ) : (
+                  cartera.map((c) => (
+                    <TableRow key={c.clienteId}>
+                      <TableCell className='font-medium whitespace-nowrap'>{c.cliente.razonSocial || c.cliente.descripcion}</TableCell>
+                      <TableCell className='text-right tabular-nums whitespace-nowrap'>USD {formatMonto(c.facturado)}</TableCell>
+                      <TableCell className='text-right tabular-nums whitespace-nowrap'>USD {formatMonto(c.pagado)}</TableCell>
+                      <TableCell className='text-right tabular-nums whitespace-nowrap'>USD {formatMonto(c.pendiente)}</TableCell>
+                      <TableCell className='text-right tabular-nums whitespace-nowrap'>USD {formatMonto(c.vencido)}</TableCell>
+                      <TableCell><Badge variant={ESTADO_DEUDA_BADGE[c.estado].variant}>{ESTADO_DEUDA_BADGE[c.estado].label}</Badge></TableCell>
+                      <TableCell className='text-right'>
+                        <Button size='sm' variant='outline' onClick={() => setClienteId(c.clienteId)}>Ver cobranza</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          {carteraResp?.monedasSinTipoCambio?.length ? (
+            <p className='text-muted-foreground text-xs'>
+              Monedas sin tipo de cambio automático (excluidas del total): {carteraResp.monedasSinTipoCambio.join(', ')}.
+            </p>
+          ) : null}
+        </div>
       ) : (
         <Tabs defaultValue='cartera' className='space-y-3'>
           <TabsList>

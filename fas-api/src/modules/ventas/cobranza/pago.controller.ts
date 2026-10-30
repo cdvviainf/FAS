@@ -26,6 +26,10 @@ export async function listClientes(_req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ data: await service.listarClientes() })
 }
 
+export async function carteraResumen(_req: FastifyRequest, reply: FastifyReply) {
+  return reply.send(await service.resumenCartera())
+}
+
 export async function listMonedas(_req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ data: await service.listarMonedas() })
 }

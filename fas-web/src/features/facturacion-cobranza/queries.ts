@@ -8,6 +8,15 @@ export const cobranzaKeys = {
   pagos: (filters: object) => ['cobranza', 'pagos', filters] as const,
   clientes: ['cobranza', 'clientes'] as const,
   monedas: ['cobranza', 'monedas'] as const,
+  carteraResumen: ['cobranza', 'cartera-resumen'] as const,
+}
+
+export function carteraResumenOptions() {
+  return queryOptions({
+    queryKey: cobranzaKeys.carteraResumen,
+    queryFn: () => cobranzaService.carteraResumen(),
+    staleTime: 30_000,
+  })
 }
 
 export function documentosPendientesOptions(clienteId: number, monedaId?: number) {
