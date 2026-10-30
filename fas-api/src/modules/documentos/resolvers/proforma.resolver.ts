@@ -7,6 +7,8 @@ import {
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
 import { factorFob, subtotalFob as calcSubtotalFob, totalClausula, unitarioFob } from '../../ventas/cobranza/clausula-flete-seguro.js'
 import { descripcionLinea } from '../../ventas/cobranza/descripcion-idioma.js'
+import { resolverDatosEmbarqueExport } from './datos-embarque-export.js'
+import { montoEnPalabras } from '../ui/monto-en-palabras.js'
 import type { ProformaPdfPayload } from '../schemas/proforma.schema.js'
 
 function round2(n: number): number {
@@ -22,10 +24,11 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
   const embarque = await getEmbarqueParaProforma(proforma.embarqueId)
   if (!embarque) throw new NotFoundError('Embarque', String(proforma.embarqueId))
 
-  const [empresa, cliente, cuotasPago] = await Promise.all([
+  const [empresa, cliente, cuotasPago, datosEmbarque] = await Promise.all([
     getEmpresaParaDocumento(empresaId),
     getEntidadParaDocumento(proforma.clienteId),
     getCuotasPagoNotaVenta(embarque.notaVentaId),
+    resolverDatosEmbarqueExport(proforma.embarqueId),
   ])
 
   // Fechas de referencia resolubles hoy (D6): ZARPE y ARRIBO. FACTURA/
@@ -75,11 +78,14 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
   const subtotalFob = calcSubtotalFob(montoTotal, montoFlete, montoSeguro, fleteSumado)
   const totalCif = totalClausula(montoTotal, montoFlete, montoSeguro, fleteSumado)
 
+  const idioma = proforma.idioma === 'EN' ? 'EN' : 'ES'
+
   return {
     empresa: {
       razonSocial: empresa?.razonSocial ?? '—',
       rut: empresa?.rut ?? null,
       direccion: empresa?.direcciones[0]?.direccion ?? null,
+      telefono: empresa?.telefono ?? null,
       logoDataUri: logoDataUri(empresa?.logo),
     },
     codigo: proforma.codigo,
@@ -113,5 +119,28 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
     subtotalFob,
     montoTotal: totalCif,
     vencimientosEstimados,
+    transporte: datosEmbarque
+      ? {
+          nave: datosEmbarque.nave,
+          via: datosEmbarque.via,
+          blAwb: datosEmbarque.blAwb,
+          tipoBl: datosEmbarque.tipoBl,
+          booking: datosEmbarque.booking,
+          contenedor: datosEmbarque.contenedor,
+          sello: datosEmbarque.sello,
+          puertoEmbarque: datosEmbarque.puertoEmbarque,
+          puertoDestino: datosEmbarque.puertoDestino,
+          etd: datosEmbarque.etd,
+          eta: datosEmbarque.eta,
+          flete: datosEmbarque.flete,
+          modalidadVenta: datosEmbarque.modalidadVenta,
+          incoterm: datosEmbarque.incoterm,
+        }
+      : null,
+    notify: datosEmbarque?.notify ?? null,
+    consignatario: datosEmbarque?.consignatario ?? null,
+    pesoNeto: datosEmbarque?.pesoNeto ?? null,
+    pesoBruto: datosEmbarque?.pesoBruto ?? null,
+    montoEnPalabras: montoEnPalabras(totalCif, idioma, proforma.moneda.codigo),
   }
 }

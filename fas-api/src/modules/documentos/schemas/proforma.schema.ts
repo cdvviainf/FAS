@@ -9,6 +9,7 @@ export const proformaPdfPayloadSchema = z.object({
     razonSocial: z.string(),
     rut: z.string().nullable(),
     direccion: z.string().nullable(),
+    telefono: z.string().nullable().default(null),
     logoDataUri: z.string().nullable(),
   }),
   codigo: z.string(),
@@ -62,6 +63,50 @@ export const proformaPdfPayloadSchema = z.object({
       fechaEstimada: z.string().nullable(), // ISO — null si la fecha base aún no se conoce
     }),
   ),
+  // Datos de transporte/exportación del Embarque (2026-10-30) — para que el PDF
+  // muestre lo mismo que un "Export Invoice" de referencia. Todo opcional:
+  // `transporte` es null si el documento no tiene Embarque resoluble, y cada
+  // campo interno es null si el dato no se cargó aún. Solo datos, no cambia el
+  // cálculo de montos/flete ni el DTE/XML.
+  transporte: z
+    .object({
+      nave: z.string().nullable(),
+      via: z.string().nullable(),
+      blAwb: z.string().nullable(),
+      tipoBl: z.string().nullable(),
+      booking: z.string().nullable(),
+      contenedor: z.string().nullable(),
+      sello: z.string().nullable(),
+      puertoEmbarque: z.string().nullable(),
+      puertoDestino: z.string().nullable(),
+      etd: z.string().nullable(), // ISO
+      eta: z.string().nullable(), // ISO
+      flete: z.string().nullable(),
+      modalidadVenta: z.string().nullable(),
+      incoterm: z.string().nullable(),
+    })
+    .nullable()
+    .default(null),
+  notify: z
+    .object({
+      razonSocial: z.string(),
+      rut: z.string().nullable(),
+      direccion: z.string().nullable(),
+    })
+    .nullable()
+    .default(null),
+  consignatario: z
+    .object({
+      razonSocial: z.string(),
+      rut: z.string().nullable(),
+      direccion: z.string().nullable(),
+    })
+    .nullable()
+    .default(null),
+  pesoNeto: z.number().nullable().default(null),
+  pesoBruto: z.number().nullable().default(null),
+  // Monto total (CIF) escrito en palabras según el idioma del documento.
+  montoEnPalabras: z.string().nullable().default(null),
 })
 
 export type ProformaPdfPayload = z.infer<typeof proformaPdfPayloadSchema>

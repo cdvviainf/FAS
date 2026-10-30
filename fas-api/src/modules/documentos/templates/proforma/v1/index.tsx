@@ -26,8 +26,29 @@ const L = {
     razonSocial: 'Company Name',
     rut: 'Tax ID',
     direccion: 'Address',
+    telefono: 'Phone',
     numeroInstructivo: 'Shipment No.',
     condicionPago: 'Payment Terms',
+    transporte: 'Transport',
+    nave: 'Vessel',
+    via: 'Mode',
+    blAwb: 'B/L - AWB',
+    tipoBl: 'BL Type',
+    booking: 'Booking',
+    contenedor: 'Container',
+    sello: 'Seal',
+    puertoEmbarque: 'Loading Port',
+    puertoDestino: 'Destination Port',
+    etd: 'ETD',
+    eta: 'ETA',
+    fleteTransporte: 'Freight',
+    modalidadVenta: 'Sale Form',
+    incoterm: 'Sales Terms',
+    notify: 'Notify',
+    consignatario: 'Consignee',
+    pesoNeto: 'Net Weight',
+    pesoBruto: 'Gross Weight',
+    montoEnPalabras: 'Amount in words',
     detalle: 'Detail',
     cantidad: 'Boxes',
     precioUnitario: 'Unit Price',
@@ -60,8 +81,29 @@ const L = {
     razonSocial: 'Razón social',
     rut: 'RUT',
     direccion: 'Dirección',
+    telefono: 'Teléfono',
     numeroInstructivo: 'N° Instructivo',
     condicionPago: 'Condición de Pago',
+    transporte: 'Transporte',
+    nave: 'Nave',
+    via: 'Vía',
+    blAwb: 'B/L - AWB',
+    tipoBl: 'Tipo BL',
+    booking: 'Booking',
+    contenedor: 'Contenedor',
+    sello: 'Sello',
+    puertoEmbarque: 'Puerto de Embarque',
+    puertoDestino: 'Puerto de Destino',
+    etd: 'ETD',
+    eta: 'ETA',
+    fleteTransporte: 'Flete',
+    modalidadVenta: 'Modalidad de Venta',
+    incoterm: 'Incoterm',
+    notify: 'Notify',
+    consignatario: 'Consignatario',
+    pesoNeto: 'Peso Neto',
+    pesoBruto: 'Peso Bruto',
+    montoEnPalabras: 'Monto en palabras',
     detalle: 'Detalle',
     cantidad: 'Cajas',
     precioUnitario: 'Precio Unitario',
@@ -111,6 +153,33 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
     { titulo: t.monto, render: (v) => fmt.moneda(v.monto, d.moneda), numerica: true },
   ]
 
+  // Bloque "Transporte": datos de exportación del Embarque (solo datos, no
+  // altera montos ni el DTE). Cada campo cae a '—' si no se cargó; los pesos se
+  // muestran acá, cerca del resto de la logística. El grupo entero se omite si
+  // el documento no tiene Embarque resoluble (d.transporte == null).
+  const tr = d.transporte
+  const guion = (v: string | null | undefined) => v ?? '—'
+  const camposTransporte = tr
+    ? [
+        { label: t.via, valor: guion(tr.via) },
+        { label: t.nave, valor: guion(tr.nave) },
+        { label: t.blAwb, valor: guion(tr.blAwb) },
+        { label: t.tipoBl, valor: guion(tr.tipoBl) },
+        { label: t.booking, valor: guion(tr.booking) },
+        { label: t.contenedor, valor: guion(tr.contenedor) },
+        { label: t.sello, valor: guion(tr.sello) },
+        { label: t.puertoEmbarque, valor: guion(tr.puertoEmbarque) },
+        { label: t.puertoDestino, valor: guion(tr.puertoDestino) },
+        { label: t.etd, valor: tr.etd ? fmt.fecha(tr.etd) : '—' },
+        { label: t.eta, valor: tr.eta ? fmt.fecha(tr.eta) : '—' },
+        { label: t.incoterm, valor: guion(tr.incoterm) },
+        { label: t.modalidadVenta, valor: guion(tr.modalidadVenta) },
+        { label: t.fleteTransporte, valor: guion(tr.flete) },
+        ...(d.pesoNeto != null ? [{ label: t.pesoNeto, valor: fmt.kilos(d.pesoNeto) }] : []),
+        ...(d.pesoBruto != null ? [{ label: t.pesoBruto, valor: fmt.kilos(d.pesoBruto) }] : []),
+      ]
+    : []
+
   return (
     <Documento
       titulo={`${titulo} ${d.codigo}`}
@@ -133,6 +202,7 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
             { label: t.razonSocial, valor: d.empresa.razonSocial },
             { label: t.rut, valor: fmt.rut(d.empresa.rut) },
             { label: t.direccion, valor: d.empresa.direccion ?? '—' },
+            ...(d.empresa.telefono ? [{ label: t.telefono, valor: d.empresa.telefono }] : []),
           ]}
         />
         <GrupoCampos
@@ -146,6 +216,33 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
           ]}
         />
       </div>
+
+      {(d.notify || d.consignatario) && (
+        <div className='doc-fila-grupos'>
+          {d.consignatario && (
+            <GrupoCampos
+              titulo={t.consignatario}
+              campos={[
+                { label: t.razonSocial, valor: d.consignatario.razonSocial },
+                { label: t.rut, valor: fmt.rut(d.consignatario.rut) },
+                { label: t.direccion, valor: d.consignatario.direccion ?? '—' },
+              ]}
+            />
+          )}
+          {d.notify && (
+            <GrupoCampos
+              titulo={t.notify}
+              campos={[
+                { label: t.razonSocial, valor: d.notify.razonSocial },
+                { label: t.rut, valor: fmt.rut(d.notify.rut) },
+                { label: t.direccion, valor: d.notify.direccion ?? '—' },
+              ]}
+            />
+          )}
+        </div>
+      )}
+
+      {tr && <GrupoCampos titulo={t.transporte} campos={camposTransporte} />}
 
       <TablaLineas
         titulo={t.detalle}
@@ -166,6 +263,13 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
         }
         neto={{ etiqueta: t.total, valor: fmt.moneda(d.montoTotal, d.moneda) }}
       />
+
+      {d.montoEnPalabras && (
+        <div style={{ marginTop: 6, fontSize: 9 }}>
+          <span style={{ fontWeight: 700 }}>{t.montoEnPalabras}: </span>
+          <span>{d.montoEnPalabras}</span>
+        </div>
+      )}
 
       {d.vencimientosEstimados.length > 0 && (
         <TablaLineas titulo={t.vencimientos} filas={d.vencimientosEstimados} columnas={columnasVencimientos} />
