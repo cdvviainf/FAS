@@ -249,8 +249,9 @@ export async function listOperacionesFacturables(filters: {
   const proformas = origen && origen !== 'PROFORMA_MATERIAL'
     ? []
     : await prisma.proformaMaterial.findMany({
+        // ProformaMaterial no tiene soft-delete (eliminadoEn): se anula vía
+        // estado = 'ANULADA'. El filtro por estado ya excluye las anuladas.
         where: {
-          eliminadoEn: null,
           OR: [
             { estado: { in: ['ENVIADA_VALIDACION', 'FACTURADA'] } },
             { facturasNacional: { some: { eliminadoEn: null } } },
