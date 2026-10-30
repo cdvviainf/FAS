@@ -40,6 +40,7 @@ export const proformaEmitirSchema = z.object({
   // Flete/Seguro de la cláusula de venta (Incoterm). Solo se exigen si la
   // cláusula lo indica (validación server-side, no aquí, porque depende de un
   // dato de la Nota de Venta). No negativos; el service redondea a 2 decimales.
+  fleteSumaAlPrecio: z.boolean().optional(),
   montoFlete: z.number().min(0).max(9_999_999_999).optional().nullable(),
   montoSeguro: z.number().min(0).max(9_999_999_999).optional().nullable(),
   // Observaciones libres del documento. Se copian a la Factura y de ahí al DTE

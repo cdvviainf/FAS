@@ -32,10 +32,12 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
   const montoTotal = Number(proforma.montoTotal)
   const montoFlete = proforma.montoFlete == null ? null : Number(proforma.montoFlete)
   const montoSeguro = proforma.montoSeguro == null ? null : Number(proforma.montoSeguro)
+  const fleteSumado = proforma.fleteSumaAlPrecio
   const tieneDesglose = montoFlete != null || montoSeguro != null
   const reduccion = (montoFlete ?? 0) + (montoSeguro ?? 0)
-  const factor = montoTotal > 0 && reduccion > 0 ? (montoTotal - reduccion) / montoTotal : 1
-  const subtotalFob = Math.round((montoTotal - reduccion) * 100) / 100
+  const factor = fleteSumado ? 1 : (montoTotal > 0 && reduccion > 0 ? (montoTotal - reduccion) / montoTotal : 1)
+  const subtotalFob = fleteSumado ? montoTotal : Math.round((montoTotal - reduccion) * 100) / 100
+  const totalCif = Math.round((subtotalFob + reduccion) * 100) / 100
   const moneda = proforma.moneda.codigo
 
   // "Ver Cierre Comercial"/"Ver Factura" abren directamente su PDF en pestaña
@@ -184,7 +186,7 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
               {tieneDesglose && (
                 <TableRow>
                   <TableCell colSpan={3} className='font-semibold'>Total (valor cláusula)</TableCell>
-                  <TableCell className='text-right font-semibold tabular-nums'>{moneda} {formatMonto(montoTotal)}</TableCell>
+                  <TableCell className='text-right font-semibold tabular-nums'>{moneda} {formatMonto(totalCif)}</TableCell>
                 </TableRow>
               )}
             </TableFooter>

@@ -10,7 +10,7 @@ import * as libredte from '../../finanzas/facturacion/libredte.adapter.js'
 import { esFacturaTimbrada, interpretarEstadoSii } from './sii-estado.js'
 import { mapFacturaExportacionA110, type ReferenciaFacturaExportacion } from '../../finanzas/facturacion/mappers/factura-exportacion.mapper.js'
 import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
-import { factorFob, resolverFleteSeguro, unitarioFob } from './clausula-flete-seguro.js'
+import { factorFob, resolverFleteSeguro, totalClausula, unitarioFob } from './clausula-flete-seguro.js'
 import { derivarEstadoCobranza, inicioDeHoy } from './cobranza-estado.js'
 import * as ncService from './nota-credito.service.js'
 import { descripcionLinea, faltantesDescripcionExtranjera, type Idioma, type LineaConMantenedores } from './descripcion-idioma.js'
@@ -154,10 +154,12 @@ export async function crearBorradorDesdeProforma(proformaId: number, userId: str
   // punto de partida; siguen siendo editables mientras la Factura esté en
   // BORRADOR. Se revalidan igual contra la cláusula, por si sus flags o el
   // total cambiaron entre la emisión de la Proforma y la creación de la Factura.
+  // El modo del flete (resta/suma) se hereda de la Proforma.
+  const fleteSumaAlPrecio = proforma.fleteSumaAlPrecio
   const { montoFlete, montoSeguro } = resolverFleteSeguro(embarque.notaVenta.clausulaVenta, montoTotal, {
     montoFlete: proforma.montoFlete == null ? null : Number(proforma.montoFlete),
     montoSeguro: proforma.montoSeguro == null ? null : Number(proforma.montoSeguro),
-  })
+  }, fleteSumaAlPrecio)
 
   // Tipo de cambio: se sugiere automáticamente desde el Banco Central (dólar/euro
   // observado) al crear el borrador, salvo que la moneda sea la base (CLP). Si la
@@ -193,6 +195,7 @@ export async function crearBorradorDesdeProforma(proformaId: number, userId: str
         montoTotal,
         montoFlete,
         montoSeguro,
+        fleteSumaAlPrecio,
         tipoCambio,
         fechaTipoCambio,
         observaciones: proforma.observaciones ?? null,
@@ -229,10 +232,13 @@ export async function actualizarBorrador(id: number, body: FacturaExportacionAct
   // Embarque). Se exigen solo si la cláusula lo indica.
   const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
   if (!embarque) throw new NotFoundError('Embarque', String(factura.embarqueId))
+  // Modo del flete (resta/suma): editable en BORRADOR; si el body no lo trae,
+  // se conserva el de la factura.
+  const fleteSumaAlPrecio = body.fleteSumaAlPrecio ?? factura.fleteSumaAlPrecio
   const { montoFlete, montoSeguro } = resolverFleteSeguro(embarque.notaVenta.clausulaVenta, montoTotal, {
     montoFlete: body.montoFlete,
     montoSeguro: body.montoSeguro,
-  })
+  }, fleteSumaAlPrecio)
 
   // Tipo de cambio: se conserva la fecha de la paridad observada mientras el
   // valor no cambie. Si el usuario lo edita, se sella con la fecha de la paridad
@@ -262,6 +268,7 @@ export async function actualizarBorrador(id: number, body: FacturaExportacionAct
       montoTotal,
       montoFlete,
       montoSeguro,
+      fleteSumaAlPrecio,
       tipoCambio,
       fechaTipoCambio,
       observaciones: body.observaciones ?? null,
@@ -442,13 +449,16 @@ export async function construirPayloadDte(
     )
   }
   const montoTotalNum = Number(factura.montoTotal)
-  // Revalida Flete/Seguro (última barrera). El total (CIF) NO cambia — va como
-  // TotClauVenta; el detalle se timbra a valor FOB.
+  const fleteSumado = factura.fleteSumaAlPrecio
+  // Revalida Flete/Seguro (última barrera). TotClauVenta (CIF) = total cláusula:
+  // en modo resta coincide con montoTotal; en modo suma es montoTotal + flete +
+  // seguro. El detalle se timbra a valor FOB (factor 1 si el flete suma).
   const { montoFlete, montoSeguro } = resolverFleteSeguro(nv.clausulaVenta, montoTotalNum, {
     montoFlete: factura.montoFlete == null ? null : Number(factura.montoFlete),
     montoSeguro: factura.montoSeguro == null ? null : Number(factura.montoSeguro),
-  })
-  const factor = factorFob(montoTotalNum, montoFlete, montoSeguro)
+  }, fleteSumado)
+  const factor = factorFob(montoTotalNum, montoFlete, montoSeguro, fleteSumado)
+  const totalCif = totalClausula(montoTotalNum, montoFlete, montoSeguro, fleteSumado)
   const fechaDocumento = factura.fechaDocumento ?? new Date()
   const fechaRef = fechaDocumento.toISOString().slice(0, 10)
 
@@ -459,7 +469,7 @@ export async function construirPayloadDte(
   // → el payload timbrado y el guardado coinciden. Tope SII: 30 repeticiones.
   // La NC de anulación (112) no lleva programación de pagos.
   const cuotasDte = (opts?.incluirCuotas ?? true)
-    ? await construirCuotas(embarque.notaVentaId, montoTotalNum, fechaDocumento, embarque)
+    ? await construirCuotas(embarque.notaVentaId, totalCif, fechaDocumento, embarque)
     : []
   if (cuotasDte.length > 30) {
     throw new ValidationError(
@@ -550,7 +560,7 @@ export async function construirPayloadDte(
     aduana: {
       codModVenta: nv.modalidadVenta?.codigoAduana ?? null,
       codClauVenta: nv.clausulaVenta?.codigoAduana ?? null,
-      totalClausulaVenta: montoTotalNum,
+      totalClausulaVenta: totalCif,
       montoFlete,
       montoSeguro,
       codViaTransp: nv.tipoEmbarque?.codigoAduana ?? null,
@@ -790,8 +800,16 @@ export async function firmar(id: number, userId: string) {
 
   const fechaEmision = new Date()
   const fechaDocumento = factura.fechaDocumento ?? fechaEmision
+  // Cuotas/cobranza sobre el total cláusula (CIF): en modo suma incluye el flete
+  // y seguro (el cliente paga más); en modo resta coincide con montoTotal.
+  const totalCifCobranza = totalClausula(
+    Number(factura.montoTotal),
+    factura.montoFlete == null ? null : Number(factura.montoFlete),
+    factura.montoSeguro == null ? null : Number(factura.montoSeguro),
+    factura.fleteSumaAlPrecio,
+  )
   // La referencia FACTURA de las cuotas usa la fecha del documento.
-  const cuotas = await construirCuotas(embarque.notaVentaId, Number(factura.montoTotal), fechaDocumento, embarque)
+  const cuotas = await construirCuotas(embarque.notaVentaId, totalCifCobranza, fechaDocumento, embarque)
   // Estado de cartera inicial (Ciclo 2): nada pagado aún → PENDIENTE (o VENCIDA si
   // alguna cuota ya nace vencida; SIN_CUOTAS si la condición no genera cuotas).
   const estadoCobranza = derivarEstadoCobranza(

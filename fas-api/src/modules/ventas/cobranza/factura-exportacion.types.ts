@@ -13,6 +13,8 @@ export interface FacturaExportacionActualizarInput {
   // cláusula (Parametro.requiereFlete/requiereSeguro). El service los valida.
   montoFlete?: number | null
   montoSeguro?: number | null
+  // Si true, el flete/seguro se SUMAN al precio de venta en vez de restar.
+  fleteSumaAlPrecio?: boolean
   // Tipo de cambio (pesos por unidad de la moneda extranjera) — editable en BORRADOR.
   tipoCambio?: number | null
   // Fecha de la paridad observada (ISO YYYY-MM-DD) cuando el valor viene de

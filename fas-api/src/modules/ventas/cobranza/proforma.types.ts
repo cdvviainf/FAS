@@ -22,6 +22,8 @@ export interface ProformaEmitirInput {
   // cláusula (Parametro.requiereFlete/requiereSeguro). El service los valida.
   montoFlete?: number | null
   montoSeguro?: number | null
+  // Si true, el flete/seguro se SUMAN al precio de venta en vez de restar.
+  fleteSumaAlPrecio?: boolean
   observaciones?: string | null
 }
 

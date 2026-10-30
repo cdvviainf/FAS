@@ -236,6 +236,15 @@ export async function emitirProforma(embarqueId: number, body: ProformaEmitirInp
   if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
   requireEmbarqueDespachado(embarque)
 
+  // La Proforma de Exportación (igual que la Factura 110) solo aplica a ventas de
+  // EXPORTACIÓN. Un Cierre marcado como NACIONAL se factura por la facturación
+  // nacional (FAS-COB-VN) — no debe entrar al flujo de exportación.
+  if (embarque.notaVenta.tipoVenta === 'NACIONAL') {
+    throw new ValidationError(
+      'El Cierre Comercial es una venta NACIONAL: no admite Proforma de Exportación. Usa la facturación nacional.',
+    )
+  }
+
   const existente = await repo.getProformaActivaPorEmbarque(embarqueId)
   if (existente) {
     throw new ValidationError('Este Embarque ya tiene una Proforma emitida — anúlala antes de emitir una nueva (CB2)')
@@ -260,11 +269,13 @@ export async function emitirProforma(embarqueId: number, body: ProformaEmitirInp
   }
 
   // Flete/Seguro según la cláusula de venta de la Nota de Venta. Se exigen solo
-  // si la cláusula lo indica; son un monto cerrado dentro de `montoTotal`.
+  // si la cláusula lo indica. Modo resta (default): monto cerrado dentro de
+  // `montoTotal`. Modo suma (`fleteSumaAlPrecio`): se suman al precio de venta.
+  const fleteSumaAlPrecio = body.fleteSumaAlPrecio ?? false
   const { montoFlete, montoSeguro } = resolverFleteSeguro(embarque.notaVenta.clausulaVenta, montoTotal, {
     montoFlete: body.montoFlete,
     montoSeguro: body.montoSeguro,
-  })
+  }, fleteSumaAlPrecio)
 
   try {
     return await repo.crearProforma(
@@ -278,6 +289,7 @@ export async function emitirProforma(embarqueId: number, body: ProformaEmitirInp
         montoTotal,
         montoFlete,
         montoSeguro,
+        fleteSumaAlPrecio,
         observaciones: body.observaciones ?? null,
       },
       { idioma: body.idioma, dimensiones: body.dimensiones, lineas },

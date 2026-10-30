@@ -98,6 +98,7 @@ export async function getProformaEmitidaParaFactura(proformaId: number) {
       fechaDocumento: true,
       montoFlete: true,
       montoSeguro: true,
+      fleteSumaAlPrecio: true,
       observaciones: true,
       lineas: {
         select: {
@@ -251,6 +252,7 @@ interface DatosCrearFactura {
   montoTotal: number
   montoFlete: number | null
   montoSeguro: number | null
+  fleteSumaAlPrecio: boolean
   tipoCambio: number | null
   fechaTipoCambio: Date | null
   observaciones: string | null
@@ -274,6 +276,7 @@ export async function crearBorrador(datos: DatosCrearFactura, creadoPorId: strin
       montoTotal: datos.montoTotal,
       montoFlete: datos.montoFlete,
       montoSeguro: datos.montoSeguro,
+      fleteSumaAlPrecio: datos.fleteSumaAlPrecio,
       tipoCambio: datos.tipoCambio,
       fechaTipoCambio: datos.fechaTipoCambio,
       observaciones: datos.observaciones,
@@ -311,6 +314,7 @@ export async function actualizarBorrador(
     montoTotal: number
     montoFlete: number | null
     montoSeguro: number | null
+    fleteSumaAlPrecio: boolean
     tipoCambio: number | null
     fechaTipoCambio: Date | null
     observaciones: string | null
@@ -350,6 +354,7 @@ export async function actualizarBorrador(
         montoTotal: datos.montoTotal,
         montoFlete: datos.montoFlete,
         montoSeguro: datos.montoSeguro,
+        fleteSumaAlPrecio: datos.fleteSumaAlPrecio,
         tipoCambio: datos.tipoCambio,
         fechaTipoCambio: datos.fechaTipoCambio,
         observaciones: datos.observaciones,
@@ -472,8 +477,10 @@ export async function listEmbarquesDespachados(filters: EmbarquesExportacionFilt
     eliminadoEn: null,
     despachadoEn: { not: null },
     despachoAnuladoEn: null,
+    // Solo ventas de EXPORTACIÓN: los Cierres marcados como venta NACIONAL van a
+    // la facturación nacional, no a la de exportación (FAS-COB-VN).
+    notaVenta: { is: { tipoVenta: 'EXPORTACION', ...(clienteId ? { clienteId } : {}) } },
     ...(folio ? { numeroInstructivo: { contains: folio, mode: 'insensitive' as const } } : {}),
-    ...(clienteId ? { notaVenta: { clienteId } } : {}),
   }
   const [data, total] = await Promise.all([
     prisma.embarque.findMany({

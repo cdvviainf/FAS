@@ -31,6 +31,7 @@ export async function getEmbarqueParaProforma(embarqueId: number) {
       notaVenta: {
         select: {
           clienteId: true,
+          tipoVenta: true,
           cliente: { select: mantenedorSelect },
           monedaId: true,
           moneda: { select: mantenedorSelect },
@@ -198,6 +199,7 @@ interface DatosCrearProforma {
   montoTotal: number
   montoFlete: number | null
   montoSeguro: number | null
+  fleteSumaAlPrecio: boolean
   observaciones: string | null
 }
 
@@ -282,6 +284,7 @@ export async function crearProforma(datos: DatosCrearProforma, meta: MetaCrearPr
       montoTotal: datos.montoTotal,
       montoFlete: datos.montoFlete,
       montoSeguro: datos.montoSeguro,
+      fleteSumaAlPrecio: datos.fleteSumaAlPrecio,
       observaciones: datos.observaciones,
       creadoPorId,
       lineas: {

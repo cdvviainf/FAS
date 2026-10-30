@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Icons } from '@/components/icons'
@@ -40,6 +41,7 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   const [lineas, setLineas] = useState<ProformaLineaSugerida[]>([])
   const [montoFlete, setMontoFlete] = useState<string>('')
   const [montoSeguro, setMontoSeguro] = useState<string>('')
+  const [fleteSumaAlPrecio, setFleteSumaAlPrecio] = useState<boolean>(false)
   const [observaciones, setObservaciones] = useState<string>('')
 
   const { data: sugerencia, isPending: cargandoSugerencia } = useQuery({
@@ -79,7 +81,8 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   const montoTotal = lineas.reduce((acc, l) => acc + l.montoLinea, 0)
   const fleteNum = requiereFlete ? Number(montoFlete) || 0 : 0
   const seguroNum = requiereSeguro ? Number(montoSeguro) || 0 : 0
-  const subtotalFob = Math.round((montoTotal - fleteNum - seguroNum) * 100) / 100
+  const subtotalFob = fleteSumaAlPrecio ? Math.round(montoTotal * 100) / 100 : Math.round((montoTotal - fleteNum - seguroNum) * 100) / 100
+  const totalCif = Math.round((subtotalFob + fleteNum + seguroNum) * 100) / 100
 
   const emitir = useMutation({
     mutationFn: () =>
@@ -100,6 +103,7 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
         })),
         montoFlete: requiereFlete ? Number(montoFlete) || 0 : null,
         montoSeguro: requiereSeguro ? Number(montoSeguro) || 0 : null,
+        fleteSumaAlPrecio,
         observaciones: observaciones.trim() || null,
       }),
     onSuccess: () => {
@@ -257,9 +261,18 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
             </CardTitle>
           </CardHeader>
           <CardContent className='space-y-3'>
+            <div className='flex items-center gap-3'>
+              <Switch
+                id='fleteSumaAlPrecio'
+                checked={fleteSumaAlPrecio}
+                onCheckedChange={setFleteSumaAlPrecio}
+              />
+              <Label htmlFor='fleteSumaAlPrecio'>El flete/seguro se suma al precio de venta</Label>
+            </div>
             <p className='text-muted-foreground text-xs'>
-              El Flete y el Seguro son un monto cerrado dentro del total: restan al valor de venta para obtener el
-              valor FOB de la mercadería. El total y las cuotas siguen sobre el valor de la cláusula.
+              {fleteSumaAlPrecio
+                ? 'El precio de venta es el valor FOB de la mercadería; el Flete y el Seguro se SUMAN encima. El total de la cláusula = precio + flete + seguro.'
+                : 'El Flete y el Seguro son un monto cerrado dentro del total: restan al valor de venta para obtener el valor FOB de la mercadería. El total y las cuotas siguen sobre el valor de la cláusula.'}
             </p>
             <div className='flex flex-wrap gap-4'>
               {requiereFlete && (
@@ -308,7 +321,7 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
               )}
               <div className='flex justify-between font-semibold'>
                 <span>Total (valor cláusula)</span>
-                <span>{formatMonto(montoTotal)}</span>
+                <span>{formatMonto(totalCif)}</span>
               </div>
             </div>
           </CardContent>

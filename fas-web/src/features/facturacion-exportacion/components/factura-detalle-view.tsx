@@ -130,15 +130,18 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
       toast.error((e as Error).message || 'No se pudo abrir el PDF timbrado del SII')
     }
   }
-  // Desglose de la cláusula de venta: el flete/seguro restan al valor de venta
-  // para dar el valor FOB de la mercadería (lo que se timbra en el detalle).
+  // Desglose de la cláusula de venta. Modo resta (default): flete/seguro restan
+  // al precio de venta para dar el valor FOB. Modo suma (fleteSumaAlPrecio): el
+  // precio ya es el FOB y el flete/seguro se suman encima → total cláusula mayor.
   const montoTotal = Number(factura.montoTotal)
   const montoFlete = factura.montoFlete == null ? null : Number(factura.montoFlete)
   const montoSeguro = factura.montoSeguro == null ? null : Number(factura.montoSeguro)
+  const fleteSumado = factura.fleteSumaAlPrecio
   const tieneDesglose = montoFlete != null || montoSeguro != null
   const reduccion = (montoFlete ?? 0) + (montoSeguro ?? 0)
-  const factor = montoTotal > 0 && reduccion > 0 ? (montoTotal - reduccion) / montoTotal : 1
-  const subtotalFob = Math.round((montoTotal - reduccion) * 100) / 100
+  const factor = fleteSumado ? 1 : (montoTotal > 0 && reduccion > 0 ? (montoTotal - reduccion) / montoTotal : 1)
+  const subtotalFob = fleteSumado ? montoTotal : Math.round((montoTotal - reduccion) * 100) / 100
+  const totalCif = Math.round((subtotalFob + reduccion) * 100) / 100
   const moneda = factura.moneda.codigo
   return (
     <div className='max-w-5xl space-y-4'>
@@ -290,7 +293,7 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
               {tieneDesglose && (
                 <TableRow>
                   <TableCell colSpan={3} className='font-semibold'>Total (valor cláusula)</TableCell>
-                  <TableCell className='text-right font-semibold tabular-nums'>{moneda} {formatMonto(montoTotal)}</TableCell>
+                  <TableCell className='text-right font-semibold tabular-nums'>{moneda} {formatMonto(totalCif)}</TableCell>
                 </TableRow>
               )}
             </TableFooter>

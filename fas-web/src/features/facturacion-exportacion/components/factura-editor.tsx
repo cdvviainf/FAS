@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -67,6 +68,8 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   const requiereSeguro = clausula?.requiereSeguro ?? false
   const [montoFlete, setMontoFlete] = useState<string>(factura.montoFlete ?? '')
   const [montoSeguro, setMontoSeguro] = useState<string>(factura.montoSeguro ?? '')
+  // Modo del flete: false = resta al precio de venta (default); true = suma.
+  const [fleteSumaAlPrecio, setFleteSumaAlPrecio] = useState<boolean>(factura.fleteSumaAlPrecio)
 
   // Tipo de cambio: solo aplica si la moneda no es la base (CLP). Lo exige el SII
   // para emitir el DTE 110 en moneda extranjera.
@@ -90,11 +93,13 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   const esRechazada = factura.estado === 'RECHAZADA'
 
   const montoTotal = lineas.reduce((acc, l) => acc + l.montoLinea, 0)
-  // Valor FOB de la mercadería = total (cláusula/CIF) − flete − seguro. Es lo
-  // que se timbra en el detalle del DTE; el total sigue siendo el valor CIF.
+  // Modo resta (default): el precio de venta (montoTotal) es el CIF; el FOB de la
+  // mercadería = montoTotal − flete − seguro. Modo suma (fleteSumaAlPrecio): el
+  // precio de venta ya es el FOB; el flete/seguro se suman → total cláusula mayor.
   const fleteNum = requiereFlete ? Number(montoFlete) || 0 : 0
   const seguroNum = requiereSeguro ? Number(montoSeguro) || 0 : 0
-  const subtotalFob = Math.round((montoTotal - fleteNum - seguroNum) * 100) / 100
+  const subtotalFob = fleteSumaAlPrecio ? Math.round(montoTotal * 100) / 100 : Math.round((montoTotal - fleteNum - seguroNum) * 100) / 100
+  const totalCif = Math.round((subtotalFob + fleteNum + seguroNum) * 100) / 100
 
   async function toggleDimension(dim: DimensionProforma, marcado: boolean) {
     const nuevas = marcado ? [...dimensiones, dim] : dimensiones.filter((d) => d !== dim)
@@ -144,6 +149,7 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
         fechaDocumento: fechaDocumento || null,
         montoFlete: requiereFlete ? Number(montoFlete) || 0 : null,
         montoSeguro: requiereSeguro ? Number(montoSeguro) || 0 : null,
+        fleteSumaAlPrecio,
         tipoCambio: esMonedaExtranjera ? Number(tipoCambio) || null : null,
         // Fecha de la paridad observada (la real del Banco Central cuando viene
         // de "Obtener"); null en ingreso manual → el backend sella con la fecha
@@ -447,10 +453,19 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
             </CardTitle>
           </CardHeader>
           <CardContent className='space-y-3'>
+            <div className='flex items-center gap-3'>
+              <Switch
+                id='fleteSumaAlPrecio'
+                checked={fleteSumaAlPrecio}
+                onCheckedChange={(v) => { setFleteSumaAlPrecio(v); setDirty(true) }}
+                disabled={!puedeEscribir}
+              />
+              <label htmlFor='fleteSumaAlPrecio' className='text-sm font-medium'>El flete/seguro se suma al precio de venta</label>
+            </div>
             <p className='text-muted-foreground text-xs'>
-              El Flete y el Seguro son un monto cerrado dentro del total: restan al valor de venta para obtener el
-              valor FOB de la mercadería (lo que se timbra en el detalle del DTE). El total y las cuotas siguen sobre el
-              valor de la cláusula.
+              {fleteSumaAlPrecio
+                ? 'El precio de venta es el valor FOB de la mercadería; el Flete y el Seguro se SUMAN encima. El total de la cláusula (CIF) y las cuotas = precio + flete + seguro.'
+                : 'El Flete y el Seguro son un monto cerrado dentro del total: restan al valor de venta para obtener el valor FOB de la mercadería (lo que se timbra en el detalle del DTE). El total y las cuotas siguen sobre el valor de la cláusula.'}
             </p>
             <div className='flex flex-wrap gap-4'>
               {requiereFlete && (
@@ -501,7 +516,7 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
               )}
               <div className='flex justify-between font-semibold'>
                 <span>Total (valor cláusula)</span>
-                <span>{factura.moneda.codigo} {formatMonto(montoTotal)}</span>
+                <span>{factura.moneda.codigo} {formatMonto(totalCif)}</span>
               </div>
             </div>
           </CardContent>

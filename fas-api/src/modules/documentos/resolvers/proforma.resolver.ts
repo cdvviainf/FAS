@@ -5,7 +5,7 @@ import {
   getProformaById,
 } from '../../ventas/cobranza/proforma.repository.js'
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
-import { factorFob, unitarioFob } from '../../ventas/cobranza/clausula-flete-seguro.js'
+import { factorFob, subtotalFob as calcSubtotalFob, totalClausula, unitarioFob } from '../../ventas/cobranza/clausula-flete-seguro.js'
 import { descripcionLinea } from '../../ventas/cobranza/descripcion-idioma.js'
 import type { ProformaPdfPayload } from '../schemas/proforma.schema.js'
 
@@ -70,8 +70,10 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
   const montoTotal = Number(proforma.montoTotal)
   const montoFlete = proforma.montoFlete == null ? null : Number(proforma.montoFlete)
   const montoSeguro = proforma.montoSeguro == null ? null : Number(proforma.montoSeguro)
-  const factor = factorFob(montoTotal, montoFlete, montoSeguro)
-  const subtotalFob = round2(montoTotal - (montoFlete ?? 0) - (montoSeguro ?? 0))
+  const fleteSumado = proforma.fleteSumaAlPrecio
+  const factor = factorFob(montoTotal, montoFlete, montoSeguro, fleteSumado)
+  const subtotalFob = calcSubtotalFob(montoTotal, montoFlete, montoSeguro, fleteSumado)
+  const totalCif = totalClausula(montoTotal, montoFlete, montoSeguro, fleteSumado)
 
   return {
     empresa: {
@@ -109,7 +111,7 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
     montoFlete,
     montoSeguro,
     subtotalFob,
-    montoTotal,
+    montoTotal: totalCif,
     vencimientosEstimados,
   }
 }

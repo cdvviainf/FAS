@@ -70,6 +70,7 @@ export interface Proforma {
   montoTotal: string
   montoFlete: string | null
   montoSeguro: string | null
+  fleteSumaAlPrecio: boolean
   fechaDocumento: string | null
   observaciones: string | null
   estado: EstadoProforma
@@ -84,6 +85,7 @@ export interface ProformaEmitirInput {
   lineas: ProformaLineaInput[]
   montoFlete?: number | null
   montoSeguro?: number | null
+  fleteSumaAlPrecio?: boolean
   observaciones?: string | null
 }
 
@@ -163,6 +165,8 @@ export interface FacturaExportacion {
   montoTotal: string
   montoFlete: string | null
   montoSeguro: string | null
+  // Si true, el flete/seguro se SUMAN al precio de venta en vez de restar.
+  fleteSumaAlPrecio: boolean
   // Tipo de cambio (pesos por unidad de la moneda extranjera) y fecha de la
   // paridad observada. Null cuando la moneda es la base (CLP) o no se capturó.
   tipoCambio: string | null
@@ -212,6 +216,7 @@ export interface FacturaExportacionActualizarInput {
   fechaDocumento?: string | null
   montoFlete?: number | null
   montoSeguro?: number | null
+  fleteSumaAlPrecio?: boolean
   tipoCambio?: number | null
   // Fecha de la paridad observada (ISO YYYY-MM-DD) cuando viene de "Obtener";
   // null en ingreso manual. BRT-R1-003.

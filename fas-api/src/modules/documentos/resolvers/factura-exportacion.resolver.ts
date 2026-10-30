@@ -1,6 +1,6 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { getFacturaActivaById } from '../../ventas/cobranza/factura-exportacion.repository.js'
-import { factorFob, unitarioFob } from '../../ventas/cobranza/clausula-flete-seguro.js'
+import { factorFob, subtotalFob as calcSubtotalFob, totalClausula, unitarioFob } from '../../ventas/cobranza/clausula-flete-seguro.js'
 import { descripcionLinea } from '../../ventas/cobranza/descripcion-idioma.js'
 import { esFacturaTimbrada } from '../../ventas/cobranza/sii-estado.js'
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
@@ -32,8 +32,12 @@ export async function resolverFacturaExportacion(id: number, empresaId: number):
   const montoTotal = Number(factura.montoTotal)
   const montoFlete = factura.montoFlete == null ? null : Number(factura.montoFlete)
   const montoSeguro = factura.montoSeguro == null ? null : Number(factura.montoSeguro)
-  const factor = factorFob(montoTotal, montoFlete, montoSeguro)
-  const subtotalFob = round2(montoTotal - (montoFlete ?? 0) - (montoSeguro ?? 0))
+  const fleteSumado = factura.fleteSumaAlPrecio
+  const factor = factorFob(montoTotal, montoFlete, montoSeguro, fleteSumado)
+  const subtotalFob = calcSubtotalFob(montoTotal, montoFlete, montoSeguro, fleteSumado)
+  // Total cláusula (CIF) mostrado = FOB mercadería + flete + seguro. En modo
+  // resta coincide con montoTotal; en modo suma es mayor.
+  const totalCif = totalClausula(montoTotal, montoFlete, montoSeguro, fleteSumado)
   const fechaDoc = factura.fechaDocumento ?? factura.fechaEmision ?? new Date()
 
   // Vencimientos = cuotas ya persistidas de la Factura (no estimadas).
@@ -79,7 +83,7 @@ export async function resolverFacturaExportacion(id: number, empresaId: number):
     montoFlete,
     montoSeguro,
     subtotalFob,
-    montoTotal,
+    montoTotal: totalCif,
     vencimientosEstimados,
   }
 }

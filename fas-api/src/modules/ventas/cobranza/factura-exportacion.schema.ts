@@ -30,6 +30,8 @@ export const facturaExportacionActualizarSchema = z.object({
   // cláusula lo indica (validación server-side). El service redondea a 2 dec.
   montoFlete: z.number().min(0).max(9_999_999_999).optional().nullable(),
   montoSeguro: z.number().min(0).max(9_999_999_999).optional().nullable(),
+  // Si true, el flete/seguro se SUMAN al precio de venta en vez de restar.
+  fleteSumaAlPrecio: z.boolean().optional(),
   // Tipo de cambio (pesos por unidad de la moneda extranjera) — editable en
   // BORRADOR; se sugiere desde el Banco Central al crear la factura. Lo exige el
   // SII para emitir en moneda extranjera (validación server-side al enviar al SII).
