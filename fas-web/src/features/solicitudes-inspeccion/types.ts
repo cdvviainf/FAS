@@ -2,6 +2,12 @@ export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZA
 export type ResultadoCierre = 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
 export type FuncionAsignado = 'ACUDIR' | 'NOTIFICAR'
 export type EtapaAdjunto = 'CREACION' | 'CIERRE'
+export type TipoInspeccion = 'PRODUCTO_TERMINADO' | 'PROCESO'
+
+export const TIPO_INSPECCION_LABELS: Record<TipoInspeccion, string> = {
+  PRODUCTO_TERMINADO: 'Producto Terminado',
+  PROCESO: 'Proceso',
+}
 
 export const ESTADO_LABELS: Record<EstadoSolicitud, string> = {
   PENDIENTE: 'Pendiente',
@@ -78,6 +84,8 @@ export interface SolicitudInspeccion {
   } | null
   // Fecha de visita: nullable (2026-10-13) — se fija al editar la visita o en el cierre.
   fechaHora: string | null
+  // Tipo de inspección (solo informativo): Producto Terminado o Proceso.
+  tipoInspeccion: TipoInspeccion | null
   mercadoId: number | null
   mercado: { id: number; codigo: string; descripcion: string } | null
   clienteId: number | null
@@ -177,6 +185,7 @@ export interface SolicitudCreateInput {
   paisIds?: number[]
   clienteId?: number | null
   fechaDespacho?: string | null
+  tipoInspeccion?: TipoInspeccion | null
   // Detalle de producto por línea (2026-10-27). Mínimo una línea.
   lineas: SolicitudLineaInput[]
   observaciones?: string | null

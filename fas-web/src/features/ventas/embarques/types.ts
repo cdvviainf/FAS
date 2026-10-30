@@ -1,6 +1,7 @@
 export interface EmbarqueNotaVentaRef {
   id: number
   folio: number
+  tipoVenta?: 'EXPORTACION' | 'NACIONAL'
   // Solo en el listado (2026-09-30) — Cliente/Mercado/Puerto destino.
   cliente?: { id: number; codigo: string; descripcion: string; razonSocial: string }
   mercado?: { id: number; codigo: string; descripcion: string }

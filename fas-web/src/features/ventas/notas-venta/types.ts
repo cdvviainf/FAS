@@ -131,7 +131,7 @@ export interface NotaVentaDetalle extends NotaVentaListItem {
   condicionPago: CondicionPagoRef | null
   cuotasPago: NotaVentaCuotaPagoRef[]
   observaciones: string | null
-  contratoNavieroAgrosan: boolean
+  contratoNaviero: 'AGROSAN_AGL' | 'CLIENTE'
   detalles: NotaVentaDetalleItem[]
 }
 
@@ -162,7 +162,7 @@ export interface NotaVentaCreateInput {
   tipoBlId?: number | null
   condicionPagoId?: number | null
   observaciones?: string | null
-  contratoNavieroAgrosan?: boolean
+  contratoNaviero?: 'AGROSAN_AGL' | 'CLIENTE'
 }
 
 export type NotaVentaUpdateInput = Partial<NotaVentaCreateInput>

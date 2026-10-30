@@ -30,7 +30,8 @@ export const instructivoEmbalajePdfPayloadSchema = z.object({
     variedad: z.string(),
     variedadRotulada: z.string().nullable(),
     categoria: z.string(),
-    articulo: z.string(),
+    articulo: z.string(), // código del artículo (1ª línea)
+    articuloDescripcion: z.string(), // descripción del artículo (2ª línea)
     etiqueta: z.string().nullable(),
     calibres: z.string(), // lista de calibres puntuales unida
     kgNetoEnvase: z.string().nullable(), // dato de catálogo, Articulo.kgNetoEnvase

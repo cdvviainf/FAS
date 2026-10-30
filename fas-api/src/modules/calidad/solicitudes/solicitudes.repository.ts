@@ -193,6 +193,7 @@ export interface SolicitudCoreData {
   mercadoId?: number | null
   clienteId?: number | null
   fechaDespacho?: Date | null
+  tipoInspeccion?: 'PRODUCTO_TERMINADO' | 'PROCESO' | null
   observaciones?: string | null
 }
 

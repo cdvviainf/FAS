@@ -98,6 +98,7 @@ const palletInclude = {
 const notaVentaListaSelect = {
   id: true,
   folio: true,
+  tipoVenta: true,
   cliente: { select: { id: true, codigo: true, descripcion: true, razonSocial: true } },
   mercado: { select: { id: true, codigo: true, descripcion: true } },
   puertoDestino: { select: { id: true, codigo: true, descripcion: true } },

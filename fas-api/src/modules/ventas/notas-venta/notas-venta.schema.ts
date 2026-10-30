@@ -27,8 +27,8 @@ export const notaVentaCreateSchema = z.object({
   condicionPagoId: z.number().int().positive().optional().nullable(),
   monedaId: z.number().int().positive('La moneda es requerida'),
   observaciones: z.string().max(1000).trim().optional().nullable(),
-  // Contrato naviero Agrosan (Sí/No). z.boolean() — nunca z.coerce.boolean().
-  contratoNavieroAgrosan: z.boolean().optional().default(false),
+  // Contrato naviero (solo informativo): AGROSAN_AGL (por defecto) o CLIENTE.
+  contratoNaviero: z.enum(['AGROSAN_AGL', 'CLIENTE']).optional().default('AGROSAN_AGL'),
   // Calidades permitidas = pares (NotaCalidad, NotaCondicion).
   calidadesPermitidas: z.array(parCalidadSchema).optional(),
 })

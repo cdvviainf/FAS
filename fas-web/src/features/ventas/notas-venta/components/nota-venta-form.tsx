@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -76,7 +75,7 @@ interface HeaderFields {
   tipoBlId: number | null
   condicionPagoId: number | null
   observaciones: string
-  contratoNavieroAgrosan: boolean
+  contratoNaviero: 'AGROSAN_AGL' | 'CLIENTE'
 }
 
 const HEADER_EMPTY: HeaderFields = {
@@ -100,7 +99,7 @@ const HEADER_EMPTY: HeaderFields = {
   tipoBlId: null,
   condicionPagoId: null,
   observaciones: '',
-  contratoNavieroAgrosan: false,
+  contratoNaviero: 'AGROSAN_AGL',
 }
 
 // Cajas por pallet: cifra teórica del mantenedor CajasPorPallet (embalaje +
@@ -261,7 +260,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
         tipoBlId: d.tipoBlId,
         condicionPagoId: d.condicionPagoId,
         observaciones: d.observaciones ?? '',
-        contratoNavieroAgrosan: d.contratoNavieroAgrosan ?? false,
+        contratoNaviero: d.contratoNaviero ?? 'AGROSAN_AGL',
       })
       setCalidadesPermitidas(d.calidadesPermitidas.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })))
     }
@@ -346,7 +345,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       tipoBlId: fields.tipoBlId,
       condicionPagoId: fields.condicionPagoId,
       observaciones: fields.observaciones.trim() || undefined,
-      contratoNavieroAgrosan: fields.contratoNavieroAgrosan,
+      contratoNaviero: fields.contratoNaviero,
     }
   }
 
@@ -632,15 +631,14 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </Select>
             </div>
             <div className='space-y-1.5'>
-              <Label htmlFor='contratoNavieroAgrosan'>Contrato naviero Agrosan</Label>
-              <div className='flex h-9 items-center gap-2'>
-                <Switch
-                  id='contratoNavieroAgrosan'
-                  checked={fields.contratoNavieroAgrosan}
-                  onCheckedChange={(v) => setFields((f) => ({ ...f, contratoNavieroAgrosan: v }))}
-                />
-                <span className='text-sm text-muted-foreground'>{fields.contratoNavieroAgrosan ? 'Sí' : 'No'}</span>
-              </div>
+              <Label>Contrato naviero</Label>
+              <Select value={fields.contratoNaviero} onValueChange={(v) => setFields((f) => ({ ...f, contratoNaviero: v as 'AGROSAN_AGL' | 'CLIENTE' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='AGROSAN_AGL'>Agrosan-AGL</SelectItem>
+                  <SelectItem value='CLIENTE'>Cliente</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

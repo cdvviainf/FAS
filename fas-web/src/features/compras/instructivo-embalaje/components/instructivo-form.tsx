@@ -898,7 +898,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
                     <TableHead>Mercado</TableHead>
                     <TableHead>Especie</TableHead>
                     <TableHead>Variedad</TableHead>
-                    <TableHead>Variedad Rotulada</TableHead>
+                    <TableHead>Var. Rot</TableHead>
                     <TableHead>Artículo</TableHead>
                     <TableHead>Marca</TableHead>
                     <TableHead>Categoría</TableHead>
@@ -916,11 +916,14 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
                       <TableCell className='font-medium whitespace-nowrap'>{nombre(especies, d.especieId)}</TableCell>
                       <TableCell className='whitespace-nowrap'>{nombre(variedadesTodas, d.variedadId)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{d.variedadRotuladaId ? nombre(variedadesTodas, d.variedadRotuladaId) : '—'}</TableCell>
-                      <TableCell className='whitespace-nowrap text-muted-foreground' title={articulos.find((a) => a.id === d.articuloId)?.descripcion ?? undefined}>{articulos.find((a) => a.id === d.articuloId)?.codigo ?? String(d.articuloId)}</TableCell>
+                      <TableCell className='whitespace-nowrap'>
+                        <div className='font-medium'>{articulos.find((a) => a.id === d.articuloId)?.codigo ?? String(d.articuloId)}</div>
+                        <div className='text-muted-foreground text-xs'>{articulos.find((a) => a.id === d.articuloId)?.descripcion ?? ''}</div>
+                      </TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{marcaDe(d)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(categoriasTodas, d.categoriaId)}</TableCell>
-                      <TableCell className='max-w-[180px] text-muted-foreground'>
-                        <div className='flex flex-wrap gap-1'>
+                      <TableCell className='whitespace-nowrap text-muted-foreground'>
+                        <div className='flex flex-nowrap gap-1'>
                           {[...d.calibreIds]
                             .sort((a, b) => (calibresTodos.find((c) => c.id === a)?.orden ?? 0) - (calibresTodos.find((c) => c.id === b)?.orden ?? 0))
                             .map((id) => (

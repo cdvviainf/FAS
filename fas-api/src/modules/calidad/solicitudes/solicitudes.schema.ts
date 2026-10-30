@@ -40,6 +40,8 @@ export const solicitudCreateSchema = z.object({
   paisIds: z.array(z.number().int().positive()).optional(),
   clienteId: z.number().int().positive().nullable().optional(),
   fechaDespacho: z.string().date().nullable().optional(),
+  // Tipo de inspección (solo informativo): Producto Terminado o Proceso.
+  tipoInspeccion: z.enum(['PRODUCTO_TERMINADO', 'PROCESO']).nullable().optional(),
   // Detalle de producto por línea (especie, embalaje, variedad, categorías,
   // calibres, calidades, cantidad de pallets). Mínimo una línea.
   lineas: z.array(solicitudLineaSchema).min(1, 'Debe agregar al menos una línea de producto'),

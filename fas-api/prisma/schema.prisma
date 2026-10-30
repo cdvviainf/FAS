@@ -1843,6 +1843,12 @@ enum FuncionAsignadoInspeccion {
   NOTIFICAR
 }
 
+// Tipo de inspección de la Solicitud (2026-10-30, solo informativo).
+enum TipoInspeccionSolicitud {
+  PRODUCTO_TERMINADO
+  PROCESO
+}
+
 model SolicitudInspeccion {
   id                    Int                       @id @default(autoincrement())
   empresaId             Int
@@ -1867,6 +1873,9 @@ model SolicitudInspeccion {
   // crear la solicitud (lo que importa al crear es `creadoEn` = ingreso); se
   // fija al editar la visita (dispara el recordatorio 24h) o en el cierre.
   fechaHora             DateTime?
+  // Tipo de inspección (2026-10-30, solo informativo): Producto Terminado o
+  // Proceso. Nullable — las solicitudes previas no lo tienen.
+  tipoInspeccion        TipoInspeccionSolicitud?
   // Documento N° 107 (calidad.md §3) — retomados por decisión de negocio (2026-07-26)
   mercadoId             Int?
   mercado               Mercado?                  @relation(fields: [empresaId, mercadoId], references: [empresaId, id])
@@ -3038,6 +3047,12 @@ enum TipoVenta {
   NACIONAL
 }
 
+// Contrato naviero del Cierre Comercial (2026-10-30, solo informativo).
+enum ContratoNaviero {
+  AGROSAN_AGL
+  CLIENTE
+}
+
 model NotaVenta {
   id        Int       @id @default(autoincrement())
   empresaId Int
@@ -3108,9 +3123,10 @@ model NotaVenta {
 
   observaciones String?
 
-  // Contrato naviero Agrosan (2026-10-29): indica si el flete marítimo se
-  // contrata bajo el contrato naviero propio de Agrosan (Sí/No).
-  contratoNavieroAgrosan Boolean @default(false)
+  // Contrato naviero (2026-10-30): bajo qué contrato naviero se contrata el
+  // flete marítimo — AGROSAN_AGL (contrato propio Agrosan-AGL, por defecto) o
+  // CLIENTE (lo pone el cliente). Solo informativo.
+  contratoNaviero ContratoNaviero @default(AGROSAN_AGL)
 
   detalles            NotaVentaDetalle[]
   ordenesCompra       OrdenCompra[]
@@ -3881,6 +3897,10 @@ model Proforma {
   // seguro) / montoTotal). El total y las cuotas siguen sobre `montoTotal`.
   montoFlete  Decimal? @db.Decimal(14, 2)
   montoSeguro Decimal? @db.Decimal(14, 2)
+  // Si true, el flete/seguro NO restan al precio de venta sino que se SUMAN
+  // encima (el precio de venta es el FOB; el total cláusula = precio + flete +
+  // seguro). Default false = comportamiento histórico (restan).
+  fleteSumaAlPrecio Boolean @default(false)
 
   estado         EstadoProforma @default(EMITIDA)
   fechaEmision   DateTime       @default(now())
@@ -4016,6 +4036,11 @@ model FacturaExportacion {
   // van como MntFlete/MntSeguro; TotClauVenta = montoTotal (CIF).
   montoFlete  Decimal? @db.Decimal(14, 2)
   montoSeguro Decimal? @db.Decimal(14, 2)
+  // Si true, el flete/seguro se SUMAN al precio de venta (el precio es el FOB y
+  // el total cláusula = precio + flete + seguro; las cuotas/cobranza y el DTE
+  // usan ese total mayor). Default false = restan (comportamiento histórico).
+  // Se hereda de la Proforma al crear el borrador.
+  fleteSumaAlPrecio Boolean @default(false)
 
   // Idioma del documento (ES/EN) — heredado de la Proforma, editable en
   // BORRADOR. Afecta las descripciones (descripcion vs descripcionExtranjera)

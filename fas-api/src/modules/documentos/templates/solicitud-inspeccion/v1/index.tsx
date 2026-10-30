@@ -2,12 +2,25 @@ import { Documento } from '../../../ui/Documento.js'
 import { Encabezado } from '../../../ui/Encabezado.js'
 import { GrupoCampos } from '../../../ui/GrupoCampos.js'
 import { PieFirma } from '../../../ui/PieFirma.js'
+import { TablaLineas, type ColumnaTabla } from '../../../ui/TablaLineas.js'
 import { fmt } from '../../../ui/formato.js'
 import type { SolicitudInspeccionPdfPayload } from '../../../schemas/solicitud-inspeccion.schema.js'
+
+type LineaSolicitud = SolicitudInspeccionPdfPayload['lineas'][number]
 
 function listaOGuion(valores: string[]): string {
   return valores.length > 0 ? valores.join(', ') : '—'
 }
+
+const columnasLineas: ColumnaTabla<LineaSolicitud>[] = [
+  { titulo: 'Especie', render: (l) => l.especie },
+  { titulo: 'Variedad', render: (l) => l.variedad },
+  { titulo: 'Embalaje', render: (l) => l.embalaje },
+  { titulo: 'Categorías', render: (l) => listaOGuion(l.categorias) },
+  { titulo: 'Calibres', render: (l) => listaOGuion(l.calibres) },
+  { titulo: 'Calidades', render: (l) => l.calidadesPermitidas ?? '—' },
+  { titulo: 'Pallets', render: (l) => (l.cantidadPallets != null ? fmt.entero(l.cantidadPallets) : '—'), numerica: true },
+]
 
 // v1 — sin control de copia (Etapa 4 §8). Sin tabla de líneas: la Solicitud
 // no trae montos ni cajas por línea, es el pedido de visita en sí (ver nota
@@ -56,6 +69,7 @@ export function SolicitudInspeccionV1({ d, marcaAgua, marcaAguaFecha }: { d: Sol
         titulo='Detalle de la visita'
         campos={[
           { label: 'Fecha y hora', valor: d.fechaHoraVisita ? fmt.fechaHora(d.fechaHoraVisita) : 'Por definir' },
+          { label: 'Tipo de inspección', valor: d.tipoInspeccion ?? '—' },
           { label: 'Mercado', valor: d.mercado ?? '—' },
           { label: 'Cliente', valor: d.cliente ?? '—' },
           { label: 'Fecha de despacho', valor: d.fechaDespacho ? fmt.fecha(d.fechaDespacho) : '—' },
@@ -63,24 +77,10 @@ export function SolicitudInspeccionV1({ d, marcaAgua, marcaAguaFecha }: { d: Sol
         ]}
       />
 
-      {/* Producto a inspeccionar por LÍNEA (2026-10-27): especie + embalaje +
-          variedad + categorías/calibres/calidades + cantidad de pallets. */}
+      {/* Producto a inspeccionar por LÍNEA como grilla (2026-10-30): especie +
+          variedad + embalaje + categorías/calibres/calidades + pallets. */}
       {d.lineas.length > 0 ? (
-        d.lineas.map((l, i) => (
-          <GrupoCampos
-            key={i}
-            titulo={d.lineas.length > 1 ? `Producto a Inspeccionar — Línea ${i + 1}` : 'Producto a Inspeccionar'}
-            campos={[
-              { label: 'Especie', valor: l.especie },
-              { label: 'Embalaje', valor: l.embalaje },
-              { label: 'Variedad', valor: l.variedad },
-              { label: 'Cantidad de pallets', valor: l.cantidadPallets != null ? fmt.entero(l.cantidadPallets) : '—' },
-              { label: 'Calidades permitidas', valor: l.calidadesPermitidas ?? '—' },
-              { label: 'Calibres', valor: listaOGuion(l.calibres) },
-              { label: 'Categorías', valor: listaOGuion(l.categorias) },
-            ]}
-          />
-        ))
+        <TablaLineas titulo='Producto a Inspeccionar' filas={d.lineas} columnas={columnasLineas} />
       ) : (
         <GrupoCampos titulo='Producto a Inspeccionar' campos={[{ label: 'Producto', valor: '—' }]} />
       )}

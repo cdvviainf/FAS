@@ -35,7 +35,10 @@ import { CajasPorPalletQuickCreate } from '@/features/cajas-por-pallet/component
 import { notasVentaService } from '@/features/ventas/notas-venta/service'
 import { usuariosService } from '@/features/usuarios/service'
 import { condicionesPagoService } from '@/features/condiciones-pago/service'
+import { CondicionPagoQuickCreate } from '@/features/condiciones-pago/components/condicion-pago-quick-create'
 import { FECHA_REFERENCIA_LABELS } from '@/features/condiciones-pago/types'
+import type { CondicionPago } from '@/features/condiciones-pago/types'
+import { formatMonto } from '@/lib/format'
 import { ordenCompraDetailOptions, ordenesCompraKeys } from '../queries'
 import { ordenesCompraService } from '../service'
 import type {
@@ -225,6 +228,8 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   // Código de la moneda elegida (CLP/USD/…) para las etiquetas de valor por
   // caja/kilo (2026-10-27) — ya no fijo "USD".
   const monedaCod = (monedasData?.data ?? []).find((m) => m.id === fields.monedaId)?.codigo || 'USD'
+  // USD/EUR muestran el precio con 2 decimales; otras monedas (p.ej. CLP) sin decimales.
+  const decimalesPrecio = monedaCod === 'USD' || monedaCod === 'EUR' ? 2 : 0
   // La modalidad (Cajas/Granel) solo se puede cambiar en Borrador y sin líneas
   // cargadas — cambiarla cambia qué campos exige cada línea (lo revalida el backend).
   const modalidadBloqueada = (ordenCompra?.data.lineas.length ?? 0) > 0 || fields.estado !== 'BORRADOR'
@@ -772,15 +777,26 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
           <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Condición de Pago</Label>
-              <Select value={fields.condicionPagoId ? String(fields.condicionPagoId) : '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, condicionPagoId: v === '__none__' ? null : Number(v) }))}>
-                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='__none__'>Sin definir</SelectItem>
-                  {(condicionesPagoData?.data ?? []).map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className='flex gap-2'>
+                <Select value={fields.condicionPagoId ? String(fields.condicionPagoId) : '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, condicionPagoId: v === '__none__' ? null : Number(v) }))}>
+                  <SelectTrigger className='flex-1'><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='__none__'>Sin definir</SelectItem>
+                    {(condicionesPagoData?.data ?? []).map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <CondicionPagoQuickCreate
+                  defaultTipo='COMPRA'
+                  onCreated={(c) => {
+                    queryClient.setQueryData<{ data: CondicionPago[] }>(['condiciones-pago-options', 'COMPRA'], (old) =>
+                      old ? { ...old, data: [...old.data, c] } : old,
+                    )
+                    setFields((f) => ({ ...f, condicionPagoId: c.id }))
+                  }}
+                />
+              </div>
             </div>
             <div className='space-y-1.5'>
               <Label>Forma de Pago</Label>
@@ -826,15 +842,25 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
             </div>
             <div className='space-y-1.5'>
               <Label>Incoterm</Label>
-              <Select value={fields.incotermId ? String(fields.incotermId) : '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, incotermId: v === '__none__' ? null : Number(v) }))}>
-                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='__none__'>Sin definir</SelectItem>
-                  {(incotermsData?.data ?? []).map((i) => (
-                    <SelectItem key={i.id} value={String(i.id)}>{i.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className='flex gap-2'>
+                <Select value={fields.incotermId ? String(fields.incotermId) : '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, incotermId: v === '__none__' ? null : Number(v) }))}>
+                  <SelectTrigger className='flex-1'><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='__none__'>Sin definir</SelectItem>
+                    {(incotermsData?.data ?? []).map((i) => (
+                      <SelectItem key={i.id} value={String(i.id)}>{i.descripcion}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <MantenedorQuickCreate
+                  recurso='clausulas-venta'
+                  titulo='Incoterm'
+                  onCreated={(i) => {
+                    agregarAOpciones(['clausulas-venta-options'], i)
+                    setFields((f) => ({ ...f, incotermId: i.id }))
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -1374,8 +1400,8 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                               ))}
                             </div>
                           </TableCell>
-                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.cantidadKilos != null ? `${l.cantidadKilos} kg` : `${l.cantidadPallets} pallets · ${l.cajas} cajas`}</TableCell>
-                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.precioUsdKilo != null ? `$${l.precioUsdKilo}/kg` : `$${l.precioUsdCaja}/cj`}</TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.cantidadKilos != null ? `${formatMonto(l.cantidadKilos, 0)} kg` : `${formatMonto(l.cantidadPallets ?? 0, 0)} pallets · ${formatMonto(l.cajas ?? 0, 0)} cajas`}</TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground'>{l.precioUsdKilo != null ? `$${formatMonto(l.precioUsdKilo, decimalesPrecio)}/kg` : `$${formatMonto(l.precioUsdCaja ?? 0, decimalesPrecio)}/cj`}</TableCell>
                           <TableCell className='text-right'>
                             <div className='flex justify-end gap-1'>
                               <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleEditarLinea(l)} title='Editar'>

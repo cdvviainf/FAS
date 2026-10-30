@@ -12,9 +12,18 @@ const columnas: ColumnaTabla<Linea>[] = [
   { titulo: 'Mercado', render: (l) => l.mercado },
   { titulo: 'Especie', render: (l) => l.especie },
   { titulo: 'Variedad', render: (l) => l.variedad },
-  { titulo: 'Var. Rotulada', render: (l) => l.variedadRotulada ?? '—' },
+  { titulo: 'Var. Rot', render: (l) => l.variedadRotulada ?? '—' },
   { titulo: 'Categoría', render: (l) => l.categoria },
-  { titulo: 'Artículo', render: (l) => l.articulo },
+  {
+    titulo: 'Artículo',
+    render: (l) => (
+      <>
+        {l.articulo}
+        <br />
+        <span style={{ color: '#666' }}>{l.articuloDescripcion}</span>
+      </>
+    ),
+  },
   { titulo: 'Etiqueta', render: (l) => l.etiqueta ?? '—' },
   { titulo: 'Calibres', render: (l) => l.calibres },
   { titulo: 'Tipo Pallet', render: (l) => l.tipoPallet ?? '—' },

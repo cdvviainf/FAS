@@ -30,8 +30,8 @@ import { useTemporada } from '@/contexts/temporada-context'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { solicitudDetailOptions, solicitudesKeys } from '../queries'
 import { solicitudesService } from '../service'
-import { FUNCION_LABELS } from '../types'
-import type { AsignadoInput, FuncionAsignado, SolicitudCreateInput } from '../types'
+import { FUNCION_LABELS, TIPO_INSPECCION_LABELS } from '../types'
+import type { AsignadoInput, FuncionAsignado, SolicitudCreateInput, TipoInspeccion } from '../types'
 import { SelectMultiple } from '@/components/shared/select-multiple'
 import { CalidadesPermitidasInput, type CalidadPermitidaPar } from '@/components/shared/calidades-permitidas-input'
 
@@ -102,6 +102,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   const [paisIds, setPaisIds] = useState<number[]>([])
   const [clienteId, setClienteId] = useState<number | null>(null)
   const [fechaDespacho, setFechaDespacho] = useState('')
+  // Tipo de inspección (solo informativo): '' = sin definir.
+  const [tipoInspeccion, setTipoInspeccion] = useState<TipoInspeccion | ''>('')
   const [lineas, setLineas] = useState<LineaForm[]>([])
   const [asignados, setAsignados] = useState<AsignadoInput[]>([])
   const [observaciones, setObservaciones] = useState('')
@@ -194,6 +196,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       setPaisIds(d.paises.map((p) => p.pais.id))
       setClienteId(d.clienteId)
       setFechaDespacho(d.fechaDespacho?.slice(0, 10) ?? '')
+      setTipoInspeccion(d.tipoInspeccion ?? '')
       setLineas(d.lineas.map((l) => ({
         especieId: l.especie.id,
         articuloId: l.articulo.id,
@@ -271,6 +274,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
       paisIds,
       clienteId,
       fechaDespacho: fechaDespacho || null,
+      tipoInspeccion: tipoInspeccion || null,
       lineas: lineas.map((l) => ({
         especieId: l.especieId!,
         articuloId: l.articuloId!,
@@ -500,6 +504,18 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
             <div className='space-y-1.5'>
               <Label>Fecha de despacho <span className='text-muted-foreground text-xs'>(opcional)</span></Label>
               <Input type='date' value={fechaDespacho} onChange={(e) => setFechaDespacho(e.target.value)} />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Tipo de inspección <span className='text-muted-foreground text-xs'>(opcional)</span></Label>
+              <Select value={tipoInspeccion || 'none'} onValueChange={(v) => setTipoInspeccion(v === 'none' ? '' : (v as TipoInspeccion))}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none'>Sin definir</SelectItem>
+                  {(Object.keys(TIPO_INSPECCION_LABELS) as TipoInspeccion[]).map((t) => (
+                    <SelectItem key={t} value={t}>{TIPO_INSPECCION_LABELS[t]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

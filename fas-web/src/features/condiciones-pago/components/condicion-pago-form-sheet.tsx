@@ -38,6 +38,10 @@ interface CondicionPagoFormSheetProps {
   item?: CondicionPago
   open: boolean
   onOpenChange: (open: boolean) => void
+  // Quick-create inline: callback con la Condición recién creada (para
+  // auto-seleccionarla) y tipo por defecto al crear (ej. 'COMPRA' desde la OC).
+  onCreated?: (item: CondicionPago) => void
+  defaultTipo?: TipoCondicionPago
 }
 
 function cuotaVacia(): CondicionPagoCuotaInput {
@@ -63,7 +67,7 @@ function validarReglaCuotas(cuotas: CondicionPagoCuotaInput[]): string | null {
   return null
 }
 
-export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPagoFormSheetProps) {
+export function CondicionPagoFormSheet({ item, open, onOpenChange, onCreated, defaultTipo }: CondicionPagoFormSheetProps) {
   const isEdit = !!item
   const queryClient = useQueryClient()
 
@@ -107,7 +111,7 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
     } else {
       setCodigo('')
       setDescripcion('')
-      setTipo('')
+      setTipo(defaultTipo ?? '')
       setCuotas([cuotaVacia()])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -169,9 +173,10 @@ export function CondicionPagoFormSheet({ item, open, onOpenChange }: CondicionPa
       if (isEdit) return condicionesPagoService.update(item!.id, payload)
       return condicionesPagoService.create({ ...payload, codigo: codigo.trim(), tipo: tipo as TipoCondicionPago })
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['condiciones-pago'] })
       toast.success(isEdit ? 'Condición de Pago actualizada' : 'Condición de Pago creada')
+      if (!isEdit && res && 'data' in res && res.data) onCreated?.(res.data)
       onOpenChange(false)
     },
     onError: (e: Error) => toast.error(e.message || 'Error al guardar la Condición de Pago'),

@@ -20,6 +20,10 @@ const FUNCION_LABELS: Record<string, string> = {
   ACUDIR: 'Acudir',
   NOTIFICAR: 'Notificar',
 }
+const TIPO_INSPECCION_LABELS: Record<string, string> = {
+  PRODUCTO_TERMINADO: 'Producto Terminado',
+  PROCESO: 'Proceso',
+}
 const ESTADOS_CON_CIERRE = new Set(['APROBADA', 'RECHAZADA', 'OBJETADA'])
 
 // Resolver de la Solicitud de Inspección — snapshot del pedido (quién,
@@ -51,6 +55,7 @@ export async function resolverSolicitudInspeccion(id: number, empresaId: number)
     fecha: solicitud.creadoEn.toISOString(),
     estado: ESTADO_LABELS[solicitud.estado] ?? solicitud.estado,
     fechaHoraVisita: solicitud.fechaHora?.toISOString() ?? null,
+    tipoInspeccion: solicitud.tipoInspeccion ? TIPO_INSPECCION_LABELS[solicitud.tipoInspeccion] ?? solicitud.tipoInspeccion : null,
     productor: {
       razonSocial: productor?.razonSocial ?? solicitud.entidadProductor.razonSocial,
       rut: productor?.identificador ?? null,

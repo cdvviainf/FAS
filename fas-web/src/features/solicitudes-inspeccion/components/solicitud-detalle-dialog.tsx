@@ -1,6 +1,5 @@
 'use client'
 
-import { Fragment } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -9,9 +8,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Icons } from '@/components/icons'
 import { solicitudesService } from '../service'
-import { ESTADO_LABELS, FUNCION_LABELS } from '../types'
+import { ESTADO_LABELS, FUNCION_LABELS, TIPO_INSPECCION_LABELS } from '../types'
 import type { SolicitudInspeccion } from '../types'
 
 const fmt = new Intl.DateTimeFormat('es-CL', {
@@ -28,9 +28,9 @@ interface SolicitudDetalleDialogProps {
 
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className='grid grid-cols-[130px_1fr] gap-2 text-sm'>
+    <div className='grid grid-cols-[110px_1fr] gap-2 text-sm sm:grid-cols-[130px_1fr]'>
       <span className='text-muted-foreground'>{label}</span>
-      <span>{children}</span>
+      <span className='min-w-0 break-words'>{children}</span>
     </div>
   )
 }
@@ -82,6 +82,7 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
             )}
             <Campo label='Fecha de ingreso'>{fmt.format(new Date(solicitud.creadoEn))}</Campo>
             <Campo label='Fecha y hora de visita'>{solicitud.fechaHora ? fmt.format(new Date(solicitud.fechaHora)) : 'Por definir'}</Campo>
+            {solicitud.tipoInspeccion && <Campo label='Tipo de inspección'>{TIPO_INSPECCION_LABELS[solicitud.tipoInspeccion]}</Campo>}
             {solicitud.mercado && <Campo label='Mercado'>{solicitud.mercado.descripcion}</Campo>}
             {solicitud.paises.length > 0 && (
               <Campo label='Países'>{solicitud.paises.map((p) => p.pais.descripcion).join(', ')}</Campo>
@@ -90,27 +91,6 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
             {solicitud.fechaDespacho && (
               <Campo label='Fecha despacho'>{new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium' }).format(new Date(solicitud.fechaDespacho))}</Campo>
             )}
-            {/* Detalle de producto por línea (2026-10-27). */}
-            {solicitud.lineas.map((l, i) => {
-              const pref = solicitud.lineas.length > 1 ? `L${i + 1} · ` : ''
-              return (
-                <Fragment key={l.id}>
-                  <Campo label={`${pref}Especie`}>{l.especie.descripcion}</Campo>
-                  <Campo label={`${pref}Embalaje`}>{l.articulo.descripcion}</Campo>
-                  <Campo label={`${pref}Variedad`}>{l.variedad.descripcion}</Campo>
-                  {l.categorias.length > 0 && (
-                    <Campo label={`${pref}Categorías`}>{l.categorias.map((c) => c.categoria.descripcion).join(', ')}</Campo>
-                  )}
-                  {l.calibres.length > 0 && (
-                    <Campo label={`${pref}Calibres`}>{l.calibres.map((c) => c.calibre.descripcion).join(', ')}</Campo>
-                  )}
-                  {l.calidades.length > 0 && (
-                    <Campo label={`${pref}Calidades permitidas`}>{l.calidades.map((c) => `${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`).join(', ')}</Campo>
-                  )}
-                  {l.cantidadPallets != null && <Campo label={`${pref}Cant. pallets`}>{l.cantidadPallets}</Campo>}
-                </Fragment>
-              )
-            })}
             <Campo label='Temporada'>{solicitud.temporada.codigo}</Campo>
             {solicitud.observaciones && (
               <Campo label='Observaciones'>
@@ -118,6 +98,40 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
               </Campo>
             )}
           </div>
+
+          {solicitud.lineas.length > 0 && (
+            <div className='space-y-1'>
+              <h4 className='text-sm font-medium'>Producto a inspeccionar</h4>
+              <div className='overflow-x-auto rounded-md border'>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Especie</TableHead>
+                      <TableHead>Variedad</TableHead>
+                      <TableHead>Embalaje</TableHead>
+                      <TableHead>Categorías</TableHead>
+                      <TableHead>Calibres</TableHead>
+                      <TableHead>Calidades</TableHead>
+                      <TableHead className='text-right'>Pallets</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {solicitud.lineas.map((l) => (
+                      <TableRow key={l.id}>
+                        <TableCell className='whitespace-nowrap font-medium'>{l.especie.descripcion}</TableCell>
+                        <TableCell className='whitespace-nowrap'>{l.variedad.descripcion}</TableCell>
+                        <TableCell className='whitespace-nowrap'>{l.articulo.descripcion}</TableCell>
+                        <TableCell>{l.categorias.map((c) => c.categoria.descripcion).join(', ') || '—'}</TableCell>
+                        <TableCell>{l.calibres.map((c) => c.calibre.descripcion).join(', ') || '—'}</TableCell>
+                        <TableCell>{l.calidades.map((c) => `${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`).join(', ') || '—'}</TableCell>
+                        <TableCell className='text-right tabular-nums'>{l.cantidadPallets ?? '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
 
           <div>
             <h4 className='mb-1 text-sm font-medium'>Personas asignadas</h4>

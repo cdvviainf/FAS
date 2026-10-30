@@ -128,7 +128,7 @@ export const embarqueColumns: ColumnDef<Embarque>[] = [
   },
   {
     id: 'notaVenta',
-    header: 'Cierre Comercial',
+    header: 'Cierre Com.',
     enableSorting: false,
     cell: ({ row }) => (
       <button
@@ -136,9 +136,25 @@ export const embarqueColumns: ColumnDef<Embarque>[] = [
         onClick={() => abrirCierreComercial(row.original.notaVentaId)}
         className='text-sm text-primary hover:underline'
       >
-        Folio {row.original.notaVenta.folio}
+        {row.original.notaVenta.folio}
       </button>
     ),
+    size: 100,
+  },
+  {
+    id: 'tipoVenta',
+    header: 'Venta',
+    enableSorting: false,
+    cell: ({ row }) => {
+      const tipo = row.original.notaVenta.tipoVenta
+      if (!tipo) return <span className='text-muted-foreground text-xs'>—</span>
+      return (
+        <Badge variant={tipo === 'EXPORTACION' ? 'default' : 'secondary'}>
+          {tipo === 'EXPORTACION' ? 'Exportación' : 'Nacional'}
+        </Badge>
+      )
+    },
+    size: 110,
   },
   {
     id: 'cliente',
