@@ -109,8 +109,10 @@ export function printCss(pagina: { formato: 'A4' | 'Letter'; orientacion: 'portr
        ya lo da .doc-fila-grupos (dos grupos lado a lado); anidar otro grid de
        2 columnas acá dejaba ~8mm para el valor y lo partía letra por letra. */
     .doc-campos { display: flex; flex-direction: column; }
-    .doc-campo { display: grid; grid-template-columns: 24mm 1fr; gap: 2mm; font-size: 9.5pt; padding: 0.6mm 0; }
-    .doc-campo .doc-campo-label { color: #6b6558; }
+    .doc-campo { display: grid; grid-template-columns: 32mm 1fr; gap: 2mm; font-size: 9.5pt; padding: 0.6mm 0; }
+    /* nowrap: los labels largos ("Puerto de Embarque", "Modalidad de Venta",
+       "Condición de Pago") deben ir en una sola línea, no partirse. */
+    .doc-campo .doc-campo-label { color: #6b6558; white-space: nowrap; }
     .doc-campo .doc-campo-valor { font-weight: 500; }
 
     /* Achicado 9pt/8.2pt -> 7.5pt/6.8pt (feedback Christian, 2026-08-19):

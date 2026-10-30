@@ -159,7 +159,9 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
   // el documento no tiene Embarque resoluble (d.transporte == null).
   const tr = d.transporte
   const guion = (v: string | null | undefined) => v ?? '—'
-  const camposTransporte = tr
+  // Dos columnas: la logística del contenedor hasta "Sello" en la primera,
+  // puertos/fechas/comerciales/pesos en la segunda.
+  const transporteCol1 = tr
     ? [
         { label: t.via, valor: guion(tr.via) },
         { label: t.nave, valor: guion(tr.nave) },
@@ -168,6 +170,10 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
         { label: t.booking, valor: guion(tr.booking) },
         { label: t.contenedor, valor: guion(tr.contenedor) },
         { label: t.sello, valor: guion(tr.sello) },
+      ]
+    : []
+  const transporteCol2 = tr
+    ? [
         { label: t.puertoEmbarque, valor: guion(tr.puertoEmbarque) },
         { label: t.puertoDestino, valor: guion(tr.puertoDestino) },
         { label: t.etd, valor: tr.etd ? fmt.fecha(tr.etd) : '—' },
@@ -242,7 +248,7 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
         </div>
       )}
 
-      {tr && <GrupoCampos titulo={t.transporte} campos={camposTransporte} />}
+      {tr && <GrupoCampos titulo={t.transporte} campos={transporteCol1} camposCol2={transporteCol2} />}
 
       <TablaLineas
         titulo={t.detalle}
