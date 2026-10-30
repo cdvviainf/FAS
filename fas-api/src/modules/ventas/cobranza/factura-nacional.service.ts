@@ -613,6 +613,20 @@ export async function listarEmbarquesFacturables(filters: { page?: number; limit
   return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
+// Listado unificado de operaciones (embarques nacionales + proformas de
+// materiales) con su estado de factura, filtrable por origen y estado.
+export async function listarOperaciones(filters: {
+  page?: number
+  limit?: number
+  q?: string
+  origen?: repo.OperacionNacionalOrigen
+  estado?: string
+}) {
+  const { page = 1, limit = 20 } = filters
+  const { data, total } = await repo.listOperacionesFacturables(filters)
+  return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
+}
+
 // Tipo de cambio sugerido (moneda de origen del embarque → CLP) para el editor
 // de una Factura Nacional de venta; `fecha` (YYYY-MM-DD) usa la paridad de esa
 // fecha (día hábil anterior más cercano).

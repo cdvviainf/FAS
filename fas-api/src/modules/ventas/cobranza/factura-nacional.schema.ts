@@ -72,3 +72,12 @@ export const proformasFacturablesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   q: z.string().max(200).optional(),
 })
+
+// Listado unificado de operaciones (venta nacional / proforma) con su factura.
+export const operacionesNacionalQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  q: z.string().max(200).optional(),
+  origen: z.enum(['VENTA_NACIONAL', 'PROFORMA_MATERIAL', 'PROFORMA_PRODUCTOR']).optional(),
+  estado: z.enum(['SIN_FACTURA', 'BORRADOR', 'ENVIADA_SII', 'APROBADA', 'RECHAZADA', 'ANULADA']).optional(),
+})

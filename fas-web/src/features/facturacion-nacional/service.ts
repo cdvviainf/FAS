@@ -6,6 +6,8 @@ import type {
   FacturasNacionalListResponse,
   ProformasFacturablesResponse,
   EmbarquesFacturablesResponse,
+  OperacionesNacionalFilters,
+  OperacionesNacionalResponse,
   TipoCambioSugerido,
 } from './types'
 
@@ -39,6 +41,16 @@ export const facturaNacionalService = {
     if (filters.limit) sp.limit = String(filters.limit)
     if (filters.q?.trim()) sp.q = filters.q.trim()
     return api.get('ventas/cobranza/facturas-nacional/embarques-facturables', { searchParams: sp }).json()
+  },
+  // Listado unificado de operaciones (venta/proforma) con su estado de factura.
+  async listOperaciones(filters: OperacionesNacionalFilters = {}): Promise<OperacionesNacionalResponse> {
+    const sp: Record<string, string> = {}
+    if (filters.page) sp.page = String(filters.page)
+    if (filters.limit) sp.limit = String(filters.limit)
+    if (filters.q?.trim()) sp.q = filters.q.trim()
+    if (filters.origen) sp.origen = filters.origen
+    if (filters.estado) sp.estado = filters.estado
+    return api.get('ventas/cobranza/facturas-nacional/operaciones', { searchParams: sp }).json()
   },
   async obtenerPorId(id: number): Promise<{ data: FacturaNacional }> {
     return api.get(`ventas/cobranza/facturas-nacional/${id}`).json()

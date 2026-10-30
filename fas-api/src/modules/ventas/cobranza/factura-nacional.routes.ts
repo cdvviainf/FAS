@@ -24,6 +24,8 @@ export async function facturaNacionalRoutes(app: FastifyInstance) {
 
   // Listados (estáticos antes de la paramétrica :id).
   app.get('/facturas-nacional', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
+  // Listado unificado: todas las operaciones (venta/proforma) con su estado de factura.
+  app.get('/facturas-nacional/operaciones', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listOperaciones)
   app.get('/facturas-nacional/proformas-facturables', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listProformasFacturables)
   app.get('/facturas-nacional/embarques-facturables', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listEmbarquesFacturables)
   app.get('/facturas-nacional/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)

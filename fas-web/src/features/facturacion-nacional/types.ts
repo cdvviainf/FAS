@@ -12,6 +12,38 @@ export const ESTADO_FN_LABELS: Record<EstadoFacturaNacional, string> = {
   ANULADA: 'Anulada',
 }
 
+// Estado de una operación en el listado unificado: su factura, o "Sin factura".
+export type EstadoOperacionNacional = 'SIN_FACTURA' | EstadoFacturaNacional
+export const ESTADO_OPERACION_LABELS: Record<EstadoOperacionNacional, string> = {
+  SIN_FACTURA: 'Sin factura',
+  ...ESTADO_FN_LABELS,
+}
+
+// Fila del listado unificado: una operación (embarque de venta nacional o
+// proforma de materiales) anotada con su Factura Nacional activa (o null).
+export interface OperacionNacional {
+  tipoOperacion: 'EMBARQUE' | 'PROFORMA'
+  origenClase: OrigenFacturaNacional
+  operacionId: number
+  referencia: string
+  cliente: { id: number; razonSocial: string } | null
+  fecha: string | null
+  factura: { id: number; codigo: string; estado: EstadoFacturaNacional; folio: number | null; tipoDte: number; montoTotal: string } | null
+}
+
+export interface OperacionesNacionalResponse {
+  data: OperacionNacional[]
+  meta: { total: number; page: number; limit: number; totalPages: number }
+}
+
+export interface OperacionesNacionalFilters {
+  page?: number
+  limit?: number
+  q?: string
+  origen?: OrigenFacturaNacional
+  estado?: EstadoOperacionNacional
+}
+
 export const ORIGEN_FN_LABELS: Record<OrigenFacturaNacional, string> = {
   PROFORMA_MATERIAL: 'Proforma de Materiales',
   PROFORMA_PRODUCTOR: 'Proforma de Productor',

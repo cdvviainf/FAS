@@ -5,6 +5,7 @@ import {
   actualizarBorradorSchema,
   facturasNacionalListQuerySchema,
   proformasFacturablesQuerySchema,
+  operacionesNacionalQuerySchema,
   embarqueParamsSchema,
   tipoCambioQuerySchema,
 } from './factura-nacional.schema.js'
@@ -13,6 +14,11 @@ import * as service from './factura-nacional.service.js'
 export async function list(req: FastifyRequest, reply: FastifyReply) {
   const filters = facturasNacionalListQuerySchema.parse(req.query)
   return reply.send(await service.listarFacturas(filters))
+}
+
+export async function listOperaciones(req: FastifyRequest, reply: FastifyReply) {
+  const filters = operacionesNacionalQuerySchema.parse(req.query)
+  return reply.send(await service.listarOperaciones(filters))
 }
 
 export async function listProformasFacturables(req: FastifyRequest, reply: FastifyReply) {

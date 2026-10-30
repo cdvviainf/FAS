@@ -193,6 +193,126 @@ export async function listEmbarquesFacturables(filters: { page?: number; limit?:
   return { data, total }
 }
 
+// ─── Listado UNIFICADO de operaciones facturables / facturadas (FAS-COB-VN) ───
+// Una sola lista (sin pestañas) con TODAS las operaciones nacionales: embarques
+// de venta nacional + proformas de materiales, cada una anotada con su Factura
+// Nacional activa (o "sin factura"). Filtrable por origen (venta/proforma) y por
+// estado de factura. La paginación es en memoria (los volúmenes nacionales son
+// modestos y la unión de dos tablas no es paginable en SQL sin raw).
+export type OperacionNacionalOrigen = 'VENTA_NACIONAL' | 'PROFORMA_MATERIAL' | 'PROFORMA_PRODUCTOR'
+
+export interface OperacionNacionalRow {
+  tipoOperacion: 'EMBARQUE' | 'PROFORMA'
+  origenClase: OperacionNacionalOrigen
+  operacionId: number
+  referencia: string
+  cliente: { id: number; razonSocial: string } | null
+  fecha: Date | null
+  factura: { id: number; codigo: string; estado: string; folio: number | null; tipoDte: number; montoTotal: string } | null
+}
+
+const facturaActivaSelect = {
+  where: { eliminadoEn: null },
+  select: { id: true, codigo: true, estado: true, folio: true, tipoDte: true, montoTotal: true },
+  take: 1,
+} as const
+
+export async function listOperacionesFacturables(filters: {
+  page?: number
+  limit?: number
+  q?: string
+  origen?: OperacionNacionalOrigen
+  estado?: string // EstadoFacturaNacional | 'SIN_FACTURA'
+}) {
+  const { page = 1, limit = 20, q, origen, estado } = filters
+
+  // Embarques de venta nacional despachados (con o sin factura).
+  const embarques = origen && origen !== 'VENTA_NACIONAL'
+    ? []
+    : await prisma.embarque.findMany({
+        where: {
+          eliminadoEn: null,
+          despachadoEn: { not: null },
+          despachoAnuladoEn: null,
+          notaVenta: { is: { tipoVenta: 'NACIONAL' } },
+        },
+        select: {
+          id: true,
+          numeroInstructivo: true,
+          despachadoEn: true,
+          notaVenta: { select: { cliente: { select: { id: true, razonSocial: true } } } },
+          facturasNacional: facturaActivaSelect,
+        },
+      })
+
+  // Proformas de materiales que deben facturarse o ya se facturaron.
+  const proformas = origen && origen !== 'PROFORMA_MATERIAL'
+    ? []
+    : await prisma.proformaMaterial.findMany({
+        where: {
+          eliminadoEn: null,
+          OR: [
+            { estado: { in: ['ENVIADA_VALIDACION', 'FACTURADA'] } },
+            { facturasNacional: { some: { eliminadoEn: null } } },
+          ],
+        },
+        select: {
+          id: true,
+          numero: true,
+          creadoEn: true,
+          entidad: { select: { id: true, razonSocial: true } },
+          facturasNacional: facturaActivaSelect,
+        },
+      })
+
+  const filas: OperacionNacionalRow[] = [
+    ...embarques.map((e): OperacionNacionalRow => ({
+      tipoOperacion: 'EMBARQUE',
+      origenClase: 'VENTA_NACIONAL',
+      operacionId: e.id,
+      referencia: e.numeroInstructivo,
+      cliente: e.notaVenta?.cliente ?? null,
+      fecha: e.despachadoEn,
+      factura: mapFacturaActiva(e.facturasNacional[0]),
+    })),
+    ...proformas.map((p): OperacionNacionalRow => ({
+      tipoOperacion: 'PROFORMA',
+      origenClase: 'PROFORMA_MATERIAL',
+      operacionId: p.id,
+      referencia: p.numero,
+      cliente: p.entidad ? { id: p.entidad.id, razonSocial: p.entidad.razonSocial } : null,
+      fecha: p.creadoEn,
+      factura: mapFacturaActiva(p.facturasNacional[0]),
+    })),
+  ]
+
+  const qLower = q?.trim().toLowerCase()
+  const filtradas = filas.filter((f) => {
+    if (estado) {
+      const estadoFila = f.factura?.estado ?? 'SIN_FACTURA'
+      if (estadoFila !== estado) return false
+    }
+    if (qLower) {
+      const texto = `${f.referencia} ${f.cliente?.razonSocial ?? ''} ${f.factura?.codigo ?? ''}`.toLowerCase()
+      if (!texto.includes(qLower)) return false
+    }
+    return true
+  })
+
+  filtradas.sort((a, b) => (b.fecha?.getTime() ?? 0) - (a.fecha?.getTime() ?? 0))
+
+  const total = filtradas.length
+  const data = filtradas.slice((page - 1) * limit, (page - 1) * limit + limit)
+  return { data, total }
+}
+
+function mapFacturaActiva(
+  f: { id: number; codigo: string; estado: string; folio: number | null; tipoDte: number; montoTotal: Prisma.Decimal } | undefined,
+): OperacionNacionalRow['factura'] {
+  if (!f) return null
+  return { id: f.id, codigo: f.codigo, estado: f.estado, folio: f.folio, tipoDte: f.tipoDte, montoTotal: f.montoTotal.toString() }
+}
+
 export async function getFacturaActivaById(id: number) {
   return prisma.facturaNacional.findFirst({ where: { id, eliminadoEn: null }, include: facturaInclude })
 }
