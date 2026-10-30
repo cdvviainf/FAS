@@ -108,6 +108,10 @@ export const facturaExportacionService = {
   async anularConNc(id: number): Promise<{ data: { id: number; codigo: string; folio: number | null } }> {
     return api.post(`ventas/cobranza/facturas-exportacion/${id}/anular-con-nc`).json()
   },
+  // Emite la NC parcial (crédito) de un reclamo aprobado del embarque (no anula la factura).
+  async emitirNcReclamo(id: number, reclamoId: number): Promise<{ data: { id: number; codigo: string; folio: number | null } }> {
+    return api.post(`ventas/cobranza/facturas-exportacion/${id}/nota-credito-reclamo`, { json: { reclamoId } }).json()
+  },
   // Abre el PDF timbrado de una Nota de Crédito en una pestaña nueva.
   async verPdfNc(ncId: number): Promise<void> {
     const blob = await api.get(`ventas/cobranza/notas-credito/${ncId}/pdf`).blob()

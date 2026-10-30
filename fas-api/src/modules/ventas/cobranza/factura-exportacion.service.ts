@@ -432,6 +432,9 @@ export interface ConstruirPayloadDteOpts {
   incluirCuotas?: boolean // default true
   incluirReferenciasFactura?: boolean // default true (B/L, Instructivo)
   referenciasExtra?: ReferenciaFacturaExportacion[]
+  // NC parcial por reclamo (crédito): el detalle es UNA línea por el monto del
+  // crédito; sin flete/seguro, sin pesos/bultos; TotClauVenta = monto; factor 1.
+  notaCreditoParcial?: { monto: number; glosa: string }
 }
 
 export async function construirPayloadDte(
@@ -448,17 +451,21 @@ export async function construirPayloadDte(
       `La moneda "${nv.moneda.codigo}" no tiene equivalente en la tabla de Monedas de Aduana del SII. Completá el mapeo (código SII, ej. "DOLAR USA") antes de enviar el DTE 110.`,
     )
   }
+  const parcial = opts?.notaCreditoParcial ?? null
   const montoTotalNum = Number(factura.montoTotal)
   const fleteSumado = factura.fleteSumaAlPrecio
   // Revalida Flete/Seguro (última barrera). TotClauVenta (CIF) = total cláusula:
   // en modo resta coincide con montoTotal; en modo suma es montoTotal + flete +
   // seguro. El detalle se timbra a valor FOB (factor 1 si el flete suma).
-  const { montoFlete, montoSeguro } = resolverFleteSeguro(nv.clausulaVenta, montoTotalNum, {
-    montoFlete: factura.montoFlete == null ? null : Number(factura.montoFlete),
-    montoSeguro: factura.montoSeguro == null ? null : Number(factura.montoSeguro),
-  }, fleteSumado)
-  const factor = factorFob(montoTotalNum, montoFlete, montoSeguro, fleteSumado)
-  const totalCif = totalClausula(montoTotalNum, montoFlete, montoSeguro, fleteSumado)
+  // En una NC parcial por reclamo no hay flete/seguro y el total = monto del crédito.
+  const { montoFlete, montoSeguro } = parcial
+    ? { montoFlete: null, montoSeguro: null }
+    : resolverFleteSeguro(nv.clausulaVenta, montoTotalNum, {
+        montoFlete: factura.montoFlete == null ? null : Number(factura.montoFlete),
+        montoSeguro: factura.montoSeguro == null ? null : Number(factura.montoSeguro),
+      }, fleteSumado)
+  const factor = parcial ? 1 : factorFob(montoTotalNum, montoFlete, montoSeguro, fleteSumado)
+  const totalCif = parcial ? Math.round(parcial.monto * 100) / 100 : totalClausula(montoTotalNum, montoFlete, montoSeguro, fleteSumado)
   const fechaDocumento = factura.fechaDocumento ?? new Date()
   const fechaRef = fechaDocumento.toISOString().slice(0, 10)
 
@@ -549,11 +556,13 @@ export async function construirPayloadDte(
       // SII espera el código de país de SU tabla de Aduana (no "COL").
       nacionalidadCodigo: nv.paisDestino?.codigoAduana ?? null,
     },
-    lineas: factura.lineas.map((l) => ({
-      descripcion: descripcionLinea(l, idioma),
-      cantidadCajas: l.cantidadCajas,
-      precioUnitario: unitarioFob(Number(l.precioUnitario), factor),
-    })),
+    lineas: parcial
+      ? [{ descripcion: parcial.glosa, cantidadCajas: 1, precioUnitario: Math.round(parcial.monto * 100) / 100 }]
+      : factura.lineas.map((l) => ({
+          descripcion: descripcionLinea(l, idioma),
+          cantidadCajas: l.cantidadCajas,
+          precioUnitario: unitarioFob(Number(l.precioUnitario), factor),
+        })),
     // Se mandan los códigos de la tabla de Aduana del SII (codigoAduana), no el
     // `codigo` de negocio — LibreDTE descarta los que no son de su tabla. El
     // service valida que estén presentes antes de enviar (validarCodigosAduana).
@@ -573,14 +582,14 @@ export async function construirPayloadDte(
       rutCiaTransp: null,
       nombreTransp: nave,
       booking,
-      pesoNeto,
-      pesoBruto,
-      totItems: factura.lineas.length,
-      totBultos: totBultos > 0 ? totBultos : null,
+      pesoNeto: parcial ? null : pesoNeto,
+      pesoBruto: parcial ? null : pesoBruto,
+      totItems: parcial ? 1 : factura.lineas.length,
+      totBultos: parcial ? null : (totBultos > 0 ? totBultos : null),
       // El bulto es la caja (CantBultos = total de cajas → CodTpoBultos=22
       // siempre); el contenedor va aparte en IdContainer con su Sello/EmisorSello
       // (el mapper solo lo emite si hay sello — ver nota en el mapper).
-      tipoBulto: totBultos > 0
+      tipoBulto: !parcial && totBultos > 0
         ? { codTpoBultos: COD_TIPO_BULTO_CAJA, cantBultos: totBultos, idContainer: contenedor, sello, emisorSello }
         : null,
     },
@@ -867,9 +876,26 @@ export async function obtenerFactura(id: number) {
   // Adjunta el estado del DocumentoDte (para habilitar Enviar/Firmar/Descargar
   // XML en el frontend sin exponer el XML completo).
   const dte = await dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id)
+  // Reclamos aprobados del embarque + estado de su NC: alimenta el indicador
+  // "reclamo aprobado — NC pendiente" / "NC de reclamo emitida".
+  const reclamosRaw = await repo.getReclamosAprobadosEmbarque(factura.embarqueId)
+  const reclamos = reclamosRaw.map((r) => {
+    const ncAprobada = r.notasCredito.find((n) => n.estado === 'APROBADA') ?? null
+    return {
+      id: r.id,
+      codigo: r.codigo,
+      procedencia: r.procedencia,
+      valorConfirmado: (r.valorConfirmado ?? 0).toString(),
+      moneda: r.moneda.codigo,
+      notaCredito: ncAprobada,
+      // Pendiente de emitir NC si no hay una NC aprobada para el reclamo.
+      ncPendiente: ncAprobada == null,
+    }
+  })
   return {
     ...factura,
     dte: dte ? { estado: dte.estado, folio: dte.folio, tieneXml: !!dte.xml } : null,
+    reclamos,
   }
 }
 
@@ -1037,6 +1063,92 @@ export async function anularConNotaCredito(id: number, userId: string) {
     clienteId: factura.clienteId,
     monedaId: factura.monedaId,
     montoTotal: factura.montoTotal,
+    idioma: factura.idioma,
+    codigo,
+    payload,
+    rutEmisor: emisor.rut,
+    rutReceptor: RUT_RECEPTOR_EXTRANJERO,
+    userId,
+  })
+}
+
+// ─── NC parcial por RECLAMO aprobado (crédito al cliente, DTE 112) ─────────────
+// Emite una NC por el valor confirmado de un reclamo CERRADO PROCEDENTE/PARCIAL
+// del embarque de la factura, SIN anular la factura; reduce su cobranza.
+export async function emitirNotaCreditoReclamo(facturaId: number, reclamoId: number, userId: string) {
+  const factura = await repo.getFacturaActivaById(facturaId)
+  if (!factura) throw new NotFoundError('Factura de Exportación', String(facturaId))
+  if (!esFacturaTimbrada(factura.estado) || factura.folio == null) {
+    throw new ValidationError('La Factura debe estar timbrada (con folio del SII) para emitir la Nota de Crédito del reclamo')
+  }
+
+  const reclamo = await repo.getReclamoParaNc(reclamoId)
+  if (!reclamo) throw new NotFoundError('Reclamo', String(reclamoId))
+  if (reclamo.embarqueId !== factura.embarqueId) {
+    throw new ValidationError('El reclamo no corresponde al embarque de esta factura')
+  }
+  if (reclamo.estado !== 'CERRADO' || !(reclamo.procedencia === 'PROCEDENTE' || reclamo.procedencia === 'PARCIAL')) {
+    throw new ValidationError('El reclamo debe estar cerrado como PROCEDENTE o PARCIAL para emitir su Nota de Crédito')
+  }
+  if (reclamo.monedaId !== factura.monedaId) {
+    throw new ValidationError('La moneda del reclamo no coincide con la de la factura')
+  }
+  const credito = reclamo.valorConfirmado == null ? 0 : Number(reclamo.valorConfirmado)
+  if (credito <= 0) throw new ValidationError('El reclamo no tiene un valor confirmado para acreditar')
+  if (reclamo.notasCredito.some((n) => n.estado === 'APROBADA')) {
+    throw new ValidationError('Este reclamo ya tiene una Nota de Crédito emitida')
+  }
+
+  const embarque = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
+  if (!embarque) throw new NotFoundError('Embarque', String(factura.embarqueId))
+  // La NC 112 lleva el mismo bloque Aduana que la 110 → mismos guards.
+  validarCodigosAduana(embarque)
+
+  const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
+  if (!emisor?.rut) {
+    throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas')
+  }
+  const idioma = normalizarIdioma(factura.idioma)
+
+  const codigo = await siguienteCodigo('notaCredito')
+  if (!codigo) {
+    throw new ValidationError('No hay un prefijo de código configurado para Notas de Crédito (Configuración › Prefijos de Código)')
+  }
+
+  const fechaFactura = factura.fechaEmision ?? factura.fechaDocumento ?? new Date()
+  const glosa = idioma === 'EN' ? `Credit note for claim ${reclamo.codigo}` : `Nota de crédito por reclamo ${reclamo.codigo}`
+  const payload = await construirPayloadDte(
+    factura,
+    embarque,
+    { rut: emisor.rut, razonSocial: emisor.razonSocial, giro: emisor.giro, direccion: emisor.direccion, comuna: emisor.comuna },
+    idioma,
+    {
+      tipoDte: TIPO_DTE_NC_EXPORTACION,
+      incluirCuotas: false,
+      incluirReferenciasFactura: false,
+      notaCreditoParcial: { monto: credito, glosa },
+      referenciasExtra: [
+        {
+          tpoDocRef: String(TIPO_DTE_FACTURA_EXPORTACION),
+          folioRef: String(factura.folio),
+          fecha: fechaFactura.toISOString().slice(0, 10),
+          codRef: 3, // corrige montos (crédito parcial, no anula)
+          razonRef: `Reclamo ${reclamo.codigo}`,
+        },
+      ],
+    },
+  )
+
+  return ncService.emitirNcReclamo({
+    reclamoId: reclamo.id,
+    facturaExportacionId: factura.id,
+    tipoDteNc: TIPO_DTE_NC_EXPORTACION,
+    facturaTipoDte: factura.tipoDte,
+    facturaFolio: factura.folio,
+    origenTipo: ORIGEN_TIPO_NC,
+    clienteId: factura.clienteId,
+    monedaId: factura.monedaId,
+    creditoMonto: credito,
     idioma: factura.idioma,
     codigo,
     payload,

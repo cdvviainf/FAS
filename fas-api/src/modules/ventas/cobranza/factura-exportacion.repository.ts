@@ -226,6 +226,52 @@ export async function getFacturaActivaById(id: number) {
   return prisma.facturaExportacion.findFirst({ where: { id, eliminadoEn: null }, include: facturaInclude })
 }
 
+// Reclamos "aprobados" (CERRADO + procedencia PROCEDENTE/PARCIAL con valor
+// confirmado) del embarque de la factura, con su Nota de Crédito (si ya se
+// emitió). Puente Factura→Embarque→Reclamo (no hay FK directa). Alimenta el
+// indicador "tiene reclamo aprobado — NC pendiente" en el detalle de la factura.
+export async function getReclamosAprobadosEmbarque(embarqueId: number) {
+  return prisma.reclamo.findMany({
+    where: {
+      embarqueId,
+      eliminadoEn: null,
+      estado: 'CERRADO',
+      procedencia: { in: ['PROCEDENTE', 'PARCIAL'] },
+      valorConfirmado: { gt: 0 },
+    },
+    select: {
+      id: true,
+      codigo: true,
+      valorConfirmado: true,
+      procedencia: true,
+      moneda: { select: { codigo: true } },
+      notasCredito: {
+        where: { eliminadoEn: null },
+        select: { id: true, codigo: true, estado: true, folio: true },
+        orderBy: { id: 'desc' },
+      },
+    },
+    orderBy: { id: 'asc' },
+  })
+}
+
+// Reclamo con lo necesario para emitir su NC parcial (validaciones + monto).
+export async function getReclamoParaNc(reclamoId: number) {
+  return prisma.reclamo.findFirst({
+    where: { id: reclamoId, eliminadoEn: null },
+    select: {
+      id: true,
+      codigo: true,
+      embarqueId: true,
+      estado: true,
+      procedencia: true,
+      valorConfirmado: true,
+      monedaId: true,
+      notasCredito: { where: { eliminadoEn: null }, select: { id: true, estado: true } },
+    },
+  })
+}
+
 export interface LineaFacturaPersistir {
   descripcion: string
   especieId: number

@@ -184,6 +184,19 @@ export interface FacturaExportacion {
   notasCredito?: NotaCreditoRef[]
   // Estado del DocumentoDte (solo en el detalle) — habilita Enviar/Firmar/XML.
   dte?: { estado: string; folio: number | null; tieneXml: boolean } | null
+  // Reclamos aprobados del embarque (solo en el detalle) con el estado de su NC.
+  reclamos?: FacturaReclamoRef[]
+}
+
+export interface FacturaReclamoRef {
+  id: number
+  codigo: string
+  procedencia: string
+  valorConfirmado: string
+  moneda: string
+  notaCredito: { id: number; codigo: string; estado: string; folio: number | null } | null
+  // Pendiente de emitir NC (no hay una NC aprobada para el reclamo).
+  ncPendiente: boolean
 }
 
 export interface NotaCreditoRef {

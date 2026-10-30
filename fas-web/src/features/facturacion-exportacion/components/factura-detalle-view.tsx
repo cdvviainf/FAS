@@ -81,6 +81,17 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
     onError: (e: Error) => toast.error(e.message || 'No se pudo anular la Factura con Nota de Crédito'),
   })
 
+  // Emite la NC parcial (crédito) de un reclamo aprobado del embarque.
+  const emitirNcReclamo = useMutation({
+    mutationFn: (reclamoId: number) => facturaExportacionService.emitirNcReclamo(factura.id, reclamoId),
+    onSuccess: (r) => {
+      toast.success(`Nota de Crédito ${r.data.codigo} emitida${r.data.folio ? ` (folio ${r.data.folio})` : ''}`)
+      queryClient.invalidateQueries({ queryKey: facturasKeys.detalle(factura.id) })
+      queryClient.invalidateQueries({ queryKey: facturasKeys.all })
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo emitir la Nota de Crédito del reclamo'),
+  })
+
   async function verPdfNc() {
     if (!ncAprobada) return
     try {
@@ -249,6 +260,39 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
           Anulada con Nota de Crédito <span className='font-medium'>{ncAprobada.codigo}</span>
           {ncAprobada.folio != null && <> · DTE {ncAprobada.tipoDte} folio {ncAprobada.folio}</>}
         </p>
+      )}
+
+      {(factura.reclamos?.length ?? 0) > 0 && (
+        <div className='rounded-md border p-3'>
+          <p className='text-sm font-medium'>Reclamos aprobados en este embarque</p>
+          <ul className='mt-2 space-y-1.5'>
+            {factura.reclamos!.map((r) => (
+              <li key={r.id} className='flex flex-wrap items-center gap-2 text-sm'>
+                <span className='font-medium'>{r.codigo}</span>
+                <span className='text-muted-foreground'>· crédito {r.moneda} {formatMonto(r.valorConfirmado)}</span>
+                {r.ncPendiente ? (
+                  <>
+                    <Badge variant='destructive'>NC pendiente de emitir</Badge>
+                    {puedeEscribir && (
+                      <Button
+                        size='sm'
+                        variant='outline'
+                        isLoading={emitirNcReclamo.isPending && emitirNcReclamo.variables === r.id}
+                        onClick={() => emitirNcReclamo.mutate(r.id)}
+                      >
+                        <Icons.billing className='mr-1 h-4 w-4' /> Emitir NC de reclamo
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <Badge variant='default'>
+                    NC {r.notaCredito?.codigo}{r.notaCredito?.folio != null ? ` · folio ${r.notaCredito.folio}` : ''}
+                  </Badge>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <Card>

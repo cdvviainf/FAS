@@ -3,6 +3,9 @@ import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { LOCK_NAMESPACE_COBRANZA_NOTA_CREDITO } from '../../../shared/advisory-locks.js'
+import { derivarEstadoCuota, derivarEstadoCobranza, inicioDeHoy } from './cobranza-estado.js'
+
+const round2 = (n: number) => Math.round(n * 100) / 100
 
 // Nota de Crédito de anulación (Ciclo 4). Repositorio compartido export/nacional:
 // crea/reusa la NC, la marca APROBADA/RECHAZADA y anula la factura referenciada.
@@ -118,4 +121,103 @@ export async function marcarNcAprobadaYAnularFactura(
 
 export async function marcarNcRechazada(ncId: number, errorMensajeSii: string) {
   return prisma.notaCredito.update({ where: { id: ncId }, data: { estado: 'RECHAZADA', errorMensajeSii }, include: ncInclude })
+}
+
+// ─── NC parcial por RECLAMO (crédito al cliente, no anulación) ─────────────────
+export interface CrearNcReclamoInput {
+  reclamoId: number
+  tipoDte: number
+  clienteId: number
+  monedaId: number
+  montoTotal: Prisma.Decimal | number
+  idioma: string
+  codigo: string
+  creadoPorId: string
+}
+
+// Crea o reusa la NC del reclamo (serializada por reclamo con advisory lock). La
+// NC lleva reclamoId + motivo CORRIGE_MONTO y NO facturaExportacionId (para no
+// chocar con "una NC por factura" de anulación y permitir varias NC por factura,
+// una por reclamo).
+export async function crearOReusarNcReclamo(data: CrearNcReclamoInput) {
+  const empresaId = getEmpresaIdActual()
+  if (empresaId == null) throw new ValidationError('No hay una empresa activa')
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_COBRANZA_NOTA_CREDITO}::int, hashtext(${`RECLAMO:${data.reclamoId}`}))`
+    const existente = await tx.notaCredito.findFirst({ where: { reclamoId: data.reclamoId, eliminadoEn: null }, include: ncInclude })
+    if (existente) {
+      if (existente.estado === 'APROBADA') throw new ValidationError('Este reclamo ya tiene una Nota de Crédito emitida')
+      return existente // BORRADOR/RECHAZADA → reintento
+    }
+    return tx.notaCredito.create({
+      data: {
+        empresaId,
+        codigo: data.codigo,
+        reclamoId: data.reclamoId,
+        tipoDte: data.tipoDte,
+        motivo: 'CORRIGE_MONTO',
+        clienteId: data.clienteId,
+        monedaId: data.monedaId,
+        montoTotal: data.montoTotal,
+        idioma: data.idioma,
+        creadoPorId: data.creadoPorId,
+      },
+      include: ncInclude,
+    })
+  })
+}
+
+// Timbrada: NC de reclamo APROBADA + REDUCE la cobranza de la factura por el
+// crédito (baja montoCuota y saldoPendiente oldest-first); la factura NO se
+// anula. Atómico. `restante` (crédito que excede el saldo) se ignora.
+export async function marcarNcReclamoAprobada(
+  ncId: number,
+  facturaExportacionId: number,
+  creditoMonto: number,
+  datos: { folio: number; trackIdSii: string | null; fechaEmision: Date },
+  userId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const nc = await tx.notaCredito.update({
+      where: { id: ncId },
+      data: {
+        estado: 'APROBADA',
+        folio: datos.folio,
+        trackIdSii: datos.trackIdSii,
+        fechaEmision: datos.fechaEmision,
+        emitidoPorId: userId,
+        emitidoEn: datos.fechaEmision,
+        errorMensajeSii: null,
+      },
+      include: ncInclude,
+    })
+    const cuotas = await tx.facturaExportacionCuota.findMany({
+      where: { facturaExportacionId },
+      select: { id: true, montoCuota: true, saldoPendiente: true, fechaVencimiento: true },
+      orderBy: { numeroCuota: 'asc' },
+    })
+    const hoy = inicioDeHoy()
+    let restante = round2(creditoMonto)
+    const agregado: Array<{ montoCuota: number; saldoPendiente: number; fechaVencimiento: Date | null }> = []
+    for (const c of cuotas) {
+      let nuevoMonto = Number(c.montoCuota)
+      let nuevoSaldo = Number(c.saldoPendiente)
+      if (restante > 0 && nuevoSaldo > 0) {
+        const aplicar = round2(Math.min(restante, nuevoSaldo))
+        nuevoMonto = round2(nuevoMonto - aplicar)
+        nuevoSaldo = round2(nuevoSaldo - aplicar)
+        restante = round2(restante - aplicar)
+        await tx.facturaExportacionCuota.update({
+          where: { id: c.id },
+          data: { montoCuota: nuevoMonto, saldoPendiente: nuevoSaldo, estado: derivarEstadoCuota(nuevoMonto, nuevoSaldo, c.fechaVencimiento, hoy) },
+        })
+      }
+      agregado.push({ montoCuota: nuevoMonto, saldoPendiente: nuevoSaldo, fechaVencimiento: c.fechaVencimiento })
+    }
+    await tx.facturaExportacion.update({
+      where: { id: facturaExportacionId },
+      data: { estadoCobranza: derivarEstadoCobranza(agregado, hoy) },
+    })
+    return nc
+  })
 }

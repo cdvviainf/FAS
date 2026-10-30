@@ -20,6 +20,8 @@ export async function facturaExportacionRoutes(app: FastifyInstance) {
   app.post('/facturas-exportacion/:id/anular', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.anular)
   // Anular una factura APROBADA (timbrada) emitiendo una Nota de Crédito de Exportación (DTE 112).
   app.post('/facturas-exportacion/:id/anular-con-nc', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.anularConNc)
+  // Emitir la NC parcial (crédito) de un reclamo aprobado del embarque — no anula la factura.
+  app.post('/facturas-exportacion/:id/nota-credito-reclamo', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.emitirNcReclamo)
 
   app.get('/facturas-exportacion', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listar)
   // Landing embarque-céntrica: embarques despachados + estado Proforma/Factura.

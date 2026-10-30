@@ -19,6 +19,11 @@ const lineaSchema = z.object({
   precioUnitario: z.number().min(0).max(9_999_999_999),
 })
 
+// Body para emitir la NC parcial de un reclamo aprobado del embarque.
+export const notaCreditoReclamoBodySchema = z.object({
+  reclamoId: z.number().int().positive('El reclamo es requerido'),
+})
+
 export const facturaExportacionActualizarSchema = z.object({
   dimensiones: z.array(dimensionSchema).default([]),
   lineas: z.array(lineaSchema).min(1, 'Agrega al menos una línea'),

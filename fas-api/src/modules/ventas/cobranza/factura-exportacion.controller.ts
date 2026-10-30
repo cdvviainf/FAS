@@ -5,6 +5,7 @@ import {
   facturaExportacionActualizarSchema,
   facturaParamsSchema,
   facturasExportacionListQuerySchema,
+  notaCreditoReclamoBodySchema,
   proformaParamsSchema,
   tipoCambioQuerySchema,
 } from './factura-exportacion.schema.js'
@@ -123,5 +124,12 @@ export async function anular(req: FastifyRequest, reply: FastifyReply) {
 export async function anularConNc(req: FastifyRequest, reply: FastifyReply) {
   const { id } = facturaParamsSchema.parse(req.params)
   const nc = await service.anularConNotaCredito(id, req.fasUserId!)
+  return reply.send({ data: nc })
+}
+
+export async function emitirNcReclamo(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = facturaParamsSchema.parse(req.params)
+  const { reclamoId } = notaCreditoReclamoBodySchema.parse(req.body)
+  const nc = await service.emitirNotaCreditoReclamo(id, reclamoId, req.fasUserId!)
   return reply.send({ data: nc })
 }

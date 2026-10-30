@@ -3727,10 +3727,12 @@ model Reclamo {
 
   temporadaId Int?
 
-  lineas      ReclamoPalletLinea[]
-  defectos    ReclamoDefecto[]
-  documentos  ReclamoDocumento[]
-  provisiones Provision[]
+  lineas       ReclamoPalletLinea[]
+  defectos     ReclamoDefecto[]
+  documentos   ReclamoDocumento[]
+  provisiones  Provision[]
+  // NC parciales emitidas por este reclamo (crédito al cliente, 2026-10-30).
+  notasCredito NotaCredito[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -4505,6 +4507,12 @@ model NotaCredito {
   facturaNacionalId    Int?
   facturaNacional      FacturaNacional?    @relation("NotaCreditoFacturaNacional", fields: [empresaId, facturaNacionalId], references: [empresaId, id])
 
+  // Reclamo que origina la NC (2026-10-30): cuando la NC es un crédito PARCIAL
+  // por un reclamo aprobado (motivo CORRIGE_MONTO), no una anulación total. Null
+  // en las NC de anulación. La factura NO se anula; su saldo de cobranza baja.
+  reclamoId Int?
+  reclamo   Reclamo? @relation(fields: [reclamoId], references: [id])
+
   // DTE: 112 (exportación) o 61 (nacional).
   tipoDte Int
   motivo  MotivoNotaCredito @default(ANULA_DOCUMENTO)
@@ -4538,6 +4546,7 @@ model NotaCredito {
   @@index([facturaExportacionId])
   @@index([facturaNacionalId])
   @@index([clienteId])
+  @@index([reclamoId])
   @@map("notas_credito")
 }
 

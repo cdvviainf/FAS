@@ -135,6 +135,86 @@ export async function emitirNcAnulacion(input: EmitirNcAnulacionInput) {
   )
 }
 
+// ─── NC parcial por RECLAMO (crédito al cliente, Exportación) ──────────────────
+// Igual patrón de 2 pasos que la anulación, pero: la NC lleva reclamoId +
+// CORRIGE_MONTO, NO anula la factura y REDUCE su cobranza por el monto del crédito.
+export interface EmitirNcReclamoInput {
+  reclamoId: number
+  facturaExportacionId: number
+  tipoDteNc: number // 112
+  facturaTipoDte: number
+  facturaFolio: number | null
+  origenTipo: string // 'nota-credito-exportacion'
+  clienteId: number
+  monedaId: number
+  creditoMonto: number
+  idioma: string
+  codigo: string
+  payload: LibredteDtePayload
+  rutEmisor: string
+  rutReceptor: string
+  userId: string
+}
+
+export async function emitirNcReclamo(input: EmitirNcReclamoInput) {
+  await verificarFacturaNoRechazadaSii(input.facturaTipoDte, input.facturaFolio, input.rutEmisor)
+
+  const nc = await ncRepo.crearOReusarNcReclamo({
+    reclamoId: input.reclamoId,
+    tipoDte: input.tipoDteNc,
+    clienteId: input.clienteId,
+    monedaId: input.monedaId,
+    montoTotal: input.creditoMonto,
+    idioma: input.idioma,
+    codigo: input.codigo,
+    creadoPorId: input.userId,
+  })
+
+  const temporal = await dteService.emitirDteTemporal({
+    origenTipo: input.origenTipo,
+    origenId: nc.id,
+    tipoDte: input.tipoDteNc,
+    payload: input.payload,
+    rutEmisor: input.rutEmisor,
+    rutReceptor: input.rutReceptor,
+    creadoPor: input.userId,
+  })
+  if (temporal.estado !== 'TEMPORAL_CREADO' && temporal.estado !== 'GENERADO') {
+    const err = temporal.errorMensaje ?? 'No se pudo crear la Nota de Crédito temporal en LibreDTE'
+    await ncRepo.marcarNcRechazada(nc.id, err)
+    throw new ValidationError(err)
+  }
+
+  const generado = await dteService.generarDteReal({
+    origenTipo: input.origenTipo,
+    origenId: nc.id,
+    tipoDte: input.tipoDteNc,
+    rutEmisor: input.rutEmisor,
+    rutReceptor: input.rutReceptor,
+    creadoPor: input.userId,
+  })
+  if (generado.estado === 'GENERANDO') {
+    throw new ValidationError('El timbrado de la Nota de Crédito ya está en curso — espera unos segundos y recarga')
+  }
+  if (generado.estado !== 'GENERADO') {
+    const err = generado.errorMensaje ?? 'No se pudo timbrar la Nota de Crédito en LibreDTE'
+    await ncRepo.marcarNcRechazada(nc.id, err)
+    throw new ValidationError(err)
+  }
+  if (generado.folio == null) {
+    throw new ValidationError('La Nota de Crédito se timbró sin folio (dato inconsistente) — contacta a soporte')
+  }
+
+  // Éxito: NC APROBADA + cobranza de la factura reducida (NO se anula), atómico.
+  return ncRepo.marcarNcReclamoAprobada(
+    nc.id,
+    input.facturaExportacionId,
+    input.creditoMonto,
+    { folio: generado.folio, trackIdSii: generado.libredteCodigoTemporal ?? null, fechaEmision: new Date() },
+    input.userId,
+  )
+}
+
 // ─── Lecturas de la Nota de Crédito ──────────────────────────────────────────
 export async function obtenerNc(id: number) {
   const nc = await ncRepo.getNcById(id)
