@@ -61,6 +61,9 @@ export const facturaNacionalService = {
   async crearDesdeEmbarque(embarqueId: number): Promise<{ data: FacturaNacional }> {
     return api.post(`ventas/cobranza/facturas-nacional/desde-embarque/${embarqueId}`).json()
   },
+  async crearDesdeProformaProductor(proformaProductorId: number): Promise<{ data: FacturaNacional }> {
+    return api.post(`ventas/cobranza/facturas-nacional/desde-proforma-productor/${proformaProductorId}`).json()
+  },
   // Tipo de cambio sugerido (moneda de origen → CLP) para una factura de venta;
   // fecha (YYYY-MM-DD) opcional = paridad de esa fecha.
   async obtenerTipoCambio(id: number, fecha?: string): Promise<{ data: TipoCambioSugerido }> {

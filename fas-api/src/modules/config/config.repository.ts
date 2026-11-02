@@ -1,5 +1,7 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../lib/empresa-context.js'
+import { ValidationError } from '../../shared/errors.js'
 import type { MantenedorModelo, MantenedorListFilters, MantenedorCreateInput, BodegaContactoInput } from './config.types.js'
 
 // Mapeo de modelo a nombre de delegado en Prisma Client
@@ -517,6 +519,39 @@ export async function updateMantenedor(
       ...data,
       actualizadoPor: userId,
     },
+  })
+}
+
+// R6 (FAS-PP-QA-002): edición ATÓMICA y serializada de un ConceptoCtaCte. En una
+// sola transacción se toma el lock de la fila con `SELECT … FOR UPDATE` (mismo
+// recurso y orden que `marcarFirmada` al insertar el movimiento DEBE), luego —si
+// la naturaleza cambia a un valor distinto de AMBOS— se cuentan los movimientos
+// de naturaleza opuesta YA bajo el lock, y recién entonces se aplica el UPDATE.
+// Así se elimina el TOCTOU: una firma concurrente o bien ya insertó su DEBE (y
+// aquí se ve → se rechaza) o bien espera este lock y revalida después. Movimiento
+// es inmutable (R5), por eso el conteo no filtra soft-delete.
+export async function updateConceptoCtaCteSeguro(
+  id: number,
+  data: Partial<MantenedorCreateInput>,
+  userId: string,
+) {
+  const naturalezaNueva = (data as { naturaleza?: string }).naturaleza
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM conceptos_cta_cte WHERE id = ${id} FOR UPDATE`
+    if (naturalezaNueva !== undefined && naturalezaNueva !== 'AMBOS') {
+      const incompatibles = await tx.movimientoCuentaCorriente.count({
+        where: { tipoId: id, naturaleza: { not: naturalezaNueva as 'DEBE' | 'HABER' } },
+      })
+      if (incompatibles > 0) {
+        throw new ValidationError(
+          `No se puede cambiar la naturaleza a ${naturalezaNueva}: existen ${incompatibles} movimiento(s) de cuenta corriente de naturaleza opuesta registrados con este concepto`,
+        )
+      }
+    }
+    return tx.conceptoCtaCte.update({
+      where: { id },
+      data: { ...(data as Prisma.ConceptoCtaCteUpdateInput), actualizadoPor: userId },
+    })
   })
 }
 

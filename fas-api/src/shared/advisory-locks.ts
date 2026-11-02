@@ -136,6 +136,21 @@ export const LOCK_NAMESPACE_COBRANZA_PAGO = 490254
 // dentro de la misma transacción; el índice único parcial por FK es el backstop.
 export const LOCK_NAMESPACE_COBRANZA_NOTA_CREDITO = 490255
 
+// Proforma a Productores (servicios, 2026-10-31): correlativo PVP-{AAAA}-{NNNN}.
+// Lock por año que cubre el cálculo del máximo + la creación dentro de la misma
+// transacción, para que dos proformas del mismo año no generen el mismo número.
+// Namespace propio, no coordina con nada más.
+export const LOCK_NAMESPACE_PROFORMA_PRODUCTOR_NUMERO = 490256
+
+// Proforma a Productores — proceso (edición de cabecera/líneas, enviar a
+// validación, rechazar, anular). Compartido con la creación de la Factura
+// Nacional desde una Proforma PRODUCTOR (factura-nacional.repository.ts
+// crearBorrador): sin esto, crear la factura y rechazar/anular la proforma no
+// se serializan y la proforma podría quedar RECHAZADA/ANULADA con una factura
+// activa (FAS-PP-R1-001). Clave: proformaProductorId. Mismo criterio que
+// LOCK_NAMESPACE_EMBARQUE_DESPACHO para VENTA_NACIONAL (VN-QA-006).
+export const LOCK_NAMESPACE_PROFORMA_PRODUCTOR_PROCESO = 490257
+
 // 490251 se usó brevemente para "Generar Instructivos" y se retiró
 // (2026-09-21, FAS-IE-QA-005, QA ronda 4): esa operación ahora comparte
 // LOCK_NAMESPACE_EMBARQUE_DESPACHO con reservarPalletsEnEmbarque/

@@ -366,6 +366,12 @@ model ProformaServicioDetalle {
 
 - **R13 — Entidad facturable.** Para emitirle una factura de venta, el productor debe estar marcado **también** como `CLIENTE_NACIONAL` en `Entidad.tipos` (multiselect, `entidades.md` R1/R8) → 422 si no. Una misma entidad puede ser Productor + Cliente + Proveedor + Empresa de Transporte simultáneamente.
 - **R14 — Líneas = conceptos de liquidación.** El detalle de la proforma de servicios se arma con `ConceptoLiquidacion` (naturaleza `COBRO`), no con texto libre.
+
+  > **⚠ Supersesión (2026-10-31, decisión de Christian — reconciliación tras QA de Codex).**
+  > La feature implementada difiere de este spec en estos puntos, que quedan como canónicos:
+  > - **Líneas con `Articulo` tipo `SERVICIO`** (no `ConceptoLiquidacion`). Se mantiene el modelo `Articulo SERVICIO` tal como está construido.
+  > - **Ruta API `/api/productores/proformas`** (no `/proformas-servicio`).
+  > - **Control de doble cobro (R15) DIFERIDO a la Etapa 3 (Liquidación).** Por ahora la vía factura **SÍ** impacta la cuenta corriente del productor: al timbrarse la Factura Nacional de origen `PROFORMA_PRODUCTOR` se registra un movimiento **DEBE** en la CC (concepto definido en `ProformaProductor.conceptoCtaCteId`, exigido al enviar a validación). La exclusión factura↔liquidación se refuerza recién en Etapa 3.
 - **R15 — Se factura O se descuenta de la liquidación (excluyente).** ⚠ **Invariante crítica.** Un cobro al productor sigue **una sola** vía:
   - **Vía factura:** se emite una Proforma de Servicios → factura de venta nacional. Impacta la **cuenta corriente** del productor (y su pago también). **No** impacta la liquidación.
   - **Vía liquidación:** el cobro se ingresa como concepto (`COBRO`/`ABONO`) dentro de la liquidación (Etapa 3). **No** se factura.

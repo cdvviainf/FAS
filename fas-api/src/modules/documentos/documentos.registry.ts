@@ -25,12 +25,45 @@ import { resolverProforma } from './resolvers/proforma.resolver.js'
 import { resolverFacturaExportacion } from './resolvers/factura-exportacion.resolver.js'
 import { proformaPdfPayloadSchema } from './schemas/proforma.schema.js'
 import { ProformaV1 } from './templates/proforma/v1/index.js'
+import { resolverFichaProductor } from './resolvers/ficha-productor.resolver.js'
+import { fichaProductorPdfPayloadSchema } from './schemas/ficha-productor.schema.js'
+import { FichaProductorV1 } from './templates/ficha-productor/v1/index.js'
+import { resolverProformaProductor } from './resolvers/proforma-productor.resolver.js'
+import { proformaProductorPdfPayloadSchema } from './schemas/proforma-productor.schema.js'
+import { ProformaProductorV1 } from './templates/proforma-productor/v1/index.js'
 import type { DocumentRegistry } from './documentos.types.js'
 
 // Registro central — Etapa 4 §4: "un solo lugar donde se declara todo".
 // Agregar un documento nuevo del catálogo (Etapa 4 §2) es agregar una
 // entrada acá; nada más del motor cambia.
 export const DOCUMENT_REGISTRY: DocumentRegistry = {
+  'ficha-productor': {
+    titulo: 'Ficha de Productor',
+    resolver: resolverFichaProductor,
+    schema: fichaProductorPdfPayloadSchema,
+    plantillaActual: 'v1',
+    plantillas: { v1: FichaProductorV1 },
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    // Mismo ítem que gatea el listado/ficha del productor (productores.routes.ts).
+    itemMenu: 'PROD_FICHA',
+    // Datos maestros — una sola versión, sin emisión oficial (ver Instructivo/Solicitud).
+    controlCopia: false,
+    nombreArchivo: (p) => `Ficha_${p.productor.codigo}.pdf`,
+    folio: (p) => p.productor.codigo,
+  },
+  'proforma-productor': {
+    titulo: 'Proforma de Servicios a Productor',
+    resolver: resolverProformaProductor,
+    schema: proformaProductorPdfPayloadSchema,
+    plantillaActual: 'v1',
+    plantillas: { v1: ProformaProductorV1 },
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    itemMenu: 'PRODUCTORES_PROFORMA',
+    // Previsualización para revisar antes de aceptar/rechazar — sin emisión oficial.
+    controlCopia: false,
+    nombreArchivo: (p) => `${p.numero}.pdf`,
+    folio: (p) => p.numero,
+  },
   'orden-compra': {
     titulo: 'Orden de Compra',
     resolver: resolverOrdenCompra,

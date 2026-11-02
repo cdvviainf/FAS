@@ -1,9 +1,9 @@
 import { Prisma } from '@prisma/client'
-import type { EstadoCobranza } from '@prisma/client'
+import type { EstadoCobranza, NaturalezaCuentaCorriente } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
-import { LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION, LOCK_NAMESPACE_EMBARQUE_DESPACHO } from '../../../shared/advisory-locks.js'
+import { LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION, LOCK_NAMESPACE_EMBARQUE_DESPACHO, LOCK_NAMESPACE_PROFORMA_PRODUCTOR_PROCESO } from '../../../shared/advisory-locks.js'
 import type { CuotaCalculada } from './cobranza-estado.js'
 import type { FacturasNacionalListFilters } from './factura-nacional.types.js'
 import { esFacturaTimbrada } from './sii-estado.js'
@@ -37,6 +37,7 @@ const facturaInclude = {
   moneda: { select: { id: true, codigo: true, descripcion: true, esMonedaBase: true } },
   condicionPago: { select: mantenedorSelect },
   proformaMaterial: { select: { id: true, numero: true, estado: true } },
+  proformaProductor: { select: { id: true, numero: true, estado: true } },
   embarque: { select: { id: true, numeroInstructivo: true, notaVenta: { select: { moneda: { select: { codigo: true } } } } } },
   lineas: {
     select: {
@@ -114,6 +115,69 @@ export async function getFacturaActivaPorProforma(proformaMaterialId: number) {
   return prisma.facturaNacional.findFirst({
     where: { proformaMaterialId, eliminadoEn: null },
     select: { id: true, estado: true },
+  })
+}
+
+// Proforma a Productores lista para facturar (ENVIADA_VALIDACION) con todo lo
+// necesario para armar el borrador: productor (que debe ser CLIENTE_NACIONAL con
+// RUT=identificador para facturar), moneda, condición de pago y líneas de servicio.
+export async function getProformaProductorParaFactura(id: number) {
+  return prisma.proformaProductor.findFirst({
+    where: { id, estado: 'ENVIADA_VALIDACION' },
+    select: {
+      id: true,
+      numero: true,
+      entidadId: true,
+      monedaId: true,
+      moneda: { select: { codigo: true, esMonedaBase: true } },
+      condicionPagoId: true,
+      observaciones: true,
+      entidad: {
+        select: {
+          id: true,
+          razonSocial: true,
+          identificador: true,
+          giro: true,
+          tipos: true,
+          direcciones: {
+            where: { eliminadoEn: null },
+            select: { direccion: true, comuna: { select: { descripcion: true } } },
+            orderBy: [{ esPorDefecto: 'desc' }, { codigo: 'asc' }],
+            take: 1,
+          },
+        },
+      },
+      lineas: {
+        select: {
+          articuloId: true,
+          articulo: { select: { descripcion: true } },
+          cantidad: true,
+          precioUnitario: true,
+          exento: true,
+        },
+        orderBy: { id: 'asc' },
+      },
+    },
+  })
+}
+
+export async function getFacturaActivaPorProformaProductor(proformaProductorId: number) {
+  return prisma.facturaNacional.findFirst({
+    where: { proformaProductorId, eliminadoEn: null },
+    select: { id: true, estado: true },
+  })
+}
+
+// Concepto de Cta. Cte. de la Proforma a Productor + su estado, para revalidarlo
+// ANTES de timbrar (FAS-PP-QA-002): no debe timbrarse si el concepto falta,
+// está bloqueado/eliminado o no admite DEBE (R6).
+export async function getConceptoCtaCteDeProforma(proformaProductorId: number) {
+  return prisma.proformaProductor.findUnique({
+    where: { id: proformaProductorId },
+    select: {
+      conceptoCtaCteId: true,
+      conceptoCtaCte: { select: { id: true, naturaleza: true, bloqueado: true, eliminadoEn: true } },
+    },
   })
 }
 
@@ -266,6 +330,25 @@ export async function listOperacionesFacturables(filters: {
         },
       })
 
+  // Proformas a Productores (servicios) que deben facturarse o ya se facturaron.
+  const proformasProductor = origen && origen !== 'PROFORMA_PRODUCTOR'
+    ? []
+    : await prisma.proformaProductor.findMany({
+        where: {
+          OR: [
+            { estado: { in: ['ENVIADA_VALIDACION', 'FACTURADA'] } },
+            { facturasNacional: { some: { eliminadoEn: null } } },
+          ],
+        },
+        select: {
+          id: true,
+          numero: true,
+          creadoEn: true,
+          entidad: { select: { id: true, razonSocial: true } },
+          facturasNacional: facturaActivaSelect,
+        },
+      })
+
   const filas: OperacionNacionalRow[] = [
     ...embarques.map((e): OperacionNacionalRow => ({
       tipoOperacion: 'EMBARQUE',
@@ -279,6 +362,15 @@ export async function listOperacionesFacturables(filters: {
     ...proformas.map((p): OperacionNacionalRow => ({
       tipoOperacion: 'PROFORMA',
       origenClase: 'PROFORMA_MATERIAL',
+      operacionId: p.id,
+      referencia: p.numero,
+      cliente: p.entidad ? { id: p.entidad.id, razonSocial: p.entidad.razonSocial } : null,
+      fecha: p.creadoEn,
+      factura: mapFacturaActiva(p.facturasNacional[0]),
+    })),
+    ...proformasProductor.map((p): OperacionNacionalRow => ({
+      tipoOperacion: 'PROFORMA',
+      origenClase: 'PROFORMA_PRODUCTOR',
       operacionId: p.id,
       referencia: p.numero,
       cliente: p.entidad ? { id: p.entidad.id, razonSocial: p.entidad.razonSocial } : null,
@@ -358,8 +450,9 @@ export interface LineaPersistir {
 }
 
 export interface CrearBorradorData {
-  origenClase: 'PROFORMA_MATERIAL' | 'VENTA_NACIONAL'
+  origenClase: 'PROFORMA_MATERIAL' | 'PROFORMA_PRODUCTOR' | 'VENTA_NACIONAL'
   proformaMaterialId?: number | null
+  proformaProductorId?: number | null
   embarqueId?: number | null
   codigo: string
   clienteId: number
@@ -384,6 +477,7 @@ export async function crearBorrador(data: CrearBorradorData, creadoPorId: string
       empresaId,
       origenClase: data.origenClase,
       proformaMaterialId: data.proformaMaterialId ?? null,
+      proformaProductorId: data.proformaProductorId ?? null,
       embarqueId: data.embarqueId ?? null,
       codigo: data.codigo,
       clienteId: data.clienteId,
@@ -420,6 +514,22 @@ export async function crearBorrador(data: CrearBorradorData, creadoPorId: string
       }
       if (emb.notaVenta.tipoVenta !== 'NACIONAL') {
         throw new ValidationError('El Cierre del Embarque ya no es una venta Nacional')
+      }
+      return tx.facturaNacional.create(createArgs)
+    })
+  }
+
+  // PROFORMA_PRODUCTOR: la validación final + INSERT van bajo el lock de proceso
+  // de la Proforma (mismo que rechazar/anular), releyendo el estado DENTRO del
+  // lock para que no quede una factura activa sobre una proforma que se rechazó
+  // o anuló en paralelo (FAS-PP-R1-001). Mismo criterio que VENTA_NACIONAL arriba.
+  if (data.origenClase === 'PROFORMA_PRODUCTOR' && data.proformaProductorId != null) {
+    const proformaProductorId = data.proformaProductorId
+    return prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_PROFORMA_PRODUCTOR_PROCESO}::int, ${proformaProductorId}::int)`
+      const pf = await tx.proformaProductor.findFirst({ where: { id: proformaProductorId }, select: { estado: true } })
+      if (!pf || pf.estado !== 'ENVIADA_VALIDACION') {
+        throw new ValidationError('La Proforma a Productor ya no está en estado "Enviada a validación" — no se puede crear la factura')
       }
       return tx.facturaNacional.create(createArgs)
     })
@@ -498,6 +608,7 @@ export async function marcarFirmada(
     fechaEmision: Date
     fechaDocumento: Date
     proformaMaterialId: number | null
+    proformaProductorId: number | null
     cuotas: CuotaCobranzaPersistir[]
     estadoCobranza: EstadoCobranza
   },
@@ -562,6 +673,82 @@ export async function marcarFirmada(
         throw new ValidationError(
           'La Proforma de origen cambió de estado durante la firma — reconcilia el documento manualmente (el DTE pudo quedar timbrado)',
         )
+      }
+    }
+    if (datos.proformaProductorId != null) {
+      // Misma transición atómica que la Proforma de Materiales: ENVIADA_VALIDACION → FACTURADA.
+      const trans = await tx.proformaProductor.updateMany({
+        where: { id: datos.proformaProductorId, estado: 'ENVIADA_VALIDACION' },
+        data: { estado: 'FACTURADA' },
+      })
+      if (trans.count !== 1) {
+        throw new ValidationError(
+          'La Proforma a Productor de origen cambió de estado durante la firma — reconcilia el documento manualmente (el DTE pudo quedar timbrado)',
+        )
+      }
+      // FAS-PP-QA-002 / R16 / VN5: al timbrar la Factura Nacional de origen
+      // PROFORMA_PRODUCTOR se impacta la cuenta corriente del productor
+      // ATÓMICAMENTE dentro de esta misma transacción. La emisión NO debe
+      // confirmarse sin el efecto CC.
+      const proforma = await tx.proformaProductor.findUnique({
+        where: { id: datos.proformaProductorId },
+        select: { conceptoCtaCteId: true },
+      })
+      if (!proforma || proforma.conceptoCtaCteId == null) {
+        throw new ValidationError(
+          'La Proforma a Productor no tiene configurado el Concepto de Cuenta Corriente — no se puede confirmar la factura (el DTE pudo quedar timbrado, reconcilia manualmente)',
+        )
+      }
+      // FAS-PP-QA-002 (R4): revalidación del concepto DENTRO de la transacción,
+      // SERIALIZADA con el mantenedor. La prevalidación en `firmar()` reduce la
+      // ventana, pero sin bloqueo de fila (READ COMMITTED) otra tx podría cambiar
+      // la naturaleza a HABER, bloquear o eliminar el concepto entre la lectura y
+      // la inserción del movimiento, dejando un DEBE incompatible con R6. El
+      // `SELECT … FOR UPDATE` toma el lock de la fila: cualquier UPDATE/DELETE del
+      // mantenedor queda en espera hasta que esta tx confirme, y si el mantenedor
+      // confirmó antes, aquí se lee el valor ya actualizado y se valida. Si el
+      // concepto quedó inválido, se revierte todo y se exige reconciliación
+      // manual (el DTE pudo quedar timbrado) — corregir el concepto y reintentar.
+      const [conceptoBloqueado] = await tx.$queryRaw<
+        Array<{ naturaleza: NaturalezaCuentaCorriente; bloqueado: boolean; eliminadoEn: Date | null }>
+      >(Prisma.sql`SELECT naturaleza, bloqueado, "eliminadoEn" FROM conceptos_cta_cte WHERE id = ${proforma.conceptoCtaCteId} FOR UPDATE`)
+      if (!conceptoBloqueado || conceptoBloqueado.eliminadoEn != null || conceptoBloqueado.bloqueado) {
+        throw new ValidationError(
+          'El Concepto de Cuenta Corriente de la Proforma quedó bloqueado o eliminado durante la firma — corrígelo y reintenta (el DTE pudo quedar timbrado, reconcilia manualmente)',
+        )
+      }
+      if (conceptoBloqueado.naturaleza === 'HABER') {
+        throw new ValidationError(
+          'El Concepto de Cuenta Corriente de la Proforma es de naturaleza HABER; una factura de venta al productor requiere DEBE o AMBOS (el DTE pudo quedar timbrado, reconcilia manualmente)',
+        )
+      }
+      // Idempotencia ante reintento de firma: si ya existe el movimiento de esta
+      // factura (mismo concepto + referencia = código de factura), no se duplica.
+      const movimientoExistente = await tx.movimientoCuentaCorriente.findFirst({
+        where: { tipoId: proforma.conceptoCtaCteId, referencia: factura.codigo },
+        select: { id: true },
+      })
+      if (!movimientoExistente) {
+        // SIGNO: una factura de venta de servicios al productor hace que el
+        // productor nos deba → naturaleza DEBE. Es el inverso de la factura de
+        // COMPRA (que es HABER). Saldo = ΣHABER − ΣDEBE (R5b): esta factura
+        // reduce el saldo a favor del productor.
+        await tx.movimientoCuentaCorriente.create({
+          data: {
+            // empresaId: la extensión de tenancy sobrescribe con la empresa activa.
+            empresaId: getEmpresaIdActual()!,
+            entidadId: factura.clienteId, // el productor = cliente nacional de la factura
+            tipoId: proforma.conceptoCtaCteId,
+            naturaleza: 'DEBE',
+            fecha: datos.fechaEmision,
+            glosa: `Factura ${factura.codigo}`,
+            monto: factura.montoTotal,
+            monedaId: factura.monedaId,
+            referencia: factura.codigo,
+            temporadaId: null,
+            usuarioId: userId,
+          },
+        })
       }
     }
     return factura

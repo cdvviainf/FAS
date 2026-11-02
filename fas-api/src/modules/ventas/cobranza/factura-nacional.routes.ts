@@ -11,6 +11,8 @@ export async function facturaNacionalRoutes(app: FastifyInstance) {
   app.post('/facturas-nacional', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.crear)
   // Crear el borrador desde un Embarque (venta NACIONAL).
   app.post('/facturas-nacional/desde-embarque/:embarqueId', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.crearDesdeEmbarque)
+  // Crear el borrador desde una Proforma a Productores (servicios).
+  app.post('/facturas-nacional/desde-proforma-productor/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.crearDesdeProformaProductor)
 
   app.patch('/facturas-nacional/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.actualizar)
   app.post('/facturas-nacional/:id/enviar-sii', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.enviarSii)

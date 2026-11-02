@@ -14,6 +14,13 @@ export type IdiomaDocumento = 'ES' | 'EN'
 
 export interface ResolverOpciones {
   idioma: IdiomaDocumento
+  // Niveles de acceso del usuario que solicita el documento (código ItemMenu →
+  // nivel). Permite que un resolver omita secciones que requieren un permiso
+  // adicional al itemMenu del documento — ej. la Ficha de Productor oculta el
+  // contrato a quien no tiene PROD_CONTRATO, igual que la ficha JSON (PROD-01,
+  // productores.controller.ts). Ausente ⇒ el resolver trata como SIN_ACCESO
+  // (fail-closed).
+  accesos?: ReadonlyMap<string, 'SIN_ACCESO' | 'LECTURA' | 'TOTAL'>
 }
 
 // Un documento del catálogo (Etapa 4 §4 "Registro central de documentos").

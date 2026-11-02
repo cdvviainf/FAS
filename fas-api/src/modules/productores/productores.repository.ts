@@ -38,8 +38,20 @@ export async function getFicha(entidadId: number) {
         where: { eliminadoEn: null },
         orderBy: [{ esRepresentanteLegal: 'desc' }, { codigo: 'asc' }],
       },
-      direcciones: { where: { eliminadoEn: null } },
-      predios: { where: { eliminadoEn: null } },
+      direcciones: {
+        where: { eliminadoEn: null },
+        include: {
+          comuna: { select: { id: true, descripcion: true } },
+          pais: { select: { id: true, descripcion: true } },
+        },
+      },
+      predios: {
+        where: { eliminadoEn: null },
+        include: {
+          comuna: { select: { id: true, descripcion: true } },
+          tipoProduccion: { select: { id: true, descripcion: true } },
+        },
+      },
       contratos: {
         where: { eliminadoEn: null },
         orderBy: { creadoEn: 'desc' },

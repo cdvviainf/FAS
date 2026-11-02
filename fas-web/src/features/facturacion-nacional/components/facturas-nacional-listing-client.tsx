@@ -57,10 +57,17 @@ export function FacturasNacionalListingClient() {
   const meta = data?.meta
 
   const crear = useMutation({
-    mutationFn: (op: OperacionNacional) =>
-      op.tipoOperacion === 'EMBARQUE'
-        ? facturaNacionalService.crearDesdeEmbarque(op.operacionId)
-        : facturaNacionalService.crearDesdeProforma(op.operacionId),
+    mutationFn: (op: OperacionNacional) => {
+      switch (op.origenClase) {
+        case 'VENTA_NACIONAL':
+          return facturaNacionalService.crearDesdeEmbarque(op.operacionId)
+        case 'PROFORMA_PRODUCTOR':
+          return facturaNacionalService.crearDesdeProformaProductor(op.operacionId)
+        case 'PROFORMA_MATERIAL':
+        default:
+          return facturaNacionalService.crearDesdeProforma(op.operacionId)
+      }
+    },
     onSuccess: ({ data }) => {
       queryClient.invalidateQueries({ queryKey: facturasNacionalKeys.all })
       toast.success(`Factura ${data.codigo} creada en borrador`)

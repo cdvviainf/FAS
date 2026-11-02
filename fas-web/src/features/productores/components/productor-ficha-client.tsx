@@ -12,10 +12,19 @@ import { CuentaCorrienteTab } from '../cuenta-corriente/components/cuenta-corrie
 
 export function ProductorFichaClient({ entidadId }: { entidadId: number }) {
   const searchParams = useSearchParams()
-  const tabInicial = searchParams.get('tab') ?? 'predios'
-  // PROD-01: Contrato tiene permiso propio (PROD_CONTRATO); ocultar la pestaña
-  // si el perfil no tiene ni siquiera LECTURA, en vez de mostrar "sin contratos".
+  // PROD-01: Contrato y Cuenta Corriente tienen permiso propio (PROD_CONTRATO /
+  // PROD_CTA_CTE); ocultar la pestaña si el perfil no tiene ni siquiera LECTURA,
+  // en vez de mostrarla vacía / disparar un 403 del backend.
   const puedeVerContrato = usePuedeLeer('PROD_CONTRATO')
+  const puedeVerCtaCte = usePuedeLeer('PROD_CTA_CTE')
+  // Si se pidió un tab por URL que el perfil no puede ver, caer a Predios
+  // (siempre visible) en vez de dejar el contenedor de tabs en blanco.
+  const tabPedido = searchParams.get('tab') ?? 'predios'
+  const tabInicial =
+    (tabPedido === 'contrato' && !puedeVerContrato) ||
+    (tabPedido === 'cuenta-corriente' && !puedeVerCtaCte)
+      ? 'predios'
+      : tabPedido
 
   const { data, isPending } = useQuery(productorFichaOptions(entidadId))
 
@@ -41,7 +50,7 @@ export function ProductorFichaClient({ entidadId }: { entidadId: number }) {
         <TabsList>
           <TabsTrigger value='predios'>Predios</TabsTrigger>
           {puedeVerContrato && <TabsTrigger value='contrato'>Contrato</TabsTrigger>}
-          <TabsTrigger value='cuenta-corriente'>Cuenta Corriente</TabsTrigger>
+          {puedeVerCtaCte && <TabsTrigger value='cuenta-corriente'>Cuenta Corriente</TabsTrigger>}
         </TabsList>
         <TabsContent value='predios'>
           <PrediosTab entidadId={entidadId} predios={productor.predios} />
@@ -51,9 +60,11 @@ export function ProductorFichaClient({ entidadId }: { entidadId: number }) {
             <ContratosTab entidadId={entidadId} contratos={productor.contratos} tieneRepresentanteLegal={productor.tieneRepresentanteLegal} />
           </TabsContent>
         )}
-        <TabsContent value='cuenta-corriente'>
-          <CuentaCorrienteTab entidadId={entidadId} />
-        </TabsContent>
+        {puedeVerCtaCte && (
+          <TabsContent value='cuenta-corriente'>
+            <CuentaCorrienteTab entidadId={entidadId} />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )

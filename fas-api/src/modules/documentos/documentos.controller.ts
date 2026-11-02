@@ -20,13 +20,13 @@ function idiomaDeQuery(req: FastifyRequest): IdiomaDocumento {
 
 export async function preview(req: FastifyRequest, reply: FastifyReply) {
   const { tipo, id } = documentoParamsSchema.parse(req.params)
-  const html = await service.obtenerPreviewHtml(tipo, id, empresaActualOFallar(req), idiomaDeQuery(req))
+  const html = await service.obtenerPreviewHtml(tipo, id, empresaActualOFallar(req), idiomaDeQuery(req), req.fasAccesos)
   return reply.header('Content-Type', 'text/html; charset=utf-8').send(html)
 }
 
 export async function descargarPdf(req: FastifyRequest, reply: FastifyReply) {
   const { tipo, id } = documentoPdfParamsSchema.parse(req.params)
-  const { buffer, nombreArchivo } = await service.obtenerPdf(tipo, id, empresaActualOFallar(req), idiomaDeQuery(req))
+  const { buffer, nombreArchivo } = await service.obtenerPdf(tipo, id, empresaActualOFallar(req), idiomaDeQuery(req), req.fasAccesos)
   return reply
     .header('Content-Type', 'application/pdf')
     .header('Content-Disposition', `inline; filename="${encodeURIComponent(nombreArchivo)}"`)

@@ -573,7 +573,17 @@ export async function actualizarMantenedor(
     }
   }
 
-  const updated = await repo.updateMantenedor(modelo, id, coreData, userId)
+  // R6 (FAS-PP-QA-002): editar un ConceptoCtaCte es ATÓMICO y serializado con la
+  // firma de facturas. En una sola tx se toma SELECT … FOR UPDATE de la fila
+  // (mismo lock y orden que `marcarFirmada`), se cuentan los movimientos de
+  // naturaleza opuesta y recién entonces se aplica el UPDATE. Así, si la firma ya
+  // insertó el DEBE, esta edición lo ve y se rechaza; y si la edición llega
+  // primero, la firma espera el lock y revalida — nunca queda un movimiento
+  // incompatible con su concepto.
+  const updated =
+    modelo === 'conceptoCtaCte'
+      ? await repo.updateConceptoCtaCteSeguro(id, coreData, userId)
+      : await repo.updateMantenedor(modelo, id, coreData, userId)
 
   if (modelo === 'pais') {
     if (mercadoIds !== undefined) {

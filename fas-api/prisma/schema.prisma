@@ -261,6 +261,7 @@ model Empresa {
   logo                   EmpresaLogo?
   OrdenCompraMaterial    OrdenCompraMaterial[]
   proformasMaterial      ProformaMaterial[]
+  proformasProductor     ProformaProductor[]
   integraciones          Integracion[]
   reclamos               Reclamo[]
   provisiones            Provision[]
@@ -680,6 +681,7 @@ model FormaPago {
   ordenesCompra         OrdenCompra[]
   ordenesCompraMaterial OrdenCompraMaterial[]
   proformasMaterial     ProformaMaterial[]
+  proformasProductor    ProformaProductor[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1540,6 +1542,7 @@ model Moneda {
   notaVentaCuotasPago   NotaVentaCuotaPago[]
   ordenesCompraMaterial OrdenCompraMaterial[]
   proformasMaterial     ProformaMaterial[]
+  proformasProductor    ProformaProductor[]
   reclamos              Reclamo[]
   proformas             Proforma[]
   facturasExportacion   FacturaExportacion[]
@@ -1649,7 +1652,8 @@ model ConceptoCtaCte {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  movimientosCC MovimientoCuentaCorriente[]
+  movimientosCC      MovimientoCuentaCorriente[]
+  proformasProductor ProformaProductor[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1729,6 +1733,7 @@ model Entidad {
   ordenesCompraProductor         OrdenCompra[]               @relation("OrdenCompraProductor")
   ordenesCompraMaterialProveedor OrdenCompraMaterial[]       @relation("OrdenCompraMaterialProveedor")
   proformasMaterialCliente       ProformaMaterial[]          @relation("ProformaMaterialCliente")
+  proformasProductor             ProformaProductor[]         @relation("ProformaProductorProductor")
   instructivosEmbalajeProductor  InstructivoEmbalaje[]       @relation("InstructivoEmbalajeProductor")
   instructivosEmbalajeExportador InstructivoEmbalaje[]       @relation("InstructivoEmbalajeExportador")
   recepcionesPlanta              Recepcion[]                 @relation("RecepcionPlanta")
@@ -2308,6 +2313,7 @@ model Articulo {
   ordenCompraLineas           OrdenCompraLinea[]
   ordenCompraMaterialLineas   OrdenCompraMaterialLinea[]
   proformaMaterialLineas      ProformaMaterialLinea[]
+  proformaProductorLineas     ProformaProductorLinea[]
   contratoProductorLineas     ProductorContratoLinea[]
   solicitudesInspeccion       SolicitudInspeccionLinea[]
   palletLineas                PalletLinea[]
@@ -2738,6 +2744,97 @@ model ProformaMaterialCuotaPago {
 
   @@index([proformaMaterialId])
   @@map("proforma_material_cuota_pago")
+}
+
+// ─── Proforma a Productores (servicios, 2026-10-31) ─────────────────────────
+// Análoga a la Proforma de Venta de Materiales, pero para SERVICIOS prestados a
+// un Productor: las líneas (Articulo tipo SERVICIO + cantidad + precio) se
+// ingresan a mano (no se copian de un Movimiento). Llega hasta
+// ENVIADA_VALIDACION y de ahí genera una Factura Nacional (origen
+// PROFORMA_PRODUCTOR). El receptor sigue exigiendo que el Productor sea también
+// CLIENTE_NACIONAL con RUT al facturar (validación en Factura Nacional).
+enum EstadoProformaProductor {
+  BORRADOR
+  ENVIADA_VALIDACION
+  // Devuelta a corrección tras previsualizar en ENVIADA_VALIDACION. Editable
+  // como BORRADOR; se reenvía a validación para una nueva generación.
+  RECHAZADA
+  FACTURADA
+  ANULADA
+}
+
+model ProformaProductor {
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  numero    String // PVP-{AAAA}-{NNNN}, correlativo por año
+
+  // El Productor al que se le prestan los servicios (Entidad tipo PRODUCTOR).
+  entidadId Int
+  entidad   Entidad @relation("ProformaProductorProductor", fields: [empresaId, entidadId], references: [empresaId, id])
+
+  formaPagoId     Int?
+  formaPago       FormaPago?     @relation(fields: [empresaId, formaPagoId], references: [empresaId, id])
+  condicionPagoId Int? // CondicionPago tipo=VENTA, solo cuotas PORCENTAJE
+  condicionPago   CondicionPago? @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
+  monedaId        Int
+  moneda          Moneda         @relation(fields: [monedaId], references: [id])
+  // Concepto de cuenta corriente que impactará la CC del productor cuando la
+  // Factura Nacional de origen PROFORMA_PRODUCTOR se timbre (R16/VN5). La factura
+  // es un cargo al productor → el concepto debe ser de naturaleza DEBE o AMBOS.
+  conceptoCtaCteId Int?
+  conceptoCtaCte   ConceptoCtaCte? @relation(fields: [empresaId, conceptoCtaCteId], references: [empresaId, id])
+  observaciones   String?
+  estado          EstadoProformaProductor @default(BORRADOR)
+
+  lineas           ProformaProductorLinea[]
+  cuotasPago       ProformaProductorCuotaPago[]
+  facturasNacional FacturaNacional[]
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+
+  @@unique([empresaId, id])
+  @@index([entidadId])
+  @@index([condicionPagoId])
+  @@index([conceptoCtaCteId])
+  @@index([empresaId])
+  @@map("proformas_productor")
+}
+
+model ProformaProductorLinea {
+  id                  Int               @id @default(autoincrement())
+  proformaProductorId Int
+  proformaProductor   ProformaProductor @relation(fields: [proformaProductorId], references: [id], onDelete: Cascade)
+
+  articuloId     Int
+  articulo       Articulo @relation(fields: [articuloId], references: [id])
+  cantidad       Decimal  @db.Decimal(14, 3)
+  precioUnitario Decimal  @db.Decimal(14, 4)
+  monto          Decimal  @db.Decimal(14, 2)
+  exento         Boolean  @default(false)
+
+  @@index([proformaProductorId])
+  @@index([articuloId])
+  @@map("proforma_productor_linea")
+}
+
+// Snapshot inmutable de las cuotas al fijar condicionPagoId — mismo patrón que
+// ProformaMaterialCuotaPago.
+model ProformaProductorCuotaPago {
+  id                  Int               @id @default(autoincrement())
+  proformaProductorId Int
+  proformaProductor   ProformaProductor @relation(fields: [proformaProductorId], references: [id], onDelete: Cascade)
+
+  fechaReferencia FechaReferenciaPago @default(FACTURA)
+  plazoDias       Int
+  porcentaje      Decimal             @db.Decimal(5, 2)
+  descripcion     String?
+
+  @@index([proformaProductorId])
+  @@map("proforma_productor_cuota_pago")
 }
 
 // ─── Productores — Predios, Contrato, Cuenta Corriente, Conceptos de Liquidación ─
@@ -4191,6 +4288,10 @@ model FacturaNacional {
   // → índice único parcial WHERE eliminadoEn IS NULL (ver migración).
   proformaMaterialId Int?
   proformaMaterial   ProformaMaterial?     @relation(fields: [proformaMaterialId], references: [id])
+  // Proforma a Productores de origen (PROFORMA_PRODUCTOR). A lo más una Factura
+  // activa por Proforma → índice único parcial WHERE eliminadoEn IS NULL.
+  proformaProductorId Int?
+  proformaProductor   ProformaProductor?   @relation(fields: [empresaId, proformaProductorId], references: [empresaId, id])
   // Embarque de origen (VENTA_NACIONAL). A lo más una Factura activa por Embarque
   // → índice único parcial WHERE eliminadoEn IS NULL (ver migración).
   embarqueId         Int?
@@ -4255,6 +4356,7 @@ model FacturaNacional {
   @@index([empresaId])
   @@index([clienteId])
   @@index([proformaMaterialId])
+  @@index([proformaProductorId])
   @@index([embarqueId])
   @@map("facturas_nacional")
 }
@@ -4825,6 +4927,7 @@ model CondicionPago {
   contratosProductor    ProductorContrato[]
   ordenesCompraMaterial OrdenCompraMaterial[]
   proformasMaterial     ProformaMaterial[]
+  proformasProductor    ProformaProductor[]
   proformas             Proforma[]
   facturasExportacion   FacturaExportacion[]
   facturasNacional      FacturaNacional[]

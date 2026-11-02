@@ -43,6 +43,12 @@ export async function crearDesdeEmbarque(req: FastifyRequest, reply: FastifyRepl
   return reply.status(201).send({ data: factura })
 }
 
+export async function crearDesdeProformaProductor(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = facturaNacionalParamsSchema.parse(req.params)
+  const factura = await service.crearBorradorDesdeProformaProductor(id, req.fasUserId!)
+  return reply.status(201).send({ data: factura })
+}
+
 export async function tipoCambio(req: FastifyRequest, reply: FastifyReply) {
   const { id } = facturaNacionalParamsSchema.parse(req.params)
   const { fecha } = tipoCambioQuerySchema.parse(req.query)

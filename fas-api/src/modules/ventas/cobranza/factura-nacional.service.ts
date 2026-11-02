@@ -145,6 +145,72 @@ export async function crearBorradorDesdeProforma(proformaMaterialId: number, use
   }
 }
 
+// ─── Crear borrador desde una Proforma a Productores (servicios) ──────────────
+export async function crearBorradorDesdeProformaProductor(proformaProductorId: number, userId: string) {
+  const proforma = await repo.getProformaProductorParaFactura(proformaProductorId)
+  if (!proforma) {
+    throw new ValidationError('La Proforma a Productor no existe o no está en estado "Enviada a validación"')
+  }
+  const existente = await repo.getFacturaActivaPorProformaProductor(proformaProductorId)
+  if (existente) {
+    throw new ValidationError('Esta Proforma a Productor ya tiene una Factura Nacional asociada')
+  }
+  if (proforma.lineas.length === 0) {
+    throw new ValidationError('La Proforma no tiene líneas para facturar')
+  }
+  // El receptor nacional debe ser una Entidad tipo CLIENTE_NACIONAL (el productor
+  // debe tener también ese tipo para poder facturarle nacionalmente).
+  if (!proforma.entidad.tipos.includes('CLIENTE_NACIONAL')) {
+    throw new ValidationError('El Productor no es un Cliente Nacional — agrégale ese tipo en Entidades para poder facturarle')
+  }
+  if (proforma.moneda.codigo !== 'CLP') {
+    throw new ValidationError('La Factura Nacional solo admite proformas en pesos chilenos (CLP)')
+  }
+
+  // Líneas: descripción = descripción del artículo de servicio; afecto/exento
+  // según la línea de la proforma.
+  const lineas = lineasPersistir(
+    proforma.lineas.map((l) => ({
+      descripcion: l.articulo?.descripcion ?? 'Servicio',
+      articuloId: l.articuloId,
+      cantidad: Number(l.cantidad),
+      precioUnitario: Number(l.precioUnitario),
+      exento: l.exento,
+    })),
+  )
+  const montos = calcularMontosYTipoDte(lineas)
+  const codigo = await siguienteCodigo('facturaNacional')
+  if (!codigo) {
+    throw new ValidationError('No hay un prefijo de código configurado para Factura Nacional (Configuración › Prefijos de Código)')
+  }
+
+  try {
+    return await repo.crearBorrador(
+      {
+        origenClase: 'PROFORMA_PRODUCTOR',
+        proformaProductorId,
+        codigo,
+        clienteId: proforma.entidadId,
+        monedaId: proforma.monedaId,
+        condicionPagoId: proforma.condicionPagoId,
+        idioma: 'ES',
+        tipoDte: montos.tipoDte,
+        montoNeto: montos.montoNeto,
+        montoExento: montos.montoExento,
+        montoIva: montos.montoIva,
+        montoTotal: montos.montoTotal,
+        lineas,
+      },
+      userId,
+    )
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
+      throw new ValidationError('Esta Proforma a Productor ya tiene una Factura Nacional asociada')
+    }
+    throw err
+  }
+}
+
 // ─── Crear borrador desde un Embarque (venta NACIONAL) ────────────────────────
 export async function crearBorradorDesdeEmbarque(embarqueId: number, userId: string) {
   const embarque = await repo.getEmbarqueParaFacturaNacional(embarqueId)
@@ -364,6 +430,9 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
   if (factura.proformaMaterial && factura.proformaMaterial.estado !== 'ENVIADA_VALIDACION') {
     throw new ValidationError('La Proforma de Materiales de origen ya no está disponible para facturar (fue anulada o facturada)')
   }
+  if (factura.proformaProductor && factura.proformaProductor.estado !== 'ENVIADA_VALIDACION') {
+    throw new ValidationError('La Proforma a Productor de origen ya no está disponible para facturar (fue anulada o facturada)')
+  }
   if (factura.origenClase === 'VENTA_NACIONAL') await revalidarEmbarqueVenta(factura.embarqueId)
 
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
@@ -461,6 +530,22 @@ export async function firmar(id: number, userId: string) {
   if (factura.proformaMaterial && factura.proformaMaterial.estado !== 'ENVIADA_VALIDACION') {
     throw new ValidationError('La Proforma de Materiales de origen ya no está disponible para facturar (fue anulada o facturada)')
   }
+  if (factura.proformaProductor && factura.proformaProductor.estado !== 'ENVIADA_VALIDACION') {
+    throw new ValidationError('La Proforma a Productor de origen ya no está disponible para facturar (fue anulada o facturada)')
+  }
+  // FAS-PP-QA-002: para origen PROFORMA_PRODUCTOR, revalidar el Concepto de Cta.
+  // Cte. ANTES de timbrar — el movimiento DEBE se crea en marcarFirmada (tras
+  // consumir folio), así que un concepto faltante/bloqueado/eliminado o de
+  // naturaleza HABER (R6) debe bloquear la firma antes de generar el DTE real.
+  if (factura.origenClase === 'PROFORMA_PRODUCTOR' && factura.proformaProductorId != null) {
+    const cc = await repo.getConceptoCtaCteDeProforma(factura.proformaProductorId)
+    if (!cc?.conceptoCtaCteId || !cc.conceptoCtaCte || cc.conceptoCtaCte.eliminadoEn != null || cc.conceptoCtaCte.bloqueado) {
+      throw new ValidationError('La Proforma a Productor no tiene un Concepto de Cuenta Corriente válido (falta, está bloqueado o eliminado) — corrígelo antes de firmar')
+    }
+    if (cc.conceptoCtaCte.naturaleza === 'HABER') {
+      throw new ValidationError('El Concepto de Cuenta Corriente de la Proforma es de naturaleza HABER; una factura de venta al productor requiere DEBE o AMBOS')
+    }
+  }
   if (factura.origenClase === 'VENTA_NACIONAL') await revalidarEmbarqueVenta(factura.embarqueId)
 
   const dte = await dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id)
@@ -519,7 +604,16 @@ export async function firmar(id: number, userId: string) {
   )
   return repo.marcarFirmada(
     factura.id,
-    { folio, trackIdSii, fechaEmision, fechaDocumento, proformaMaterialId: factura.proformaMaterialId, cuotas, estadoCobranza },
+    {
+      folio,
+      trackIdSii,
+      fechaEmision,
+      fechaDocumento,
+      proformaMaterialId: factura.proformaMaterialId,
+      proformaProductorId: factura.proformaProductorId,
+      cuotas,
+      estadoCobranza,
+    },
     userId,
   )
 }

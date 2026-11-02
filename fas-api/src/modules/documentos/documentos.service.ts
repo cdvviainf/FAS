@@ -5,6 +5,10 @@ import { NotFoundError, ValidationError } from '../../shared/errors.js'
 import { renderPdf } from '../../shared/pdf/render.js'
 import { getDocumentDefinition } from './documentos.registry.js'
 import type { IdiomaDocumento } from './documentos.types.js'
+
+// Niveles de acceso del solicitante (código ItemMenu → nivel). Se propaga al
+// resolver para que oculte secciones con permiso propio — ver ResolverOpciones.
+type AccesosUsuario = ReadonlyMap<string, 'SIN_ACCESO' | 'LECTURA' | 'TOTAL'>
 import * as repo from './documentos.repository.js'
 import { marcarOrdenCompraEmitida } from '../compras/ordenes-compra/ordenes-compra.repository.js'
 import { fmt } from './ui/formato.js'
@@ -19,9 +23,9 @@ function getDefinicionOFallar(tipo: string) {
   return def
 }
 
-async function resolverYValidar(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES') {
+async function resolverYValidar(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES', accesos?: AccesosUsuario) {
   const def = getDefinicionOFallar(tipo)
-  const payload = await def.resolver(id, empresaId, { idioma })
+  const payload = await def.resolver(id, empresaId, { idioma, accesos })
   const parsed = def.schema.safeParse(payload)
   if (!parsed.success) {
     // No debería pasar en producción (el resolver ya arma el shape del
@@ -49,14 +53,14 @@ function armarHtml(
 // Mismo HTML que se fotografía para el PDF; se sirve crudo para mostrarlo en
 // un iframe en el ERP antes de emitir. Siempre con marca BORRADOR — nada
 // generado por esta vía queda registrado como oficial.
-export async function obtenerPreviewHtml(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES'): Promise<string> {
-  const { def, payload } = await resolverYValidar(tipo, id, empresaId, idioma)
+export async function obtenerPreviewHtml(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES', accesos?: AccesosUsuario): Promise<string> {
+  const { def, payload } = await resolverYValidar(tipo, id, empresaId, idioma, accesos)
   return armarHtml(def, payload, def.plantillaActual, def.controlCopia ? 'BORRADOR' : undefined)
 }
 
 // ─── PDF bajo demanda (sin emitir) ─────────────────────────────────────────
-export async function obtenerPdf(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES'): Promise<{ buffer: Buffer; nombreArchivo: string }> {
-  const { def, payload } = await resolverYValidar(tipo, id, empresaId, idioma)
+export async function obtenerPdf(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES', accesos?: AccesosUsuario): Promise<{ buffer: Buffer; nombreArchivo: string }> {
+  const { def, payload } = await resolverYValidar(tipo, id, empresaId, idioma, accesos)
   const html = armarHtml(def, payload, def.plantillaActual, def.controlCopia ? 'BORRADOR' : undefined)
   const buffer = await renderPdf(html, def.pagina)
   return { buffer, nombreArchivo: def.nombreArchivo(payload) }

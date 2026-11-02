@@ -103,17 +103,9 @@ export const navGroups: NavGroup[] = [
   {
     label: 'Gestión Productores',
     items: [
-      {
-        title: 'Productores',
-        url: '#',
-        icon: 'teams',
-        isActive: false,
-        items: [
-          { title: 'Contrato',          url: '/dashboard/productores/contrato',         icon: 'post'         },
-          { title: 'Cuenta Corriente',  url: '/dashboard/productores/cuenta-corriente', icon: 'billing'      },
-          { title: 'Solicitud de Pago', url: '/dashboard/productores/pagos',            icon: 'trendingDown', disabled: true }
-        ]
-      },
+      { title: 'Productores',           url: '/dashboard/productores',           icon: 'teams'        },
+      { title: 'Proforma de Servicio',  url: '/dashboard/productores/proformas', icon: 'billing'      },
+      { title: 'Solicitud de Pago',     url: '/dashboard/productores/pagos',     icon: 'trendingDown', disabled: true },
       {
         title: 'Liquidaciones',
         url: '#',
@@ -259,7 +251,6 @@ export const navGroups: NavGroup[] = [
         isActive: false,
         items: [
           { title: 'Entidades',                url: '/dashboard/configuracion/entidades',              icon: 'teams'   },
-          { title: 'Productores',              url: '/dashboard/configuracion/productores',            icon: 'teams'   },
           { title: 'Conceptos de Liquidación', url: '/dashboard/configuracion/conceptos-liquidacion', icon: 'forms'   },
           { title: 'Conceptos Cta. Cte.',      url: '/dashboard/configuracion/conceptos-cta-cte',     icon: 'billing' },
           { title: 'Matriz de Costos',         url: '/dashboard/configuracion/matriz-costos',         icon: 'billing', disabled: true }
