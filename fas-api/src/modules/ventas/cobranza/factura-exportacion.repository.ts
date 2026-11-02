@@ -226,6 +226,16 @@ export async function getFacturaActivaById(id: number) {
   return prisma.facturaExportacion.findFirst({ where: { id, eliminadoEn: null }, include: facturaInclude })
 }
 
+// Facturas de Exportación timbradas aún sin veredicto del SII (ENVIADA_SII) —
+// para el resync de arranque del seguimiento automático. Acotado a la empresa
+// activa por la extensión de tenancy (se llama bajo empresaContext).
+export async function getFacturasExportacionEnviadasSii() {
+  return prisma.facturaExportacion.findMany({
+    where: { estado: 'ENVIADA_SII', eliminadoEn: null },
+    select: { id: true, empresaId: true },
+  })
+}
+
 // Reclamos "aprobados" (CERRADO + procedencia PROCEDENTE/PARCIAL con valor
 // confirmado) del embarque de la factura, con su Nota de Crédito (si ya se
 // emitió). Puente Factura→Embarque→Reclamo (no hay FK directa). Alimenta el

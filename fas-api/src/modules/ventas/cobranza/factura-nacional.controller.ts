@@ -106,6 +106,15 @@ export async function descargarPdfBorrador(req: FastifyRequest, reply: FastifyRe
     .send(pdf)
 }
 
+export async function descargarPdfTimbrado(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = facturaNacionalParamsSchema.parse(req.params)
+  const { pdf, folio } = await service.obtenerPdfTimbrado(id)
+  return reply
+    .header('Content-Type', 'application/pdf')
+    .header('Content-Disposition', `inline; filename="factura-nacional-folio-${folio}.pdf"`)
+    .send(pdf)
+}
+
 export async function descargarXml(req: FastifyRequest, reply: FastifyReply) {
   const { id } = facturaNacionalParamsSchema.parse(req.params)
   const { xml, codigo } = await service.obtenerXmlFactura(id)

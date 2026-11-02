@@ -114,6 +114,12 @@ export const facturaNacionalService = {
     const blob = await api.get(`ventas/cobranza/facturas-nacional/${id}/pdf-borrador`).blob()
     window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer')
   },
+  // Rescata el PDF del DTE 33/34 REAL ya timbrado (timbre + folio del SII) y lo
+  // abre en una pestaña nueva. Requiere la Factura timbrada (con folio).
+  async verPdfTimbrado(id: number): Promise<void> {
+    const blob = await api.get(`ventas/cobranza/facturas-nacional/${id}/pdf-sii`).blob()
+    window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer')
+  },
   // Descarga el XML timbrado, disparando la descarga en el navegador.
   async descargarXml(id: number, nombreArchivo: string): Promise<void> {
     const blob = await api.get(`ventas/cobranza/facturas-nacional/${id}/xml`).blob()

@@ -34,4 +34,5 @@ export async function facturaNacionalRoutes(app: FastifyInstance) {
   app.get('/facturas-nacional/:id/tipo-cambio', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.tipoCambio)
   app.get('/facturas-nacional/:id/xml', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarXml)
   app.get('/facturas-nacional/:id/pdf-borrador', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.descargarPdfBorrador)
+  app.get('/facturas-nacional/:id/pdf-sii', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarPdfTimbrado)
 }

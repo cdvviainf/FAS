@@ -336,6 +336,19 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
               Consultar estado SII
             </Button>
           )}
+          {esTimbrada(factura.estado) && factura.folio != null && (
+            <Button
+              variant='outline'
+              onClick={() =>
+                facturaNacionalService
+                  .verPdfTimbrado(factura.id)
+                  .catch((e) => toast.error((e as Error).message || 'No se pudo abrir el PDF de la factura'))
+              }
+            >
+              <Icons.page className='mr-1 h-4 w-4' />
+              Ver PDF
+            </Button>
+          )}
           {esTimbrada(factura.estado) && dte?.tieneXml && (
             <Button variant='outline' onClick={() => facturaNacionalService.descargarXml(factura.id, `${factura.codigo}.xml`)}>
               <Icons.download className='mr-1 h-4 w-4' />

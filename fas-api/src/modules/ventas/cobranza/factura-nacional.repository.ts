@@ -410,6 +410,16 @@ export async function getFacturaActivaById(id: number) {
   return prisma.facturaNacional.findFirst({ where: { id, eliminadoEn: null }, include: facturaInclude })
 }
 
+// Facturas timbradas aún sin veredicto del SII (ENVIADA_SII) — para el resync de
+// arranque del seguimiento automático (dte-seguimiento-sii.queue.ts). Acotado a
+// la empresa activa por la extensión de tenancy (se llama bajo empresaContext).
+export async function getFacturasNacionalEnviadasSii() {
+  return prisma.facturaNacional.findMany({
+    where: { estado: 'ENVIADA_SII', eliminadoEn: null },
+    select: { id: true, empresaId: true },
+  })
+}
+
 // Cuotas de la CondicionPago para generar las FacturaNacionalCuota al firmar
 // (Ciclo 2). Orden estable por id = numeroCuota.
 export async function getCuotasCondicionPago(condicionPagoId: number) {

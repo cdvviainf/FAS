@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { env } from '../../../config/env.js'
 import { BusinessError, NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { logger } from '../../../lib/logger.js'
+import { encolarSeguimientoSii } from './dte-seguimiento-sii.queue.js'
 import { siguienteCodigo } from '../../config/prefijos-codigo/prefijos-codigo.service.js'
 import { validarYCompletarLineas } from './proforma.service.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
@@ -826,7 +827,15 @@ export async function firmar(id: number, userId: string) {
     inicioDeHoy(),
   )
 
-  return repo.marcarFirmada(factura.id, { folio, trackIdSii, fechaEmision, fechaDocumento, cuotas, estadoCobranza }, userId)
+  const firmada = await repo.marcarFirmada(factura.id, { folio, trackIdSii, fechaEmision, fechaDocumento, cuotas, estadoCobranza }, userId)
+  // Seguimiento automático del veredicto SII (queda ENVIADA_SII). No crítico: si
+  // Redis/cola fallan, la firma ya está hecha y queda el botón manual + el resync.
+  try {
+    await encolarSeguimientoSii({ tipo: 'factura-exportacion', facturaId: factura.id, empresaId: factura.empresaId })
+  } catch (err) {
+    logger.warn({ facturaId: factura.id, err: err instanceof Error ? err.message : String(err) }, 'No se pudo encolar el seguimiento SII (se usará el botón manual / resync)')
+  }
+  return firmada
 }
 
 // ─── Reconciliación on-demand del veredicto real del SII (FAS-COB-SII) ────────
@@ -848,7 +857,9 @@ export async function consultarEstadoSii(id: number) {
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
   if (!emisor?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
 
-  const r = await libredte.consultarEstadoEmitido(TIPO_DTE_FACTURA_EXPORTACION, factura.folio, dteService.rutSinDv(emisor.rut))
+  // actualizar_estado (no `estado`): además de traer el veredicto, PERSISTE el
+  // estado en LibreDTE, requisito para poder referenciar el DTE desde una NC.
+  const r = await libredte.actualizarEstadoEmitido(TIPO_DTE_FACTURA_EXPORTACION, factura.folio, dteService.rutSinDv(emisor.rut))
   if (!r.ok || r.data == null) {
     throw new ValidationError(`No se pudo consultar el estado en el SII: ${r.error ?? 'respuesta vacía de LibreDTE'}`)
   }

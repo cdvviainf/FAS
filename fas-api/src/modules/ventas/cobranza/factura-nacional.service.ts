@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { env } from '../../../config/env.js'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { logger } from '../../../lib/logger.js'
+import { encolarSeguimientoSii } from './dte-seguimiento-sii.queue.js'
 import { siguienteCodigo } from '../../config/prefijos-codigo/prefijos-codigo.service.js'
 import { construirCuotasDesdeCondicion, derivarEstadoCobranza, inicioDeHoy } from './cobranza-estado.js'
 import * as ncService from './nota-credito.service.js'
@@ -602,7 +603,7 @@ export async function firmar(id: number, userId: string) {
     cuotas.map((c) => ({ montoCuota: c.montoCuota, saldoPendiente: c.montoCuota, fechaVencimiento: c.fechaVencimiento })),
     inicioDeHoy(),
   )
-  return repo.marcarFirmada(
+  const firmada = await repo.marcarFirmada(
     factura.id,
     {
       folio,
@@ -616,6 +617,14 @@ export async function firmar(id: number, userId: string) {
     },
     userId,
   )
+  // Seguimiento automático del veredicto SII (queda ENVIADA_SII). No crítico: si
+  // Redis/cola fallan, la firma ya está hecha y queda el botón manual + el resync.
+  try {
+    await encolarSeguimientoSii({ tipo: 'factura-nacional', facturaId: factura.id, empresaId: factura.empresaId })
+  } catch (err) {
+    logger.warn({ facturaId: factura.id, err: err instanceof Error ? err.message : String(err) }, 'No se pudo encolar el seguimiento SII (se usará el botón manual / resync)')
+  }
+  return firmada
 }
 
 // Arma las cuotas de la Factura Nacional desde su CondicionPago. Sin condición
@@ -689,6 +698,26 @@ export async function obtenerPdfBorrador(id: number) {
   return { pdf: r.pdf, codigo: factura.codigo }
 }
 
+// Rescata desde LibreDTE el PDF del DTE 33/34 REAL ya timbrado (timbre + folio
+// del SII). Requiere la Factura timbrada (ENVIADA_SII/APROBADA) y con folio.
+// Espejo de factura-exportacion.service.ts obtenerPdfTimbrado.
+export async function obtenerPdfTimbrado(id: number) {
+  const factura = await repo.getFacturaActivaById(id)
+  if (!factura) throw new NotFoundError('Factura Nacional', String(id))
+  if (!esFacturaTimbrada(factura.estado) || factura.folio == null) {
+    throw new ValidationError('El PDF timbrado solo está disponible para una Factura ya timbrada (con folio del SII)')
+  }
+  const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
+  if (!emisor?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
+  const r = await dteService.obtenerPdfEmitido({
+    tipoDte: factura.tipoDte,
+    folio: factura.folio,
+    rutEmisor: emisor.rut,
+  })
+  if (!r.ok) throw new ValidationError(r.error)
+  return { pdf: r.pdf, folio: factura.folio }
+}
+
 export async function listarFacturas(filters: FacturasNacionalListFilters) {
   const { page = 1, limit = 20 } = filters
   const { data, total } = await repo.listFacturas(filters)
@@ -760,7 +789,10 @@ export async function consultarEstadoSii(id: number) {
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
   if (!emisor?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
 
-  const r = await libredte.consultarEstadoEmitido(factura.tipoDte, factura.folio, dteService.rutSinDv(emisor.rut))
+  // actualizar_estado (no `estado`): además de traer el veredicto, PERSISTE el
+  // estado en LibreDTE, requisito para poder luego referenciar el DTE desde una
+  // Nota de Crédito (ver nota en el adapter).
+  const r = await libredte.actualizarEstadoEmitido(factura.tipoDte, factura.folio, dteService.rutSinDv(emisor.rut))
   if (!r.ok || r.data == null) {
     throw new ValidationError(`No se pudo consultar el estado en el SII: ${r.error ?? 'respuesta vacía de LibreDTE'}`)
   }

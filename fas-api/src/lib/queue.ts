@@ -30,3 +30,8 @@ export function createQueueEvents(name: string) {
 }
 
 export const cobranzaQueue = createQueue('cobranza')
+
+// Seguimiento del veredicto SII de un DTE puntual (Factura Nacional/Exportación):
+// jobs con delay que se auto-reagendan mientras la factura siga ENVIADA_SII y se
+// detienen al llegar a APROBADA/RECHAZADA — ver dte-seguimiento-sii.queue.ts.
+export const dteSeguimientoQueue = createQueue('dte-seguimiento')

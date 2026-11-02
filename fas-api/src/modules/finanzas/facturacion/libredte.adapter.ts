@@ -203,3 +203,15 @@ export async function consultarConfigContribuyente(rut: string): Promise<Libredt
 export async function consultarEstadoEmitido(dte: number, folio: number, emisorSinDv: number): Promise<LibredteResultado> {
   return request(`/api/dte/dte_emitidos/estado/${dte}/${folio}/${emisorSinDv}`, 'GET')
 }
+
+// GET /api/dte/dte_emitidos/actualizar_estado/{dte}/{folio}/{emisor} — consulta el
+// estado en el SII y lo PERSISTE en LibreDTE (deja revision_estado/revision_detalle).
+// A diferencia de `estado` (que solo valida y no guarda nada), este deja el estado
+// final registrado en LibreDTE, que es lo que LibreDTE exige para poder referenciar
+// el DTE desde una Nota de Crédito (sin esto responde "no se conoce el estado final
+// de validación"). usarWebservice=1: consulta rápida por webservice del SII.
+export async function actualizarEstadoEmitido(dte: number, folio: number, emisorSinDv: number): Promise<LibredteResultado> {
+  return request(`/api/dte/dte_emitidos/actualizar_estado/${dte}/${folio}/${emisorSinDv}`, 'GET', {
+    query: { usarWebservice: '1' },
+  })
+}
