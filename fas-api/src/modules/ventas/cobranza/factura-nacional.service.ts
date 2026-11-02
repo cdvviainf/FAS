@@ -9,7 +9,7 @@ import * as ncService from './nota-credito.service.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
 import * as libredte from '../../finanzas/facturacion/libredte.adapter.js'
-import { esFacturaTimbrada, interpretarEstadoSii } from './sii-estado.js'
+import { esFacturaTimbrada, esFacturaConDocumentoDescargable, interpretarEstadoSii } from './sii-estado.js'
 import { mapFacturaNacionalADte } from '../../finanzas/facturacion/mappers/factura-nacional.mapper.js'
 import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
 import * as proformaService from './proforma.service.js'
@@ -704,7 +704,9 @@ export async function obtenerPdfBorrador(id: number) {
 export async function obtenerPdfTimbrado(id: number) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura Nacional', String(id))
-  if (!esFacturaTimbrada(factura.estado) || factura.folio == null) {
+  // Timbrada o ANULADA (anulada con NC): el DTE original persiste en LibreDTE y su
+  // PDF sigue siendo descargable. RECHAZADA queda fuera (no es válida).
+  if (!esFacturaConDocumentoDescargable(factura.estado) || factura.folio == null) {
     throw new ValidationError('El PDF timbrado solo está disponible para una Factura ya timbrada (con folio del SII)')
   }
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)

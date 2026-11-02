@@ -20,6 +20,14 @@ export function esFacturaTimbrada(estado: string): boolean {
   return estado === 'ENVIADA_SII' || estado === 'APROBADA'
 }
 
+// Estados cuyo DTE timbrado (PDF/XML) sigue siendo descargable: los timbrados
+// (ENVIADA_SII/APROBADA) y ANULADA (anulada con Nota de Crédito — el DTE original
+// persiste en LibreDTE y se debe poder reimprimir). RECHAZADA queda fuera: el SII
+// la rechazó, no es un documento válido aunque tenga folio.
+export function esFacturaConDocumentoDescargable(estado: string): boolean {
+  return esFacturaTimbrada(estado) || estado === 'ANULADA'
+}
+
 // Códigos/glosas de RECHAZO del SII (revisión de envío + estado de documento).
 // RCH/RFR/RCT/RLV = rechazos de envío; FAU/FNA = firma/autorización; más glosas.
 const RECHAZO_SII = /rechaz|"?rch"?|"?rfr"?|"?rct"?|"?rlv"?|"?fau"?|"?fna"?|no v[aá]lid|anulad/i

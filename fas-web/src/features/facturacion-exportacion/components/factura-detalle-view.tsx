@@ -47,10 +47,12 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
   const queryClient = useQueryClient()
   const puedeEscribir = usePuedeEscribir(ITEM)
   const badge = ESTADO_BADGE[factura.estado]
-  const puedeDescargarXml = esTimbrada(factura.estado) && (factura.dte?.tieneXml ?? false)
-  // Defensa extra (FAS-EXP-IE-QA-003): el backend ya no debería dejar una
-  // Factura timbrada sin folio, pero se exige explícitamente igual.
-  const puedeVerPdf = esTimbrada(factura.estado) && factura.folio != null
+  // Timbrada o ANULADA (anulada con NC): la Factura mantiene su PDF y XML
+  // descargables. RECHAZADA queda fuera (no es un documento válido). Antes se
+  // exigía esTimbrada, que excluía ANULADA y escondía los docs tras anularla.
+  const puedeDescargarDocs = esTimbrada(factura.estado) || factura.estado === 'ANULADA'
+  const puedeDescargarXml = puedeDescargarDocs && (factura.dte?.tieneXml ?? false)
+  const puedeVerPdf = puedeDescargarDocs && factura.folio != null
   // NC de anulación aprobada (cuando la factura está ANULADA).
   const ncAprobada = factura.notasCredito?.find((n) => n.estado === 'APROBADA') ?? null
 

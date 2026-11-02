@@ -336,7 +336,9 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
               Consultar estado SII
             </Button>
           )}
-          {esTimbrada(factura.estado) && factura.folio != null && (
+          {/* Timbrada o ANULADA (anulada con NC): la Factura mantiene su PDF y XML
+              descargables. RECHAZADA queda fuera (no es un documento válido). */}
+          {(esTimbrada(factura.estado) || factura.estado === 'ANULADA') && factura.folio != null && (
             <Button
               variant='outline'
               onClick={() =>
@@ -346,13 +348,13 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
               }
             >
               <Icons.page className='mr-1 h-4 w-4' />
-              Ver PDF
+              Ver Factura (PDF)
             </Button>
           )}
-          {esTimbrada(factura.estado) && dte?.tieneXml && (
+          {(esTimbrada(factura.estado) || factura.estado === 'ANULADA') && dte?.tieneXml && (
             <Button variant='outline' onClick={() => facturaNacionalService.descargarXml(factura.id, `${factura.codigo}.xml`)}>
               <Icons.download className='mr-1 h-4 w-4' />
-              Descargar XML
+              Descargar XML Factura
             </Button>
           )}
           {editable && puedeEscribir && (
