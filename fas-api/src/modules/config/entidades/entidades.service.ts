@@ -19,8 +19,9 @@ export async function listarEntidades(
   q?: string,
   tipo?: TipoEntidad,
   activo?: boolean,
+  sort?: string,
 ) {
-  const { data, total } = await repo.findAllEntidades(page, limit, q, tipo, activo)
+  const { data, total } = await repo.findAllEntidades(page, limit, q, tipo, activo, sort)
   return {
     data,
     meta: { total, page, limit, totalPages: Math.ceil(total / limit) },

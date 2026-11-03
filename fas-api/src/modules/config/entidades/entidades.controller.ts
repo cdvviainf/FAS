@@ -23,6 +23,7 @@ export async function listEntidades(req: FastifyRequest, reply: FastifyReply) {
     query.q,
     query.tipo,
     query.activo,
+    query.sort,
   )
   return reply.send(result)
 }

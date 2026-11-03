@@ -25,6 +25,9 @@ export function EntidadListingClient() {
     perPage: parseAsInteger.withDefault(20),
     q: parseAsString,
     tipo: parseAsStringEnum<TipoEntidad>(Object.keys(TIPO_ENTIDAD_LABELS) as TipoEntidad[]),
+    // Misma clave/formato que useDataTable (SORT_KEY='sort', JSON [{id,desc}]):
+    // se lee crudo y se pasa al backend, igual que el listado de Embarques.
+    sort: parseAsString.withDefault(''),
   })
 
   const filters = {
@@ -32,6 +35,7 @@ export function EntidadListingClient() {
     limit: params.perPage,
     ...(params.q ? { q: params.q } : {}),
     ...(params.tipo ? { tipo: params.tipo } : {}),
+    ...(params.sort ? { sort: params.sort } : {}),
   }
 
   // keepPreviousData: evita desmontar el buscador al tipear (ver mantenedor-table).

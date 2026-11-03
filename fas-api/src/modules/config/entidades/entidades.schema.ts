@@ -122,6 +122,8 @@ export const entidadListQuerySchema = z.object({
       if (v === undefined) return undefined
       return v === 'true' ? true : v === 'false' ? false : undefined
     }),
+  // Orden del listado: JSON [{id,desc}] (formato de useDataTable).
+  sort: z.string().optional(),
 })
 
 // ─── Tipos inferidos ──────────────────────────────────────────────────────────

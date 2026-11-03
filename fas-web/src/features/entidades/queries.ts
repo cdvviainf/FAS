@@ -10,7 +10,7 @@ export const entidadesKeys = {
   comunas: ['comunas'] as const,
 }
 
-export function entidadesListOptions(filters: { page?: number; limit?: number; q?: string; tipo?: TipoEntidad } = {}) {
+export function entidadesListOptions(filters: { page?: number; limit?: number; q?: string; tipo?: TipoEntidad; sort?: string } = {}) {
   return queryOptions({
     queryKey: entidadesKeys.list(filters),
     queryFn: () => entidadesService.list(filters),

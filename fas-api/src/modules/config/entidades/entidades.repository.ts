@@ -1,6 +1,6 @@
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
-import type { TipoEntidad } from '@prisma/client'
+import type { TipoEntidad, Prisma } from '@prisma/client'
 import type {
   EntidadCreateInput,
   EntidadUpdateInput,
@@ -33,12 +33,38 @@ const comunaSelect = {
 
 // ─── Entidades ────────────────────────────────────────────────────────────────
 
+// Orden dinámico del listado (FAS-ENT-SORT): el frontend manda `sort` como JSON
+// [{id,desc}] (mismo formato que useDataTable). Mapea los ids de columna del
+// listado a campos ordenables. Por defecto, código ascendente.
+function resolveOrderByEntidad(sort?: string): Prisma.EntidadOrderByWithRelationInput[] {
+  if (sort) {
+    try {
+      const arr = JSON.parse(sort) as Array<{ id: string; desc: boolean }>
+      const first = Array.isArray(arr) ? arr[0] : null
+      if (first?.id) {
+        const dir = first.desc ? 'desc' : 'asc'
+        // Desempate por `codigo` (único) en los campos no únicos, para que la
+        // paginación server-side tenga un orden total y reproducible.
+        switch (first.id) {
+          case 'codigo': return [{ codigo: dir }]
+          case 'descripcion': return [{ descripcion: dir }, { codigo: 'asc' }]
+          case 'activo': return [{ activo: dir }, { codigo: 'asc' }]
+        }
+      }
+    } catch {
+      /* sort inválido: orden por defecto */
+    }
+  }
+  return [{ codigo: 'asc' }]
+}
+
 export async function findAllEntidades(
   page: number,
   limit: number,
   q?: string,
   tipo?: TipoEntidad,
   activo?: boolean,
+  sort?: string,
 ) {
   const where = {
     eliminadoEn: null as null,
@@ -68,7 +94,7 @@ export async function findAllEntidades(
         creadoEn: true,
         pais: { select: paisSelect },
       },
-      orderBy: { codigo: 'asc' },
+      orderBy: resolveOrderByEntidad(sort),
       skip: (page - 1) * limit,
       take: limit,
     }),

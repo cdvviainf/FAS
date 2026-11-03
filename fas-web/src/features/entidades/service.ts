@@ -11,13 +11,14 @@ import type {
 } from './types'
 
 export const entidadesService = {
-  async list(params: { page?: number; limit?: number; q?: string; tipo?: TipoEntidad; activo?: boolean } = {}): Promise<EntidadListResponse> {
+  async list(params: { page?: number; limit?: number; q?: string; tipo?: TipoEntidad; activo?: boolean; sort?: string } = {}): Promise<EntidadListResponse> {
     const sp: Record<string, string> = {}
     if (params.page) sp.page = String(params.page)
     if (params.limit) sp.limit = String(params.limit)
     if (params.q) sp.q = params.q
     if (params.tipo) sp.tipo = params.tipo
     if (params.activo !== undefined) sp.activo = String(params.activo)
+    if (params.sort) sp.sort = params.sort
     return api.get('config/entidades', { searchParams: sp }).json()
   },
 
