@@ -132,7 +132,7 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='flex max-h-[90vh] max-w-[calc(100%-2rem)] flex-col sm:max-w-4xl'>
+      <DialogContent className='flex max-h-[90vh] max-w-[calc(100%-2rem)] flex-col sm:max-w-6xl'>
         <DialogHeader>
           <DialogTitle className='flex items-center gap-2'>
             {titulo}
