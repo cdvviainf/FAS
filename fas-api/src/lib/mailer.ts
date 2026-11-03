@@ -47,15 +47,22 @@ async function getTransport(): Promise<{ transport: Transporter; from: string }>
   return { transport, from }
 }
 
+export interface AdjuntoCorreo {
+  filename: string
+  content: Buffer
+  contentType?: string
+}
+
 export interface EnviarCorreoInput {
   to: string[]
   subject: string
   html: string
+  attachments?: AdjuntoCorreo[]
 }
 
-export async function enviarCorreo({ to, subject, html }: EnviarCorreoInput) {
+export async function enviarCorreo({ to, subject, html, attachments }: EnviarCorreoInput) {
   const { transport, from } = await getTransport()
-  await transport.sendMail({ from, to: to.join(', '), subject, html })
+  await transport.sendMail({ from, to: to.join(', '), subject, html, attachments })
 }
 
 /** Verifica la conexión SMTP con la configuración actual (para el botón "probar"). */

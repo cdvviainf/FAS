@@ -1,6 +1,7 @@
 import type { Job } from 'bullmq'
 import { createQueue, createWorker } from '../../lib/queue.js'
 import { enviarCorreo } from '../../lib/mailer.js'
+import type { AdjuntoCorreo } from '../../lib/mailer.js'
 import { empresaContext } from '../../lib/empresa-context.js'
 
 export interface CorreoJobData {
@@ -11,6 +12,11 @@ export interface CorreoJobData {
   // empresa) — el worker corre fuera de cualquier request, así que necesita
   // que el job cargue este dato para resolver el SMTP correcto.
   empresaId: number | null
+  // PDF a adjuntar (opcional). NO se serializa el Buffer por Redis: solo el
+  // descriptor (tipo de documento + id); el worker regenera el PDF con
+  // documentos.service.obtenerPdf al momento del envío (igual criterio que el
+  // job 'recordatorio-solicitud', que reconstruye su correo al enviar).
+  pdf?: { tipo: string; id: number }
 }
 
 export interface RecordatorioJobData {
@@ -64,7 +70,21 @@ export function iniciarWorkerCorreos() {
         await procesarRecordatorio((job.data as RecordatorioJobData).solicitudId)
         return
       }
-      await enviarCorreo(job.data as CorreoJobData)
+      const data = job.data as CorreoJobData
+      // Adjunto PDF (obligatorio cuando viene el descriptor): se regenera acá, bajo
+      // el empresaContext ya activo, para no serializar el Buffer por Redis. El PDF
+      // se genera ANTES de enviar: si falla, se lanza el error para que BullMQ
+      // reintente (attempts/backoff) — NO se manda el correo sin el adjunto pedido.
+      let attachments: AdjuntoCorreo[] | undefined
+      if (data.pdf) {
+        if (data.empresaId == null) {
+          throw new Error('No se puede adjuntar el PDF al correo: falta la empresa en el job')
+        }
+        const { obtenerPdf } = await import('../documentos/documentos.service.js')
+        const { buffer, nombreArchivo } = await obtenerPdf(data.pdf.tipo, data.pdf.id, data.empresaId)
+        attachments = [{ filename: nombreArchivo, content: buffer, contentType: 'application/pdf' }]
+      }
+      await enviarCorreo({ to: data.to, subject: data.subject, html: data.html, attachments })
     })
   })
 }

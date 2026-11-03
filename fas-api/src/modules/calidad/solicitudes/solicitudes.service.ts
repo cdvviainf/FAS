@@ -362,7 +362,14 @@ export async function notificarSolicitud(id: number, userId: string) {
   const notificada = await repo.marcarNotificada(id, userId)
 
   const { subject, html } = emails.correoNotificacion(notificada)
-  await encolarCorreo({ to: await destinatariosDe(notificada), subject, html, empresaId: getEmpresaIdActual() })
+  // Adjunta el PDF de la Solicitud de Inspección (se regenera en el worker).
+  await encolarCorreo({
+    to: await destinatariosDe(notificada),
+    subject,
+    html,
+    empresaId: getEmpresaIdActual(),
+    pdf: { tipo: 'solicitud-inspeccion', id: notificada.id },
+  })
   await programarRecordatorio(notificada)
   return notificada
 }

@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Icons } from '@/components/icons'
 import { Combobox } from '@/components/ui/combobox'
@@ -71,6 +72,14 @@ interface LineaForm {
   calibreIds: number[]
   calidadesPermitidas: CalidadPermitidaPar[]
   cantidadPallets: string
+  // Labels denormalizados para la tabla resumen (se resuelven al guardar en el
+  // editor y al hidratar): evitan recargar catálogos por especie solo para mostrar.
+  especieLabel?: string
+  articuloLabel?: string
+  variedadLabel?: string
+  categoriaLabels?: string[]
+  calibreLabels?: string[]
+  calidadLabels?: string[]
 }
 const LINEA_VACIA: LineaForm = {
   especieId: null, articuloId: null, variedadId: null,
@@ -105,6 +114,9 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
   // Tipo de inspección (solo informativo): '' = sin definir.
   const [tipoInspeccion, setTipoInspeccion] = useState<TipoInspeccion | ''>('')
   const [lineas, setLineas] = useState<LineaForm[]>([])
+  // Editor de línea: 'nueva' = agregando, number = editando esa fila, null = cerrado.
+  const [editandoLinea, setEditandoLinea] = useState<number | 'nueva' | null>(null)
+  const [borradorLinea, setBorradorLinea] = useState<LineaForm>({ ...LINEA_VACIA })
   const [asignados, setAsignados] = useState<AsignadoInput[]>([])
   const [observaciones, setObservaciones] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -205,6 +217,12 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
         calibreIds: l.calibres.map((c) => c.calibre.id),
         calidadesPermitidas: l.calidades.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })),
         cantidadPallets: l.cantidadPallets != null ? String(l.cantidadPallets) : '',
+        especieLabel: l.especie.descripcion,
+        articuloLabel: `${l.articulo.codigo} — ${l.articulo.descripcion}`,
+        variedadLabel: l.variedad.descripcion,
+        categoriaLabels: l.categorias.map((c) => c.categoria.descripcion),
+        calibreLabels: l.calibres.map((c) => c.calibre.descripcion),
+        calidadLabels: l.calidades.map((c) => `${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`),
       })))
       setAsignados(d.asignados.map((a) => ({ usuarioId: a.usuarioId, funcion: a.funcion })))
       setObservaciones(d.observaciones ?? '')
@@ -229,15 +247,25 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     return usuarios?.data.find((u) => u.id === id)?.nombre ?? id
   }
 
-  // ── Líneas ──
-  function agregarLinea() {
-    setLineas((prev) => [...prev, { ...LINEA_VACIA }])
+  // ── Líneas (tabla resumen + editor) ──
+  function abrirNuevaLinea() {
+    setBorradorLinea({ ...LINEA_VACIA })
+    setEditandoLinea('nueva')
   }
-  function actualizarLinea(index: number, cambios: Partial<LineaForm>) {
-    setLineas((prev) => prev.map((l, i) => (i === index ? { ...l, ...cambios } : l)))
+  function abrirEditarLinea(index: number) {
+    setBorradorLinea({ ...lineas[index] })
+    setEditandoLinea(index)
+  }
+  function cancelarEditarLinea() {
+    setEditandoLinea(null)
+  }
+  function guardarLinea(linea: LineaForm) {
+    setLineas((prev) => (editandoLinea === 'nueva' ? [...prev, linea] : prev.map((l, i) => (i === editandoLinea ? linea : l))))
+    setEditandoLinea(null)
   }
   function quitarLinea(index: number) {
     setLineas((prev) => prev.filter((_, i) => i !== index))
+    if (editandoLinea === index) setEditandoLinea(null)
   }
 
   function validate(): boolean {
@@ -253,7 +281,8 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     if (asignados.length === 0) e.asignados = 'Debe asignar al menos un usuario'
     // Detalle de producto (2026-10-27): al menos una línea y cada línea con
     // especie, embalaje y variedad.
-    if (lineas.length === 0) e.lineas = 'Debe agregar al menos una línea de producto'
+    if (editandoLinea !== null) e.lineas = 'Guarda o cancela la línea en edición antes de continuar'
+    else if (lineas.length === 0) e.lineas = 'Debe agregar al menos una línea de producto'
     else if (lineas.some((l) => !l.especieId || !l.articuloId || !l.variedadId)) {
       e.lineas = 'Cada línea requiere especie, embalaje y variedad'
     }
@@ -525,25 +554,66 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
           <div className='space-y-3'>
             <div className='flex items-center justify-between'>
               <Label>Detalle de producto <span className='text-destructive'>*</span></Label>
-              <Button type='button' variant='secondary' size='sm' onClick={agregarLinea}>
+              <Button type='button' variant='secondary' size='sm' onClick={abrirNuevaLinea} disabled={editandoLinea !== null}>
                 <Icons.add className='mr-1 h-4 w-4' /> Agregar línea
               </Button>
             </div>
-            {lineas.length === 0 && (
+            {lineas.length === 0 ? (
               <p className='text-xs text-muted-foreground'>Agrega al menos una línea de producto.</p>
+            ) : (
+              <div className='overflow-x-auto rounded-md border'>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Especie</TableHead>
+                      <TableHead>Variedad</TableHead>
+                      <TableHead>Embalaje</TableHead>
+                      <TableHead>Categorías</TableHead>
+                      <TableHead>Calibres</TableHead>
+                      <TableHead>Calidades</TableHead>
+                      <TableHead className='text-right'>Pallets</TableHead>
+                      <TableHead className='w-20' />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lineas.map((l, i) => (
+                      <TableRow key={i}>
+                        <TableCell>{l.especieLabel ?? '—'}</TableCell>
+                        <TableCell>{l.variedadLabel ?? '—'}</TableCell>
+                        <TableCell>{l.articuloLabel ?? '—'}</TableCell>
+                        <TableCell className='text-xs'>{l.categoriaLabels?.join(', ') || '—'}</TableCell>
+                        <TableCell className='text-xs'>{l.calibreLabels?.join(', ') || '—'}</TableCell>
+                        <TableCell className='text-xs'>{l.calidadLabels?.join(', ') || '—'}</TableCell>
+                        <TableCell className='text-right tabular-nums'>{l.cantidadPallets || '—'}</TableCell>
+                        <TableCell className='text-right'>
+                          <div className='flex justify-end gap-1'>
+                            <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => abrirEditarLinea(i)} disabled={editandoLinea !== null}>
+                              <Icons.edit className='h-4 w-4' />
+                            </Button>
+                            {/* Deshabilitado mientras hay un editor abierto: borrar otra fila
+                                correría los índices y descartaría la edición en curso. */}
+                            <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => quitarLinea(i)} disabled={editandoLinea !== null}>
+                              <Icons.trash className='h-4 w-4' />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
-            {lineas.map((linea, i) => (
+            {editandoLinea !== null && (
               <LineaEditor
-                key={i}
-                index={i}
-                linea={linea}
+                linea={borradorLinea}
+                onChange={(cambios) => setBorradorLinea((b) => ({ ...b, ...cambios }))}
                 especies={(especies?.data ?? []).map((e) => ({ id: e.id, descripcion: e.descripcion }))}
                 notasCalidad={notasCalidad?.data ?? []}
                 notasCondicion={notasCondicion?.data ?? []}
-                onChange={(cambios) => actualizarLinea(i, cambios)}
-                onRemove={() => quitarLinea(i)}
+                onGuardar={guardarLinea}
+                onCancelar={cancelarEditarLinea}
               />
-            ))}
+            )}
             {errors.lineas && <p className='text-xs text-destructive'>{errors.lineas}</p>}
           </div>
 
@@ -663,16 +733,16 @@ interface NotaConEspecies {
   especies: { especieId: number }[]
 }
 interface LineaEditorProps {
-  index: number
   linea: LineaForm
   especies: { id: number; descripcion: string }[]
   notasCalidad: NotaConEspecies[]
   notasCondicion: NotaConEspecies[]
   onChange: (cambios: Partial<LineaForm>) => void
-  onRemove: () => void
+  onGuardar: (linea: LineaForm) => void
+  onCancelar: () => void
 }
 
-function LineaEditor({ index, linea, especies, notasCalidad, notasCondicion, onChange, onRemove }: LineaEditorProps) {
+function LineaEditor({ linea, especies, notasCalidad, notasCondicion, onChange, onGuardar, onCancelar }: LineaEditorProps) {
   const especieId = linea.especieId
   // Embalajes filtrados por la especie de la línea (el backend incluye los
   // genéricos sin especie, mismo criterio que la Orden de Compra).
@@ -713,13 +783,36 @@ function LineaEditor({ index, linea, especies, notasCalidad, notasCondicion, onC
     return todas.filter((n) => n.especies.some((e) => e.especieId === especieId))
   }, [notasCondicion, especieId])
 
+  const [errorLinea, setErrorLinea] = useState('')
+
+  // Al guardar: valida obligatorios y resuelve los labels (de los datasets ya
+  // cargados) para mostrarlos en la tabla resumen sin recargar catálogos.
+  function guardar() {
+    if (!linea.especieId || !linea.articuloId || !linea.variedadId) {
+      setErrorLinea('Especie, embalaje y variedad son obligatorios')
+      return
+    }
+    const embalaje = (embalajesData?.data ?? []).find((a) => a.id === linea.articuloId)
+    const variedad = (variedadesData?.data ?? []).find((v) => v.id === linea.variedadId)
+    const categoriaNombre = (id: number) => (categoriasData?.data ?? []).find((c) => c.id === id)?.descripcion ?? String(id)
+    const calibreNombre = (id: number) => (calibresData?.data ?? []).find((c) => c.id === id)?.descripcion ?? String(id)
+    const notaCal = (id: number) => notasCalidad.find((n) => n.id === id)?.descripcion ?? String(id)
+    const notaCon = (id: number) => notasCondicion.find((n) => n.id === id)?.descripcion ?? String(id)
+    onGuardar({
+      ...linea,
+      especieLabel: especies.find((e) => e.id === linea.especieId)?.descripcion,
+      articuloLabel: embalaje ? `${embalaje.codigo} — ${embalaje.descripcion}` : undefined,
+      variedadLabel: variedad?.descripcion,
+      categoriaLabels: linea.categoriaIds.map(categoriaNombre),
+      calibreLabels: linea.calibreIds.map(calibreNombre),
+      calidadLabels: linea.calidadesPermitidas.map((p) => `${notaCal(p.notaCalidadId)}/${notaCon(p.notaCondicionId)}`),
+    })
+  }
+
   return (
     <div className='space-y-3 rounded-md border p-3'>
       <div className='flex items-center justify-between'>
-        <span className='text-sm font-medium'>Línea {index + 1}</span>
-        <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={onRemove}>
-          <Icons.trash className='h-4 w-4' />
-        </Button>
+        <span className='text-sm font-medium'>Línea de producto</span>
       </div>
       <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
         <div className='space-y-1.5'>
@@ -787,6 +880,13 @@ function LineaEditor({ index, linea, especies, notasCalidad, notasCondicion, onC
         calidades={notasCalidadValidas.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
         condiciones={notasCondicionValidas.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
       />
+      {errorLinea && <p className='text-xs text-destructive'>{errorLinea}</p>}
+      <div className='flex justify-end gap-2'>
+        <Button type='button' variant='outline' size='sm' onClick={onCancelar}>Cancelar</Button>
+        <Button type='button' size='sm' onClick={guardar}>
+          <Icons.check className='mr-1 h-4 w-4' /> Guardar línea
+        </Button>
+      </div>
     </div>
   )
 }
