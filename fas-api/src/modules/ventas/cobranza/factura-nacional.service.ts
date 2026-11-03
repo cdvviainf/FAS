@@ -164,18 +164,30 @@ export async function crearBorradorDesdeProformaProductor(proformaProductorId: n
   if (!proforma.entidad.tipos.includes('CLIENTE_NACIONAL')) {
     throw new ValidationError('El Productor no es un Cliente Nacional — agrégale ese tipo en Entidades para poder facturarle')
   }
-  if (proforma.moneda.codigo !== 'CLP') {
-    throw new ValidationError('La Factura Nacional solo admite proformas en pesos chilenos (CLP)')
+  // La Factura Nacional es en CLP. Si la proforma está en otra moneda, se
+  // convierte con el tipo de cambio capturado en la proforma (CLP por 1 unidad).
+  const esClp = proforma.moneda.codigo === 'CLP'
+  let tipoCambio = 1
+  if (!esClp) {
+    const tc = proforma.tipoCambio != null ? Number(proforma.tipoCambio) : null
+    if (tc == null || tc <= 0) {
+      throw new ValidationError('La Proforma no está en CLP y no tiene tipo de cambio — indícalo en la proforma antes de facturar')
+    }
+    tipoCambio = tc
   }
+  const clp = await repo.getMonedaClp()
+  if (!clp) throw new ValidationError('No existe la moneda CLP en el maestro de Monedas')
 
   // Líneas: descripción = descripción del artículo de servicio; afecto/exento
-  // según la línea de la proforma.
+  // según la línea de la proforma. Precio convertido a CLP si la moneda no es CLP
+  // (se guarda el precio de origen en precioUnitarioOrigen).
   const lineas = lineasPersistir(
     proforma.lineas.map((l) => ({
       descripcion: l.articulo?.descripcion ?? 'Servicio',
       articuloId: l.articuloId,
       cantidad: Number(l.cantidad),
-      precioUnitario: Number(l.precioUnitario),
+      precioUnitario: esClp ? Number(l.precioUnitario) : round4(Number(l.precioUnitario) * tipoCambio),
+      precioUnitarioOrigen: esClp ? null : Number(l.precioUnitario),
       exento: l.exento,
     })),
   )
@@ -192,10 +204,11 @@ export async function crearBorradorDesdeProformaProductor(proformaProductorId: n
         proformaProductorId,
         codigo,
         clienteId: proforma.entidadId,
-        monedaId: proforma.monedaId,
+        monedaId: esClp ? proforma.monedaId : clp.id,
         condicionPagoId: proforma.condicionPagoId,
         idioma: 'ES',
         tipoDte: montos.tipoDte,
+        tipoCambio: esClp ? null : tipoCambio,
         montoNeto: montos.montoNeto,
         montoExento: montos.montoExento,
         montoIva: montos.montoIva,

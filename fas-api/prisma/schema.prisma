@@ -2779,6 +2779,10 @@ model ProformaProductor {
   condicionPago   CondicionPago? @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
   monedaId        Int
   moneda          Moneda         @relation(fields: [monedaId], references: [id])
+  // Tipo de cambio (CLP por 1 unidad de la moneda) para convertir la Factura
+  // Nacional a CLP cuando la proforma NO está en CLP. Obligatorio si moneda≠CLP
+  // (se valida en el service / al enviar a validación); null/1 cuando es CLP.
+  tipoCambio      Decimal?       @db.Decimal(14, 4)
   // Concepto de cuenta corriente que impactará la CC del productor cuando la
   // Factura Nacional de origen PROFORMA_PRODUCTOR se timbre (R16/VN5). La factura
   // es un cargo al productor → el concepto debe ser de naturaleza DEBE o AMBOS.

@@ -8,6 +8,9 @@ export interface ProformaProductorLineaInput {
 export interface ProformaProductorCreateInput {
   entidadId: number
   monedaId: number
+  // CLP por 1 unidad de la moneda — obligatorio si moneda ≠ CLP (para convertir
+  // la Factura Nacional a CLP). null cuando es CLP.
+  tipoCambio?: number | null
   formaPagoId?: number | null
   condicionPagoId?: number | null
   conceptoCtaCteId?: number | null

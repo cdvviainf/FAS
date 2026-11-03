@@ -138,6 +138,7 @@ export async function createProformaProductor(data: ProformaProductorCreateInput
         condicionPagoId: data.condicionPagoId,
         conceptoCtaCteId: data.conceptoCtaCteId,
         monedaId: data.monedaId,
+        tipoCambio: data.tipoCambio ?? null,
         observaciones: data.observaciones,
         creadoPor,
         lineas: { create: lineasPersistir(data.lineas) },
@@ -174,6 +175,7 @@ export async function updateProformaProductor(id: number, data: ProformaProducto
       data: {
         ...(data.entidadId !== undefined ? { entidadId: data.entidadId } : {}),
         ...(data.monedaId !== undefined ? { monedaId: data.monedaId } : {}),
+        ...(data.tipoCambio !== undefined ? { tipoCambio: data.tipoCambio } : {}),
         ...(data.formaPagoId !== undefined ? { formaPagoId: data.formaPagoId } : {}),
         ...(data.condicionPagoId !== undefined ? { condicionPagoId: data.condicionPagoId } : {}),
         ...(data.conceptoCtaCteId !== undefined ? { conceptoCtaCteId: data.conceptoCtaCteId } : {}),
@@ -297,7 +299,7 @@ export async function anularProformaProductor(id: number) {
 // ─── Validación de referencias ───────────────────────────────────────────────
 
 export async function getMoneda(id: number) {
-  return prisma.moneda.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+  return prisma.moneda.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true, codigo: true } })
 }
 
 export async function getFormaPago(id: number) {

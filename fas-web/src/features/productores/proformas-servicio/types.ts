@@ -64,6 +64,7 @@ export interface ProformaProductorListItem {
 // El detalle (getById) no calcula estadoEmision (solo el listado lo deriva).
 export interface ProformaProductorDetalle extends Omit<ProformaProductorListItem, 'estadoEmision'> {
   monedaId: number
+  tipoCambio: string | null
   formaPagoId: number | null
   formaPago: MantenedorRef | null
   condicionPagoId: number | null
@@ -92,6 +93,7 @@ export interface ProformaProductorLineaInput {
 export interface ProformaProductorCreateInput {
   entidadId: number
   monedaId: number
+  tipoCambio?: number | null
   formaPagoId?: number | null
   condicionPagoId?: number | null
   conceptoCtaCteId?: number | null

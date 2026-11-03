@@ -8,6 +8,7 @@
 //     productor (DEBE) al timbrarse la Factura Nacional de origen.
 // ─────────────────────────────────────────────────────────────────────────────
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
 import * as repo from './proformas.repository.js'
 import type {
   ProformaProductorCreateInput,
@@ -88,20 +89,65 @@ export async function obtenerProformaProductor(id: number) {
   return proforma
 }
 
+// Tipo de cambio sugerido (CLP por 1 unidad de la moneda) desde la fuente
+// oficial (mindicador.cl), para el botón "Obtener" del form. No persiste nada.
+// CLP → 1. Monedas sin serie automática → error accionable (se ingresa manual).
+export async function obtenerTipoCambioSugerido(monedaCodigo: string, fecha?: string) {
+  if (monedaCodigo.toUpperCase() === 'CLP') return { valor: 1, fecha: null, moneda: 'CLP' }
+  const tc = await obtenerTipoCambio(monedaCodigo, fecha ? new Date(fecha) : undefined)
+  if ('error' in tc) throw new ValidationError(tc.error)
+  return { valor: tc.valor, fecha: tc.fecha, moneda: monedaCodigo }
+}
+
+// La Factura Nacional es en CLP: si la moneda de la proforma no es CLP, se exige
+// el tipo de cambio (CLP por 1 unidad) para convertir al facturar.
+function validarTipoCambio(codigoMoneda: string, tipoCambio: number | null | undefined) {
+  if (codigoMoneda === 'CLP') return
+  if (tipoCambio == null || tipoCambio <= 0) {
+    throw new ValidationError('La moneda no es CLP: indica el tipo de cambio (CLP por 1 unidad de la moneda) para poder facturar')
+  }
+}
+
 export async function crearProformaProductor(body: ProformaProductorCreateInput, creadoPor: string) {
   await validarReferenciasHeader(body)
   await validarLineas(body.lineas)
-  return repo.createProformaProductor(body, creadoPor)
+  const moneda = await repo.getMoneda(body.monedaId)
+  if (!moneda) throw new ValidationError('La moneda seleccionada no existe o está bloqueada')
+  validarTipoCambio(moneda.codigo, body.tipoCambio)
+  // CLP no lleva tipo de cambio: se normaliza a null.
+  const tipoCambio = moneda.codigo === 'CLP' ? null : body.tipoCambio
+  return repo.createProformaProductor({ ...body, tipoCambio }, creadoPor)
 }
 
 export async function actualizarProformaProductor(id: number, body: ProformaProductorUpdateInput, actualizadoPor: string) {
-  await obtenerProformaProductor(id)
+  const actual = await obtenerProformaProductor(id)
   await validarReferenciasHeader(body)
   if (body.lineas !== undefined) {
     if (body.lineas.length === 0) throw new ValidationError('La Proforma debe tener al menos una línea')
     await validarLineas(body.lineas)
   }
-  return repo.updateProformaProductor(id, body, actualizadoPor)
+  // Valida/normaliza el tipo de cambio contra la moneda EFECTIVA (la del patch o,
+  // si no cambia, la actual de la proforma).
+  let patch = body
+  if (body.monedaId !== undefined || body.tipoCambio !== undefined) {
+    const moneda = await repo.getMoneda(body.monedaId ?? actual.monedaId)
+    if (!moneda) throw new ValidationError('La moneda seleccionada no existe o está bloqueada')
+    if (moneda.codigo === 'CLP') {
+      patch = { ...body, tipoCambio: null }
+    } else {
+      // Si la moneda CAMBIA a una no-CLP, el tipo de cambio del mismo PATCH es
+      // obligatorio: no se reutiliza el anterior (era de otra moneda). Si la
+      // moneda no cambia, se conserva el tipo de cambio actual de la proforma.
+      const monedaCambia = body.monedaId !== undefined && body.monedaId !== actual.monedaId
+      const tc = body.tipoCambio !== undefined
+        ? body.tipoCambio
+        : monedaCambia
+          ? null
+          : actual.tipoCambio != null ? Number(actual.tipoCambio) : null
+      validarTipoCambio(moneda.codigo, tc)
+    }
+  }
+  return repo.updateProformaProductor(id, patch, actualizadoPor)
 }
 
 export async function enviarValidacionProformaProductor(id: number) {
@@ -116,6 +162,9 @@ export async function enviarValidacionProformaProductor(id: number) {
   if (proforma.conceptoCtaCteId == null) {
     throw new ValidationError('Debes seleccionar el Concepto de Cuenta Corriente antes de enviar a validación (se usará al emitir la factura)')
   }
+  // Si la moneda no es CLP, el tipo de cambio es obligatorio para convertir la
+  // Factura Nacional a CLP al facturar.
+  validarTipoCambio(proforma.moneda.codigo, proforma.tipoCambio != null ? Number(proforma.tipoCambio) : null)
   // FAS-PP-QA-004 / R13: para poder facturarle, el productor debe estar marcado
   // también como Cliente Nacional. Se valida temprano (acá) para no dejar
   // proformas "listas" que luego no se pueden facturar.

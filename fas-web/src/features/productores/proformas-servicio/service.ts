@@ -38,6 +38,14 @@ export const proformasProductorService = {
     return api.post(`productores/proformas/${id}/rechazar`).json()
   },
 
+  // Tipo de cambio sugerido (CLP por 1 unidad) desde la fuente oficial, para el
+  // botón "Obtener" del form cuando la moneda no es CLP.
+  async obtenerTipoCambio(moneda: string, fecha?: string): Promise<{ data: { valor: number; fecha: string | null; moneda: string } }> {
+    const sp: Record<string, string> = { moneda }
+    if (fecha) sp.fecha = fecha
+    return api.get('productores/proformas/tipo-cambio', { searchParams: sp }).json()
+  },
+
   async anular(id: number): Promise<{ data: ProformaProductorDetalle }> {
     return api.post(`productores/proformas/${id}/anular`).json()
   },

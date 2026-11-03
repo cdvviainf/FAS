@@ -4,6 +4,7 @@ import {
   proformaProductorUpdateSchema,
   proformaProductorParamsSchema,
   proformaProductorListQuerySchema,
+  proformaTipoCambioQuerySchema,
 } from './proformas.schema.js'
 import * as service from './proformas.service.js'
 
@@ -11,6 +12,11 @@ export async function list(req: FastifyRequest, reply: FastifyReply) {
   const { page, limit, entidadId, estado, q } = proformaProductorListQuerySchema.parse(req.query)
   const result = await service.listarProformasProductor({ page, limit, entidadId, estado, q })
   return reply.send(result)
+}
+
+export async function tipoCambio(req: FastifyRequest, reply: FastifyReply) {
+  const { moneda, fecha } = proformaTipoCambioQuerySchema.parse(req.query)
+  return reply.send({ data: await service.obtenerTipoCambioSugerido(moneda, fecha) })
 }
 
 export async function getById(req: FastifyRequest, reply: FastifyReply) {

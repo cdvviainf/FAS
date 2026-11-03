@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -46,6 +46,7 @@ interface HeaderFields {
   condicionPagoId: number | null
   conceptoCtaCteId: number | null
   monedaId: number
+  tipoCambio: string // CLP por 1 unidad de la moneda (vacío si CLP)
   observaciones: string
 }
 
@@ -63,6 +64,7 @@ const HEADER_EMPTY: HeaderFields = {
   condicionPagoId: null,
   conceptoCtaCteId: null,
   monedaId: 0,
+  tipoCambio: '',
   observaciones: '',
 }
 
@@ -127,6 +129,17 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
     (c) => (c as { naturaleza?: string }).naturaleza !== 'HABER',
   )
 
+  const monedaSeleccionada = (monedasData?.data ?? []).find((m) => m.id === fields.monedaId)
+  // Si la moneda no es CLP, la Factura Nacional (CLP) exige tipo de cambio.
+  const esMonedaNoClp = !!monedaSeleccionada && monedaSeleccionada.codigo !== 'CLP'
+  // Moneda vigente (ref) para descartar respuestas tardías del botón "Obtener"
+  // si el usuario cambió de moneda mientras se consultaba. Se sincroniza en un
+  // effect (el proyecto prohíbe escribir refs durante el render).
+  const monedaIdActualRef = useRef(fields.monedaId)
+  useEffect(() => {
+    monedaIdActualRef.current = fields.monedaId
+  }, [fields.monedaId])
+
   const condicionPagoSeleccionada = (condicionesPagoData?.data ?? []).find((c) => c.id === fields.condicionPagoId)
   const cuotasPreview = isEdit ? proforma?.data.cuotasPago ?? [] : condicionPagoSeleccionada?.cuotas ?? []
 
@@ -140,6 +153,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
         condicionPagoId: d.condicionPagoId,
         conceptoCtaCteId: d.conceptoCtaCteId,
         monedaId: d.monedaId,
+        tipoCambio: d.tipoCambio ?? '',
         observaciones: d.observaciones ?? '',
       })
       setLineas(
@@ -157,6 +171,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
     const e: Record<string, string> = {}
     if (!fields.entidadId) e.entidadId = 'El productor es requerido'
     if (!fields.monedaId) e.monedaId = 'La moneda es requerida'
+    if (esMonedaNoClp && !(Number(fields.tipoCambio) > 0)) e.tipoCambio = 'Indica el tipo de cambio (la moneda no es CLP)'
     if (lineas.length === 0) e.lineas = 'Agrega al menos una línea'
     if (lineas.some((l) => !l.articuloId)) e.lineas = 'Cada línea debe tener un artículo de servicio'
     if (lineas.some((l) => Number(l.cantidad) <= 0)) e.lineas = 'La cantidad de cada línea debe ser mayor a 0'
@@ -178,6 +193,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
     return {
       entidadId: fields.entidadId,
       monedaId: fields.monedaId,
+      tipoCambio: esMonedaNoClp && Number(fields.tipoCambio) > 0 ? Number(fields.tipoCambio) : null,
       formaPagoId: fields.formaPagoId,
       condicionPagoId: fields.condicionPagoId,
       conceptoCtaCteId: fields.conceptoCtaCteId,
@@ -216,6 +232,17 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
       toast.error(e.message || 'Error al enviar a validación')
       setEnviarOpen(false)
     },
+  })
+
+  const obtenerTcMutation = useMutation({
+    mutationFn: (v: { monedaId: number; codigo: string }) => proformasProductorService.obtenerTipoCambio(v.codigo),
+    onSuccess: (res, v) => {
+      // Descartar si la moneda cambió mientras se consultaba (race USD→EUR).
+      if (monedaIdActualRef.current !== v.monedaId) return
+      setFields((f) => ({ ...f, tipoCambio: String(res.data.valor) }))
+      toast.success(`Tipo de cambio ${res.data.valor}${res.data.fecha ? ` (${res.data.fecha})` : ''}`)
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo obtener el tipo de cambio — ingrésalo manualmente'),
   })
 
   const rechazarMutation = useMutation({
@@ -324,8 +351,9 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
                 placeholder='Seleccionar productor...'
                 searchPlaceholder='Buscar productor...'
                 options={productores.map((p) => ({
+                  // Solo el nombre (descripcion), no "nombre — razón social".
                   value: String(p.id),
-                  label: `${p.descripcion} — ${p.razonSocial}`,
+                  label: p.descripcion,
                 }))}
                 disabled={soloLectura}
               />
@@ -376,7 +404,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
               <div className='space-y-1.5'>
                 <Label>Moneda <span className='text-destructive'>*</span></Label>
                 <div className='flex gap-2'>
-                  <Select value={fields.monedaId ? String(fields.monedaId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, monedaId: Number(v) }))}>
+                  <Select value={fields.monedaId ? String(fields.monedaId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, monedaId: Number(v), tipoCambio: '' }))}>
                     <SelectTrigger className='flex-1'><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                     <SelectContent>
                       {(monedasData?.data ?? []).map((m) => (
@@ -387,13 +415,47 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
                   <MonedaQuickCreate
                     onCreated={(m) => {
                       agregarAOpciones(['monedas-options'], m)
-                      setFields((f) => ({ ...f, monedaId: m.id }))
+                      // Limpiar el tipo de cambio: corresponde a la moneda anterior.
+                      setFields((f) => ({ ...f, monedaId: m.id, tipoCambio: '' }))
                     }}
                   />
                 </div>
                 {errors.monedaId && <p className='text-xs text-destructive'>{errors.monedaId}</p>}
-                <p className='text-xs text-muted-foreground'>La Factura Nacional exige CLP.</p>
+                <p className='text-xs text-muted-foreground'>
+                  La Factura Nacional es en CLP. Si eliges otra moneda, indica el tipo de cambio para convertirla.
+                </p>
               </div>
+              {esMonedaNoClp && (
+                <div className='space-y-1.5'>
+                  <Label>Tipo de cambio <span className='text-destructive'>*</span></Label>
+                  <div className='flex gap-2'>
+                    <Input
+                      type='number'
+                      min='0'
+                      step='0.0001'
+                      inputMode='decimal'
+                      placeholder={`CLP por 1 ${monedaSeleccionada?.codigo ?? ''}`}
+                      value={fields.tipoCambio}
+                      onChange={(e) => setFields((f) => ({ ...f, tipoCambio: e.target.value }))}
+                      disabled={soloLectura}
+                      className='flex-1'
+                    />
+                    <Button
+                      type='button'
+                      variant='outline'
+                      onClick={() => obtenerTcMutation.mutate({ monedaId: fields.monedaId, codigo: monedaSeleccionada?.codigo ?? '' })}
+                      isLoading={obtenerTcMutation.isPending}
+                      disabled={soloLectura || !monedaSeleccionada}
+                    >
+                      Obtener
+                    </Button>
+                  </div>
+                  {errors.tipoCambio && <p className='text-xs text-destructive'>{errors.tipoCambio}</p>}
+                  <p className='text-xs text-muted-foreground'>
+                    CLP por 1 {monedaSeleccionada?.codigo ?? 'unidad'}. Se usa para convertir la Factura Nacional a CLP.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className='space-y-1.5'>

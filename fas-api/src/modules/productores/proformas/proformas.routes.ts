@@ -6,6 +6,8 @@ const ITEM = 'PRODUCTORES_PROFORMA'
 
 export async function proformasProductorRoutes(app: FastifyInstance) {
   app.get('/proformas', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
+  // Ruta estática antes de la paramétrica /:id (Fastify prioriza estáticas igual).
+  app.get('/proformas/tipo-cambio', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.tipoCambio)
   app.get('/proformas/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
   app.post('/proformas', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)
   app.patch('/proformas/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.update)
