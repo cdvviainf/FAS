@@ -42,8 +42,7 @@ export interface ProformaProductorCuotaPagoItem {
 
 export interface ProformaProductorLineaItem {
   id: number
-  articuloId: number
-  articulo: MantenedorRef & { unidad: MantenedorRef }
+  glosa: string
   cantidad: string
   precioUnitario: string
   monto: string
@@ -84,7 +83,7 @@ export interface ProformaProductorListResponse {
 }
 
 export interface ProformaProductorLineaInput {
-  articuloId: number
+  glosa: string
   cantidad: number
   precioUnitario: number
   exento: boolean

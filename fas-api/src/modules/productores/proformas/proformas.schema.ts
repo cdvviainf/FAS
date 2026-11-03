@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 const lineaSchema = z.object({
-  articuloId: z.number().int().positive('El artículo es requerido'),
+  glosa: z.string().trim().min(1, 'La glosa es requerida'),
   cantidad: z.number().positive('La cantidad debe ser mayor a 0'),
   precioUnitario: z.number().nonnegative('El precio no puede ser negativo'),
   exento: z.boolean().default(false),

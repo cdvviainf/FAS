@@ -115,6 +115,15 @@ export async function descargarPdfTimbrado(req: FastifyRequest, reply: FastifyRe
     .send(pdf)
 }
 
+export async function descargarPdfProformaOrigen(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = facturaNacionalParamsSchema.parse(req.params)
+  const { buffer, nombreArchivo } = await service.obtenerPdfProformaOrigen(id)
+  return reply
+    .header('Content-Type', 'application/pdf')
+    .header('Content-Disposition', `inline; filename="${nombreArchivo}"`)
+    .send(buffer)
+}
+
 export async function descargarXml(req: FastifyRequest, reply: FastifyReply) {
   const { id } = facturaNacionalParamsSchema.parse(req.params)
   const { xml, codigo } = await service.obtenerXmlFactura(id)

@@ -35,4 +35,6 @@ export async function facturaNacionalRoutes(app: FastifyInstance) {
   app.get('/facturas-nacional/:id/xml', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarXml)
   app.get('/facturas-nacional/:id/pdf-borrador', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.descargarPdfBorrador)
   app.get('/facturas-nacional/:id/pdf-sii', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarPdfTimbrado)
+  // PDF de la proforma de ORIGEN, autorizado por FACT_NACIONAL (FAS-IB-QA-001).
+  app.get('/facturas-nacional/:id/proforma-pdf', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarPdfProformaOrigen)
 }

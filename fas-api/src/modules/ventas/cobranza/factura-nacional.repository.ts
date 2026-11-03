@@ -150,8 +150,7 @@ export async function getProformaProductorParaFactura(id: number) {
       },
       lineas: {
         select: {
-          articuloId: true,
-          articulo: { select: { descripcion: true } },
+          glosa: true,
           cantidad: true,
           precioUnitario: true,
           exento: true,

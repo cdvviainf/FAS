@@ -2317,7 +2317,6 @@ model Articulo {
   ordenCompraLineas           OrdenCompraLinea[]
   ordenCompraMaterialLineas   OrdenCompraMaterialLinea[]
   proformaMaterialLineas      ProformaMaterialLinea[]
-  proformaProductorLineas     ProformaProductorLinea[]
   contratoProductorLineas     ProductorContratoLinea[]
   solicitudesInspeccion       SolicitudInspeccionLinea[]
   palletLineas                PalletLinea[]
@@ -2817,15 +2816,16 @@ model ProformaProductorLinea {
   proformaProductorId Int
   proformaProductor   ProformaProductor @relation(fields: [proformaProductorId], references: [id], onDelete: Cascade)
 
-  articuloId     Int
-  articulo       Articulo @relation(fields: [articuloId], references: [id])
+  // Glosa libre digitada (2026-11-03): el detalle ya no referencia un Artículo
+  // SERVICIO; la clasificación va por el Concepto de Cta. Cte. de la cabecera y
+  // cada línea lleva su texto, cantidad, precio y exento manuales.
+  glosa          String
   cantidad       Decimal  @db.Decimal(14, 3)
   precioUnitario Decimal  @db.Decimal(14, 4)
   monto          Decimal  @db.Decimal(14, 2)
   exento         Boolean  @default(false)
 
   @@index([proformaProductorId])
-  @@index([articuloId])
   @@map("proforma_productor_linea")
 }
 

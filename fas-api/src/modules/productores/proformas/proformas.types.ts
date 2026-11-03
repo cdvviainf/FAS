@@ -1,5 +1,5 @@
 export interface ProformaProductorLineaInput {
-  articuloId: number
+  glosa: string
   cantidad: number
   precioUnitario: number
   exento: boolean

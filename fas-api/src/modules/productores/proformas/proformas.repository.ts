@@ -20,7 +20,6 @@ const includeDetalle = {
   condicionPago: { select: { id: true, codigo: true, descripcion: true } },
   conceptoCtaCte: { select: { id: true, codigo: true, descripcion: true, naturaleza: true } },
   lineas: {
-    include: { articulo: { select: { id: true, codigo: true, descripcion: true, unidad: { select: mantenedorSelect } } } },
     orderBy: { id: 'asc' as const },
   },
   cuotasPago: { orderBy: { id: 'asc' as const } },
@@ -97,7 +96,7 @@ async function cuotasDesdeCondicionPago(tx: Tx, condicionPagoId: number | null |
 
 function lineasPersistir(lineas: ProformaProductorLineaInput[]) {
   return lineas.map((l) => ({
-    articuloId: l.articuloId,
+    glosa: l.glosa,
     cantidad: l.cantidad,
     precioUnitario: l.precioUnitario,
     monto: round2(l.cantidad * l.precioUnitario),
@@ -321,16 +320,4 @@ export async function getConceptoCtaCte(id: number) {
     where: { id, eliminadoEn: null, bloqueado: false },
     select: { id: true, naturaleza: true },
   })
-}
-
-// Artículos SERVICIO FACTURABLES válidos (en la empresa activa — la extensión de
-// tenancy acota Articulo por empresa). Devuelve un Map id→exento, para validar
-// que la línea referencia un servicio facturable y heredar su afecto/exento.
-export async function getArticulosServicioFacturables(ids: number[]): Promise<Map<number, boolean>> {
-  if (ids.length === 0) return new Map()
-  const articulos = await prisma.articulo.findMany({
-    where: { id: { in: ids }, tipo: 'SERVICIO', facturable: true, activo: true },
-    select: { id: true, exento: true },
-  })
-  return new Map(articulos.map((a) => [a.id, a.exento]))
 }

@@ -13,6 +13,8 @@ import { esFacturaTimbrada, esFacturaConDocumentoDescargable, interpretarEstadoS
 import { mapFacturaNacionalADte } from '../../finanzas/facturacion/mappers/factura-nacional.mapper.js'
 import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
 import * as proformaService from './proforma.service.js'
+import { obtenerPdf } from '../../documentos/documentos.service.js'
+import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import * as repo from './factura-nacional.repository.js'
 import type { DimensionProforma } from './proforma.types.js'
 import type { FacturaNacionalActualizarInput, FacturasNacionalListFilters } from './factura-nacional.types.js'
@@ -183,8 +185,10 @@ export async function crearBorradorDesdeProformaProductor(proformaProductorId: n
   // (se guarda el precio de origen en precioUnitarioOrigen).
   const lineas = lineasPersistir(
     proforma.lineas.map((l) => ({
-      descripcion: l.articulo?.descripcion ?? 'Servicio',
-      articuloId: l.articuloId,
+      descripcion: l.glosa,
+      // El detalle de la proforma de servicios ya no referencia un Artículo
+      // (es glosa libre): la línea de la Factura queda sin artículo.
+      articuloId: null,
       cantidad: Number(l.cantidad),
       precioUnitario: esClp ? Number(l.precioUnitario) : round4(Number(l.precioUnitario) * tipoCambio),
       precioUnitarioOrigen: esClp ? null : Number(l.precioUnitario),
@@ -682,6 +686,33 @@ export async function obtenerFactura(id: number) {
   if (!factura) throw new NotFoundError('Factura Nacional', String(id))
   const dte = await dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id)
   return { ...factura, dte: dte ? { estado: dte.estado, folio: dte.folio, tieneXml: !!dte.xml } : null }
+}
+
+// PDF de la Proforma de ORIGEN de la Factura (Productor o Materiales), servido
+// bajo el permiso de Factura Nacional (FACT_NACIONAL): se resuelve la proforma a
+// partir de la propia factura (FK), sin exponer proformas ajenas por id — así un
+// usuario con acceso a la factura ve la proforma aunque no tenga el permiso del
+// módulo de origen (FAS-IB-QA-001).
+export async function obtenerPdfProformaOrigen(id: number) {
+  const factura = await repo.getFacturaByIdConHistorial(id)
+  if (!factura) throw new NotFoundError('Factura Nacional', String(id))
+
+  let tipo: 'proforma-productor' | 'proforma-material'
+  let proformaId: number | null
+  if (factura.origenClase === 'PROFORMA_PRODUCTOR') {
+    tipo = 'proforma-productor'
+    proformaId = factura.proformaProductorId
+  } else if (factura.origenClase === 'PROFORMA_MATERIAL') {
+    tipo = 'proforma-material'
+    proformaId = factura.proformaMaterialId
+  } else {
+    throw new ValidationError('Esta Factura Nacional no tiene una proforma de origen')
+  }
+  if (proformaId == null) throw new NotFoundError('Proforma de origen', String(id))
+
+  const empresaId = getEmpresaIdActual()
+  if (empresaId == null) throw new ValidationError('No hay empresa activa en la sesión')
+  return obtenerPdf(tipo, proformaId, empresaId)
 }
 
 export async function obtenerXmlFactura(id: number) {

@@ -101,6 +101,8 @@ export interface FacturaNacional {
   origenClase: OrigenFacturaNacional
   proformaMaterialId: number | null
   proformaMaterial: { id: number; numero: string; estado: string } | null
+  proformaProductorId: number | null
+  proformaProductor: { id: number; numero: string; estado: string } | null
   embarqueId: number | null
   embarque: { id: number; numeroInstructivo: string; notaVenta: { moneda: { codigo: string } } } | null
   tipoCambio: string | null

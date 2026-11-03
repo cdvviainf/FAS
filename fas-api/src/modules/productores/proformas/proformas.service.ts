@@ -59,25 +59,6 @@ async function validarReferenciasHeader(data: {
   }
 }
 
-// Valida que cada artículo de las líneas exista, sea SERVICIO y FACTURABLE (en la
-// empresa activa). Devuelve un Map id→exento para heredar el afecto/exento del
-// artículo en la línea (la Proforma no lo deja editar a mano).
-async function validarLineas(lineas: ProformaProductorLineaInput[]): Promise<Map<number, boolean>> {
-  const ids = [...new Set(lineas.map((l) => l.articuloId))]
-  const facturables = await repo.getArticulosServicioFacturables(ids)
-  const invalido = ids.find((id) => !facturables.has(id))
-  if (invalido != null) {
-    throw new ValidationError('Una de las líneas referencia un artículo que no existe, está inactivo, no es de tipo Servicio o no está marcado como facturable')
-  }
-  return facturables
-}
-
-// El exento de cada línea se HEREDA del artículo (no se edita a mano): se
-// sobrescribe con el valor del maestro.
-function heredarExento(lineas: ProformaProductorLineaInput[], exentoPorArticulo: Map<number, boolean>): ProformaProductorLineaInput[] {
-  return lineas.map((l) => ({ ...l, exento: exentoPorArticulo.get(l.articuloId) ?? l.exento }))
-}
-
 export async function listarProformasProductor(filters: ProformaProductorListFilters) {
   const { page = 1, limit = 20, entidadId, estado, q } = filters
   const { data, total } = await repo.listProformasProductor(page, limit, entidadId, estado, q)
@@ -118,8 +99,6 @@ function validarTipoCambio(codigoMoneda: string, tipoCambio: number | null | und
 
 export async function crearProformaProductor(body: ProformaProductorCreateInput, creadoPor: string) {
   await validarReferenciasHeader(body)
-  const exentoPorArticulo = await validarLineas(body.lineas)
-  body = { ...body, lineas: heredarExento(body.lineas, exentoPorArticulo) }
   const moneda = await repo.getMoneda(body.monedaId)
   if (!moneda) throw new ValidationError('La moneda seleccionada no existe o está bloqueada')
   validarTipoCambio(moneda.codigo, body.tipoCambio)
@@ -134,8 +113,7 @@ export async function actualizarProformaProductor(id: number, body: ProformaProd
   const patch: ProformaProductorUpdateInput = { ...body }
   if (body.lineas !== undefined) {
     if (body.lineas.length === 0) throw new ValidationError('La Proforma debe tener al menos una línea')
-    const exentoPorArticulo = await validarLineas(body.lineas)
-    patch.lineas = heredarExento(body.lineas, exentoPorArticulo)
+    patch.lineas = body.lineas
   }
   // Valida/normaliza el tipo de cambio contra la moneda EFECTIVA (la del patch o,
   // si no cambia, la actual de la proforma).

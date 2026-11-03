@@ -295,12 +295,28 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
           <p className='text-muted-foreground text-sm'>
             {ORIGEN_FN_LABELS[factura.origenClase]}
             {factura.proformaMaterial ? ` · ${factura.proformaMaterial.numero}` : ''}
+            {factura.proformaProductor ? ` · ${factura.proformaProductor.numero}` : ''}
             {factura.embarque ? ` · Embarque ${factura.embarque.numeroInstructivo}` : ''} ·{' '}
             {factura.cliente.razonSocial ?? factura.cliente.descripcion}
             {factura.cliente.identificador ? ` (${factura.cliente.identificador})` : ''}
           </p>
         </div>
         <div className='flex flex-wrap gap-2'>
+          {/* Ver la Proforma de origen (Productor o Materiales) en PDF — servida
+              por la propia Factura Nacional bajo FACT_NACIONAL. */}
+          {(factura.proformaProductorId != null || factura.proformaMaterialId != null) && (
+            <Button
+              variant='outline'
+              onClick={() =>
+                facturaNacionalService
+                  .verProformaPdf(factura.id)
+                  .catch((e) => toast.error((e as Error).message || 'No se pudo abrir la proforma'))
+              }
+            >
+              <Icons.page className='mr-1 h-4 w-4' />
+              Ver Proforma (PDF)
+            </Button>
+          )}
           {editable && puedeEscribir && (
             <Button variant='outline' disabled={trabajando || !dirty} onClick={() => guardar.mutate()}>
               <Icons.check className='mr-1 h-4 w-4' />

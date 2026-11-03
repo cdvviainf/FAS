@@ -26,7 +26,6 @@ import { condicionesPagoService } from '@/features/condiciones-pago/service'
 import { FECHA_REFERENCIA_LABELS } from '@/features/condiciones-pago/types'
 import type { MantenedorSimple, MantenedorSimpleListResponse } from '@/features/mantenedor-simple/types'
 import { entidadesService } from '@/features/entidades/service'
-import { articulosService } from '@/features/materiales/articulos/service'
 import { formatMonto } from '@/lib/format'
 import { proformaProductorDetailOptions, proformasProductorKeys } from '../queries'
 import { proformasProductorService } from '../service'
@@ -50,9 +49,9 @@ interface HeaderFields {
   observaciones: string
 }
 
-// Línea en edición local: ids/números como string para el input controlado.
+// Línea en edición local: glosa libre + números como string para el input.
 interface LineaEdit {
-  articuloId: number
+  glosa: string
   cantidad: string
   precioUnitario: string
   exento: boolean
@@ -68,7 +67,7 @@ const HEADER_EMPTY: HeaderFields = {
   observaciones: '',
 }
 
-const LINEA_EMPTY: LineaEdit = { articuloId: 0, cantidad: '1', precioUnitario: '0', exento: false }
+const LINEA_EMPTY: LineaEdit = { glosa: '', cantidad: '1', precioUnitario: '0', exento: false }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
@@ -108,11 +107,6 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
     queryFn: () => entidadesService.list({ tipo: 'PRODUCTOR', activo: true, limit: 500 }),
     staleTime: 60_000,
   })
-  const { data: articulosData } = useQuery({
-    queryKey: ['articulos-servicio-facturables-options'],
-    queryFn: () => articulosService.list({ tipo: 'SERVICIO', activo: true, facturable: true, limit: 500 }),
-    staleTime: 60_000,
-  })
   const { data: condicionesPagoData } = useQuery({
     queryKey: ['condiciones-pago-options', 'VENTA'],
     queryFn: () => condicionesPagoService.list({ tipo: 'VENTA' }),
@@ -123,7 +117,6 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
   const { data: conceptosCtaCteData } = useQuery({ queryKey: ['conceptos-cta-cte-options'], queryFn: () => conceptosCtaCteService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000 })
 
   const productores = productoresData?.data ?? []
-  const articulos = articulosData?.data ?? []
   // La factura al productor es un cargo (DEBE) → solo conceptos DEBE o AMBOS.
   const conceptosCtaCte = (conceptosCtaCteData?.data ?? []).filter(
     (c) => (c as { naturaleza?: string }).naturaleza !== 'HABER',
@@ -158,7 +151,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
       })
       setLineas(
         d.lineas.map((l) => ({
-          articuloId: l.articuloId,
+          glosa: l.glosa,
           cantidad: l.cantidad,
           precioUnitario: l.precioUnitario,
           exento: l.exento,
@@ -173,7 +166,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
     if (!fields.monedaId) e.monedaId = 'La moneda es requerida'
     if (esMonedaNoClp && !(Number(fields.tipoCambio) > 0)) e.tipoCambio = 'Indica el tipo de cambio (la moneda no es CLP)'
     if (lineas.length === 0) e.lineas = 'Agrega al menos una línea'
-    if (lineas.some((l) => !l.articuloId)) e.lineas = 'Cada línea debe tener un artículo de servicio'
+    if (lineas.some((l) => !l.glosa.trim())) e.lineas = 'Cada línea debe tener una glosa'
     if (lineas.some((l) => Number(l.cantidad) <= 0)) e.lineas = 'La cantidad de cada línea debe ser mayor a 0'
     if (lineas.some((l) => Number(l.precioUnitario) < 0)) e.lineas = 'El precio no puede ser negativo'
     setErrors(e)
@@ -182,7 +175,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
 
   function buildLineasPayload(): ProformaProductorLineaInput[] {
     return lineas.map((l) => ({
-      articuloId: l.articuloId,
+      glosa: l.glosa.trim(),
       cantidad: Number(l.cantidad),
       precioUnitario: Number(l.precioUnitario),
       exento: l.exento,
@@ -303,7 +296,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
   const soloLectura = !puedeEscribir || (isEdit && !editable)
   const puedeAnular = puedeEscribir && (estado === 'BORRADOR' || estado === 'ENVIADA_VALIDACION' || estado === 'RECHAZADA')
   const puedeRechazar = puedeEscribir && estado === 'ENVIADA_VALIDACION'
-  const todasConPrecio = lineas.length > 0 && lineas.every((l) => Number(l.precioUnitario) > 0 && l.articuloId > 0)
+  const todasConPrecio = lineas.length > 0 && lineas.every((l) => Number(l.precioUnitario) > 0 && l.glosa.trim().length > 0)
   const puedeEnviarValidacion = puedeEscribir && editable && todasConPrecio && fields.conceptoCtaCteId != null
 
   const totalProforma = lineas.reduce((acc, l) => acc + round2(Number(l.cantidad) * Number(l.precioUnitario)), 0)
@@ -508,7 +501,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className='min-w-[260px]'>Servicio</TableHead>
+                    <TableHead className='min-w-[260px]'>Glosa</TableHead>
                     <TableHead className='w-28'>Cantidad</TableHead>
                     <TableHead className='w-32'>Precio Unitario</TableHead>
                     <TableHead className='w-20 text-center'>Exento</TableHead>
@@ -522,16 +515,10 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
                     return (
                       <TableRow key={idx}>
                         <TableCell>
-                          <Combobox
-                            value={l.articuloId ? String(l.articuloId) : ''}
-                            onChange={(v) => {
-                              // El exento se HEREDA del artículo (afecto/exento del maestro).
-                              const art = articulos.find((a) => a.id === Number(v))
-                              setLinea(idx, { articuloId: Number(v), exento: art?.exento ?? false })
-                            }}
-                            placeholder='Seleccionar servicio...'
-                            searchPlaceholder='Buscar servicio...'
-                            options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+                          <Input
+                            value={l.glosa}
+                            onChange={(e) => setLinea(idx, { glosa: e.target.value })}
+                            placeholder='Glosa del servicio...'
                             disabled={soloLectura}
                           />
                         </TableCell>
@@ -550,8 +537,11 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
                           />
                         </TableCell>
                         <TableCell className='text-center'>
-                          {/* Exento se hereda del artículo (maestro) — solo lectura. */}
-                          <Checkbox checked={l.exento} disabled />
+                          <Checkbox
+                            checked={l.exento}
+                            disabled={soloLectura}
+                            onCheckedChange={(v) => setLinea(idx, { exento: v === true })}
+                          />
                         </TableCell>
                         <TableCell className='text-right tabular-nums'>{formatMonto(monto)}</TableCell>
                         {!soloLectura && (

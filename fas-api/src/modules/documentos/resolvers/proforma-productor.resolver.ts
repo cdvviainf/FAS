@@ -68,7 +68,7 @@ export async function resolverProformaProductor(id: number, empresaId: number): 
     condicionPago: proforma.condicionPago?.descripcion ?? null,
     observaciones: proforma.observaciones,
     lineas: proforma.lineas.map((l) => ({
-      descripcion: l.articulo.descripcion,
+      descripcion: l.glosa,
       cantidad: l.cantidad.toString(),
       precioUnitario: l.precioUnitario.toString(),
       monto: l.monto.toString(),

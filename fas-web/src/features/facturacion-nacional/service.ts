@@ -120,6 +120,13 @@ export const facturaNacionalService = {
     const blob = await api.get(`ventas/cobranza/facturas-nacional/${id}/pdf-sii`).blob()
     window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer')
   },
+
+  // PDF de la proforma de origen (Productor/Materiales), servido por la propia
+  // Factura Nacional bajo FACT_NACIONAL (FAS-IB-QA-001).
+  async verProformaPdf(id: number): Promise<void> {
+    const blob = await api.get(`ventas/cobranza/facturas-nacional/${id}/proforma-pdf`).blob()
+    window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer')
+  },
   // Descarga el XML timbrado, disparando la descarga en el navegador.
   async descargarXml(id: number, nombreArchivo: string): Promise<void> {
     const blob = await api.get(`ventas/cobranza/facturas-nacional/${id}/xml`).blob()

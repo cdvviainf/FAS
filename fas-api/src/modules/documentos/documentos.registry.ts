@@ -31,6 +31,9 @@ import { FichaProductorV1 } from './templates/ficha-productor/v1/index.js'
 import { resolverProformaProductor } from './resolvers/proforma-productor.resolver.js'
 import { proformaProductorPdfPayloadSchema } from './schemas/proforma-productor.schema.js'
 import { ProformaProductorV1 } from './templates/proforma-productor/v1/index.js'
+import { resolverProformaMaterial } from './resolvers/proforma-material.resolver.js'
+import { proformaMaterialPdfPayloadSchema } from './schemas/proforma-material.schema.js'
+import { ProformaMaterialV1 } from './templates/proforma-material/v1/index.js'
 import type { DocumentRegistry } from './documentos.types.js'
 
 // Registro central — Etapa 4 §4: "un solo lugar donde se declara todo".
@@ -60,6 +63,18 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'PRODUCTORES_PROFORMA',
     // Previsualización para revisar antes de aceptar/rechazar — sin emisión oficial.
+    controlCopia: false,
+    nombreArchivo: (p) => `${p.numero}.pdf`,
+    folio: (p) => p.numero,
+  },
+  'proforma-material': {
+    titulo: 'Proforma de Venta de Materiales',
+    resolver: resolverProformaMaterial,
+    schema: proformaMaterialPdfPayloadSchema,
+    plantillaActual: 'v1',
+    plantillas: { v1: ProformaMaterialV1 },
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    itemMenu: 'MATERIALES_PROFORMA',
     controlCopia: false,
     nombreArchivo: (p) => `${p.numero}.pdf`,
     folio: (p) => p.numero,
