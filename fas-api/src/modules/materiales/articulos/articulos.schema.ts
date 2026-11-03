@@ -10,6 +10,10 @@ export const articuloCreateSchema = z.object({
   valorEstandar: z.number().min(0).optional().nullable(),
   stockCritico: z.number().min(0).optional().nullable(),
   activo: z.boolean().default(true),
+  // Facturable + exento (solo aplican a SERVICIO; se normalizan en el service).
+  // exento: true = exento de IVA, false = afecto. Solo relevante si facturable.
+  facturable: z.boolean().optional(),
+  exento: z.boolean().optional(),
   // Atributos físicos del embalaje, usados por Compras (Orden de Compra hereda
   // estos valores de la línea, ver compras.md §4.3). etiquetaId es requerido
   // solo si tipo=EMBALAJE — validado en articulos.service.ts (mismo criterio
@@ -50,6 +54,9 @@ export const articuloListQuerySchema = z.object({
   // z.coerce.boolean() convierte cualquier string no vacío (incluido "false") a true;
   // se usa un enum explícito para que ?activo=false realmente filtre por false.
   activo: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  // Filtra por facturable (mismo patrón enum→bool que activo) — lo usa la Proforma
+  // a Productores para listar solo los SERVICIO facturables.
+  facturable: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(500).default(20),
   sort: z.string().optional(),

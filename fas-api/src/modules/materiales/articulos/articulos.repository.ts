@@ -26,6 +26,7 @@ function buildWhere(filters: ArticuloListFilters): Prisma.ArticuloWhereInput {
   return {
     ...(filters.tipo ? { tipo: filters.tipo } : {}),
     ...(filters.activo !== undefined ? { activo: filters.activo } : {}),
+    ...(filters.facturable !== undefined ? { facturable: filters.facturable } : {}),
     ...(and.length > 0 ? { AND: and } : {}),
   }
 }

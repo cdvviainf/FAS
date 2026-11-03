@@ -2279,6 +2279,11 @@ model Articulo {
   controlaStock         Boolean            @default(true) // false si ESTANDAR (R3)
   stockCritico          Decimal?           @db.Decimal(14, 3)
   activo                Boolean            @default(true)
+  // Facturable (solo aplica a tipo SERVICIO, validado en el service): si true, el
+  // servicio puede facturarse y aparece en la Proforma a Productores. `exento`
+  // solo tiene sentido cuando facturable=true: true = exento de IVA, false = afecto.
+  facturable            Boolean            @default(false)
+  exento                Boolean            @default(false)
   // Atributos físicos del embalaje (Orden de Compra hereda estos valores del
   // artículo elegido en la línea, no los duplica — ver compras.md §4.3).
   // Etiqueta PRINCIPAL (por defecto) del embalaje. Requerida solo si tipo =

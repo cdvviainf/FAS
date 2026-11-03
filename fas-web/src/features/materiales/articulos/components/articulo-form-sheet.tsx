@@ -63,6 +63,9 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
   const [kgNetoEnvase, setKgNetoEnvase] = useState('')
   const [kgBrutoEnvase, setKgBrutoEnvase] = useState('')
   const [especieId, setEspecieId] = useState<number | null>(null)
+  // Solo SERVICIO: facturable + exento (true = exento IVA, false = afecto).
+  const [facturable, setFacturable] = useState(false)
+  const [exento, setExento] = useState(false)
   const [codigosEquivalentes, setCodigosEquivalentes] = useState<{ codigo: string; descripcion: string }[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -117,6 +120,8 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setKgNetoEnvase(item.kgNetoEnvase ?? '')
       setKgBrutoEnvase(item.kgBrutoEnvase ?? '')
       setEspecieId(item.especieId ?? null)
+      setFacturable(item.facturable ?? false)
+      setExento(item.exento ?? false)
       setCodigosEquivalentes((item.codigosEquivalentes ?? []).map((c) => ({ codigo: c.codigo, descripcion: c.descripcion ?? '' })))
     } else {
       setTipo('MATERIAL_EMBALAJE')
@@ -133,6 +138,8 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setKgNetoEnvase('')
       setKgBrutoEnvase('')
       setEspecieId(null)
+      setFacturable(false)
+      setExento(false)
       setCodigosEquivalentes([])
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,6 +166,9 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
         // Especie: aplica a EMBALAJE (agrupa Cajas por Pallet) y a GRANEL (filtra
         // el artículo por especie en la Orden de Compra). 2026-10-23.
         especieId: tipo === 'EMBALAJE' || tipo === 'GRANEL' ? especieId : null,
+        // Facturable/exento solo para SERVICIO; exento solo si facturable.
+        facturable: tipo === 'SERVICIO' ? facturable : false,
+        exento: tipo === 'SERVICIO' && facturable ? exento : false,
         codigosEquivalentes: codigosEquivalentes
           .map((c) => ({ codigo: c.codigo.trim(), descripcion: c.descripcion.trim() || null }))
           .filter((c) => c.codigo.length > 0),
@@ -275,6 +285,27 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
               <p className='text-xs text-muted-foreground'>Los servicios siempre usan costeo Estándar (R4).</p>
             )}
           </div>
+
+          {tipo === 'SERVICIO' && (
+            <div className='space-y-3 rounded-md border p-3'>
+              <div className='flex items-center justify-between'>
+                <div className='space-y-0.5'>
+                  <Label htmlFor='facturable-articulo'>Facturable</Label>
+                  <p className='text-xs text-muted-foreground'>Solo los servicios facturables aparecen en la Proforma a Productores.</p>
+                </div>
+                <Switch id='facturable-articulo' checked={facturable} onCheckedChange={(v) => { setFacturable(v); if (!v) setExento(false) }} />
+              </div>
+              {facturable && (
+                <div className='flex items-center justify-between'>
+                  <div className='space-y-0.5'>
+                    <Label htmlFor='exento-articulo'>Exento de IVA</Label>
+                    <p className='text-xs text-muted-foreground'>Activado = Exento; desactivado = Afecto a IVA.</p>
+                  </div>
+                  <Switch id='exento-articulo' checked={exento} onCheckedChange={setExento} />
+                </div>
+              )}
+            </div>
+          )}
 
           {tipoCosteo === 'ESTANDAR' ? (
             <div className='space-y-1.5'>

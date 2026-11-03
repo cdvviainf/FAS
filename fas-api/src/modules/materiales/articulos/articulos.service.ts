@@ -53,6 +53,18 @@ function controlaStockDe(tipoCosteo: string): boolean {
   return tipoCosteo === 'PROMEDIO_PONDERADO'
 }
 
+// Facturable/exento solo aplican a SERVICIO. Devuelve los valores NORMALIZADOS:
+// no-SERVICIO ⇒ facturable=false; no facturable ⇒ exento=false (afecto).
+function normalizarFacturable(
+  tipo: string | undefined,
+  facturable: boolean | undefined,
+  exento: boolean | undefined,
+): { facturable: boolean; exento: boolean } {
+  if (tipo !== 'SERVICIO') return { facturable: false, exento: false }
+  const fact = facturable ?? false
+  return { facturable: fact, exento: fact ? exento ?? false : false }
+}
+
 export async function listarArticulos(filters: ArticuloListFilters) {
   const { data, total } = await repo.listArticulos(filters)
   const { page = 1, limit = 20 } = filters
@@ -84,8 +96,11 @@ export async function crearArticulo(body: ArticuloCreateInput) {
   const adicionales = sanearEtiquetasAdicionales(body.tipo, body.etiquetaId, body.etiquetaIdsAdicionales)
   await validarEtiquetasActivas(adicionales)
 
+  const facturacion = normalizarFacturable(body.tipo, body.facturable, body.exento)
+
   return repo.createArticulo({
     ...body,
+    ...facturacion,
     etiquetaIdsAdicionales: adicionales,
     controlaStock: controlaStockDe(body.tipoCosteo),
   })
@@ -118,6 +133,16 @@ export async function actualizarArticulo(id: number, body: ArticuloUpdateInput) 
   if (body.tipoCosteo !== undefined) {
     data.controlaStock = controlaStockDe(body.tipoCosteo)
   }
+
+  // Normalizar facturable/exento contra el tipo efectivo (si el PATCH cambia el
+  // tipo a no-SERVICIO, se limpian; si deja de ser facturable, exento→false).
+  const facturacion = normalizarFacturable(
+    tipo,
+    body.facturable !== undefined ? body.facturable : actual.facturable,
+    body.exento !== undefined ? body.exento : actual.exento,
+  )
+  data.facturable = facturacion.facturable
+  data.exento = facturacion.exento
 
   // Etiquetas adicionales: si vienen en el body se reemplazan; si el artículo
   // dejó de ser EMBALAJE se limpian aunque el body no las mande; en cualquier

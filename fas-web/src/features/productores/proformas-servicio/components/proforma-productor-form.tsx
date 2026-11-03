@@ -109,8 +109,8 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
     staleTime: 60_000,
   })
   const { data: articulosData } = useQuery({
-    queryKey: ['articulos-servicio-options'],
-    queryFn: () => articulosService.list({ tipo: 'SERVICIO', activo: true, limit: 500 }),
+    queryKey: ['articulos-servicio-facturables-options'],
+    queryFn: () => articulosService.list({ tipo: 'SERVICIO', activo: true, facturable: true, limit: 500 }),
     staleTime: 60_000,
   })
   const { data: condicionesPagoData } = useQuery({
@@ -524,7 +524,11 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
                         <TableCell>
                           <Combobox
                             value={l.articuloId ? String(l.articuloId) : ''}
-                            onChange={(v) => setLinea(idx, { articuloId: Number(v) })}
+                            onChange={(v) => {
+                              // El exento se HEREDA del artículo (afecto/exento del maestro).
+                              const art = articulos.find((a) => a.id === Number(v))
+                              setLinea(idx, { articuloId: Number(v), exento: art?.exento ?? false })
+                            }}
                             placeholder='Seleccionar servicio...'
                             searchPlaceholder='Buscar servicio...'
                             options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
@@ -546,7 +550,8 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
                           />
                         </TableCell>
                         <TableCell className='text-center'>
-                          <Checkbox checked={l.exento} onCheckedChange={(v) => setLinea(idx, { exento: v === true })} disabled={soloLectura} />
+                          {/* Exento se hereda del artículo (maestro) — solo lectura. */}
+                          <Checkbox checked={l.exento} disabled />
                         </TableCell>
                         <TableCell className='text-right tabular-nums'>{formatMonto(monto)}</TableCell>
                         {!soloLectura && (

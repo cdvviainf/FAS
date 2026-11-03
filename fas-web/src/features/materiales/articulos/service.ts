@@ -15,6 +15,7 @@ export const articulosService = {
     if (filters.tipo) sp.tipo = filters.tipo
     if (filters.especieId != null) sp.especieId = String(filters.especieId)
     if (filters.activo !== undefined) sp.activo = String(filters.activo)
+    if (filters.facturable !== undefined) sp.facturable = String(filters.facturable)
     if (filters.page) sp.page = String(filters.page)
     if (filters.limit) sp.limit = String(filters.limit)
     if (filters.sort) sp.sort = filters.sort

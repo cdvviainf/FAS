@@ -323,10 +323,14 @@ export async function getConceptoCtaCte(id: number) {
   })
 }
 
-// Artículos tipo SERVICIO válidos (en la empresa activa — la extensión de
-// tenancy acota Articulo por empresa). Devuelve el set de ids que SÍ son SERVICIO.
-export async function getArticulosServicioValidos(ids: number[]): Promise<Set<number>> {
-  if (ids.length === 0) return new Set()
-  const articulos = await prisma.articulo.findMany({ where: { id: { in: ids }, tipo: 'SERVICIO' }, select: { id: true } })
-  return new Set(articulos.map((a) => a.id))
+// Artículos SERVICIO FACTURABLES válidos (en la empresa activa — la extensión de
+// tenancy acota Articulo por empresa). Devuelve un Map id→exento, para validar
+// que la línea referencia un servicio facturable y heredar su afecto/exento.
+export async function getArticulosServicioFacturables(ids: number[]): Promise<Map<number, boolean>> {
+  if (ids.length === 0) return new Map()
+  const articulos = await prisma.articulo.findMany({
+    where: { id: { in: ids }, tipo: 'SERVICIO', facturable: true, activo: true },
+    select: { id: true, exento: true },
+  })
+  return new Map(articulos.map((a) => [a.id, a.exento]))
 }

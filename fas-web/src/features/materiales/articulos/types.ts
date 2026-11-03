@@ -41,6 +41,9 @@ export interface Articulo {
   kgBrutoEnvase: string | null
   especieId: number | null
   especie?: { id: number; codigo: string; descripcion: string } | null
+  // Solo SERVICIO: facturable + exento (true = exento IVA, false = afecto).
+  facturable: boolean
+  exento: boolean
   codigosEquivalentes?: CodigoEquivalente[]
   // Etiquetas adicionales permitidas (2026-10-12). El conjunto permitido del
   // embalaje = etiqueta (principal) ∪ estas.
@@ -74,6 +77,8 @@ export interface ArticuloCreateInput {
   kgNetoEnvase?: number | null
   kgBrutoEnvase?: number | null
   especieId?: number | null
+  facturable?: boolean
+  exento?: boolean
   codigosEquivalentes?: CodigoEquivalenteInput[]
 }
 
@@ -90,6 +95,7 @@ export interface ArticuloListFilters {
   // Filtra embalajes por especie (incluye los genéricos sin especie) — 2026-10-05.
   especieId?: number
   activo?: boolean
+  facturable?: boolean
   page?: number
   limit?: number
   sort?: string

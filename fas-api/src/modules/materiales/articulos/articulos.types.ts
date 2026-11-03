@@ -16,6 +16,9 @@ export interface ArticuloCreateInput {
   valorEstandar?: number | null
   stockCritico?: number | null
   activo?: boolean
+  // Solo SERVICIO; se normalizan en el service. exento: true=exento IVA, false=afecto.
+  facturable?: boolean
+  exento?: boolean
   controlaStock?: boolean // calculado por el service a partir de tipoCosteo (R3)
   etiquetaId?: number | null
   // Etiquetas adicionales permitidas (2026-10-12). En update, si viene definida
@@ -36,6 +39,7 @@ export interface ArticuloListFilters {
   tipo?: TipoArticulo
   especieId?: number
   activo?: boolean
+  facturable?: boolean
   page?: number
   limit?: number
   sort?: string
