@@ -30,6 +30,7 @@ export const ENUM_TIPO_ENTIDAD = [
   'EXPORTADORA',
   'PLANTA',
   'GESTOR_LOGISTICO',
+  'PACKING',
 ]
 export const ENUM_TIPO_BODEGA = ['MATERIALES', 'EMBARQUE', 'DESPACHO']
 export const ENUM_MODELO_PREFIJO = [
