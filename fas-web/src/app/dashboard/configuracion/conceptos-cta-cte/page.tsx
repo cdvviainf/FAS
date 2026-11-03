@@ -1,9 +1,8 @@
 import PageContainer from '@/components/layout/page-container'
 import { searchParamsCache } from '@/lib/searchparams'
 import { SearchParams } from 'nuqs/server'
-import MantenedorListing from '@/components/shared/mantenedor-simple/mantenedor-listing'
 import { ConceptoCtaCteFormSheetTrigger } from '@/features/conceptos-cta-cte/components/concepto-form-sheet'
-import { conceptoExtraColumns } from '@/features/conceptos-cta-cte/components/concepto-columns'
+import { ConceptosCtaCteListing } from '@/features/conceptos-cta-cte/components/conceptos-cta-cte-listing'
 
 export const metadata = {
   title: 'FAS — Conceptos Cta. Cte.'
@@ -23,7 +22,7 @@ export default async function Page(props: PageProps) {
       pageDescription='Conceptos de debe y haber para la cuenta corriente del productor.'
       pageHeaderAction={<ConceptoCtaCteFormSheetTrigger />}
     >
-      <MantenedorListing recurso='conceptos-cta-cte' titulo='Concepto' extraColumns={conceptoExtraColumns} />
+      <ConceptosCtaCteListing />
     </PageContainer>
   )
 }
