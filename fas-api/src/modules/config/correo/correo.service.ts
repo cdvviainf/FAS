@@ -1,6 +1,6 @@
 import { encrypt } from '../../../lib/crypto.js'
 import { enviarCorreo, invalidateMailer } from '../../../lib/mailer.js'
-import { ValidationError } from '../../../shared/errors.js'
+import { BusinessError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './correo.repository.js'
 import type { CorreoConfigBody } from './correo.schema.js'
 
@@ -32,10 +32,25 @@ export async function guardarConfiguracion(body: CorreoConfigBody, userId: strin
 }
 
 export async function enviarCorreoPrueba(destinatario: string) {
-  await enviarCorreo({
-    to: [destinatario],
-    subject: 'FAS — Correo de prueba',
-    html: `<p>Este es un correo de prueba del sistema FAS (Frutera Agrosan).</p>
+  try {
+    await enviarCorreo({
+      to: [destinatario],
+      subject: 'FAS — Correo de prueba',
+      html: `<p>Este es un correo de prueba del sistema FAS (Frutera Agrosan).</p>
 <p>Si lo recibiste, la configuración SMTP es correcta.</p>`,
-  })
+    })
+  } catch (err) {
+    // SMTP_NO_CONFIGURADO (503) y demás BusinessError ya traen mensaje accionable.
+    if (err instanceof BusinessError) throw err
+    // Error crudo de nodemailer/SMTP (auth, conexión, TLS…): se expone la causa
+    // REAL (code + respuesta del servidor) en vez de un 500 genérico, para poder
+    // diagnosticar (ej. Office365 rechaza por MFA / SMTP AUTH deshabilitado).
+    const e = err as { message?: string; code?: string; response?: string }
+    const detalle = [e.response, e.code ? `[${e.code}]` : '', e.message].filter(Boolean).join(' ').trim()
+    throw new BusinessError(
+      'SMTP_ENVIO_FALLIDO',
+      `No se pudo enviar el correo de prueba: ${detalle || 'el servidor SMTP rechazó el envío'}`,
+      502,
+    )
+  }
 }
