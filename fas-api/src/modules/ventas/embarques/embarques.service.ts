@@ -6,14 +6,15 @@ import * as prefijosService from '../../config/prefijos-codigo/prefijos-codigo.s
 import * as aglAdapter from './agl360.adapter.js'
 import * as integracionesRepo from '../../config/integraciones/integraciones.repository.js'
 import * as templatesCargaRepo from '../../config/templates-carga/templates-carga.repository.js'
-import { reconciliarPackingList } from './embarques.packing-list.motor.js'
+import { generarFormatoBase } from '../../config/templates-carga/templates-carga.excel.js'
+import { reconciliarPackingList, type EsAgrosanEmisor } from './embarques.packing-list.motor.js'
 import { generarPackingListExcel } from './embarques.packing-list-emision.js'
 import { getEmpresaParaDocumento } from '../../documentos/documentos.repository.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
 import { mapEmbarqueAGuiaDespacho, type EmbarqueGuiaLineaMapeo } from '../../finanzas/facturacion/mappers/embarque-guia-despacho.mapper.js'
-import type { EmitirGuiaDespachoInput, RegistrarGuiaExternaInput } from './embarques.schema.js'
+import type { EmitirGuiaDespachoInput } from './embarques.schema.js'
 import type { ResultadoIntentoReserva } from './embarques.repository.js'
 import type { DatosReservaManualInput, DatosReservaBaseInput, DatosInstructivoInput, InstructivoHijoUpdateInput, EmbarqueCreateInput, DatosContenedorInput } from './embarques.types.js'
 import type { AglWebhookConfirmarBody } from './embarques.schema.js'
@@ -549,6 +550,28 @@ async function validarTemplateCargaPackingList(templateCargaId: number) {
   return template
 }
 
+// Etiqueta usada en la columna Emisor del Packing List para indicar que la guía
+// la emite la empresa (no un productor/planta). Pregrabada como opción en el
+// formato descargado y reconocida en la carga.
+const EMISOR_AGROSAN = 'Agrosan'
+
+// Arma el predicado "¿el Emisor de la Guía es Agrosan (la empresa)?" + la etiqueta
+// para el dropdown del formato. Reconoce la etiqueta fija y, como alias, el
+// código/razón social/nombre de fantasía de la empresa activa.
+async function construirEsAgrosanEmisor(): Promise<{ esAgrosan: EsAgrosanEmisor; etiqueta: string }> {
+  const emp = await repo.getEmpresaActivaNombres()
+  const norm = (s: string) => s.trim().toLowerCase()
+  const codigoAntes = (s: string) => (s.includes(' - ') ? s.split(' - ')[0] : s).trim().toLowerCase()
+  const nombres = new Set<string>([norm(EMISOR_AGROSAN)])
+  if (emp) {
+    nombres.add(norm(emp.codigo))
+    nombres.add(norm(emp.razonSocial))
+    if (emp.nombreFantasia) nombres.add(norm(emp.nombreFantasia))
+  }
+  const esAgrosan: EsAgrosanEmisor = (texto) => nombres.has(norm(texto)) || nombres.has(codigoAntes(texto))
+  return { esAgrosan, etiqueta: EMISOR_AGROSAN }
+}
+
 export async function subirPackingList(
   embarqueId: number,
   templateCargaId: number,
@@ -582,8 +605,10 @@ export async function subirPackingList(
 
   // Emisores válidos de la Guía (2026-10-23): productores/plantas del embarque.
   const entidadesEmisor = await repo.getEntidadesEmisorEmbarque(embarqueId)
+  // "Agrosan" como emisor = la empresa exportadora emite la guía (pendiente).
+  const { esAgrosan } = await construirEsAgrosanEmisor()
 
-  const resultado = await reconciliarPackingList(template, archivo.datos, palletsStock, entidadesEmisor)
+  const resultado = await reconciliarPackingList(template, archivo.datos, palletsStock, entidadesEmisor, esAgrosan)
 
   return repo.guardarPackingList(embarqueId, {
     templateCargaId,
@@ -598,6 +623,28 @@ export async function subirPackingList(
     datosPorPallet: resultado.datosPorPallet,
     cargadoPor: userId,
   })
+}
+
+// Descarga el formato base del Packing List ESPECÍFICO del embarque: la columna
+// Emisor de la Guía baja con un dropdown de los productores/plantas del embarque
+// + la opción "Agrosan" (pre-grabada) para los pallets cuya guía emite la empresa.
+export async function descargarFormatoPackingList(embarqueId: number, templateCargaId: number) {
+  await obtenerEmbarque(embarqueId)
+  const template = await validarTemplateCargaPackingList(templateCargaId)
+  const entidadesEmisor = await repo.getEntidadesEmisorEmbarque(embarqueId)
+  const { etiqueta } = await construirEsAgrosanEmisor()
+  // Opciones del dropdown: "código - razón social" (lo que reconoce matchEmisor) +
+  // "Agrosan".
+  const opciones = [...entidadesEmisor.map((e) => `${e.codigo} - ${e.razonSocial}`), etiqueta]
+  // Filas a pre-generar con el dropdown: una por línea de pallet reservada (lo que
+  // el usuario debe llenar), con un mínimo para que el formato nunca baje "pelado".
+  const lineas = await repo.contarLineasPalletReservadas(embarqueId)
+  const filas = Math.max(lineas, 50)
+  const buffer = await generarFormatoBase(template as Parameters<typeof generarFormatoBase>[0], {
+    filas,
+    guia: { EMISOR_GUIA: { opciones } },
+  })
+  return { buffer, nombreArchivo: `packing-list-formato-embarque-${embarqueId}.xlsx` }
 }
 
 export async function descargarPackingList(embarqueId: number, packingListId?: number) {
@@ -722,22 +769,6 @@ export async function obtenerGuiaDespacho(embarqueId: number) {
           comuna: dirAgente?.comuna?.descripcion ?? null,
         }
       : null,
-    // Guía externa (emitida por un tercero) — null si no hay una registrada.
-    externa:
-      embarque.guiaExternaNumero != null
-        ? {
-            numero: embarque.guiaExternaNumero,
-            fecha: embarque.guiaExternaFecha,
-            emisorId: embarque.guiaExternaEmisorId,
-            emisor: embarque.guiaExternaEmisor
-              ? {
-                  id: embarque.guiaExternaEmisor.id,
-                  razonSocial: embarque.guiaExternaEmisor.razonSocial,
-                  rut: embarque.guiaExternaEmisor.identificador,
-                }
-              : null,
-          }
-        : null,
   }
 }
 
@@ -810,13 +841,6 @@ export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDe
   if (input.indTraslado !== INDTRASLADO_EXPORTACION) {
     throw new ValidationError('La Guía de Despacho desde el Embarque es siempre de exportación (Traslado para exportación, IndTraslado 8)')
   }
-  // Exclusión mutua: no se puede emitir una Guía propia si ya hay una externa
-  // registrada (chequeo temprano; el definitivo race-safe está en
-  // prepararEmisionGuiaEnTx bajo el lock DTE).
-  if (embarque.guiaExternaNumero != null) {
-    throw new ValidationError('Este Embarque ya tiene registrada una Guía de Despacho externa; quítala antes de emitir una propia')
-  }
-
   let transportista: Awaited<ReturnType<typeof repo.getTransportistaParaGuia>> = null
   if (input.transporteId != null) {
     transportista = await repo.getTransportistaParaGuia(input.transporteId)
@@ -1038,53 +1062,4 @@ export async function obtenerPdfGuiaDespacho(embarqueId: number): Promise<Buffer
   })
   if (!r.ok) throw new ValidationError(r.error)
   return r.pdf
-}
-
-// ─── Guía de Despacho emitida por un tercero (2026-10-12) ───────────────────
-// Cuando NO emitimos nosotros el DTE 52, se registra el número de la Guía de
-// quien la emitió (Productor o Planta) para trazabilidad. Excluyente con la
-// Guía propia (enforcement atómico en el repo, bajo el lock DTE).
-
-export async function registrarGuiaExterna(embarqueId: number, input: RegistrarGuiaExternaInput, userId: string) {
-  const embarque = await repo.getEmbarqueParaGuia(embarqueId)
-  if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
-  if (!estaDespachadoEfectivo(embarque)) {
-    throw new ValidationError('El Embarque debe estar despachado para registrar una Guía de Despacho externa')
-  }
-
-  const emisor = await repo.getEmisorGuiaExterna(input.emisorId)
-  if (!emisor) throw new ValidationError('La entidad emisora seleccionada no existe')
-  if (!emisor.activo) throw new ValidationError('La entidad emisora seleccionada está inactiva')
-  if (!emisor.tipos.includes('PRODUCTOR') && !emisor.tipos.includes('PLANTA')) {
-    throw new ValidationError('La entidad emisora debe ser un Productor o una Planta')
-  }
-  if (!emisor.identificador) {
-    throw new ValidationError('La entidad emisora no tiene RUT configurado')
-  }
-
-  const resultado = await repo.registrarGuiaExternaEnTx(
-    embarqueId,
-    { emisorId: input.emisorId, numero: input.numero, fecha: input.fecha ?? null },
-    userId,
-  )
-  if (resultado === 'NO_DESPACHADO') {
-    throw new ValidationError('El Embarque ya no está despachado — no se puede registrar la Guía de Despacho externa')
-  }
-  if (resultado === 'TIENE_GUIA_PROPIA') {
-    throw new ValidationError('Este Embarque ya tiene una Guía de Despacho propia (DTE 52) en curso o timbrada; anúlala antes de registrar una externa')
-  }
-  if (resultado === 'DUPLICADA') {
-    throw new ValidationError('Ya existe una Guía de Despacho con ese emisor y número en otro Embarque')
-  }
-  return obtenerGuiaDespacho(embarqueId)
-}
-
-export async function quitarGuiaExterna(embarqueId: number, userId: string) {
-  const embarque = await repo.getEmbarqueParaGuia(embarqueId)
-  if (!embarque) throw new NotFoundError('Embarque', String(embarqueId))
-  if (embarque.guiaExternaNumero == null) {
-    throw new ValidationError('Este Embarque no tiene una Guía de Despacho externa registrada')
-  }
-  await repo.quitarGuiaExterna(embarqueId, userId)
-  return obtenerGuiaDespacho(embarqueId)
 }

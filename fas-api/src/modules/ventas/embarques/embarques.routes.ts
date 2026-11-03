@@ -122,18 +122,6 @@ export async function embarquesRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
     ctrl.descargarGuiaDespachoPdf,
   )
-  // Guía emitida por un tercero (2026-10-12): registrar número + emisor, o quitarla.
-  app.post(
-    '/embarques/:id/guia-despacho/externa',
-    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
-    ctrl.registrarGuiaExterna,
-  )
-  app.delete(
-    '/embarques/:id/guia-despacho/externa',
-    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
-    ctrl.quitarGuiaExterna,
-  )
-
   // ─── Packing List (compras.md §9.3, cierra EP-QA-003) ────────────────────
   app.post(
     '/embarques/:id/packing-list',
@@ -144,6 +132,13 @@ export async function embarquesRoutes(app: FastifyInstance) {
     '/embarques/:id/packing-list/descarga',
     { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
     ctrl.descargarPackingList,
+  )
+  // Formato base del Packing List específico del embarque (columna Emisor con
+  // dropdown de productores/plantas + "Agrosan").
+  app.get(
+    '/embarques/:id/packing-list/formato',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    ctrl.descargarFormatoPackingList,
   )
   // Emisión del Packing List (reporte Excel, 2026-10-25) — lectura, igual que la
   // descarga del archivo subido.

@@ -1754,7 +1754,6 @@ model Entidad {
   embarquesEmbarcador            Embarque[]                  @relation("EmbarqueEmbarcador")
   embarquesNaviera               Embarque[]                  @relation("EmbarqueNaviera")
   embarquesGuiaTransporte        Embarque[]                  @relation("EmbarqueGuiaTransporte")
-  embarquesGuiaExternaEmisor     Embarque[]                  @relation("EmbarqueGuiaExternaEmisor")
   instructivosHijosPlanta        InstructivoHijo[]           @relation("InstructivoHijoPlanta")
 
   @@unique([empresaId, id])
@@ -3510,19 +3509,6 @@ model Embarque {
   guiaDirDestino      String?
   guiaComunaDestino   String?
 
-  // ─── Guía de Despacho emitida por un tercero (2026-10-12) — cuando NO
-  // emitimos nosotros el DTE 52, se registra el número de la Guía de quien la
-  // emitió (Entidad tipo PRODUCTOR o PLANTA) para trazabilidad. EXCLUYENTE con
-  // la Guía propia (DocumentoDte origenTipo='embarque'): un Embarque tiene una
-  // u otra, nunca ambas (enforcement en el service). Duplicidad "mismo emisor
-  // + mismo número" bloqueada por índice único parcial por empresa (ver
-  // migración 20261012130000_embarque_guia_externa — no se declara acá, mismo
-  // patrón que el resto de índices parciales del schema).
-  guiaExternaNumero   String?
-  guiaExternaEmisorId Int?
-  guiaExternaEmisor   Entidad?  @relation("EmbarqueGuiaExternaEmisor", fields: [empresaId, guiaExternaEmisorId], references: [empresaId, id])
-  guiaExternaFecha    DateTime?
-
   creadoEn       DateTime  @default(now())
   creadoPor      String
   actualizadoEn  DateTime? @updatedAt
@@ -3539,7 +3525,6 @@ model Embarque {
   @@index([embarcadorId])
   @@index([navieraId])
   @@index([guiaTransporteId])
-  @@index([guiaExternaEmisorId])
   @@map("embarques")
 }
 
@@ -5268,6 +5253,9 @@ model Pallet {
   numeroGuiaDespacho String?
   emisorGuiaId       Int?
   emisorGuia         Entidad? @relation("PalletEmisorGuia", fields: [empresaId, emisorGuiaId], references: [empresaId, id])
+  // Emisor = "Agrosan" en el Packing List (la guía la emite la empresa): el pallet
+  // queda sin numeroGuiaDespacho/emisorGuiaId (pendiente de que Agrosan la emita).
+  guiaEmitidaPorAgrosan Boolean @default(false)
 
   // Temperatura (°C) y termógrafo por pallet (2026-10-25, columnas del Packing
   // List): capturados en la reconciliación, por pallet. Alimentan la emisión del

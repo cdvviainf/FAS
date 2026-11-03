@@ -219,8 +219,6 @@ export interface Embarque extends DatosReservaManual, DatosInstructivo {
   // Guía de Despacho por fila (2026-10-12, solo en list()): estado de la guía
   // PROPIA (DTE 52) para el link al PDF cuando la emitimos nosotros.
   guiaDespacho?: { pdfDisponible: boolean; estado: EstadoDocumentoDte | null; folio: number | null }
-  // Número de la guía externa (emitida por un tercero), si hay una registrada.
-  guiaExternaNumero?: string | null
 }
 
 export type EstadoEmbarqueListado = 'PENDIENTE' | 'SOLICITADA' | 'CONFIRMADA' | 'DESPACHADO' | 'DESPACHO_ANULADO'
@@ -337,15 +335,6 @@ export interface GuiaDespachoDatos {
   comunaDestino: string
 }
 
-// Guía emitida por un tercero (2026-10-12) — registrada manualmente cuando no
-// emitimos nosotros el DTE 52.
-export interface GuiaExternaResumen {
-  numero: string
-  fecha: string | null
-  emisorId: number | null
-  emisor: { id: number; razonSocial: string; rut: string | null } | null
-}
-
 export interface GuiaDespachoPlantaDireccion {
   id: number
   direccion: string | null
@@ -377,13 +366,6 @@ export interface GuiaDespachoResponse {
   plantas: GuiaDespachoPlanta[]
   // Agente de aduana = receptor en exportación (IndTraslado 8). null si no hay.
   agente: GuiaDespachoAgente | null
-  externa: GuiaExternaResumen | null
-}
-
-export interface RegistrarGuiaExternaInput {
-  emisorId: number
-  numero: string
-  fecha?: string | null
 }
 
 export interface EmitirGuiaDespachoInput {

@@ -68,13 +68,20 @@ export interface DatoPalletReconciliado {
   numeroPallet: string
   numeroGuia?: string
   emisorGuiaId?: number
+  // Pallet cuyo Emisor de la Guía es "Agrosan" (la empresa exportadora): la guía
+  // la emitirá Agrosan — queda sin emisorGuiaId ni N° de guía (pendiente).
+  guiaEmitidaPorAgrosan?: boolean
   termografo?: string
   temperatura?: number
 }
 
+// Predicado: ¿el texto del Emisor de la Guía corresponde a "Agrosan" (la empresa
+// activa)? Lo arma el service a partir del código/razón social de la empresa.
+export type EsAgrosanEmisor = (texto: string) => boolean
+
 // ─── Etapa 2: filas completas y con datos válidos (sin BD) ────────────────
 
-function validarFilasCompletas(filas: FilaPackingListCruda[]): string[] {
+function validarFilasCompletas(filas: FilaPackingListCruda[], esAgrosan: EsAgrosanEmisor): string[] {
   const errores: string[] = []
   for (const f of filas) {
     if (!f.numeroPallet) errores.push(`Fila ${f.fila}: falta el N° de Pallet`)
@@ -87,9 +94,11 @@ function validarFilasCompletas(filas: FilaPackingListCruda[]): string[] {
     if (!f.etiqueta) errores.push(`Fila ${f.fila}: falta la Etiqueta`)
     if (!f.fechaEmbalaje) errores.push(`Fila ${f.fila}: falta la Fecha de Embalaje`)
     // N° de Guía y Emisor OBLIGATORIOS por fila (2026-10-27) — como el resto de
-    // las columnas requeridas, una celda vacía aborta la carga.
-    if (!f.numeroGuia) errores.push(`Fila ${f.fila}: falta el N° de Guía`)
+    // las columnas requeridas, una celda vacía aborta la carga. Excepción: si el
+    // Emisor es "Agrosan" (la guía la emite la empresa), el N° de Guía puede ir
+    // vacío (pendiente de emitir).
     if (!f.emisorGuia) errores.push(`Fila ${f.fila}: falta el Emisor de la Guía`)
+    else if (!f.numeroGuia && !esAgrosan(f.emisorGuia)) errores.push(`Fila ${f.fila}: falta el N° de Guía`)
 
     if (!f.cajas) {
       errores.push(`Fila ${f.fila}: faltan las Cajas`)
@@ -206,6 +215,7 @@ async function resolverContraMaestros(filas: FilaPackingListCruda[]): Promise<{ 
 function resolverDatosPorPallet(
   filas: FilaPackingListCruda[],
   entidadesEmisor: EntidadEmisorEmbarque[],
+  esAgrosan: EsAgrosanEmisor,
 ): { datosPorPallet: DatoPalletReconciliado[]; errores: string[] } {
   const errores: string[] = []
 
@@ -262,14 +272,20 @@ function resolverDatosPorPallet(
     if (inconsistente) continue
 
     let emisorGuiaId: number | undefined
+    let guiaEmitidaPorAgrosan = false
     if (emisoresTexto.size === 1) {
       const texto = [...emisoresTexto][0]
-      const emisor = matchEmisor(texto)
-      if (!emisor) {
-        errores.push(`Pallet "${numeroPallet}": el Emisor de la Guía "${texto}" no corresponde a un productor o planta de este Embarque`)
-        continue
+      if (esAgrosan(texto)) {
+        // La guía la emite Agrosan (la empresa): sin emisor-entidad ni N° de guía.
+        guiaEmitidaPorAgrosan = true
+      } else {
+        const emisor = matchEmisor(texto)
+        if (!emisor) {
+          errores.push(`Pallet "${numeroPallet}": el Emisor de la Guía "${texto}" no corresponde a un productor, planta del Embarque ni a Agrosan`)
+          continue
+        }
+        emisorGuiaId = emisor.id
       }
-      emisorGuiaId = emisor.id
     }
 
     let temperatura: number | undefined
@@ -288,6 +304,7 @@ function resolverDatosPorPallet(
       numeroPallet,
       numeroGuia: numerosGuia.size === 1 ? [...numerosGuia][0] : undefined,
       emisorGuiaId,
+      guiaEmitidaPorAgrosan: guiaEmitidaPorAgrosan || undefined,
       termografo: termografosPallet.size === 1 ? [...termografosPallet][0] : undefined,
       temperatura,
     })
@@ -303,6 +320,7 @@ export async function reconciliarPackingList(
   buffer: Buffer,
   palletsStock: PalletStockParaComparar[],
   entidadesEmisor: EntidadEmisorEmbarque[] = [],
+  esAgrosan: EsAgrosanEmisor = () => false,
 ): Promise<ResultadoReconciliacion> {
   const hoja = await cargarPrimeraHoja(buffer)
 
@@ -315,7 +333,7 @@ export async function reconciliarPackingList(
   const filasCrudas = leerFilasPackingList(hoja, template, indicePorCampo)
 
   // Etapa 2 — Filas: completas y con formato válido, sin tocar la BD.
-  const erroresFilas = validarFilasCompletas(filasCrudas)
+  const erroresFilas = validarFilasCompletas(filasCrudas, esAgrosan)
   if (erroresFilas.length > 0) {
     throw new ValidationError('Etapa 2 — Hay filas incompletas o con datos inválidos', { diferencias: erroresFilas })
   }
@@ -357,7 +375,7 @@ export async function reconciliarPackingList(
   // plantas del embarque) + termógrafo + temperatura. Sus inconsistencias se
   // suman como discrepancias; solo los pallets consistentes se devuelven para
   // persistir.
-  const { datosPorPallet, errores: erroresDatos } = resolverDatosPorPallet(filasCrudas, entidadesEmisor)
+  const { datosPorPallet, errores: erroresDatos } = resolverDatosPorPallet(filasCrudas, entidadesEmisor, esAgrosan)
   discrepancias.push(...erroresDatos)
 
   return discrepancias.length > 0

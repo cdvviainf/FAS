@@ -220,10 +220,6 @@ export const embarqueColumns: ColumnDef<Embarque>[] = [
           </button>
         )
       }
-      // Emitida por un tercero: se muestra como referencia, sin PDF nuestro.
-      if (row.original.guiaExternaNumero) {
-        return <span className='text-muted-foreground text-xs'>Externa N° {row.original.guiaExternaNumero}</span>
-      }
       return <span className='text-muted-foreground text-sm'>—</span>
     },
     size: 150,

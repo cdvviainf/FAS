@@ -179,8 +179,7 @@ export async function listEmbarques(
   // Guía de Despacho propia (DTE 52) por fila (2026-10-12): una sola consulta
   // para toda la página en vez de N llamadas a obtenerGuiaDespacho. Expone si
   // hay PDF disponible (libredteCodigoTemporal presente = borrador o timbrada)
-  // y el folio si está timbrada. La guía externa ya viaja en el escalar
-  // guiaExternaNumero del propio Embarque.
+  // y el folio si está timbrada.
   const guias = data.length
     ? await prisma.documentoDte.findMany({
         where: { origenTipo: 'embarque', origenId: { in: data.map((e) => e.id) }, tipoDte: 52 },
@@ -487,14 +486,6 @@ export async function anularDespacho(embarqueId: number, actualizadoPor: string)
       data: {
         despachoAnuladoEn: new Date(),
         despachoAnuladoPor: actualizadoPor,
-        // FAS-BATCH-R1-004 (2026-10-12, decisión de negocio Christian): la Guía
-        // emitida por un tercero se registra sólo sobre un despacho efectivo;
-        // al anularlo se limpia (número/emisor/fecha) para que no quede
-        // asociada a un ciclo posterior. La Guía propia (DTE 52) ya bloquea la
-        // anulación si está timbrada/en proceso.
-        guiaExternaNumero: null,
-        guiaExternaEmisorId: null,
-        guiaExternaFecha: null,
       },
     })
     if (claim.count === 0) return 'NO_DESPACHADO' as const
@@ -540,6 +531,13 @@ export async function getPalletsReservadosParaReconciliar(embarqueId: number) {
   })
 }
 
+// N° de líneas de pallet reservadas (una por fila del Packing List): dimensiona
+// las filas del formato base descargable para que el dropdown de Emisor cubra
+// todas las filas que el usuario debe llenar.
+export async function contarLineasPalletReservadas(embarqueId: number): Promise<number> {
+  return prisma.palletLinea.count({ where: { pallet: { embarqueId } } })
+}
+
 // Entidades que pueden figurar como "Emisor de la Guía" del Packing List
 // (2026-10-23): los productores (Pallet.productorId) y las plantas
 // (Pallet.recepcion.plantaId) asociados a los pallets reservados al embarque —
@@ -560,6 +558,16 @@ export async function getEntidadesEmisorEmbarque(embarqueId: number) {
   return prisma.entidad.findMany({
     where: { id: { in: [...ids] }, eliminadoEn: null },
     select: { id: true, codigo: true, descripcion: true, razonSocial: true },
+  })
+}
+
+// Nombres de la empresa ACTIVA (para reconocer "Agrosan" como emisor de la guía
+// en el Packing List). Empresa no es tenant-filtrada por sí misma → se lee por id.
+export async function getEmpresaActivaNombres() {
+  const empresaId = getEmpresaIdActual()!
+  return prisma.empresa.findFirst({
+    where: { id: empresaId },
+    select: { codigo: true, razonSocial: true, nombreFantasia: true },
   })
 }
 
@@ -641,9 +649,18 @@ export async function guardarPackingList(
     // updateMany porque no hay índice único declarado en ese par.
     if (datos.estado === 'OK') {
       for (const g of datos.datosPorPallet) {
-        const dataPallet: { numeroGuiaDespacho?: string; emisorGuiaId?: number; termografo?: string; temperatura?: number } = {}
-        if (g.numeroGuia !== undefined) dataPallet.numeroGuiaDespacho = g.numeroGuia
-        if (g.emisorGuiaId !== undefined) dataPallet.emisorGuiaId = g.emisorGuiaId
+        const dataPallet: { numeroGuiaDespacho?: string | null; emisorGuiaId?: number | null; guiaEmitidaPorAgrosan?: boolean; termografo?: string; temperatura?: number } = {}
+        if (g.guiaEmitidaPorAgrosan) {
+          // Emisor = Agrosan: la guía la emite la empresa → sin número ni emisor-entidad.
+          dataPallet.guiaEmitidaPorAgrosan = true
+          dataPallet.numeroGuiaDespacho = null
+          dataPallet.emisorGuiaId = null
+        } else {
+          if (g.numeroGuia !== undefined) dataPallet.numeroGuiaDespacho = g.numeroGuia
+          if (g.emisorGuiaId !== undefined) dataPallet.emisorGuiaId = g.emisorGuiaId
+          // Si antes era Agrosan y ahora trae un emisor real, se limpia la marca.
+          if (g.emisorGuiaId !== undefined) dataPallet.guiaEmitidaPorAgrosan = false
+        }
         if (g.termografo !== undefined) dataPallet.termografo = g.termografo
         if (g.temperatura !== undefined) dataPallet.temperatura = g.temperatura
         if (Object.keys(dataPallet).length === 0) continue
@@ -701,7 +718,7 @@ export async function eliminarPackingList(embarqueId: number, packingListId: num
     if (numeros.length > 0) {
       await tx.pallet.updateMany({
         where: { embarqueId, numeroPallet: { in: numeros }, eliminadoEn: null },
-        data: { numeroGuiaDespacho: null, emisorGuiaId: null, termografo: null, temperatura: null },
+        data: { numeroGuiaDespacho: null, emisorGuiaId: null, guiaEmitidaPorAgrosan: false, termografo: null, temperatura: null },
       })
     }
     return 'OK' as const
@@ -748,6 +765,7 @@ export async function getDatosEmisionPackingList(embarqueId: number) {
           temperatura: true,
           termografo: true,
           numeroGuiaDespacho: true,
+          guiaEmitidaPorAgrosan: true,
           emisorGuia: { select: { razonSocial: true } },
           productor: {
             select: {
@@ -1424,10 +1442,6 @@ export async function getEmbarqueParaGuia(embarqueId: number) {
       guiaComunaOrigen: true,
       guiaDirDestino: true,
       guiaComunaDestino: true,
-      guiaExternaNumero: true,
-      guiaExternaEmisorId: true,
-      guiaExternaFecha: true,
-      guiaExternaEmisor: { select: { id: true, razonSocial: true, identificador: true } },
       // Puerto de zarpe: descripción (destino en Transporte) + codigoAduana
       // (CodPtoEmbarque del bloque Aduana del DTE 52 de exportación).
       puertoZarpe: { select: { id: true, descripcion: true, codigoAduana: true } },
@@ -1538,16 +1552,10 @@ export async function prepararEmisionGuiaEnTx(
   if (doc) await tx.documentoDte.delete({ where: { id: doc.id } })
   const e = await tx.embarque.findFirst({
     where: { id: embarqueId, eliminadoEn: null },
-    select: { despachadoEn: true, despachoAnuladoEn: true, guiaExternaNumero: true },
+    select: { despachadoEn: true, despachoAnuladoEn: true },
   })
   if (!e || !(e.despachadoEn && !e.despachoAnuladoEn)) {
     throw new ValidationError('El Embarque ya no está despachado — no se puede emitir la Guía de Despacho')
-  }
-  // Exclusión mutua (2026-10-12): si ya hay una Guía externa registrada, no se
-  // puede emitir una propia. Re-chequeo bajo el lock DTE para cerrar la carrera
-  // con registrarGuiaExterna (que toma el mismo lock).
-  if (e.guiaExternaNumero != null) {
-    throw new ValidationError('Este Embarque ya tiene registrada una Guía de Despacho externa; quítala antes de emitir una propia')
   }
   await tx.embarque.update({ where: { id: embarqueId }, data: { ...datos, actualizadoPor } })
 }
@@ -1571,86 +1579,5 @@ export async function getTransportistaParaGuia(entidadId: number) {
   return prisma.entidad.findFirst({
     where: { id: entidadId, eliminadoEn: null },
     select: { id: true, identificador: true, razonSocial: true, tipos: true },
-  })
-}
-
-// ─── Guía de Despacho emitida por un tercero (2026-10-12) ───────────────────
-
-// Entidad emisora de una Guía externa: debe ser Productor o Planta, activa y
-// con RUT (identificador) — el RUT es la mitad de la clave de duplicidad.
-export async function getEmisorGuiaExterna(entidadId: number) {
-  return prisma.entidad.findFirst({
-    where: { id: entidadId, eliminadoEn: null },
-    select: { id: true, identificador: true, razonSocial: true, tipos: true, activo: true },
-  })
-}
-
-type GuiaExternaResultado =
-  | 'OK'
-  | 'NO_DESPACHADO'
-  | 'TIENE_GUIA_PROPIA'
-  | 'DUPLICADA'
-
-// Registra (o reemplaza) la Guía externa de forma atómica, bajo el MISMO
-// advisory lock del origen DTE que usan emitir/timbrar la Guía propia — así la
-// exclusión mutua propia/externa es indivisible frente a una emisión
-// concurrente. Dentro de la sección crítica: (1) revalida despacho vigente,
-// (2) rechaza si ya existe un DocumentoDte propio no-ERROR (propia en curso o
-// timbrada), (3) valida duplicidad por empresa (mismo emisor + número) y
-// (4) persiste. El índice único parcial es la última línea de defensa.
-export async function registrarGuiaExternaEnTx(
-  embarqueId: number,
-  datos: { emisorId: number; numero: string; fecha: Date | null },
-  actualizadoPor: string,
-): Promise<GuiaExternaResultado> {
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION}::int, hashtext(${`embarque:${embarqueId}`}))`
-
-    const e = await tx.embarque.findFirst({
-      where: { id: embarqueId, eliminadoEn: null },
-      select: { despachadoEn: true, despachoAnuladoEn: true },
-    })
-    if (!e || !(e.despachadoEn && !e.despachoAnuladoEn)) return 'NO_DESPACHADO' as const
-
-    // Exclusión mutua: cualquier DocumentoDte propio no-ERROR bloquea la guía
-    // externa (borrador temporal, emitiendo, generando o timbrado).
-    const propia = await tx.documentoDte.findFirst({
-      where: { origenTipo: 'embarque', origenId: embarqueId, estado: { not: 'ERROR' } },
-      select: { id: true },
-    })
-    if (propia) return 'TIENE_GUIA_PROPIA' as const
-
-    // Duplicidad por empresa (el tenant extension inyecta empresaId): mismo
-    // emisor + mismo número en otro embarque.
-    const dup = await tx.embarque.findFirst({
-      where: {
-        id: { not: embarqueId },
-        eliminadoEn: null,
-        guiaExternaEmisorId: datos.emisorId,
-        guiaExternaNumero: datos.numero,
-      },
-      select: { id: true },
-    })
-    if (dup) return 'DUPLICADA' as const
-
-    await tx.embarque.update({
-      where: { id: embarqueId },
-      data: {
-        guiaExternaEmisorId: datos.emisorId,
-        guiaExternaNumero: datos.numero,
-        guiaExternaFecha: datos.fecha,
-        actualizadoPor,
-      },
-    })
-    return 'OK' as const
-  })
-}
-
-// Quita la Guía externa registrada (deja el Embarque libre para emitir una
-// propia). No toca el despacho ni ningún DTE.
-export async function quitarGuiaExterna(embarqueId: number, actualizadoPor: string): Promise<void> {
-  await prisma.embarque.update({
-    where: { id: embarqueId },
-    data: { guiaExternaEmisorId: null, guiaExternaNumero: null, guiaExternaFecha: null, actualizadoPor },
   })
 }

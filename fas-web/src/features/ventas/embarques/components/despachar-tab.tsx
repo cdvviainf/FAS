@@ -284,8 +284,10 @@ export function DespacharTab({ embarque }: { embarque: EmbarqueDetalle }) {
                 onClick={() => {
                   const t = templates.find((x) => x.id === Number(templateCargaId))
                   if (!t) { toast.error('Selecciona un Template de Carga'); return }
-                  templatesCargaService
-                    .descargarFormatoBase(t.id, `formato-packing-list-${t.codigo}.xlsx`)
+                  // Formato específico del embarque: la columna Emisor trae el
+                  // dropdown de productores/plantas del embarque + "Agrosan".
+                  embarquesService
+                    .descargarFormatoPackingList(embarque.id, t.id, `formato-packing-list-${t.codigo}.xlsx`)
                     .catch((e: Error) => toast.error(e.message || 'No se pudo descargar el formato base'))
                 }}
               >

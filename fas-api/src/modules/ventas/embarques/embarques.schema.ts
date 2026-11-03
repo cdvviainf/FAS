@@ -235,17 +235,6 @@ export const emitirGuiaDespachoSchema = z.object({
 
 export type EmitirGuiaDespachoInput = z.infer<typeof emitirGuiaDespachoSchema>
 
-// Registro de una Guía de Despacho emitida por un tercero (2026-10-12): número
-// + entidad emisora (Productor o Planta) + fecha opcional. La validación de
-// tipo/RUT del emisor y la duplicidad viven en el service/repo.
-export const registrarGuiaExternaSchema = z.object({
-  emisorId: z.number().int().positive(),
-  numero: z.string().trim().min(1).max(40),
-  fecha: z.coerce.date().optional().nullable(),
-})
-
-export type RegistrarGuiaExternaInput = z.infer<typeof registrarGuiaExternaSchema>
-
 export type EmbarqueCreateBody = z.infer<typeof embarqueCreateSchema>
 export type ReservarPalletsBody = z.infer<typeof reservarPalletsSchema>
 export type AglWebhookConfirmarBody = z.infer<typeof aglWebhookConfirmarSchema>

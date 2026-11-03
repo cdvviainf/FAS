@@ -23,7 +23,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Icons } from '@/components/icons'
-import { AlertModal } from '@/components/modal/alert-modal'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { entidadesService } from '@/features/entidades/service'
 import { embarquesService } from '../service'
@@ -360,137 +359,14 @@ function EmitirGuiaDialog({
   )
 }
 
-// Popup para registrar una Guía emitida por un TERCERO (no la emitimos
-// nosotros): entidad emisora (Productor o Planta), número de guía y fecha.
-function RegistrarGuiaExternaDialog({
-  embarqueId,
-  open,
-  onOpenChange,
-  onRegistrado,
-}: {
-  embarqueId: number
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onRegistrado: () => void
-}) {
-  const [emisorId, setEmisorId] = useState('')
-  const [numero, setNumero] = useState('')
-  const [fecha, setFecha] = useState('')
-
-  useEffect(() => {
-    if (!open) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setEmisorId('')
-    setNumero('')
-    setFecha('')
-  }, [open])
-
-  // Emisor = Productor o Planta. Dos consultas acotadas que se fusionan (el
-  // service.list sólo acepta un `tipo`); dedupe por id porque una Entidad puede
-  // ser ambos tipos.
-  const { data: productoresData } = useQuery({
-    queryKey: ['entidades-options', 'PRODUCTOR'],
-    queryFn: () => entidadesService.list({ tipo: 'PRODUCTOR', activo: true, limit: 500 }),
-    enabled: open,
-  })
-  const { data: plantasData } = useQuery({
-    queryKey: ['entidades-options', 'PLANTA'],
-    queryFn: () => entidadesService.list({ tipo: 'PLANTA', activo: true, limit: 500 }),
-    enabled: open,
-  })
-  const emisores = (() => {
-    const map = new Map<number, { id: number; razonSocial: string }>()
-    for (const e of [...(productoresData?.data ?? []), ...(plantasData?.data ?? [])]) {
-      if (!map.has(e.id)) map.set(e.id, { id: e.id, razonSocial: e.razonSocial })
-    }
-    return [...map.values()].sort((a, b) => a.razonSocial.localeCompare(b.razonSocial))
-  })()
-
-  const mutation = useMutation({
-    mutationFn: () =>
-      embarquesService.registrarGuiaExterna(embarqueId, {
-        emisorId: Number(emisorId),
-        numero: numero.trim(),
-        fecha: fecha || null,
-      }),
-    onSuccess: () => {
-      toast.success('Guía de Despacho externa registrada')
-      onRegistrado()
-      onOpenChange(false)
-    },
-    onError: (e: Error) => toast.error(e.message || 'No se pudo registrar la Guía externa'),
-  })
-
-  function handleSubmit() {
-    if (!emisorId) {
-      toast.error('Selecciona la entidad que emitió la guía')
-      return
-    }
-    if (!numero.trim()) {
-      toast.error('Ingresa el número de la guía')
-      return
-    }
-    mutation.mutate()
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-lg'>
-        <DialogHeader>
-          <DialogTitle>Registrar Guía de Despacho de un tercero</DialogTitle>
-          <DialogDescription>
-            Cuando la Guía de Despacho no la emitimos nosotros, registra aquí el número y la entidad
-            (Productor o Planta) que la emitió para dejar la trazabilidad.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className='space-y-4 py-2'>
-          <div className='space-y-1.5'>
-            <Label>Emisor de la guía <span className='text-destructive'>*</span></Label>
-            <Select value={emisorId} onValueChange={setEmisorId}>
-              <SelectTrigger>
-                <SelectValue placeholder='Seleccionar Productor o Planta...' />
-              </SelectTrigger>
-              <SelectContent>
-                {emisores.map((e) => (
-                  <SelectItem key={e.id} value={String(e.id)}>{e.razonSocial}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className='grid gap-3 sm:grid-cols-2'>
-            <div className='space-y-1.5'>
-              <Label>Número de guía <span className='text-destructive'>*</span></Label>
-              <Input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder='N° de la guía emitida' />
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Fecha de la guía</Label>
-              <Input type='date' value={fecha} onChange={(e) => setFecha(e.target.value)} />
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button type='button' variant='outline' onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type='button' isLoading={mutation.isPending} onClick={handleSubmit}>
-            <Icons.check className='mr-1 h-4 w-4' /> Registrar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 // Bloque de la Guía de Despacho dentro de la pestaña Despachar (solo visible
-// cuando el Embarque ya está despachado). Dos caminos EXCLUYENTES: emitimos
-// nosotros el DTE 52 (emitir borrador → timbrar → ver PDF) o registramos la
-// guía emitida por un tercero (número + emisor).
+// cuando el Embarque ya está despachado): emitimos nosotros el DTE 52 (emitir
+// borrador → timbrar → ver PDF). Las guías con que llegó la fruta de cada
+// productor/planta se registran por pallet desde el Packing List.
 export function GuiaDespachoSection({ embarqueId }: { embarqueId: number }) {
   const puedeEscribir = usePuedeEscribir(ITEM)
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [externaDialogOpen, setExternaDialogOpen] = useState(false)
-  const [quitarOpen, setQuitarOpen] = useState(false)
 
   const { data } = useQuery({
     queryKey: GUIA_KEY(embarqueId),
@@ -498,7 +374,6 @@ export function GuiaDespachoSection({ embarqueId }: { embarqueId: number }) {
   })
   const guia = data?.data
   const doc = guia?.documento ?? null
-  const externa = guia?.externa ?? null
 
   const invalidar = () => queryClient.invalidateQueries({ queryKey: GUIA_KEY(embarqueId) })
 
@@ -513,23 +388,13 @@ export function GuiaDespachoSection({ embarqueId }: { embarqueId: number }) {
     onError: (e: Error) => toast.error(e.message || 'Error al timbrar la Guía'),
   })
 
-  const quitarMutation = useMutation({
-    mutationFn: () => embarquesService.quitarGuiaExterna(embarqueId),
-    onSuccess: () => {
-      toast.success('Guía externa quitada')
-      setQuitarOpen(false)
-      invalidar()
-    },
-    onError: (e: Error) => toast.error(e.message || 'No se pudo quitar la Guía externa'),
-  })
-
   const estado = doc?.estado
   const timbrada = estado === 'GENERADO'
   const borrador = estado === 'TEMPORAL_CREADO'
   const enProceso = estado === 'EMITIENDO' || estado === 'GENERANDO'
-  // Puede iniciar una guía (propia o externa) sólo si no hay ninguna en curso:
-  // sin externa registrada y sin DTE propio (o el propio quedó en ERROR).
-  const sinGuiaVigente = externa == null && (!doc || estado === 'ERROR')
+  // Puede emitir una guía propia sólo si no hay ninguna en curso (sin DTE propio o
+  // el propio quedó en ERROR).
+  const sinGuiaVigente = !doc || estado === 'ERROR'
 
   return (
     <div className='space-y-3 rounded-md border p-4'>
@@ -538,44 +403,25 @@ export function GuiaDespachoSection({ embarqueId }: { embarqueId: number }) {
           <Icons.fileTypePdf className='text-muted-foreground h-4 w-4' />
           <span className='text-sm font-medium'>Guía de Despacho</span>
         </div>
-        {externa != null && <Badge variant='secondary'>Emitida por un tercero</Badge>}
-        {externa == null && timbrada && <Badge className='bg-emerald-600'>Timbrada — folio {doc?.folio}</Badge>}
-        {externa == null && borrador && <Badge variant='secondary'>Borrador emitido</Badge>}
-        {externa == null && estado === 'ERROR' && <Badge variant='destructive'>Error</Badge>}
+        {timbrada && <Badge className='bg-emerald-600'>Timbrada — folio {doc?.folio}</Badge>}
+        {borrador && <Badge variant='secondary'>Borrador emitido</Badge>}
+        {estado === 'ERROR' && <Badge variant='destructive'>Error</Badge>}
         {sinGuiaVigente && <Badge variant='outline'>No emitida</Badge>}
       </div>
 
-      {externa != null && (
-        <div className='text-muted-foreground text-xs'>
-          <p><span className='font-medium text-foreground'>Emisor:</span> {externa.emisor?.razonSocial ?? '—'}{externa.emisor?.rut ? ` (${externa.emisor.rut})` : ''}</p>
-          <p><span className='font-medium text-foreground'>N° de guía:</span> {externa.numero}{externa.fecha ? ` · ${externa.fecha.slice(0, 10)}` : ''}</p>
-        </div>
-      )}
-
-      {externa == null && doc?.errorMensaje && estado === 'ERROR' && (
+      {doc?.errorMensaje && estado === 'ERROR' && (
         <p className='text-destructive text-xs'>{doc.errorMensaje}</p>
       )}
 
       {puedeEscribir && (
         <div className='flex flex-wrap gap-2'>
           {sinGuiaVigente && (
-            <>
-              <Button type='button' size='sm' onClick={() => setDialogOpen(true)}>
-                <Icons.fileTypePdf className='mr-1 h-4 w-4' /> Emitir Guía
-              </Button>
-              <Button type='button' size='sm' variant='outline' onClick={() => setExternaDialogOpen(true)}>
-                <Icons.edit className='mr-1 h-4 w-4' /> Registrar guía de un tercero
-              </Button>
-            </>
-          )}
-
-          {externa != null && (
-            <Button type='button' size='sm' variant='outline' className='text-destructive' onClick={() => setQuitarOpen(true)}>
-              <Icons.trash className='mr-1 h-4 w-4' /> Quitar guía externa
+            <Button type='button' size='sm' onClick={() => setDialogOpen(true)}>
+              <Icons.fileTypePdf className='mr-1 h-4 w-4' /> Emitir Guía
             </Button>
           )}
 
-          {externa == null && borrador && (
+          {borrador && (
             <>
               <Button type='button' size='sm' variant='outline' onClick={() => setDialogOpen(true)}>
                 <Icons.edit className='mr-1 h-4 w-4' /> Editar datos
@@ -586,9 +432,9 @@ export function GuiaDespachoSection({ embarqueId }: { embarqueId: number }) {
             </>
           )}
 
-          {externa == null && enProceso && <span className='text-muted-foreground text-xs'>Procesando en LibreDTE…</span>}
+          {enProceso && <span className='text-muted-foreground text-xs'>Procesando en LibreDTE…</span>}
 
-          {externa == null && (borrador || timbrada) && doc?.libredteCodigoTemporal && (
+          {(borrador || timbrada) && doc?.libredteCodigoTemporal && (
             <Button
               type='button'
               size='sm'
@@ -616,20 +462,6 @@ export function GuiaDespachoSection({ embarqueId }: { embarqueId: number }) {
           onEmitido={invalidar}
         />
       )}
-      <RegistrarGuiaExternaDialog
-        embarqueId={embarqueId}
-        open={externaDialogOpen}
-        onOpenChange={setExternaDialogOpen}
-        onRegistrado={invalidar}
-      />
-      <AlertModal
-        isOpen={quitarOpen}
-        onClose={() => setQuitarOpen(false)}
-        onConfirm={() => quitarMutation.mutate()}
-        loading={quitarMutation.isPending}
-        title='Quitar guía externa'
-        description='¿Quitar la Guía de Despacho externa registrada? Luego podrás registrar otra o emitir una propia.'
-      />
     </div>
   )
 }

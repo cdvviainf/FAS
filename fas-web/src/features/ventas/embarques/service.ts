@@ -13,7 +13,6 @@ import type {
   InstructivoHijoUpdateInput,
   PackingListEmbarque,
   PalletResumen,
-  RegistrarGuiaExternaInput,
 } from './types'
 
 export const embarquesService = {
@@ -109,6 +108,22 @@ export const embarquesService = {
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
   },
 
+  // Formato base del Packing List específico del embarque (columna Emisor con
+  // dropdown de productores/plantas + "Agrosan").
+  async descargarFormatoPackingList(id: number, templateCargaId: number, nombreArchivo: string): Promise<void> {
+    const blob = await api
+      .get(`ventas/embarques/${id}/packing-list/formato`, { searchParams: { templateCargaId: String(templateCargaId) } })
+      .blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombreArchivo
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  },
+
   // Packing parcializado (2026-09-28): eliminar un archivo de la carga.
   async eliminarPackingList(id: number, packingListId: number): Promise<{ data: EmbarqueDetalle }> {
     return api.delete(`ventas/embarques/${id}/packing-list/${packingListId}`).json()
@@ -180,14 +195,5 @@ export const embarquesService = {
     const url = URL.createObjectURL(blob)
     window.open(url, '_blank', 'noopener,noreferrer')
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
-  },
-
-  // Guía emitida por un tercero (2026-10-12).
-  async registrarGuiaExterna(id: number, data: RegistrarGuiaExternaInput): Promise<{ data: GuiaDespachoResponse }> {
-    return api.post(`ventas/embarques/${id}/guia-despacho/externa`, { json: data }).json()
-  },
-
-  async quitarGuiaExterna(id: number): Promise<{ data: GuiaDespachoResponse }> {
-    return api.delete(`ventas/embarques/${id}/guia-despacho/externa`).json()
   },
 }

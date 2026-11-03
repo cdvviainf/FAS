@@ -19,7 +19,6 @@ import {
   packingListDescargaQuerySchema,
   packingListParamsSchema,
   emitirGuiaDespachoSchema,
-  registrarGuiaExternaSchema,
 } from './embarques.schema.js'
 import * as service from './embarques.service.js'
 import { prisma } from '../../../lib/prisma.js'
@@ -112,6 +111,16 @@ export async function subirPackingList(req: FastifyRequest, reply: FastifyReply)
     req.fasUserId!,
   )
   return reply.status(201).send({ data: resultado })
+}
+
+export async function descargarFormatoPackingList(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = embarqueParamsSchema.parse(req.params)
+  const { templateCargaId } = packingListUploadQuerySchema.parse(req.query)
+  const { buffer, nombreArchivo } = await service.descargarFormatoPackingList(id, templateCargaId)
+  return reply
+    .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    .header('Content-Disposition', `attachment; filename="${encodeURIComponent(nombreArchivo)}"`)
+    .send(Buffer.from(buffer))
 }
 
 export async function emitirPackingList(req: FastifyRequest, reply: FastifyReply) {
@@ -314,17 +323,4 @@ export async function descargarGuiaDespachoPdf(req: FastifyRequest, reply: Fasti
     .header('Content-Disposition', `inline; filename="guia-despacho-${id}.pdf"`)
     .header('Content-Length', String(pdf.length))
     .send(pdf)
-}
-
-export async function registrarGuiaExterna(req: FastifyRequest, reply: FastifyReply) {
-  const { id } = embarqueParamsSchema.parse(req.params)
-  const body = registrarGuiaExternaSchema.parse(req.body)
-  const data = await service.registrarGuiaExterna(id, body, req.fasUserId!)
-  return reply.send({ data })
-}
-
-export async function quitarGuiaExterna(req: FastifyRequest, reply: FastifyReply) {
-  const { id } = embarqueParamsSchema.parse(req.params)
-  const data = await service.quitarGuiaExterna(id, req.fasUserId!)
-  return reply.send({ data })
 }
