@@ -125,8 +125,13 @@ function parsearHoja(ws: ExcelJS.Worksheet | undefined, hoja: HojaSpec, erroresG
   const ultima = ws.actualRowCount
   for (let r = 2; r <= ultima; r++) {
     const row = ws.getRow(r)
-    // Saltar filas totalmente vacías.
-    const algo = hoja.columnas.some((c) => normalizarTexto(row.getCell(encHeader.get(c.encabezado) ?? 0).value) !== undefined)
+    // Saltar filas totalmente vacías. Solo se miran las columnas presentes en el
+    // archivo: una columna opcional ausente no tiene índice (getCell(0) reventaría
+    // — ExcelJS es base-1).
+    const algo = hoja.columnas.some((c) => {
+      const idx = encHeader.get(c.encabezado)
+      return idx ? normalizarTexto(row.getCell(idx).value) !== undefined : false
+    })
     if (!algo) continue
 
     const valores: Record<string, unknown> = {}
