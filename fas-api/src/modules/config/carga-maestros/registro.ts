@@ -66,6 +66,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   {
     hoja: 'Especies',
     modelo: 'especie',
+    claveNatural: ['descripcion'],
     titulo: 'Especies',
     descripcion: 'Especies de fruta. El código se usa como referencia en Grupos de Variedad, Variedades, Categorías y Calibres.',
     dependeDe: [],
@@ -79,6 +80,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   {
     hoja: 'Etiquetas',
     modelo: 'etiqueta',
+    claveNatural: ['descripcion'],
     titulo: 'Etiquetas',
     descripcion: 'Etiquetas de embalaje. Referenciadas por Artículos de tipo EMBALAJE.',
     dependeDe: [],
@@ -91,6 +93,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   {
     hoja: 'GruposVariedad',
     modelo: 'grupoVariedad',
+    claveNatural: ['descripcion', 'especieId'],
     titulo: 'Grupos de Variedad',
     descripcion: 'Agrupaciones de variedades por especie. OJO: el código debe ser único por empresa (no por especie).',
     dependeDe: ['Especies'],
@@ -104,6 +107,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   {
     hoja: 'Variedades',
     modelo: 'variedad',
+    claveNatural: ['descripcion', 'especieId'],
     titulo: 'Variedades',
     descripcion: 'Variedades de cada especie.',
     dependeDe: ['Especies', 'GruposVariedad'],
@@ -118,6 +122,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   {
     hoja: 'Categorias',
     modelo: 'categoria',
+    claveNatural: ['descripcion', 'especieId'],
     titulo: 'Categorías',
     descripcion: 'Categorías comerciales por especie. El "Orden" debe ser único por especie.',
     dependeDe: ['Especies'],
@@ -133,6 +138,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   {
     hoja: 'Calibres',
     modelo: 'calibre',
+    claveNatural: ['descripcion', 'especieId'],
     titulo: 'Calibres',
     descripcion: 'Calibres por especie. El "Orden" debe ser único por especie. El calibre equivalente (opcional) debe ser de la misma especie; si se deja vacío, el calibre queda como su propio equivalente.',
     dependeDe: ['Especies'],
@@ -149,6 +155,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   {
     hoja: 'Mercados',
     modelo: 'mercado',
+    claveNatural: ['descripcion'],
     titulo: 'Mercados',
     descripcion: 'Mercados comerciales. El Grupo de Mercado YA DEBE EXISTIR en el sistema.',
     dependeDe: [],
@@ -162,6 +169,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   {
     hoja: 'Puertos',
     modelo: 'puerto',
+    claveNatural: ['descripcion'],
     titulo: 'Puertos',
     descripcion: 'Puertos de embarque/destino. El Tipo de Embarque YA DEBE EXISTIR.',
     dependeDe: ['Paises'],
@@ -193,6 +201,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   {
     hoja: 'Entidades',
     modelo: 'entidad',
+    claveNatural: ['razonSocial'],
     titulo: 'Entidades',
     descripcion: 'Clientes, productores, proveedores, navieras, etc. Direcciones y contactos se cargan aparte.',
     dependeDe: ['Paises'],
@@ -253,6 +262,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   {
     hoja: 'Articulos',
     modelo: 'articulo',
+    claveNatural: ['codigo'],
     titulo: 'Artículos',
     descripcion: 'Artículos de materiales (embalaje, envases, servicios). La Unidad de Medida YA DEBE EXISTIR.',
     dependeDe: ['Etiquetas'],
@@ -275,6 +285,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   {
     hoja: 'Bodegas',
     modelo: 'bodega',
+    claveNatural: ['descripcion'],
     titulo: 'Bodegas',
     descripcion: 'Bodegas físicas. La Comuna YA DEBE EXISTIR.',
     dependeDe: [],

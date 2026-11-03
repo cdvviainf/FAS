@@ -38,7 +38,8 @@ export function CargaMaestrosClient() {
     onSuccess: (data, commit) => {
       setResultado(data)
       const creados = Object.values(data.resumen).reduce((a, r) => a + r.creados, 0)
-      if (commit) toast.success(`Carga completada: ${creados} registros creados, ${data.errores.length} con error`)
+      const existentes = Object.values(data.resumen).reduce((a, r) => a + r.existentes, 0)
+      if (commit) toast.success(`Carga completada: ${creados} creados, ${existentes} ya existían, ${data.errores.length} con error`)
       else toast.info(`Validación: ${data.errores.length} problemas encontrados`)
     },
     onError: (e: Error) => toast.error(e.message || 'Error al procesar el archivo'),
@@ -50,6 +51,7 @@ export function CargaMaestrosClient() {
   })
 
   const totalCreados = resultado ? Object.values(resultado.resumen).reduce((a, r) => a + r.creados, 0) : 0
+  const totalExistentes = resultado ? Object.values(resultado.resumen).reduce((a, r) => a + r.existentes, 0) : 0
 
   return (
     <div className='flex flex-col gap-6'>
@@ -135,6 +137,7 @@ export function CargaMaestrosClient() {
             <CardTitle className='flex items-center gap-2'>
               {resultado.dryRun ? 'Resultado de validación' : 'Resultado de la carga'}
               <Badge variant='secondary'>{totalCreados} creados</Badge>
+              {totalExistentes > 0 && <Badge variant='outline'>{totalExistentes} ya existían</Badge>}
               <Badge variant={resultado.errores.length ? 'destructive' : 'secondary'}>
                 {resultado.errores.length} errores
               </Badge>
@@ -152,6 +155,7 @@ export function CargaMaestrosClient() {
                     <TableHead>Hoja</TableHead>
                     <TableHead className='text-right'>Filas</TableHead>
                     <TableHead className='text-right'>Creados</TableHead>
+                    <TableHead className='text-right'>Ya existían</TableHead>
                     <TableHead className='text-right'>Errores</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -163,6 +167,7 @@ export function CargaMaestrosClient() {
                         <TableCell className='font-medium'>{hoja}</TableCell>
                         <TableCell className='text-right'>{r.filas}</TableCell>
                         <TableCell className='text-right'>{r.creados}</TableCell>
+                        <TableCell className='text-right text-muted-foreground'>{r.existentes}</TableCell>
                         <TableCell className='text-right'>
                           {nErr > 0 ? <span className='text-destructive'>{nErr}</span> : nErr}
                         </TableCell>

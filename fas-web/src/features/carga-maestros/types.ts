@@ -8,6 +8,6 @@ export interface ErrorFila {
 
 export interface ResultadoCarga {
   dryRun: boolean
-  resumen: Record<string, { filas: number; creados: number }>
+  resumen: Record<string, { filas: number; creados: number; existentes: number }>
   errores: ErrorFila[]
 }

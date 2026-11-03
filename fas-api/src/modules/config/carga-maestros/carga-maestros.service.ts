@@ -1,8 +1,41 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { Prisma } from '@prisma/client'
 import type { ColumnaSpec, ErrorFila, HojaSpec } from '../../../lib/carga-maestros/tipos.js'
 import { parsearLibro, validarReferenciasInternas } from '../../../lib/carga-maestros/parsear.js'
 import { empresaContext } from '../../../lib/empresa-context.js'
+import { prisma } from '../../../lib/prisma.js'
 import { REGISTRO_MAESTROS, ordenTopologico } from './registro.js'
+
+// Modelos con soft-delete (eliminadoEn): la verificación de existencia por clave
+// natural debe ignorar las filas ya eliminadas. Nombres en estilo delegate
+// (camelCase), igual que `hoja.modelo`.
+const MODELOS_SOFT_DELETE = new Set(
+  Prisma.dmmf.datamodel.models
+    .filter((m) => m.fields.some((f) => f.name === 'eliminadoEn'))
+    .map((m) => m.name.charAt(0).toLowerCase() + m.name.slice(1)),
+)
+
+// IDEMPOTENCIA (2026-11-03): ¿ya existe una fila de esta empresa con la misma
+// clave natural? El empresaId lo inyecta la extensión de tenancy (findFirst corre
+// dentro del empresaContext.run del commit). Si la clave viene incompleta en el
+// input, no se puede matchear → se crea.
+async function buscarExistentePorClaveNatural(
+  modelo: string,
+  claveNatural: string[],
+  input: Record<string, any>,
+): Promise<number | null> {
+  const where: Record<string, unknown> = {}
+  for (const campo of claveNatural) {
+    const val = input[campo]
+    if (val == null) return null
+    where[campo] = val
+  }
+  if (MODELOS_SOFT_DELETE.has(modelo)) where.eliminadoEn = null
+  const delegate = (prisma as any)[modelo]
+  if (!delegate?.findFirst) return null
+  const found = await delegate.findFirst({ where, select: { id: true } })
+  return (found as { id: number } | null)?.id ?? null
+}
 
 // Services y repos que el cargador reutiliza (misma lógica de negocio que la API).
 import * as configService from '../config.service.js'
@@ -30,12 +63,22 @@ export interface OpcionesCarga {
 
 export interface ResultadoCarga {
   dryRun: boolean
-  resumen: Record<string, { filas: number; creados: number }>
+  resumen: Record<string, { filas: number; creados: number; existentes: number }>
   errores: ErrorFila[]
 }
 
-/** Resuelve un código a su id contra la BD (tenant-scoped por el contexto activo). */
-async function resolverCodigoAId(modelo: string, codigo: string): Promise<number | null> {
+/** Resuelve un código a su id contra la BD (tenant-scoped por el contexto activo).
+ *  `equivalencias` mapea modelo -> códigoExcel -> id de filas SALTADAS por clave
+ *  natural (cuyo código persistido puede diferir del que trae el archivo): se
+ *  consulta primero para que las FKs internas de filas hijas del mismo archivo
+ *  apunten a la fila existente (FAS-CM-IDEMP-001). */
+async function resolverCodigoAId(
+  modelo: string,
+  codigo: string,
+  equivalencias?: Map<string, Map<string, number>>,
+): Promise<number | null> {
+  const eq = equivalencias?.get(modelo)?.get(codigo)
+  if (eq != null) return eq
   switch (modelo) {
     case 'entidad': {
       const e = await entidadesRepo.findEntidadByCodigo(codigo)
@@ -70,6 +113,7 @@ async function construirInput(
   hoja: HojaSpec,
   fila: { fila: number; valores: Record<string, unknown> },
   errores: ErrorFila[],
+  equivalencias?: Map<string, Map<string, number>>,
 ): Promise<Record<string, any> | null> {
   const input: Record<string, any> = {}
   let bloqueada = false
@@ -92,7 +136,7 @@ async function construirInput(
       }
       const modelo = modeloDestinoFk(col)
       if (!modelo) continue
-      const id = await resolverCodigoAId(modelo, String(val))
+      const id = await resolverCodigoAId(modelo, String(val), equivalencias)
       if (id == null) {
         errores.push({ hoja: hoja.hoja, fila: fila.fila, columna: col.encabezado, codigo: 'FK_NO_RESUELTA', mensaje: `No existe "${val}" en ${modelo}.` })
         bloqueada = true
@@ -110,19 +154,17 @@ async function construirInput(
     input[col.campo] = col.tipo === 'decimal' ? Number(val) : val
   }
 
-  // Código propio: usar el del archivo o autogenerar vía PrefijoCodigo.
+  // Código propio: usar el del archivo, o DIFERIR la autogeneración. La
+  // autogeneración (siguienteCodigo) se posterga a `asegurarCodigo`, que solo
+  // corre si la fila realmente se va a crear — así una fila saltada por
+  // idempotencia NO consume correlativo ni se bloquea por SIN_PREFIJO
+  // (FAS-CM-IDEMP-002).
   if (colCodigo) {
     const codArchivo = fila.valores['codigo']
     if (codArchivo != null) {
       input.codigo = String(codArchivo)
     } else if (colCodigo.autogenerar && hoja.modelo) {
-      const generado = await siguienteCodigo(hoja.modelo)
-      if (!generado) {
-        errores.push({ hoja: hoja.hoja, fila: fila.fila, columna: 'Código', codigo: 'SIN_PREFIJO', mensaje: `No hay Prefijo de Código para "${hoja.modelo}": complete el código o configure el prefijo.` })
-        bloqueada = true
-      } else {
-        input.codigo = generado
-      }
+      input.__codigoPendiente = true
     } else if (colCodigo.requerido) {
       // Faltante obligatorio: ya reportado por el parser; solo bloquear.
       bloqueada = true
@@ -130,6 +172,25 @@ async function construirInput(
   }
 
   return bloqueada ? null : input
+}
+
+// Autogenera el código vía PrefijoCodigo justo antes de crear (si quedó
+// pendiente). Devuelve false si no hay prefijo configurado (fila bloqueada).
+async function asegurarCodigo(
+  hoja: HojaSpec,
+  fila: { fila: number },
+  input: Record<string, any>,
+  errores: ErrorFila[],
+): Promise<boolean> {
+  if (!input.__codigoPendiente) return true
+  delete input.__codigoPendiente
+  const generado = hoja.modelo ? await siguienteCodigo(hoja.modelo) : null
+  if (!generado) {
+    errores.push({ hoja: hoja.hoja, fila: fila.fila, columna: 'Código', codigo: 'SIN_PREFIJO', mensaje: `No hay Prefijo de Código para "${hoja.modelo}": complete el código o configure el prefijo.` })
+    return false
+  }
+  input.codigo = generado
+  return true
 }
 
 /** Despacha la creación al service correcto según el modelo de la hoja. */
@@ -218,11 +279,11 @@ export async function cargarMaestros(
     ...Object.values(parseo.hojas).flatMap((h) => h.errores),
     ...validarReferenciasInternas(parseo, registro),
   ]
-  const resumen: Record<string, { filas: number; creados: number }> = {}
+  const resumen: Record<string, { filas: number; creados: number; existentes: number }> = {}
   // Las hojas de solo-referencia no producen registros: no entran al resumen.
   for (const h of registro) {
     if (h.soloReferencia) continue
-    resumen[h.hoja] = { filas: parseo.hojas[h.hoja]?.filas.length ?? 0, creados: 0 }
+    resumen[h.hoja] = { filas: parseo.hojas[h.hoja]?.filas.length ?? 0, creados: 0, existentes: 0 }
   }
 
   if (dryRun) {
@@ -234,18 +295,43 @@ export async function cargarMaestros(
 
   await empresaContext.run({ empresaId }, async () => {
     const detallePorReceta = await ensamblarDetalleRecetas(parseo.hojas['RecetasDetalle']?.filas ?? [], errores)
+    // modelo -> códigoExcel -> id de filas saltadas por idempotencia (ver
+    // resolverCodigoAId): permite que las FKs internas resuelvan a la fila existente.
+    const equivalencias = new Map<string, Map<string, number>>()
 
     for (const hoja of ordenTopologico(registro)) {
       if (hoja.soloReferencia) continue // hojas de referencia: no se cargan
       if (hoja.hoja === 'RecetasDetalle') continue // se carga junto con Recetas
 
       for (const fila of parseo.hojas[hoja.hoja]?.filas ?? []) {
-        const input = await construirInput(hoja, fila, errores)
+        const input = await construirInput(hoja, fila, errores, equivalencias)
         if (!input) continue
 
         if (hoja.modelo === 'receta') {
           input.detalle = detallePorReceta.get(String(fila.valores['codigo'] ?? '')) ?? []
         }
+
+        // IDEMPOTENCIA: si ya existe una fila con la misma clave natural en esta
+        // empresa, se SALTA (no se re-crea) — así re-cargar el mismo archivo no
+        // duplica (los códigos autogenerados no sirven para reconocerla). Se chequea
+        // ANTES de autogenerar el código, para no consumir correlativo en vano.
+        if (hoja.claveNatural && hoja.modelo) {
+          const existenteId = await buscarExistentePorClaveNatural(hoja.modelo, hoja.claveNatural, input)
+          if (existenteId != null) {
+            resumen[hoja.hoja].existentes++
+            // El código del Excel (si lo trae) de esta fila saltada -> id existente,
+            // para que las FKs internas de filas hijas resuelvan a esta fila aunque
+            // su código persistido difiera (FAS-CM-IDEMP-001).
+            if (typeof input.codigo === 'string' && input.codigo) {
+              if (!equivalencias.has(hoja.modelo)) equivalencias.set(hoja.modelo, new Map())
+              equivalencias.get(hoja.modelo)!.set(input.codigo, existenteId)
+            }
+            continue
+          }
+        }
+
+        // Recién ahora (se va a crear) se autogenera el código si quedó pendiente.
+        if (!(await asegurarCodigo(hoja, fila, input, errores))) continue
 
         try {
           await crearRegistro(hoja, input, userId)

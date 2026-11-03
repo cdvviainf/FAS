@@ -82,6 +82,15 @@ export interface HojaSpec {
    * de datos; el cargador la IGNORA (no crea registros desde ella).
    */
   soloReferencia?: boolean
+  /**
+   * Clave natural (campos del input) para IDEMPOTENCIA: antes de crear, el
+   * cargador busca una fila existente de esta empresa con estos mismos campos;
+   * si existe, la SALTA (no la vuelve a crear). Necesario porque el código se
+   * autogenera y no sirve para reconocer una fila ya cargada. Ej.: ['descripcion']
+   * para Especie, ['descripcion','especieId'] para Variedad, ['razonSocial'] para
+   * Entidad, ['codigo'] para Artículo. Omitir = sin deduplicación (siempre crea).
+   */
+  claveNatural?: string[]
   columnas: ColumnaSpec[]
 }
 
