@@ -58,8 +58,9 @@ const estadoVariant: Record<EstadoSolicitud, 'secondary' | 'default' | 'outline'
 
 interface SolicitudListingClientProps {
   // Determina el set de acciones, no solo el permiso (2026-08-10, ver
-  // Docs/Hallazgos/solicitud-inspeccion.md): Compras gestiona por completo
-  // (ingresar/editar/notificar/cerrar/eliminar), Calidad solo ve y cierra.
+  // Docs/Hallazgos/solicitud-inspeccion.md): Compras gestiona el ciclo de
+  // ingreso (ingresar/editar/notificar/eliminar); el CIERRE es exclusivo de
+  // Calidad / Inspección de Compra (2026-11-03) — no se muestra desde Compras.
   contexto?: 'COMPRAS' | 'CALIDAD'
 }
 
@@ -187,7 +188,9 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
         const esCerrada = s.estado === 'APROBADA' || s.estado === 'RECHAZADA' || s.estado === 'OBJETADA'
         // QAS-SI-007: un asignado ACUDIR con solo LECTURA también puede cerrar
         const esInspectorAcudir = s.asignados.some((a) => a.usuarioId === currentUserId && a.funcion === 'ACUDIR')
-        const puedeCerrar = esNotificada && (tieneTotalEnCualquiera || (esInspectorAcudir && tieneLecturaEnCualquiera))
+        // El cierre es una acción de Calidad: NO se permite desde el link de
+        // Compras (solo desde Inspección de Compra / Calidad).
+        const puedeCerrar = !esCompras && esNotificada && (tieneTotalEnCualquiera || (esInspectorAcudir && tieneLecturaEnCualquiera))
         return (
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>

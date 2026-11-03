@@ -9,7 +9,7 @@ export default function Page() {
   return (
     <PageContainer
       pageTitle='Solicitud de Inspección'
-      pageDescription='Gestión de solicitudes de inspección en terreno: ingreso, asignación, notificación y cierre.'
+      pageDescription='Gestión de solicitudes de inspección en terreno: ingreso, asignación y notificación.'
     >
       <SolicitudListingClient contexto='COMPRAS' />
     </PageContainer>
