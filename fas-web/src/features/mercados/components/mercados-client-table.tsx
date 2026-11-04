@@ -30,6 +30,7 @@ export function MercadosClientTable() {
     data: data?.mercados ?? [],
     columns,
     pageCount,
+    rowCount: data?.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

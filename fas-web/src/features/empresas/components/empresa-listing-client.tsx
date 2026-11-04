@@ -31,6 +31,7 @@ export function EmpresaListingClient() {
     data: data?.data ?? [],
     columns: empresaColumns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

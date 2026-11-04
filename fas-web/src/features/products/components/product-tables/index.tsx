@@ -36,6 +36,7 @@ export function ProductTable() {
     data: data.products,
     columns,
     pageCount,
+    rowCount: data?.total_products ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

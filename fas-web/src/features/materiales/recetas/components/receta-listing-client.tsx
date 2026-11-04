@@ -94,6 +94,7 @@ export function RecetaListingClient() {
     data: data?.data ?? [],
     columns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
     debounceMs: 500,
     // pageSize alineado con el `perPage` que se envía a la API y con el que se

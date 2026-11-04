@@ -38,6 +38,7 @@ export function EmbarqueListingClient() {
     data: data?.data ?? [],
     columns: embarqueColumns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

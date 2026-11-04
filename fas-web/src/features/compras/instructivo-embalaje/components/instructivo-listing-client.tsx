@@ -31,6 +31,7 @@ export function InstructivoListingClient() {
     data: data?.data ?? [],
     columns: instructivoColumns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

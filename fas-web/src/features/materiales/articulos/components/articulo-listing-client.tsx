@@ -121,6 +121,7 @@ export function ArticuloListingClient() {
     data: data?.data ?? [],
     columns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: { columnPinning: { right: ['actions'] } },

@@ -31,6 +31,7 @@ export function OrdenCompraMaterialListingClient() {
     data: data?.data ?? [],
     columns: ordenCompraMaterialColumns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

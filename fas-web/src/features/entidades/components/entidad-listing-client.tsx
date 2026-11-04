@@ -47,6 +47,7 @@ export function EntidadListingClient() {
     data: data?.data ?? [],
     columns: entidadColumns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

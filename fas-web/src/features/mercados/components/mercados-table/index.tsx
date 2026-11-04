@@ -33,6 +33,7 @@ export function MercadosTable() {
     data: data.mercados,
     columns,
     pageCount,
+    rowCount: data?.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: { columnPinning: { right: ['actions'] } }

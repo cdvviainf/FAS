@@ -36,6 +36,7 @@ export function UsersTable() {
     data: data.users,
     columns,
     pageCount,
+    rowCount: data?.total_users ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

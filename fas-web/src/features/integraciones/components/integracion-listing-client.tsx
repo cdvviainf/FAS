@@ -51,6 +51,7 @@ export function IntegracionListingClient() {
     data: data?.data ?? [],
     columns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
     initialState: { columnPinning: { right: ['actions'] } },
   })

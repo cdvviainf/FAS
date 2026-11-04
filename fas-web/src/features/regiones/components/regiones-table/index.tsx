@@ -34,6 +34,7 @@ export function RegionesTable() {
     data: data.regiones,
     columns,
     pageCount,
+    rowCount: data?.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

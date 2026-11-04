@@ -31,6 +31,7 @@ export function RecepcionListingClient() {
     data: data?.data ?? [],
     columns: recepcionColumns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

@@ -31,6 +31,7 @@ export function UsuarioListingClient() {
     data: data?.data ?? [],
     columns: usuarioColumns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

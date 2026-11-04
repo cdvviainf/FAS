@@ -28,6 +28,7 @@ export function MovimientoListingClient() {
     data: data?.data ?? [],
     columns: movimientoColumns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
   })
 

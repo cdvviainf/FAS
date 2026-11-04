@@ -31,6 +31,7 @@ export function PerfilListingClient() {
     data: data?.data ?? [],
     columns: perfilColumns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

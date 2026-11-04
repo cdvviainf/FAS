@@ -31,6 +31,7 @@ export function NotaVentaListingClient() {
     data: data?.data ?? [],
     columns: notaVentaColumns,
     pageCount,
+    rowCount: data?.meta.total ?? 0,
     shallow: true,
     debounceMs: 500,
     initialState: {

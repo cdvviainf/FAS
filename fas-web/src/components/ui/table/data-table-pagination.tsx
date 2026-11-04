@@ -38,7 +38,10 @@ export function DataTablePagination<TData>({
             {table.getFilteredRowModel().rows.length} row(s) selected.
           </>
         ) : (
-          <>{table.getFilteredRowModel().rows.length} row(s) total.</>
+          // Total real (server-side): getRowCount() devuelve el `rowCount` que el
+          // listing pasa a useDataTable (meta.total). Sin él, cae a las filas de la
+          // página actual — por eso mostraba "10" en vez del total.
+          <>{table.getRowCount()} row(s) total.</>
         )}
       </div>
       <div className='flex items-center gap-2 sm:gap-6 lg:gap-8'>
