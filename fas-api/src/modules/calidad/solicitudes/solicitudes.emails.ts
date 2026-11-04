@@ -21,6 +21,9 @@ interface SolicitudParaCorreo {
   paises?: { pais: { descripcion: string } }[]
   // Detalle de producto por línea (2026-10-27).
   lineas?: {
+    id: number
+    // Veredicto del cierre por línea (2026-11-03).
+    estadoCierre?: string | null
     especie: { descripcion: string }
     variedad: { descripcion: string }
     articulo: { descripcion: string }
@@ -29,7 +32,37 @@ interface SolicitudParaCorreo {
     calibres: { calibre: { descripcion: string } }[]
     calidades: { notaCalidad: { descripcion: string }; notaCondicion: { descripcion: string } }[]
   }[]
+  // Defectos y características de madurez del cierre (por línea vía solicitudLineaId).
+  defectos?: { solicitudLineaId: number | null; grupoDefecto: { descripcion: string }; defecto: { descripcion: string; tipoMedida: string }; valor: unknown }[]
+  madurez?: { solicitudLineaId: number | null; caracteristica: { descripcion: string; tipoDato: string; unidad: { codigo: string } | null }; valorNumerico: unknown; valorTexto: string | null }[]
   asignados: { funcion: string; usuario: { nombre: string; email: string } }[]
+}
+
+const RESULTADO_LINEA_LABELS: Record<string, string> = { APROBADA: 'Aprobada', RECHAZADA: 'Rechazada', OBJETADA: 'Objetada' }
+
+function textoDefecto(d: NonNullable<SolicitudParaCorreo['defectos']>[number]): string {
+  const sufijo = d.defecto.tipoMedida === 'PORCENTAJE' ? '%' : ' u.'
+  return esc(`${d.grupoDefecto.descripcion} · ${d.defecto.descripcion}: ${String(d.valor).replace('.', ',')}${sufijo}`)
+}
+function textoMadurez(m: NonNullable<SolicitudParaCorreo['madurez']>[number]): string {
+  if (m.valorTexto != null) return esc(`${m.caracteristica.descripcion}: ${m.valorTexto}`)
+  const sufijo = m.caracteristica.tipoDato === 'PORCENTAJE' ? '%' : m.caracteristica.unidad ? ` ${m.caracteristica.unidad.codigo}` : ''
+  return esc(`${m.caracteristica.descripcion}: ${String(m.valorNumerico ?? '').replace('.', ',')}${sufijo}`)
+}
+
+// Resultado del cierre POR LÍNEA (2026-11-03): veredicto + defectos + madurez.
+function bloqueResultadoCierre(s: SolicitudParaCorreo): string {
+  if (!s.lineas || s.lineas.length === 0) return ''
+  const bloques = s.lineas.map((l, i) => {
+    const defs = (s.defectos ?? []).filter((d) => d.solicitudLineaId === l.id).map(textoDefecto)
+    const mads = (s.madurez ?? []).filter((m) => m.solicitudLineaId === l.id).map(textoMadurez)
+    const veredicto = l.estadoCierre ? (RESULTADO_LINEA_LABELS[l.estadoCierre] ?? l.estadoCierre) : 'Pendiente'
+    const items = [...defs, ...mads]
+    return `<p style="margin:6px 0 2px"><strong>Línea ${i + 1}</strong> — ${esc(l.especie.descripcion)} · ${esc(l.variedad.descripcion)}: <strong>${esc(veredicto)}</strong></p>${
+      items.length > 0 ? `<ul style="margin:0 0 4px 18px;padding:0">${items.map((t) => `<li>${t}</li>`).join('')}</ul>` : ''
+    }`
+  })
+  return `<div style="margin-top:8px"><h4 style="margin:12px 0 4px">Resultado por línea</h4>${bloques.join('')}</div>`
 }
 
 const fmtFechaCorta = new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeZone: 'America/Santiago' })
@@ -134,14 +167,16 @@ export function correoEliminacion(s: SolicitudParaCorreo) {
   }
 }
 
-export function correoCierre(s: SolicitudParaCorreo, comentarios: string, cantidadAdjuntos: number, resultado: 'APROBADA' | 'RECHAZADA' | 'OBJETADA') {
-  const label = resultado
+export function correoCierre(s: SolicitudParaCorreo, comentarios: string, cantidadAdjuntos: number, resultado: 'APROBADA' | 'RECHAZADA' | 'OBJETADA' | 'MIXTO') {
+  // MIXTO = cierre por línea con veredictos distintos (ver detalle por línea).
+  const label = resultado === 'MIXTO' ? 'CERRADA (resultado por línea)' : resultado
   return {
     subject: `[FAS] Solicitud de inspección ${s.codigo} ${label}`,
     html: envolver(
       'Inspección cerrada',
       `<p>La inspección fue realizada y la solicitud quedó <strong>${label.toLowerCase()}</strong>.</p>
 ${cuerpoDetalle(s)}
+${bloqueResultadoCierre(s)}
 <h4 style="margin-bottom:4px">Comentarios del inspector</h4>
 <p>${esc(comentarios).replace(/\n/g, '<br>')}</p>
 ${cantidadAdjuntos > 0 ? `<p>La inspección incluye <strong>${cantidadAdjuntos} archivo(s) adjunto(s)</strong> disponibles en el sistema.</p>` : ''}`,

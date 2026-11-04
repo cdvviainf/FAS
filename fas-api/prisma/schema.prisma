@@ -1840,6 +1840,16 @@ enum EstadoSolicitudInspeccion {
   // RECHAZADA (bloquea OC, no se reabre automáticamente): Compras/Ventas
   // objeta la inspección sin necesariamente rechazarla de plano.
   OBJETADA
+  // Cierre por línea (2026-11-03): rollup de la cabecera cuando las líneas tienen
+  // veredictos distintos (ni todas APROBADA, ni todas RECHAZADA, ni todas OBJETADA).
+  MIXTO
+}
+
+// Veredicto por LÍNEA del cierre de inspección (2026-11-03). null = pendiente.
+enum EstadoLineaInspeccion {
+  APROBADA
+  RECHAZADA
+  OBJETADA
 }
 
 enum FuncionAsignadoInspeccion {
@@ -1966,9 +1976,15 @@ model SolicitudInspeccionLinea {
   articulo        Articulo            @relation(fields: [articuloId], references: [id])
   cantidadPallets Int?
 
+  // Veredicto del cierre POR LÍNEA (2026-11-03). null = pendiente de cierre.
+  estadoCierre EstadoLineaInspeccion?
+
   categorias SolicitudInspeccionLineaCategoria[]
   calibres   SolicitudInspeccionLineaCalibre[]
   calidades  SolicitudInspeccionLineaCalidad[]
+  // Defectos y características de madurez capturados en el cierre POR LÍNEA.
+  defectos   SolicitudInspeccionDefecto[]
+  madurez    SolicitudInspeccionMadurez[]
 
   @@index([solicitudId])
   @@index([especieId])
@@ -2060,6 +2076,10 @@ model SolicitudInspeccionDefecto {
   id             Int                 @id @default(autoincrement())
   solicitudId    Int
   solicitud      SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  // Línea a la que pertenece el defecto (cierre por línea, 2026-11-03). Nullable:
+  // las filas históricas (cierre a nivel solicitud) quedan sin línea.
+  solicitudLineaId Int?
+  solicitudLinea   SolicitudInspeccionLinea? @relation(fields: [solicitudLineaId], references: [id], onDelete: Cascade)
   grupoDefectoId Int
   grupoDefecto   GrupoDefecto        @relation(fields: [grupoDefectoId], references: [id])
   defectoId      Int
@@ -2067,6 +2087,7 @@ model SolicitudInspeccionDefecto {
   valor          Decimal             @db.Decimal(7, 2)
 
   @@index([solicitudId])
+  @@index([solicitudLineaId])
   @@index([grupoDefectoId])
   @@index([defectoId])
   @@map("solicitud_inspeccion_defectos")
@@ -2079,13 +2100,21 @@ model SolicitudInspeccionMadurez {
   id               Int                   @id @default(autoincrement())
   solicitudId      Int
   solicitud        SolicitudInspeccion   @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  // Línea a la que pertenece la medición (cierre por línea, 2026-11-03). Nullable:
+  // las filas históricas (cierre a nivel solicitud) quedan sin línea.
+  solicitudLineaId Int?
+  solicitudLinea   SolicitudInspeccionLinea? @relation(fields: [solicitudLineaId], references: [id], onDelete: Cascade)
   caracteristicaId Int
   caracteristica   CaracteristicaMadurez @relation(fields: [caracteristicaId], references: [id])
   valorNumerico    Decimal?              @db.Decimal(10, 2)
   valorTexto       String?
 
-  @@unique([solicitudId, caracteristicaId])
+  // Una medición por (línea, característica). Las filas históricas (línea null)
+  // conservan su unicidad previa por (solicitud, característica) vía índice parcial
+  // en la migración.
+  @@unique([solicitudLineaId, caracteristicaId])
   @@index([solicitudId])
+  @@index([solicitudLineaId])
   @@index([caracteristicaId])
   @@map("solicitud_inspeccion_madurez")
 }

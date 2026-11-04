@@ -38,6 +38,7 @@ const includeDetalle = {
     select: {
       id: true,
       cantidadPallets: true,
+      estadoCierre: true,
       especie: { select: { id: true, codigo: true, descripcion: true } },
       variedad: { select: { id: true, codigo: true, descripcion: true } },
       articulo: { select: { id: true, codigo: true, descripcion: true } },
@@ -64,6 +65,7 @@ const includeDetalle = {
   defectos: {
     select: {
       id: true,
+      solicitudLineaId: true,
       grupoDefectoId: true,
       defectoId: true,
       valor: true,
@@ -76,6 +78,7 @@ const includeDetalle = {
   madurez: {
     select: {
       id: true,
+      solicitudLineaId: true,
       caracteristicaId: true,
       valorNumerico: true,
       valorTexto: true,
@@ -355,17 +358,29 @@ export async function marcarNotificada(id: number, userId: string) {
   })
 }
 
+export interface CierreLineaData {
+  solicitudLineaId: number
+  veredicto: 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
+  defectos: { grupoDefectoId: number; defectoId: number; valor: number }[]
+  caracteristicas: { caracteristicaId: number; valorNumerico: number | null; valorTexto: string | null }[]
+}
+
 export interface CierreData {
   comentarios: string
-  resultado: 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
+  // Estado de la cabecera (rollup de los veredictos de línea, o el veredicto de
+  // cabecera en el flujo legacy), calculado en el service.
+  resultado: 'APROBADA' | 'RECHAZADA' | 'OBJETADA' | 'MIXTO'
   // Fecha/hora de la visita (2026-10-13): se fija/edita en el cierre. undefined = no tocar.
   fechaHora?: Date
   // Si vienen, reemplazan el set de asignados (incluye quién asiste = ACUDIR).
   asignados?: AsignadoInput[]
-  // Si vienen, reemplazan las líneas de defecto del cierre.
-  defectos?: { grupoDefectoId: number; defectoId: number; valor: number }[]
-  // Si vienen, reemplazan las características de madurez del cierre (2026-10-26).
-  caracteristicas?: { caracteristicaId: number; valorNumerico?: number | null; valorTexto?: string | null }[]
+  // Cierre POR LÍNEA: veredicto + defectos + madurez de cada línea. undefined en
+  // el flujo legacy (solicitud sin líneas).
+  lineas?: CierreLineaData[]
+  // Flujo LEGACY (solicitud sin líneas): defectos/madurez a nivel solicitud
+  // (solicitudLineaId NULL).
+  defectosCabecera?: { grupoDefectoId: number; defectoId: number; valor: number }[]
+  caracteristicasCabecera?: { caracteristicaId: number; valorNumerico: number | null; valorTexto: string | null }[]
 }
 
 // Cierre atómico (CAS NOTIFICADA -> resultado) + fecha de visita + asignados +
@@ -393,24 +408,53 @@ export async function cerrarSolicitud(id: number, data: CierreData, userId: stri
       await tx.solicitudInspeccionAsignado.deleteMany({ where: { solicitudId: id } })
       await tx.solicitudInspeccionAsignado.createMany({ data: data.asignados.map((a) => ({ solicitudId: id, ...a })) })
     }
-    if (data.defectos !== undefined) {
-      await tx.solicitudInspeccionDefecto.deleteMany({ where: { solicitudId: id } })
-      if (data.defectos.length > 0) {
+
+    // Se parte de cero (cerrar solo procede desde NOTIFICADA): se limpian
+    // defectos/madurez previos y se reescriben.
+    await tx.solicitudInspeccionDefecto.deleteMany({ where: { solicitudId: id } })
+    await tx.solicitudInspeccionMadurez.deleteMany({ where: { solicitudId: id } })
+
+    if (data.lineas !== undefined) {
+      // Flujo POR LÍNEA: veredicto + defectos + madurez de cada línea.
+      for (const linea of data.lineas) {
+        await tx.solicitudInspeccionLinea.update({
+          where: { id: linea.solicitudLineaId },
+          data: { estadoCierre: linea.veredicto },
+        })
+        if (linea.defectos.length > 0) {
+          await tx.solicitudInspeccionDefecto.createMany({
+            data: linea.defectos.map((d) => ({
+              solicitudId: id,
+              solicitudLineaId: linea.solicitudLineaId,
+              grupoDefectoId: d.grupoDefectoId,
+              defectoId: d.defectoId,
+              valor: d.valor,
+            })),
+          })
+        }
+        if (linea.caracteristicas.length > 0) {
+          await tx.solicitudInspeccionMadurez.createMany({
+            data: linea.caracteristicas.map((c) => ({
+              solicitudId: id,
+              solicitudLineaId: linea.solicitudLineaId,
+              caracteristicaId: c.caracteristicaId,
+              valorNumerico: c.valorNumerico ?? null,
+              valorTexto: c.valorTexto ?? null,
+            })),
+          })
+        }
+      }
+    } else {
+      // Flujo LEGACY (solicitud sin líneas): defectos/madurez a nivel solicitud
+      // (solicitudLineaId NULL).
+      if (data.defectosCabecera && data.defectosCabecera.length > 0) {
         await tx.solicitudInspeccionDefecto.createMany({
-          data: data.defectos.map((d) => ({ solicitudId: id, grupoDefectoId: d.grupoDefectoId, defectoId: d.defectoId, valor: d.valor })),
+          data: data.defectosCabecera.map((d) => ({ solicitudId: id, solicitudLineaId: null, grupoDefectoId: d.grupoDefectoId, defectoId: d.defectoId, valor: d.valor })),
         })
       }
-    }
-    if (data.caracteristicas !== undefined) {
-      await tx.solicitudInspeccionMadurez.deleteMany({ where: { solicitudId: id } })
-      if (data.caracteristicas.length > 0) {
+      if (data.caracteristicasCabecera && data.caracteristicasCabecera.length > 0) {
         await tx.solicitudInspeccionMadurez.createMany({
-          data: data.caracteristicas.map((c) => ({
-            solicitudId: id,
-            caracteristicaId: c.caracteristicaId,
-            valorNumerico: c.valorNumerico ?? null,
-            valorTexto: c.valorTexto ?? null,
-          })),
+          data: data.caracteristicasCabecera.map((c) => ({ solicitudId: id, solicitudLineaId: null, caracteristicaId: c.caracteristicaId, valorNumerico: c.valorNumerico ?? null, valorTexto: c.valorTexto ?? null })),
         })
       }
     }
@@ -451,7 +495,7 @@ export async function reabrirSolicitud(id: number, userId: string) {
   // haberse fijado antes del cierre.
   return prisma.$transaction(async (tx) => {
     const result = await tx.solicitudInspeccion.updateMany({
-      where: { id, estado: { in: ['APROBADA', 'RECHAZADA', 'OBJETADA'] }, eliminadoEn: null },
+      where: { id, estado: { in: ['APROBADA', 'RECHAZADA', 'OBJETADA', 'MIXTO'] }, eliminadoEn: null },
       data: { estado: 'NOTIFICADA', comentariosCierre: null, fechaCierre: null, cerradaPor: null, actualizadoPor: userId },
     })
     if (result.count === 0) {
@@ -459,6 +503,8 @@ export async function reabrirSolicitud(id: number, userId: string) {
         'La solicitud ya no está en el estado esperado: probablemente fue modificada por otro usuario. Recarga e intenta de nuevo.',
       )
     }
+    // Veredicto por línea capturado en el cierre: se limpia al reabrir.
+    await tx.solicitudInspeccionLinea.updateMany({ where: { solicitudId: id }, data: { estadoCierre: null } })
     await tx.solicitudInspeccionDefecto.deleteMany({ where: { solicitudId: id } })
     // Características de madurez capturadas en el cierre (2026-10-26): también
     // son evidencia de la visita cerrada; se limpian al reabrir (CM-004).

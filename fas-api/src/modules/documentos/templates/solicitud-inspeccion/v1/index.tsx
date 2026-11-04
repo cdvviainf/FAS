@@ -20,6 +20,8 @@ const columnasLineas: ColumnaTabla<LineaSolicitud>[] = [
   { titulo: 'Calibres', render: (l) => listaOGuion(l.calibres) },
   { titulo: 'Calidades', render: (l) => l.calidadesPermitidas ?? '—' },
   { titulo: 'Pallets', render: (l) => (l.cantidadPallets != null ? fmt.entero(l.cantidadPallets) : '—'), numerica: true },
+  // Veredicto del cierre por línea (2026-11-03).
+  { titulo: 'Estado', render: (l) => l.estadoCierre ?? '—' },
 ]
 
 // v1 — sin control de copia (Etapa 4 §8). Sin tabla de líneas: la Solicitud
@@ -106,6 +108,27 @@ export function SolicitudInspeccionV1({ d, marcaAgua, marcaAguaFecha }: { d: Sol
             { label: 'Fecha de cierre', valor: d.cierre.fecha ? fmt.fecha(d.cierre.fecha) : '—' },
             { label: 'Comentarios', valor: d.cierre.comentarios ?? '—' },
           ]}
+        />
+      )}
+
+      {/* Resultado general histórico (cierre a nivel solicitud, sin línea). */}
+      {d.cierre && d.cierre.historico.length > 0 && (
+        <GrupoCampos
+          titulo='Resultado general (histórico)'
+          campos={[{ label: '', valor: d.cierre.historico.join(' · ') }]}
+        />
+      )}
+
+      {/* Resultado del cierre POR LÍNEA (2026-11-03): veredicto + defectos + madurez. */}
+      {d.cierre && d.lineas.some((l) => l.estadoCierre || l.defectos.length > 0 || l.madurez.length > 0) && (
+        <GrupoCampos
+          titulo='Resultado por línea'
+          campos={d.lineas
+            .filter((l) => l.estadoCierre || l.defectos.length > 0 || l.madurez.length > 0)
+            .map((l) => ({
+              label: `${l.especie} · ${l.variedad}${l.estadoCierre ? ` — ${l.estadoCierre}` : ''}`,
+              valor: [...l.defectos, ...l.madurez].join(' · ') || 'Sin defectos ni mediciones',
+            }))}
         />
       )}
 

@@ -14,6 +14,7 @@ const ESTADO_LABELS: Record<string, string> = {
   APROBADA: 'Aprobada',
   RECHAZADA: 'Rechazada',
   OBJETADA: 'Objetada',
+  MIXTO: 'Mixto', // rollup del cierre por línea (2026-11-03)
   CERRADA: 'Cerrada', // valor legado del enum, ver schema.prisma
 }
 const FUNCION_LABELS: Record<string, string> = {
@@ -24,7 +25,18 @@ const TIPO_INSPECCION_LABELS: Record<string, string> = {
   PRODUCTO_TERMINADO: 'Producto Terminado',
   PROCESO: 'Proceso',
 }
-const ESTADOS_CON_CIERRE = new Set(['APROBADA', 'RECHAZADA', 'OBJETADA'])
+const ESTADOS_CON_CIERRE = new Set(['APROBADA', 'RECHAZADA', 'OBJETADA', 'MIXTO'])
+
+// Formatea un defecto/característica a texto para el PDF (la plantilla no formatea).
+function fmtDefecto(d: { grupoDefecto: { descripcion: string }; defecto: { descripcion: string; tipoMedida: string }; valor: unknown }): string {
+  const sufijo = d.defecto.tipoMedida === 'PORCENTAJE' ? '%' : ' u.'
+  return `${d.grupoDefecto.descripcion} · ${d.defecto.descripcion}: ${String(d.valor).replace('.', ',')}${sufijo}`
+}
+function fmtMadurez(m: { caracteristica: { descripcion: string; tipoDato: string; unidad: { codigo: string } | null }; valorNumerico: unknown; valorTexto: string | null }): string {
+  if (m.valorTexto != null) return `${m.caracteristica.descripcion}: ${m.valorTexto}`
+  const sufijo = m.caracteristica.tipoDato === 'PORCENTAJE' ? '%' : m.caracteristica.unidad ? ` ${m.caracteristica.unidad.codigo}` : ''
+  return `${m.caracteristica.descripcion}: ${String(m.valorNumerico ?? '').replace('.', ',')}${sufijo}`
+}
 
 // Resolver de la Solicitud de Inspección — snapshot del pedido (quién,
 // cuándo, dónde, alcance, asignados), no el informe de resultados por caja
@@ -76,6 +88,10 @@ export async function resolverSolicitudInspeccion(id: number, empresaId: number)
       calibres: l.calibres.map((c) => c.calibre.descripcion),
       calidadesPermitidas: l.calidades.map((c) => `${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`).join(', ') || null,
       cantidadPallets: l.cantidadPallets,
+      // Resultado del cierre POR LÍNEA (2026-11-03): veredicto + defectos + madurez.
+      estadoCierre: l.estadoCierre ? (ESTADO_LABELS[l.estadoCierre] ?? l.estadoCierre) : null,
+      defectos: solicitud.defectos.filter((d) => d.solicitudLineaId === l.id).map(fmtDefecto),
+      madurez: solicitud.madurez.filter((m) => m.solicitudLineaId === l.id).map(fmtMadurez),
     })),
     asignados: solicitud.asignados.map((a) => ({
       nombre: a.usuario.nombre,
@@ -88,6 +104,12 @@ export async function resolverSolicitudInspeccion(id: number, empresaId: number)
           resultado: ESTADO_LABELS[solicitud.estado] ?? solicitud.estado,
           comentarios: solicitud.comentariosCierre,
           fecha: solicitud.fechaCierre ? solicitud.fechaCierre.toISOString() : null,
+          // Resultado general histórico: defectos/madurez de cierres previos a
+          // nivel solicitud (solicitudLineaId NULL), que el detalle web muestra.
+          historico: [
+            ...solicitud.defectos.filter((d) => d.solicitudLineaId == null).map(fmtDefecto),
+            ...solicitud.madurez.filter((m) => m.solicitudLineaId == null).map(fmtMadurez),
+          ],
         }
       : null,
   }

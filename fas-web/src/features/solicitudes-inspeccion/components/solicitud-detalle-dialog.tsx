@@ -11,14 +11,26 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Icons } from '@/components/icons'
 import { solicitudesService } from '../service'
-import { ESTADO_LABELS, FUNCION_LABELS, TIPO_INSPECCION_LABELS } from '../types'
-import type { SolicitudInspeccion } from '../types'
+import { ESTADO_LABELS, FUNCION_LABELS, TIPO_INSPECCION_LABELS, RESULTADO_CIERRE_LABELS } from '../types'
+import type { SolicitudInspeccion, EstadoLineaInspeccion } from '../types'
 
 const fmt = new Intl.DateTimeFormat('es-CL', {
   dateStyle: 'medium',
   timeStyle: 'short',
   timeZone: 'America/Santiago',
 })
+
+// Badge del veredicto por línea del cierre (verde/amarillo/rojo).
+const CLASES_ESTADO_LINEA: Record<EstadoLineaInspeccion, string> = {
+  APROBADA: 'border-green-300 bg-green-100 text-green-800',
+  OBJETADA: 'border-amber-300 bg-amber-100 text-amber-800',
+  RECHAZADA: 'border-red-300 bg-red-100 text-red-800',
+}
+
+function BadgeEstadoLinea({ estado }: { estado: EstadoLineaInspeccion | null }) {
+  if (!estado) return <Badge variant='outline' className='text-muted-foreground text-xs'>Pendiente</Badge>
+  return <Badge variant='outline' className={`text-xs ${CLASES_ESTADO_LINEA[estado]}`}>{RESULTADO_CIERRE_LABELS[estado]}</Badge>
+}
 
 interface SolicitudDetalleDialogProps {
   solicitud: SolicitudInspeccion
@@ -112,6 +124,7 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
                       <TableHead>Categorías</TableHead>
                       <TableHead>Calibres</TableHead>
                       <TableHead>Calidades</TableHead>
+                      <TableHead>Estado</TableHead>
                       <TableHead className='text-right'>Pallets</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -124,6 +137,7 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
                         <TableCell>{l.categorias.map((c) => c.categoria.descripcion).join(', ') || '—'}</TableCell>
                         <TableCell>{l.calibres.map((c) => c.calibre.descripcion).join(', ') || '—'}</TableCell>
                         <TableCell>{l.calidades.map((c) => `${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`).join(', ') || '—'}</TableCell>
+                        <TableCell><BadgeEstadoLinea estado={l.estadoCierre} /></TableCell>
                         <TableCell className='text-right tabular-nums'>{l.cantidadPallets ?? '—'}</TableCell>
                       </TableRow>
                     ))}
@@ -146,10 +160,10 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
             </div>
           </div>
 
-          {(solicitud.estado === 'APROBADA' || solicitud.estado === 'RECHAZADA' || solicitud.estado === 'OBJETADA') && (
+          {['APROBADA', 'RECHAZADA', 'OBJETADA', 'MIXTO'].includes(solicitud.estado) && (
             <div className='rounded-md border bg-muted/40 p-3'>
               <h4 className='mb-1 text-sm font-medium'>
-                Cierre — <Badge variant={solicitud.estado === 'APROBADA' ? 'outline' : 'destructive'}>{ESTADO_LABELS[solicitud.estado]}</Badge>
+                Cierre — <Badge variant={solicitud.estado === 'APROBADA' ? 'outline' : solicitud.estado === 'MIXTO' ? 'default' : 'destructive'}>{ESTADO_LABELS[solicitud.estado]}</Badge>
               </h4>
               {solicitud.fechaCierre && (
                 <p className='text-xs text-muted-foreground'>Cerrada el {fmt.format(new Date(solicitud.fechaCierre))}</p>
@@ -157,41 +171,63 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
               {solicitud.comentariosCierre && (
                 <p className='mt-1 whitespace-pre-wrap text-sm'>{solicitud.comentariosCierre}</p>
               )}
-              {solicitud.defectos.length > 0 && (
-                <div className='mt-2'>
-                  <p className='text-muted-foreground text-xs font-medium'>Defectos</p>
-                  <ul className='mt-1 space-y-0.5 text-sm'>
-                    {solicitud.defectos.map((d) => (
-                      <li key={d.id}>
-                        {d.grupoDefecto.descripcion} · {d.defecto.descripcion}:{' '}
-                        {String(d.valor).replace('.', ',')}{d.defecto.tipoMedida === 'PORCENTAJE' ? '%' : ' u.'}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {(solicitud.madurez ?? []).length > 0 && (
-                <div className='mt-2'>
-                  <p className='text-muted-foreground text-xs font-medium'>Características de calidad</p>
-                  <ul className='mt-1 space-y-0.5 text-sm'>
-                    {solicitud.madurez.map((m) => {
-                      const sufijo = m.valorTexto != null
-                        ? ''
-                        : m.caracteristica.tipoDato === 'PORCENTAJE'
-                          ? '%'
-                          : m.caracteristica.unidad
-                            ? ` ${m.caracteristica.unidad.codigo}`
-                            : ''
-                      const valor = m.valorTexto != null ? m.valorTexto : String(m.valorNumerico ?? '').replace('.', ',')
-                      return (
-                        <li key={m.id}>
-                          {m.caracteristica.descripcion}: {valor}{sufijo}
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-              )}
+
+              {/* Resultado POR LÍNEA: veredicto + defectos + madurez de cada línea. */}
+              <div className='mt-2 space-y-2'>
+                {solicitud.lineas.map((l) => {
+                  const defs = solicitud.defectos.filter((d) => d.solicitudLineaId === l.id)
+                  const mads = (solicitud.madurez ?? []).filter((m) => m.solicitudLineaId === l.id)
+                  return (
+                    <div key={l.id} className='rounded border bg-background p-2'>
+                      <div className='flex flex-wrap items-center gap-2 text-sm font-medium'>
+                        {l.especie.descripcion} · {l.variedad.descripcion}
+                        <BadgeEstadoLinea estado={l.estadoCierre} />
+                      </div>
+                      {defs.length > 0 && (
+                        <ul className='mt-1 space-y-0.5 text-sm'>
+                          {defs.map((d) => (
+                            <li key={d.id}>
+                              {d.grupoDefecto.descripcion} · {d.defecto.descripcion}:{' '}
+                              {String(d.valor).replace('.', ',')}{d.defecto.tipoMedida === 'PORCENTAJE' ? '%' : ' u.'}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {mads.length > 0 && (
+                        <ul className='mt-1 space-y-0.5 text-sm'>
+                          {mads.map((m) => {
+                            const sufijo = m.valorTexto != null ? '' : m.caracteristica.tipoDato === 'PORCENTAJE' ? '%' : m.caracteristica.unidad ? ` ${m.caracteristica.unidad.codigo}` : ''
+                            const valor = m.valorTexto != null ? m.valorTexto : String(m.valorNumerico ?? '').replace('.', ',')
+                            return <li key={m.id}>{m.caracteristica.descripcion}: {valor}{sufijo}</li>
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Histórico: defectos/madurez sin línea (cierres previos a nivel solicitud). */}
+              {(() => {
+                const defsHist = solicitud.defectos.filter((d) => d.solicitudLineaId == null)
+                const madsHist = (solicitud.madurez ?? []).filter((m) => m.solicitudLineaId == null)
+                if (defsHist.length === 0 && madsHist.length === 0) return null
+                return (
+                  <div className='mt-2 rounded border border-dashed bg-background p-2'>
+                    <p className='text-muted-foreground text-xs font-medium'>General (cierre histórico sin línea)</p>
+                    <ul className='mt-1 space-y-0.5 text-sm'>
+                      {defsHist.map((d) => (
+                        <li key={`d${d.id}`}>{d.grupoDefecto.descripcion} · {d.defecto.descripcion}: {String(d.valor).replace('.', ',')}{d.defecto.tipoMedida === 'PORCENTAJE' ? '%' : ' u.'}</li>
+                      ))}
+                      {madsHist.map((m) => {
+                        const sufijo = m.valorTexto != null ? '' : m.caracteristica.tipoDato === 'PORCENTAJE' ? '%' : m.caracteristica.unidad ? ` ${m.caracteristica.unidad.codigo}` : ''
+                        const valor = m.valorTexto != null ? m.valorTexto : String(m.valorNumerico ?? '').replace('.', ',')
+                        return <li key={`m${m.id}`}>{m.caracteristica.descripcion}: {valor}{sufijo}</li>
+                      })}
+                    </ul>
+                  </div>
+                )
+              })()}
             </div>
           )}
 

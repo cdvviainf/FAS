@@ -30,7 +30,17 @@ import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { solicitudesService } from '../service'
 import { solicitudesKeys } from '../queries'
 import { RESULTADO_CIERRE_LABELS } from '../types'
-import type { SolicitudInspeccion, ResultadoCierre, AsignadoInput, SolicitudDefectoInput, TipoMedidaDefecto, SolicitudMadurezInput, TipoDatoMadurez } from '../types'
+import type {
+  SolicitudInspeccion,
+  SolicitudLinea,
+  ResultadoCierre,
+  EstadoLineaInspeccion,
+  AsignadoInput,
+  SolicitudDefectoInput,
+  TipoMedidaDefecto,
+  SolicitudMadurezInput,
+  TipoDatoMadurez,
+} from '../types'
 
 const gruposDefectoService = createMantenedorService('grupos-defecto')
 const defectosService = createMantenedorService('defectos')
@@ -42,20 +52,30 @@ interface CaracteristicaMadurezOption {
   descripcion: string
   tipoDato: TipoDatoMadurez
   unidad?: { id: number; codigo: string; descripcion: string } | null
-  // Validez por especie (N:M); vacío = genérica (toda especie).
   especies?: { especieId: number }[]
 }
-
-const MAX_BYTES = 10 * 1024 * 1024
-const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.heic'
 
 interface DefectoOption {
   id: number
   descripcion: string
   grupoDefecto?: { id: number } | null
   tipoMedida: TipoMedidaDefecto
-  // Validez por especie (N:M); vacío = defecto genérico (toda especie).
   especies?: { especieId: number }[]
+}
+
+interface GrupoOption {
+  id: number
+  descripcion: string
+}
+
+const MAX_BYTES = 10 * 1024 * 1024
+const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.heic'
+
+// Estado de cierre de una línea (en edición local).
+interface LineaCierreState {
+  veredicto: EstadoLineaInspeccion | ''
+  defectos: SolicitudDefectoInput[]
+  caracteristicas: SolicitudMadurezInput[]
 }
 
 function formatoBytes(b: number): string {
@@ -71,6 +91,186 @@ function toLocalInput(iso: string): string {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16)
 }
 
+// ─── Editor de cierre de UNA línea (veredicto + defectos + madurez) ──────────
+interface LineaCierreEditorProps {
+  // linea undefined = cierre LEGACY de cabecera (solicitud sin líneas): sin filtro
+  // por especie y veredicto a nivel solicitud.
+  linea?: SolicitudLinea
+  valor: LineaCierreState
+  onChange: (next: LineaCierreState) => void
+  grupos: GrupoOption[]
+  defectosCatalogo: DefectoOption[]
+  caracteristicasCatalogo: CaracteristicaMadurezOption[]
+}
+
+function LineaCierreEditor({ linea, valor, onChange, grupos, defectosCatalogo, caracteristicasCatalogo }: LineaCierreEditorProps) {
+  const [grupoSel, setGrupoSel] = useState('')
+  const [defectoSel, setDefectoSel] = useState('')
+  const [valorSel, setValorSel] = useState('')
+  const [caracSel, setCaracSel] = useState('')
+  const [caracValor, setCaracValor] = useState('')
+
+  const especieId = linea ? linea.especie.id : null
+
+  const defectosDelGrupo = grupoSel
+    ? defectosCatalogo.filter((d) => {
+        if (d.grupoDefecto?.id !== Number(grupoSel)) return false
+        if (especieId == null) return true
+        const especies = d.especies ?? []
+        return especies.length === 0 || especies.some((e) => e.especieId === especieId)
+      })
+    : []
+  const defectoElegido = defectoSel ? defectosCatalogo.find((d) => d.id === Number(defectoSel)) : undefined
+
+  const caracteristicasDisponibles = caracteristicasCatalogo.filter((c) => {
+    if (valor.caracteristicas.some((x) => x.caracteristicaId === c.id)) return false
+    if (especieId == null) return true
+    const especies = c.especies ?? []
+    return especies.length === 0 || especies.some((e) => e.especieId === especieId)
+  })
+  const caracElegida = caracSel ? caracteristicasCatalogo.find((c) => c.id === Number(caracSel)) : undefined
+
+  function agregarDefecto() {
+    if (!grupoSel || !defectoSel || !defectoElegido) { toast.error('Selecciona grupo y defecto'); return }
+    const v = Number(valorSel.replace(',', '.'))
+    if (!Number.isFinite(v) || v < 0) { toast.error('Ingresa un valor válido'); return }
+    if (defectoElegido.tipoMedida === 'PORCENTAJE') {
+      if (v > 100) { toast.error('El porcentaje no puede superar 100'); return }
+    } else if (!Number.isInteger(v)) { toast.error('El valor por unidades debe ser un número entero'); return }
+    if (valor.defectos.some((d) => d.grupoDefectoId === Number(grupoSel) && d.defectoId === Number(defectoSel))) {
+      toast.error('Ese defecto ya está agregado en esta línea'); return
+    }
+    onChange({ ...valor, defectos: [...valor.defectos, { grupoDefectoId: Number(grupoSel), defectoId: Number(defectoSel), valor: v }] })
+    setDefectoSel('')
+    setValorSel('')
+  }
+
+  function etiquetaDefecto(d: SolicitudDefectoInput): string {
+    const def = defectosCatalogo.find((x) => x.id === d.defectoId)
+    const grupo = grupos.find((g) => g.id === d.grupoDefectoId)
+    const sufijo = def?.tipoMedida === 'PORCENTAJE' ? '%' : ' u.'
+    return `${grupo?.descripcion ?? d.grupoDefectoId} · ${def?.descripcion ?? d.defectoId}: ${String(d.valor).replace('.', ',')}${sufijo}`
+  }
+
+  function agregarCaracteristica() {
+    if (!caracSel || !caracElegida) { toast.error('Selecciona una característica'); return }
+    if (valor.caracteristicas.some((c) => c.caracteristicaId === Number(caracSel))) { toast.error('Esa característica ya está agregada'); return }
+    if (caracElegida.tipoDato === 'TEXTO') {
+      const texto = caracValor.trim()
+      if (!texto) { toast.error('Ingresa un valor'); return }
+      onChange({ ...valor, caracteristicas: [...valor.caracteristicas, { caracteristicaId: Number(caracSel), valorTexto: texto }] })
+    } else {
+      const v = Number(caracValor.replace(',', '.'))
+      if (!Number.isFinite(v) || v < 0) { toast.error('Ingresa un valor válido'); return }
+      if (caracElegida.tipoDato === 'ENTERO' && !Number.isInteger(v)) { toast.error('El valor debe ser un número entero'); return }
+      if (caracElegida.tipoDato === 'PORCENTAJE' && v > 100) { toast.error('El porcentaje no puede superar 100'); return }
+      onChange({ ...valor, caracteristicas: [...valor.caracteristicas, { caracteristicaId: Number(caracSel), valorNumerico: v }] })
+    }
+    setCaracSel('')
+    setCaracValor('')
+  }
+
+  function etiquetaCaracteristica(c: SolicitudMadurezInput): string {
+    const def = caracteristicasCatalogo.find((x) => x.id === c.caracteristicaId)
+    if (c.valorTexto != null) return `${def?.descripcion ?? c.caracteristicaId}: ${c.valorTexto}`
+    const sufijo = def?.tipoDato === 'PORCENTAJE' ? '%' : def?.unidad ? ` ${def.unidad.codigo}` : ''
+    return `${def?.descripcion ?? c.caracteristicaId}: ${String(c.valorNumerico ?? '').replace('.', ',')}${sufijo}`
+  }
+
+  return (
+    <div className='space-y-3 rounded-md border p-3'>
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <div className='text-sm font-medium'>
+          {linea
+            ? <>{linea.especie.descripcion} · {linea.variedad.descripcion}<span className='text-muted-foreground'> · {linea.articulo.descripcion}</span></>
+            : 'Resultado general (solicitud sin líneas)'}
+        </div>
+        <div className='w-56 space-y-1'>
+          <Label className='text-xs'>Veredicto <span className='text-destructive'>*</span></Label>
+          <Select value={valor.veredicto} onValueChange={(v) => onChange({ ...valor, veredicto: v as EstadoLineaInspeccion })}>
+            <SelectTrigger><SelectValue placeholder='Selecciona...' /></SelectTrigger>
+            <SelectContent>
+              {(Object.keys(RESULTADO_CIERRE_LABELS) as ResultadoCierre[]).map((r) => (
+                <SelectItem key={r} value={r}>{RESULTADO_CIERRE_LABELS[r]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Defectos de la línea */}
+      <div className='space-y-2'>
+        <Label className='text-xs'>Defectos</Label>
+        {valor.defectos.length > 0 && (
+          <div className='flex flex-wrap gap-1.5'>
+            {valor.defectos.map((d, i) => (
+              <Badge key={i} variant='secondary' className='gap-1 pr-1'>
+                {etiquetaDefecto(d)}
+                <button type='button' onClick={() => onChange({ ...valor, defectos: valor.defectos.filter((_, j) => j !== i) })} className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'>
+                  <Icons.close className='h-3 w-3' />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
+        <div className='grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end'>
+          <Select value={grupoSel} onValueChange={(v) => { setGrupoSel(v); setDefectoSel(''); setValorSel('') }}>
+            <SelectTrigger><SelectValue placeholder='Grupo...' /></SelectTrigger>
+            <SelectContent>{grupos.map((g) => <SelectItem key={g.id} value={String(g.id)}>{g.descripcion}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={defectoSel} onValueChange={setDefectoSel} disabled={!grupoSel}>
+            <SelectTrigger><SelectValue placeholder='Defecto...' /></SelectTrigger>
+            <SelectContent>{defectosDelGrupo.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.descripcion}</SelectItem>)}</SelectContent>
+          </Select>
+          <Input
+            className='w-24'
+            value={valorSel}
+            onChange={(e) => setValorSel(e.target.value)}
+            placeholder={defectoElegido?.tipoMedida === 'PORCENTAJE' ? '12,5 %' : '3 u.'}
+            disabled={!defectoSel}
+          />
+          <Button type='button' variant='secondary' size='sm' onClick={agregarDefecto} disabled={!defectoSel || !valorSel}>
+            <Icons.add className='mr-1 h-4 w-4' /> Agregar
+          </Button>
+        </div>
+      </div>
+
+      {/* Características de madurez de la línea */}
+      <div className='space-y-2'>
+        <Label className='text-xs'>Características de calidad</Label>
+        {valor.caracteristicas.length > 0 && (
+          <div className='flex flex-wrap gap-1.5'>
+            {valor.caracteristicas.map((c, i) => (
+              <Badge key={i} variant='secondary' className='gap-1 pr-1'>
+                {etiquetaCaracteristica(c)}
+                <button type='button' onClick={() => onChange({ ...valor, caracteristicas: valor.caracteristicas.filter((_, j) => j !== i) })} className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'>
+                  <Icons.close className='h-3 w-3' />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
+        <div className='grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end'>
+          <Select value={caracSel} onValueChange={(v) => { setCaracSel(v); setCaracValor('') }}>
+            <SelectTrigger><SelectValue placeholder='Característica...' /></SelectTrigger>
+            <SelectContent>{caracteristicasDisponibles.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>)}</SelectContent>
+          </Select>
+          <Input
+            className='w-28'
+            value={caracValor}
+            onChange={(e) => setCaracValor(e.target.value)}
+            placeholder={caracElegida?.tipoDato === 'TEXTO' ? 'Texto...' : caracElegida?.tipoDato === 'ENTERO' ? '3' : '12,5'}
+            disabled={!caracSel}
+          />
+          <Button type='button' variant='secondary' size='sm' onClick={agregarCaracteristica} disabled={!caracSel || !caracValor}>
+            <Icons.add className='mr-1 h-4 w-4' /> Agregar
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface SolicitudCerrarDialogProps {
   solicitud: SolicitudInspeccion
   open: boolean
@@ -80,38 +280,45 @@ interface SolicitudCerrarDialogProps {
 export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: SolicitudCerrarDialogProps) {
   const queryClient = useQueryClient()
   const [comentarios, setComentarios] = useState('')
-  const [resultado, setResultado] = useState<ResultadoCierre | ''>('')
   const [fechaHora, setFechaHora] = useState('')
   const [acudeIds, setAcudeIds] = useState<string[]>([])
-  const [defectos, setDefectos] = useState<SolicitudDefectoInput[]>([])
-  // Editor de línea de defecto en curso.
-  const [grupoSel, setGrupoSel] = useState('')
-  const [defectoSel, setDefectoSel] = useState('')
-  const [valorSel, setValorSel] = useState('')
-  // Características de madurez/calidad (Firmeza, Brix, ...).
-  const [caracteristicas, setCaracteristicas] = useState<SolicitudMadurezInput[]>([])
-  const [caracSel, setCaracSel] = useState('')
-  const [caracValor, setCaracValor] = useState('')
+  // Estado de cierre por línea, indexado por id de línea.
+  const [lineasCierre, setLineasCierre] = useState<Record<number, LineaCierreState>>({})
+  // Estado de cierre de CABECERA (legacy, solicitud sin líneas).
+  const [legacyCierre, setLegacyCierre] = useState<LineaCierreState>({ veredicto: '', defectos: [], caracteristicas: [] })
+  const sinLineas = solicitud.lineas.length === 0
   const [pendientes, setPendientes] = useState<File[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Prefill al abrir con lo que ya tenga la solicitud.
+  // Prefill al abrir con lo que ya tenga la solicitud (por línea).
   useEffect(() => {
     if (!open) return
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación al abrir
     setFechaHora(solicitud.fechaHora ? toLocalInput(solicitud.fechaHora) : '')
     setAcudeIds(solicitud.asignados.filter((a) => a.funcion === 'ACUDIR').map((a) => a.usuarioId))
-    setDefectos(solicitud.defectos.map((d) => ({ grupoDefectoId: d.grupoDefecto.id, defectoId: d.defecto.id, valor: Number(d.valor) })))
-    setCaracteristicas((solicitud.madurez ?? []).map((m) => ({
-      caracteristicaId: m.caracteristicaId,
-      valorNumerico: m.valorNumerico != null ? Number(m.valorNumerico) : null,
-      valorTexto: m.valorTexto ?? null,
-    })))
-    setGrupoSel('')
-    setDefectoSel('')
-    setValorSel('')
-    setCaracSel('')
-    setCaracValor('')
+    const porLinea: Record<number, LineaCierreState> = {}
+    for (const l of solicitud.lineas) {
+      porLinea[l.id] = {
+        veredicto: l.estadoCierre ?? '',
+        defectos: solicitud.defectos
+          .filter((d) => d.solicitudLineaId === l.id)
+          .map((d) => ({ grupoDefectoId: d.grupoDefecto.id, defectoId: d.defecto.id, valor: Number(d.valor) })),
+        caracteristicas: (solicitud.madurez ?? [])
+          .filter((m) => m.solicitudLineaId === l.id)
+          .map((m) => ({ caracteristicaId: m.caracteristicaId, valorNumerico: m.valorNumerico != null ? Number(m.valorNumerico) : null, valorTexto: m.valorTexto ?? null })),
+      }
+    }
+    setLineasCierre(porLinea)
+    // Legacy (sin líneas): defectos/madurez a nivel solicitud (línea null).
+    setLegacyCierre({
+      veredicto: '',
+      defectos: solicitud.defectos
+        .filter((d) => d.solicitudLineaId == null)
+        .map((d) => ({ grupoDefectoId: d.grupoDefecto.id, defectoId: d.defecto.id, valor: Number(d.valor) })),
+      caracteristicas: (solicitud.madurez ?? [])
+        .filter((m) => m.solicitudLineaId == null)
+        .map((m) => ({ caracteristicaId: m.caracteristicaId, valorNumerico: m.valorNumerico != null ? Number(m.valorNumerico) : null, valorTexto: m.valorTexto ?? null })),
+    })
   }, [open, solicitud])
 
   const { data: usuarios } = useQuery({ queryKey: ['usuarios-options'], queryFn: () => usuariosService.list({ limit: 500 }), staleTime: 5 * 60_000, enabled: open })
@@ -119,60 +326,50 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
   const { data: defectosData } = useQuery({ queryKey: ['defectos-options'], queryFn: () => defectosService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000, enabled: open })
   const { data: caracteristicasData } = useQuery({ queryKey: ['caracteristicas-madurez-options'], queryFn: () => caracteristicasMadurezService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000, enabled: open })
 
-  const grupos = gruposData?.data ?? []
-  // Especies presentes en las líneas (2026-10-27): defectos/madurez válidos si
-  // son genéricos o pertenecen a CUALQUIER especie de la solicitud. Conjunto
-  // vacío (sin líneas) = no se filtra por especie.
-  const especiesSolicitud = new Set(solicitud.lineas.map((l) => l.especie.id))
+  const grupos = (gruposData?.data ?? []) as unknown as GrupoOption[]
   const defectosCatalogo = (defectosData?.data ?? []) as unknown as DefectoOption[]
-  const defectosDelGrupo = grupoSel
-    ? defectosCatalogo.filter((d) => {
-        if (d.grupoDefecto?.id !== Number(grupoSel)) return false
-        if (especiesSolicitud.size === 0) return true
-        const especies = d.especies ?? []
-        return especies.length === 0 || especies.some((e) => especiesSolicitud.has(e.especieId))
-      })
-    : []
-  const defectoElegido = defectoSel ? defectosCatalogo.find((d) => d.id === Number(defectoSel)) : undefined
-
   const caracteristicasCatalogo = (caracteristicasData?.data ?? []) as unknown as CaracteristicaMadurezOption[]
-  // Filtra por especie de la solicitud (misma regla que defectos): genérica
-  // (sin especies) o válida para alguna especie. Excluye las ya agregadas.
-  const caracteristicasDisponibles = caracteristicasCatalogo.filter((c) => {
-    if (caracteristicas.some((x) => x.caracteristicaId === c.id)) return false
-    if (especiesSolicitud.size === 0) return true
-    const especies = c.especies ?? []
-    return especies.length === 0 || especies.some((e) => especiesSolicitud.has(e.especieId))
-  })
-  const caracElegida = caracSel ? caracteristicasCatalogo.find((c) => c.id === Number(caracSel)) : undefined
 
   const cerrarMutation = useMutation({
     mutationFn: async () => {
       for (const archivo of pendientes) {
         await solicitudesService.subirAdjunto(solicitud.id, archivo, 'CIERRE')
       }
-      // Asignados: los que acuden (ACUDIR) + se preservan los NOTIFICAR actuales
-      // EXCLUYENDO a quienes ahora acuden (un usuario no puede tener dos filas).
       const acudeSet = new Set(acudeIds)
       const notificar = solicitud.asignados
         .filter((a) => a.funcion === 'NOTIFICAR' && !acudeSet.has(a.usuarioId))
         .map((a) => ({ usuarioId: a.usuarioId, funcion: 'NOTIFICAR' as const }))
       const asignados: AsignadoInput[] = [...acudeIds.map((usuarioId) => ({ usuarioId, funcion: 'ACUDIR' as const })), ...notificar]
-      return solicitudesService.cerrar(solicitud.id, {
+      const base = {
         comentarios: comentarios.trim(),
-        resultado: resultado as ResultadoCierre,
         fechaHora: fechaHora ? new Date(fechaHora).toISOString() : null,
         asignados,
-        defectos,
-        caracteristicas,
+      }
+      if (sinLineas) {
+        // Legacy: veredicto de cabecera + defectos/madurez a nivel solicitud.
+        return solicitudesService.cerrar(solicitud.id, {
+          ...base,
+          resultado: legacyCierre.veredicto as EstadoLineaInspeccion,
+          defectos: legacyCierre.defectos,
+          caracteristicas: legacyCierre.caracteristicas,
+        })
+      }
+      const lineas = solicitud.lineas.map((l) => {
+        const estado = lineasCierre[l.id]
+        return {
+          solicitudLineaId: l.id,
+          veredicto: estado.veredicto as EstadoLineaInspeccion,
+          defectos: estado.defectos,
+          caracteristicas: estado.caracteristicas,
+        }
       })
+      return solicitudesService.cerrar(solicitud.id, { ...base, lineas })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: solicitudesKeys.all })
       toast.success('Inspección cerrada. Se notificó a los involucrados.')
       onOpenChange(false)
       setComentarios('')
-      setResultado('')
       setPendientes([])
     },
     onError: (e: Error) => toast.error(e.message || 'Error al cerrar la inspección'),
@@ -182,231 +379,85 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
     if (!files) return
     const validos: File[] = []
     for (const f of Array.from(files)) {
-      if (f.size > MAX_BYTES) {
-        toast.error(`"${f.name}" supera los 10 MB`)
-        continue
-      }
+      if (f.size > MAX_BYTES) { toast.error(`"${f.name}" supera los 10 MB`); continue }
       validos.push(f)
     }
     setPendientes((prev) => [...prev, ...validos])
     if (inputRef.current) inputRef.current.value = ''
   }
 
-  function agregarDefecto() {
-    if (!grupoSel || !defectoSel || !defectoElegido) {
-      toast.error('Selecciona grupo y defecto')
-      return
-    }
-    const valor = Number(valorSel.replace(',', '.'))
-    if (!Number.isFinite(valor) || valor < 0) {
-      toast.error('Ingresa un valor válido')
-      return
-    }
-    if (defectoElegido.tipoMedida === 'PORCENTAJE') {
-      if (valor > 100) { toast.error('El porcentaje no puede superar 100'); return }
-    } else if (!Number.isInteger(valor)) {
-      toast.error('El valor por unidades debe ser un número entero')
-      return
-    }
-    if (defectos.some((d) => d.grupoDefectoId === Number(grupoSel) && d.defectoId === Number(defectoSel))) {
-      toast.error('Ese defecto ya está agregado')
-      return
-    }
-    setDefectos((prev) => [...prev, { grupoDefectoId: Number(grupoSel), defectoId: Number(defectoSel), valor }])
-    setDefectoSel('')
-    setValorSel('')
-  }
-
-  function etiquetaDefecto(d: SolicitudDefectoInput): string {
-    const def = defectosCatalogo.find((x) => x.id === d.defectoId)
-    const grupo = grupos.find((g) => g.id === d.grupoDefectoId)
-    const sufijo = def?.tipoMedida === 'PORCENTAJE' ? '%' : ' u.'
-    const valorFmt = String(d.valor).replace('.', ',')
-    return `${grupo?.descripcion ?? d.grupoDefectoId} · ${def?.descripcion ?? d.defectoId}: ${valorFmt}${sufijo}`
-  }
-
-  function agregarCaracteristica() {
-    if (!caracSel || !caracElegida) {
-      toast.error('Selecciona una característica')
-      return
-    }
-    if (caracteristicas.some((c) => c.caracteristicaId === Number(caracSel))) {
-      toast.error('Esa característica ya está agregada')
-      return
-    }
-    if (caracElegida.tipoDato === 'TEXTO') {
-      const texto = caracValor.trim()
-      if (!texto) { toast.error('Ingresa un valor'); return }
-      setCaracteristicas((prev) => [...prev, { caracteristicaId: Number(caracSel), valorTexto: texto }])
-    } else {
-      const valor = Number(caracValor.replace(',', '.'))
-      if (!Number.isFinite(valor) || valor < 0) { toast.error('Ingresa un valor válido'); return }
-      if (caracElegida.tipoDato === 'ENTERO' && !Number.isInteger(valor)) {
-        toast.error('El valor debe ser un número entero'); return
-      }
-      if (caracElegida.tipoDato === 'PORCENTAJE' && valor > 100) {
-        toast.error('El porcentaje no puede superar 100'); return
-      }
-      setCaracteristicas((prev) => [...prev, { caracteristicaId: Number(caracSel), valorNumerico: valor }])
-    }
-    setCaracSel('')
-    setCaracValor('')
-  }
-
-  function etiquetaCaracteristica(c: SolicitudMadurezInput): string {
-    const def = caracteristicasCatalogo.find((x) => x.id === c.caracteristicaId)
-    if (c.valorTexto != null) return `${def?.descripcion ?? c.caracteristicaId}: ${c.valorTexto}`
-    const valorFmt = String(c.valorNumerico ?? '').replace('.', ',')
-    const sufijo = def?.tipoDato === 'PORCENTAJE' ? '%' : def?.unidad ? ` ${def.unidad.codigo}` : ''
-    return `${def?.descripcion ?? c.caracteristicaId}: ${valorFmt}${sufijo}`
-  }
-
   function handleCerrar() {
     if (!comentarios.trim()) { toast.error('Los comentarios de cierre son requeridos'); return }
-    if (!resultado) { toast.error('Debes indicar el resultado de la inspección'); return }
     if (!fechaHora) { toast.error('Ingresa la fecha y hora de la visita'); return }
     if (acudeIds.length === 0) { toast.error('Indica quién asiste a la visita'); return }
+    if (sinLineas) {
+      if (!legacyCierre.veredicto) { toast.error('Debes indicar el resultado de la inspección'); return }
+    } else if (solicitud.lineas.some((l) => !lineasCierre[l.id]?.veredicto)) {
+      toast.error('Debes indicar el veredicto de todas las líneas')
+      return
+    }
     cerrarMutation.mutate()
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-h-[90vh] max-w-lg overflow-auto'>
+      <DialogContent className='max-h-[92vh] max-w-5xl overflow-auto'>
         <DialogHeader>
           <DialogTitle>Cerrar inspección {solicitud.codigo}</DialogTitle>
           <DialogDescription>
-            Registra la fecha de la visita, quién asistió, los defectos detectados y el resultado. Al cerrar
-            se notificará a los asignados y al solicitante.
+            Registra la fecha de la visita, quién asistió, y el veredicto con los defectos/características de
+            cada línea. Al cerrar se notificará a los asignados y al solicitante.
           </DialogDescription>
         </DialogHeader>
 
         <div className='space-y-4 py-2'>
           <div className='grid gap-4 sm:grid-cols-2'>
             <div className='space-y-1.5'>
-              <Label>Resultado <span className='text-destructive'>*</span></Label>
-              <Select value={resultado} onValueChange={(v) => setResultado(v as ResultadoCierre)}>
-                <SelectTrigger><SelectValue placeholder='Selecciona...' /></SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(RESULTADO_CIERRE_LABELS) as ResultadoCierre[]).map((r) => (
-                    <SelectItem key={r} value={r}>{RESULTADO_CIERRE_LABELS[r]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='space-y-1.5'>
               <Label>Fecha y hora de visita <span className='text-destructive'>*</span></Label>
               <Input type='datetime-local' value={fechaHora} onChange={(e) => setFechaHora(e.target.value)} />
             </div>
-          </div>
-
-          <div className='space-y-1.5'>
-            <Label>Quién asiste <span className='text-destructive'>*</span></Label>
-            <MultiCombobox
-              options={(usuarios?.data ?? []).map((u) => ({ value: u.id, label: u.nombre }))}
-              selected={acudeIds}
-              onChange={setAcudeIds}
-              placeholder='Selecciona quién asiste a la visita...'
-            />
+            <div className='space-y-1.5'>
+              <Label>Quién asiste <span className='text-destructive'>*</span></Label>
+              <MultiCombobox
+                options={(usuarios?.data ?? []).map((u) => ({ value: u.id, label: u.nombre }))}
+                selected={acudeIds}
+                onChange={setAcudeIds}
+                placeholder='Selecciona quién asiste a la visita...'
+              />
+            </div>
           </div>
 
           <div className='space-y-1.5'>
             <Label>Comentarios <span className='text-destructive'>*</span></Label>
-            <Textarea rows={4} value={comentarios} onChange={(e) => setComentarios(e.target.value)} placeholder='Hallazgos, observaciones...' />
+            <Textarea rows={3} value={comentarios} onChange={(e) => setComentarios(e.target.value)} placeholder='Hallazgos, observaciones...' />
           </div>
 
-          {/* Defectos detectados en la visita */}
+          {/* Veredicto + defectos + madurez POR LÍNEA (o de cabecera si legacy). */}
           <div className='space-y-2'>
-            <Label>Defectos</Label>
-            {defectos.length > 0 && (
-              <div className='flex flex-wrap gap-1.5'>
-                {defectos.map((d, i) => (
-                  <Badge key={i} variant='secondary' className='gap-1 pr-1'>
-                    {etiquetaDefecto(d)}
-                    <button type='button' onClick={() => setDefectos((prev) => prev.filter((_, j) => j !== i))} className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'>
-                      <Icons.close className='h-3 w-3' />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-            <div className='grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end'>
-              <div className='space-y-1'>
-                <Label className='text-xs'>Grupo</Label>
-                <Select value={grupoSel} onValueChange={(v) => { setGrupoSel(v); setDefectoSel(''); setValorSel('') }}>
-                  <SelectTrigger><SelectValue placeholder='Grupo...' /></SelectTrigger>
-                  <SelectContent>
-                    {grupos.map((g) => <SelectItem key={g.id} value={String(g.id)}>{g.descripcion}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className='space-y-1'>
-                <Label className='text-xs'>Defecto</Label>
-                <Select value={defectoSel} onValueChange={setDefectoSel} disabled={!grupoSel}>
-                  <SelectTrigger><SelectValue placeholder='Defecto...' /></SelectTrigger>
-                  <SelectContent>
-                    {defectosDelGrupo.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.descripcion}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className='space-y-1'>
-                <Label className='text-xs'>{defectoElegido?.tipoMedida === 'PORCENTAJE' ? 'Valor (%)' : 'Valor (u.)'}</Label>
-                <Input
-                  className='w-24'
-                  value={valorSel}
-                  onChange={(e) => setValorSel(e.target.value)}
-                  placeholder={defectoElegido?.tipoMedida === 'PORCENTAJE' ? '12,5' : '3'}
-                  disabled={!defectoSel}
+            <Label>{sinLineas ? 'Resultado de la inspección' : 'Resultado por línea'} <span className='text-destructive'>*</span></Label>
+            <div className='space-y-3'>
+              {sinLineas ? (
+                <LineaCierreEditor
+                  valor={legacyCierre}
+                  onChange={setLegacyCierre}
+                  grupos={grupos}
+                  defectosCatalogo={defectosCatalogo}
+                  caracteristicasCatalogo={caracteristicasCatalogo}
                 />
-              </div>
-              <Button type='button' variant='secondary' onClick={agregarDefecto} disabled={!defectoSel || !valorSel}>
-                <Icons.add className='mr-1 h-4 w-4' /> Agregar
-              </Button>
+              ) : (
+                solicitud.lineas.map((l) => (
+                  <LineaCierreEditor
+                    key={l.id}
+                    linea={l}
+                    valor={lineasCierre[l.id] ?? { veredicto: '', defectos: [], caracteristicas: [] }}
+                    onChange={(next) => setLineasCierre((prev) => ({ ...prev, [l.id]: next }))}
+                    grupos={grupos}
+                    defectosCatalogo={defectosCatalogo}
+                    caracteristicasCatalogo={caracteristicasCatalogo}
+                  />
+                ))
+              )}
             </div>
-            <p className='text-muted-foreground text-xs'>Según el defecto: por unidades (entero) o porcentaje (ej. 12,5).</p>
-          </div>
-
-          {/* Características de madurez/calidad (Firmeza, Brix, ...) */}
-          <div className='space-y-2'>
-            <Label>Características de calidad</Label>
-            {caracteristicas.length > 0 && (
-              <div className='flex flex-wrap gap-1.5'>
-                {caracteristicas.map((c, i) => (
-                  <Badge key={i} variant='secondary' className='gap-1 pr-1'>
-                    {etiquetaCaracteristica(c)}
-                    <button type='button' onClick={() => setCaracteristicas((prev) => prev.filter((_, j) => j !== i))} className='ml-0.5 rounded-sm hover:bg-muted-foreground/20'>
-                      <Icons.close className='h-3 w-3' />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-            <div className='grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end'>
-              <div className='space-y-1'>
-                <Label className='text-xs'>Característica</Label>
-                <Select value={caracSel} onValueChange={(v) => { setCaracSel(v); setCaracValor('') }}>
-                  <SelectTrigger><SelectValue placeholder='Característica...' /></SelectTrigger>
-                  <SelectContent>
-                    {caracteristicasDisponibles.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className='space-y-1'>
-                <Label className='text-xs'>
-                  {caracElegida?.tipoDato === 'TEXTO' ? 'Valor' : caracElegida?.tipoDato === 'PORCENTAJE' ? 'Valor (%)' : caracElegida?.unidad ? `Valor (${caracElegida.unidad.codigo})` : 'Valor'}
-                </Label>
-                <Input
-                  className='w-28'
-                  value={caracValor}
-                  onChange={(e) => setCaracValor(e.target.value)}
-                  placeholder={caracElegida?.tipoDato === 'TEXTO' ? 'Texto...' : caracElegida?.tipoDato === 'ENTERO' ? '3' : '12,5'}
-                  disabled={!caracSel}
-                />
-              </div>
-              <Button type='button' variant='secondary' onClick={agregarCaracteristica} disabled={!caracSel || !caracValor}>
-                <Icons.add className='mr-1 h-4 w-4' /> Agregar
-              </Button>
-            </div>
-            <p className='text-muted-foreground text-xs'>Opcional. Firmeza, Brix u otras, según el mantenedor de Características de Madurez.</p>
           </div>
 
           <div className='space-y-2'>

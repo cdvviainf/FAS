@@ -380,7 +380,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
 
   const adjuntosExistentes = solicitud?.data.adjuntos.filter((a) => a.etapa === 'CREACION') ?? []
   const puedeGestionarAdjuntos = isEdit && solicitud?.data.estado === 'NOTIFICADA'
-  const estaCerrada = solicitud?.data.estado === 'APROBADA' || solicitud?.data.estado === 'RECHAZADA' || solicitud?.data.estado === 'OBJETADA'
+  const estaCerrada = solicitud?.data.estado === 'APROBADA' || solicitud?.data.estado === 'RECHAZADA' || solicitud?.data.estado === 'OBJETADA' || solicitud?.data.estado === 'MIXTO'
   const soloLectura = !puedeEscribir || estaCerrada
   const isPending = mutation.isPending
 

@@ -16,7 +16,7 @@ type SolicitudDetalle = NonNullable<Awaited<ReturnType<typeof repo.getSolicitudB
 // APROBADA/RECHAZADA/OBJETADA son los tres estados terminales tras el cierre
 // (OBJETADA agregada 2026-08-10) — CERRADA queda obsoleto (ver schema.prisma).
 function estaCerrada(estado: string): boolean {
-  return estado === 'APROBADA' || estado === 'RECHAZADA' || estado === 'OBJETADA'
+  return estado === 'APROBADA' || estado === 'RECHAZADA' || estado === 'OBJETADA' || estado === 'MIXTO'
 }
 
 // ─── Helpers de correo ───────────────────────────────────────────────────────
@@ -374,6 +374,60 @@ export async function notificarSolicitud(id: number, userId: string) {
   return notificada
 }
 
+// Valida las líneas de defecto del cierre contra una especie (null = sin filtro
+// por especie, p.ej. solicitudes legacy sin líneas). Reutilizado por el flujo por
+// línea y el legacy de cabecera.
+async function validarDefectosCierre(
+  defectos: { grupoDefectoId: number; defectoId: number; valor: number }[],
+  especieId: number | null,
+  prefBase: string,
+): Promise<void> {
+  for (const [i, d] of defectos.entries()) {
+    const prefijo = `${prefBase}defecto ${i + 1}:`
+    const grupo = await repo.getGrupoDefectoActivo(d.grupoDefectoId)
+    if (!grupo) throw new ValidationError(`${prefijo} el grupo seleccionado no existe o está bloqueado`)
+    const defecto = await repo.getDefectoActivo(d.defectoId)
+    if (!defecto) throw new ValidationError(`${prefijo} el defecto seleccionado no existe o está bloqueado`)
+    if (defecto.grupoDefectoId !== d.grupoDefectoId) throw new ValidationError(`${prefijo} el defecto no pertenece al grupo seleccionado`)
+    if (especieId != null && defecto.especies.length > 0 && !defecto.especies.some((e) => e.especieId === especieId)) {
+      throw new ValidationError(`${prefijo} el defecto no es válido para la especie`)
+    }
+    if (defecto.tipoMedida === 'PORCENTAJE') {
+      if (d.valor > 100) throw new ValidationError(`${prefijo} el porcentaje no puede superar 100`)
+    } else if (!Number.isInteger(d.valor)) {
+      throw new ValidationError(`${prefijo} el valor por unidades debe ser un número entero`)
+    }
+  }
+}
+
+// Valida + normaliza las características de madurez del cierre contra una especie
+// (null = sin filtro). Devuelve solo la columna relevante según tipoDato (CM-007).
+async function normalizarMadurezCierre(
+  cs: { caracteristicaId: number; valorNumerico?: number | null; valorTexto?: string | null }[],
+  especieId: number | null,
+  prefBase: string,
+): Promise<{ caracteristicaId: number; valorNumerico: number | null; valorTexto: string | null }[]> {
+  const out: { caracteristicaId: number; valorNumerico: number | null; valorTexto: string | null }[] = []
+  for (const [i, c] of cs.entries()) {
+    const prefijo = `${prefBase}característica ${i + 1}:`
+    const caracteristica = await repo.getCaracteristicaMadurezActiva(c.caracteristicaId)
+    if (!caracteristica) throw new ValidationError(`${prefijo} la característica seleccionada no existe o está bloqueada`)
+    if (especieId != null && caracteristica.especies.length > 0 && !caracteristica.especies.some((e) => e.especieId === especieId)) {
+      throw new ValidationError(`${prefijo} la característica no es válida para la especie`)
+    }
+    if (caracteristica.tipoDato === 'TEXTO') {
+      if (c.valorTexto == null || c.valorTexto.trim() === '') throw new ValidationError(`${prefijo} debe registrar un valor de texto`)
+      out.push({ caracteristicaId: c.caracteristicaId, valorNumerico: null, valorTexto: c.valorTexto.trim() })
+    } else {
+      if (c.valorNumerico == null) throw new ValidationError(`${prefijo} debe registrar un valor numérico`)
+      if (caracteristica.tipoDato === 'ENTERO' && !Number.isInteger(c.valorNumerico)) throw new ValidationError(`${prefijo} el valor debe ser un número entero`)
+      if (caracteristica.tipoDato === 'PORCENTAJE' && c.valorNumerico > 100) throw new ValidationError(`${prefijo} el porcentaje no puede superar 100`)
+      out.push({ caracteristicaId: c.caracteristicaId, valorNumerico: c.valorNumerico, valorTexto: null })
+    }
+  }
+  return out
+}
+
 export async function cerrarSolicitud(
   id: number,
   body: SolicitudCerrarBody,
@@ -408,93 +462,59 @@ export async function cerrarSolicitud(
     throw new ValidationError('Debe registrar al menos una persona que asiste (función Acudir)')
   }
 
-  // Especies presentes en las líneas (2026-10-27): la validez por especie de
-  // defectos/madurez del cierre se evalúa contra este conjunto (default: válido
-  // si pertenece a CUALQUIER especie de las líneas). Vacío (legacy sin líneas) =
-  // no se restringe por especie.
-  const especiesSolicitud = new Set(solicitud.lineas.map((l) => l.especie.id))
-
-  // Defectos del cierre (2026-10-13): grupo/defecto existen (tenant), el defecto
-  // pertenece a su grupo y es válido para alguna especie de la solicitud (o es
-  // genérico); el valor respeta la unidad de medida (UNIDADES = entero ≥ 0;
-  // PORCENTAJE = decimal 0..100).
-  if (body.defectos !== undefined) {
-    for (const [i, linea] of body.defectos.entries()) {
-      const prefijo = `Defecto ${i + 1}:`
-      const grupo = await repo.getGrupoDefectoActivo(linea.grupoDefectoId)
-      if (!grupo) throw new ValidationError(`${prefijo} el grupo seleccionado no existe o está bloqueado`)
-      const defecto = await repo.getDefectoActivo(linea.defectoId)
-      if (!defecto) throw new ValidationError(`${prefijo} el defecto seleccionado no existe o está bloqueado`)
-      if (defecto.grupoDefectoId !== linea.grupoDefectoId) {
-        throw new ValidationError(`${prefijo} el defecto no pertenece al grupo seleccionado`)
-      }
-      // Validez por especie (calidad.md): si la solicitud tiene especies (en sus
-      // líneas) y el defecto declara especies, debe incluir al menos una; un
-      // defecto sin especies es genérico.
-      if (especiesSolicitud.size > 0 && defecto.especies.length > 0 && !defecto.especies.some((e) => especiesSolicitud.has(e.especieId))) {
-        throw new ValidationError(`${prefijo} el defecto no es válido para las especies de la solicitud`)
-      }
-      if (defecto.tipoMedida === 'PORCENTAJE') {
-        if (linea.valor > 100) throw new ValidationError(`${prefijo} el porcentaje no puede superar 100`)
-      } else if (!Number.isInteger(linea.valor)) {
-        throw new ValidationError(`${prefijo} el valor por unidades debe ser un número entero`)
-      }
-    }
+  // Cierre POR LÍNEA (solicitudes con líneas) o de CABECERA (legacy sin líneas).
+  let resultado: 'APROBADA' | 'RECHAZADA' | 'OBJETADA' | 'MIXTO'
+  let cierreExtra: {
+    lineas?: repo.CierreLineaData[]
+    defectosCabecera?: { grupoDefectoId: number; defectoId: number; valor: number }[]
+    caracteristicasCabecera?: { caracteristicaId: number; valorNumerico: number | null; valorTexto: string | null }[]
   }
 
-  // Características de madurez del cierre (2026-10-26): la característica existe
-  // (tenant, no bloqueada), es válida para la especie de la solicitud (o es
-  // genérica), y el valor concuerda con su tipoDato — numérico para
-  // DECIMAL/PORCENTAJE/ENTERO (ENTERO entero, PORCENTAJE 0..100), texto para TEXTO.
-  // CM-007: según tipoDato solo persiste la columna relevante — se descarta la
-  // columna incompatible aunque el cliente la haya enviado (evita filas con
-  // valorNumerico y valorTexto simultáneos, R6).
-  let caracteristicasNormalizadas: { caracteristicaId: number; valorNumerico: number | null; valorTexto: string | null }[] | undefined
-  if (body.caracteristicas !== undefined) {
-    caracteristicasNormalizadas = []
-    for (const [i, linea] of body.caracteristicas.entries()) {
-      const prefijo = `Característica ${i + 1}:`
-      const caracteristica = await repo.getCaracteristicaMadurezActiva(linea.caracteristicaId)
-      if (!caracteristica) throw new ValidationError(`${prefijo} la característica seleccionada no existe o está bloqueada`)
-      if (
-        especiesSolicitud.size > 0 &&
-        caracteristica.especies.length > 0 &&
-        !caracteristica.especies.some((e) => especiesSolicitud.has(e.especieId))
-      ) {
-        throw new ValidationError(`${prefijo} la característica no es válida para las especies de la solicitud`)
-      }
-      if (caracteristica.tipoDato === 'TEXTO') {
-        if (linea.valorTexto == null || linea.valorTexto.trim() === '') {
-          throw new ValidationError(`${prefijo} debe registrar un valor de texto`)
-        }
-        caracteristicasNormalizadas.push({ caracteristicaId: linea.caracteristicaId, valorNumerico: null, valorTexto: linea.valorTexto.trim() })
-      } else {
-        if (linea.valorNumerico == null) {
-          throw new ValidationError(`${prefijo} debe registrar un valor numérico`)
-        }
-        if (caracteristica.tipoDato === 'ENTERO' && !Number.isInteger(linea.valorNumerico)) {
-          throw new ValidationError(`${prefijo} el valor debe ser un número entero`)
-        }
-        if (caracteristica.tipoDato === 'PORCENTAJE' && linea.valorNumerico > 100) {
-          throw new ValidationError(`${prefijo} el porcentaje no puede superar 100`)
-        }
-        caracteristicasNormalizadas.push({ caracteristicaId: linea.caracteristicaId, valorNumerico: linea.valorNumerico, valorTexto: null })
-      }
+  if (solicitud.lineas.length > 0) {
+    // Flujo POR LÍNEA: cada línea debe tener su veredicto; sus defectos/madurez se
+    // validan contra la especie de SU línea.
+    if (!body.lineas) throw new ValidationError('Debes registrar el veredicto de cada línea de la solicitud')
+    const lineasSolicitud = new Map(solicitud.lineas.map((l) => [l.id, l]))
+    const lineaIdsCierre = new Set(body.lineas.map((l) => l.solicitudLineaId))
+    for (const l of body.lineas) {
+      if (!lineasSolicitud.has(l.solicitudLineaId)) throw new ValidationError('Una de las líneas del cierre no pertenece a la solicitud')
     }
+    for (const l of solicitud.lineas) {
+      if (!lineaIdsCierre.has(l.id)) throw new ValidationError('Debes registrar el veredicto de todas las líneas antes de cerrar la inspección')
+    }
+    const lineasCierre: repo.CierreLineaData[] = []
+    for (const [idx, lineaCierre] of body.lineas.entries()) {
+      const especieLinea = lineasSolicitud.get(lineaCierre.solicitudLineaId)!.especie.id
+      await validarDefectosCierre(lineaCierre.defectos, especieLinea, `Línea ${idx + 1}: `)
+      const caracteristicasNormalizadas = await normalizarMadurezCierre(lineaCierre.caracteristicas, especieLinea, `Línea ${idx + 1}: `)
+      lineasCierre.push({ solicitudLineaId: lineaCierre.solicitudLineaId, veredicto: lineaCierre.veredicto, defectos: lineaCierre.defectos, caracteristicas: caracteristicasNormalizadas })
+    }
+    // Rollup de la cabecera: todas igual -> ese veredicto; mixto -> MIXTO.
+    const veredictos = body.lineas.map((l) => l.veredicto)
+    const todas = (v: 'APROBADA' | 'RECHAZADA' | 'OBJETADA') => veredictos.every((x) => x === v)
+    resultado = todas('APROBADA') ? 'APROBADA' : todas('RECHAZADA') ? 'RECHAZADA' : todas('OBJETADA') ? 'OBJETADA' : 'MIXTO'
+    cierreExtra = { lineas: lineasCierre }
+  } else {
+    // Flujo LEGACY (solicitud sin líneas): un veredicto de cabecera + defectos/
+    // madurez a nivel solicitud (sin filtro por especie).
+    if (!body.resultado) throw new ValidationError('Debes indicar el resultado de la inspección')
+    await validarDefectosCierre(body.defectos ?? [], null, '')
+    const caracteristicasCabecera = await normalizarMadurezCierre(body.caracteristicas ?? [], null, '')
+    resultado = body.resultado
+    cierreExtra = { defectosCabecera: body.defectos ?? [], caracteristicasCabecera }
   }
 
   const cerrada = await repo.cerrarSolicitud(id, {
     comentarios: body.comentarios,
-    resultado: body.resultado,
+    resultado,
     fechaHora: body.fechaHora ? new Date(body.fechaHora) : undefined,
     asignados: body.asignados,
-    defectos: body.defectos,
-    caracteristicas: caracteristicasNormalizadas,
+    ...cierreExtra,
   }, userId)
   await cancelarCorreoDiferido(recordatorioJobId(id))
 
   const adjuntosCierre = cerrada.adjuntos.filter((a) => a.etapa === 'CIERRE').length
-  const { subject, html } = emails.correoCierre(cerrada, body.comentarios, adjuntosCierre, body.resultado)
+  const { subject, html } = emails.correoCierre(cerrada, body.comentarios, adjuntosCierre, resultado)
   await encolarCorreo({ to: await destinatariosDe(cerrada), subject, html, empresaId: getEmpresaIdActual() })
 
   return cerrada

@@ -1,5 +1,7 @@
-export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
+export type EstadoSolicitud = 'PENDIENTE' | 'NOTIFICADA' | 'APROBADA' | 'RECHAZADA' | 'OBJETADA' | 'MIXTO'
 export type ResultadoCierre = 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
+// Veredicto por LÍNEA del cierre (2026-11-03).
+export type EstadoLineaInspeccion = 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
 export type FuncionAsignado = 'ACUDIR' | 'NOTIFICAR'
 export type EtapaAdjunto = 'CREACION' | 'CIERRE'
 export type TipoInspeccion = 'PRODUCTO_TERMINADO' | 'PROCESO'
@@ -15,6 +17,7 @@ export const ESTADO_LABELS: Record<EstadoSolicitud, string> = {
   APROBADA: 'Aprobada',
   RECHAZADA: 'Rechazada',
   OBJETADA: 'Objetada',
+  MIXTO: 'Mixto',
 }
 
 export const RESULTADO_CIERRE_LABELS: Record<ResultadoCierre, string> = {
@@ -115,6 +118,8 @@ export interface SolicitudInspeccion {
 export interface SolicitudLinea {
   id: number
   cantidadPallets: number | null
+  // Veredicto del cierre por línea (null = pendiente).
+  estadoCierre: EstadoLineaInspeccion | null
   especie: { id: number; codigo: string; descripcion: string }
   variedad: { id: number; codigo: string; descripcion: string }
   articulo: { id: number; codigo: string; descripcion: string }
@@ -137,6 +142,7 @@ export type TipoDatoMadurez = 'DECIMAL' | 'PORCENTAJE' | 'ENTERO' | 'TEXTO'
 
 export interface SolicitudMadurez {
   id: number
+  solicitudLineaId: number | null
   caracteristicaId: number
   valorNumerico: string | null
   valorTexto: string | null
@@ -159,6 +165,7 @@ export type TipoMedidaDefecto = 'UNIDADES' | 'PORCENTAJE'
 
 export interface SolicitudDefecto {
   id: number
+  solicitudLineaId: number | null
   grupoDefectoId: number
   defectoId: number
   valor: string
@@ -194,17 +201,28 @@ export interface SolicitudCreateInput {
 
 export type SolicitudUpdateInput = Partial<Omit<SolicitudCreateInput, 'temporadaId'>>
 
+// Cierre POR LÍNEA (2026-11-03): cada línea lleva su veredicto + defectos + madurez.
+export interface SolicitudCierreLineaInput {
+  solicitudLineaId: number
+  veredicto: EstadoLineaInspeccion
+  defectos: SolicitudDefectoInput[]
+  caracteristicas: SolicitudMadurezInput[]
+}
+
 export interface SolicitudCerrarInput {
   comentarios: string
-  resultado: ResultadoCierre
   // Fecha/hora de la visita (se ingresa/edita en el cierre). Opcional solo si la
   // solicitud ya la tenía fijada; el backend exige una fecha efectiva.
   fechaHora?: string | null
   // Asignados (incluye a quién asiste = ACUDIR): REEMPLAZA el set, obligatorio.
   asignados: AsignadoInput[]
-  // Defectos registrados en la visita.
+  // Flujo POR LÍNEA (solicitudes con líneas): veredicto + defectos + madurez por
+  // línea. El estado de la cabecera lo calcula (rollup) el backend.
+  lineas?: SolicitudCierreLineaInput[]
+  // Flujo LEGACY (solicitudes sin líneas): un veredicto de cabecera + defectos/
+  // madurez a nivel solicitud.
+  resultado?: ResultadoCierre
   defectos?: SolicitudDefectoInput[]
-  // Características de madurez/calidad (reemplaza el set completo).
   caracteristicas?: SolicitudMadurezInput[]
 }
 

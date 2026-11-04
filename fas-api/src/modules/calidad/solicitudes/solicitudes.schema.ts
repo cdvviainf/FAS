@@ -73,7 +73,7 @@ export const solicitudListQuerySchema = z.object({
   q: z.string().max(200).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(500).default(20),
-  estado: z.enum(['PENDIENTE', 'NOTIFICADA', 'APROBADA', 'RECHAZADA', 'OBJETADA']).optional(),
+  estado: z.enum(['PENDIENTE', 'NOTIFICADA', 'APROBADA', 'RECHAZADA', 'OBJETADA', 'MIXTO']).optional(),
   temporadaId: z.coerce.number().int().positive().optional(),
   entidadProductorId: z.coerce.number().int().positive().optional(),
   usuarioAsignadoId: z.string().optional(),
@@ -107,11 +107,28 @@ export const solicitudMadurezSchema = z.object({
   valorTexto: z.string().max(500, 'El texto es demasiado largo').optional().nullable(),
 })
 
+// Cierre POR LÍNEA (2026-11-03): cada línea de la solicitud lleva su veredicto +
+// sus defectos + sus características de madurez.
+export const solicitudCierreLineaSchema = z.object({
+  solicitudLineaId: z.number().int().positive(),
+  // OBJETADA (2026-08-10): tercer veredicto, terminal — mismo tratamiento que RECHAZADA.
+  veredicto: z.enum(['APROBADA', 'RECHAZADA', 'OBJETADA'], { message: 'El veredicto (Aprobado/Rechazado/Objetado) es requerido por línea' }),
+  defectos: z
+    .array(solicitudDefectoSchema)
+    .refine((ds) => new Set(ds.map((d) => `${d.grupoDefectoId}-${d.defectoId}`)).size === ds.length, {
+      message: 'Hay defectos repetidos (mismo grupo y defecto) en una línea',
+    })
+    .default([]),
+  caracteristicas: z
+    .array(solicitudMadurezSchema)
+    .refine((cs) => new Set(cs.map((c) => c.caracteristicaId)).size === cs.length, {
+      message: 'Hay características de madurez repetidas en una línea',
+    })
+    .default([]),
+})
+
 export const solicitudCerrarSchema = z.object({
   comentarios: z.string().min(1, 'Los comentarios de cierre son requeridos').max(5000),
-  // OBJETADA (2026-08-10): tercer veredicto de cierre, terminal — mismo
-  // tratamiento que RECHAZADA (bloquea OC, no se reabre automáticamente).
-  resultado: z.enum(['APROBADA', 'RECHAZADA', 'OBJETADA'], { message: 'El resultado (Aprobado/Rechazado/Objetado) es requerido' }),
   // Fecha/hora de la visita (2026-10-13): se ingresa/edita en el cierre. Puede
   // omitirse si la solicitud ya la tenía fijada; el service exige una fecha
   // efectiva (body o la vigente) y rechaza null.
@@ -122,21 +139,37 @@ export const solicitudCerrarSchema = z.object({
     .array(asignadoSchema)
     .min(1, 'Debe registrar al menos una persona que asiste')
     .refine((a) => new Set(a.map((x) => x.usuarioId)).size === a.length, { message: 'Hay usuarios repetidos en los asignados' }),
-  // Defectos registrados en la visita: grupo+defecto no se repiten.
+  // Flujo POR LÍNEA (solicitudes con líneas): veredicto + defectos + madurez de
+  // cada línea. El estado de la cabecera se calcula (rollup) en el service.
+  lineas: z
+    .array(solicitudCierreLineaSchema)
+    .refine((ls) => new Set(ls.map((l) => l.solicitudLineaId)).size === ls.length, {
+      message: 'Hay líneas repetidas en el cierre',
+    })
+    .optional(),
+  // Flujo LEGACY (solicitudes SIN líneas): un veredicto de cabecera + defectos/
+  // madurez a nivel solicitud (compatibilidad con solicitudes previas al detalle
+  // por línea — ver backfill 20261027140000 que no creó línea sin variedades).
+  resultado: z.enum(['APROBADA', 'RECHAZADA', 'OBJETADA']).optional(),
   defectos: z
     .array(solicitudDefectoSchema)
     .refine((ds) => new Set(ds.map((d) => `${d.grupoDefectoId}-${d.defectoId}`)).size === ds.length, {
       message: 'Hay defectos repetidos (mismo grupo y defecto)',
     })
     .optional(),
-  // Características de madurez registradas en la visita (2026-10-26): opcionales;
-  // una misma característica no se repite.
   caracteristicas: z
     .array(solicitudMadurezSchema)
     .refine((cs) => new Set(cs.map((c) => c.caracteristicaId)).size === cs.length, {
       message: 'Hay características de madurez repetidas',
     })
     .optional(),
+}).superRefine((v, ctx) => {
+  const tieneLineas = v.lineas != null && v.lineas.length > 0
+  const tieneResultado = v.resultado != null
+  // Exactamente una vía: por línea (con líneas) o de cabecera (legacy sin líneas).
+  if (tieneLineas === tieneResultado) {
+    ctx.addIssue({ code: 'custom', message: 'Debes enviar el veredicto por línea o un resultado de cabecera (legacy sin líneas), no ambos ni ninguno', path: ['lineas'] })
+  }
 })
 
 export type SolicitudLineaBody = z.infer<typeof solicitudLineaSchema>

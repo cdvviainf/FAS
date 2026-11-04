@@ -54,6 +54,7 @@ const estadoVariant: Record<EstadoSolicitud, 'secondary' | 'default' | 'outline'
   APROBADA: 'outline',
   RECHAZADA: 'destructive',
   OBJETADA: 'destructive',
+  MIXTO: 'default',
 }
 
 interface SolicitudListingClientProps {
@@ -90,7 +91,7 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
     page: parseAsInteger.withDefault(1),
     perPage: parseAsInteger.withDefault(20),
     q: parseAsString,
-    estado: parseAsStringEnum<EstadoSolicitud>(['PENDIENTE', 'NOTIFICADA', 'APROBADA', 'RECHAZADA', 'OBJETADA']),
+    estado: parseAsStringEnum<EstadoSolicitud>(['PENDIENTE', 'NOTIFICADA', 'APROBADA', 'RECHAZADA', 'OBJETADA', 'MIXTO']),
   })
 
   // Dialog state
@@ -185,7 +186,7 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
         // Máquina de estados (QAS-SI-003): notificar solo PENDIENTE, cerrar solo NOTIFICADA
         const esPendiente = s.estado === 'PENDIENTE'
         const esNotificada = s.estado === 'NOTIFICADA'
-        const esCerrada = s.estado === 'APROBADA' || s.estado === 'RECHAZADA' || s.estado === 'OBJETADA'
+        const esCerrada = s.estado === 'APROBADA' || s.estado === 'RECHAZADA' || s.estado === 'OBJETADA' || s.estado === 'MIXTO'
         // QAS-SI-007: un asignado ACUDIR con solo LECTURA también puede cerrar
         const esInspectorAcudir = s.asignados.some((a) => a.usuarioId === currentUserId && a.funcion === 'ACUDIR')
         // El cierre es una acción de Calidad: NO se permite desde el link de
@@ -286,6 +287,7 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
             <SelectItem value='APROBADA'>Aprobada</SelectItem>
             <SelectItem value='RECHAZADA'>Rechazada</SelectItem>
             <SelectItem value='OBJETADA'>Objetada</SelectItem>
+            <SelectItem value='MIXTO'>Mixto</SelectItem>
           </SelectContent>
         </Select>
         <div className='flex-1' />
