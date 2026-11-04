@@ -34,6 +34,9 @@ import { ProformaProductorV1 } from './templates/proforma-productor/v1/index.js'
 import { resolverProformaMaterial } from './resolvers/proforma-material.resolver.js'
 import { proformaMaterialPdfPayloadSchema } from './schemas/proforma-material.schema.js'
 import { ProformaMaterialV1 } from './templates/proforma-material/v1/index.js'
+import { resolverDocumentoManual } from './resolvers/documento-manual.resolver.js'
+import { documentoManualPdfPayloadSchema } from './schemas/documento-manual.schema.js'
+import { DocumentoManualV1 } from './templates/documento-manual/v1/index.js'
 import type { DocumentRegistry } from './documentos.types.js'
 
 // Registro central — Etapa 4 §4: "un solo lugar donde se declara todo".
@@ -78,6 +81,20 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     controlCopia: false,
     nombreArchivo: (p) => `${p.numero}.pdf`,
     folio: (p) => p.numero,
+  },
+  // Generador DTE — documento manual (2026-11-04). Previsualización de borrador
+  // para las 4 clases (Factura Nacional, Guía de Despacho, Nota de Crédito/Débito).
+  'documento-manual': {
+    titulo: 'Documento Manual (Generador DTE)',
+    resolver: resolverDocumentoManual,
+    schema: documentoManualPdfPayloadSchema,
+    plantillaActual: 'v1',
+    plantillas: { v1: DocumentoManualV1 },
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    itemMenu: 'GENERADOR_DTE',
+    controlCopia: false,
+    nombreArchivo: (p) => `${p.codigo}.pdf`,
+    folio: (p) => p.codigo,
   },
   'orden-compra': {
     titulo: 'Orden de Compra',

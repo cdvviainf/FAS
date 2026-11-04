@@ -151,6 +151,16 @@ export const LOCK_NAMESPACE_PROFORMA_PRODUCTOR_NUMERO = 490256
 // LOCK_NAMESPACE_EMBARQUE_DESPACHO para VENTA_NACIONAL (VN-QA-006).
 export const LOCK_NAMESPACE_PROFORMA_PRODUCTOR_PROCESO = 490257
 
+// Generador DTE — documentos manuales (2026-11-04): correlativo GDT-{AAAA}-{NNNN}.
+// Lock por (empresaId:año) que cubre el cálculo del máximo + la creación dentro de
+// la misma transacción, para que dos documentos del mismo año/empresa no generen
+// el mismo código. Namespace propio, no coordina con nada más.
+export const LOCK_NAMESPACE_DOCUMENTO_MANUAL_NUMERO = 490258
+
+// Generador DTE — proceso (edición de cabecera/líneas/referencias, anular).
+// Serializa el CRUD de un DocumentoManual consigo mismo. Clave: documentoManualId.
+export const LOCK_NAMESPACE_DOCUMENTO_MANUAL_PROCESO = 490259
+
 // 490251 se usó brevemente para "Generar Instructivos" y se retiró
 // (2026-09-21, FAS-IE-QA-005, QA ronda 4): esa operación ahora comparte
 // LOCK_NAMESPACE_EMBARQUE_DESPACHO con reservarPalletsEnEmbarque/

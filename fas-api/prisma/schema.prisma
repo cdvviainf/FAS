@@ -273,6 +273,7 @@ model Empresa {
   pagos                  Pago[]
   saldosAFavor           SaldoAFavorCliente[]
   notasCredito           NotaCredito[]
+  documentosManuales     DocumentoManual[]
 
   @@map("empresas")
 }
@@ -1550,6 +1551,7 @@ model Moneda {
   pagos                 Pago[]
   saldosAFavor          SaldoAFavorCliente[]
   notasCredito          NotaCredito[]
+  documentosManuales    DocumentoManual[]
 
   @@map("monedas")
 }
@@ -1755,6 +1757,8 @@ model Entidad {
   embarquesNaviera               Embarque[]                  @relation("EmbarqueNaviera")
   embarquesGuiaTransporte        Embarque[]                  @relation("EmbarqueGuiaTransporte")
   instructivosHijosPlanta        InstructivoHijo[]           @relation("InstructivoHijoPlanta")
+  documentosManualesReceptor     DocumentoManual[]           @relation("DocumentoManualReceptor")
+  documentosManualesTransporte   DocumentoManual[]           @relation("DocumentoManualGuiaTransporte")
 
   @@unique([empresaId, id])
   @@index([eliminadoEn])
@@ -2073,18 +2077,18 @@ model SolicitudInspeccionAsignado {
 // padre). `valor` admite entero (si el Defecto es UNIDADES) o decimal 0..100
 // (si es PORCENTAJE, ej. 12.5 = 12,5%); la interpretación la da Defecto.tipoMedida.
 model SolicitudInspeccionDefecto {
-  id             Int                 @id @default(autoincrement())
-  solicitudId    Int
-  solicitud      SolicitudInspeccion @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  id               Int                       @id @default(autoincrement())
+  solicitudId      Int
+  solicitud        SolicitudInspeccion       @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
   // Línea a la que pertenece el defecto (cierre por línea, 2026-11-03). Nullable:
   // las filas históricas (cierre a nivel solicitud) quedan sin línea.
   solicitudLineaId Int?
   solicitudLinea   SolicitudInspeccionLinea? @relation(fields: [solicitudLineaId], references: [id], onDelete: Cascade)
-  grupoDefectoId Int
-  grupoDefecto   GrupoDefecto        @relation(fields: [grupoDefectoId], references: [id])
-  defectoId      Int
-  defecto        Defecto             @relation(fields: [defectoId], references: [id])
-  valor          Decimal             @db.Decimal(7, 2)
+  grupoDefectoId   Int
+  grupoDefecto     GrupoDefecto              @relation(fields: [grupoDefectoId], references: [id])
+  defectoId        Int
+  defecto          Defecto                   @relation(fields: [defectoId], references: [id])
+  valor            Decimal                   @db.Decimal(7, 2)
 
   @@index([solicitudId])
   @@index([solicitudLineaId])
@@ -2097,16 +2101,16 @@ model SolicitudInspeccionDefecto {
 // de SolicitudInspeccionDefecto: una fila por característica registrada, con el
 // valor numérico o texto según el tipoDato de la característica.
 model SolicitudInspeccionMadurez {
-  id               Int                   @id @default(autoincrement())
+  id               Int                       @id @default(autoincrement())
   solicitudId      Int
-  solicitud        SolicitudInspeccion   @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  solicitud        SolicitudInspeccion       @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
   // Línea a la que pertenece la medición (cierre por línea, 2026-11-03). Nullable:
   // las filas históricas (cierre a nivel solicitud) quedan sin línea.
   solicitudLineaId Int?
   solicitudLinea   SolicitudInspeccionLinea? @relation(fields: [solicitudLineaId], references: [id], onDelete: Cascade)
   caracteristicaId Int
-  caracteristica   CaracteristicaMadurez @relation(fields: [caracteristicaId], references: [id])
-  valorNumerico    Decimal?              @db.Decimal(10, 2)
+  caracteristica   CaracteristicaMadurez     @relation(fields: [caracteristicaId], references: [id])
+  valorNumerico    Decimal?                  @db.Decimal(10, 2)
   valorTexto       String?
 
   // Una medición por (línea, característica). Las filas históricas (línea null)
@@ -2353,6 +2357,7 @@ model Articulo {
   proformaLineas              ProformaLinea[]
   facturaExportacionLineas    FacturaExportacionLinea[]
   facturaNacionalLineas       FacturaNacionalLinea[]
+  documentoManualLineas       DocumentoManualLinea[]
   codigosEquivalentes         ArticuloCodigoEquivalente[]
 
   creadoEn      DateTime @default(now())
@@ -2805,23 +2810,23 @@ model ProformaProductor {
   entidadId Int
   entidad   Entidad @relation("ProformaProductorProductor", fields: [empresaId, entidadId], references: [empresaId, id])
 
-  formaPagoId     Int?
-  formaPago       FormaPago?     @relation(fields: [empresaId, formaPagoId], references: [empresaId, id])
-  condicionPagoId Int? // CondicionPago tipo=VENTA, solo cuotas PORCENTAJE
-  condicionPago   CondicionPago? @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
-  monedaId        Int
-  moneda          Moneda         @relation(fields: [monedaId], references: [id])
+  formaPagoId      Int?
+  formaPago        FormaPago?              @relation(fields: [empresaId, formaPagoId], references: [empresaId, id])
+  condicionPagoId  Int? // CondicionPago tipo=VENTA, solo cuotas PORCENTAJE
+  condicionPago    CondicionPago?          @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
+  monedaId         Int
+  moneda           Moneda                  @relation(fields: [monedaId], references: [id])
   // Tipo de cambio (CLP por 1 unidad de la moneda) para convertir la Factura
   // Nacional a CLP cuando la proforma NO está en CLP. Obligatorio si moneda≠CLP
   // (se valida en el service / al enviar a validación); null/1 cuando es CLP.
-  tipoCambio      Decimal?       @db.Decimal(14, 4)
+  tipoCambio       Decimal?                @db.Decimal(14, 4)
   // Concepto de cuenta corriente que impactará la CC del productor cuando la
   // Factura Nacional de origen PROFORMA_PRODUCTOR se timbre (R16/VN5). La factura
   // es un cargo al productor → el concepto debe ser de naturaleza DEBE o AMBOS.
   conceptoCtaCteId Int?
-  conceptoCtaCte   ConceptoCtaCte? @relation(fields: [empresaId, conceptoCtaCteId], references: [empresaId, id])
-  observaciones   String?
-  estado          EstadoProformaProductor @default(BORRADOR)
+  conceptoCtaCte   ConceptoCtaCte?         @relation(fields: [empresaId, conceptoCtaCteId], references: [empresaId, id])
+  observaciones    String?
+  estado           EstadoProformaProductor @default(BORRADOR)
 
   lineas           ProformaProductorLinea[]
   cuotasPago       ProformaProductorCuotaPago[]
@@ -2849,10 +2854,10 @@ model ProformaProductorLinea {
   // SERVICIO; la clasificación va por el Concepto de Cta. Cte. de la cabecera y
   // cada línea lleva su texto, cantidad, precio y exento manuales.
   glosa          String
-  cantidad       Decimal  @db.Decimal(14, 3)
-  precioUnitario Decimal  @db.Decimal(14, 4)
-  monto          Decimal  @db.Decimal(14, 2)
-  exento         Boolean  @default(false)
+  cantidad       Decimal @db.Decimal(14, 3)
+  precioUnitario Decimal @db.Decimal(14, 4)
+  monto          Decimal @db.Decimal(14, 2)
+  exento         Boolean @default(false)
 
   @@index([proformaProductorId])
   @@map("proforma_productor_linea")
@@ -4017,12 +4022,12 @@ model Proforma {
   // cerrado DENTRO del total: restan al valor de venta para obtener el valor
   // FOB de la mercadería (unitario FOB = unitario × (montoTotal − flete −
   // seguro) / montoTotal). El total y las cuotas siguen sobre `montoTotal`.
-  montoFlete  Decimal? @db.Decimal(14, 2)
-  montoSeguro Decimal? @db.Decimal(14, 2)
+  montoFlete        Decimal? @db.Decimal(14, 2)
+  montoSeguro       Decimal? @db.Decimal(14, 2)
   // Si true, el flete/seguro NO restan al precio de venta sino que se SUMAN
   // encima (el precio de venta es el FOB; el total cláusula = precio + flete +
   // seguro). Default false = comportamiento histórico (restan).
-  fleteSumaAlPrecio Boolean @default(false)
+  fleteSumaAlPrecio Boolean  @default(false)
 
   estado         EstadoProforma @default(EMITIDA)
   fechaEmision   DateTime       @default(now())
@@ -4156,13 +4161,13 @@ model FacturaExportacion {
   // obtener el valor FOB de la mercadería. Se hereda de la Proforma al crear el
   // borrador y es editable mientras la Factura esté en BORRADOR. En el DTE 110
   // van como MntFlete/MntSeguro; TotClauVenta = montoTotal (CIF).
-  montoFlete  Decimal? @db.Decimal(14, 2)
-  montoSeguro Decimal? @db.Decimal(14, 2)
+  montoFlete        Decimal? @db.Decimal(14, 2)
+  montoSeguro       Decimal? @db.Decimal(14, 2)
   // Si true, el flete/seguro se SUMAN al precio de venta (el precio es el FOB y
   // el total cláusula = precio + flete + seguro; las cuotas/cobranza y el DTE
   // usan ese total mayor). Default false = restan (comportamiento histórico).
   // Se hereda de la Proforma al crear el borrador.
-  fleteSumaAlPrecio Boolean @default(false)
+  fleteSumaAlPrecio Boolean  @default(false)
 
   // Idioma del documento (ES/EN) — heredado de la Proforma, editable en
   // BORRADOR. Afecta las descripciones (descripcion vs descripcionExtranjera)
@@ -4306,19 +4311,19 @@ model FacturaNacional {
 
   // Origen del documento: PROFORMA_MATERIAL o VENTA_NACIONAL (Embarque con
   // Cierre tipoVenta=NACIONAL). Alimenta la columna "origen" del listado.
-  origenClase        OrigenFacturaNacional @default(PROFORMA_MATERIAL)
+  origenClase         OrigenFacturaNacional @default(PROFORMA_MATERIAL)
   // Proforma de Materiales de origen. A lo más una Factura activa por Proforma
   // → índice único parcial WHERE eliminadoEn IS NULL (ver migración).
-  proformaMaterialId Int?
-  proformaMaterial   ProformaMaterial?     @relation(fields: [proformaMaterialId], references: [id])
+  proformaMaterialId  Int?
+  proformaMaterial    ProformaMaterial?     @relation(fields: [proformaMaterialId], references: [id])
   // Proforma a Productores de origen (PROFORMA_PRODUCTOR). A lo más una Factura
   // activa por Proforma → índice único parcial WHERE eliminadoEn IS NULL.
   proformaProductorId Int?
-  proformaProductor   ProformaProductor?   @relation(fields: [empresaId, proformaProductorId], references: [empresaId, id])
+  proformaProductor   ProformaProductor?    @relation(fields: [empresaId, proformaProductorId], references: [empresaId, id])
   // Embarque de origen (VENTA_NACIONAL). A lo más una Factura activa por Embarque
   // → índice único parcial WHERE eliminadoEn IS NULL (ver migración).
-  embarqueId         Int?
-  embarque           Embarque?             @relation("FacturaNacionalEmbarque", fields: [empresaId, embarqueId], references: [empresaId, id])
+  embarqueId          Int?
+  embarque            Embarque?             @relation("FacturaNacionalEmbarque", fields: [empresaId, embarqueId], references: [empresaId, id])
 
   codigo String // autogenerado vía PrefijoCodigo (modelo='facturaNacional')
 
@@ -4954,6 +4959,7 @@ model CondicionPago {
   proformas             Proforma[]
   facturasExportacion   FacturaExportacion[]
   facturasNacional      FacturaNacional[]
+  documentosManuales    DocumentoManual[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -5279,12 +5285,12 @@ model Pallet {
   // columnas del Packing List): número de guía + emisor. El emisor es una Entidad
   // tipo PRODUCTOR o PLANTA asociada al embarque (se valida en la reconciliación
   // del PL). FK compuesta multiempresa, mismo patrón que productorId/recepcionId.
-  numeroGuiaDespacho String?
-  emisorGuiaId       Int?
-  emisorGuia         Entidad? @relation("PalletEmisorGuia", fields: [empresaId, emisorGuiaId], references: [empresaId, id])
+  numeroGuiaDespacho    String?
+  emisorGuiaId          Int?
+  emisorGuia            Entidad? @relation("PalletEmisorGuia", fields: [empresaId, emisorGuiaId], references: [empresaId, id])
   // Emisor = "Agrosan" en el Packing List (la guía la emite la empresa): el pallet
   // queda sin numeroGuiaDespacho/emisorGuiaId (pendiente de que Agrosan la emita).
-  guiaEmitidaPorAgrosan Boolean @default(false)
+  guiaEmitidaPorAgrosan Boolean  @default(false)
 
   // Temperatura (°C) y termógrafo por pallet (2026-10-25, columnas del Packing
   // List): capturados en la reconciliación, por pallet. Alimentan la emisión del
@@ -5537,4 +5543,151 @@ model AuditLog {
   @@index([accion, creadoEn])
   @@index([entidad, entidadId])
   @@map("audit_logs")
+}
+
+// ─── Generador DTE — Documentos manuales (2026-11-04) ──────────────────────────
+// Módulo de digitación manual de documentos electrónicos (Factura Nacional 33/34,
+// Guía de Despacho 52, Nota de Crédito 61, Nota de Débito 56). A diferencia de
+// FacturaNacional/Embarque (que SIEMPRE derivan de un documento origen), aquí el
+// documento se arma 100% a mano. Fase 1: SOLO digitación (BORRADOR + PDF preview);
+// la emisión al SII (motor DocumentoDte, origenTipo='generador-dte') es fase 2 y
+// por eso el enum de estado ya contempla ENVIADA_SII/APROBADA/RECHAZADA.
+enum ClaseDocumentoManual {
+  FACTURA_NACIONAL
+  GUIA_DESPACHO
+  NOTA_CREDITO
+  NOTA_DEBITO
+}
+
+enum EstadoDocumentoManual {
+  BORRADOR
+  ENVIADA_SII
+  APROBADA
+  RECHAZADA
+  ANULADA
+}
+
+model DocumentoManual {
+  id        Int     @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa @relation(fields: [empresaId], references: [id])
+
+  codigo String // autogenerado vía correlativo GDT-{AAAA}-{NNNN} (advisory lock)
+
+  // Discriminador: la clase define qué secciones aplican (transporte solo guía,
+  // referencias solo NC/ND, condición de pago solo factura). `tipoDte` es el
+  // código SII: 33/34 derivado por exento en FACTURA_NACIONAL; 52/56/61 fijo.
+  claseDocumento ClaseDocumentoManual
+  tipoDte        Int
+
+  // Receptor (Entidad). Para documentos nacionales el RUT = Entidad.identificador.
+  entidadId Int
+  entidad   Entidad @relation("DocumentoManualReceptor", fields: [empresaId, entidadId], references: [empresaId, id])
+
+  // Moneda (default CLP). tipoCambio/fechaTipoCambio se reservan para montos en
+  // otra moneda (fase 2); en fase 1 nacional se opera en CLP.
+  monedaId        Int
+  moneda          Moneda    @relation(fields: [monedaId], references: [id])
+  tipoCambio      Decimal?  @db.Decimal(14, 4)
+  fechaTipoCambio DateTime?
+
+  // Condición de pago (solo FACTURA_NACIONAL). Las cuotas se previsualizan desde
+  // la condición en el form; se materializan al timbrar (fase 2) — igual que la
+  // Proforma de Productor.
+  condicionPagoId Int?
+  condicionPago   CondicionPago? @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
+
+  // Montos (en la moneda del documento). montoNeto = Σ líneas afectas; montoExento
+  // = Σ líneas exentas; montoIva = 19% del neto (CLP); montoTotal = suma.
+  montoNeto   Decimal @db.Decimal(14, 2)
+  montoExento Decimal @db.Decimal(14, 2)
+  montoIva    Decimal @db.Decimal(14, 2)
+  montoTotal  Decimal @db.Decimal(14, 2)
+
+  idioma         String                @default("ES")
+  estado         EstadoDocumentoManual @default(BORRADOR)
+  fechaDocumento DateTime
+  observaciones  String?
+
+  // ─── Datos de transporte (solo GUIA_DESPACHO) — espeja Embarque guia* ───────
+  guiaIndTraslado     Int? // IndTraslado SII (1=Venta, 5=Traslado interno, etc.)
+  guiaTransporteId    Int? // Entidad tipo EMPRESA_TRANSPORTE (RUT transportista)
+  guiaTransporte      Entidad? @relation("DocumentoManualGuiaTransporte", fields: [empresaId, guiaTransporteId], references: [empresaId, id])
+  guiaChoferRut       String?
+  guiaChoferChileno   Boolean  @default(true)
+  guiaChoferNombre    String?
+  guiaPatenteCamion   String?
+  guiaPatenteRemolque String?
+  guiaDirOrigen       String?
+  guiaComunaOrigen    String?
+  guiaDirDestino      String?
+  guiaComunaDestino   String?
+
+  lineas      DocumentoManualLinea[]
+  referencias DocumentoManualReferencia[]
+
+  // DTE (fase 2): folio/trackId quedan nulos hasta el timbrado.
+  folio      Int?
+  trackIdSii String?
+
+  creadoPorId   String
+  creadoEn      DateTime  @default(now())
+  actualizadoEn DateTime? @updatedAt
+  eliminadoEn   DateTime?
+  eliminadoPor  String?
+
+  @@unique([empresaId, id])
+  @@index([empresaId])
+  @@index([entidadId])
+  @@index([claseDocumento])
+  @@index([estado])
+  @@map("documentos_manuales")
+}
+
+model DocumentoManualLinea {
+  id                Int             @id @default(autoincrement())
+  documentoManualId Int
+  documentoManual   DocumentoManual @relation(fields: [documentoManualId], references: [id], onDelete: Cascade)
+
+  // Línea libre (glosa digitada) o artículo seleccionado (articuloId opcional;
+  // la glosa se prellena desde el artículo pero queda editable) — patrón Proforma
+  // de Productor + Factura Nacional.
+  descripcion String
+  articuloId  Int?
+  articulo    Articulo? @relation(fields: [articuloId], references: [id])
+
+  cantidad       Decimal @db.Decimal(14, 3)
+  precioUnitario Decimal @db.Decimal(14, 4)
+  exento         Boolean @default(false)
+  montoLinea     Decimal @db.Decimal(14, 2)
+  orden          Int     @default(0)
+
+  @@index([documentoManualId])
+  @@index([articuloId])
+  @@map("documento_manual_lineas")
+}
+
+model DocumentoManualReferencia {
+  id                Int             @id @default(autoincrement())
+  documentoManualId Int
+  documentoManual   DocumentoManual @relation(fields: [documentoManualId], references: [id], onDelete: Cascade)
+
+  // Campos crudos SII (siempre presentes). Cuando se enlaza un documento del
+  // sistema se prellenan desde él; si no, se digitan a mano.
+  tipoDocRef String // código SII del documento referenciado (33, 61, 110, etc.)
+  folioRef   String
+  fechaRef   DateTime
+  codRef     Int? // 1=anula, 2=corrige texto, 3=corrige monto
+  razonRef   String?
+
+  // Enlace blando (opcional, trazabilidad) al documento del sistema referenciado,
+  // sin FK dura — mismo criterio que DocumentoDte.origenTipo/origenId: permite
+  // referenciar FacturaNacional/FacturaExportacion/DocumentoManual o nada.
+  refOrigenTipo String?
+  refOrigenId   Int?
+
+  orden Int @default(0)
+
+  @@index([documentoManualId])
+  @@map("documento_manual_referencias")
 }

@@ -68,9 +68,10 @@ export const navGroups: NavGroup[] = [
         icon: 'billing',
         isActive: false,
         items: [
-          { title: 'Facturación Exportación', url: '/dashboard/facturacion/exportacion', icon: 'post'    },
-          { title: 'Facturación Nacional',    url: '/dashboard/facturacion/nacional',    icon: 'post'    },
-          { title: 'Cobranza / CRM',          url: '/dashboard/facturacion/cobranza',    icon: 'billing' }
+          { title: 'Facturación Exportación', url: '/dashboard/facturacion/exportacion',   icon: 'post'    },
+          { title: 'Facturación Nacional',    url: '/dashboard/facturacion/nacional',      icon: 'post'    },
+          { title: 'Generador DTE',           url: '/dashboard/facturacion/generador-dte', icon: 'post'    },
+          { title: 'Cobranza / CRM',          url: '/dashboard/facturacion/cobranza',      icon: 'billing' }
         ]
       }
     ]

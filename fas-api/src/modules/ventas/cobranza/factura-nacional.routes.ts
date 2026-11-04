@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { requireAuth, requireLevel } from '../../../plugins/auth-guard.js'
+import { requireAuth, requireLevel, requireAnyLevel } from '../../../plugins/auth-guard.js'
 import * as ctrl from './factura-nacional.controller.js'
 
 // Factura Nacional (DTE 33/34, Docs/cobranza.md). Primera entrega: desde Proforma
@@ -25,7 +25,9 @@ export async function facturaNacionalRoutes(app: FastifyInstance) {
   app.post('/facturas-nacional/:id/anular-con-nc', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.anularConNc)
 
   // Listados (estáticos antes de la paramétrica :id).
-  app.get('/facturas-nacional', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
+  // Lectura también desde el Generador DTE (combo para enlazar una Factura como
+  // documento de referencia en NC/ND), sin dar acceso a la facturación — IMP-QA-R1-048.
+  app.get('/facturas-nacional', { preHandler: [requireAuth, requireAnyLevel([ITEM, 'GENERADOR_DTE'], 'LECTURA')] }, ctrl.list)
   // Listado unificado: todas las operaciones (venta/proforma) con su estado de factura.
   app.get('/facturas-nacional/operaciones', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listOperaciones)
   app.get('/facturas-nacional/proformas-facturables', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listProformasFacturables)

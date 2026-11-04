@@ -36,6 +36,8 @@ const itemsMenu: Array<{ codigo: string; nombre: string; grupo: string; seccion:
   { codigo: 'FACT_EXPORTACION', nombre: 'Facturación Exportación', grupo: 'Gestión Comercial', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/exportacion', tipo: 'PANTALLA', orden: 2310 },
   { codigo: 'FACT_NACIONAL', nombre: 'Facturación Nacional', grupo: 'Gestión Comercial', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/nacional', tipo: 'PANTALLA', orden: 2320 },
   { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', grupo: 'Gestión Comercial', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/cobranza', tipo: 'PANTALLA', orden: 2330 },
+  // Generador DTE — digitación manual de documentos electrónicos (2026-11-04).
+  { codigo: 'GENERADOR_DTE', nombre: 'Generador DTE', grupo: 'Gestión Comercial', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/generador-dte', tipo: 'PANTALLA', orden: 2340 },
 
   // ── Operaciones › Materiales ────────────────────────────────────────────
   // OPER_MATERIALES queda para Movimientos de Materiales (operación); Artículos/

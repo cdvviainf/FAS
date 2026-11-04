@@ -17,6 +17,7 @@ import { ventasRoutes } from './modules/ventas/ventas.routes.js'
 import { comprasRoutes } from './modules/compras/compras.routes.js'
 import { operacionesRoutes } from './modules/operaciones/operaciones.routes.js'
 import { documentosRoutes } from './modules/documentos/documentos.routes.js'
+import { generadorDteRoutes } from './modules/finanzas/generador-dte/generador-dte.routes.js'
 import { auditoriaRoutes } from './modules/auditoria/auditoria.routes.js'
 import { registrarAcceso } from './modules/auditoria/auditoria.service.js'
 import { encolarAuditoria } from './modules/auditoria/auditoria.queue.js'
@@ -200,6 +201,7 @@ export async function buildApp(options: { logger?: boolean } = {}) {
   await app.register(comprasRoutes, { prefix: '/api/compras' })
   await app.register(operacionesRoutes, { prefix: '/api/operaciones' })
   await app.register(documentosRoutes, { prefix: '/api/documentos' })
+  await app.register(generadorDteRoutes, { prefix: '/api/generador-dte' })
   await app.register(auditoriaRoutes, { prefix: '/api/auditoria' })
 
   // Motor de Documentos (Etapa 4): cierre ordenado del Chromium compartido

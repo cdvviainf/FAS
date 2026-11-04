@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { makeControllers, getTemporadaPredeterminada, getMiMenu, getMisEmpresas } from './config.controller.js'
 import type { MantenedorConfig } from './config.types.js'
-import { requireAuth, requireLevel } from '../../plugins/auth-guard.js'
+import { requireAuth, requireLevel, requireAnyLevel } from '../../plugins/auth-guard.js'
 import { perfilesRoutes } from './perfiles/perfiles.routes.js'
 import { usuariosRoutes } from './usuarios/usuarios.routes.js'
 import { entidadesRoutes } from './entidades/entidades.routes.js'
@@ -56,7 +56,7 @@ const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'mercado', prefixRuta: 'mercados', label: 'Mercado', itemCodigo: 'CONFIG_MERCADOS', schemaKey: 'mercado' },
   // Lote 3
   { modelo: 'puerto', prefixRuta: 'puertos', label: 'Puerto', itemCodigo: 'CONFIG_PUERTOS', schemaKey: 'puerto' },
-  { modelo: 'moneda', prefixRuta: 'monedas', label: 'Moneda', itemCodigo: 'CONFIG_MONEDAS', schemaKey: 'moneda' },
+  { modelo: 'moneda', prefixRuta: 'monedas', label: 'Moneda', itemCodigo: 'CONFIG_MONEDAS', schemaKey: 'moneda', lecturaItemsAdicionales: ['GENERADOR_DTE'] },
   { modelo: 'conceptoCtaCte', prefixRuta: 'conceptos-cta-cte', label: 'Concepto Cta. Cte.', itemCodigo: 'CONFIG_CONCEPTOS_CTA_CTE', schemaKey: 'conceptoCtaCte' },
   // Lote 4
   { modelo: 'temporada', prefixRuta: 'temporadas', label: 'Temporada', itemCodigo: 'CONFIG_TEMPORADAS', schemaKey: 'temporada' },
@@ -94,9 +94,14 @@ export async function configRoutes(app: FastifyInstance) {
   for (const cfg of MANTENEDORES) {
     const ctrl = makeControllers(cfg.modelo, cfg.schemaKey)
     const item = cfg.itemCodigo
+    // Guard de LECTURA: itemCodigo propio + eventuales ítems de otros módulos que
+    // solo consumen el maestro como combo (lecturaItemsAdicionales).
+    const guardLectura = cfg.lecturaItemsAdicionales?.length
+      ? requireAnyLevel([item, ...cfg.lecturaItemsAdicionales], 'LECTURA')
+      : requireLevel(item, 'LECTURA')
 
-    app.get(`/${cfg.prefixRuta}`, { preHandler: [requireAuth, requireLevel(item, 'LECTURA')] }, ctrl.list)
-    app.get(`/${cfg.prefixRuta}/:id`, { preHandler: [requireAuth, requireLevel(item, 'LECTURA')] }, ctrl.getById)
+    app.get(`/${cfg.prefixRuta}`, { preHandler: [requireAuth, guardLectura] }, ctrl.list)
+    app.get(`/${cfg.prefixRuta}/:id`, { preHandler: [requireAuth, guardLectura] }, ctrl.getById)
     app.post(`/${cfg.prefixRuta}`, { preHandler: [requireAuth, requireLevel(item, 'TOTAL')] }, ctrl.create)
     app.patch(`/${cfg.prefixRuta}/:id`, { preHandler: [requireAuth, requireLevel(item, 'TOTAL')] }, ctrl.update)
     app.delete(`/${cfg.prefixRuta}/:id`, { preHandler: [requireAuth, requireLevel(item, 'TOTAL')] }, ctrl.remove)

@@ -102,6 +102,10 @@ const MODELOS_TENANT = new Set([
   'ClausulaVenta',
   // Tipo de Reclamo (2026-10-01) — mantenedor por empresa, mismo aislamiento.
   'TipoReclamo',
+  // Generador DTE — documentos manuales (2026-11-04). Las líneas/referencias
+  // cuelgan del documento (empresaId indirecto vía cascade); la raíz lleva
+  // empresaId — mismo criterio que FacturaNacional.
+  'DocumentoManual',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

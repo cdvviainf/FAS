@@ -135,6 +135,11 @@ export interface MantenedorConfig {
   // Código de ItemMenu que protege este mantenedor (2026-10-07: un permiso por
   // mantenedor, en vez del genérico CONFIG_MANTENEDORES).
   itemCodigo: string     // e.g. 'CONFIG_PAISES'
+  // Ítems adicionales que habilitan SOLO LECTURA de este mantenedor (además de
+  // itemCodigo), para pantallas de otros módulos que necesitan el maestro como
+  // combo pero no administrarlo (p. ej. Generador DTE lee monedas). Mismo
+  // criterio de "lectura por cualquiera de los ítems involucrados" de cobranza.md.
+  lecturaItemsAdicionales?: string[]
   tienePaisOrigen?: boolean
   schemaKey?: string     // para selección de schema en controller
 }
