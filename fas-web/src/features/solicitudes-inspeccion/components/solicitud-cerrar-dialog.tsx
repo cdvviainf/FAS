@@ -401,7 +401,7 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-h-[92vh] max-w-5xl overflow-auto'>
+      <DialogContent className='max-h-[92vh] sm:max-w-[900px] overflow-auto'>
         <DialogHeader>
           <DialogTitle>Cerrar inspección {solicitud.codigo}</DialogTitle>
           <DialogDescription>

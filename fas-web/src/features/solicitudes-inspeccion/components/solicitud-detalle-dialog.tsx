@@ -53,7 +53,7 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-h-[90vh] max-w-5xl overflow-auto'>
+      <DialogContent className='max-h-[90vh] sm:max-w-[900px] overflow-auto'>
         <DialogHeader>
           <DialogTitle className='flex items-center gap-2'>
             {solicitud.codigo}
