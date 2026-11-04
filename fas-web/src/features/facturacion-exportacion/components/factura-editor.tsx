@@ -313,6 +313,69 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
         </div>
       )}
 
+      {factura.validacion && (
+        <Card>
+          <CardHeader className='flex-row items-center justify-between gap-2 space-y-0'>
+            <CardTitle className='text-sm'>Datos para el SII (bloque Aduana)</CardTitle>
+            {factura.validacion.faltantes.length > 0 ? (
+              <Badge variant='destructive'>Faltan {factura.validacion.faltantes.length} dato(s)</Badge>
+            ) : (
+              <Badge className='bg-emerald-600'>Completo</Badge>
+            )}
+          </CardHeader>
+          <CardContent className='space-y-3'>
+            {factura.validacion.faltantes.length > 0 && (
+              <p className='text-destructive text-xs'>
+                Completa el <span className='font-medium'>Código de Aduana (SII)</span> del dato marcado
+                (en el mantenedor de Cláusula de Venta, Modalidad, Tipo de Embarque, Puerto o País) o selecciónalo
+                en el Cierre Comercial / Embarque. El envío al SII queda bloqueado hasta completarlo.
+              </p>
+            )}
+            <div className='overflow-x-auto'>
+              <table className='w-full text-sm'>
+                <thead>
+                  <tr className='text-muted-foreground text-left text-xs'>
+                    <th className='py-1 pr-3 font-medium'>Campo</th>
+                    <th className='py-1 pr-3 font-medium'>Valor</th>
+                    <th className='py-1 font-medium'>Código SII</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {factura.validacion.bloqueAduana.map((it) => (
+                    <tr key={it.etiqueta} className={it.falta ? 'text-destructive' : ''}>
+                      <td className='py-1 pr-3'>
+                        {it.etiqueta}
+                        {it.requerido && <span className='text-destructive'> *</span>}
+                      </td>
+                      <td className='py-1 pr-3'>{it.valor ?? (it.requerido ? '⚠ Sin dato' : '—')}</td>
+                      <td className='py-1'>
+                        {it.codigoAduana?.trim()
+                          ? it.codigoAduana
+                          : it.requerido
+                            ? <span className='font-medium'>⚠ Falta código de Aduana</span>
+                            : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Transporte y pesos (informativo — no bloquean el envío). */}
+            <dl className='text-muted-foreground grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-[auto_1fr_auto_1fr]'>
+              <dt className='font-medium'>Naviera:</dt><dd>{factura.validacion.transporte.naviera ?? '—'}</dd>
+              <dt className='font-medium'>Nave:</dt><dd>{factura.validacion.transporte.nave ?? '—'}</dd>
+              <dt className='font-medium'>Booking:</dt><dd>{factura.validacion.transporte.booking ?? '—'}</dd>
+              <dt className='font-medium'>Contenedor:</dt><dd>{factura.validacion.transporte.contenedor ?? '—'}</dd>
+              <dt className='font-medium'>Sello:</dt><dd>{factura.validacion.transporte.sello ?? '—'}</dd>
+              <dt className='font-medium'>B/L (AWB):</dt><dd>{factura.validacion.transporte.awbBl ?? '—'}</dd>
+              <dt className='font-medium'>Bultos (cajas):</dt><dd>{factura.validacion.pesos.totBultos}</dd>
+              <dt className='font-medium'>Peso neto:</dt><dd>{factura.validacion.pesos.pesoNeto != null ? `${factura.validacion.pesos.pesoNeto} kg` : '—'}</dd>
+              <dt className='font-medium'>Peso bruto:</dt><dd>{factura.validacion.pesos.pesoBruto != null ? `${factura.validacion.pesos.pesoBruto} kg` : '—'}</dd>
+            </dl>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader><CardTitle className='text-sm'>Documento</CardTitle></CardHeader>
         <CardContent className='flex flex-wrap items-end gap-4'>

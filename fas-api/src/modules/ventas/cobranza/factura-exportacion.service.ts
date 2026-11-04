@@ -339,18 +339,19 @@ async function construirCuotas(
 // presente en la Nota de Venta/Embarque y tenga su código de Aduana del SII
 // (codigoAduana) cargado. Junta todos los faltantes en un solo error accionable
 // en vez de fallar de a uno. (Decisión 2026-10-01: normalizar a códigos SII.)
-function validarCodigosAduana(
-  embarque: NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>,
-) {
+type EmbarqueFacturaDte = NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>
+
+// Lista de registros del bloque Aduana que el DTE 110 exige con Código de Aduana
+// (SII). Fuente ÚNICA, compartida por el gate (`validarCodigosAduana`) y el panel
+// de prevalidación (`construirValidacionFactura`) para que nunca difieran.
+// `donde` indica dónde completar cada dato cuando FALTA el registro en sí.
+function requeridosAduana(embarque: EmbarqueFacturaDte): Array<{
+  etiqueta: string
+  registro: { descripcion: string; codigoAduana: string | null } | null
+  donde: string
+}> {
   const nv = embarque.notaVenta
-  // `donde` dice dónde completar cada dato cuando FALTA el registro en sí (no el
-  // código): casi todos vienen del Cierre Comercial (Nota de Venta); el Puerto de
-  // Embarque se carga en el Embarque → pestaña "Solicitud de Reserva".
-  const requeridos: Array<{
-    etiqueta: string
-    registro: { descripcion: string; codigoAduana: string | null } | null
-    donde: string
-  }> = [
+  return [
     { etiqueta: 'Cláusula de Venta (Incoterm)', registro: nv.clausulaVenta, donde: 'el Cierre Comercial / Nota de Venta' },
     { etiqueta: 'Modalidad de Venta', registro: nv.modalidadVenta, donde: 'el Cierre Comercial / Nota de Venta' },
     { etiqueta: 'Vía de transporte (Tipo de Embarque)', registro: nv.tipoEmbarque, donde: 'el Cierre Comercial / Nota de Venta' },
@@ -358,18 +359,71 @@ function validarCodigosAduana(
     { etiqueta: 'Puerto de Desembarque (destino)', registro: nv.puertoDestino, donde: 'el Cierre Comercial / Nota de Venta' },
     { etiqueta: 'País de destino', registro: nv.paisDestino, donde: 'el Cierre Comercial / Nota de Venta' },
   ]
-  const faltantes = requeridos
+}
+
+// Mensajes de faltantes (registro ausente o sin Código de Aduana) — reusados por
+// el gate y por el panel.
+function faltantesAduana(embarque: EmbarqueFacturaDte): string[] {
+  return requeridosAduana(embarque)
     .filter((r) => !r.registro || !r.registro.codigoAduana?.trim())
     .map((r) =>
       r.registro
         ? `${r.etiqueta} ("${r.registro.descripcion}") no tiene Código de Aduana (SII) — cárgalo en Configuración`
         : `Falta seleccionar ${r.etiqueta} en ${r.donde}`,
     )
+}
+
+function validarCodigosAduana(embarque: EmbarqueFacturaDte) {
+  const faltantes = faltantesAduana(embarque)
   if (faltantes.length > 0) {
     throw new ValidationError(
       `No se puede enviar al SII hasta completar: ${faltantes.join('; ')}.`,
     )
   }
+}
+
+// Resumen pre-vuelo de TODO lo que irá en la Factura (bloque Aduana con su Código
+// SII + transporte + pesos/bultos), con los faltantes marcados. El panel lo pinta
+// en rojo y el envío al SII bloquea con la misma lista (`faltantes`).
+async function construirValidacionFactura(
+  factura: { lineas: Array<{ cantidadCajas: unknown }> },
+  embarque: EmbarqueFacturaDte,
+) {
+  const bloqueAduana = requeridosAduana(embarque).map((r) => ({
+    etiqueta: r.etiqueta,
+    valor: r.registro?.descripcion ?? null,
+    codigoAduana: r.registro?.codigoAduana ?? null,
+    requerido: true,
+    falta: !r.registro || !r.registro.codigoAduana?.trim(),
+  }))
+
+  // Transporte/booking: manual (Embarque) o AGL360 (SolicitudReserva) — mismo
+  // criterio que el payload del DTE.
+  const transporte = {
+    naviera: embarque.naviera?.razonSocial ?? null,
+    nave: embarque.reservaManual ? embarque.naveManual : (embarque.solicitudReserva?.nave ?? null),
+    booking: embarque.reservaManual ? embarque.numeroBookingManual : (embarque.solicitudReserva?.numeroBooking ?? null),
+    contenedor: embarque.reservaManual ? embarque.numeroContenedorManual : (embarque.solicitudReserva?.numeroContenedor ?? null),
+    sello: embarque.numeroSelloManual ?? embarque.solicitudReserva?.numeroSello ?? null,
+    awbBl: embarque.awbBl ?? null,
+  }
+
+  // Pesos desde los pallets físicos; bultos = cajas facturadas (líneas).
+  const redondea = (n: number) => Math.round(n * 100) / 100
+  const lineasPallet = await repo.getLineasPalletParaPeso(embarque.id)
+  let pesoNetoAcum = 0
+  let pesoBrutoAcum = 0
+  for (const pl of lineasPallet) {
+    if (pl.articulo?.kgNetoEnvase != null) pesoNetoAcum += pl.cajas * Number(pl.articulo.kgNetoEnvase)
+    if (pl.articulo?.kgBrutoEnvase != null) pesoBrutoAcum += pl.cajas * Number(pl.articulo.kgBrutoEnvase)
+  }
+  const pesos = {
+    pesoNeto: pesoNetoAcum > 0 ? redondea(pesoNetoAcum) : null,
+    pesoBruto: pesoBrutoAcum > 0 ? redondea(pesoBrutoAcum) : null,
+    totBultos: factura.lineas.reduce((s, l) => s + Number(l.cantidadCajas), 0),
+  }
+
+  return { bloqueAduana, transporte, pesos, faltantes: faltantesAduana(embarque) }
 }
 
 // Ejecuta el armado/envío del DTE 110 con manejo de errores: los de negocio
@@ -887,6 +941,11 @@ export async function obtenerFactura(id: number) {
   // Adjunta el estado del DocumentoDte (para habilitar Enviar/Firmar/Descargar
   // XML en el frontend sin exponer el XML completo).
   const dte = await dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id)
+  // Resumen pre-vuelo del bloque Aduana + transporte + pesos, con los faltantes
+  // marcados (el editor lo muestra en rojo antes de enviar al SII). Reusa el mismo
+  // gate `requeridosAduana` que bloquea el envío.
+  const embarqueDte = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
+  const validacion = embarqueDte ? await construirValidacionFactura(factura, embarqueDte) : null
   // Reclamos aprobados del embarque + estado de su NC: alimenta el indicador
   // "reclamo aprobado — NC pendiente" / "NC de reclamo emitida".
   const reclamosRaw = await repo.getReclamosAprobadosEmbarque(factura.embarqueId)
@@ -907,6 +966,7 @@ export async function obtenerFactura(id: number) {
     ...factura,
     dte: dte ? { estado: dte.estado, folio: dte.folio, tieneXml: !!dte.xml } : null,
     reclamos,
+    validacion,
   }
 }
 

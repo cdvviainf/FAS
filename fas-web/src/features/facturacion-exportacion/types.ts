@@ -186,6 +186,34 @@ export interface FacturaExportacion {
   dte?: { estado: string; folio: number | null; tieneXml: boolean } | null
   // Reclamos aprobados del embarque (solo en el detalle) con el estado de su NC.
   reclamos?: FacturaReclamoRef[]
+  // Resumen pre-vuelo del bloque Aduana + transporte + pesos (solo en el detalle),
+  // con los faltantes marcados. null si no se pudo resolver el embarque.
+  validacion?: FacturaValidacion | null
+}
+
+// Ítem del bloque Aduana del resumen pre-vuelo. `falta` = requerido sin Código
+// de Aduana (o sin selección) — el editor lo marca en rojo.
+export interface FacturaAduanaItem {
+  etiqueta: string
+  valor: string | null
+  codigoAduana: string | null
+  requerido: boolean
+  falta: boolean
+}
+
+export interface FacturaValidacion {
+  bloqueAduana: FacturaAduanaItem[]
+  transporte: {
+    naviera: string | null
+    nave: string | null
+    booking: string | null
+    contenedor: string | null
+    sello: string | null
+    awbBl: string | null
+  }
+  pesos: { pesoNeto: number | null; pesoBruto: number | null; totBultos: number }
+  // Bloqueadores (igual que el gate del envío al SII). Vacío = se puede enviar.
+  faltantes: string[]
 }
 
 export interface FacturaReclamoRef {
