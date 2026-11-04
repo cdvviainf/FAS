@@ -531,10 +531,14 @@ async function main() {
   // usa como "ya existentes"): Grupo de Mercado, Tipos de Embarque, Tipo de
   // Producción.
   console.log('Seeding maestros externos (GrupoMercado / TipoEmbarque / TipoProduccion)...')
-  const externos: Array<{ delegate: 'grupoMercado' | 'tipoEmbarque' | 'tipoProduccion'; registros: Array<{ codigo: string; descripcion: string }> }> = [
+  // `global: true` = maestro transversal a empresas (sin empresaId) — TipoEmbarque
+  // se volvió global el 2026-11-04 (igual que Pais); GrupoMercado/TipoProduccion
+  // siguen por-empresa.
+  const externos: Array<{ delegate: 'grupoMercado' | 'tipoEmbarque' | 'tipoProduccion'; global?: boolean; registros: Array<{ codigo: string; descripcion: string }> }> = [
     { delegate: 'grupoMercado', registros: [{ codigo: 'GM', descripcion: 'General' }] },
     {
       delegate: 'tipoEmbarque',
+      global: true,
       registros: [
         { codigo: 'MARITIMO', descripcion: 'Marítimo' },
         { codigo: 'AEREO', descripcion: 'Aéreo' },
@@ -545,17 +549,18 @@ async function main() {
   ]
   let externosCreados = 0
   for (const grupo of externos) {
+    const scope = grupo.global ? {} : { empresaId: agrosanParaParametros.id }
     for (const r of grupo.registros) {
       const delegate = prisma[grupo.delegate] as {
         findFirst: (a: unknown) => Promise<unknown>
         create: (a: unknown) => Promise<unknown>
       }
       const existente = await delegate.findFirst({
-        where: { empresaId: agrosanParaParametros.id, codigo: r.codigo, eliminadoEn: null },
+        where: { ...scope, codigo: r.codigo, eliminadoEn: null },
       })
       if (!existente) {
         await delegate.create({
-          data: { empresaId: agrosanParaParametros.id, ...r, creadoPor: SISTEMA_USER },
+          data: { ...scope, ...r, creadoPor: SISTEMA_USER },
         })
         externosCreados++
       }
@@ -570,15 +575,16 @@ async function main() {
   // Vía de transporte (tabla SII): 1=Marítima, 4=Aéreo, 7=Carretero/Terrestre.
   const viaAduana: Record<string, string> = { MARITIMO: '1', AEREO: '4', TERRESTRE: '7' }
   for (const [codigo, codigoAduana] of Object.entries(viaAduana)) {
+    // TipoEmbarque global (sin empresaId).
     await prisma.tipoEmbarque.updateMany({
-      where: { empresaId: agrosanParaParametros.id, codigo, codigoAduana: null, eliminadoEn: null },
+      where: { codigo, codigoAduana: null, eliminadoEn: null },
       data: { codigoAduana },
     })
   }
   // Requiere Solicitud de Reserva (2026-10-08): solo Aéreo y Marítimo reservan
   // espacio logístico; Terrestre no (queda en el default false).
   await prisma.tipoEmbarque.updateMany({
-    where: { empresaId: agrosanParaParametros.id, codigo: { in: ['MARITIMO', 'AEREO'] }, eliminadoEn: null },
+    where: { codigo: { in: ['MARITIMO', 'AEREO'] }, eliminadoEn: null },
     data: { requiereReserva: true },
   })
   // Modalidad de Venta "A firme" (Parametro bajo MODALIDAD_VENTA) → código SII 1.

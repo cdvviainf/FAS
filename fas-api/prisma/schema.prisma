@@ -209,7 +209,6 @@ model Empresa {
   configuracionesCorreo  ConfiguracionCorreo[]
   prefijosCodigo         PrefijoCodigo[]
   mercadoPaises          MercadoPais[]
-  tiposEmbarque          TipoEmbarque[]
   formasPago             FormaPago[]
   unidadesMedida         UnidadMedida[]
   tiposPallet            TipoPallet[]
@@ -221,7 +220,6 @@ model Empresa {
   defectos               Defecto[]
   caracteristicasMadurez CaracteristicaMadurez[]
   tiposParametro         TipoParametro[]
-  puertos                Puerto[]
   temporadas             Temporada[]
   bodegas                Bodega[]
   conceptosCtaCte        ConceptoCtaCte[]
@@ -635,8 +633,8 @@ model GrupoMercado {
 
 model TipoEmbarque {
   id                    Int       @id @default(autoincrement())
-  empresaId             Int
-  empresa               Empresa   @relation(fields: [empresaId], references: [id])
+  // Geografía/catálogo GLOBAL (transversal a empresas), igual que Pais/Puerto
+  // (2026-11-04): Marítimo/Aéreo/Terrestre son universales. Antes era por-empresa.
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -659,8 +657,6 @@ model TipoEmbarque {
   notasVenta     NotaVenta[]
   prefijosCodigo PrefijoCodigo[]
 
-  @@unique([empresaId, id])
-  @@index([empresaId])
   @@map("tipos_embarque")
 }
 
@@ -999,7 +995,7 @@ model PrefijoCodigo {
   // migration.sql: (empresaId, modelo) cuando es null, (empresaId, modelo,
   // tipoEmbarqueId) cuando no lo es — no representable en el DSL de Prisma).
   tipoEmbarqueId Int?
-  tipoEmbarque   TipoEmbarque? @relation(fields: [empresaId, tipoEmbarqueId], references: [empresaId, id])
+  tipoEmbarque   TipoEmbarque? @relation(fields: [tipoEmbarqueId], references: [id])
   prefijo        String
   digitos        Int
   creadoEn       DateTime      @default(now())
@@ -1487,8 +1483,9 @@ model Mercado {
 
 model Puerto {
   id                    Int          @id @default(autoincrement())
-  empresaId             Int
-  empresa               Empresa      @relation(fields: [empresaId], references: [id])
+  // Geografía GLOBAL (transversal a empresas), igual que Pais (2026-11-04).
+  // Antes era por-empresa; ahora TipoEmbarque también es global, así que la FK
+  // a TipoEmbarque pasa a ser simple (por id).
   codigo                String
   descripcion           String
   descripcionExtranjera String?
@@ -1497,10 +1494,7 @@ model Puerto {
   paisId                Int
   pais                  Pais         @relation(fields: [paisId], references: [id])
   tipoEmbarqueId        Int
-  // FK compuesta (empresaId, tipoEmbarqueId) -> TipoEmbarque(empresaId, id):
-  // TipoEmbarque pasa a ser por-empresa en este lote (Fase 3), a diferencia
-  // de Pais que sigue global — mismo patrón que Mercado↔GrupoMercado.
-  tipoEmbarque          TipoEmbarque @relation(fields: [empresaId, tipoEmbarqueId], references: [empresaId, id])
+  tipoEmbarque          TipoEmbarque @relation(fields: [tipoEmbarqueId], references: [id])
   latitud               Decimal?     @db.Decimal(10, 7)
   longitud              Decimal?     @db.Decimal(10, 7)
   bloqueado             Boolean      @default(false)
@@ -1515,8 +1509,7 @@ model Puerto {
   embarquesZarpe Embarque[]         @relation("EmbarquePuertoZarpe")
   direcciones    EntidadDireccion[]
 
-  @@unique([empresaId, id])
-  @@index([empresaId])
+  @@index([tipoEmbarqueId])
   @@map("puertos")
 }
 
@@ -3222,13 +3215,13 @@ model NotaVenta {
   consignatario       Entidad?         @relation("NotaVentaConsignatario", fields: [empresaId, consignatarioId], references: [empresaId, id])
 
   tipoEmbarqueId   Int
-  tipoEmbarque     TipoEmbarque      @relation(fields: [empresaId, tipoEmbarqueId], references: [empresaId, id])
+  tipoEmbarque     TipoEmbarque      @relation(fields: [tipoEmbarqueId], references: [id])
   mercadoId        Int
   mercado          Mercado           @relation(fields: [empresaId, mercadoId], references: [empresaId, id])
   paisDestinoId    Int
   paisDestino      Pais              @relation(fields: [paisDestinoId], references: [id])
   puertoDestinoId  Int?
-  puertoDestino    Puerto?           @relation(fields: [empresaId, puertoDestinoId], references: [empresaId, id])
+  puertoDestino    Puerto?           @relation(fields: [puertoDestinoId], references: [id])
   direccionId      Int?
   direccion        EntidadDireccion? @relation(fields: [direccionId], references: [id])
   direccionDetalle String?
@@ -3473,9 +3466,8 @@ model Embarque {
   // desde la pestaña "Generar Instructivos" antes de emitir el PDF, no al
   // crear el Embarque.
   puertoZarpeId            Int?
-  // FK compuesta (empresaId, puertoZarpeId) -> Puerto(empresaId, id) — mismo
-  // patrón que NotaVenta.puertoDestinoId.
-  puertoZarpe              Puerto?   @relation("EmbarquePuertoZarpe", fields: [empresaId, puertoZarpeId], references: [empresaId, id])
+  // Puerto es global (2026-11-04): FK simple por id.
+  puertoZarpe              Puerto?   @relation("EmbarquePuertoZarpe", fields: [puertoZarpeId], references: [id])
   voyageNumber             String?
   deposito                 String?
   awbBl                    String?

@@ -12,14 +12,13 @@ const MODELOS_TENANT = new Set([
   'PrefijoCodigo',
   'MercadoPais',
   // Fase 3, lote Config/Mantenedores:
-  'TipoEmbarque',
+  // (TipoEmbarque y Puerto se volvieron GLOBALES el 2026-11-04 — ya no son tenant.)
   'FormaPago',
   'UnidadMedida',
   'TipoPallet',
   'Altura',
   'TipoProduccion',
   'TipoParametro',
-  'Puerto',
   'Temporada',
   'Bodega',
   'ConceptoCtaCte',
