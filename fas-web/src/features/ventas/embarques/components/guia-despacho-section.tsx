@@ -79,6 +79,9 @@ function EmitirGuiaDialog({
     patenteRemolque: '', plantaId: '', dirOrigenId: '', dirOrigen: '', comunaOrigen: '', dirDestino: '', comunaDestino: '',
   })
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }))
+  // Bloque "Datos para el SII" colapsable: cerrado si está completo, abierto si
+  // hay advertencias (siempre con opción de abrir/cerrar manualmente).
+  const [aduanaAbierto, setAduanaAbierto] = useState(validacion.faltantes.length > 0)
 
   // Precargar desde los datos guardados/defaults cada vez que se abre.
   useEffect(() => {
@@ -217,44 +220,58 @@ function EmitirGuiaDialog({
           {/* Resumen pre-vuelo: todo lo que irá en la Guía (bloque Aduana del SII),
               marcando en rojo lo que falta (sin Código de Aduana o sin selección). */}
           <div className='rounded-md border p-3'>
-            <div className='flex items-center justify-between gap-2'>
-              <p className='text-sm font-medium'>Datos para el SII (bloque Aduana)</p>
+            <button
+              type='button'
+              onClick={() => setAduanaAbierto((v) => !v)}
+              className='flex w-full items-center justify-between gap-2'
+            >
+              <span className='flex items-center gap-1.5 text-sm font-medium'>
+                {aduanaAbierto ? <Icons.chevronDown className='h-4 w-4' /> : <Icons.chevronRight className='h-4 w-4' />}
+                Datos para el SII (bloque Aduana)
+              </span>
               {faltanAduana ? (
                 <Badge variant='destructive'>Faltan {validacion.faltantes.length} dato(s)</Badge>
               ) : (
                 <Badge className='bg-emerald-600'>Completo</Badge>
               )}
-            </div>
-            {faltanAduana && (
-              <p className='text-destructive mt-1 text-xs'>
-                Completa el <span className='font-medium'>Código de Aduana (SII)</span> en el mantenedor correspondiente
-                (Cláusula de Venta, Tipo de Embarque, Puerto, País) o selecciona el Puerto de Zarpe en el Embarque.
-              </p>
-            )}
-            <div className='mt-2 overflow-x-auto'>
-              <table className='w-full text-sm'>
-                <thead>
-                  <tr className='text-muted-foreground text-left text-xs'>
-                    <th className='py-1 pr-3 font-medium'>Campo</th>
-                    <th className='py-1 pr-3 font-medium'>Valor</th>
-                    <th className='py-1 font-medium'>Código SII</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* Receptor = Agente de Aduana: exige RUT + dirección por puerto. */}
-                  <tr className={validacion.receptor.falta ? 'text-destructive' : ''}>
-                    <td className='py-1 pr-3'>{validacion.receptor.etiqueta}</td>
-                    <td className='py-1 pr-3' colSpan={2}>
-                      {!validacion.receptor.razonSocial
-                        ? '⚠ Sin Agente de Aduana asignado'
-                        : !validacion.receptor.rut
-                          ? `⚠ ${validacion.receptor.razonSocial} — sin RUT configurado`
-                          : !validacion.receptor.direccion
-                            ? `⚠ ${validacion.receptor.razonSocial} · ${validacion.receptor.rut} — sin dirección para el puerto de zarpe`
-                            : `${validacion.receptor.razonSocial} · ${validacion.receptor.rut} — ${[validacion.receptor.direccion, validacion.receptor.comuna].filter(Boolean).join(', ')}`}
-                    </td>
-                  </tr>
-                  {validacion.bloqueAduana.map((it) => (
+            </button>
+            {aduanaAbierto && (
+              <>
+                {faltanAduana && (
+                  <p className='text-destructive mt-2 text-xs'>
+                    Completa el <span className='font-medium'>Código de Aduana (SII)</span> en el mantenedor correspondiente
+                    (Cláusula de Venta, Tipo de Embarque, Puerto, País) o selecciona el Puerto de Zarpe en el Embarque.
+                  </p>
+                )}
+                <div className='mt-2 overflow-x-auto'>
+                  <table className='w-full text-sm'>
+                    <thead>
+                      <tr className='text-muted-foreground text-left text-xs'>
+                        <th className='py-1 pr-3 font-medium'>Campo</th>
+                        <th className='py-1 pr-3 font-medium'>Valor</th>
+                        <th className='py-1 font-medium'>Código SII</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Receptor = Agente de Aduana: Nombre / RUT / Dirección por
+                          puerto de zarpe en 3 filas; cada una en rojo si falta. */}
+                      <tr className={!validacion.receptor.razonSocial ? 'text-destructive' : ''}>
+                        <td className='py-1 pr-3'>Receptor — Nombre</td>
+                        <td className='py-1 pr-3' colSpan={2}>{validacion.receptor.razonSocial ?? '⚠ Sin Agente de Aduana asignado'}</td>
+                      </tr>
+                      <tr className={!validacion.receptor.rut ? 'text-destructive' : ''}>
+                        <td className='py-1 pr-3'>RUT</td>
+                        <td className='py-1 pr-3' colSpan={2}>{validacion.receptor.rut ?? '⚠ Sin RUT configurado'}</td>
+                      </tr>
+                      <tr className={!validacion.receptor.direccion ? 'text-destructive' : ''}>
+                        <td className='py-1 pr-3'>Dirección del puerto de zarpe</td>
+                        <td className='py-1 pr-3' colSpan={2}>
+                          {validacion.receptor.direccion
+                            ? [validacion.receptor.direccion, validacion.receptor.comuna].filter(Boolean).join(', ')
+                            : '⚠ Sin dirección para el puerto de zarpe'}
+                        </td>
+                      </tr>
+                      {validacion.bloqueAduana.map((it) => (
                     <tr key={it.etiqueta} className={it.falta ? 'text-destructive' : ''}>
                       <td className='py-1 pr-3'>
                         {it.etiqueta}
@@ -269,10 +286,12 @@ function EmitirGuiaDialog({
                             : '—'}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
 
           <div className='grid gap-3 sm:grid-cols-2'>
