@@ -3,6 +3,7 @@
 import type { ColumnDef } from '@tanstack/react-table'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 import { Badge } from '@/components/ui/badge'
+import { codigoAduanaColumn } from '@/components/shared/mantenedor-simple/codigo-aduana-column'
 
 type PuertoItem = MantenedorSimple & {
   pais?: { id: number; descripcion: string; codigo: string; puedeSerOrigen: boolean } | null
@@ -36,4 +37,5 @@ export const puertoExtraColumns: ColumnDef<MantenedorSimple>[] = [
     enableSorting: false,
     cell: ({ row }) => (row.original as PuertoItem).tipoEmbarque?.descripcion ?? '—'
   },
+  codigoAduanaColumn,
 ]

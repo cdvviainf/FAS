@@ -3,6 +3,7 @@
 import type { ColumnDef } from '@tanstack/react-table'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 import { Icons } from '@/components/icons'
+import { codigoAduanaColumn } from './codigo-aduana-column'
 
 // Pais has extra fields esPaisNacional/puedeSerOrigen y mercados (N:M, Fase 2b:
 // un país puede pertenecer a varios Mercados por empresa — ver MercadoPais).
@@ -61,5 +62,6 @@ export const paisExtraColumns: ColumnDef<MantenedorSimple>[] = [
         <span className='text-muted-foreground text-xs'>—</span>
       )
     }
-  }
+  },
+  codigoAduanaColumn,
 ]

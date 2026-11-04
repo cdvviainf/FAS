@@ -3,6 +3,7 @@
 import type { ColumnDef } from '@tanstack/react-table'
 import { Badge } from '@/components/ui/badge'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
+import { codigoAduanaColumn } from '@/components/shared/mantenedor-simple/codigo-aduana-column'
 
 type ClausulaVentaItem = MantenedorSimple & {
   requiereFlete?: boolean
@@ -30,5 +31,6 @@ export const clausulaVentaExtraColumns: ColumnDef<MantenedorSimple>[] = [
     header: 'Requiere Seguro',
     enableSorting: false,
     cell: ({ row }) => badgeSiNo((row.original as ClausulaVentaItem).requiereSeguro)
-  }
+  },
+  codigoAduanaColumn,
 ]
