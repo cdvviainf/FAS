@@ -358,6 +358,32 @@ export interface GuiaDespachoAgente {
   comuna: string | null
 }
 
+// Ítem del bloque Aduana del resumen pre-vuelo (lo que irá al SII). `falta` =
+// requerido sin Código de Aduana — el popup lo marca en rojo.
+export interface GuiaDespachoAduanaItem {
+  etiqueta: string
+  valor: string | null
+  codigoAduana: string | null
+  requerido: boolean
+  falta: boolean
+}
+
+export interface GuiaDespachoValidacion {
+  bloqueAduana: GuiaDespachoAduanaItem[]
+  // Receptor = Agente de Aduana: exige RUT + dirección del puerto de zarpe.
+  receptor: {
+    etiqueta: string
+    razonSocial: string | null
+    rut: string | null
+    direccion: string | null
+    comuna: string | null
+    ok: boolean
+    falta: boolean
+  }
+  // Lista de bloqueadores (igual que el gate del emit). Vacía = se puede emitir.
+  faltantes: string[]
+}
+
 export interface GuiaDespachoResponse {
   despachado: boolean
   documento: DocumentoDteResumen | null
@@ -366,6 +392,8 @@ export interface GuiaDespachoResponse {
   plantas: GuiaDespachoPlanta[]
   // Agente de aduana = receptor en exportación (IndTraslado 8). null si no hay.
   agente: GuiaDespachoAgente | null
+  // Resumen pre-vuelo del bloque Aduana + receptor con faltantes marcados.
+  validacion: GuiaDespachoValidacion
 }
 
 export interface EmitirGuiaDespachoInput {

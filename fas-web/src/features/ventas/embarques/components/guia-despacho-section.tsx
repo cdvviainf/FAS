@@ -27,7 +27,7 @@ import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { entidadesService } from '@/features/entidades/service'
 import { embarquesService } from '../service'
 import { IND_TRASLADO_OPCIONES, INDTRASLADO_EXPORTACION } from '../types'
-import type { GuiaDespachoDatos, GuiaDespachoPlanta, GuiaDespachoAgente } from '../types'
+import type { GuiaDespachoDatos, GuiaDespachoPlanta, GuiaDespachoAgente, GuiaDespachoValidacion } from '../types'
 
 const ITEM = 'VENTAS_EMBARQUES'
 const GUIA_KEY = (embarqueId: number) => ['guia-despacho', embarqueId] as const
@@ -42,6 +42,7 @@ function EmitirGuiaDialog({
   datos,
   plantas,
   agente,
+  validacion,
   onEmitido,
 }: {
   embarqueId: number
@@ -50,6 +51,7 @@ function EmitirGuiaDialog({
   datos: GuiaDespachoDatos
   plantas: GuiaDespachoPlanta[]
   agente: GuiaDespachoAgente | null
+  validacion: GuiaDespachoValidacion
   onEmitido: () => void
 }) {
   interface FormState {
@@ -124,7 +126,9 @@ function EmitirGuiaDialog({
   // pero se deshabilita el emitir para avisar antes.
   const faltaDestino = !agente?.direccion
   const faltaOrigen = !form.dirOrigenId
-  const puedeEmitir = !faltaDestino && !faltaOrigen
+  // Datos del bloque Aduana sin Código de Aduana / sin selección: bloquean el SII.
+  const faltanAduana = validacion.faltantes.length > 0
+  const puedeEmitir = !faltaDestino && !faltaOrigen && !faltanAduana
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -169,7 +173,7 @@ function EmitirGuiaDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-h-[90vh] overflow-auto sm:max-w-2xl'>
+      <DialogContent className='max-h-[90vh] overflow-auto sm:max-w-[900px]'>
         <DialogHeader>
           <DialogTitle>Emitir Guía de Despacho (DTE 52)</DialogTitle>
           <DialogDescription>
@@ -209,6 +213,67 @@ function EmitirGuiaDialog({
               <p className='text-muted-foreground mt-1 text-xs'>Traslado para exportación: $1/caja exento, con bloque Aduana. La dirección se elige según el puerto de zarpe.</p>
             </div>
           )}
+
+          {/* Resumen pre-vuelo: todo lo que irá en la Guía (bloque Aduana del SII),
+              marcando en rojo lo que falta (sin Código de Aduana o sin selección). */}
+          <div className='rounded-md border p-3'>
+            <div className='flex items-center justify-between gap-2'>
+              <p className='text-sm font-medium'>Datos para el SII (bloque Aduana)</p>
+              {faltanAduana ? (
+                <Badge variant='destructive'>Faltan {validacion.faltantes.length} dato(s)</Badge>
+              ) : (
+                <Badge className='bg-emerald-600'>Completo</Badge>
+              )}
+            </div>
+            {faltanAduana && (
+              <p className='text-destructive mt-1 text-xs'>
+                Completa el <span className='font-medium'>Código de Aduana (SII)</span> en el mantenedor correspondiente
+                (Cláusula de Venta, Tipo de Embarque, Puerto, País) o selecciona el Puerto de Zarpe en el Embarque.
+              </p>
+            )}
+            <div className='mt-2 overflow-x-auto'>
+              <table className='w-full text-sm'>
+                <thead>
+                  <tr className='text-muted-foreground text-left text-xs'>
+                    <th className='py-1 pr-3 font-medium'>Campo</th>
+                    <th className='py-1 pr-3 font-medium'>Valor</th>
+                    <th className='py-1 font-medium'>Código SII</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Receptor = Agente de Aduana: exige RUT + dirección por puerto. */}
+                  <tr className={validacion.receptor.falta ? 'text-destructive' : ''}>
+                    <td className='py-1 pr-3'>{validacion.receptor.etiqueta}</td>
+                    <td className='py-1 pr-3' colSpan={2}>
+                      {!validacion.receptor.razonSocial
+                        ? '⚠ Sin Agente de Aduana asignado'
+                        : !validacion.receptor.rut
+                          ? `⚠ ${validacion.receptor.razonSocial} — sin RUT configurado`
+                          : !validacion.receptor.direccion
+                            ? `⚠ ${validacion.receptor.razonSocial} · ${validacion.receptor.rut} — sin dirección para el puerto de zarpe`
+                            : `${validacion.receptor.razonSocial} · ${validacion.receptor.rut} — ${[validacion.receptor.direccion, validacion.receptor.comuna].filter(Boolean).join(', ')}`}
+                    </td>
+                  </tr>
+                  {validacion.bloqueAduana.map((it) => (
+                    <tr key={it.etiqueta} className={it.falta ? 'text-destructive' : ''}>
+                      <td className='py-1 pr-3'>
+                        {it.etiqueta}
+                        {it.requerido && <span className='text-destructive'> *</span>}
+                      </td>
+                      <td className='py-1 pr-3'>{it.valor ?? (it.requerido ? '⚠ Sin dato' : '—')}</td>
+                      <td className='py-1'>
+                        {it.codigoAduana?.trim()
+                          ? it.codigoAduana
+                          : it.requerido
+                            ? <span className='font-medium'>⚠ Falta código de Aduana</span>
+                            : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           <div className='grid gap-3 sm:grid-cols-2'>
             <div className='space-y-1.5'>
@@ -344,9 +409,11 @@ function EmitirGuiaDialog({
         <DialogFooter>
           {!puedeEmitir && (
             <p className='text-destructive mr-auto self-center text-xs'>
-              {faltaDestino
-                ? 'Falta la dirección del Agente de Aduana asociada al puerto de zarpe.'
-                : 'Selecciona la dirección de origen de la planta.'}
+              {faltanAduana
+                ? `Faltan datos del bloque Aduana: ${validacion.faltantes.join('; ')}.`
+                : faltaDestino
+                  ? 'Falta la dirección del Agente de Aduana asociada al puerto de zarpe.'
+                  : 'Selecciona la dirección de origen de la planta.'}
             </p>
           )}
           <Button type='button' variant='outline' onClick={() => onOpenChange(false)}>Cancelar</Button>
@@ -459,6 +526,7 @@ export function GuiaDespachoSection({ embarqueId }: { embarqueId: number }) {
           datos={guia.datos}
           plantas={guia.plantas}
           agente={guia.agente}
+          validacion={guia.validacion}
           onEmitido={invalidar}
         />
       )}

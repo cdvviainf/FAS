@@ -769,6 +769,9 @@ export async function obtenerGuiaDespacho(embarqueId: number) {
           comuna: dirAgente?.comuna?.descripcion ?? null,
         }
       : null,
+    // Resumen pre-vuelo del bloque Aduana + receptor, con los faltantes marcados
+    // (el popup lo muestra en rojo antes de emitir).
+    validacion: construirValidacionGuia(embarque, dirAgente),
   }
 }
 
@@ -826,6 +829,52 @@ function faltantesCodigoAduanaGuia(e: EmbarqueParaGuia): string[] {
   if (!e.puertoZarpe?.codigoAduana) faltantes.push('Puerto de Zarpe')
   if (!nv?.paisDestino?.codigoAduana) faltantes.push('País de Destino')
   return faltantes
+}
+
+// Resumen "pre-vuelo" de lo que irá en la Guía (bloque Aduana + receptor), para
+// mostrarlo en el popup y marcar en rojo lo que falta ANTES de emitir. La lista
+// de bloqueadores (`faltantes`) reusa faltantesCodigoAduanaGuia + la dirección
+// del Agente por puerto, de modo que el panel y el gate del emit nunca difieran.
+function construirValidacionGuia(e: EmbarqueParaGuia, dirAgente: ReturnType<typeof resolverDireccionAgente>) {
+  const nv = e.notaVenta
+  const item = (etiqueta: string, valor: string | null, codigoAduana: string | null, requerido: boolean) => ({
+    etiqueta,
+    valor: valor ?? null,
+    codigoAduana: codigoAduana ?? null,
+    requerido,
+    // Falta = es requerido y no tiene Código de Aduana (SII) — mismo criterio que
+    // el gate del emit. Los no requeridos nunca se marcan en rojo.
+    falta: requerido && !(codigoAduana && codigoAduana.trim()),
+  })
+  const bloqueAduana = [
+    item('Modalidad de Venta', nv?.modalidadVenta?.descripcion ?? null, nv?.modalidadVenta?.codigoAduana ?? null, false),
+    item('Cláusula de Venta (Incoterm)', nv?.clausulaVenta?.descripcion ?? null, nv?.clausulaVenta?.codigoAduana ?? null, true),
+    item('Vía de Transporte (Tipo de Embarque)', nv?.tipoEmbarque?.descripcion ?? null, nv?.tipoEmbarque?.codigoAduana ?? null, true),
+    item('Puerto de Embarque (Zarpe)', e.puertoZarpe?.descripcion ?? null, e.puertoZarpe?.codigoAduana ?? null, true),
+    item('Puerto de Desembarque', nv?.puertoDestino?.descripcion ?? null, nv?.puertoDestino?.codigoAduana ?? null, false),
+    item('País de Destino', nv?.paisDestino?.descripcion ?? null, nv?.paisDestino?.codigoAduana ?? null, true),
+  ]
+  // Receptor = Agente de Aduana. El emit exige agente + su RUT (identificador) +
+  // la dirección asociada al puerto de zarpe (ver emitirGuiaDespacho). El panel
+  // refleja los tres para no habilitar Emitir si falta alguno (IMP-QA-R1-050).
+  const agente = e.agenteAduana
+  const agenteRut = agente?.identificador ?? null
+  const receptor = {
+    etiqueta: 'Receptor (Agente de Aduana) con RUT y dirección del puerto de zarpe',
+    razonSocial: agente?.razonSocial ?? null,
+    rut: agenteRut,
+    direccion: dirAgente?.direccion ?? null,
+    comuna: dirAgente?.comuna?.descripcion ?? null,
+    ok: agente != null && !!(agenteRut && agenteRut.trim()) && dirAgente != null,
+    falta: agente == null || !(agenteRut && agenteRut.trim()) || dirAgente == null,
+  }
+  const faltantes = [
+    ...faltantesCodigoAduanaGuia(e),
+    ...(agente == null ? ['Agente de Aduana (receptor)'] : []),
+    ...(agente != null && !(agenteRut && agenteRut.trim()) ? ['RUT del Agente de Aduana'] : []),
+    ...(agente != null && dirAgente == null ? ['Dirección del Agente de Aduana para el puerto de zarpe'] : []),
+  ]
+  return { bloqueAduana, receptor, faltantes }
 }
 
 export async function emitirGuiaDespacho(embarqueId: number, input: EmitirGuiaDespachoInput, userId: string) {

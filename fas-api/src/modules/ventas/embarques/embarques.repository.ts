@@ -1471,10 +1471,10 @@ export async function getEmbarqueParaGuia(embarqueId: number) {
       // (sus codigoAduana), igual que la Factura de Exportación DTE 110.
       notaVenta: {
         select: {
-          tipoEmbarque: { select: { codigoAduana: true } },
+          tipoEmbarque: { select: { codigoAduana: true, descripcion: true } },
           paisDestino: { select: { codigoAduana: true, descripcion: true } },
-          puertoDestino: { select: { codigoAduana: true } },
-          modalidadVenta: { select: { codigoAduana: true } },
+          puertoDestino: { select: { codigoAduana: true, descripcion: true } },
+          modalidadVenta: { select: { codigoAduana: true, descripcion: true } },
           clausulaVenta: { select: { codigoAduana: true, descripcion: true } },
         },
       },
