@@ -193,11 +193,18 @@ async function asegurarCodigo(
   return true
 }
 
-/** Despacha la creación al service correcto según el modelo de la hoja. */
-async function crearRegistro(hoja: HojaSpec, input: Record<string, any>, userId: string): Promise<void> {
+/** Despacha la creación al service correcto según el modelo de la hoja.
+ * `opts.permitirSinTaxId`: relaja el TaxID obligatorio del Cliente Extranjero en
+ * la carga masiva (se completa luego); el alta manual lo sigue exigiendo. */
+async function crearRegistro(
+  hoja: HojaSpec,
+  input: Record<string, any>,
+  userId: string,
+  opts?: { permitirSinTaxId?: boolean },
+): Promise<void> {
   switch (hoja.modelo) {
     case 'entidad':
-      await crearEntidad(input as any, userId)
+      await crearEntidad(input as any, userId, { permitirSinTaxId: opts?.permitirSinTaxId })
       break
     case 'entidadDireccion': {
       // La dirección se cuelga de una entidad existente. Si no se indicó país,
@@ -330,11 +337,28 @@ export async function cargarMaestros(
           }
         }
 
+        // IMP-QA-R2-053: un País NUEVO (no matcheado por descripción arriba) debe
+        // traer su código ISO 3166-1 alfa-3; no se persiste el nombre como código.
+        // Los países ya existentes se resolvieron por descripción (idempotencia) y
+        // no llegan acá; esto solo frena crear un país no-ISO desde el Excel.
+        if (hoja.modelo === 'pais' && typeof input.codigo === 'string' && !/^[A-Za-z]{3}$/.test(input.codigo.trim())) {
+          errores.push({
+            hoja: hoja.hoja,
+            fila: fila.fila,
+            columna: 'Código',
+            codigo: 'PAIS_CODIGO_NO_ISO',
+            mensaje: `País nuevo "${input.descripcion ?? input.codigo}": el código "${input.codigo}" no es ISO alfa-3 (3 letras). Usa el código ISO, o verifica que el país ya exista (se reconoce por su descripción).`,
+          })
+          continue
+        }
+
         // Recién ahora (se va a crear) se autogenera el código si quedó pendiente.
         if (!(await asegurarCodigo(hoja, fila, input, errores))) continue
 
         try {
-          await crearRegistro(hoja, input, userId)
+          // permitirSinTaxId: en carga masiva, CLIENTE_EXTRANJERO puede crearse sin
+          // TaxID (se completa luego); el alta manual lo sigue exigiendo.
+          await crearRegistro(hoja, input, userId, { permitirSinTaxId: true })
           resumen[hoja.hoja].creados++
         } catch (err: any) {
           errores.push({ hoja: hoja.hoja, fila: fila.fila, codigo: 'ERROR_CREACION', mensaje: err?.message ?? String(err) })

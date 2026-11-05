@@ -211,10 +211,10 @@ export function CargaMaestrosClient() {
             ) : (
               <Alert>
                 <Icons.check className='h-4 w-4' />
-                <AlertTitle>Sin errores</AlertTitle>
+                <AlertTitle>{resultado.dryRun ? 'Estructura válida' : 'Sin errores'}</AlertTitle>
                 <AlertDescription>
                   {resultado.dryRun
-                    ? 'El archivo está listo para cargar.'
+                    ? 'La estructura del archivo es válida. Durante la carga aún pueden detectarse errores de referencias, unicidad, prefijos o reglas de negocio.'
                     : 'Todos los registros se cargaron correctamente.'}
                 </AlertDescription>
               </Alert>

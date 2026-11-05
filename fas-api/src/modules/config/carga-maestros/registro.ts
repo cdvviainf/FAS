@@ -50,6 +50,12 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
   {
     hoja: 'Paises',
     modelo: 'pais',
+    // Idempotencia por DESCRIPCIÓN (nombre del país), no por código: el Excel suele
+    // traer el nombre como "código" (ej. 'ARGENTINA') mientras en BD el país ya
+    // existe con código ISO ('ARG'). Sin esto, cada carga creaba un país duplicado.
+    // Al saltarlo, la equivalencia código->id deja que las entidades que referencian
+    // el país por nombre resuelvan al país existente.
+    claveNatural: ['descripcion'],
     titulo: 'Países',
     descripcion: 'Maestro global (no pertenece a una empresa).',
     dependeDe: [],

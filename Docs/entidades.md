@@ -144,6 +144,7 @@ model EntidadContacto {
 - **R1 — Al menos un tipo.** Toda `Entidad` debe tener ≥1 valor en `tipos` → 422.
 - **R2 — Código único.** `codigo` de Entidad único entre no eliminados (regla maestro). Igual para `codigo` de dirección/contacto, pero **único por entidad** (EN8).
 - **R3 — RUT.** Opcional; si viene, formato + DV chileno válidos y único entre no eliminados → 422 si inválido/duplicado.
+- **R3b — TaxID del Cliente Extranjero (política, 2026-11-05).** El `taxId` (identificador tributario extranjero, = `NumId` del DTE 110) es **obligatorio en el alta/edición manual** de una entidad `CLIENTE_EXTRANJERO` → 422 si falta. **La Carga Masiva de Maestros lo permite vacío** (flag `permitirSinTaxId`): se crea el cliente y el `taxId` se completa después en el editor (se exige, de todos modos, antes de emitir la Factura de Exportación — ver `cobranza.md`). Decisión operativa: cargar primero el padrón de clientes y regularizar `taxId` luego; por eso el template de carga no incluye columna TaxID.
 - **R4 — Dirección por defecto.** Máximo una `esPorDefecto = true` por entidad; al marcar una, se desmarca la anterior.
 - **R5 — Comuna/País.** `paisId` obligatorio en dirección; `comunaId` opcional y, si viene, debe pertenecer a Chile (consistencia geográfica).
 - **R6 — Softdelete + auditoría.** En las 3 tablas; listados filtran `eliminadoEn IS NULL`.

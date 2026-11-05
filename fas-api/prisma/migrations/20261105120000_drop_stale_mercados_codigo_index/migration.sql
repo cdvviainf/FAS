@@ -1,0 +1,11 @@
+-- El índice único GLOBAL "ux_mercados_codigo" (sobre mercados(codigo)) quedó como
+-- leftover de la era pre-multiempresa: se creó en 20260713_add_unique_partial_indexes_lote2
+-- y la migración de Fase 3 (20260803100000) eliminó los ux_*_codigo de los demás
+-- maestros al volverlos por-empresa, pero OMITIÓ mercados (mismo caso que ya se
+-- corrigió para grupos_mercado en 20261103160000).
+--
+-- Mercado es por-empresa: la unicidad correcta es el índice parcial
+-- "mercados_empresa_codigo_activo_key" (empresaId, codigo). Dos empresas pueden
+-- tener el mismo código de mercado, así que el índice global obsoleto se elimina
+-- (impedía duplicar mercados entre empresas).
+DROP INDEX IF EXISTS "ux_mercados_codigo";

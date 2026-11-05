@@ -338,6 +338,10 @@ model TipoCuentaCorriente {
   - Bodega: dirección, select Comuna, multiselect tipos, lat/long.
   - Puerto: select País, select Tipo de embarque, lat/long.
 
+### Carga Masiva de Maestros — alcance de "Validar" (dry-run) (2026-11-05)
+
+Contrato **actual** del cargador general (`/api/config/carga-maestros`): el botón **"Validar"** (dry-run) hace validación **estructural** (tipos de celda, enums, requeridos, duplicados de código dentro del archivo y FKs **internas** entre hojas del mismo Excel). **No** resuelve FKs contra la BD, **no** chequea unicidad contra la base, **no** genera/valida prefijos de código ni ejecuta las reglas de negocio de los services. Esas se comprueban **en el commit** ("Cargar a la base"), que reporta por fila sus errores. Por eso una validación sin errores **no garantiza** que todas las filas se carguen (puede fallar en el commit por FK externa, prefijo ausente, unicidad o regla de negocio). La **paridad completa dry-run↔commit** (vía transacción revertida o simulación con registros virtuales) es una **mejora futura** —el cargador **dedicado** de Recetas (`materiales.md` §6) sí garantiza paridad, pero el motor general aún no. Éxito parcial: cada fila/hoja se procesa de forma independiente (no atómico por archivo).
+
 ---
 
 ## 8. Criterios de aceptación (Given / When / Then)

@@ -34,7 +34,13 @@ export async function obtenerEntidad(id: number) {
   return entidad
 }
 
-export async function crearEntidad(input: EntidadCreateInput, userId: string) {
+export async function crearEntidad(
+  input: EntidadCreateInput,
+  userId: string,
+  // Carga Masiva (2026-11-05): permitirSinTaxId deja crear un CLIENTE_EXTRANJERO sin
+  // TaxID (se completa después); el alta manual por pantalla lo sigue exigiendo.
+  opts?: { permitirSinTaxId?: boolean },
+) {
   // R1: tipos.length >= 1 (ya validado por Zod, pero reforzamos)
   if (input.tipos.length < 1) {
     throw new ValidationError('Debe especificar al menos un tipo de entidad')
@@ -77,7 +83,7 @@ export async function crearEntidad(input: EntidadCreateInput, userId: string) {
   if ((input.tipos.includes('PLANTA') || input.tipos.includes('PACKING')) && !input.csp?.trim()) {
     throw new ValidationError('El CSP es obligatorio para entidades de tipo Planta o Packing')
   }
-  if (input.tipos.includes('CLIENTE_EXTRANJERO') && !input.taxId) {
+  if (input.tipos.includes('CLIENTE_EXTRANJERO') && !input.taxId && !opts?.permitirSinTaxId) {
     throw new ValidationError('El TAXID es obligatorio para entidades de tipo Cliente Extranjero')
   }
 
