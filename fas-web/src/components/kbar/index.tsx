@@ -1,6 +1,6 @@
 'use client';
 import { navGroups } from '@/config/nav-config';
-import { KBarAnimator, KBarPortal, KBarPositioner, KBarProvider, KBarSearch } from 'kbar';
+import { KBarAnimator, KBarPortal, KBarPositioner, KBarProvider, KBarSearch, useRegisterActions } from 'kbar';
 import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 import RenderResults from './render-result';
@@ -8,12 +8,21 @@ import useThemeSwitching from './use-theme-switching';
 import { useFilteredNavGroups } from '@/hooks/use-nav';
 
 export default function KBar({ children }: { children: React.ReactNode }) {
+  return (
+    <KBarProvider>
+      <KBarComponent>{children}</KBarComponent>
+    </KBarProvider>
+  );
+}
+const KBarComponent = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
   const filteredGroups = useFilteredNavGroups(navGroups);
 
-  // These action are for the navigation
+  // Acciones de navegación del buscador. Se registran DINÁMICAMENTE con
+  // useRegisterActions (abajo) y no vía KBarProvider actions={}, porque los
+  // permisos del menú cargan async: al montar, useFilteredNavGroups devuelve []
+  // (fail-closed, QA-MENU-002) y un actions estático quedaría vacío para siempre.
   const actions = useMemo(() => {
-    // Define navigateTo inside the useMemo callback to avoid dependency array issues
     const navigateTo = (url: string) => {
       router.push(url);
     };
@@ -21,7 +30,6 @@ export default function KBar({ children }: { children: React.ReactNode }) {
     const allItems = filteredGroups.flatMap((group) => group.items);
 
     return allItems.flatMap((navItem) => {
-      // Only include base action if the navItem has a real URL and is not just a container
       const baseAction =
         navItem.url !== '#'
           ? {
@@ -29,13 +37,12 @@ export default function KBar({ children }: { children: React.ReactNode }) {
               name: navItem.title,
               shortcut: navItem.shortcut,
               keywords: navItem.title.toLowerCase(),
-              section: 'Navigation',
-              subtitle: `Go to ${navItem.title}`,
+              section: 'Navegación',
+              subtitle: `Ir a ${navItem.title}`,
               perform: () => navigateTo(navItem.url)
             }
           : null;
 
-      // Map child items into actions
       const childActions =
         navItem.items?.map((childItem) => ({
           id: `${childItem.title.toLowerCase()}Action`,
@@ -43,22 +50,17 @@ export default function KBar({ children }: { children: React.ReactNode }) {
           shortcut: childItem.shortcut,
           keywords: childItem.title.toLowerCase(),
           section: navItem.title,
-          subtitle: `Go to ${childItem.title}`,
+          subtitle: `Ir a ${childItem.title}`,
           perform: () => navigateTo(childItem.url)
         })) ?? [];
 
-      // Return only valid actions (ignoring null base actions for containers)
       return baseAction ? [baseAction, ...childActions] : childActions;
     });
   }, [router, filteredGroups]);
 
-  return (
-    <KBarProvider actions={actions}>
-      <KBarComponent>{children}</KBarComponent>
-    </KBarProvider>
-  );
-}
-const KBarComponent = ({ children }: { children: React.ReactNode }) => {
+  // Registro dinámico: cuando los permisos resuelven y `actions` cambia, kbar
+  // reemplaza las acciones de navegación (igual que useThemeSwitching).
+  useRegisterActions(actions, [actions]);
   useThemeSwitching();
 
   return (
