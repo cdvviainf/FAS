@@ -4,6 +4,27 @@
 -- (se conserva el de menor id) y se repuntan todas las referencias al que queda.
 -- ============================================================================
 
+-- 0) Vistas operativas (no gestionadas por Prisma) que dependen de
+--    puertos.empresaId / tipos_embarque.empresaId: hay que eliminarlas antes de
+--    quitar la columna (ej. th_embarques). Se eliminan DINÁMICAMENTE las que
+--    dependan de esas columnas, sin importar su nombre. Recréalas DESPUÉS del
+--    deploy desde QA/ (ya sin el join por empresaId a esas tablas globales).
+DO $$
+DECLARE v text;
+BEGIN
+  FOR v IN
+    SELECT DISTINCT dv.relname
+    FROM pg_depend d
+    JOIN pg_rewrite r  ON r.oid = d.objid
+    JOIN pg_class   dv ON dv.oid = r.ev_class AND dv.relkind = 'v'
+    JOIN pg_class   tc ON tc.oid = d.refobjid
+    JOIN pg_attribute a ON a.attrelid = d.refobjid AND a.attnum = d.refobjsubid
+    WHERE tc.relname IN ('puertos', 'tipos_embarque') AND a.attname = 'empresaId'
+  LOOP
+    EXECUTE format('DROP VIEW IF EXISTS %I CASCADE', v);
+  END LOOP;
+END $$;
+
 -- 1) Quitar las FK que bloquearían el dedup/repunte (se recrean simples al final).
 ALTER TABLE "embarques"       DROP CONSTRAINT "embarques_empresaId_puertoZarpeId_fkey";
 ALTER TABLE "notas_venta"     DROP CONSTRAINT "notas_venta_empresaId_puertoDestinoId_fkey";
