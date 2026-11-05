@@ -249,6 +249,50 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
     ],
   },
 
+  // ─── Direcciones y Contactos por entidad (pestañas del mismo archivo) ─────────
+  // Enlazan a la entidad por su CÓDIGO: la entidad debe estar en la hoja
+  // Entidades de este archivo (con código) — sea nueva (se crea) o ya existente
+  // (idempotencia la salta y la equivalencia resuelve el enlace). Mismo patrón
+  // que Predios.entidadId.
+  {
+    hoja: 'Direcciones',
+    modelo: 'entidadDireccion',
+    titulo: 'Direcciones',
+    descripcion: 'Direcciones por entidad. La Entidad debe estar en la hoja Entidades (de este archivo) con su código. Si dejas el País vacío, se usa el de la entidad; la Comuna solo aplica a Chile.',
+    dependeDe: ['Entidades'],
+    codigoUnicoGlobal: false, // el código de dirección es único por entidad
+    columnas: [
+      { encabezado: 'Entidad (código)', campo: 'entidadId', tipo: 'fk', requerido: true, fk: { hoja: 'Entidades' }, ayuda: 'Código de la entidad (hoja Entidades de este archivo).' },
+      { encabezado: 'Código', campo: 'codigo', tipo: 'texto', autogenerar: true, ayuda: 'Vacío = se autogenera (prefijo entidadDireccion). Único por entidad.' },
+      { encabezado: 'Descripción', campo: 'descripcion', tipo: 'texto', requerido: true, ayuda: 'Etiqueta legible. Ej. Casa matriz, Bodega Norte.' },
+      { encabezado: 'Dirección', campo: 'direccion', tipo: 'textoLargo', requerido: true },
+      { encabezado: 'País (código, opcional)', campo: 'paisId', tipo: 'fk', fk: { hoja: 'Paises', externo: true, modelo: 'pais' }, ayuda: 'Vacío = país de la entidad. La comuna solo aplica a Chile.' },
+      { encabezado: 'Comuna (código, solo Chile, opcional)', campo: 'comunaId', tipo: 'fk', fk: { externo: true, modelo: 'comuna' } },
+      { encabezado: 'Por Defecto (SI/NO)', campo: 'esPorDefecto', tipo: 'booleanSiNo', ayuda: 'Marca la dirección principal de la entidad.' },
+      { encabezado: 'Latitud', campo: 'latitud', tipo: 'decimal' },
+      { encabezado: 'Longitud', campo: 'longitud', tipo: 'decimal' },
+    ],
+  },
+  {
+    hoja: 'Contactos',
+    modelo: 'entidadContacto',
+    titulo: 'Contactos',
+    descripcion: 'Contactos por entidad. La Entidad debe estar en la hoja Entidades (de este archivo) con su código.',
+    dependeDe: ['Entidades'],
+    codigoUnicoGlobal: false, // el código de contacto es único por entidad
+    columnas: [
+      { encabezado: 'Entidad (código)', campo: 'entidadId', tipo: 'fk', requerido: true, fk: { hoja: 'Entidades' }, ayuda: 'Código de la entidad (hoja Entidades de este archivo).' },
+      { encabezado: 'Código', campo: 'codigo', tipo: 'texto', autogenerar: true, ayuda: 'Vacío = se autogenera (prefijo entidadContacto). Único por entidad.' },
+      { encabezado: 'Nombre', campo: 'nombre', tipo: 'texto', requerido: true },
+      { encabezado: 'RUT', campo: 'rut', tipo: 'texto', ayuda: 'Obligatorio si es Representante Legal (RUT chileno válido).' },
+      { encabezado: 'WhatsApp', campo: 'whatsapp', tipo: 'texto' },
+      { encabezado: 'Email', campo: 'email', tipo: 'texto' },
+      { encabezado: 'Teléfono', campo: 'telefono', tipo: 'texto' },
+      { encabezado: 'Tipo', campo: 'tipo', tipo: 'texto', ayuda: 'Ej. Ventas, Finanzas, Operaciones.' },
+      { encabezado: 'Es Representante Legal (SI/NO)', campo: 'esRepresentanteLegal', tipo: 'booleanSiNo', ayuda: 'Si SI: requiere RUT válido y solo uno por entidad.' },
+    ],
+  },
+
   // ─── Prefijos de código ────────────────────────────────────────────────────
   {
     hoja: 'PrefijosCodigo',

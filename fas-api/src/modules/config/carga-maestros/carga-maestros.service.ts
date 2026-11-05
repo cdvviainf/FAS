@@ -43,6 +43,8 @@ import * as configRepo from '../config.repository.js'
 import { siguienteCodigo } from '../prefijos-codigo/prefijos-codigo.service.js'
 import { crearPrefijoCodigo } from '../prefijos-codigo/prefijos-codigo.service.js'
 import { crearEntidad, crearDireccion, crearContacto } from '../entidades/entidades.service.js'
+import { direccionCreateSchema, contactoCreateSchema } from '../entidades/entidades.schema.js'
+import { ZodError } from 'zod'
 import * as entidadesRepo from '../entidades/entidades.repository.js'
 import { crearArticulo } from '../../materiales/articulos/articulos.service.js'
 import * as articulosRepo from '../../materiales/articulos/articulos.repository.js'
@@ -193,6 +195,21 @@ async function asegurarCodigo(
   return true
 }
 
+// Valida un input de la carga con el schema Zod del contrato API (mismas
+// restricciones que el POST). Convierte el ZodError en un mensaje legible que el
+// orquestador ubica por hoja/fila (IMP-QA-R1-055).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function validarConSchema<T>(schema: { parse: (d: unknown) => T }, data: any): T {
+  try {
+    return schema.parse(data)
+  } catch (e) {
+    if (e instanceof ZodError) {
+      throw new Error(e.issues.map((i) => `${i.path.join('.') || 'campo'}: ${i.message}`).join('; '))
+    }
+    throw e
+  }
+}
+
 /** Despacha la creación al service correcto según el modelo de la hoja.
  * `opts.permitirSinTaxId`: relaja el TaxID obligatorio del Cliente Extranjero en
  * la carga masiva (se completa luego); el alta manual lo sigue exigiendo. */
@@ -215,12 +232,17 @@ async function crearRegistro(
         const ent = await entidadesRepo.findEntidadById(entidadId)
         pid = (ent as any)?.paisId
       }
-      await crearDireccion(entidadId, { ...body, paisId: pid } as any, userId)
+      // Mismas restricciones de datos que el POST (rangos lat/long, largos) —
+      // IMP-QA-R1-055: la carga no debe persistir lo que el alta normal rechaza.
+      const data = validarConSchema(direccionCreateSchema, { ...body, paisId: pid })
+      await crearDireccion(entidadId, data, userId)
       break
     }
     case 'entidadContacto': {
       const { entidadId, ...body } = input
-      await crearContacto(entidadId, body as any, userId)
+      // Valida email/largos/etc. igual que el POST (IMP-QA-R1-055).
+      const data = validarConSchema(contactoCreateSchema, body)
+      await crearContacto(entidadId, data, userId)
       break
     }
     case 'articulo':

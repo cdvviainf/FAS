@@ -210,7 +210,7 @@ export async function generarTemplate(hojas: HojaSpec[], opciones: OpcionesGener
     wb,
     hojas,
     opciones.titulo ?? 'CARGA MASIVA DE MAESTROS — FRUTERA AGROSAN',
-    opciones.fueraDeAlcance ?? ['Direcciones y Contactos de Entidad', 'Documentos adjuntos de Artículo'],
+    opciones.fueraDeAlcance ?? ['Documentos adjuntos de Artículo'],
   )
   const rangos = construirListasFijas(wb, listas)
 
