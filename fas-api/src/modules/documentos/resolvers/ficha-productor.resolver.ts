@@ -3,6 +3,7 @@ import { getFicha } from '../../productores/productores.repository.js'
 import { getEmpresaParaDocumento, logoDataUri } from '../documentos.repository.js'
 import type { ResolverOpciones } from '../documentos.types.js'
 import type { FichaProductorPdfPayload } from '../schemas/ficha-productor.schema.js'
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
 // Resolver de la Ficha de Productor — datos maestros: identificación,
 // direcciones/contactos, predios y contrato vigente. Reusa getFicha del módulo
@@ -73,7 +74,7 @@ export async function resolverFichaProductor(id: number, empresaId: number, opci
           fechaInicio: contrato.fechaInicio.toISOString(),
           fechaTermino: contrato.fechaTermino.toISOString(),
           lineas: contrato.lineas.map((l) => ({
-            articulo: l.articulo.descripcion,
+            articulo: descripcionComercialArticulo(l.articulo),
             variedad: l.variedad.descripcion,
             calibre: l.calibreDesde.id === l.calibreHasta.id
               ? l.calibreDesde.descripcion

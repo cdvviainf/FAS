@@ -41,6 +41,7 @@ import type {
   DocumentoManualReferenciaInput,
   DocumentoManualTransporteInput,
 } from '../types'
+import { articuloDescripcionComercial } from '@/lib/articulo'
 
 const monedasService = createMantenedorService('monedas')
 
@@ -333,7 +334,7 @@ export function GeneradorDteForm({ documentoId }: GeneradorDteFormProps) {
     setLineas((prev) =>
       prev.map((l, i) =>
         i === idx
-          ? { ...l, articuloId, descripcion: art && !l.descripcion.trim() ? art.descripcion : l.descripcion }
+          ? { ...l, articuloId, descripcion: art && !l.descripcion.trim() ? articuloDescripcionComercial(art) : l.descripcion }
           : l,
       ),
     )
@@ -689,7 +690,7 @@ export function GeneradorDteForm({ documentoId }: GeneradorDteFormProps) {
                             onChange={(v) => onSelectArticulo(idx, v ? Number(v) : null)}
                             placeholder='Línea libre'
                             searchPlaceholder='Buscar artículo...'
-                            options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+                            options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${articuloDescripcionComercial(a)}` }))}
                             disabled={soloLectura}
                           />
                         </TableCell>

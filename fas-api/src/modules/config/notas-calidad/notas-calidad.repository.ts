@@ -12,7 +12,7 @@ export async function listNotasCalidad() {
   return prisma.notaCalidad.findMany({
     where: { eliminadoEn: null },
     include: includeEspecies,
-    orderBy: { codigo: 'asc' },
+    orderBy: [{ orden: 'asc' }, { codigo: 'asc' }],
   })
 }
 
@@ -33,6 +33,12 @@ export async function getEspeciesPorIds(ids: number[]) {
 
 export async function createNotaCalidad(data: NotaCalidadCreateInput, creadoPor: string) {
   const { especieIds, ...cabecera } = data
+  // Sin orden explícito, la nota nueva queda al final de la escala (la "peor")
+  // en vez de 0 — evita que una nota recién creada pase a ser la mejor.
+  if (cabecera.orden === undefined) {
+    const max = await prisma.notaCalidad.aggregate({ where: { eliminadoEn: null }, _max: { orden: true } })
+    cabecera.orden = (max._max.orden ?? 0) + 1
+  }
   return prisma.notaCalidad.create({
     data: {
       // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe

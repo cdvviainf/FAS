@@ -7,6 +7,8 @@ const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 // Descripciones ES/EN de un mantenedor referenciado por una línea — para
 // construir la descripción según idioma (descripcion-idioma.ts).
 const descSelect = { select: { descripcion: true, descripcionExtranjera: true } }
+// Artículo: además la descripción comercial (2026-11-05, shared/articulo-descripcion.ts).
+const articuloDescSelect = { select: { descripcion: true, descripcionExtranjera: true, descripcionComercial: true } }
 
 // Datos del Embarque que necesita el módulo de Proforma — cliente/moneda/
 // condiciónPago se heredan de la Nota de Venta (cobranza.md, D1/RC-D4-like).
@@ -64,7 +66,7 @@ export async function getPalletsReservadosConDetalle(embarqueId: number) {
           categoriaId: true,
           categoria: { select: mantenedorSelect },
           articuloId: true,
-          articulo: { select: mantenedorSelect },
+          articulo: { select: { ...mantenedorSelect, descripcionComercial: true } },
           calibreId: true,
           calibre: { select: mantenedorSelect },
           etiquetaId: true,
@@ -137,7 +139,7 @@ const proformaInclude = {
       // Relaciones para reconstruir la descripción por idioma (ES/EN).
       especie: descSelect,
       variedad: descSelect,
-      articulo: descSelect,
+      articulo: articuloDescSelect,
       calibre: descSelect,
       categoria: descSelect,
       etiqueta: descSelect,
@@ -219,14 +221,15 @@ export async function getDescripcionesMantenedores(lineas: LineaIds[]) {
   const [esp, vari, art, cal, cat, eti] = await Promise.all([
     prisma.especie.findMany({ where: { id: { in: uniq(lineas.map((l) => l.especieId)) } }, select: sel }),
     prisma.variedad.findMany({ where: { id: { in: uniq(lineas.map((l) => l.variedadId)) } }, select: sel }),
-    prisma.articulo.findMany({ where: { id: { in: uniq(lineas.map((l) => l.articuloId)) } }, select: sel }),
+    prisma.articulo.findMany({ where: { id: { in: uniq(lineas.map((l) => l.articuloId)) } }, select: { ...sel, descripcionComercial: true } }),
     prisma.calibre.findMany({ where: { id: { in: uniq(lineas.map((l) => l.calibreId)) } }, select: sel }),
     prisma.categoria.findMany({ where: { id: { in: uniq(lineas.map((l) => l.categoriaId)) } }, select: sel }),
     prisma.etiqueta.findMany({ where: { id: { in: uniq(lineas.map((l) => l.etiquetaId)) } }, select: sel }),
   ])
   type Row = { id: number; descripcion: string; descripcionExtranjera: string | null }
   const mapa = (rows: Row[]) => new Map(rows.map((r) => [r.id, { descripcion: r.descripcion, descripcionExtranjera: r.descripcionExtranjera }]))
-  const [me, mv, ma, mc, mca, met] = [mapa(esp), mapa(vari), mapa(art), mapa(cal), mapa(cat), mapa(eti)]
+  const [me, mv, mc, mca, met] = [mapa(esp), mapa(vari), mapa(cal), mapa(cat), mapa(eti)]
+  const ma = new Map(art.map((r) => [r.id, { descripcion: r.descripcion, descripcionExtranjera: r.descripcionExtranjera, descripcionComercial: r.descripcionComercial }]))
   return lineas.map((l) => ({
     especie: me.get(l.especieId) ?? { descripcion: '', descripcionExtranjera: null },
     variedad: l.variedadId != null ? mv.get(l.variedadId) ?? null : null,

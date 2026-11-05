@@ -8,6 +8,7 @@ import type {
   OrdenCompraLineaUpdateInput,
   OrdenCompraUpdateInput,
 } from './ordenes-compra.types.js'
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
 async function validarLinea(linea: OrdenCompraLineaInput, index: number, modalidad: 'CAJAS' | 'GRANEL') {
   const prefijo = `Línea ${index + 1}:`
@@ -50,18 +51,18 @@ async function validarLinea(linea: OrdenCompraLineaInput, index: number, modalid
   if (articulo.etiquetaId != null) permitidas.add(articulo.etiquetaId)
   for (const a of articulo.etiquetasAdicionales) permitidas.add(a.etiquetaId)
   if (permitidas.size === 0) {
-    throw new ValidationError(`${prefijo} el artículo "${articulo.descripcion}" no tiene etiqueta configurada — defínela en el maestro de Artículos`)
+    throw new ValidationError(`${prefijo} el artículo "${descripcionComercialArticulo(articulo)}" no tiene etiqueta configurada — defínela en el maestro de Artículos`)
   }
   let etiquetaIdResuelta: number
   if (linea.etiquetaId != null) {
     if (!permitidas.has(linea.etiquetaId)) {
-      throw new ValidationError(`${prefijo} la etiqueta seleccionada no está permitida para el artículo "${articulo.descripcion}"`)
+      throw new ValidationError(`${prefijo} la etiqueta seleccionada no está permitida para el artículo "${descripcionComercialArticulo(articulo)}"`)
     }
     etiquetaIdResuelta = linea.etiquetaId
   } else if (permitidas.size === 1) {
     etiquetaIdResuelta = [...permitidas][0] // etiqueta fija heredada del maestro
   } else {
-    throw new ValidationError(`${prefijo} el artículo "${articulo.descripcion}" tiene etiqueta dinámica — selecciona la etiqueta`)
+    throw new ValidationError(`${prefijo} el artículo "${descripcionComercialArticulo(articulo)}" tiene etiqueta dinámica — selecciona la etiqueta`)
   }
 
   if (linea.categoriaId == null) throw new ValidationError(`${prefijo} la categoría es requerida`)

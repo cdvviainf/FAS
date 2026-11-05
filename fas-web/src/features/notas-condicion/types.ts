@@ -15,6 +15,8 @@ export interface NotaCondicion {
   codigo: string
   descripcion: string
   descripcionExtranjera?: string | null
+  // Escala (menor = mejor) para la regla "hasta" del Cierre Comercial.
+  orden: number
   bloqueado: boolean
   especies: NotaCondicionEspecie[]
 }
@@ -23,6 +25,7 @@ export interface NotaCondicionCreateInput {
   codigo: string
   descripcion: string
   descripcionExtranjera?: string
+  orden?: number
   especieIds: number[]
 }
 

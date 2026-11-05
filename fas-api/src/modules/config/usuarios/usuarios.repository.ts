@@ -9,6 +9,8 @@ const usuarioSelect = {
   perfilId: true,
   esResponsableVenta: true,
   empresaPredeterminadaId: true,
+  // Solo presencia de la firma (nunca el binario) → se aplana a `tieneFirma`.
+  firma: { select: { usuarioId: true } },
   creadoEn: true,
   actualizadoEn: true,
   perfil: { select: { id: true, codigo: true, descripcion: true } },
@@ -25,9 +27,9 @@ const usuarioSelect = {
 // se aplana a `empresas: [{...}]` (los Empresa en sí), que es la forma que
 // consume el frontend.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapUsuario<T extends { empresas: { empresa: any }[] }>(row: T) {
-  const { empresas, ...rest } = row
-  return { ...rest, empresas: empresas.map((ue) => ue.empresa) }
+function mapUsuario<T extends { empresas: { empresa: any }[]; firma: { usuarioId: string } | null }>(row: T) {
+  const { empresas, firma, ...rest } = row
+  return { ...rest, tieneFirma: firma != null, empresas: empresas.map((ue) => ue.empresa) }
 }
 
 export async function findAllUsuarios(page: number, limit: number, q?: string, perfilId?: number, esResponsableVenta?: boolean) {
@@ -199,11 +201,12 @@ export async function upsertAvatar(id: string, data: { mime: string; tamano: num
       create: { usuarioId: id, mime: data.mime, tamano: data.tamano, datos: data.datos },
       update: { mime: data.mime, tamano: data.tamano, datos: data.datos },
     })
-    return tx.usuario.update({
+    const row = await tx.usuario.update({
       where: { id },
       data: { imagenUrl: `${AVATAR_RUTA_PREFIJO}/${id}/avatar` },
       select: usuarioSelect,
     })
+    return mapUsuario(row)
   })
 }
 
@@ -216,6 +219,30 @@ export async function deleteAvatar(id: string) {
     await tx.usuarioAvatar.deleteMany({ where: { usuarioId: id } })
     await tx.usuario.update({ where: { id }, data: { imagenUrl: null } })
   })
+}
+
+// ─── Firma (2026-11-05) ──────────────────────────────────────────────────────
+// Mismo patrón que el avatar (binario en tabla 1:1), pero sin URL persistida:
+// se expone `tieneFirma` y el binario se sirve por GET /usuarios/:id/firma.
+
+export async function upsertFirma(id: string, data: { mime: string; tamano: number; datos: Buffer }) {
+  return prisma.$transaction(async (tx) => {
+    await tx.usuarioFirma.upsert({
+      where: { usuarioId: id },
+      create: { usuarioId: id, mime: data.mime, tamano: data.tamano, datos: data.datos },
+      update: { mime: data.mime, tamano: data.tamano, datos: data.datos, creadoEn: new Date() },
+    })
+    const row = await tx.usuario.findFirstOrThrow({ where: { id }, select: usuarioSelect })
+    return mapUsuario(row)
+  })
+}
+
+export async function getFirmaContenido(id: string) {
+  return prisma.usuarioFirma.findUnique({ where: { usuarioId: id } })
+}
+
+export async function deleteFirma(id: string) {
+  return prisma.usuarioFirma.deleteMany({ where: { usuarioId: id } })
 }
 
 export async function softDeleteUsuario(id: string, deletedBy: string) {

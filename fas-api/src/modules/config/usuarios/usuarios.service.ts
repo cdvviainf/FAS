@@ -195,6 +195,47 @@ export async function eliminarAvatar(id: string) {
   await repo.deleteAvatar(id)
 }
 
+// ─── Firma (2026-11-05) ──────────────────────────────────────────────────────
+// Se estampa sobre la línea de firma del PDF de Cierre Comercial: solo PNG con
+// canal alfa (fondo transparente). Se valida el contenido real (magic bytes +
+// color type del IHDR), no solo el mimetype declarado por el cliente.
+
+export const MAX_FIRMA_BYTES = 1 * 1024 * 1024
+const PNG_FIRMA = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+function esPngConAlfa(datos: Buffer): boolean {
+  // Firma PNG (8) + largo chunk (4) + "IHDR" (4) + ancho (4) + alto (4) +
+  // bit depth (1) + color type (1, offset 25). Color type 4 = gris+alfa,
+  // 6 = RGBA. (Un PNG paleta con tRNS no se admite: se pide alfa explícito.)
+  if (datos.length < 26) return false
+  if (!datos.subarray(0, 8).equals(PNG_FIRMA)) return false
+  if (datos.subarray(12, 16).toString('ascii') !== 'IHDR') return false
+  const colorType = datos[25]
+  return colorType === 4 || colorType === 6
+}
+
+export async function subirFirma(id: string, archivo: { mime: string; datos: Buffer }) {
+  await obtenerUsuario(id)
+  if (archivo.datos.length > MAX_FIRMA_BYTES) {
+    throw new ValidationError('La firma supera el tamaño máximo de 1 MB')
+  }
+  if (!esPngConAlfa(archivo.datos)) {
+    throw new ValidationError('La firma debe ser un PNG con fondo transparente')
+  }
+  return repo.upsertFirma(id, { mime: 'image/png', tamano: archivo.datos.length, datos: archivo.datos })
+}
+
+export async function descargarFirma(id: string) {
+  const firma = await repo.getFirmaContenido(id)
+  if (!firma) throw new NotFoundError('Firma', id)
+  return { mime: firma.mime, datos: Buffer.from(firma.datos) }
+}
+
+export async function eliminarFirma(id: string) {
+  await obtenerUsuario(id)
+  await repo.deleteFirma(id)
+}
+
 export async function cambiarPassword(id: string, input: CambiarPasswordInput) {
   const usuario = await repo.findUsuarioById(id)
   if (!usuario) throw new NotFoundError('Usuario', id)

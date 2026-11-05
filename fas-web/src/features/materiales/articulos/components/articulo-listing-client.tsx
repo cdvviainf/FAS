@@ -70,6 +70,12 @@ export function ArticuloListingClient() {
       header: ({ column }) => <DataTableColumnHeader column={column} title='Descripción' />,
     },
     {
+      id: 'descripcionComercial',
+      header: ({ column }) => <DataTableColumnHeader column={column} title='Descripción comercial' />,
+      cell: ({ row }) => row.original.descripcionComercial ?? <span className='text-muted-foreground'>—</span>,
+      enableSorting: false,
+    },
+    {
       id: 'tipo',
       header: ({ column }) => <DataTableColumnHeader column={column} title='Tipo' />,
       cell: ({ row }) => <Badge variant='outline'>{TIPO_ARTICULO_LABELS[row.original.tipo]}</Badge>,

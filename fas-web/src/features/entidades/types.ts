@@ -77,6 +77,24 @@ export interface DireccionItem {
   puerto: { id: number; codigo: string; descripcion: string } | null
 }
 
+// Categorías comerciales del contacto (2026-11-05): el Cierre Comercial toma
+// como defaults el contacto "por defecto" de cada categoría del Cliente.
+export type CategoriaContacto = 'COMPRADOR' | 'NOTIFY' | 'CONSIGNATARIO'
+export const CATEGORIAS_CONTACTO: CategoriaContacto[] = ['COMPRADOR', 'NOTIFY', 'CONSIGNATARIO']
+export const CATEGORIA_CONTACTO_LABELS: Record<CategoriaContacto, string> = {
+  COMPRADOR: 'Comprador',
+  NOTIFY: 'Notify',
+  CONSIGNATARIO: 'Consignatario',
+}
+
+export interface EntidadVinculada {
+  id: number
+  codigo: string
+  descripcion: string
+  razonSocial: string
+  tipos?: TipoEntidad[]
+}
+
 export interface ContactoItem {
   id: number
   codigo: string
@@ -87,6 +105,11 @@ export interface ContactoItem {
   telefono: string | null
   tipo: string | null
   esRepresentanteLegal: boolean
+  categorias?: CategoriaContacto[]
+  categoriasPorDefecto?: CategoriaContacto[]
+  // Entidad Notify/Consignatario real a la que apunta el contacto.
+  entidadVinculadaId?: number | null
+  entidadVinculada?: EntidadVinculada | null
 }
 
 export interface EntidadListItem {
@@ -166,4 +189,7 @@ export interface ContactoCreateInput {
   telefono?: string
   tipo?: string
   esRepresentanteLegal: boolean
+  categorias?: CategoriaContacto[]
+  categoriasPorDefecto?: CategoriaContacto[]
+  entidadVinculadaId?: number | null
 }

@@ -10,6 +10,9 @@ import {
   subirAvatar,
   descargarAvatar,
   eliminarAvatar,
+  subirFirma,
+  descargarFirma,
+  eliminarFirma,
 } from './usuarios.controller.js'
 
 const ITEM = 'CONFIG_USUARIOS'
@@ -24,4 +27,8 @@ export async function usuariosRoutes(app: FastifyInstance) {
   app.post('/usuarios/:id/avatar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, subirAvatar)
   app.get('/usuarios/:id/avatar', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, descargarAvatar)
   app.delete('/usuarios/:id/avatar', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, eliminarAvatar)
+  // Firma PNG transparente del responsable de venta (PDF Cierre Comercial).
+  app.post('/usuarios/:id/firma', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, subirFirma)
+  app.get('/usuarios/:id/firma', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, descargarFirma)
+  app.delete('/usuarios/:id/firma', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, eliminarFirma)
 }

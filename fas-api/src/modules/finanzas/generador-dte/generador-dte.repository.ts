@@ -32,7 +32,7 @@ const includeDetalle = {
   condicionPago: { select: { id: true, codigo: true, descripcion: true } },
   lineas: {
     orderBy: { orden: 'asc' as const },
-    include: { articulo: { select: mantenedorSelect } },
+    include: { articulo: { select: { ...mantenedorSelect, descripcionComercial: true } } },
   },
   referencias: { orderBy: { orden: 'asc' as const } },
 } satisfies Prisma.DocumentoManualInclude

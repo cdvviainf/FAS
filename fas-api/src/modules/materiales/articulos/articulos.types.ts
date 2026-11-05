@@ -10,6 +10,7 @@ export interface ArticuloCreateInput {
   tipo: TipoArticulo
   codigo: string
   descripcion: string
+  descripcionComercial?: string | null
   descripcionExtranjera?: string | null
   unidadId: number
   tipoCosteo: TipoCosteo

@@ -42,7 +42,7 @@ export interface NotaVentaDetalleItem {
   variedadId: number
   variedad: MantenedorRef
   articuloId: number
-  articulo: MantenedorRef & { etiqueta: MantenedorRef | null; kgNetoEnvase: string | null; kgBrutoEnvase: string | null }
+  articulo: MantenedorRef & { descripcionComercial?: string | null; etiqueta: MantenedorRef | null; kgNetoEnvase: string | null; kgBrutoEnvase: string | null }
   // Etiqueta (Marca) de la línea, resuelta en el backend (FIJA/DINÁMICA).
   etiquetaId: number | null
   etiqueta: MantenedorRef | null
@@ -54,8 +54,12 @@ export interface NotaVentaDetalleItem {
   cajasPorPallet: number
   cajas: number
   precio: string
-  calibres: { calibre: MantenedorRef }[]
+  calibres: { calibre: MantenedorRef & { orden?: number } }[]
+  // Presentación de calibres en el PDF (sin efecto funcional).
+  calibreModo: CalibreModo
 }
+
+export type CalibreModo = 'ESPECIFICOS' | 'RANGO'
 
 export type EstadoOcCierre = 'PENDIENTE' | 'COMPLETA'
 
@@ -101,7 +105,13 @@ export interface NotaVentaDetalle extends NotaVentaListItem {
   tipoVenta: 'EXPORTACION' | 'NACIONAL'
   exportadorId: number | null
   exportador: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
-  calidadesPermitidas: { notaCalidad: { id: number; codigo: string; descripcion: string }; notaCondicion: { id: number; codigo: string; descripcion: string } }[]
+  // Calidad / Condición "hasta" (2026-11-05): admite todo lo de orden <= al elegido.
+  notaCalidadHastaId: number | null
+  notaCalidadHasta: (MantenedorRef & { orden: number }) | null
+  notaCondicionHastaId: number | null
+  notaCondicionHasta: (MantenedorRef & { orden: number }) | null
+  responsableVentaId: string | null
+  responsableVenta: { id: string; nombre: string; email: string } | null
   compradorContactoId: number | null
   compradorContacto: { id: number; nombre: string; email: string | null; telefono: string | null; whatsapp: string | null } | null
   notifyId: number | null
@@ -145,7 +155,9 @@ export interface NotaVentaCreateInput {
   tipoVenta?: 'EXPORTACION' | 'NACIONAL'
   clienteId: number
   exportadorId?: number | null
-  calidadesPermitidas?: { notaCalidadId: number; notaCondicionId: number }[]
+  notaCalidadHastaId?: number | null
+  notaCondicionHastaId?: number | null
+  responsableVentaId?: string | null
   compradorContactoId?: number | null
   notifyId?: number | null
   consignatarioId?: number | null
@@ -181,4 +193,5 @@ export interface NotaVentaDetalleCreateInput {
   cajas: number
   precio: number
   calibreIds: number[]
+  calibreModo?: CalibreModo
 }

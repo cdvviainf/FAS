@@ -1,7 +1,8 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError } from '../../../shared/errors.js'
 import { getNotaVentaById } from '../../ventas/notas-venta/notas-venta.repository.js'
-import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
+import { firmaDataUri, getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 import { FECHA_REFERENCIA_LABEL } from './orden-compra.resolver.js'
 import type { CierreComercialPdfPayload } from '../schemas/cierre-comercial.schema.js'
 
@@ -16,36 +17,28 @@ export async function resolverCierreComercial(id: number, empresaId: number): Pr
   const nv = await getNotaVentaById(id)
   if (!nv) throw new NotFoundError('Cierre Comercial', String(id))
 
-  const [empresa, cliente] = await Promise.all([
+  const [empresa, cliente, exportador, firmaResponsable] = await Promise.all([
     getEmpresaParaDocumento(empresaId),
     getEntidadParaDocumento(nv.clienteId),
+    nv.exportadorId != null ? getEntidadParaDocumento(nv.exportadorId) : Promise.resolve(null),
+    firmaDataUri(nv.responsableVentaId),
   ])
 
-  // Kg Neto/Bruto (feedback Christian, 2026-08-19): Cierre Comercial no
-  // calculaba peso — mismo criterio que orden-compra.resolver.ts (envase ×
-  // cajas), el artículo ya trae kgNetoEnvase/kgBrutoEnvase seleccionados en
-  // notas-venta.repository.ts.
-  const calculadas = nv.detalles.map((l) => {
-    const kgNetoEnvase = l.articulo.kgNetoEnvase ? new Prisma.Decimal(l.articulo.kgNetoEnvase) : new Prisma.Decimal(0)
-    const kgBrutoEnvase = l.articulo.kgBrutoEnvase ? new Prisma.Decimal(l.articulo.kgBrutoEnvase) : new Prisma.Decimal(0)
-    return {
-      l,
-      kgNetoEnvase,
-      kgBrutoEnvase,
-      total: new Prisma.Decimal(l.precio).mul(l.cajas),
-      kgNeto: kgNetoEnvase.mul(l.cajas),
-      kgBruto: kgBrutoEnvase.mul(l.cajas),
-    }
-  })
+  const calculadas = nv.detalles.map((l) => ({
+    l,
+    kgNetoEnvase: l.articulo.kgNetoEnvase ? new Prisma.Decimal(l.articulo.kgNetoEnvase) : new Prisma.Decimal(0),
+    total: new Prisma.Decimal(l.precio).mul(l.cajas),
+  }))
 
-  const lineas = calculadas.map(({ l, kgNetoEnvase, kgBrutoEnvase, total, kgNeto, kgBruto }) => ({
+  const lineas = calculadas.map(({ l, kgNetoEnvase, total }) => ({
     especie: l.especie.descripcion,
     variedad: l.variedad.descripcion,
-    articulo: l.articulo.descripcion,
-    etiqueta: l.articulo.etiqueta?.descripcion ?? null,
-    // Descripción, no código (feedback Christian, 2026-08-19) — en las 3
-    // plantillas del motor, no solo acá.
-    calibres: l.calibres.map((c) => c.calibre.descripcion).join(', '),
+    // Descripción comercial (de venta) del artículo, no la de materiales (2026-11-05).
+    articulo: descripcionComercialArticulo(l.articulo),
+    // Etiqueta (Marca) DE LA LÍNEA (2026-11-05, antes salía la del artículo);
+    // la del artículo queda como respaldo para líneas antiguas sin etiqueta.
+    etiqueta: l.etiqueta?.descripcion ?? l.articulo.etiqueta?.descripcion ?? null,
+    calibres: textoCalibres(l.calibres.map((c) => c.calibre), l.calibreModo),
     categoria: l.categoria?.descripcion ?? null,
     tipoPallet: l.tipoPallet?.descripcion ?? null,
     cantidadPallets: l.cantidadPallets,
@@ -54,9 +47,6 @@ export async function resolverCierreComercial(id: number, empresaId: number): Pr
     precio: new Prisma.Decimal(l.precio).toString(),
     total: total.toString(),
     kgNetoEnvase: kgNetoEnvase.toString(),
-    kgBrutoEnvase: kgBrutoEnvase.toString(),
-    kgNeto: kgNeto.toString(),
-    kgBruto: kgBruto.toString(),
   }))
 
   const totales = calculadas.reduce(
@@ -64,10 +54,8 @@ export async function resolverCierreComercial(id: number, empresaId: number): Pr
       pallets: acc.pallets + c.l.cantidadPallets,
       cajas: acc.cajas + c.l.cajas,
       totalMonto: acc.totalMonto.add(c.total),
-      kgNeto: acc.kgNeto.add(c.kgNeto),
-      kgBruto: acc.kgBruto.add(c.kgBruto),
     }),
-    { pallets: 0, cajas: 0, totalMonto: new Prisma.Decimal(0), kgNeto: new Prisma.Decimal(0), kgBruto: new Prisma.Decimal(0) },
+    { pallets: 0, cajas: 0, totalMonto: new Prisma.Decimal(0) },
   )
 
   return {
@@ -77,6 +65,22 @@ export async function resolverCierreComercial(id: number, empresaId: number): Pr
       direccion: empresa?.direcciones[0]?.direccion ?? null,
       logoDataUri: logoDataUri(empresa?.logo),
     },
+    // Exportador del Cierre (2026-11-05, antes siempre la empresa).
+    exportador: exportador
+      ? {
+          razonSocial: exportador.razonSocial,
+          rut: exportador.identificador ?? null,
+          direccion: exportador.direcciones[0]?.direccion ?? null,
+        }
+      : {
+          razonSocial: empresa?.razonSocial ?? '—',
+          rut: empresa?.rut ?? null,
+          direccion: empresa?.direcciones[0]?.direccion ?? null,
+        },
+    responsableVenta: nv.responsableVenta?.nombre ?? null,
+    firmaResponsableDataUri: firmaResponsable,
+    calidadHasta: nv.notaCalidadHasta ? `${nv.notaCalidadHasta.codigo} — ${nv.notaCalidadHasta.descripcion}` : null,
+    condicionHasta: nv.notaCondicionHasta ? `${nv.notaCondicionHasta.codigo} — ${nv.notaCondicionHasta.descripcion}` : null,
     folio: String(nv.folio),
     fecha: nv.fecha.toISOString(),
     cliente: {
@@ -97,24 +101,28 @@ export async function resolverCierreComercial(id: number, empresaId: number): Pr
     tipoFlete: nv.tipoFlete?.descripcion ?? null,
     condicionPago: nv.condicionPago?.descripcion ?? null,
     moneda: nv.moneda.codigo,
-    cuotas: nv.cuotasPago.map((c) => ({
-      plazoDias: c.plazoDias,
-      fechaReferencia: c.fechaReferencia,
-      tipoValor: c.tipoValor,
-      porcentaje: c.porcentaje ? c.porcentaje.toString() : null,
-      valorUnitario: c.valorUnitario ? c.valorUnitario.toString() : null,
-      unidad: c.unidad?.descripcion ?? null,
-    })),
     observaciones: nv.observaciones,
     lineas,
     totales: {
       pallets: totales.pallets,
       cajas: totales.cajas,
       totalMonto: totales.totalMonto.toString(),
-      kgNeto: totales.kgNeto.toString(),
-      kgBruto: totales.kgBruto.toString(),
     },
   }
+}
+
+// Calibres en el PDF (2026-11-05): RANGO = "Desde {menor} hasta {mayor}" según
+// el orden del mantenedor de calibres; ESPECIFICOS = lista. Con un solo calibre
+// se muestra tal cual en ambos modos.
+export function textoCalibres(
+  calibres: { descripcion: string; orden: number }[],
+  modo: 'ESPECIFICOS' | 'RANGO',
+): string {
+  const ordenados = [...calibres].sort((a, b) => a.orden - b.orden)
+  if (modo === 'RANGO' && ordenados.length > 1) {
+    return `Desde ${ordenados[0].descripcion} hasta ${ordenados[ordenados.length - 1].descripcion}`
+  }
+  return ordenados.map((c) => c.descripcion).join(', ')
 }
 
 // Reexport — el título "FECHA_REFERENCIA_LABEL" queda dueño de

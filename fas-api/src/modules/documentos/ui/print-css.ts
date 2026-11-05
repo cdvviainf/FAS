@@ -152,6 +152,10 @@ export function printCss(pagina: { formato: 'A4' | 'Letter'; orientacion: 'portr
     .doc-pie-firma { break-inside: avoid; margin-top: 12mm; display: flex; gap: 12mm; }
     .doc-firma { flex: 1; text-align: center; font-size: 9pt; }
     .doc-firma .doc-firma-linea { border-top: 1px solid ${T.tinta}; margin-bottom: 1.5mm; padding-top: 10mm; }
+    .doc-firma-espacio { height: 20mm; display: flex; align-items: flex-end; justify-content: center; }
+    .doc-firma-imagen { max-height: 20mm; max-width: 60mm; object-fit: contain; margin-bottom: -2mm; }
+    .doc-firma .doc-firma-linea--con-imagen { padding-top: 0; }
+    .doc-firma-detalle { font-size: 8pt; color: ${T.tinta}; opacity: 0.75; }
 
     .doc-footer-empresa {
       font-size: 7.5pt;

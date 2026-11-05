@@ -41,6 +41,7 @@ import type {
   SolicitudMadurezInput,
   TipoDatoMadurez,
 } from '../types'
+import { articuloDescripcionComercial } from '@/lib/articulo'
 
 const gruposDefectoService = createMantenedorService('grupos-defecto')
 const defectosService = createMantenedorService('defectos')
@@ -182,7 +183,7 @@ function LineaCierreEditor({ linea, valor, onChange, grupos, defectosCatalogo, c
       <div className='flex flex-wrap items-center justify-between gap-2'>
         <div className='text-sm font-medium'>
           {linea
-            ? <>{linea.especie.descripcion} · {linea.variedad.descripcion}<span className='text-muted-foreground'> · {linea.articulo.descripcion}</span></>
+            ? <>{linea.especie.descripcion} · {linea.variedad.descripcion}<span className='text-muted-foreground'> · {articuloDescripcionComercial(linea.articulo)}</span></>
             : 'Resultado general (solicitud sin líneas)'}
         </div>
         <div className='w-56 space-y-1'>

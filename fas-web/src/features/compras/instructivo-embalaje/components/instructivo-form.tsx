@@ -35,6 +35,7 @@ import { CalidadesPermitidasInput, type CalidadPermitidaPar } from '@/components
 import { instructivoEmbalajeDetailOptions, instructivosEmbalajeKeys } from '../queries'
 import { instructivoEmbalajeService } from '../service'
 import type { InstructivoEmbalajeDetalleInput } from '../types'
+import { articuloDescripcionComercial } from '@/lib/articulo'
 
 const ITEM = 'COMPRAS_INSTRUCTIVO'
 
@@ -651,7 +652,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
             <div className='space-y-1.5 md:col-span-2'>
               <Label>Artículo (Embalaje) <span className='text-destructive'>*</span></Label>
               <Combobox
-                options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+                options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${articuloDescripcionComercial(a)}` }))}
                 value={linea.articuloId ? String(linea.articuloId) : null}
                 onChange={(v) => {
                   const id = Number(v)
@@ -918,7 +919,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{d.variedadRotuladaId ? nombre(variedadesTodas, d.variedadRotuladaId) : '—'}</TableCell>
                       <TableCell className='whitespace-nowrap'>
                         <div className='font-medium'>{articulos.find((a) => a.id === d.articuloId)?.codigo ?? String(d.articuloId)}</div>
-                        <div className='text-muted-foreground text-xs'>{articulos.find((a) => a.id === d.articuloId)?.descripcion ?? ''}</div>
+                        <div className='text-muted-foreground text-xs'>{(() => { const a = articulos.find((x) => x.id === d.articuloId); return a ? articuloDescripcionComercial(a) : '' })()}</div>
                       </TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{marcaDe(d)}</TableCell>
                       <TableCell className='whitespace-nowrap text-muted-foreground'>{nombre(categoriasTodas, d.categoriaId)}</TableCell>

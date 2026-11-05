@@ -31,6 +31,7 @@ import { condicionesPagoService } from '@/features/condiciones-pago/service'
 import { usuariosService } from '@/features/usuarios/service'
 import { contratosService } from '../service'
 import type { Contrato, ContratoLineaInput } from '../types'
+import { articuloDescripcionComercial } from '@/lib/articulo'
 
 const temporadasService = createMantenedorService('temporadas')
 const especiesService = createMantenedorService('especies')
@@ -412,7 +413,7 @@ function LineaContrato({
         <div className='space-y-1.5'>
           <Label className='text-xs'>Embalaje</Label>
           <Combobox
-            options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+            options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${articuloDescripcionComercial(a)}` }))}
             value={linea.articuloId ? String(linea.articuloId) : null}
             onChange={(v) => onChange({ articuloId: Number(v) })}
             placeholder='Seleccionar...'

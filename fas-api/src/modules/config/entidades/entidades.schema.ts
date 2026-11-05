@@ -72,6 +72,11 @@ export const direccionUpdateSchema = z.object({
 
 // ─── Contacto ─────────────────────────────────────────────────────────────────
 
+// Categorías comerciales del contacto (2026-11-05): Comprador / Notify /
+// Consignatario. El Cierre Comercial toma como valor por defecto el contacto
+// marcado "por defecto" en cada categoría del Cliente.
+export const categoriaContactoSchema = z.enum(['COMPRADOR', 'NOTIFY', 'CONSIGNATARIO'])
+
 export const contactoCreateSchema = z.object({
   codigo: z.string().min(1, 'El código es requerido').max(50).trim(),
   nombre: z.string().min(1, 'El nombre es requerido').max(200).trim(),
@@ -81,6 +86,11 @@ export const contactoCreateSchema = z.object({
   telefono: z.string().max(50).trim().optional(),
   tipo: z.string().max(100).trim().optional(),
   esRepresentanteLegal: z.boolean().default(false),
+  categorias: z.array(categoriaContactoSchema).default([]),
+  categoriasPorDefecto: z.array(categoriaContactoSchema).default([]),
+  // Entidad Notify/Consignatario real a la que apunta el contacto (requerida si
+  // tiene categoría NOTIFY o CONSIGNATARIO — validado en el service).
+  entidadVinculadaId: z.number().int().positive().nullable().optional(),
 })
 
 export const contactoUpdateSchema = z.object({
@@ -92,6 +102,9 @@ export const contactoUpdateSchema = z.object({
   telefono: z.string().max(50).trim().nullable().optional(),
   tipo: z.string().max(100).trim().nullable().optional(),
   esRepresentanteLegal: z.boolean().optional(),
+  categorias: z.array(categoriaContactoSchema).optional(),
+  categoriasPorDefecto: z.array(categoriaContactoSchema).optional(),
+  entidadVinculadaId: z.number().int().positive().nullable().optional(),
 })
 
 // ─── Params y Query ───────────────────────────────────────────────────────────
@@ -132,6 +145,9 @@ export type EntidadCreateInput = z.infer<typeof entidadCreateSchema>
 export type EntidadUpdateInput = z.infer<typeof entidadUpdateSchema>
 export type DireccionCreateInput = z.infer<typeof direccionCreateSchema>
 export type DireccionUpdateInput = z.infer<typeof direccionUpdateSchema>
-export type ContactoCreateInput = z.infer<typeof contactoCreateSchema>
+// categorias/categoriasPorDefecto opcionales en el tipo: los consumidores que
+// llaman al service sin pasar por Zod (loaders, tests) las omiten → [] en el service.
+export type ContactoCreateInput = Omit<z.infer<typeof contactoCreateSchema>, 'categorias' | 'categoriasPorDefecto'> &
+  Partial<Pick<z.infer<typeof contactoCreateSchema>, 'categorias' | 'categoriasPorDefecto'>>
 export type ContactoUpdateInput = z.infer<typeof contactoUpdateSchema>
 export type EntidadListQuery = z.infer<typeof entidadListQuerySchema>

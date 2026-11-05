@@ -1,3 +1,5 @@
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
+
 // Construcción de la descripción de línea (Proforma/Factura) según idioma y
 // validación de descripciones extranjeras. La descripción se arma desde los
 // mantenedores incluidos en la línea (Especie siempre + los que estén
@@ -8,6 +10,9 @@ export type Idioma = 'ES' | 'EN'
 export interface CampoDesc {
   descripcion: string
   descripcionExtranjera: string | null
+  // Solo Artículo (2026-11-05): descripción comercial — la que se usa en ES
+  // fuera de Materiales (fallback a `descripcion`, ver shared/articulo-descripcion.ts).
+  descripcionComercial?: string | null
 }
 
 export interface LineaConMantenedores {
@@ -30,8 +35,9 @@ const ORDEN: { key: keyof LineaConMantenedores; label: string }[] = [
 ]
 
 function textoCampo(c: CampoDesc, idioma: Idioma): string {
-  if (idioma === 'EN') return (c.descripcionExtranjera && c.descripcionExtranjera.trim()) || c.descripcion
-  return c.descripcion
+  const base = descripcionComercialArticulo(c)
+  if (idioma === 'EN') return (c.descripcionExtranjera && c.descripcionExtranjera.trim()) || base
+  return base
 }
 
 // Descripción de la línea en el idioma pedido.
@@ -50,7 +56,7 @@ export function faltantesDescripcionExtranjera(lineas: LineaConMantenedores[]): 
     for (const { key, label } of ORDEN) {
       const c = l[key] as CampoDesc | null | undefined
       if (c && !(c.descripcionExtranjera && c.descripcionExtranjera.trim())) {
-        faltan.add(`${label}: ${c.descripcion}`)
+        faltan.add(`${label}: ${descripcionComercialArticulo(c)}`)
       }
     }
   }

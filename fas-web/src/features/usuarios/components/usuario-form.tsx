@@ -27,6 +27,7 @@ import { usuarioDetailOptions, usuariosKeys } from '../queries'
 import { usuariosService } from '../service'
 import { PasswordStrengthIndicator } from './password-strength-indicator'
 import { AvatarUploadField } from './avatar-upload-field'
+import { FirmaUploadField, FONDO_CUADRICULADO } from './firma-upload-field'
 import type { Perfil } from '@/features/perfiles/types'
 
 const usuarioBaseSchema = z.object({
@@ -76,6 +77,10 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [passwordValue, setPasswordValue] = useState('')
+  // Modo creación: imagen y firma elegidas antes de que exista el usuario; se
+  // suben después del POST (mismo patrón que los contactos en entidad-form).
+  const [avatarPendiente, setAvatarPendiente] = useState<File | null>(null)
+  const [firmaPendiente, setFirmaPendiente] = useState<File | null>(null)
 
   const { data: usuario, isLoading: loadingUsuario } = useQuery(
     usuarioDetailOptions(usuarioId ?? '')
@@ -112,7 +117,23 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
         empresas: values.empresas,
         empresaPredeterminadaId: values.empresaPredeterminadaId ?? null,
       }),
-    onSuccess: () => {
+    onSuccess: async (creado, values) => {
+      // Subidas diferidas: si fallan, el usuario ya existe — se avisa y se
+      // puede reintentar desde la edición.
+      if (avatarPendiente) {
+        try {
+          await usuariosService.subirAvatar(creado.id, avatarPendiente)
+        } catch (e) {
+          toast.error(`Usuario creado, pero no se pudo subir la imagen: ${(e as Error).message}`)
+        }
+      }
+      if (firmaPendiente && values.esResponsableVenta) {
+        try {
+          await usuariosService.subirFirma(creado.id, firmaPendiente)
+        } catch (e) {
+          toast.error(`Usuario creado, pero no se pudo subir la firma: ${(e as Error).message}`)
+        }
+      }
       toast.success('Usuario creado correctamente')
       queryClient.invalidateQueries({ queryKey: usuariosKeys.all })
       router.push('/dashboard/configuracion/usuarios')
@@ -302,6 +323,22 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
                   )}
                 </editForm.Field>
 
+                {/* Firma (solo responsables de venta) */}
+                <editForm.Subscribe selector={(st) => st.values.esResponsableVenta}>
+                  {(esResponsable) =>
+                    esResponsable ? (
+                      <div className='space-y-1.5 sm:col-span-2'>
+                        <Label>Firma</Label>
+                        <FirmaUploadField
+                          usuarioId={usuarioId!}
+                          tieneFirma={usuario?.tieneFirma ?? false}
+                          version={usuario?.actualizadoEn ?? null}
+                        />
+                      </div>
+                    ) : null
+                  }
+                </editForm.Subscribe>
+
                 {/* Empresas asignadas + predeterminada */}
                 <div className='sm:col-span-2 space-y-4'>
                   <Separator />
@@ -489,6 +526,35 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
                   </div>
                 )}
               </createForm.Field>
+
+              {/* Imagen (se sube al crear) */}
+              <div className='space-y-1.5 sm:col-span-2'>
+                <Label>Imagen</Label>
+                <ArchivoPendiente
+                  accept='image/jpeg,image/png,image/webp'
+                  archivo={avatarPendiente}
+                  onChange={setAvatarPendiente}
+                  textoBoton='Elegir imagen'
+                />
+              </div>
+
+              {/* Firma (solo responsables de venta; se sube al crear) */}
+              <createForm.Subscribe selector={(st) => st.values.esResponsableVenta}>
+                {(esResponsable) =>
+                  esResponsable ? (
+                    <div className='space-y-1.5 sm:col-span-2'>
+                      <Label>Firma</Label>
+                      <ArchivoPendiente
+                        accept='image/png'
+                        archivo={firmaPendiente}
+                        onChange={setFirmaPendiente}
+                        textoBoton='Elegir firma (PNG transparente)'
+                        fondoCuadriculado
+                      />
+                    </div>
+                  ) : null
+                }
+              </createForm.Subscribe>
             </div>
           </CardContent>
         </Card>
@@ -624,5 +690,62 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
         </div>
       </createForm.Form>
     </createForm.AppForm>
+  )
+}
+
+// Selector de archivo local (modo creación): muestra preview y se sube recién
+// después de crear el usuario.
+function ArchivoPendiente({
+  accept,
+  archivo,
+  onChange,
+  textoBoton,
+  fondoCuadriculado,
+}: {
+  accept: string
+  archivo: File | null
+  onChange: (f: File | null) => void
+  textoBoton: string
+  fondoCuadriculado?: boolean
+}) {
+  const preview = useMemo(() => (archivo ? URL.createObjectURL(archivo) : null), [archivo])
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview)
+  }, [preview])
+
+  return (
+    <div className='flex flex-wrap items-center gap-4'>
+      {preview && (
+        <div
+          className='flex h-16 w-40 items-center justify-center rounded border'
+          style={fondoCuadriculado ? FONDO_CUADRICULADO : undefined}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={preview} alt='Vista previa' className='max-h-full max-w-full object-contain' />
+        </div>
+      )}
+      <label className='inline-flex'>
+        <input
+          type='file'
+          accept={accept}
+          className='hidden'
+          onChange={(e) => {
+            const f = e.target.files?.[0] ?? null
+            e.target.value = ''
+            onChange(f)
+          }}
+        />
+        <span className='border-input hover:bg-accent inline-flex h-8 cursor-pointer items-center rounded-md border px-3 text-sm'>
+          <Icons.upload className='mr-1.5 h-3.5 w-3.5' />
+          {archivo ? 'Cambiar' : textoBoton}
+        </span>
+      </label>
+      {archivo && (
+        <Button type='button' variant='ghost' size='sm' onClick={() => onChange(null)}>
+          <Icons.trash className='mr-1.5 h-3.5 w-3.5' />
+          Quitar
+        </Button>
+      )}
+    </div>
   )
 }

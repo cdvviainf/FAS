@@ -21,8 +21,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Icons } from '@/components/icons'
-import { Combobox } from '@/components/ui/combobox'
+import { Combobox, NONE_VALUE } from '@/components/ui/combobox'
+import { authClient } from '@/lib/auth-client'
+import { articuloDescripcionComercial } from '@/lib/articulo'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
+import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 import { entidadesService } from '@/features/entidades/service'
 import { entidadDetailOptions } from '@/features/entidades/queries'
 import { articulosService } from '@/features/materiales/articulos/service'
@@ -32,11 +35,20 @@ import { condicionesPagoService } from '@/features/condiciones-pago/service'
 import { FECHA_REFERENCIA_LABELS } from '@/features/condiciones-pago/types'
 import { notasCalidadService } from '@/features/notas-calidad/service'
 import { notasCondicionService } from '@/features/notas-condicion/service'
-import { CalidadesPermitidasInput, type CalidadPermitidaPar } from '@/components/shared/calidades-permitidas-input'
 import { notaVentaDetailOptions, notasVentaKeys } from '../queries'
 import { notasVentaService } from '../service'
 import { CLIENTE_SIN_DEFINIR_CODIGO } from '../constants'
-import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleItem } from '../types'
+import type { CalibreModo, NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleItem } from '../types'
+
+// Categorías comerciales del contacto (2026-11-05, EntidadContacto.categorias):
+// el Cierre toma de aquí los defaults de Comprador / Notify / Consignatario.
+type ContactoComercial = {
+  id: number
+  nombre: string
+  categorias?: string[]
+  categoriasPorDefecto?: string[]
+  entidadVinculadaId?: number | null
+}
 
 const tiposEmbarqueService = createMantenedorService('tipos-embarque')
 const mercadosService = createMantenedorService('mercados')
@@ -76,6 +88,11 @@ interface HeaderFields {
   condicionPagoId: number | null
   observaciones: string
   contratoNaviero: 'AGROSAN_AGL' | 'CLIENTE'
+  // Calidad / Condición "hasta" (2026-11-05). null = sin restricción.
+  notaCalidadHastaId: number | null
+  notaCondicionHastaId: number | null
+  // Responsable de venta (2026-11-05): por defecto el usuario digitador.
+  responsableVentaId: string | null
 }
 
 const HEADER_EMPTY: HeaderFields = {
@@ -100,6 +117,9 @@ const HEADER_EMPTY: HeaderFields = {
   condicionPagoId: null,
   observaciones: '',
   contratoNaviero: 'AGROSAN_AGL',
+  notaCalidadHastaId: null,
+  notaCondicionHastaId: null,
+  responsableVentaId: null,
 }
 
 // Cajas por pallet: cifra teórica del mantenedor CajasPorPallet (embalaje +
@@ -119,6 +139,8 @@ interface NuevaLinea {
   cajas: string
   precio: string
   calibreIds: number[]
+  // Presentación de calibres en el PDF (sin efecto funcional).
+  calibreModo: CalibreModo
 }
 
 const LINEA_EMPTY: NuevaLinea = {
@@ -134,6 +156,7 @@ const LINEA_EMPTY: NuevaLinea = {
   cajas: '',
   precio: '',
   calibreIds: [],
+  calibreModo: 'ESPECIFICOS',
 }
 
 interface NotaVentaFormProps {
@@ -147,7 +170,20 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
 
   const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [calidadesPermitidas, setCalidadesPermitidas] = useState<CalidadPermitidaPar[]>([])
+  const { data: session } = authClient.useSession()
+  const usuarioActualId = session?.user?.id ?? null
+  // Defaults comerciales del Cliente (Comprador/Notify/Consignatario): se
+  // aplican solo cuando el USUARIO elige un cliente (no al hidratar un Cierre
+  // guardado, que conserva sus valores).
+  const aplicarDefaultsClienteRef = useRef(false)
+  // Últimos defaults aplicados (CCN26-R1-003): al cambiar de Cliente, un campo
+  // solo se reemplaza si está vacío o si su valor sigue siendo ese default
+  // (no se pisa una elección manual).
+  const defaultsAplicadosRef = useRef<{ compradorContactoId: number | null; notifyId: number | null; consignatarioId: number | null }>({
+    compradorContactoId: null,
+    notifyId: null,
+    consignatarioId: null,
+  })
   const [linea, setLinea] = useState<NuevaLinea>(LINEA_EMPTY)
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
   // Estado del lookup de cajas por pallet (2026-10-13, CPP-QA-003): distingue
@@ -189,14 +225,37 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   // (IMP-QA-R1-005).
   const consignatarios = entidades.filter((e) => e.tipos.includes('CONSIGNATARIO'))
   const exportadores = entidades.filter((e) => e.tipos.includes('EXPORTADORA'))
+  // El backend exige tipo NOTIFY al fijar/cambiar el notify (2026-11-05); se
+  // conserva el ya guardado aunque no tenga el tipo (Cierres antiguos).
+  const notifies = entidades.filter((e) => e.tipos.includes('NOTIFY') || e.id === notaVenta?.data.notifyId)
   const { data: notasCalidadData } = useQuery({ queryKey: ['notas-calidad-options'], queryFn: () => notasCalidadService.list(), staleTime: 5 * 60_000 })
   const { data: notasCondicionData } = useQuery({ queryKey: ['notas-condicion-options'], queryFn: () => notasCondicionService.list(), staleTime: 5 * 60_000 })
-  const notasCalidad = (notasCalidadData?.data ?? []).filter((n) => !n.bloqueado)
-  const notasCondicion = (notasCondicionData?.data ?? []).filter((n) => !n.bloqueado)
+  const porOrden = (a: { orden: number; codigo: string }, b: { orden: number; codigo: string }) => a.orden - b.orden || a.codigo.localeCompare(b.codigo)
+  // Vigentes + la ya guardada (aunque hoy esté bloqueada) para no perderla al editar.
+  const notasCalidad = (notasCalidadData?.data ?? []).filter((n) => !n.bloqueado || n.id === fields.notaCalidadHastaId).sort(porOrden)
+  const notasCondicion = (notasCondicionData?.data ?? []).filter((n) => !n.bloqueado || n.id === fields.notaCondicionHastaId).sort(porOrden)
+  const { data: responsablesData } = useQuery({
+    queryKey: ['cierre-responsables-venta-options'],
+    queryFn: () => notasVentaService.responsablesVenta(),
+    staleTime: 60_000,
+  })
+  // Responsables = usuarios marcados como responsables de venta + el digitador
+  // (default) + el ya guardado, sin duplicados.
+  const responsables = (() => {
+    const lista: { id: string; nombre: string }[] = (responsablesData?.data ?? []).map((u) => ({ id: u.id, nombre: u.nombre }))
+    const agregar = (id: string | null | undefined, nombre: string | null | undefined) => {
+      if (id && !lista.some((u) => u.id === id)) lista.push({ id, nombre: nombre ?? id })
+    }
+    agregar(usuarioActualId, session?.user?.name)
+    agregar(notaVenta?.data.responsableVentaId, notaVenta?.data.responsableVenta?.nombre)
+    return lista.sort((a, b) => a.nombre.localeCompare(b.nombre))
+  })()
 
   const { data: tiposEmbarqueData } = useQuery({ queryKey: ['tipos-embarque-options'], queryFn: () => tiposEmbarqueService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const { data: mercadosData } = useQuery({ queryKey: ['mercados-options'], queryFn: () => mercadosService.list({ limit: 200 }), staleTime: 5 * 60_000 })
-  const { data: paisesData } = useQuery({ queryKey: ['paises-options', fields.mercadoId], queryFn: () => paisesService.list({ limit: 200, mercadoId: fields.mercadoId }), staleTime: 60_000, enabled: !!fields.mercadoId })
+  // Mercado derivado (2026-11-05): se elige primero el País (con buscador) y el
+  // Mercado se deriva de los mercados a los que pertenece (MercadoPais).
+  const { data: paisesData } = useQuery({ queryKey: ['paises-con-mercado-options'], queryFn: () => paisesService.list({ limit: 500, soloActivos: true }), staleTime: 60_000 })
   const { data: puertosData } = useQuery({ queryKey: ['puertos-options', fields.paisDestinoId], queryFn: () => puertosService.list({ limit: 200, paisId: fields.paisDestinoId }), staleTime: 60_000, enabled: !!fields.paisDestinoId })
   const { data: monedasData } = useQuery({ queryKey: ['monedas-options'], queryFn: () => monedasService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const { data: especiesData } = useQuery({ queryKey: ['especies-options'], queryFn: () => especiesService.list({ limit: 200 }), staleTime: 5 * 60_000 })
@@ -233,7 +292,85 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     enabled: !!fields.clienteId,
   })
   const direccionesCliente = clienteDetalle?.direcciones ?? []
-  const contactosCliente = clienteDetalle?.contactos ?? []
+  const contactosCliente = (clienteDetalle?.contactos ?? []) as ContactoComercial[]
+  const contactoPorDefecto = (cat: string) => contactosCliente.find((c) => (c.categoriasPorDefecto ?? []).includes(cat))
+  // Entidades vinculadas al Cliente como Notify / Consignatario (se listan primero).
+  const vinculadasCliente = (cat: string) =>
+    new Set(contactosCliente.filter((c) => (c.categorias ?? []).includes(cat) && c.entidadVinculadaId != null).map((c) => c.entidadVinculadaId!))
+  const notifyDelCliente = vinculadasCliente('NOTIFY')
+  const consignatarioDelCliente = vinculadasCliente('CONSIGNATARIO')
+  const ordenarDelCliente = <T extends { id: number }>(lista: T[], delCliente: Set<number>) =>
+    [...lista].sort((a, b) => Number(delCliente.has(b.id)) - Number(delCliente.has(a.id)))
+
+  // Países elegibles: los que pertenecen a algún mercado de la empresa (más el
+  // ya guardado, para no perderlo al editar).
+  const mercados = mercadosData?.data ?? []
+  const mercadoIdsVigentes = new Set(mercados.map((m) => m.id))
+  const paisesElegibles = ((paisesData?.data ?? []) as (MantenedorSimple & { mercadoIds?: number[] })[]).filter(
+    (p) => (p.mercadoIds ?? []).some((id: number) => mercadoIdsVigentes.has(id)) || p.id === fields.paisDestinoId,
+  )
+  const paisSeleccionado = paisesElegibles.find((p) => p.id === fields.paisDestinoId)
+  const mercadosDelPais = paisSeleccionado
+    ? mercados.filter((m) => (paisSeleccionado.mercadoIds ?? []).includes(m.id) || m.id === fields.mercadoId)
+    : []
+
+  function elegirPais(paisId: number) {
+    const pais = paisesElegibles.find((p) => p.id === paisId)
+    const candidatos = mercados.filter((m) => (pais?.mercadoIds ?? []).includes(m.id))
+    setFields((f) => ({
+      ...f,
+      paisDestinoId: paisId,
+      puertoDestinoId: null,
+      // 1 mercado → se asigna solo; varios → se conserva el actual si sigue
+      // siendo válido, si no queda por elegir.
+      mercadoId: candidatos.length === 1 ? candidatos[0].id : candidatos.some((m) => m.id === f.mercadoId) ? f.mercadoId : 0,
+    }))
+  }
+
+  // Al cambiar el Cliente (acción del usuario), se proponen sus defaults
+  // comerciales — o se limpian, porque los del cliente anterior ya no aplican.
+  useEffect(() => {
+    if (!aplicarDefaultsClienteRef.current || !clienteDetalle || clienteDetalle.id !== fields.clienteId) return
+    aplicarDefaultsClienteRef.current = false
+    const comprador = contactoPorDefecto('COMPRADOR')
+    const notify = contactoPorDefecto('NOTIFY')
+    const consignatario = contactoPorDefecto('CONSIGNATARIO')
+    const nuevos = {
+      compradorContactoId: comprador?.id ?? null,
+      notifyId: notify?.entidadVinculadaId ?? null,
+      consignatarioId: consignatario?.entidadVinculadaId ?? null,
+    }
+    const anteriores = defaultsAplicadosRef.current
+    defaultsAplicadosRef.current = nuevos
+    // Reemplazable = vacío o igual al default aplicado antes. El comprador es un
+    // contacto DEL cliente: si no pertenece al nuevo cliente, también se reemplaza.
+    const reemplazable = (actual: number | null, anterior: number | null) => actual == null || actual === anterior
+    setFields((f) => ({
+      ...f,
+      compradorContactoId:
+        reemplazable(f.compradorContactoId, anteriores.compradorContactoId) || !contactosCliente.some((c) => c.id === f.compradorContactoId)
+          ? nuevos.compradorContactoId
+          : f.compradorContactoId,
+      notifyId: reemplazable(f.notifyId, anteriores.notifyId) ? nuevos.notifyId : f.notifyId,
+      consignatarioId: reemplazable(f.consignatarioId, anteriores.consignatarioId) ? nuevos.consignatarioId : f.consignatarioId,
+    }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteDetalle, fields.clienteId])
+
+  function elegirCliente(clienteId: number) {
+    aplicarDefaultsClienteRef.current = true
+    // Dirección: siempre del cliente → se limpia. Comprador/Notify/Consignatario
+    // se resuelven en el efecto de defaults (CCN26-R1-003).
+    setFields((f) => ({ ...f, clienteId, direccionId: null }))
+  }
+
+  // Responsable de venta por defecto al crear: el usuario digitador.
+  useEffect(() => {
+    if (!isEdit && !fields.responsableVentaId && usuarioActualId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFields((f) => (f.responsableVentaId ? f : { ...f, responsableVentaId: usuarioActualId }))
+    }
+  }, [isEdit, fields.responsableVentaId, usuarioActualId])
 
   useEffect(() => {
     if (notaVenta) {
@@ -261,8 +398,10 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
         condicionPagoId: d.condicionPagoId,
         observaciones: d.observaciones ?? '',
         contratoNaviero: d.contratoNaviero ?? 'AGROSAN_AGL',
+        notaCalidadHastaId: d.notaCalidadHastaId ?? null,
+        notaCondicionHastaId: d.notaCondicionHastaId ?? null,
+        responsableVentaId: d.responsableVentaId ?? null,
       })
-      setCalidadesPermitidas(d.calidadesPermitidas.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })))
     }
   }, [notaVenta])
 
@@ -328,7 +467,9 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       tipoVenta: fields.tipoVenta,
       clienteId: fields.clienteId,
       exportadorId: fields.exportadorId,
-      calidadesPermitidas,
+      notaCalidadHastaId: fields.notaCalidadHastaId,
+      notaCondicionHastaId: fields.notaCondicionHastaId,
+      responsableVentaId: fields.responsableVentaId,
       compradorContactoId: fields.compradorContactoId,
       notifyId: fields.notifyId,
       consignatarioId: fields.consignatarioId,
@@ -368,6 +509,17 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar el Cierre Comercial'),
   })
+
+  const duplicarMutation = useMutation({
+    mutationFn: () => notasVentaService.duplicar(notaVentaId!),
+    onSuccess: (res) => {
+      toast.success(`Cierre duplicado — nuevo Folio ${res.data.folio}`)
+      queryClient.invalidateQueries({ queryKey: notasVentaKeys.all })
+      router.push(`/dashboard/ventas/cierre/${res.data.id}`)
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al duplicar el Cierre Comercial'),
+  })
+  const [confirmDuplicar, setConfirmDuplicar] = useState(false)
 
   const addDetalleMutation = useMutation({
     mutationFn: (data: NotaVentaDetalleCreateInput) => notasVentaService.addDetalle(notaVentaId!, data),
@@ -503,6 +655,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       cajas: Number(linea.cajas),
       precio: Number(linea.precio),
       calibreIds: linea.calibreIds,
+      calibreModo: linea.calibreModo,
     }
     if (editingDetalleId) updateDetalleMutation.mutate(payload)
     else addDetalleMutation.mutate(payload)
@@ -523,6 +676,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       cajas: String(d.cajas),
       precio: d.precio,
       calibreIds: d.calibres.map((c) => c.calibre.id),
+      calibreModo: d.calibreModo ?? 'ESPECIFICOS',
     })
     invalidarLookupCajas()
     setLineaErrors({})
@@ -546,6 +700,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       cajas: String(d.cajas),
       precio: d.precio,
       calibreIds: d.calibres.map((c) => c.calibre.id),
+      calibreModo: d.calibreModo ?? 'ESPECIFICOS',
     })
     invalidarLookupCajas()
     setLineaErrors({})
@@ -609,7 +764,22 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     <div className='space-y-6'>
       <Card>
         <CardHeader>
-          <CardTitle>{isEdit ? `Cierre Comercial — Folio ${notaVenta?.data.folio}` : 'Nuevo Cierre Comercial'}</CardTitle>
+          <div className='flex items-center justify-between gap-2'>
+            <CardTitle>{isEdit ? `Cierre Comercial — Folio ${notaVenta?.data.folio}` : 'Nuevo Cierre Comercial'}</CardTitle>
+            {isEdit && (
+              <Button variant='outline' size='sm' onClick={() => setConfirmDuplicar(true)} isLoading={duplicarMutation.isPending}>
+                <Icons.copy className='mr-1 h-4 w-4' /> Duplicar Cierre
+              </Button>
+            )}
+          </div>
+          <AlertModal
+            isOpen={confirmDuplicar}
+            onClose={() => setConfirmDuplicar(false)}
+            onConfirm={() => { setConfirmDuplicar(false); duplicarMutation.mutate() }}
+            loading={duplicarMutation.isPending}
+            title='¿Duplicar este Cierre Comercial?'
+            description='Se creará un Cierre nuevo (abierto, con fecha de hoy) con el mismo encabezado y líneas. No se copian Embarques ni Órdenes de Compra.'
+          />
         </CardHeader>
         <CardContent className='space-y-4'>
           {/* Línea 1: Fecha + Tipo de Venta (Exportación/Nacional, 2026-10-06)
@@ -653,18 +823,24 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </Label>
               <Combobox
                 value={fields.clienteId ? String(fields.clienteId) : ''}
-                onChange={(v) => setFields((f) => ({ ...f, clienteId: Number(v), direccionId: null, compradorContactoId: null }))}
+                onChange={(v) => elegirCliente(Number(v))}
                 placeholder='Seleccionar cliente...'
                 searchPlaceholder='Buscar cliente...'
-                options={clientes.map((c) => ({ value: String(c.id), label: `${c.descripcion} — ${c.razonSocial}` }))}
+                options={clientes
+                  .filter((c) => c.id !== clientePlaceholder?.id)
+                  .map((c) => ({ value: String(c.id), label: `${c.descripcion} — ${c.razonSocial}` }))}
+                // Volver a "Cliente sin definir" (placeholder CLIENTE-SD) en cualquier momento.
+                noneLabel={clientePlaceholder ? 'Cliente sin definir' : undefined}
+                onNone={() => clientePlaceholder && elegirCliente(clientePlaceholder.id)}
               />
               {errors.clienteId && <p className='text-xs text-destructive'>{errors.clienteId}</p>}
             </div>
             <div className='space-y-1.5'>
               <Label>Dirección</Label>
-              <Select value={fields.direccionId ? String(fields.direccionId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, direccionId: v ? Number(v) : null }))} disabled={!fields.clienteId}>
+              <Select value={fields.direccionId ? String(fields.direccionId) : NONE_VALUE} onValueChange={(v) => setFields((f) => ({ ...f, direccionId: v === NONE_VALUE ? null : Number(v) }))} disabled={!fields.clienteId}>
                 <SelectTrigger className='w-full'><SelectValue placeholder={fields.clienteId ? 'Sin dirección' : 'Elige un cliente primero'} /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NONE_VALUE}>Sin definir</SelectItem>
                   {direccionesCliente.map((d) => (
                     <SelectItem key={d.id} value={String(d.id)}>{d.descripcion} — {d.direccion}{d.esPorDefecto ? ' (por defecto)' : ''}</SelectItem>
                   ))}
@@ -688,50 +864,114 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 <SelectTrigger><SelectValue placeholder={fields.clienteId ? 'Sin comprador' : 'Selecciona un cliente primero'} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value='none'>Sin comprador</SelectItem>
-                  {contactosCliente.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>
-                  ))}
+                  {[...contactosCliente]
+                    .sort((a, b) => Number((b.categorias ?? []).includes('COMPRADOR')) - Number((a.categorias ?? []).includes('COMPRADOR')))
+                    .map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.nombre}{(c.categorias ?? []).includes('COMPRADOR') ? ' (comprador)' : ''}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
             <div className='space-y-1.5'>
               <Label>Notify</Label>
               <Combobox
-                value={fields.notifyId ? String(fields.notifyId) : 'none'}
-                onChange={(v) => setFields((f) => ({ ...f, notifyId: v === 'none' ? null : Number(v) }))}
+                value={fields.notifyId ? String(fields.notifyId) : ''}
+                onChange={(v) => setFields((f) => ({ ...f, notifyId: Number(v) }))}
                 placeholder='Sin notify'
                 searchPlaceholder='Buscar entidad...'
-                options={[{ value: 'none', label: 'Sin notify' }, ...entidades.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
+                noneLabel='Sin definir'
+                onNone={() => setFields((f) => ({ ...f, notifyId: null }))}
+                options={ordenarDelCliente(notifies, notifyDelCliente).map((e) => ({
+                  value: String(e.id),
+                  label: `${e.descripcion}${notifyDelCliente.has(e.id) ? ' (del cliente)' : ''}`,
+                }))}
               />
             </div>
             <div className='space-y-1.5'>
               <Label>Consignatario</Label>
               <Combobox
-                value={fields.consignatarioId ? String(fields.consignatarioId) : 'none'}
-                onChange={(v) => setFields((f) => ({ ...f, consignatarioId: v === 'none' ? null : Number(v) }))}
+                value={fields.consignatarioId ? String(fields.consignatarioId) : ''}
+                onChange={(v) => setFields((f) => ({ ...f, consignatarioId: Number(v) }))}
                 placeholder='Sin consignatario'
                 searchPlaceholder='Buscar entidad...'
-                options={[{ value: 'none', label: 'Sin consignatario' }, ...consignatarios.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
+                noneLabel='Sin definir'
+                onNone={() => setFields((f) => ({ ...f, consignatarioId: null }))}
+                options={ordenarDelCliente(consignatarios, consignatarioDelCliente).map((e) => ({
+                  value: String(e.id),
+                  label: `${e.descripcion}${consignatarioDelCliente.has(e.id) ? ' (del cliente)' : ''}`,
+                }))}
               />
             </div>
             <div className='space-y-1.5'>
               <Label>Exportador</Label>
               <Combobox
-                value={fields.exportadorId ? String(fields.exportadorId) : 'none'}
-                onChange={(v) => setFields((f) => ({ ...f, exportadorId: v === 'none' ? null : Number(v) }))}
+                value={fields.exportadorId ? String(fields.exportadorId) : ''}
+                onChange={(v) => setFields((f) => ({ ...f, exportadorId: Number(v) }))}
                 placeholder='Sin exportador'
                 searchPlaceholder='Buscar exportador...'
-                options={[{ value: 'none', label: 'Sin exportador' }, ...exportadores.map((e) => ({ value: String(e.id), label: e.descripcion }))]}
+                noneLabel='Sin definir'
+                onNone={() => setFields((f) => ({ ...f, exportadorId: null }))}
+                options={exportadores.map((e) => ({ value: String(e.id), label: e.descripcion }))}
               />
               <p className='text-muted-foreground text-xs'>Por defecto, la exportadora de la empresa (Agrosan). Editable.</p>
             </div>
-            <div className='sm:col-span-2 lg:col-span-3'>
-              <CalidadesPermitidasInput
-                value={calidadesPermitidas}
-                onChange={setCalidadesPermitidas}
-                calidades={notasCalidad.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
-                condiciones={notasCondicion.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
-              />
+            <div className='space-y-1.5'>
+              <Label>Responsable de Venta</Label>
+              <Select
+                value={fields.responsableVentaId ?? NONE_VALUE}
+                onValueChange={(v) => setFields((f) => ({ ...f, responsableVentaId: v === NONE_VALUE ? null : v }))}
+              >
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_VALUE}>Sin definir</SelectItem>
+                  {responsables.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className='text-muted-foreground text-xs'>Por defecto, el usuario que digita. Su firma sale en el PDF.</p>
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Calidad hasta</Label>
+              <Select
+                value={fields.notaCalidadHastaId ? String(fields.notaCalidadHastaId) : NONE_VALUE}
+                onValueChange={(v) => setFields((f) => ({ ...f, notaCalidadHastaId: v === NONE_VALUE ? null : Number(v) }))}
+              >
+                <SelectTrigger><SelectValue placeholder='Sin restricción' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_VALUE}>Sin restricción</SelectItem>
+                  {notasCalidad.map((n) => (
+                    <SelectItem key={n.id} value={String(n.id)}>{n.codigo} — {n.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(() => {
+                const sel = notasCalidad.find((n) => n.id === fields.notaCalidadHastaId)
+                const admitidas = sel ? notasCalidad.filter((n) => n.orden <= sel.orden).map((n) => n.codigo) : []
+                return sel ? <p className='text-muted-foreground text-xs'>Admite: {admitidas.join(', ')}</p> : null
+              })()}
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Condición hasta</Label>
+              <Select
+                value={fields.notaCondicionHastaId ? String(fields.notaCondicionHastaId) : NONE_VALUE}
+                onValueChange={(v) => setFields((f) => ({ ...f, notaCondicionHastaId: v === NONE_VALUE ? null : Number(v) }))}
+              >
+                <SelectTrigger><SelectValue placeholder='Sin restricción' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_VALUE}>Sin restricción</SelectItem>
+                  {notasCondicion.map((n) => (
+                    <SelectItem key={n.id} value={String(n.id)}>{n.codigo} — {n.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(() => {
+                const sel = notasCondicion.find((n) => n.id === fields.notaCondicionHastaId)
+                const admitidas = sel ? notasCondicion.filter((n) => n.orden <= sel.orden).map((n) => n.codigo) : []
+                return sel ? <p className='text-muted-foreground text-xs'>Admite: {admitidas.join(', ')}</p> : null
+              })()}
             </div>
 
             <div className='space-y-1.5'>
@@ -747,35 +987,41 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               {errors.tipoEmbarqueId && <p className='text-xs text-destructive'>{errors.tipoEmbarqueId}</p>}
             </div>
             <div className='space-y-1.5'>
+              <Label>País Destino <span className='text-destructive'>*</span></Label>
+              <Combobox
+                value={fields.paisDestinoId ? String(fields.paisDestinoId) : ''}
+                onChange={(v) => elegirPais(Number(v))}
+                placeholder='Seleccionar país...'
+                searchPlaceholder='Buscar país...'
+                options={paisesElegibles.map((p) => ({ value: String(p.id), label: p.descripcion }))}
+              />
+              {errors.paisDestinoId && <p className='text-xs text-destructive'>{errors.paisDestinoId}</p>}
+            </div>
+            <div className='space-y-1.5'>
               <Label>Mercado <span className='text-destructive'>*</span></Label>
-              <Select value={fields.mercadoId ? String(fields.mercadoId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, mercadoId: Number(v), paisDestinoId: 0, puertoDestinoId: null }))}>
-                <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
+              <Select
+                value={fields.mercadoId ? String(fields.mercadoId) : ''}
+                onValueChange={(v) => setFields((f) => ({ ...f, mercadoId: Number(v) }))}
+                disabled={!fields.paisDestinoId || mercadosDelPais.length <= 1}
+              >
+                <SelectTrigger><SelectValue placeholder={fields.paisDestinoId ? 'Seleccionar...' : 'Se deriva del país'} /></SelectTrigger>
                 <SelectContent>
-                  {(mercadosData?.data ?? []).map((m) => (
+                  {mercadosDelPais.map((m) => (
                     <SelectItem key={m.id} value={String(m.id)}>{m.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className='text-muted-foreground text-xs'>
+                {mercadosDelPais.length > 1 ? 'El país pertenece a varios mercados: elige uno.' : 'Se determina según el país.'}
+              </p>
               {errors.mercadoId && <p className='text-xs text-destructive'>{errors.mercadoId}</p>}
-            </div>
-
-            <div className='space-y-1.5'>
-              <Label>País Destino <span className='text-destructive'>*</span></Label>
-              <Select value={fields.paisDestinoId ? String(fields.paisDestinoId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, paisDestinoId: Number(v), puertoDestinoId: null }))} disabled={!fields.mercadoId}>
-                <SelectTrigger><SelectValue placeholder={fields.mercadoId ? 'Seleccionar...' : 'Elige un mercado primero'} /></SelectTrigger>
-                <SelectContent>
-                  {(paisesData?.data ?? []).map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.paisDestinoId && <p className='text-xs text-destructive'>{errors.paisDestinoId}</p>}
             </div>
             <div className='space-y-1.5'>
               <Label>Puerto Destino</Label>
-              <Select value={fields.puertoDestinoId ? String(fields.puertoDestinoId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, puertoDestinoId: v ? Number(v) : null }))} disabled={!fields.paisDestinoId}>
+              <Select value={fields.puertoDestinoId ? String(fields.puertoDestinoId) : NONE_VALUE} onValueChange={(v) => setFields((f) => ({ ...f, puertoDestinoId: v === NONE_VALUE ? null : Number(v) }))} disabled={!fields.paisDestinoId}>
                 <SelectTrigger><SelectValue placeholder='Sin puerto' /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NONE_VALUE}>Sin definir</SelectItem>
                   {(puertosData?.data ?? []).map((p) => (
                     <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
                   ))}
@@ -922,9 +1168,10 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 </div>
                 <div className='space-y-1.5'>
                   <Label>Categoría</Label>
-                  <Select value={linea.categoriaId ? String(linea.categoriaId) : ''} onValueChange={(v) => setLinea((l) => ({ ...l, categoriaId: v ? Number(v) : null }))} disabled={!linea.especieId}>
+                  <Select value={linea.categoriaId ? String(linea.categoriaId) : NONE_VALUE} onValueChange={(v) => setLinea((l) => ({ ...l, categoriaId: v === NONE_VALUE ? null : Number(v) }))} disabled={!linea.especieId}>
                     <SelectTrigger><SelectValue placeholder='Sin categoría' /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value={NONE_VALUE}>Sin definir</SelectItem>
                       {(categoriasData?.data ?? []).map((c) => (
                         <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
                       ))}
@@ -938,7 +1185,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 <div className='space-y-1.5 sm:col-span-2'>
                   <Label>Artículo (Embalaje) <span className='text-destructive'>*</span></Label>
                   <Combobox
-                    options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+                    options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${articuloDescripcionComercial(a)}` }))}
                     value={linea.articuloId ? String(linea.articuloId) : null}
                     onChange={(v) => {
                       const id = Number(v)
@@ -1078,6 +1325,16 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                     <Icons.add className='mr-1 h-4 w-4' /> Agregar
                   </Button>
                 </div>
+                <div className='space-y-1.5'>
+                  <Label>Calibres en PDF</Label>
+                  <Select value={linea.calibreModo} onValueChange={(v) => setLinea((l) => ({ ...l, calibreModo: v as CalibreModo }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='ESPECIFICOS'>Calibres específicos</SelectItem>
+                      <SelectItem value='RANGO'>Desde – hasta</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className='space-y-1.5'>
@@ -1154,7 +1411,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                       {notaVenta!.data.detalles.map((d) => (
                         <TableRow key={d.id}>
                           <TableCell className='font-medium whitespace-nowrap'>{d.especie.descripcion} / {d.variedad.descripcion}</TableCell>
-                          <TableCell className='w-[110px] max-w-[110px] truncate text-muted-foreground' title={d.articulo.descripcion}>{d.articulo.codigo}</TableCell>
+                          <TableCell className='w-[110px] max-w-[110px] truncate text-muted-foreground' title={articuloDescripcionComercial(d.articulo)}>{d.articulo.codigo}</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{d.etiqueta?.descripcion ?? '—'}</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{d.categoria?.descripcion ?? '—'}</TableCell>
                           <TableCell className='min-w-[240px] text-muted-foreground'>
@@ -1163,6 +1420,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                                 <Badge key={c.calibre.id} variant='outline' className='text-xs'>{c.calibre.descripcion}</Badge>
                               ))}
                             </div>
+                            {d.calibreModo === 'RANGO' && <p className='mt-1 text-[11px]'>PDF: desde – hasta</p>}
                           </TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{d.cantidadPallets} pallets × {d.cajasPorPallet} cj</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>${d.precio}/cj</TableCell>

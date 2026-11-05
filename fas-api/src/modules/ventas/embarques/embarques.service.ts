@@ -448,7 +448,7 @@ export async function listarPalletsDisponibles(embarqueId: number) {
   const embarque = await obtenerEmbarque(embarqueId)
   const notaVenta = await repo.getNotaVentaConDetalle(embarque.notaVentaId)
   if (!notaVenta) throw new ValidationError('El Cierre Comercial de este Embarque ya no existe')
-  return repo.getPalletsDisponibles(notaVenta.detalles, notaVenta.calidadesPermitidas)
+  return repo.getPalletsDisponibles(notaVenta.detalles, repo.calidadHastaDeNotaVenta(notaVenta))
 }
 
 // Reclamo atómico en el repositorio (reservarPalletsEnEmbarque) es la
@@ -463,7 +463,8 @@ export async function agregarPallets(embarqueId: number, palletIds: number[]) {
   const notaVenta = await repo.getNotaVentaConDetalle(embarque.notaVentaId)
   if (!notaVenta) throw new ValidationError('El Cierre Comercial de este Embarque ya no existe')
 
-  const disponibles = await repo.getPalletsDisponibles(notaVenta.detalles, notaVenta.calidadesPermitidas)
+  const hasta = repo.calidadHastaDeNotaVenta(notaVenta)
+  const disponibles = await repo.getPalletsDisponibles(notaVenta.detalles, hasta)
   const disponiblesIds = new Set(disponibles.map((p) => p.id))
   const fueraDeAlcance = unicos.filter((id) => !disponiblesIds.has(id))
   if (fueraDeAlcance.length > 0) {
@@ -472,7 +473,7 @@ export async function agregarPallets(embarqueId: number, palletIds: number[]) {
     )
   }
 
-  await repo.reservarPalletsEnEmbarque(unicos, embarqueId)
+  await repo.reservarPalletsEnEmbarque(unicos, embarqueId, hasta)
   return repo.getEmbarqueById(embarqueId)
 }
 

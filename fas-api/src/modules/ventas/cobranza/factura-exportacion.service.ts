@@ -76,7 +76,7 @@ function normalizarIdioma(idioma: string | null | undefined): Idioma {
 type LineaConRelaciones = {
   especie: { descripcion: string; descripcionExtranjera: string | null }
   variedad: { descripcion: string; descripcionExtranjera: string | null } | null
-  articulo: { descripcion: string; descripcionExtranjera: string | null } | null
+  articulo: { descripcion: string; descripcionExtranjera: string | null; descripcionComercial?: string | null } | null
   calibre: { descripcion: string; descripcionExtranjera: string | null } | null
   categoria: { descripcion: string; descripcionExtranjera: string | null } | null
   etiqueta: { descripcion: string; descripcionExtranjera: string | null } | null

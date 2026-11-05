@@ -2,6 +2,7 @@ import { NotFoundError } from '../../../shared/errors.js'
 import { getInstructivoHijoConDetalle } from '../../ventas/embarques/embarques.repository.js'
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
 import type { InstructivoEmbarquePdfPayload } from '../schemas/instructivo-embarque.schema.js'
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
 type EntidadDocumento = Awaited<ReturnType<typeof getEntidadParaDocumento>>
 
@@ -52,7 +53,7 @@ export async function resolverInstructivoEmbarque(id: number, empresaId: number)
         variedad: l.variedad.descripcion,
         categoria: l.categoria.descripcion,
         calibre: l.calibre.descripcion,
-        articulo: l.articulo.descripcion,
+        articulo: descripcionComercialArticulo(l.articulo),
         productor: p.productor.razonSocial,
         cajas: l.cajas,
         pesoNeto: l.cajas * kgNeto,

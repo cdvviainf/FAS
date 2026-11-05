@@ -27,6 +27,11 @@ export async function exportadorPredeterminado(_req: FastifyRequest, reply: Fast
   return reply.send({ data: exportador })
 }
 
+export async function responsablesVenta(_req: FastifyRequest, reply: FastifyReply) {
+  const data = await service.listarResponsablesVenta()
+  return reply.send({ data })
+}
+
 export async function create(req: FastifyRequest, reply: FastifyReply) {
   const body = notaVentaCreateSchema.parse(req.body)
   const notaVenta = await service.crearNotaVenta(body, req.fasUserId!)
@@ -44,6 +49,12 @@ export async function remove(req: FastifyRequest, reply: FastifyReply) {
   const { id } = notaVentaParamsSchema.parse(req.params)
   await service.eliminarNotaVenta(id, req.fasUserId!)
   return reply.status(204).send()
+}
+
+export async function duplicar(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = notaVentaParamsSchema.parse(req.params)
+  const notaVenta = await service.duplicarNotaVenta(id, req.fasUserId!)
+  return reply.status(201).send({ data: notaVenta })
 }
 
 export async function cerrar(req: FastifyRequest, reply: FastifyReply) {

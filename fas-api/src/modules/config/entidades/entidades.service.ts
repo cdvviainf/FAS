@@ -9,7 +9,7 @@ import type {
   ContactoCreateInput,
   ContactoUpdateInput,
 } from './entidades.schema.js'
-import type { TipoEntidad } from '@prisma/client'
+import { Prisma, type TipoEntidad } from '@prisma/client'
 
 // ─── Entidades ────────────────────────────────────────────────────────────────
 
@@ -294,6 +294,63 @@ export async function eliminarDireccion(
 
 // ─── Contactos ────────────────────────────────────────────────────────────────
 
+type CategoriaContacto = 'COMPRADOR' | 'NOTIFY' | 'CONSIGNATARIO'
+
+// Categorías comerciales (2026-11-05): categoriasPorDefecto ⊆ categorias; si el
+// contacto es NOTIFY y/o CONSIGNATARIO, debe vincularse a una Entidad real
+// (activa, de la empresa activa) que tenga el/los TipoEntidad correspondientes
+// — esa Entidad es la que usan Cierre/Instructivo/Proforma/DTE (TAXID,
+// dirección). Sin esas categorías, el vínculo se limpia.
+async function validarCategoriasContacto(
+  entidadId: number,
+  categorias: CategoriaContacto[],
+  categoriasPorDefecto: CategoriaContacto[],
+  entidadVinculadaId: number | null,
+): Promise<number | null> {
+  const set = new Set(categorias)
+  if (set.size !== categorias.length) throw new ValidationError('Hay categorías de contacto repetidas')
+  for (const c of categoriasPorDefecto) {
+    if (!set.has(c)) throw new ValidationError('Solo se puede marcar "por defecto" una categoría asignada al contacto')
+  }
+  const requiereVinculo = set.has('NOTIFY') || set.has('CONSIGNATARIO')
+  if (!requiereVinculo) return null
+  if (entidadVinculadaId == null) {
+    throw new ValidationError('Un contacto Notify/Consignatario debe vincularse a la Entidad correspondiente')
+  }
+  if (entidadVinculadaId === entidadId) {
+    throw new ValidationError('El contacto no puede vincularse a la misma entidad')
+  }
+  const vinculada = await repo.findEntidadVinculable(entidadVinculadaId)
+  if (!vinculada) throw new ValidationError('La entidad vinculada no existe o está inactiva')
+  if (set.has('NOTIFY') && !vinculada.tipos.includes('NOTIFY')) {
+    throw new ValidationError('La entidad vinculada no tiene tipo Notify')
+  }
+  if (set.has('CONSIGNATARIO') && !vinculada.tipos.includes('CONSIGNATARIO')) {
+    throw new ValidationError('La entidad vinculada no tiene tipo Consignatario')
+  }
+  return entidadVinculadaId
+}
+
+// CCN26-R1-001: los índices únicos parciales `entidad_contactos_default_*_key`
+// garantizan un solo contacto por defecto por (entidad, categoría). Si dos
+// guardados concurrentes chocan, se traduce a un conflicto de negocio (409).
+async function conDefaultUnico<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn()
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === 'P2002' &&
+      // Prisma reporta el target como nombre de índice o como lista de campos
+      // (['entidadId']); entidad_contactos no tiene otro único sobre entidadId.
+      /_default_|entidadId/.test(String((err.meta as { target?: unknown } | undefined)?.target ?? ''))
+    ) {
+      throw new ConflictError('Otro contacto de esta entidad se marcó como por defecto para la misma categoría al mismo tiempo. Recarga e intenta de nuevo.')
+    }
+    throw err
+  }
+}
+
 export async function crearContacto(
   entidadId: number,
   input: ContactoCreateInput,
@@ -324,7 +381,18 @@ export async function crearContacto(
     }
   }
 
-  return repo.createContacto(entidadId, input, userId)
+  const categorias = input.categorias ?? []
+  const categoriasPorDefecto = input.categoriasPorDefecto ?? []
+  const entidadVinculadaId = await validarCategoriasContacto(
+    entidadId,
+    categorias,
+    categoriasPorDefecto,
+    input.entidadVinculadaId ?? null,
+  )
+
+  return conDefaultUnico(() =>
+    repo.createContacto(entidadId, { ...input, categorias, categoriasPorDefecto, entidadVinculadaId }, userId),
+  )
 }
 
 export async function actualizarContacto(
@@ -367,7 +435,22 @@ export async function actualizarContacto(
     }
   }
 
-  return repo.updateContacto(conId, input, userId)
+  // Categorías: se valida el estado EFECTIVO (lo que llega ∪ lo persistido).
+  let entidadVinculadaId = input.entidadVinculadaId
+  if (
+    input.categorias !== undefined ||
+    input.categoriasPorDefecto !== undefined ||
+    input.entidadVinculadaId !== undefined
+  ) {
+    entidadVinculadaId = await validarCategoriasContacto(
+      entidadId,
+      input.categorias ?? contacto.categorias,
+      input.categoriasPorDefecto ?? contacto.categoriasPorDefecto,
+      input.entidadVinculadaId !== undefined ? input.entidadVinculadaId : contacto.entidadVinculadaId,
+    )
+  }
+
+  return conDefaultUnico(() => repo.updateContacto(conId, { ...input, entidadVinculadaId }, userId))
 }
 
 export async function eliminarContacto(

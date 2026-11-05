@@ -50,6 +50,7 @@ import type {
   NotaVentaDetalleDisponibilidad,
 } from '../types'
 import { ESTADO_OC_LABELS, MODALIDAD_COMPRA_LABELS } from '../types'
+import { articuloDescripcionComercial } from '@/lib/articulo'
 
 const monedasService = createMantenedorService('monedas')
 const especiesService = createMantenedorService('especies')
@@ -1077,7 +1078,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 <div className='space-y-1.5'>
                   <Label>{esGranel ? 'Artículo (Granel)' : 'Embalaje'} <span className='text-destructive'>*</span></Label>
                   <Combobox
-                    options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${a.descripcion}` }))}
+                    options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${articuloDescripcionComercial(a)}` }))}
                     value={linea.articuloId ? String(linea.articuloId) : null}
                     onChange={(v) => {
                       const id = Number(v)
@@ -1390,7 +1391,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                       {ordenCompra!.data.lineas.map((l) => (
                         <TableRow key={l.id}>
                           <TableCell className='font-medium whitespace-nowrap'>{l.especie.descripcion} / {l.variedad.descripcion}</TableCell>
-                          <TableCell className='w-[110px] max-w-[110px] truncate text-muted-foreground' title={l.articulo.descripcion}>{l.articulo.codigo}</TableCell>
+                          <TableCell className='w-[110px] max-w-[110px] truncate text-muted-foreground' title={articuloDescripcionComercial(l.articulo)}>{l.articulo.codigo}</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{l.etiqueta?.descripcion ?? l.articulo.etiqueta?.descripcion ?? '—'}</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{l.categoria?.descripcion ?? '—'}</TableCell>
                           <TableCell className='min-w-[240px] text-muted-foreground'>

@@ -26,6 +26,8 @@ export interface Articulo {
   tipo: TipoArticulo
   codigo: string
   descripcion: string
+  // Descripción comercial (2026-11-05): la que se despliega fuera de Materiales.
+  descripcionComercial: string | null
   descripcionExtranjera: string | null
   unidadId: number
   unidad: { id: number; codigo: string; descripcion: string }
@@ -66,6 +68,7 @@ export interface ArticuloCreateInput {
   tipo: TipoArticulo
   codigo: string
   descripcion: string
+  descripcionComercial?: string | null
   descripcionExtranjera?: string | null
   unidadId: number
   tipoCosteo: TipoCosteo

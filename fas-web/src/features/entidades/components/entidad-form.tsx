@@ -43,8 +43,10 @@ import type {
   ContactoCreateInput,
   DireccionItem,
   ContactoItem,
+  CategoriaContacto,
+  EntidadVinculada,
 } from '../types'
-import { TIPOS_ENTIDAD_ORDEN, TIPO_ENTIDAD_LABELS } from '../types'
+import { TIPOS_ENTIDAD_ORDEN, TIPO_ENTIDAD_LABELS, CATEGORIAS_CONTACTO, CATEGORIA_CONTACTO_LABELS } from '../types'
 
 // Mapea cada campo validado a la pestaña donde vive su input, para poder saltar
 // automáticamente a la pestaña con el primer error (el formulario está dividido
@@ -177,19 +179,13 @@ function DireccionDialog({ open, initial, defaultPaisId, onClose, onSave, isSavi
             </div>
             <div className='space-y-1.5'>
               <Label>País <span className='text-destructive'>*</span></Label>
-              <Select
+              <Combobox
                 value={form.paisId ? String(form.paisId) : ''}
-                onValueChange={(v) => setForm((f) => ({ ...f, paisId: parseInt(v), comunaId: null }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder='País...' />
-                </SelectTrigger>
-                <SelectContent>
-                  {paises.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setForm((f) => ({ ...f, paisId: parseInt(v), comunaId: null }))}
+                placeholder='País...'
+                searchPlaceholder='Buscar país...'
+                options={paises.map((p) => ({ value: String(p.id), label: p.descripcion }))}
+              />
               {errors.paisId && <p className='text-xs text-destructive'>{errors.paisId}</p>}
             </div>
           </div>
@@ -302,15 +298,19 @@ function DireccionDialog({ open, initial, defaultPaisId, onClose, onSave, isSavi
 
 // ─── Dialog de Contacto ───────────────────────────────────────────────────────
 
+type ContactoDialogData = ContactoCreateInput & { id?: number; entidadVinculada?: EntidadVinculada | null }
+
 interface ContactoDialogProps {
   open: boolean
   initial?: Partial<ContactoCreateInput> & { id?: number; rut?: string; whatsapp?: string }
+  // Id de la entidad que se edita (no puede vincularse a sí misma).
+  entidadId?: number
   onClose: () => void
-  onSave: (data: ContactoCreateInput & { id?: number }) => Promise<void>
+  onSave: (data: ContactoDialogData) => Promise<void>
   isSaving: boolean
 }
 
-function ContactoDialog({ open, initial, onClose, onSave, isSaving }: ContactoDialogProps) {
+function ContactoDialog({ open, initial, entidadId, onClose, onSave, isSaving }: ContactoDialogProps) {
   const [form, setForm] = useState<ContactoCreateInput>({
     codigo: '',
     nombre: '',
@@ -320,8 +320,57 @@ function ContactoDialog({ open, initial, onClose, onSave, isSaving }: ContactoDi
     telefono: '',
     tipo: '',
     esRepresentanteLegal: false,
+    categorias: [],
+    categoriasPorDefecto: [],
+    entidadVinculadaId: null,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  // Entidades vinculables como Notify / Consignatario (2026-11-05). Solo se
+  // consultan si el contacto tiene alguna de esas categorías.
+  const categorias = form.categorias ?? []
+  const requiereVinculo = categorias.includes('NOTIFY') || categorias.includes('CONSIGNATARIO')
+  const { data: notifyData } = useQuery({
+    queryKey: ['entidades-vinculables', 'NOTIFY'],
+    queryFn: () => entidadesService.list({ tipo: 'NOTIFY', activo: true, limit: 500 }),
+    enabled: open && categorias.includes('NOTIFY'),
+    staleTime: 60_000,
+  })
+  const { data: consignatarioData } = useQuery({
+    queryKey: ['entidades-vinculables', 'CONSIGNATARIO'],
+    queryFn: () => entidadesService.list({ tipo: 'CONSIGNATARIO', activo: true, limit: 500 }),
+    enabled: open && categorias.includes('CONSIGNATARIO'),
+    staleTime: 60_000,
+  })
+  // Si el contacto es Notify y Consignatario a la vez, la entidad vinculada
+  // debe tener ambos tipos (intersección).
+  const entidadesVinculables = (() => {
+    const listas: { id: number; codigo: string; descripcion: string; razonSocial: string }[][] = []
+    if (categorias.includes('NOTIFY')) listas.push(notifyData?.data ?? [])
+    if (categorias.includes('CONSIGNATARIO')) listas.push(consignatarioData?.data ?? [])
+    if (listas.length === 0) return []
+    const [primera, ...resto] = listas
+    return primera.filter((e) => e.id !== entidadId && resto.every((l) => l.some((x) => x.id === e.id)))
+  })()
+
+  function toggleCategoria(c: CategoriaContacto) {
+    setForm((f) => {
+      const actuales = f.categorias ?? []
+      const quitar = actuales.includes(c)
+      return {
+        ...f,
+        categorias: quitar ? actuales.filter((x) => x !== c) : [...actuales, c],
+        categoriasPorDefecto: quitar ? (f.categoriasPorDefecto ?? []).filter((x) => x !== c) : f.categoriasPorDefecto,
+      }
+    })
+  }
+
+  function togglePorDefecto(c: CategoriaContacto, v: boolean) {
+    setForm((f) => {
+      const actuales = f.categoriasPorDefecto ?? []
+      return { ...f, categoriasPorDefecto: v ? [...actuales.filter((x) => x !== c), c] : actuales.filter((x) => x !== c) }
+    })
+  }
 
   useEffect(() => {
     if (open) {
@@ -334,6 +383,9 @@ function ContactoDialog({ open, initial, onClose, onSave, isSaving }: ContactoDi
         telefono: initial?.telefono ?? '',
         tipo: initial?.tipo ?? '',
         esRepresentanteLegal: initial?.esRepresentanteLegal ?? false,
+        categorias: initial?.categorias ?? [],
+        categoriasPorDefecto: initial?.categoriasPorDefecto ?? [],
+        entidadVinculadaId: initial?.entidadVinculadaId ?? null,
       })
       setErrors({})
     }
@@ -352,6 +404,9 @@ function ContactoDialog({ open, initial, onClose, onSave, isSaving }: ContactoDi
         e.rut = 'RUT inválido'
       }
     }
+    if (requiereVinculo && !form.entidadVinculadaId) {
+      e.entidadVinculadaId = 'Selecciona la entidad Notify/Consignatario'
+    }
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -367,6 +422,12 @@ function ContactoDialog({ open, initial, onClose, onSave, isSaving }: ContactoDi
       telefono: form.telefono?.trim() || undefined,
       tipo: form.tipo?.trim() || undefined,
       esRepresentanteLegal: form.esRepresentanteLegal,
+      categorias: form.categorias ?? [],
+      categoriasPorDefecto: form.categoriasPorDefecto ?? [],
+      entidadVinculadaId: requiereVinculo ? (form.entidadVinculadaId ?? null) : null,
+      entidadVinculada: requiereVinculo
+        ? (entidadesVinculables.find((x) => x.id === form.entidadVinculadaId) ?? null)
+        : null,
       id: initial?.id,
     })
   }
@@ -405,6 +466,56 @@ function ContactoDialog({ open, initial, onClose, onSave, isSaving }: ContactoDi
               placeholder='Nombre completo'
             />
             {errors.nombre && <p className='text-xs text-destructive'>{errors.nombre}</p>}
+          </div>
+          {/* Categorías comerciales (Cierre Comercial toma los "por defecto") */}
+          <div className='space-y-2 rounded-md border p-3'>
+            <Label>Categorías comerciales</Label>
+            <div className='grid gap-2'>
+              {CATEGORIAS_CONTACTO.map((c) => {
+                const activa = categorias.includes(c)
+                return (
+                  <div key={c} className='flex items-center justify-between gap-2'>
+                    <div className='flex items-center gap-2'>
+                      <Checkbox id={`cat-${c}`} checked={activa} onCheckedChange={() => toggleCategoria(c)} />
+                      <Label htmlFor={`cat-${c}`} className='font-normal'>{CATEGORIA_CONTACTO_LABELS[c]}</Label>
+                    </div>
+                    {activa && (
+                      <div className='flex items-center gap-2'>
+                        <Checkbox
+                          id={`def-${c}`}
+                          checked={(form.categoriasPorDefecto ?? []).includes(c)}
+                          onCheckedChange={(v) => togglePorDefecto(c, v === true)}
+                        />
+                        <Label htmlFor={`def-${c}`} className='text-muted-foreground text-xs font-normal'>Por defecto</Label>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {requiereVinculo && (
+              <div className='space-y-1.5 pt-1'>
+                <Label>Entidad {categorias.includes('NOTIFY') && categorias.includes('CONSIGNATARIO') ? 'Notify / Consignatario' : categorias.includes('NOTIFY') ? 'Notify' : 'Consignatario'} <span className='text-destructive'>*</span></Label>
+                <Combobox
+                  value={form.entidadVinculadaId ? String(form.entidadVinculadaId) : ''}
+                  onChange={(v) => {
+                    const id = Number(v)
+                    const ent = entidadesVinculables.find((x) => x.id === id)
+                    setForm((f) => ({
+                      ...f,
+                      entidadVinculadaId: id,
+                      // Prefill del nombre desde la razón social si está vacío.
+                      nombre: f.nombre.trim() ? f.nombre : (ent?.razonSocial ?? f.nombre),
+                    }))
+                  }}
+                  placeholder='Seleccionar entidad...'
+                  searchPlaceholder='Buscar entidad...'
+                  emptyText='Sin entidades con ese tipo'
+                  options={entidadesVinculables.map((x) => ({ value: String(x.id), label: `${x.codigo} — ${x.razonSocial || x.descripcion}` }))}
+                />
+                {errors.entidadVinculadaId && <p className='text-xs text-destructive'>{errors.entidadVinculadaId}</p>}
+              </div>
+            )}
           </div>
           <div className='grid grid-cols-2 gap-3'>
             <div className='space-y-1.5'>
@@ -515,7 +626,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
 
   // ── Sub-listas (para create: local state; para edit: desde API) ──
   const [localDirecciones, setLocalDirecciones] = useState<(DireccionCreateInput & { _localId: number })[]>([])
-  const [localContactos, setLocalContactos] = useState<(ContactoCreateInput & { _localId: number })[]>([])
+  const [localContactos, setLocalContactos] = useState<(ContactoCreateInput & { _localId: number; entidadVinculada?: EntidadVinculada | null })[]>([])
   const [localIdCounter, setLocalIdCounter] = useState(0)
 
   // ── Dialogs ──
@@ -652,6 +763,9 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
             telefono: con.telefono || undefined,
             tipo: con.tipo || undefined,
             esRepresentanteLegal: con.esRepresentanteLegal,
+            categorias: con.categorias ?? [],
+            categoriasPorDefecto: con.categoriasPorDefecto ?? [],
+            entidadVinculadaId: con.entidadVinculadaId ?? null,
           })
         }
       } catch (err) {
@@ -778,26 +892,33 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
   }, [isEdit, entidadId, deleteDir, queryClient])
 
   // ── Contacto handlers ──
-  const handleSaveContacto = useCallback(async (data: ContactoCreateInput & { id?: number }) => {
+  const handleSaveContacto = useCallback(async (data: ContactoDialogData) => {
     if (!isEdit) {
+      // Un solo contacto "por defecto" por categoría (espejo de la regla del
+      // backend, que se aplica al persistir).
+      const defaults = data.categoriasPorDefecto ?? []
+      const liberar = <T extends { categoriasPorDefecto?: CategoriaContacto[] }>(c: T): T =>
+        defaults.length === 0 ? c : { ...c, categoriasPorDefecto: (c.categoriasPorDefecto ?? []).filter((x) => !defaults.includes(x)) }
       if (conDialog.localId !== undefined) {
         setLocalContactos((cons) =>
-          cons.map((c) => (c._localId === conDialog.localId ? { ...c, ...data } : c))
+          cons.map((c) => (c._localId === conDialog.localId ? { ...c, ...data } : liberar(c)))
         )
       } else {
         const newId = localIdCounter
         setLocalIdCounter((n) => n + 1)
-        setLocalContactos((cons) => [...cons, { ...data, _localId: newId }])
+        setLocalContactos((cons) => [...cons.map(liberar), { ...data, _localId: newId }])
       }
       setConDialog({ open: false })
       return
     }
     setSavingCon(true)
     try {
-      if (data.id) {
-        await entidadesService.updateContacto(entidadId!, data.id, data)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, entidadVinculada, ...payload } = data
+      if (id) {
+        await entidadesService.updateContacto(entidadId!, id, payload)
       } else {
-        await entidadesService.createContacto(entidadId!, data)
+        await entidadesService.createContacto(entidadId!, payload)
       }
       queryClient.invalidateQueries({ queryKey: entidadesKeys.detail(entidadId!) })
       setConDialog({ open: false })
@@ -859,6 +980,10 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
         telefono: c.telefono ?? null,
         tipo: c.tipo ?? null,
         esRepresentanteLegal: c.esRepresentanteLegal,
+        categorias: c.categorias ?? [],
+        categoriasPorDefecto: c.categoriasPorDefecto ?? [],
+        entidadVinculadaId: c.entidadVinculadaId ?? null,
+        entidadVinculada: c.entidadVinculada ?? null,
       }))
 
   // Próximo código de dirección: parte de la sugerencia del servidor y la
@@ -938,19 +1063,13 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                 </div>
                 <div className='space-y-1.5'>
                   <Label>País <span className='text-destructive'>*</span></Label>
-                  <Select
+                  <Combobox
                     value={fields.paisId ? String(fields.paisId) : ''}
-                    onValueChange={(v) => setFields((f) => ({ ...f, paisId: parseInt(v) }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder='Seleccionar país...' />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {paises.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(v) => setFields((f) => ({ ...f, paisId: parseInt(v) }))}
+                    placeholder='Seleccionar país...'
+                    searchPlaceholder='Buscar país...'
+                    options={paises.map((p) => ({ value: String(p.id), label: p.descripcion }))}
+                  />
                   {fieldErrors.paisId && <p className='text-xs text-destructive'>{fieldErrors.paisId}</p>}
                 </div>
                 <div className='space-y-1.5 sm:col-span-2'>
@@ -1221,6 +1340,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                     <tr className='border-b bg-muted/40'>
                       <th className='px-4 py-2 text-left font-medium'>Nombre</th>
                       <th className='px-4 py-2 text-left font-medium'>Tipo</th>
+                      <th className='px-4 py-2 text-left font-medium'>Categorías</th>
                       <th className='px-4 py-2 text-left font-medium'>Teléfono / Email</th>
                       <th className='px-4 py-2 text-center font-medium'>Rep. Legal</th>
                       <th className='px-4 py-2 w-20' />
@@ -1231,6 +1351,25 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                       <tr key={con.id} className='border-b hover:bg-muted/30 transition-colors'>
                         <td className='px-4 py-2 font-medium'>{con.nombre}</td>
                         <td className='px-4 py-2 text-muted-foreground'>{con.tipo ?? '—'}</td>
+                        <td className='px-4 py-2'>
+                          <div className='flex flex-wrap gap-1'>
+                            {(con.categorias ?? []).map((c) => (
+                              <Badge
+                                key={c}
+                                variant={(con.categoriasPorDefecto ?? []).includes(c) ? 'default' : 'outline'}
+                                className='text-xs'
+                                title={(con.categoriasPorDefecto ?? []).includes(c) ? 'Por defecto' : undefined}
+                              >
+                                {CATEGORIA_CONTACTO_LABELS[c]}
+                                {(con.categoriasPorDefecto ?? []).includes(c) && ' ★'}
+                              </Badge>
+                            ))}
+                            {(con.categorias ?? []).length === 0 && <span className='text-muted-foreground'>—</span>}
+                          </div>
+                          {con.entidadVinculada && (
+                            <div className='text-muted-foreground mt-0.5 text-xs'>→ {con.entidadVinculada.razonSocial || con.entidadVinculada.descripcion}</div>
+                          )}
+                        </td>
                         <td className='px-4 py-2 text-xs text-muted-foreground'>
                           {con.telefono && <div>{con.telefono}</div>}
                           {con.email && <div>{con.email}</div>}
@@ -1261,6 +1400,9 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                                     telefono: con.telefono ?? '',
                                     tipo: con.tipo ?? '',
                                     esRepresentanteLegal: con.esRepresentanteLegal,
+                                    categorias: con.categorias ?? [],
+                                    categoriasPorDefecto: con.categoriasPorDefecto ?? [],
+                                    entidadVinculadaId: con.entidadVinculadaId ?? null,
                                   },
                                   localId: localCon?._localId,
                                 })
@@ -1321,6 +1463,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
       <ContactoDialog
         open={conDialog.open}
         initial={conDialog.initial}
+        entidadId={entidadId}
         onClose={() => setConDialog({ open: false })}
         onSave={handleSaveContacto}
         isSaving={savingCon}

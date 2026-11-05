@@ -14,6 +14,8 @@ export interface Usuario {
   perfilId: number
   perfil: { id: number; codigo: string; descripcion: string }
   esResponsableVenta: boolean
+  // Tiene firma PNG cargada (binario por GET /config/usuarios/:id/firma).
+  tieneFirma: boolean
   empresaPredeterminadaId: number | null
   empresas: EmpresaAsignada[]
   creadoEn: string

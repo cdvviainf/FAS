@@ -1,5 +1,3 @@
-import type { ParCalidad } from '../../../shared/calidades-permitidas.js'
-
 export type TipoVenta = 'EXPORTACION' | 'NACIONAL'
 
 export interface NotaVentaCreateInput {
@@ -7,9 +5,11 @@ export interface NotaVentaCreateInput {
   tipoVenta?: TipoVenta
   clienteId: number
   exportadorId?: number | null
-  // Calidades permitidas = pares (NotaCalidad, NotaCondicion). Restringen qué
-  // pallets se pueden reservar en el Embarque de este Cierre.
-  calidadesPermitidas?: ParCalidad[]
+  // Calidad / Condición "hasta" (2026-11-05): restringen qué pallets se pueden
+  // reservar en el Embarque de este Cierre (orden <= hasta). null = sin restricción.
+  notaCalidadHastaId?: number | null
+  notaCondicionHastaId?: number | null
+  responsableVentaId?: string | null
   compradorContactoId?: number | null
   notifyId?: number | null
   consignatarioId?: number | null
@@ -46,6 +46,7 @@ export interface NotaVentaDetalleCreateInput {
   cajas: number
   precio: number
   calibreIds: number[]
+  calibreModo?: 'ESPECIFICOS' | 'RANGO'
 }
 
 export type NotaVentaDetalleUpdateInput = NotaVentaDetalleCreateInput

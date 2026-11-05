@@ -15,7 +15,7 @@ const palletLineaInclude = {
   variedad: { select: mantenedorSelect },
   categoria: { select: mantenedorSelect },
   calibre: { select: mantenedorSelect },
-  articulo: { select: { id: true, codigo: true, descripcion: true, kgNetoEnvase: true } },
+  articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true, kgNetoEnvase: true } },
 } satisfies Prisma.PalletLineaInclude
 
 const reclamoInclude = {

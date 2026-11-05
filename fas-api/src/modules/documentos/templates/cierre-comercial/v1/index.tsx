@@ -5,7 +5,6 @@ import { TablaLineas, type ColumnaTabla } from '../../../ui/TablaLineas.js'
 import { BloqueTotales } from '../../../ui/BloqueTotales.js'
 import { PieFirma } from '../../../ui/PieFirma.js'
 import { fmt } from '../../../ui/formato.js'
-import { FECHA_REFERENCIA_LABEL } from '../../../resolvers/cierre-comercial.resolver.js'
 import type { CierreComercialPdfPayload } from '../../../schemas/cierre-comercial.schema.js'
 
 type Linea = CierreComercialPdfPayload['lineas'][number]
@@ -21,21 +20,10 @@ const columnas: ColumnaTabla<Linea>[] = [
   { titulo: 'Cajas', render: (l) => fmt.entero(l.cajas), numerica: true },
   { titulo: 'Precio', render: (l) => fmt.usd(l.precio), numerica: true },
   { titulo: 'Total', render: (l) => fmt.usd(l.total), numerica: true },
-  // Kg Envase/Neto/Bruto (feedback Christian, 2026-08-19) — mismo criterio
-  // que orden-compra/v1/index.tsx. Fecha compromiso se sacó (no está en el
-  // documento original).
+  // Solo Kg Neto por envase (2026-11-05): se eliminaron Kg Bruto Envase
+  // (unitario bruto) y los kilos totales Neto/Bruto, a pedido del cliente.
   { titulo: 'Kg Neto Envase', render: (l) => fmt.kilos(l.kgNetoEnvase), numerica: true },
-  { titulo: 'Kg Bruto Envase', render: (l) => fmt.kilos(l.kgBrutoEnvase), numerica: true },
-  { titulo: 'Kg Neto', render: (l) => fmt.kilos(l.kgNeto), numerica: true },
-  { titulo: 'Kg Bruto', render: (l) => fmt.kilos(l.kgBruto), numerica: true },
 ]
-
-function textoCuota(c: CierreComercialPdfPayload['cuotas'][number]): string {
-  const valor = c.tipoValor === 'PORCENTAJE'
-    ? `${c.porcentaje}%`
-    : `${fmt.usd(c.valorUnitario ?? '0')} por ${c.unidad ?? '—'}`
-  return `${valor} a ${c.plazoDias} días desde ${FECHA_REFERENCIA_LABEL[c.fechaReferencia]}`
-}
 
 // v1 — CON control de copia (Etapa 4 §8): recibe marcaAgua/marcaAguaFecha
 // como la Orden de Compra. Layout análogo al de orden-compra/v1, adaptado a
@@ -55,15 +43,17 @@ export function CierreComercialV1({ d, marcaAgua, marcaAguaFecha }: { d: CierreC
         tituloDocumento='Cierre Comercial / Sales Contract'
         numero={d.folio}
         fecha={fmt.fecha(d.fecha)}
+        subtitulo={d.responsableVenta ? `Responsable de venta: ${d.responsableVenta}` : undefined}
       />
 
       <div className='doc-fila-grupos'>
         <GrupoCampos
           titulo='Exportador'
           campos={[
-            { label: 'Razón social', valor: d.empresa.razonSocial },
-            { label: 'RUT', valor: fmt.rut(d.empresa.rut) },
-            { label: 'Dirección', valor: d.empresa.direccion ?? '—' },
+            { label: 'Razón social', valor: d.exportador.razonSocial },
+            { label: 'RUT', valor: fmt.rut(d.exportador.rut) },
+            { label: 'Dirección', valor: d.exportador.direccion ?? '—' },
+            { label: 'Responsable de venta', valor: d.responsableVenta ?? '—' },
           ]}
         />
         <GrupoCampos
@@ -94,15 +84,9 @@ export function CierreComercialV1({ d, marcaAgua, marcaAguaFecha }: { d: CierreC
           { label: 'Incoterm', valor: d.clausulaVenta ?? '—' },
           { label: 'Flete', valor: d.tipoFlete ?? '—' },
           { label: 'Moneda', valor: d.moneda },
-        ]}
-      />
-      <GrupoCampos
-        titulo='Cuotas de pago'
-        campos={[
           { label: 'Condición de pago', valor: d.condicionPago ?? '—' },
-          ...(d.cuotas.length > 0
-            ? d.cuotas.map((c, i) => ({ label: `Cuota ${i + 1}`, valor: textoCuota(c) }))
-            : [{ label: 'Cuotas', valor: '—' }]),
+          { label: 'Calidad hasta', valor: d.calidadHasta ?? 'Sin restricción' },
+          { label: 'Condición hasta', valor: d.condicionHasta ?? 'Sin restricción' },
         ]}
       />
 
@@ -121,9 +105,6 @@ export function CierreComercialV1({ d, marcaAgua, marcaAguaFecha }: { d: CierreC
           '',
           fmt.usd(d.totales.totalMonto),
           '', // Kg Neto Envase — dato de catálogo, no se totaliza
-          '', // Kg Bruto Envase — ídem
-          fmt.kilos(d.totales.kgNeto),
-          fmt.kilos(d.totales.kgBruto),
         ]}
       />
 
@@ -134,7 +115,11 @@ export function CierreComercialV1({ d, marcaAgua, marcaAguaFecha }: { d: CierreC
 
       <PieFirma
         nota='* El precio unitario corresponde al Incoterm indicado conforme a Incoterms 2020.'
-        firmantes={['Frutera Agrosan', 'Cliente']}
+        firmantes={[
+          // Firma PNG del responsable de venta sobre la línea (2026-11-05).
+          { nombre: 'Frutera Agrosan', imagenDataUri: d.firmaResponsableDataUri, detalle: d.responsableVenta },
+          'Cliente',
+        ]}
       />
     </Documento>
   )

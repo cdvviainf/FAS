@@ -157,6 +157,10 @@ model Usuario {
   solicitudesAsignadas          SolicitudInspeccionAsignado[]
   solicitudesComoSolicitante    SolicitudInspeccion[]         @relation("SolicitudInspeccionSolicitante")
   avatar                        UsuarioAvatar?
+  // Firma (PNG con fondo transparente) del responsable de venta — se estampa
+  // sobre la línea de firma del PDF de Cierre Comercial (2026-11-05).
+  firma                         UsuarioFirma?
+  notasVentaResponsable         NotaVenta[]                   @relation("NotaVentaResponsableVenta")
   ordenesCompraResponsable      OrdenCompra[]
   contratosProductorResponsable ProductorContrato[]
   empresas                      UsuarioEmpresa[]
@@ -176,6 +180,19 @@ model UsuarioAvatar {
   creadoEn  DateTime @default(now())
 
   @@map("usuarios_avatar")
+}
+
+// Firma del usuario (2026-11-05): mismo patrón que UsuarioAvatar. Solo PNG con
+// canal alfa (validado en usuarios.service.ts).
+model UsuarioFirma {
+  usuarioId String   @id
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  mime      String
+  tamano    Int
+  datos     Bytes
+  creadoEn  DateTime @default(now())
+
+  @@map("usuarios_firma")
 }
 
 // ─── EMPRESAS (multi-empresa / multi-tenant) ─────────────────────────────────
@@ -1712,7 +1729,10 @@ model Entidad {
   eliminadoEn                    DateTime?
   eliminadoPor                   String?
   direcciones                    EntidadDireccion[]
-  contactos                      EntidadContacto[]
+  contactos                      EntidadContacto[]           @relation("EntidadContactos")
+  // Contactos (de otros Clientes) que apuntan a esta Entidad como su Notify /
+  // Consignatario (2026-11-05, EntidadContacto.entidadVinculadaId).
+  contactosVinculados            EntidadContacto[]           @relation("EntidadContactoVinculada")
   solicitudesInspeccion          SolicitudInspeccion[]       @relation("SolicitudInspeccionProductor")
   solicitudesInspeccionCliente   SolicitudInspeccion[]       @relation("SolicitudInspeccionCliente")
   solicitudesInspeccionPlanta    SolicitudInspeccion[]       @relation("SolicitudInspeccionPlanta")
@@ -1796,9 +1816,9 @@ model EntidadDireccion {
 }
 
 model EntidadContacto {
-  id                   Int       @id @default(autoincrement())
+  id                   Int                 @id @default(autoincrement())
   entidadId            Int
-  entidad              Entidad   @relation(fields: [entidadId], references: [id])
+  entidad              Entidad             @relation("EntidadContactos", fields: [entidadId], references: [id])
   codigo               String
   nombre               String
   rut                  String?
@@ -1806,10 +1826,20 @@ model EntidadContacto {
   email                String?
   telefono             String?
   tipo                 String?
-  esRepresentanteLegal Boolean   @default(false)
-  creadoEn             DateTime  @default(now())
+  esRepresentanteLegal Boolean             @default(false)
+  // Categorías comerciales (2026-11-05): un contacto del Cliente puede ser su
+  // Comprador, Notify y/o Consignatario. Para NOTIFY/CONSIGNATARIO el contacto
+  // se vincula a la Entidad real (entidadVinculadaId, con TAXID/dirección para
+  // PDFs y DTE). categoriasPorDefecto ⊆ categorias: a lo sumo un contacto por
+  // (entidad, categoría) — validado en entidades.service.ts. El Cierre
+  // Comercial toma estos defaults al elegir el Cliente.
+  categorias           CategoriaContacto[] @default([])
+  categoriasPorDefecto CategoriaContacto[] @default([])
+  entidadVinculadaId   Int?
+  entidadVinculada     Entidad?            @relation("EntidadContactoVinculada", fields: [entidadVinculadaId], references: [id])
+  creadoEn             DateTime            @default(now())
   creadoPor            String
-  actualizadoEn        DateTime? @updatedAt
+  actualizadoEn        DateTime?           @updatedAt
   actualizadoPor       String?
   eliminadoEn          DateTime?
   eliminadoPor         String?
@@ -1818,7 +1848,14 @@ model EntidadContacto {
   notasVentaComprador   NotaVenta[]
 
   @@index([entidadId])
+  @@index([entidadVinculadaId])
   @@map("entidad_contactos")
+}
+
+enum CategoriaContacto {
+  COMPRADOR
+  NOTIFY
+  CONSIGNATARIO
 }
 
 // ─── Calidad — Solicitudes de Inspección ─────────────────────────────────────
@@ -2023,20 +2060,6 @@ model SolicitudInspeccionLineaCalidad {
   @@unique([lineaId, notaCalidadId, notaCondicionId])
   @@index([lineaId])
   @@map("solicitud_inspeccion_linea_calidades")
-}
-
-model NotaVentaCalidadPermitida {
-  id              Int           @id @default(autoincrement())
-  notaVentaId     Int
-  notaVenta       NotaVenta     @relation(fields: [notaVentaId], references: [id], onDelete: Cascade)
-  notaCalidadId   Int
-  notaCalidad     NotaCalidad   @relation(fields: [notaCalidadId], references: [id])
-  notaCondicionId Int
-  notaCondicion   NotaCondicion @relation(fields: [notaCondicionId], references: [id])
-
-  @@unique([notaVentaId, notaCalidadId, notaCondicionId])
-  @@index([notaVentaId])
-  @@map("nota_venta_calidades_permitidas")
 }
 
 model InstructivoEmbalajeCalidadPermitida {
@@ -2294,6 +2317,12 @@ model Articulo {
   tipo                  TipoArticulo
   codigo                String
   descripcion           String
+  // Descripción comercial (2026-11-05): la que se despliega en todos los
+  // módulos comerciales (Cierre, OC fruta, Instructivos, Embarque, Proforma,
+  // Factura, Calidad...). `descripcion` queda solo para Materiales.
+  // Null = fallback a `descripcion` (shared/articulo-descripcion.ts).
+  // `descripcionExtranjera` es la descripción comercial en idioma extranjero.
+  descripcionComercial  String?
   descripcionExtranjera String?
   unidadId              Int
   // FK compuesta (empresaId, unidadId) -> UnidadMedida(empresaId, id): mismo
@@ -3098,6 +3127,10 @@ model NotaCalidad {
   descripcion           String
   descripcionExtranjera String?
   bloqueado             Boolean   @default(false)
+  // Orden de la escala (2026-11-05): menor = mejor. El Cierre Comercial fija
+  // un "hasta" y admite todo lo de orden <= al elegido (ej. Calidad B admite
+  // A y B). Backfill por codigo.
+  orden                 Int       @default(0)
   creadoEn              DateTime  @default(now())
   creadoPor             String
   actualizadoEn         DateTime? @updatedAt
@@ -3105,11 +3138,11 @@ model NotaCalidad {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  especies            NotaCalidadEspecie[]
-  pallets             Pallet[]
-  solicitudesCalidad  SolicitudInspeccionLineaCalidad[]
-  notasVentaCalidad   NotaVentaCalidadPermitida[]
-  instructivosCalidad InstructivoEmbalajeCalidadPermitida[]
+  especies               NotaCalidadEspecie[]
+  pallets                Pallet[]
+  solicitudesCalidad     SolicitudInspeccionLineaCalidad[]
+  notasVentaCalidadHasta NotaVenta[]                           @relation("NotaVentaCalidadHasta")
+  instructivosCalidad    InstructivoEmbalajeCalidadPermitida[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -3136,6 +3169,10 @@ model NotaCondicion {
   descripcion           String
   descripcionExtranjera String?
   bloqueado             Boolean   @default(false)
+  // Orden de la escala (2026-11-05): menor = mejor. El Cierre Comercial fija
+  // un "hasta" y admite todo lo de orden <= al elegido (ej. Calidad B admite
+  // A y B). Backfill por codigo.
+  orden                 Int       @default(0)
   creadoEn              DateTime  @default(now())
   creadoPor             String
   actualizadoEn         DateTime? @updatedAt
@@ -3143,11 +3180,11 @@ model NotaCondicion {
   eliminadoEn           DateTime?
   eliminadoPor          String?
 
-  especies              NotaCondicionEspecie[]
-  pallets               Pallet[]
-  solicitudesCondicion  SolicitudInspeccionLineaCalidad[]
-  notasVentaCondicion   NotaVentaCalidadPermitida[]
-  instructivosCondicion InstructivoEmbalajeCalidadPermitida[]
+  especies                 NotaCondicionEspecie[]
+  pallets                  Pallet[]
+  solicitudesCondicion     SolicitudInspeccionLineaCalidad[]
+  notasVentaCondicionHasta NotaVenta[]                           @relation("NotaVentaCondicionHasta")
+  instructivosCondicion    InstructivoEmbalajeCalidadPermitida[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -3255,17 +3292,29 @@ model NotaVenta {
 
   observaciones String?
 
+  // Responsable de venta (2026-11-05): por defecto el usuario digitador; se
+  // elige entre los usuarios con esResponsableVenta. Su firma (UsuarioFirma)
+  // se estampa en el PDF. FK String (boundary Usuario).
+  responsableVentaId String?
+  responsableVenta   Usuario? @relation("NotaVentaResponsableVenta", fields: [responsableVentaId], references: [id])
+
+  // Calidad / Condición "hasta" (2026-11-05, supersede los pares
+  // NotaVentaCalidadPermitida de 55022c4): un pallet califica para el Cierre
+  // si notaCalidad.orden <= notaCalidadHasta.orden Y notaCondicion.orden <=
+  // notaCondicionHasta.orden. Null = sin restricción en esa dimensión.
+  notaCalidadHastaId   Int?
+  notaCalidadHasta     NotaCalidad?   @relation("NotaVentaCalidadHasta", fields: [empresaId, notaCalidadHastaId], references: [empresaId, id])
+  notaCondicionHastaId Int?
+  notaCondicionHasta   NotaCondicion? @relation("NotaVentaCondicionHasta", fields: [empresaId, notaCondicionHastaId], references: [empresaId, id])
+
   // Contrato naviero (2026-10-30): bajo qué contrato naviero se contrata el
   // flete marítimo — AGROSAN_AGL (contrato propio Agrosan-AGL, por defecto) o
   // CLIENTE (lo pone el cliente). Solo informativo.
   contratoNaviero ContratoNaviero @default(AGROSAN_AGL)
 
-  detalles            NotaVentaDetalle[]
-  ordenesCompra       OrdenCompra[]
-  embarques           Embarque[]
-  // Calidades permitidas = pares (NotaCalidad, NotaCondicion). Restringen qué
-  // pallets se pueden reservar al Embarque de este Cierre (ver embarques).
-  calidadesPermitidas NotaVentaCalidadPermitida[]
+  detalles      NotaVentaDetalle[]
+  ordenesCompra OrdenCompra[]
+  embarques     Embarque[]
 
   // Bloqueo del Cierre Comercial (2026-09-28): al cerrar, la NV queda de solo
   // lectura (no se editan encabezado, líneas ni se borra). Reabrir exige el
@@ -3286,6 +3335,7 @@ model NotaVenta {
   @@index([fecha])
   @@index([condicionPagoId])
   @@index([empresaId])
+  @@index([responsableVentaId])
   @@map("notas_venta")
 }
 
@@ -3344,7 +3394,10 @@ model NotaVentaDetalle {
   precio          Decimal @db.Decimal(14, 4) // valor unitario por caja, en la moneda del encabezado
 
   // Multiselect de calibres aceptados (antes: rango calibreInicioId/calibreFinId).
-  calibres NotaVentaDetalleCalibre[]
+  calibres    NotaVentaDetalleCalibre[]
+  // Cómo se presentan los calibres en el PDF (2026-11-05): RANGO = "Desde X
+  // hasta Y" (menor/mayor por orden), ESPECIFICOS = lista. Sin efecto funcional.
+  calibreModo CalibreModo               @default(ESPECIFICOS)
 
   // Líneas de Orden de Compra tomadas (completas o parciales) desde esta
   // línea del Cierre — 2026-08-23, ver OrdenCompraLinea.notaVentaDetalleId.
@@ -3353,6 +3406,11 @@ model NotaVentaDetalle {
   @@index([notaVentaId])
   @@index([etiquetaId])
   @@map("notas_venta_detalle")
+}
+
+enum CalibreModo {
+  ESPECIFICOS
+  RANGO
 }
 
 model NotaVentaDetalleCalibre {

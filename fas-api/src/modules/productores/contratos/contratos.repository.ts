@@ -11,7 +11,7 @@ const includeDetalle = {
   responsable: { select: { id: true, nombre: true, email: true } },
   lineas: {
     include: {
-      articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+      articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
       variedad: { select: mantenedorSelect },
       calibreDesde: { select: mantenedorSelect },
       calibreHasta: { select: mantenedorSelect },

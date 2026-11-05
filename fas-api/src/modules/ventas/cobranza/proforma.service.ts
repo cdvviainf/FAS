@@ -5,6 +5,7 @@ import { siguienteCodigo } from '../../config/prefijos-codigo/prefijos-codigo.se
 import { resolverFleteSeguro } from './clausula-flete-seguro.js'
 import { faltantesDescripcionExtranjera } from './descripcion-idioma.js'
 import * as repo from './proforma.repository.js'
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 import type { DimensionProforma, ProformaEmitirInput, ProformaLineaInput, ProformasListFilters } from './proforma.types.js'
 
 // Orden de armado de la descripción (decisión de negocio, Christian
@@ -106,7 +107,7 @@ export async function sugerirLineas(embarqueId: number, dimensiones: DimensionPr
           variedadId: dimensiones.includes('VARIEDAD') ? l.variedadId : null,
           variedadDesc: dimensiones.includes('VARIEDAD') ? l.variedad.descripcion : null,
           articuloId: dimensiones.includes('ARTICULO') ? l.articuloId : null,
-          articuloDesc: dimensiones.includes('ARTICULO') ? l.articulo.descripcion : null,
+          articuloDesc: dimensiones.includes('ARTICULO') ? descripcionComercialArticulo(l.articulo) : null,
           calibreId: dimensiones.includes('CALIBRE') ? l.calibreId : null,
           calibreDesc: dimensiones.includes('CALIBRE') ? l.calibre.descripcion : null,
           categoriaId: dimensiones.includes('CATEGORIA') ? l.categoriaId : null,

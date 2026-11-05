@@ -26,6 +26,7 @@ import { notasCalidadService } from '@/features/notas-calidad/service'
 import { notasCondicionService } from '@/features/notas-condicion/service'
 import { stockFrutaService } from '../service'
 import type { LoteLineaInput } from '../types'
+import { articuloDescripcionComercial } from '@/lib/articulo'
 
 const NINGUNO = '__NINGUNO__'
 const especiesService = createMantenedorService('especies')
@@ -305,7 +306,7 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
                   <div className='min-w-0 space-y-1 sm:col-span-2'>
                     <Label className='text-[10px] uppercase'>Artículo</Label>
                     <Combobox
-                      options={toOptions(articulos?.data)}
+                      options={(articulos?.data ?? []).map((a) => ({ value: String(a.id), label: articuloDescripcionComercial(a) }))}
                       value={l.articuloId ? String(l.articuloId) : null}
                       onChange={(v) => cambiarArticuloLinea(i, Number(v))}
                       placeholder='—'

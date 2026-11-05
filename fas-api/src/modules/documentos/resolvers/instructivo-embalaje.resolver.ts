@@ -5,6 +5,7 @@ import { NotFoundError } from '../../../shared/errors.js'
 import { getInstructivoById } from '../../compras/instructivo-embalaje/instructivo-embalaje.repository.js'
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
 import type { InstructivoEmbalajePdfPayload } from '../schemas/instructivo-embalaje.schema.js'
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
 dayjs.extend(isoWeek)
 
@@ -27,7 +28,7 @@ export async function resolverInstructivoEmbalaje(id: number, empresaId: number)
     variedadRotulada: d.variedadRotulada?.descripcion ?? null,
     categoria: d.categoria.descripcion,
     articulo: d.articulo.codigo,
-    articuloDescripcion: d.articulo.descripcion,
+    articuloDescripcion: descripcionComercialArticulo(d.articulo),
     // Marca (Etiqueta) por línea (2026-10-05): si la línea fijó una, manda;
     // si no, cae a la etiqueta del artículo (comportamiento previo).
     etiqueta: d.etiqueta?.descripcion ?? d.articulo.etiqueta?.descripcion ?? null,

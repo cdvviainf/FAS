@@ -11,6 +11,19 @@ export const cierreComercialPdfPayloadSchema = z.object({
     direccion: z.string().nullable(),
     logoDataUri: z.string().nullable(),
   }),
+  // Exportador del Cierre (NotaVenta.exportadorId, 2026-11-05); si el Cierre
+  // no tiene exportador se usan los datos de la empresa.
+  exportador: z.object({
+    razonSocial: z.string(),
+    rut: z.string().nullable(),
+    direccion: z.string().nullable(),
+  }),
+  // Responsable de venta (cabecera) + su firma PNG (sobre la línea de firma).
+  responsableVenta: z.string().nullable(),
+  firmaResponsableDataUri: z.string().nullable(),
+  // Calidad / Condición "hasta" (2026-11-05).
+  calidadHasta: z.string().nullable(),
+  condicionHasta: z.string().nullable(),
   folio: z.string(),
   fecha: z.string(), // ISO
   cliente: z.object({
@@ -33,16 +46,8 @@ export const cierreComercialPdfPayloadSchema = z.object({
   tipoFlete: z.string().nullable(),
   condicionPago: z.string().nullable(),
   moneda: z.string(),
-  // Snapshot de NotaVenta.cuotasPago (no la plantilla CondicionPago viva) —
-  // mismo shape crudo que orden-compra.schema.ts, la plantilla arma el texto.
-  cuotas: z.array(z.object({
-    plazoDias: z.number().int(),
-    fechaReferencia: z.enum(['FACTURA', 'ZARPE', 'ENVIO_DOCUMENTOS', 'ARRIBO']),
-    tipoValor: z.enum(['PORCENTAJE', 'MONTO_UNITARIO']),
-    porcentaje: z.string().nullable(),
-    valorUnitario: z.string().nullable(),
-    unidad: z.string().nullable(),
-  })),
+  // Cuotas: eliminadas del PDF (2026-11-05, pedido del cliente) — solo se
+  // muestra la condición de pago.
   observaciones: z.string().nullable(),
   lineas: z.array(z.object({
     especie: z.string(),
@@ -57,13 +62,9 @@ export const cierreComercialPdfPayloadSchema = z.object({
     cajas: z.number().int(),
     precio: z.string(),
     total: z.string(),
-    // Kg Neto/Bruto (feedback Christian, 2026-08-19), mismo criterio que
-    // orden-compra.schema.ts: Envase es el dato de catálogo, Neto/Bruto a
-    // secas es el total de la línea (envase × cajas).
+    // Solo Kg Neto por envase (2026-11-05): se eliminaron Kg Bruto Envase
+    // (unitario bruto) y los kilos totales Neto/Bruto, a pedido del cliente.
     kgNetoEnvase: z.string(),
-    kgBrutoEnvase: z.string(),
-    kgNeto: z.string(),
-    kgBruto: z.string(),
     // fechaCompromiso: sacado (feedback Christian, 2026-08-19) — no está en
     // el documento original.
   })),
@@ -71,8 +72,6 @@ export const cierreComercialPdfPayloadSchema = z.object({
     pallets: z.number().int(),
     cajas: z.number().int(),
     totalMonto: z.string(),
-    kgNeto: z.string(),
-    kgBruto: z.string(),
   }),
 })
 

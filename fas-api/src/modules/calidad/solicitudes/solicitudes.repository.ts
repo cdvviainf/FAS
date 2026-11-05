@@ -41,7 +41,7 @@ const includeDetalle = {
       estadoCierre: true,
       especie: { select: { id: true, codigo: true, descripcion: true } },
       variedad: { select: { id: true, codigo: true, descripcion: true } },
-      articulo: { select: { id: true, codigo: true, descripcion: true } },
+      articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true } },
       categorias: { select: { categoria: { select: { id: true, codigo: true, descripcion: true } } } },
       calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
       calidades: {

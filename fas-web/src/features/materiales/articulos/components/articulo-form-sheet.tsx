@@ -52,6 +52,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
   const [tipo, setTipo] = useState<TipoArticulo>('MATERIAL_EMBALAJE')
   const [codigo, setCodigo] = useState('')
   const [descripcion, setDescripcion] = useState('')
+  const [descripcionComercial, setDescripcionComercial] = useState('')
   const [descripcionExtranjera, setDescripcionExtranjera] = useState('')
   const [unidadId, setUnidadId] = useState<number | null>(null)
   const [tipoCosteo, setTipoCosteo] = useState<TipoCosteo>('PROMEDIO_PONDERADO')
@@ -109,6 +110,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setTipo(item.tipo)
       setCodigo(item.codigo)
       setDescripcion(item.descripcion)
+      setDescripcionComercial(item.descripcionComercial ?? '')
       setDescripcionExtranjera(item.descripcionExtranjera ?? '')
       setUnidadId(item.unidadId)
       setTipoCosteo(item.tipoCosteo)
@@ -127,6 +129,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       setTipo('MATERIAL_EMBALAJE')
       setCodigo('')
       setDescripcion('')
+      setDescripcionComercial('')
       setDescripcionExtranjera('')
       setUnidadId(null)
       setTipoCosteo('PROMEDIO_PONDERADO')
@@ -151,6 +154,7 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
       const payload = {
         tipo,
         descripcion: descripcion.trim(),
+        descripcionComercial: descripcionComercial.trim() || null,
         descripcionExtranjera: descripcionExtranjera.trim() || null,
         unidadId: unidadId!,
         tipoCosteo,
@@ -245,8 +249,20 @@ export function ArticuloFormSheet({ item, open, onOpenChange }: ArticuloFormShee
             {errors.descripcion && <p className='text-xs text-destructive'>{errors.descripcion}</p>}
           </div>
 
+          {/* Descripción comercial (2026-11-05): la que se muestra fuera de Materiales
+              (Cierre, OC, Instructivos, Proforma, Factura...). Vacía = usa la Descripción. */}
           <div className='space-y-1.5'>
-            <Label>Descripción extranjera</Label>
+            <Label>Descripción comercial</Label>
+            <Input
+              value={descripcionComercial}
+              onChange={(e) => setDescripcionComercial(e.target.value)}
+              placeholder='Vacío = usa la descripción'
+            />
+            <p className='text-xs text-muted-foreground'>Se muestra en los módulos comerciales. La descripción queda solo para Materiales.</p>
+          </div>
+
+          <div className='space-y-1.5'>
+            <Label>Descripción comercial (extranjera)</Label>
             <Input value={descripcionExtranjera} onChange={(e) => setDescripcionExtranjera(e.target.value)} />
           </div>
 

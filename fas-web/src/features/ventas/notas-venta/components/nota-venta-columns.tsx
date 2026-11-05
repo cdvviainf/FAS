@@ -61,6 +61,19 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
     onError: (e: Error) => toast.error(e.message || 'Error al reabrir el Cierre Comercial'),
   })
 
+  // Duplicar (2026-11-05): crea un Cierre nuevo (abierto) y navega a él.
+  const [duplicarOpen, setDuplicarOpen] = useState(false)
+  const duplicarMutation = useMutation({
+    mutationFn: () => notasVentaService.duplicar(notaVenta.id),
+    onSuccess: (res) => {
+      toast.success(`Cierre duplicado — nuevo Folio ${res.data.folio}`)
+      setDuplicarOpen(false)
+      queryClient.invalidateQueries({ queryKey: notasVentaKeys.all })
+      router.push(`/dashboard/ventas/cierre/${res.data.id}`)
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al duplicar el Cierre Comercial'),
+  })
+
   async function descargarPdf() {
     setDescargando(true)
     try {
@@ -90,6 +103,14 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
         onConfirm={() => deleteMutation.mutate()}
         loading={deleteMutation.isPending}
       />
+      <AlertModal
+        isOpen={duplicarOpen}
+        onClose={() => setDuplicarOpen(false)}
+        onConfirm={() => duplicarMutation.mutate()}
+        loading={duplicarMutation.isPending}
+        title={`¿Duplicar el Cierre ${notaVenta.folio}?`}
+        description='Se creará un Cierre nuevo (abierto, con fecha de hoy) con el mismo encabezado y líneas. No se copian Embarques ni Órdenes de Compra.'
+      />
       <GenerarEmbarqueDialog notaVentaId={notaVenta.id} open={embarqueOpen} onOpenChange={setEmbarqueOpen} />
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
@@ -104,6 +125,12 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
             <Icons.edit className='mr-2 h-4 w-4' />
             {puedeEscribir && !cerrado ? 'Editar' : 'Ver detalle'}
           </DropdownMenuItem>
+          {puedeEscribir && (
+            <DropdownMenuItem onClick={() => setDuplicarOpen(true)} disabled={duplicarMutation.isPending}>
+              <Icons.copy className='mr-2 h-4 w-4' />
+              Duplicar
+            </DropdownMenuItem>
+          )}
           {puedeEscribirEmbarques && (
             <DropdownMenuItem onClick={() => setEmbarqueOpen(true)}>
               <Icons.post className='mr-2 h-4 w-4' />

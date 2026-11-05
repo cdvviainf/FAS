@@ -2,6 +2,7 @@ export interface NotaCondicionCreateInput {
   codigo: string
   descripcion: string
   descripcionExtranjera?: string
+  orden?: number
   especieIds: number[]
 }
 

@@ -5,9 +5,10 @@ import type {
   CajasPorPalletUpdateInput,
   CajasPorPalletListFilters,
 } from './cajas-por-pallet.types.js'
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
 const includeRefs = {
-  articulo: { select: { id: true, codigo: true, descripcion: true } },
+  articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true } },
   tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
 }
 
@@ -96,6 +97,7 @@ export async function listEmbalajesConCajas(especieId: number, tipoPalletId: num
       id: true,
       codigo: true,
       descripcion: true,
+      descripcionComercial: true,
       cajasPorPallet: { where: { tipoPalletId, eliminadoEn: null }, select: { cajasPorPallet: true } },
     },
     orderBy: { codigo: 'asc' },
@@ -103,7 +105,8 @@ export async function listEmbalajesConCajas(especieId: number, tipoPalletId: num
   return articulos.map((a) => ({
     articuloId: a.id,
     codigo: a.codigo,
-    descripcion: a.descripcion,
+    // Descripción comercial (2026-11-05): Cajas por Pallet es un mantenedor comercial.
+    descripcion: descripcionComercialArticulo(a),
     cajasPorPallet: a.cajasPorPallet[0]?.cajasPorPallet ?? null,
   }))
 }

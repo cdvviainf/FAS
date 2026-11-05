@@ -13,13 +13,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -151,19 +144,13 @@ function DireccionDialog({ open, initial, paisOrigen, onClose, onSave, isSaving,
             </div>
             <div className='space-y-1.5'>
               <Label>País <span className='text-destructive'>*</span></Label>
-              <Select
+              <Combobox
                 value={form.paisId ? String(form.paisId) : ''}
-                onValueChange={(v) => setForm((f) => ({ ...f, paisId: parseInt(v), comunaId: null }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder='País...' />
-                </SelectTrigger>
-                <SelectContent>
-                  {paises.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setForm((f) => ({ ...f, paisId: parseInt(v), comunaId: null }))}
+                placeholder='País...'
+                searchPlaceholder='Buscar país...'
+                options={paises.map((p) => ({ value: String(p.id), label: p.descripcion }))}
+              />
               {errors.paisId && <p className='text-xs text-destructive'>{errors.paisId}</p>}
             </div>
           </div>

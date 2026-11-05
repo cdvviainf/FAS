@@ -81,7 +81,7 @@ const palletInclude = {
       categoriaId: true,
       categoria: { select: mantenedorSelect },
       articuloId: true,
-      articulo: { select: { ...mantenedorSelect, kgNetoEnvase: true } },
+      articulo: { select: { ...mantenedorSelect, descripcionComercial: true, kgNetoEnvase: true } },
       calibreId: true,
       calibre: { select: mantenedorSelect },
       cajas: true,
@@ -278,8 +278,10 @@ export async function getNotaVentaConDetalle(id: number) {
     where: { id, eliminadoEn: null },
     include: {
       detalles: { include: { calibres: { select: { calibreId: true } } } },
-      // Calidades permitidas (pares): restringen qué pallets se pueden reservar.
-      calidadesPermitidas: { select: { notaCalidadId: true, notaCondicionId: true } },
+      // Calidad / Condición "hasta" (2026-11-05): restringen qué pallets se
+      // pueden reservar (orden del pallet <= orden del "hasta").
+      notaCalidadHasta: { select: { orden: true } },
+      notaCondicionHasta: { select: { orden: true } },
     },
   })
 }
@@ -289,9 +291,10 @@ export async function getNotaVentaConDetalle(id: number) {
 // es solo de catálogo (embarques.comparacion.ts), sin tope de cantidad.
 export async function getPalletsDisponibles(
   detalleNV: NonNullable<Awaited<ReturnType<typeof getNotaVentaConDetalle>>>['detalles'],
-  // Calidades permitidas (pares) del Cierre: si hay, solo se ofrecen pallets cuya
-  // combinación (notaCalidad, notaCondicion) esté admitida. Vacío = sin restricción.
-  calidadesPermitidas: { notaCalidadId: number; notaCondicionId: number }[] = [],
+  // Calidad / Condición "hasta" del Cierre (2026-11-05, supersede los pares):
+  // si hay, solo se ofrecen pallets con orden <= al del "hasta" en cada
+  // dimensión. null = sin restricción en esa dimensión.
+  hasta: CalidadHasta = { calidadOrden: null, condicionOrden: null },
 ) {
   // 2026-09-28 (decisión de negocio Christian): se muestran TODOS los pallets
   // sin reservar que calzan con el detalle de la NV, calificados o no — el
@@ -301,15 +304,32 @@ export async function getPalletsDisponibles(
   const pallets = await prisma.pallet.findMany({
     // eliminadoEn: null (2026-10-12) — un pallet eliminado desde Edición de
     // Stock no es stock disponible y no debe poder reservarse a un Embarque.
-    where: { embarqueId: null, eliminadoEn: null },
+    where: { embarqueId: null, eliminadoEn: null, ...filtroCalidadHasta(hasta) },
     include: palletInclude,
     orderBy: { creadoEn: 'asc' },
   })
-  const calzan = pallets.filter((p) => palletCalzaConDetalleNV(p.lineas, detalleNV))
-  if (calidadesPermitidas.length === 0) return calzan
-  // Filtro de calidad permitida: la combinación del pallet debe estar en el set.
-  const permitidos = new Set(calidadesPermitidas.map((c) => `${c.notaCalidadId}-${c.notaCondicionId}`))
-  return calzan.filter((p) => p.notaCalidadId != null && p.notaCondicionId != null && permitidos.has(`${p.notaCalidadId}-${p.notaCondicionId}`))
+  return pallets.filter((p) => palletCalzaConDetalleNV(p.lineas, detalleNV))
+}
+
+export interface CalidadHasta {
+  calidadOrden: number | null
+  condicionOrden: number | null
+}
+
+export function calidadHastaDeNotaVenta(nv: {
+  notaCalidadHasta: { orden: number } | null
+  notaCondicionHasta: { orden: number } | null
+}): CalidadHasta {
+  return { calidadOrden: nv.notaCalidadHasta?.orden ?? null, condicionOrden: nv.notaCondicionHasta?.orden ?? null }
+}
+
+// Filtro Prisma de la regla "hasta": un pallet sin nota en una dimensión
+// restringida no califica (mismo criterio que tenían los pares).
+function filtroCalidadHasta(hasta: CalidadHasta) {
+  return {
+    ...(hasta.calidadOrden != null ? { notaCalidad: { orden: { lte: hasta.calidadOrden } } } : {}),
+    ...(hasta.condicionOrden != null ? { notaCondicion: { orden: { lte: hasta.condicionOrden } } } : {}),
+  }
 }
 
 // Reclamo atómico (mismo patrón que folios de Instructivo/Recepción de
@@ -319,7 +339,11 @@ export async function getPalletsDisponibles(
 // (otro Embarque se llevó uno de los pallets en el medio) dejaba los demás
 // ya asignados aunque el service lanzara error — el throw dentro de
 // `$transaction` revierte todo el lote, no solo informa el fallo.
-export async function reservarPalletsEnEmbarque(palletIds: number[], embarqueId: number) {
+export async function reservarPalletsEnEmbarque(
+  palletIds: number[],
+  embarqueId: number,
+  hasta: CalidadHasta = { calidadOrden: null, condicionOrden: null },
+) {
   await prisma.$transaction(async (tx) => {
     // FAS-IE-QA-005 (QA ronda 4): mismo lock que desvincularPallet/
     // confirmarDespacho/generarInstructivosHijos — sin esto, una generación
@@ -340,6 +364,9 @@ export async function reservarPalletsEnEmbarque(palletIds: number[], embarqueId:
         completo: true,
         notaCalidadId: { not: null },
         notaCondicionId: { not: null },
+        // Regla "hasta" del Cierre (2026-11-05) re-chequeada en el claim:
+        // la nota del pallet pudo cambiar entre el listado y la reserva.
+        ...filtroCalidadHasta(hasta),
       },
       data: { embarqueId },
     })
@@ -801,7 +828,7 @@ export async function getDatosEmisionPackingList(embarqueId: number) {
               variedad: { select: { descripcion: true } },
               categoria: { select: { descripcion: true } },
               calibre: { select: { descripcion: true } },
-              articulo: { select: { codigo: true, descripcion: true, kgNetoEnvase: true } },
+              articulo: { select: { codigo: true, descripcion: true, descripcionComercial: true, kgNetoEnvase: true } },
               etiqueta: { select: { descripcion: true } },
             },
           },
@@ -1341,7 +1368,7 @@ export async function getInstructivoHijoConDetalle(instructivoHijoId: number) {
           categoria: { select: mantenedorSelect },
           calibre: { select: mantenedorSelect },
           // kgNeto/kgBruto del envase para Peso Neto/Bruto por línea (2026-09-28).
-          articulo: { select: { ...mantenedorSelect, kgNetoEnvase: true, kgBrutoEnvase: true } },
+          articulo: { select: { ...mantenedorSelect, descripcionComercial: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
           cajas: true,
         },
       },

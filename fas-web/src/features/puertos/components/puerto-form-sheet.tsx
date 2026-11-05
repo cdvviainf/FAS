@@ -19,8 +19,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
-import { Badge } from '@/components/ui/badge'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -155,28 +155,20 @@ export function PuertoFormSheet({ item, open, onOpenChange }: PuertoFormSheetPro
                       País <span className='text-destructive'>*</span>
                     </Label>
                     <div className='flex gap-2'>
-                      <Select
+                      <Combobox
+                        className='flex-1'
                         value={field.state.value ? String(field.state.value) : ''}
-                        onValueChange={(v) => field.handleChange(parseInt(v, 10))}
-                      >
-                        <SelectTrigger className='flex-1'>
-                          <SelectValue placeholder='Seleccionar país...' />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {paises.map((p) => {
-                            const pais = p as MantenedorSimple & { puedeSerOrigen?: boolean; codigo?: string }
-                            return (
-                              <SelectItem key={pais.id} value={String(pais.id)}>
-                                <span className='font-mono text-xs text-muted-foreground mr-2'>{pais.codigo}</span>
-                                {pais.descripcion}
-                                {pais.puedeSerOrigen && (
-                                  <Badge variant='outline' className='ml-2 text-xs py-0'>Origen</Badge>
-                                )}
-                              </SelectItem>
-                            )
-                          })}
-                        </SelectContent>
-                      </Select>
+                        onChange={(v) => field.handleChange(parseInt(v, 10))}
+                        placeholder='Seleccionar país...'
+                        searchPlaceholder='Buscar país...'
+                        options={paises.map((p) => {
+                          const pais = p as MantenedorSimple & { puedeSerOrigen?: boolean; codigo?: string }
+                          return {
+                            value: String(pais.id),
+                            label: `${pais.codigo ? `${pais.codigo} — ` : ''}${pais.descripcion}${pais.puedeSerOrigen ? ' (Origen)' : ''}`,
+                          }
+                        })}
+                      />
                       <PaisQuickCreate onCreated={(pais) => field.handleChange(pais.id)} />
                     </div>
                     {field.state.meta.errors.length > 0 && (

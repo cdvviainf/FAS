@@ -42,6 +42,21 @@ export const usuariosService = {
     await api.delete(`config/usuarios/${id}/avatar`)
   },
 
+  async subirFirma(id: string, file: File): Promise<Usuario> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`config/usuarios/${id}/firma`, { body: formData }).json()
+  },
+
+  async eliminarFirma(id: string): Promise<void> {
+    await api.delete(`config/usuarios/${id}/firma`)
+  },
+
+  // Ruta relativa (mismo origen, con cookie de sesión) — igual que avatarSrc.
+  firmaSrc(id: string): string {
+    return `/api/config/usuarios/${id}/firma`
+  },
+
   avatarSrc(imagenUrl: string | null): string | null {
     if (!imagenUrl) return null
     // Ruta relativa (mismo origen) para que el navegador envíe la cookie de

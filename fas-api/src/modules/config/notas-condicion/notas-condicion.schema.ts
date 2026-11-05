@@ -4,6 +4,9 @@ export const notaCondicionCreateSchema = z.object({
   codigo: z.string().min(1, 'El código es requerido').max(20).trim(),
   descripcion: z.string().min(1, 'La descripción es requerida').max(200).trim(),
   descripcionExtranjera: z.string().max(200).trim().optional(),
+  // Orden de la escala (2026-11-05): menor = mejor. Lo usa la regla "hasta"
+  // del Cierre Comercial (admite todo lo de orden <= al elegido).
+  orden: z.number().int().min(0).max(9999).optional(),
   especieIds: z
     .array(z.number().int().positive())
     .refine((v) => new Set(v).size === v.length, { message: 'Hay especies repetidas' }),

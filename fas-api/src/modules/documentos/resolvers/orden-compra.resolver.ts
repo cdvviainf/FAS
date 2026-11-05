@@ -4,6 +4,7 @@ import { getOrdenCompraById } from '../../compras/ordenes-compra/ordenes-compra.
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri, getEspecieImagenDataUri } from '../documentos.repository.js'
 import type { ResolverOpciones } from '../documentos.types.js'
 import type { OrdenCompraPdfPayload } from '../schemas/orden-compra.schema.js'
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
 export const FECHA_REFERENCIA_LABEL: Record<string, string> = {
   FACTURA: 'Factura',
@@ -14,10 +15,13 @@ export const FECHA_REFERENCIA_LABEL: Record<string, string> = {
 
 // Valor de un mantenedor en el idioma del documento: descripcionExtranjera en
 // EN (si existe), descripcion en ES o cuando no hay traducción.
-type Traducible = { descripcion: string; descripcionExtranjera?: string | null }
+// Artículo (2026-11-05): en ES usa su descripción comercial (fallback a
+// descripcion) — el helper es inocuo para los demás mantenedores.
+type Traducible = { descripcion: string; descripcionExtranjera?: string | null; descripcionComercial?: string | null }
 function valorIdioma(o: Traducible | null | undefined, idioma: 'ES' | 'EN'): string | null {
   if (!o) return null
-  return idioma === 'EN' ? (o.descripcionExtranjera?.trim() || o.descripcion) : o.descripcion
+  const base = descripcionComercialArticulo(o)
+  return idioma === 'EN' ? (o.descripcionExtranjera?.trim() || base) : base
 }
 
 // Resolver de Orden de Compra — Etapa 4 §4: "consulta la base y arma un

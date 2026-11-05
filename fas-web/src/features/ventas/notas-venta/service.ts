@@ -26,6 +26,11 @@ export const notasVentaService = {
     return api.get('ventas/notas-venta/exportador-predeterminado').json()
   },
 
+  // Responsables de venta para el selector (con permiso de Cierre Comercial).
+  async responsablesVenta(): Promise<{ data: { id: string; nombre: string; email: string }[] }> {
+    return api.get('ventas/notas-venta/responsables-venta').json()
+  },
+
   async create(data: NotaVentaCreateInput): Promise<{ data: NotaVentaDetalle }> {
     return api.post('ventas/notas-venta', { json: data }).json()
   },
@@ -48,6 +53,11 @@ export const notasVentaService = {
 
   async removeDetalle(id: number, detalleId: number): Promise<void> {
     await api.delete(`ventas/notas-venta/${id}/detalles/${detalleId}`)
+  },
+
+  // Duplicar (2026-11-05): crea un Cierre nuevo (abierto) con encabezado y líneas.
+  async duplicar(id: number): Promise<{ data: NotaVentaDetalle }> {
+    return api.post(`ventas/notas-venta/${id}/duplicar`).json()
   },
 
   async cerrar(id: number): Promise<{ data: NotaVentaDetalle }> {

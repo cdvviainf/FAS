@@ -4,6 +4,8 @@ export const articuloCreateSchema = z.object({
   tipo: z.enum(['EMBALAJE', 'ENVASE', 'MATERIAL_EMBALAJE', 'SERVICIO', 'GRANEL']),
   codigo: z.string().min(1, 'El código es requerido').max(50).trim(),
   descripcion: z.string().min(1, 'La descripción es requerida').max(200).trim(),
+  // Descripción comercial (2026-11-05): la que se despliega fuera de Materiales.
+  descripcionComercial: z.string().max(200).trim().optional().nullable(),
   descripcionExtranjera: z.string().max(200).trim().optional().nullable(),
   unidadId: z.number().int().positive('La unidad de medida es requerida'),
   tipoCosteo: z.enum(['PROMEDIO_PONDERADO', 'ESTANDAR']),

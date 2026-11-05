@@ -14,6 +14,8 @@ const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 // Descripciones ES/EN de un mantenedor referenciado por una línea — base para
 // construir la descripción según idioma (ver descripcion-idioma.ts).
 const descSelect = { select: { descripcion: true, descripcionExtranjera: true } }
+// Artículo: además la descripción comercial (2026-11-05, shared/articulo-descripcion.ts).
+const articuloDescSelect = { select: { descripcion: true, descripcionExtranjera: true, descripcionComercial: true } }
 
 const facturaInclude = {
   cliente: { select: mantenedorSelect },
@@ -54,7 +56,7 @@ const facturaInclude = {
       // Relaciones para reconstruir la descripción por idioma (ES/EN).
       especie: descSelect,
       variedad: descSelect,
-      articulo: descSelect,
+      articulo: articuloDescSelect,
       calibre: descSelect,
       categoria: descSelect,
       etiqueta: descSelect,
@@ -114,7 +116,7 @@ export async function getProformaEmitidaParaFactura(proformaId: number) {
           montoLinea: true,
           especie: descSelect,
           variedad: descSelect,
-          articulo: descSelect,
+          articulo: articuloDescSelect,
           calibre: descSelect,
           categoria: descSelect,
           etiqueta: descSelect,

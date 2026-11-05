@@ -9,6 +9,7 @@ import type {
   OrdenCompraLineaCreateInput,
   OrdenCompraLineaUpdateInput,
 } from './ordenes-compra.types.js'
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
 const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: true }
 // descripcionExtranjera: la usa el PDF de la OC para emitir en inglés
@@ -36,7 +37,7 @@ const includeDetalle = {
       especie: { select: mantenedorSelect },
       variedad: { select: mantenedorSelect },
       categoria: { select: mantenedorSelect },
-      articulo: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+      articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true, descripcionExtranjera: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
       etiqueta: { select: mantenedorSelect },
       calibres: { select: { calibre: { select: mantenedorSelect } } },
       tipoPallet: { select: mantenedorSelect },
@@ -349,7 +350,7 @@ const lineaInclude = {
   especie: { select: mantenedorSelect },
   variedad: { select: mantenedorSelect },
   categoria: { select: mantenedorSelect },
-  articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+  articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
   etiqueta: { select: mantenedorSelect },
   calibres: { select: { calibre: { select: mantenedorSelect } } },
   tipoPallet: { select: mantenedorSelect },
@@ -420,12 +421,12 @@ async function resolverLineaCierreBajoLock(
 async function resolverEtiquetaBajoLock(tx: Prisma.TransactionClient, articuloId: number, etiquetaId: number | null): Promise<number> {
   const art = await tx.articulo.findUnique({
     where: { id: articuloId },
-    select: { descripcion: true, etiquetaId: true, etiquetasAdicionales: { select: { etiquetaId: true } } },
+    select: { descripcion: true, descripcionComercial: true, etiquetaId: true, etiquetasAdicionales: { select: { etiquetaId: true } } },
   })
   const permitidas = new Set<number>()
   if (art?.etiquetaId != null) permitidas.add(art.etiquetaId)
   for (const a of art?.etiquetasAdicionales ?? []) permitidas.add(a.etiquetaId)
-  const nombre = art?.descripcion ?? `#${articuloId}`
+  const nombre = art ? descripcionComercialArticulo(art) : `#${articuloId}`
   if (permitidas.size === 0) throw new ValidationError(`El artículo "${nombre}" no tiene etiqueta configurada`)
   if (etiquetaId != null) {
     if (!permitidas.has(etiquetaId)) {
@@ -629,7 +630,7 @@ export async function getNotaVentaDetalleConDisponibilidad(notaVentaId: number) 
       especie: { select: mantenedorSelect },
       variedad: { select: mantenedorSelect },
       categoria: { select: mantenedorSelect },
-      articulo: { select: { id: true, codigo: true, descripcion: true } },
+      articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true } },
       // Etiqueta (Marca) resuelta en el Cierre: la OC la usa como valor inicial
       // al tomar esta línea (editable, 2026-10-18).
       etiqueta: { select: mantenedorSelect },
@@ -735,6 +736,7 @@ export async function getArticuloTipo(id: number) {
       tipo: true,
       activo: true,
       descripcion: true,
+      descripcionComercial: true,
       // Set de etiquetas permitido = principal ∪ adicionales (2026-10-15).
       etiquetaId: true,
       etiquetasAdicionales: { select: { etiquetaId: true } },

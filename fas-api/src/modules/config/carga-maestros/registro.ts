@@ -320,6 +320,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
       { encabezado: 'Tipo', campo: 'tipo', tipo: 'enum', requerido: true, enumValores: ENUM_TIPO_ARTICULO },
       { encabezado: 'Código', campo: 'codigo', tipo: 'texto', autogenerar: true },
       COL_DESCRIPCION,
+      { encabezado: 'Descripción Comercial', campo: 'descripcionComercial', tipo: 'texto', ayuda: 'Descripción que se muestra fuera de Materiales (Cierre, OC, Instructivos, Proforma...). Vacío = usa la Descripción.' },
       COL_DESCRIPCION_EXT,
       { encabezado: 'Unidad (código, ya existente)', campo: 'unidadId', tipo: 'fk', requerido: true, fk: { externo: true, modelo: 'unidadMedida' } },
       { encabezado: 'Tipo de Costeo', campo: 'tipoCosteo', tipo: 'enum', requerido: true, enumValores: ENUM_TIPO_COSTEO },

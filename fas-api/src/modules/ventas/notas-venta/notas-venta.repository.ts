@@ -10,12 +10,9 @@ const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: 
 const includeDetalle = {
   cliente: { select: entidadSelect },
   exportador: { select: entidadSelect },
-  calidadesPermitidas: {
-    select: {
-      notaCalidad: { select: { id: true, codigo: true, descripcion: true } },
-      notaCondicion: { select: { id: true, codigo: true, descripcion: true } },
-    },
-  },
+  notaCalidadHasta: { select: { id: true, codigo: true, descripcion: true, orden: true } },
+  notaCondicionHasta: { select: { id: true, codigo: true, descripcion: true, orden: true } },
+  responsableVenta: { select: { id: true, nombre: true, email: true } },
   compradorContacto: { select: { id: true, nombre: true, email: true, telefono: true, whatsapp: true } },
   notify: { select: entidadSelect },
   consignatario: { select: entidadSelect },
@@ -40,11 +37,11 @@ const includeDetalle = {
     include: {
       especie: { select: { id: true, codigo: true, descripcion: true } },
       variedad: { select: { id: true, codigo: true, descripcion: true } },
-      articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+      articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
       etiqueta: { select: { id: true, codigo: true, descripcion: true } },
       categoria: { select: { id: true, codigo: true, descripcion: true } },
       tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
-      calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
+      calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true, orden: true } } } },
     },
   },
 }
@@ -286,8 +283,6 @@ export async function createNotaVenta(data: NotaVentaCreateInput, creadoPor: str
     const max = await tx.notaVenta.aggregate({ _max: { folio: true } })
     const folio = (max._max.folio ?? 0) + 1
     const cuotasPago = await cuotasDesdeCondicionPago(tx, data.condicionPagoId, [])
-    // Calidades permitidas (pares) son colección hija — se crean nested, no spread.
-    const { calidadesPermitidas, ...scalar } = data
 
     return tx.notaVenta.create({
       // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
@@ -295,13 +290,10 @@ export async function createNotaVenta(data: NotaVentaCreateInput, creadoPor: str
       // para satisfacer el tipo requerido por Prisma.
       data: {
         empresaId: getEmpresaIdActual()!,
-        ...scalar,
+        ...data,
         folio,
         creadoPor,
         cuotasPago: { create: cuotasPago },
-        ...(calidadesPermitidas && calidadesPermitidas.length > 0
-          ? { calidadesPermitidas: { create: calidadesPermitidas.map((p) => ({ notaCalidadId: p.notaCalidadId, notaCondicionId: p.notaCondicionId })) } }
-          : {}),
       },
       include: includeDetalle,
     })
@@ -322,20 +314,83 @@ export async function updateNotaVenta(id: number, data: NotaVentaUpdateInput, ac
         await tx.notaVentaCuotaPago.createMany({ data: cuotasPago.map((c) => ({ notaVentaId: id, ...c })) })
       }
     }
-    // Calidades permitidas (pares): colección hija — fuera del spread; si viene,
-    // se reemplaza el set.
-    const { calidadesPermitidas, ...scalar } = data
-    if (calidadesPermitidas !== undefined) {
-      await tx.notaVentaCalidadPermitida.deleteMany({ where: { notaVentaId: id } })
-      if (calidadesPermitidas.length > 0) {
-        await tx.notaVentaCalidadPermitida.createMany({
-          data: calidadesPermitidas.map((p) => ({ notaVentaId: id, notaCalidadId: p.notaCalidadId, notaCondicionId: p.notaCondicionId })),
-        })
-      }
-    }
     return tx.notaVenta.update({
       where: { id },
-      data: { ...scalar, actualizadoPor },
+      data: { ...data, actualizadoPor },
+      include: includeDetalle,
+    })
+  })
+}
+
+// Duplicar Cierre (2026-11-05): crea un Cierre NUEVO copiando encabezado y
+// líneas (con calibres y modo de calibre) del origen. No se copian folio,
+// fecha (hoy), estado de cierre, Embarques ni vínculos con OC. Las cuotas se
+// re-snapshotean desde la Condición de Pago VIGENTE (no se copia el snapshot
+// del origen) y se resuelven contra las líneas copiadas. Todo en una sola
+// transacción con el mismo lock de folio que createNotaVenta.
+export async function duplicarNotaVenta(origenId: number, creadoPor: string, responsableVentaId: string | null) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_NOTA_VENTA}::int, 0)`
+
+    const origen = await tx.notaVenta.findFirst({
+      where: { id: origenId, eliminadoEn: null },
+      include: { detalles: { include: { calibres: { select: { calibreId: true } } } } },
+    })
+    if (!origen) throw new ValidationError('El Cierre Comercial a duplicar no existe')
+
+    const max = await tx.notaVenta.aggregate({ _max: { folio: true } })
+    const folio = (max._max.folio ?? 0) + 1
+    const lineas = origen.detalles.map((d) => ({ cajas: d.cajas, articuloId: d.articuloId }))
+    const cuotasPago = await cuotasDesdeCondicionPago(tx, origen.condicionPagoId, lineas)
+
+    return tx.notaVenta.create({
+      data: {
+        empresaId: getEmpresaIdActual()!,
+        folio,
+        fecha: new Date(),
+        tipoVenta: origen.tipoVenta,
+        clienteId: origen.clienteId,
+        exportadorId: origen.exportadorId,
+        compradorContactoId: origen.compradorContactoId,
+        notifyId: origen.notifyId,
+        consignatarioId: origen.consignatarioId,
+        tipoEmbarqueId: origen.tipoEmbarqueId,
+        mercadoId: origen.mercadoId,
+        paisDestinoId: origen.paisDestinoId,
+        puertoDestinoId: origen.puertoDestinoId,
+        direccionId: origen.direccionId,
+        direccionDetalle: origen.direccionDetalle,
+        modalidadVentaId: origen.modalidadVentaId,
+        clausulaVentaId: origen.clausulaVentaId,
+        tipoFleteId: origen.tipoFleteId,
+        tipoBlId: origen.tipoBlId,
+        condicionPagoId: origen.condicionPagoId,
+        monedaId: origen.monedaId,
+        observaciones: origen.observaciones,
+        contratoNaviero: origen.contratoNaviero,
+        notaCalidadHastaId: origen.notaCalidadHastaId,
+        notaCondicionHastaId: origen.notaCondicionHastaId,
+        responsableVentaId,
+        creadoPor,
+        cuotasPago: { create: cuotasPago },
+        detalles: {
+          create: origen.detalles.map((d) => ({
+            fechaCompromiso: d.fechaCompromiso,
+            especieId: d.especieId,
+            variedadId: d.variedadId,
+            articuloId: d.articuloId,
+            etiquetaId: d.etiquetaId,
+            categoriaId: d.categoriaId,
+            tipoPalletId: d.tipoPalletId,
+            cantidadPallets: d.cantidadPallets,
+            cajasPorPallet: d.cajasPorPallet,
+            cajas: d.cajas,
+            precio: d.precio,
+            calibreModo: d.calibreModo,
+            calibres: { create: d.calibres.map((c) => ({ calibreId: c.calibreId })) },
+          })),
+        },
+      },
       include: includeDetalle,
     })
   })
@@ -372,11 +427,11 @@ export async function reabrirNotaVenta(id: number, actualizadoPor: string) {
 const detalleInclude = {
   especie: { select: { id: true, codigo: true, descripcion: true } },
   variedad: { select: { id: true, codigo: true, descripcion: true } },
-  articulo: { select: { id: true, codigo: true, descripcion: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+  articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
   etiqueta: { select: { id: true, codigo: true, descripcion: true } },
   categoria: { select: { id: true, codigo: true, descripcion: true } },
   tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
-  calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true } } } },
+  calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true, orden: true } } } },
 }
 
 export async function addDetalle(notaVentaId: number, data: NotaVentaDetalleCreateInput) {
@@ -573,6 +628,36 @@ export async function getCalibresActivos(ids: number[]) {
   return prisma.calibre.findMany({
     where: { id: { in: ids }, eliminadoEn: null, bloqueado: false },
     select: { id: true, especieId: true },
+  })
+}
+
+// Nota de Calidad / Condición vigente (tenant-scoped por la extensión).
+export async function getNotaCalidad(id: number) {
+  return prisma.notaCalidad.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+export async function getNotaCondicion(id: number) {
+  return prisma.notaCondicion.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+// Usuarios marcados como responsables de venta con acceso a la empresa activa
+// (solo id/nombre/email — nunca campos sensibles).
+export async function listResponsablesVenta() {
+  const empresaId = getEmpresaIdActual()
+  return prisma.usuario.findMany({
+    where: { eliminadoEn: null, esResponsableVenta: true, ...(empresaId ? { empresas: { some: { empresaId } } } : {}) },
+    select: { id: true, nombre: true, email: true },
+    orderBy: { nombre: 'asc' },
+  })
+}
+
+// Usuario vigente para responsable de venta (Usuario no es tenant: se exige
+// además acceso a la empresa activa vía UsuarioEmpresa).
+export async function getUsuarioParaResponsable(id: string) {
+  const empresaId = getEmpresaIdActual()
+  return prisma.usuario.findFirst({
+    where: { id, eliminadoEn: null, ...(empresaId ? { empresas: { some: { empresaId } } } : {}) },
+    select: { id: true, esResponsableVenta: true },
   })
 }
 

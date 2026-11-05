@@ -60,7 +60,7 @@ export async function getFicha(entidadId: number) {
           especie: { select: { id: true, codigo: true, descripcion: true } },
           lineas: {
             include: {
-              articulo: { select: { id: true, codigo: true, descripcion: true } },
+              articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true } },
               variedad: { select: { id: true, codigo: true, descripcion: true } },
               calibreDesde: { select: { id: true, codigo: true, descripcion: true } },
               calibreHasta: { select: { id: true, codigo: true, descripcion: true } },

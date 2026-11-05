@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { parCalidadSchema } from '../../../shared/calidades-permitidas.js'
 
 export const notaVentaCreateSchema = z.object({
   fecha: z.coerce.date(),
@@ -29,8 +28,13 @@ export const notaVentaCreateSchema = z.object({
   observaciones: z.string().max(1000).trim().optional().nullable(),
   // Contrato naviero (solo informativo): AGROSAN_AGL (por defecto) o CLIENTE.
   contratoNaviero: z.enum(['AGROSAN_AGL', 'CLIENTE']).optional().default('AGROSAN_AGL'),
-  // Calidades permitidas = pares (NotaCalidad, NotaCondicion).
-  calidadesPermitidas: z.array(parCalidadSchema).optional(),
+  // Calidad / Condición "hasta" (2026-11-05, supersede los pares): admite todo
+  // lo de orden <= al elegido. null = sin restricción.
+  notaCalidadHastaId: z.number().int().positive().optional().nullable(),
+  notaCondicionHastaId: z.number().int().positive().optional().nullable(),
+  // Responsable de venta (2026-11-05). Si se omite al crear, el service usa el
+  // usuario digitador.
+  responsableVentaId: z.string().min(1).optional().nullable(),
 })
 
 export const notaVentaUpdateSchema = notaVentaCreateSchema.partial()
@@ -53,6 +57,8 @@ export const notaVentaDetalleCreateSchema = z.object({
   cajas: z.number().int().positive('Las cajas deben ser mayor a 0'),
   precio: z.number().positive('El valor por caja debe ser mayor a 0'),
   calibreIds: z.array(z.number().int().positive()).min(1, 'Selecciona al menos un calibre'),
+  // Presentación de calibres en el PDF (sin efecto funcional).
+  calibreModo: z.enum(['ESPECIFICOS', 'RANGO']).optional().default('ESPECIFICOS'),
 })
 
 export const notaVentaDetalleUpdateSchema = notaVentaDetalleCreateSchema

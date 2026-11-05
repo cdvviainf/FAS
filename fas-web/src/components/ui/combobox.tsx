@@ -32,7 +32,17 @@ interface ComboboxProps {
   emptyText?: string;
   disabled?: boolean;
   className?: string;
+  /**
+   * Si se define, agrega al tope una opción con este texto (ej. "Sin definir")
+   * que devuelve `onNone()` — permite volver a "vacío" después de elegir un valor
+   * (2026-11-05). Sin `noneLabel` el comportamiento es el de siempre.
+   */
+  noneLabel?: string;
+  onNone?: () => void;
 }
+
+/** Sentinel compartido para la opción "ninguno" de los Select de shadcn/Radix. */
+export const NONE_VALUE = '__none__';
 
 /** Select con búsqueda (Popover + Command), para listas largas (comunas, entidades, etc.). */
 export function Combobox({
@@ -43,7 +53,9 @@ export function Combobox({
   searchPlaceholder = 'Buscar...',
   emptyText = 'Sin resultados.',
   disabled,
-  className
+  className,
+  noneLabel,
+  onNone
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const selected = options.find((o) => o.value === value);
@@ -73,6 +85,19 @@ export function Combobox({
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
+              {noneLabel && (
+                <CommandItem
+                  key={NONE_VALUE}
+                  value={noneLabel}
+                  onSelect={() => {
+                    onNone?.();
+                    setOpen(false);
+                  }}
+                >
+                  <Icons.check className={cn('mr-2 h-4 w-4', !selected ? 'opacity-100' : 'opacity-0')} />
+                  <span className='text-muted-foreground truncate italic'>{noneLabel}</span>
+                </CommandItem>
+              )}
               {options.map((option) => (
                 <CommandItem
                   key={option.value}

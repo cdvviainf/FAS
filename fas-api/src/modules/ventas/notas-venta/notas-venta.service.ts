@@ -1,6 +1,5 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
-import { validarCalidadesPermitidas } from '../../../shared/calidades-permitidas.js'
 import * as repo from './notas-venta.repository.js'
 import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleUpdateInput, NotaVentaUpdateInput } from './notas-venta.types.js'
 
@@ -45,10 +44,38 @@ interface ReferenciasHeader {
   condicionPagoId?: number | null
 }
 
+// Calidad / Condición "hasta" (2026-11-05): cada una debe existir y estar
+// vigente en la empresa activa. null/undefined = sin restricción.
+async function validarCalidadHasta(notaCalidadHastaId?: number | null, notaCondicionHastaId?: number | null) {
+  if (notaCalidadHastaId != null && !(await repo.getNotaCalidad(notaCalidadHastaId))) {
+    throw new ValidationError('La Nota de Calidad "hasta" seleccionada no existe o está bloqueada')
+  }
+  if (notaCondicionHastaId != null && !(await repo.getNotaCondicion(notaCondicionHastaId))) {
+    throw new ValidationError('La Nota de Condición "hasta" seleccionada no existe o está bloqueada')
+  }
+}
+
+// Responsable de venta (2026-11-05): usuario vigente con acceso a la empresa
+// activa, que sea responsable de venta (esResponsableVenta) o bien el propio
+// usuario digitador (default). `vigente` = valor ya persistido: mantenerlo no
+// se re-valida contra el flag (un usuario puede dejar de ser responsable sin
+// romper la edición de Cierres antiguos).
+async function validarResponsableVenta(responsableVentaId: string | null | undefined, userId: string, vigente?: string | null) {
+  if (responsableVentaId == null || responsableVentaId === vigente) return
+  const usuario = await repo.getUsuarioParaResponsable(responsableVentaId)
+  if (!usuario) throw new ValidationError('El responsable de venta seleccionado no existe o no tiene acceso a la empresa')
+  if (!usuario.esResponsableVenta && usuario.id !== userId) {
+    throw new ValidationError('El usuario seleccionado no está marcado como responsable de venta')
+  }
+}
+
 // NV-IE-004: valida existencia + vigencia (no eliminado/bloqueado) de cada
 // referencia del encabezado, y consistencia cruzada (dirección↔cliente,
 // puerto↔país/tipo de embarque).
-async function validarReferenciasHeader(r: ReferenciasHeader) {
+// `validarTipoNotify`: el tipo NOTIFY se exige solo cuando el notify se fija o
+// cambia (2026-11-05) — Cierres antiguos podían tener un notify sin ese tipo y
+// no deben quedar ineditables por eso.
+async function validarReferenciasHeader(r: ReferenciasHeader, validarTipoNotify = true) {
   const entidadIds = [r.clienteId, r.exportadorId, r.notifyId, r.consignatarioId].filter(
     (v): v is number => v != null,
   )
@@ -69,6 +96,12 @@ async function validarReferenciasHeader(r: ReferenciasHeader) {
   const cliente = encontrados.get(r.clienteId)
   if (cliente && !cliente.tipos.some((t) => TIPOS_CLIENTE.has(t))) {
     throw new ValidationError('La entidad seleccionada como cliente no tiene tipo Cliente Nacional/Extranjero')
+  }
+  if (validarTipoNotify && r.notifyId != null) {
+    const notify = encontrados.get(r.notifyId)
+    if (notify && !notify.tipos.includes('NOTIFY')) {
+      throw new ValidationError('La entidad seleccionada como notify no tiene tipo Notify')
+    }
   }
   // Supersesión 2026-08-13: antes "Cliente Final" sin validar tipo — ahora
   // exige CONSIGNATARIO, mismo criterio que el cliente.
@@ -260,6 +293,10 @@ export async function obtenerExportadorPorDefecto() {
   return repo.getExportadorPorDefecto()
 }
 
+export async function listarResponsablesVenta() {
+  return repo.listResponsablesVenta()
+}
+
 export async function crearNotaVenta(body: NotaVentaCreateInput, creadoPor: string) {
   // Si el body OMITE exportador (undefined), se defaultea al de la empresa activa
   // (Agrosan) para consumidores de API que no lo envíen. Un `null` EXPLÍCITO
@@ -268,8 +305,11 @@ export async function crearNotaVenta(body: NotaVentaCreateInput, creadoPor: stri
     const porDefecto = await repo.getExportadorPorDefecto()
     if (porDefecto) body = { ...body, exportadorId: porDefecto.id }
   }
+  // Responsable de venta: por defecto el usuario digitador (si se omite).
+  if (body.responsableVentaId === undefined) body = { ...body, responsableVentaId: creadoPor }
   await validarReferenciasHeader(body)
-  await validarCalidadesPermitidas(body.calidadesPermitidas ?? [])
+  await validarCalidadHasta(body.notaCalidadHastaId, body.notaCondicionHastaId)
+  await validarResponsableVenta(body.responsableVentaId, creadoPor)
   return ejecutarConFkTraducida(() => repo.createNotaVenta(body, creadoPor))
 }
 
@@ -314,12 +354,28 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
     tipoBlId: body.tipoBlId !== undefined ? body.tipoBlId : existente.tipoBlId,
     condicionPagoId: body.condicionPagoId !== undefined ? body.condicionPagoId : existente.condicionPagoId,
   }
-  await validarReferenciasHeader(efectivo)
-  if (body.calidadesPermitidas !== undefined) {
-    await validarCalidadesPermitidas(body.calidadesPermitidas)
+  await validarReferenciasHeader(efectivo, body.notifyId !== undefined && body.notifyId !== existente.notifyId)
+  await validarCalidadHasta(
+    body.notaCalidadHastaId !== undefined && body.notaCalidadHastaId !== existente.notaCalidadHastaId ? body.notaCalidadHastaId : null,
+    body.notaCondicionHastaId !== undefined && body.notaCondicionHastaId !== existente.notaCondicionHastaId ? body.notaCondicionHastaId : null,
+  )
+  if (body.responsableVentaId !== undefined) {
+    await validarResponsableVenta(body.responsableVentaId, actualizadoPor, existente.responsableVentaId)
   }
 
   return ejecutarConFkTraducida(() => repo.updateNotaVenta(id, body, actualizadoPor))
+}
+
+// Duplicar (2026-11-05): no exige que el origen esté abierto (duplicar un
+// Cierre cerrado es justamente el caso típico). El responsable del nuevo
+// Cierre es el usuario que duplica (regla "digitador"). Las referencias del
+// origen se re-validan: si algún maestro quedó bloqueado/eliminado desde
+// entonces, se rechaza con el mismo mensaje que al crear.
+export async function duplicarNotaVenta(id: number, userId: string) {
+  const origen = await obtenerNotaVenta(id)
+  await validarReferenciasHeader(origen, false)
+  await validarCalidadHasta(origen.notaCalidadHastaId, origen.notaCondicionHastaId)
+  return ejecutarConFkTraducida(() => repo.duplicarNotaVenta(id, userId, userId))
 }
 
 export async function eliminarNotaVenta(id: number, eliminadoPor: string) {

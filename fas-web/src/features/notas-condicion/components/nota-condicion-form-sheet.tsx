@@ -38,6 +38,7 @@ export function NotaCondicionFormSheet({ item, open, onOpenChange }: NotaCondici
   const [codigo, setCodigo] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [descripcionExtranjera, setDescripcionExtranjera] = useState('')
+  const [orden, setOrden] = useState('')
   const [especieIds, setEspecieIds] = useState<number[]>([])
   const [bloqueado, setBloqueado] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -57,12 +58,14 @@ export function NotaCondicionFormSheet({ item, open, onOpenChange }: NotaCondici
       setCodigo(item.codigo)
       setDescripcion(item.descripcion)
       setDescripcionExtranjera(item.descripcionExtranjera ?? '')
+      setOrden(String(item.orden ?? 0))
       setEspecieIds(item.especies.map((e) => e.especieId))
       setBloqueado(item.bloqueado)
     } else {
       setCodigo('')
       setDescripcion('')
       setDescripcionExtranjera('')
+      setOrden('')
       setEspecieIds([])
       setBloqueado(false)
     }
@@ -74,6 +77,7 @@ export function NotaCondicionFormSheet({ item, open, onOpenChange }: NotaCondici
       const payload = {
         descripcion: descripcion.trim(),
         descripcionExtranjera: descripcionExtranjera.trim() || undefined,
+        ...(orden.trim() !== '' ? { orden: Number(orden) } : {}),
         especieIds,
         ...(isEdit ? { bloqueado } : {}),
       }
@@ -92,6 +96,7 @@ export function NotaCondicionFormSheet({ item, open, onOpenChange }: NotaCondici
     const e: Record<string, string> = {}
     if (!isEdit && !codigo.trim()) e.codigo = 'El código es requerido'
     if (!descripcion.trim()) e.descripcion = 'La descripción es requerida'
+    if (orden.trim() !== '' && (!Number.isInteger(Number(orden)) || Number(orden) < 0)) e.orden = 'El orden debe ser un entero mayor o igual a 0'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -127,6 +132,15 @@ export function NotaCondicionFormSheet({ item, open, onOpenChange }: NotaCondici
           <div className='space-y-1.5'>
             <Label>Descripción extranjera</Label>
             <Input value={descripcionExtranjera} onChange={(e) => setDescripcionExtranjera(e.target.value)} placeholder='Foreign description' />
+          </div>
+
+          <div className='space-y-1.5'>
+            <Label>Orden</Label>
+            <Input type='number' min={0} step={1} value={orden} onChange={(e) => setOrden(e.target.value)} placeholder='1 = mejor' />
+            <p className='text-muted-foreground text-xs'>
+              Escala de la nota (menor = mejor). En el Cierre Comercial, elegir &quot;hasta&quot; una nota admite todas las de orden menor o igual.
+            </p>
+            {errors.orden && <p className='text-xs text-destructive'>{errors.orden}</p>}
           </div>
 
           <div className='space-y-1.5'>

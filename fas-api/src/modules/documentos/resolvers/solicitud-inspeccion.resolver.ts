@@ -2,6 +2,7 @@ import { NotFoundError } from '../../../shared/errors.js'
 import { getSolicitudById } from '../../calidad/solicitudes/solicitudes.repository.js'
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
 import type { SolicitudInspeccionPdfPayload } from '../schemas/solicitud-inspeccion.schema.js'
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
 // Labels — mismo texto que fas-web/src/features/solicitudes-inspeccion/types.ts
 // (ESTADO_LABELS/FUNCION_LABELS/RESULTADO_CIERRE_LABELS).
@@ -82,7 +83,7 @@ export async function resolverSolicitudInspeccion(id: number, empresaId: number)
     // (feedback Christian, 2026-08-19).
     lineas: solicitud.lineas.map((l) => ({
       especie: l.especie.descripcion,
-      embalaje: l.articulo.descripcion,
+      embalaje: descripcionComercialArticulo(l.articulo),
       variedad: l.variedad.descripcion,
       categorias: l.categorias.map((c) => c.categoria.descripcion),
       calibres: l.calibres.map((c) => c.calibre.descripcion),

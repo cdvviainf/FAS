@@ -42,6 +42,16 @@ export function logoDataUri(logo: { mime: string; datos: Buffer } | null | undef
   return `data:${logo.mime};base64,${logo.datos.toString('base64')}`
 }
 
+// Firma (PNG transparente) de un usuario — data URI listo para <img src>, para
+// estamparla sobre la línea de firma (PieFirma). null si no tiene firma
+// cargada (Usuarios → Firma) o si no hay usuario.
+export async function firmaDataUri(usuarioId: string | null | undefined): Promise<string | null> {
+  if (!usuarioId) return null
+  const firma = await prisma.usuarioFirma.findUnique({ where: { usuarioId }, select: { mime: true, datos: true } })
+  if (!firma) return null
+  return `data:${firma.mime};base64,${Buffer.from(firma.datos).toString('base64')}`
+}
+
 // Imagen de la especie para el banner del encabezado (mitad derecha) — data URI
 // listo para <img src>. null si la especie no tiene imagen cargada. El resolver
 // pasa la "primera especie por ID" del documento (menor id del maestro).

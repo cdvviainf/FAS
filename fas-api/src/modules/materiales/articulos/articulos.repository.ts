@@ -14,6 +14,7 @@ function buildWhere(filters: ArticuloListFilters): Prisma.ArticuloWhereInput {
       OR: [
         { codigo: { contains: filters.q, mode: 'insensitive' as const } },
         { descripcion: { contains: filters.q, mode: 'insensitive' as const } },
+        { descripcionComercial: { contains: filters.q, mode: 'insensitive' as const } },
       ],
     })
   }

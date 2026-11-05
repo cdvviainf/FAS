@@ -1,3 +1,5 @@
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
+
 // Plantillas HTML de correos de Solicitudes de Inspección.
 // Fechas formateadas en zona America/Santiago.
 
@@ -26,7 +28,7 @@ interface SolicitudParaCorreo {
     estadoCierre?: string | null
     especie: { descripcion: string }
     variedad: { descripcion: string }
-    articulo: { descripcion: string }
+    articulo: { descripcion: string; descripcionComercial?: string | null }
     cantidadPallets?: number | null
     categorias: { categoria: { descripcion: string } }[]
     calibres: { calibre: { descripcion: string } }[]
@@ -116,7 +118,7 @@ function bloqueLineas(lineas: SolicitudParaCorreo['lineas']): string {
   const bloques = lineas.map((l, i) => {
     const filas = [
       fila('Especie', esc(l.especie.descripcion)),
-      fila('Embalaje', esc(l.articulo.descripcion)),
+      fila('Embalaje', esc(descripcionComercialArticulo(l.articulo))),
       fila('Variedad', esc(l.variedad.descripcion)),
       l.categorias.length > 0 ? fila('Categorías', l.categorias.map((c) => esc(c.categoria.descripcion)).join(', ')) : '',
       l.calibres.length > 0 ? fila('Calibres', l.calibres.map((c) => esc(c.calibre.descripcion)).join(', ')) : '',

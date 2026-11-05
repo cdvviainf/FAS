@@ -1,6 +1,6 @@
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
-import type { TipoEntidad, Prisma } from '@prisma/client'
+import type { TipoEntidad, Prisma, CategoriaContacto } from '@prisma/client'
 import type {
   EntidadCreateInput,
   EntidadUpdateInput,
@@ -11,6 +11,9 @@ import type {
 } from './entidades.schema.js'
 
 // ─── Selectores reutilizables ─────────────────────────────────────────────────
+
+// Entidad Notify/Consignatario vinculada a un contacto (2026-11-05).
+const entidadVinculadaSelect = { id: true, codigo: true, descripcion: true, razonSocial: true, tipos: true }
 
 const paisSelect = {
   id: true,
@@ -139,6 +142,10 @@ export async function findEntidadById(id: number) {
           telefono: true,
           tipo: true,
           esRepresentanteLegal: true,
+          categorias: true,
+          categoriasPorDefecto: true,
+          entidadVinculadaId: true,
+          entidadVinculada: { select: entidadVinculadaSelect },
           creadoEn: true,
         },
         orderBy: [{ esRepresentanteLegal: 'desc' }, { codigo: 'asc' }],
@@ -392,6 +399,29 @@ export async function softDeleteDireccion(id: number, eliminadoPor: string) {
 
 // ─── Contactos ────────────────────────────────────────────────────────────────
 
+const contactoInclude = { entidadVinculada: { select: entidadVinculadaSelect } }
+
+// Entidad a vincular como Notify/Consignatario de un contacto: activa, no
+// eliminada y de la empresa activa (Entidad es tenant: la extensión filtra).
+export async function findEntidadVinculable(id: number) {
+  return prisma.entidad.findFirst({
+    where: { id, eliminadoEn: null, activo: true },
+    select: { id: true, tipos: true },
+  })
+}
+
+// Quita `categoria` de categoriasPorDefecto de los demás contactos de la
+// entidad: a lo sumo un contacto por defecto por (entidad, categoría).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function liberarDefaults(tx: any, entidadId: number, categorias: CategoriaContacto[], excludeId: number) {
+  for (const categoria of categorias) {
+    await tx.$executeRaw`
+      UPDATE "entidad_contactos"
+      SET "categoriasPorDefecto" = array_remove("categoriasPorDefecto", ${categoria}::"CategoriaContacto")
+      WHERE "entidadId" = ${entidadId} AND id <> ${excludeId} AND ${categoria}::"CategoriaContacto" = ANY("categoriasPorDefecto")`
+  }
+}
+
 export async function findContactoById(id: number, entidadId: number) {
   return prisma.entidadContacto.findFirst({
     where: { id, entidadId, eliminadoEn: null },
@@ -429,7 +459,13 @@ export async function createContacto(
   data: ContactoCreateInput,
   creadoPor: string,
 ) {
-  return prisma.entidadContacto.create({
+  return prisma.$transaction(async (tx) => {
+    // CCN26-R2-005: liberar PRIMERO los defaults de los demás contactos y
+    // recién después crear — al revés, el índice único parcial rechaza la
+    // inserción antes de llegar a liberar (el contacto aún no tiene id: -1
+    // no excluye a nadie).
+    await liberarDefaults(tx, entidadId, data.categoriasPorDefecto ?? [], -1)
+    const creado = await tx.entidadContacto.create({
     data: {
       entidadId,
       codigo: data.codigo,
@@ -440,8 +476,14 @@ export async function createContacto(
       telefono: data.telefono,
       tipo: data.tipo,
       esRepresentanteLegal: data.esRepresentanteLegal,
+      categorias: data.categorias,
+      categoriasPorDefecto: data.categoriasPorDefecto,
+      entidadVinculadaId: data.entidadVinculadaId ?? null,
       creadoPor,
     },
+    include: contactoInclude,
+    })
+    return creado
   })
 }
 
@@ -450,7 +492,14 @@ export async function updateContacto(
   data: ContactoUpdateInput,
   actualizadoPor: string,
 ) {
-  return prisma.entidadContacto.update({
+  return prisma.$transaction(async (tx) => {
+    // CCN26-R2-005: liberar antes de escribir (ver createContacto). Solo si el
+    // PATCH trae categoriasPorDefecto; si no, los defaults no cambian.
+    if (data.categoriasPorDefecto !== undefined && data.categoriasPorDefecto.length > 0) {
+      const actual = await tx.entidadContacto.findUniqueOrThrow({ where: { id }, select: { entidadId: true } })
+      await liberarDefaults(tx, actual.entidadId, data.categoriasPorDefecto, id)
+    }
+    const actualizado = await tx.entidadContacto.update({
     where: { id },
     data: {
       ...(data.codigo !== undefined ? { codigo: data.codigo } : {}),
@@ -461,8 +510,14 @@ export async function updateContacto(
       ...(data.telefono !== undefined ? { telefono: data.telefono } : {}),
       ...(data.tipo !== undefined ? { tipo: data.tipo } : {}),
       ...(data.esRepresentanteLegal !== undefined ? { esRepresentanteLegal: data.esRepresentanteLegal } : {}),
+      ...(data.categorias !== undefined ? { categorias: data.categorias } : {}),
+      ...(data.categoriasPorDefecto !== undefined ? { categoriasPorDefecto: data.categoriasPorDefecto } : {}),
+      ...(data.entidadVinculadaId !== undefined ? { entidadVinculadaId: data.entidadVinculadaId } : {}),
       actualizadoPor,
     },
+    include: contactoInclude,
+    })
+    return actualizado
   })
 }
 

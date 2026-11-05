@@ -49,6 +49,7 @@ export function NotaCondicionListingClient() {
               <div className='flex items-center justify-between'>
                 <div className='flex items-center gap-2'>
                   <p className='font-medium'>{n.codigo} — {n.descripcion}</p>
+                  <Badge variant='outline'>Orden {n.orden}</Badge>
                   {n.bloqueado && <Badge variant='secondary'>Bloqueado</Badge>}
                 </div>
                 {puedeEscribir && (

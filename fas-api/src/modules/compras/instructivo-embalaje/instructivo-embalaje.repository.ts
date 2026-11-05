@@ -23,7 +23,7 @@ const includeDetalle = {
       // kgNetoEnvase: agregado (2026-08-19) — lo usa el PDF del Instructivo
       // (documentos/resolvers/instructivo-embalaje.resolver.ts), mismo campo
       // que ya expone ordenes-compra.repository.ts para su propio PDF.
-      articulo: { select: { ...mantenedorSelect, etiqueta: { select: mantenedorSelect }, kgNetoEnvase: true } },
+      articulo: { select: { ...mantenedorSelect, descripcionComercial: true, etiqueta: { select: mantenedorSelect }, kgNetoEnvase: true } },
       // etiqueta (Marca) elegida por línea (2026-10-05) — puede diferir de la
       // etiqueta del artículo.
       etiqueta: { select: mantenedorSelect },
@@ -176,6 +176,7 @@ export async function getArticuloTipo(articuloId: number) {
       tipo: true,
       activo: true,
       descripcion: true,
+      descripcionComercial: true,
       // Set de etiquetas permitido = principal ∪ adicionales (misma regla que OC).
       etiquetaId: true,
       etiquetasAdicionales: { select: { etiquetaId: true } },

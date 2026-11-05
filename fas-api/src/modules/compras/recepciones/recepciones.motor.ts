@@ -20,6 +20,7 @@ import { ValidationError } from '../../../shared/errors.js'
 import * as repo from './recepciones.repository.js'
 import { cargarPrimeraHoja, resolverMapeoColumnas, leerFilasCrudas, type FilaExcelCruda } from './recepciones.excel.js'
 import { compararLineasOcConExcel, compararInstructivoConExcel, type FilaInstructivoParaComparar } from './recepciones.comparacion.js'
+import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
 interface FilaResuelta {
   fila: number
@@ -264,16 +265,16 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
       for (const a of articulo.etiquetasAdicionales) permitidas.add(a.etiquetaId)
       if (textoEtiqueta !== '') {
         if (etiquetaResuelta && !permitidas.has(etiquetaResuelta.id)) {
-          erroresFila.push(`Fila ${cruda.fila}: la Etiqueta "${cruda.etiqueta}" no está permitida para el artículo "${articulo.descripcion}"`)
+          erroresFila.push(`Fila ${cruda.fila}: la Etiqueta "${cruda.etiqueta}" no está permitida para el artículo "${descripcionComercialArticulo(articulo)}"`)
         } else if (etiquetaResuelta) {
           etiquetaIdFinal = etiquetaResuelta.id
         }
       } else if (permitidas.size === 0) {
-        erroresFila.push(`Fila ${cruda.fila}: el artículo "${articulo.descripcion}" no tiene una etiqueta configurada`)
+        erroresFila.push(`Fila ${cruda.fila}: el artículo "${descripcionComercialArticulo(articulo)}" no tiene una etiqueta configurada`)
       } else if (permitidas.size === 1) {
         etiquetaIdFinal = [...permitidas][0] // etiqueta fija heredada del maestro
       } else {
-        erroresFila.push(`Fila ${cruda.fila}: la Etiqueta es obligatoria — el artículo "${articulo.descripcion}" admite varias etiquetas`)
+        erroresFila.push(`Fila ${cruda.fila}: la Etiqueta es obligatoria — el artículo "${descripcionComercialArticulo(articulo)}" admite varias etiquetas`)
       }
     }
 

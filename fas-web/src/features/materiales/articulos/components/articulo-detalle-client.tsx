@@ -68,6 +68,9 @@ export function ArticuloDetalleClient({ articuloId }: { articuloId: number }) {
           <CardDescription>{articulo.descripcion}</CardDescription>
         </CardHeader>
         <CardContent className='space-y-1 text-sm'>
+          {articulo.descripcionComercial && (
+            <p><span className='text-muted-foreground'>Descripción comercial:</span> {articulo.descripcionComercial}</p>
+          )}
           <p><span className='text-muted-foreground'>Unidad:</span> {articulo.unidad.descripcion}</p>
           <p><span className='text-muted-foreground'>Costeo:</span> {articulo.tipoCosteo === 'ESTANDAR' ? `Estándar ($${articulo.valorEstandar})` : 'Promedio Ponderado'}</p>
           {articulo.stockCritico && <p><span className='text-muted-foreground'>Stock crítico:</span> {articulo.stockCritico}</p>}

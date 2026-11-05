@@ -73,3 +73,30 @@ export async function eliminarAvatar(req: FastifyRequest, reply: FastifyReply) {
   await service.eliminarAvatar(id)
   return reply.status(204).send()
 }
+
+// ─── Firma (2026-11-05) ──────────────────────────────────────────────────────
+
+export async function subirFirma(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = usuarioIdParamSchema.parse(req.params)
+  const archivo = await req.file()
+  if (!archivo) throw new ValidationError('No se recibió ninguna imagen')
+  const datos = await archivo.toBuffer()
+  const usuario = await service.subirFirma(id, { mime: archivo.mimetype, datos })
+  return reply.status(201).send(usuario)
+}
+
+export async function descargarFirma(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = usuarioIdParamSchema.parse(req.params)
+  const { mime, datos } = await service.descargarFirma(id)
+  return reply
+    .header('Content-Type', mime)
+    .header('Content-Length', String(datos.length))
+    .header('Cache-Control', 'private, no-cache')
+    .send(datos)
+}
+
+export async function eliminarFirma(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = usuarioIdParamSchema.parse(req.params)
+  await service.eliminarFirma(id)
+  return reply.status(204).send()
+}

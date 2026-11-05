@@ -32,7 +32,7 @@ export async function listPalletsConLineas() {
           calibre: { select: { ...mantenedorSelect, orden: true } },
           // id/codigo/descripcion (2026-09-30): nivel de agrupador "Artículo"
           // (Embalaje) en el reporte de Stock, entre Especie y Variedad.
-          articulo: { select: { ...mantenedorSelect, kgNetoEnvase: true } },
+          articulo: { select: { ...mantenedorSelect, descripcionComercial: true, kgNetoEnvase: true } },
           packing: { select: entidadSelect },
         },
       },

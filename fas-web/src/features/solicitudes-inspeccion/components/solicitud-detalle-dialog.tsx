@@ -13,6 +13,7 @@ import { Icons } from '@/components/icons'
 import { solicitudesService } from '../service'
 import { ESTADO_LABELS, FUNCION_LABELS, TIPO_INSPECCION_LABELS, RESULTADO_CIERRE_LABELS } from '../types'
 import type { SolicitudInspeccion, EstadoLineaInspeccion } from '../types'
+import { articuloDescripcionComercial } from '@/lib/articulo'
 
 const fmt = new Intl.DateTimeFormat('es-CL', {
   dateStyle: 'medium',
@@ -133,7 +134,7 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
                       <TableRow key={l.id}>
                         <TableCell className='whitespace-nowrap font-medium'>{l.especie.descripcion}</TableCell>
                         <TableCell className='whitespace-nowrap'>{l.variedad.descripcion}</TableCell>
-                        <TableCell className='whitespace-nowrap'>{l.articulo.descripcion}</TableCell>
+                        <TableCell className='whitespace-nowrap'>{articuloDescripcionComercial(l.articulo)}</TableCell>
                         <TableCell>{l.categorias.map((c) => c.categoria.descripcion).join(', ') || '—'}</TableCell>
                         <TableCell>{l.calibres.map((c) => c.calibre.descripcion).join(', ') || '—'}</TableCell>
                         <TableCell>{l.calidades.map((c) => `${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`).join(', ') || '—'}</TableCell>
