@@ -336,3 +336,12 @@ El lote con más FK compuestas hasta ahora (8), repartidas en 5 modelos con estr
 ## Fase 3 — completa
 
 Los 7 sub-lotes de Fase 3 (Config/Mantenedores, Entidades, Calidad, Materiales, Productores, Ventas, Compras) quedan implementados. Todo modelo raíz del sistema con datos de negocio real es ahora tenant-scoped por `empresaId`, enforced server-side por la Prisma Client Extension de Fase 2a. Quedan como trabajo futuro (fuera del alcance original de Fase 3): Fase 4 (UI de administración de Empresas) y la cobertura de tests de aislamiento cruzado entre dos empresas explícitamente señalada como deuda en cada lote.
+
+---
+
+## Revisión 2026-11-06 — Términos de la Orden de Compra por empresa
+
+- `EmpresaClausulaOc` (empresaId, orden, icono `IconoClausula`, tituloEs/textoEs, tituloEn/textoEn) + `Empresa.notaTerminosOcEs/En`. No es modelo tenant: se administra desde el mantenedor Empresas para cualquier empresa (como `EmpresaDireccion`/`EmpresaContacto`).
+- `PUT /api/config/empresas/:id/terminos-oc` (CONFIG_EMPRESAS TOTAL): reemplazo completo `{ notaEs, notaEn, clausulas[] }` en transacción; `orden` = posición. El GET de la empresa incluye `clausulasOc` y las notas.
+- UI: pestaña "Términos OC" en la ficha de Empresa. `{empresa}` en el texto se reemplaza por la razón social al emitir.
+- Migración `20261106180000_oc_pdf_v3_terminos` siembra 6 cláusulas + nota para la empresa `AGROSAN`.

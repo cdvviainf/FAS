@@ -28,4 +28,13 @@ export const fmt = {
   },
   fechaHora: (iso: string) => new Date(iso).toLocaleString('es-CL'),
   rut: (rut: string | null | undefined) => rut ?? '—',
+  // Por idioma del documento (2026-11-06, OC v3): EN usa separadores en-US
+  // (1,080.00) y fecha "Oct 3, 2026"; ES usa es-CL (1.080,00) y "3 oct 2026".
+  numeroIdioma: (v: number | string, decimales: number, idioma: 'ES' | 'EN') => {
+    const n = typeof v === 'string' ? Number(v) : v
+    if (!Number.isFinite(n)) return '—'
+    return new Intl.NumberFormat(idioma === 'EN' ? 'en-US' : 'es-CL', { minimumFractionDigits: decimales, maximumFractionDigits: decimales }).format(n)
+  },
+  fechaLarga: (iso: string, idioma: 'ES' | 'EN') =>
+    new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString(idioma === 'EN' ? 'en-US' : 'es-CL', { day: 'numeric', month: 'short', year: 'numeric' }),
 }

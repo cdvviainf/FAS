@@ -27,6 +27,7 @@ import { ComunaQuickCreate } from '@/features/comunas/components/comuna-quick-cr
 import { useEmpresa } from '@/contexts/empresa-context'
 import { SmtpConfigForm } from '@/features/configuracion-general/components/smtp-config-form'
 import { LogoUploadField } from './logo-upload-field'
+import { TerminosOcForm } from './terminos-oc-form'
 import { empresaDetailOptions, empresasKeys, empresasPaisesOptions, empresasComunasOptions } from '../queries'
 import { empresasService } from '../service'
 import type {
@@ -757,6 +758,7 @@ export function EmpresaForm({ empresaId }: EmpresaFormProps) {
           </TabsTrigger>
           {isEdit && <TabsTrigger value='logo'>Logo</TabsTrigger>}
           {isEdit && <TabsTrigger value='smtp'>SMTP</TabsTrigger>}
+          {isEdit && <TabsTrigger value='terminos-oc'>Términos OC</TabsTrigger>}
         </TabsList>
 
         {/* ── Tab 1: Empresa ── */}
@@ -1074,6 +1076,14 @@ export function EmpresaForm({ empresaId }: EmpresaFormProps) {
                 </CardHeader>
               </Card>
             )}
+          </TabsContent>
+        )}
+
+        {/* ── Tab: Términos del PDF de Orden de Compra (2026-11-06) ── */}
+        {isEdit && empresa && (
+          <TabsContent value='terminos-oc' className='mt-4'>
+            {/* key por empresa: el estado local se hidrata al montar con los términos guardados. */}
+            <TerminosOcForm key={empresa.id} empresa={empresa} />
           </TabsContent>
         )}
       </Tabs>

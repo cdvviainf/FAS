@@ -8,6 +8,7 @@ import type {
   DireccionUpdateInput,
   ContactoCreateInput,
   ContactoUpdateInput,
+  TerminosOcInput,
 } from './empresas.schema.js'
 
 // ─── Empresas ─────────────────────────────────────────────────────────────────
@@ -300,4 +301,16 @@ export async function eliminarLogo(empresaId: number) {
   const empresa = await repo.findEmpresaById(empresaId)
   if (!empresa) throw new NotFoundError('Empresa', String(empresaId))
   await repo.deleteLogo(empresaId)
+}
+
+// ─── Términos de la Orden de Compra (2026-11-06, PDF OC v3) ───────────────────
+export async function reemplazarTerminosOc(empresaId: number, input: TerminosOcInput, userId: string) {
+  const empresa = await repo.findEmpresaById(empresaId)
+  if (!empresa) throw new NotFoundError('Empresa', String(empresaId))
+  const clausulas = await repo.reemplazarTerminosOc(
+    empresaId,
+    { notaEs: input.notaEs?.trim() || null, notaEn: input.notaEn?.trim() || null, clausulas: input.clausulas },
+    userId,
+  )
+  return { notaTerminosOcEs: input.notaEs?.trim() || null, notaTerminosOcEn: input.notaEn?.trim() || null, clausulasOc: clausulas }
 }

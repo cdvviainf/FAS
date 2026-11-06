@@ -12,6 +12,7 @@ import {
   direccionUpdateSchema,
   contactoCreateSchema,
   contactoUpdateSchema,
+  terminosOcSchema,
 } from './empresas.schema.js'
 
 // ─── Empresas ─────────────────────────────────────────────────────────────────
@@ -118,4 +119,12 @@ export async function eliminarLogo(req: FastifyRequest, reply: FastifyReply) {
   const { id } = empresaIdParamSchema.parse(req.params)
   await service.eliminarLogo(id)
   return reply.status(204).send()
+}
+
+// PUT /empresas/:id/terminos-oc — reemplaza los Términos del PDF de OC (2026-11-06).
+export async function updateTerminosOc(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = empresaIdParamSchema.parse(req.params)
+  const input = terminosOcSchema.parse(req.body)
+  const result = await service.reemplazarTerminosOc(id, input, req.fasUserId!)
+  return reply.send(result)
 }

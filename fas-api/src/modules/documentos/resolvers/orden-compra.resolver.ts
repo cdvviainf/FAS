@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError } from '../../../shared/errors.js'
 import { getOrdenCompraById } from '../../compras/ordenes-compra/ordenes-compra.repository.js'
-import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri, getEspecieImagenDataUri } from '../documentos.repository.js'
+import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri, getEspecieImagenDataUri, firmaDataUri, getTerminosOc } from '../documentos.repository.js'
 import type { ResolverOpciones } from '../documentos.types.js'
 import type { OrdenCompraPdfPayload } from '../schemas/orden-compra.schema.js'
 import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
@@ -30,6 +30,20 @@ function valorIdioma(o: Traducible | null | undefined, idioma: 'ES' | 'EN'): str
 // de duplicar la query; getEmpresaParaDocumento/getEntidadParaDocumento
 // (documentos.repository.ts) cubren solo lo que el PDF necesita y el
 // endpoint normal de OC no expone (RUT, dirección por defecto).
+// Dirección completa en líneas (v3, 2026-11-06): calle · "comuna, región" · país
+// (país en el idioma del documento). Sin datos → arreglo vacío.
+interface DireccionDoc {
+  direccion: string
+  comuna: { descripcion: string; provincia: { region: { descripcion: string } } } | null
+  pais: { descripcion: string; descripcionExtranjera: string | null } | null
+}
+function lineasDireccion(d: DireccionDoc | undefined, idioma: 'ES' | 'EN'): string[] {
+  if (!d) return []
+  const zona = [d.comuna?.descripcion, d.comuna?.provincia.region.descripcion].filter(Boolean).join(', ')
+  const pais = d.pais ? (idioma === 'EN' ? d.pais.descripcionExtranjera?.trim() || d.pais.descripcion : d.pais.descripcion) : ''
+  return [d.direccion, zona, pais].map((x) => x?.trim() ?? '').filter(Boolean)
+}
+
 export async function resolverOrdenCompra(id: number, empresaId: number, opciones: ResolverOpciones): Promise<OrdenCompraPdfPayload> {
   const oc = await getOrdenCompraById(id)
   if (!oc) throw new NotFoundError('Orden de Compra', String(id))
@@ -40,11 +54,29 @@ export async function resolverOrdenCompra(id: number, empresaId: number, opcione
   const especieIds = oc.lineas.map((l) => l.especie.id)
   const primeraEspecieId = especieIds.length ? Math.min(...especieIds) : null
 
-  const [empresa, productor, especieImagenDataUri] = await Promise.all([
+  const [empresa, productor, especieImagenDataUri, firmaComprador, terminosOc] = await Promise.all([
     getEmpresaParaDocumento(empresaId),
     getEntidadParaDocumento(oc.entidadProductorId),
     getEspecieImagenDataUri(primeraEspecieId),
+    firmaDataUri(oc.responsable?.id),
+    getTerminosOc(empresaId),
   ])
+  // Términos en el idioma del documento; {empresa} = razón social de la empresa.
+  const razonSocialEmpresa = empresa?.razonSocial ?? ''
+  const conEmpresa = (t: string) => t.replaceAll('{empresa}', razonSocialEmpresa)
+  const terminos = terminosOc.clausulas.length > 0
+    ? {
+        clausulas: terminosOc.clausulas.map((c) => ({
+          icono: c.icono,
+          titulo: conEmpresa(idioma === 'EN' ? c.tituloEn : c.tituloEs),
+          texto: conEmpresa(idioma === 'EN' ? c.textoEn : c.textoEs),
+        })),
+        nota: (() => {
+          const n = idioma === 'EN' ? terminosOc.notaEn : terminosOc.notaEs
+          return n ? conEmpresa(n) : null
+        })(),
+      }
+    : null
 
   // Cálculo en Decimal (CLAUDE.md §12.5) — nunca number de JS. El detalle
   // depende de la modalidad (2026-10-23):
@@ -140,7 +172,15 @@ export async function resolverOrdenCompra(id: number, empresaId: number, opcione
       rut: empresa?.rut ?? null,
       direccion: empresa?.direcciones[0]?.direccion ?? null,
       logoDataUri: logoDataUri(empresa?.logo),
+      direccionLineas: lineasDireccion(empresa?.direcciones[0], idioma),
     },
+    comprador: {
+      nombre: oc.responsable?.nombre ?? null,
+      telefono: oc.responsable?.whatsapp?.trim() || null,
+      email: oc.responsable?.email ?? null,
+    },
+    firmaCompradorDataUri: firmaComprador,
+    terminos,
     numero: oc.numero,
     modalidad: oc.modalidad,
     fecha: oc.fecha.toISOString(),
@@ -150,6 +190,9 @@ export async function resolverOrdenCompra(id: number, empresaId: number, opcione
       rut: productor?.identificador ?? null,
       direccion: productor?.direcciones[0]?.direccion ?? null,
       contacto: productor?.contactos[0]?.nombre ?? null,
+      direccionLineas: lineasDireccion(productor?.direcciones[0], idioma),
+      contactoTelefono: productor?.contactos[0]?.telefono?.trim() || productor?.telefono?.trim() || null,
+      contactoEmail: productor?.contactos[0]?.email?.trim() || null,
     },
     formaPago: valorIdioma(oc.formaPago, idioma),
     moneda: oc.moneda.codigo,

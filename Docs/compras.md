@@ -635,3 +635,15 @@ Reemplaza el modelo anterior ("Nota de Venta → múltiples Instructivos, uno po
 - **Pallets / Stock** heredan la temporada de su Recepción: `GET /api/operaciones/stock` y `/stock/pallets` aceptan `?temporadaId=` (filtra `recepcion.temporadaId`).
 - Listados `GET /api/compras/ordenes-compra`, `/instructivos-embalaje`, `/recepciones` aceptan `?temporadaId=`.
 - Migración `20261106150000_temporada_documentos`: todas las OC, Instructivos y Recepciones existentes (de prueba) quedan en la temporada `25-26` de su empresa (si no existe: predeterminada → NULL).
+
+---
+
+## Revisión 2026-11-06 — PDF de Orden de Compra v3 (formato corporativo)
+
+> Plan: `QA/plan-oc-pdf-v3-nov2026.md`. Referencia visual: `Docs/Orden de Compra Corporativa de Frutas.png`.
+
+- Plantilla vigente `orden-compra` **v3** (v1/v2 se conservan para reimpresiones). Bilingüe ES/EN.
+- Hoja 1: cabecera (logo de la empresa — la leyenda va dentro del logo — + imagen de la especie), Comprador (empresa; contacto = responsable de la OC: nombre, `whatsapp` como teléfono, email), Proveedor/Productor (contacto principal con teléfono/email), direcciones completas (calle · comuna, región · país), Condiciones de compra, Calendario de pago, Detalle (columna `#`), Facturación, Observaciones y firmas (firma PNG del responsable si existe).
+- **Sin bloque Embarque** (decisión del usuario).
+- Hoja 2: misma cabecera (compacta) + Términos y Condiciones de la empresa (`EmpresaClausulaOc`, ver `Docs/empresas.md`) + nota final. Sin cláusulas → sin hoja 2.
+- Numeración "Página X de Y" en todas las hojas (pie nativo de Chromium vía `<meta name="fas-numeracion">`).

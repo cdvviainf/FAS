@@ -108,6 +108,22 @@ export const empresaListQuerySchema = z.object({
 
 // ─── Tipos inferidos ──────────────────────────────────────────────────────────
 
+// ─── Términos de la Orden de Compra (2026-11-06, PDF OC v3) ───────────────────
+// Reemplazo completo (replace-all): nota final ES/EN + cláusulas en orden.
+export const ICONOS_CLAUSULA = ['CALIDAD', 'INOCUIDAD', 'COSTOS', 'TRIBUTARIO', 'EMBARQUE', 'ACEPTACION', 'DOCUMENTO', 'INFO'] as const
+export const clausulaOcSchema = z.object({
+  icono: z.enum(ICONOS_CLAUSULA),
+  tituloEs: z.string().min(1, 'El título en español es requerido').max(200).trim(),
+  textoEs: z.string().min(1, 'El texto en español es requerido').max(3000).trim(),
+  tituloEn: z.string().min(1, 'El título en inglés es requerido').max(200).trim(),
+  textoEn: z.string().min(1, 'El texto en inglés es requerido').max(3000).trim(),
+})
+export const terminosOcSchema = z.object({
+  notaEs: z.string().max(2000).trim().nullable().optional(),
+  notaEn: z.string().max(2000).trim().nullable().optional(),
+  clausulas: z.array(clausulaOcSchema).max(20, 'Máximo 20 cláusulas'),
+})
+
 export type EmpresaCreateInput = z.infer<typeof empresaCreateSchema>
 export type EmpresaUpdateInput = z.infer<typeof empresaUpdateSchema>
 export type DireccionCreateInput = z.infer<typeof direccionCreateSchema>
@@ -115,3 +131,4 @@ export type DireccionUpdateInput = z.infer<typeof direccionUpdateSchema>
 export type ContactoCreateInput = z.infer<typeof contactoCreateSchema>
 export type ContactoUpdateInput = z.infer<typeof contactoUpdateSchema>
 export type EmpresaListQuery = z.infer<typeof empresaListQuerySchema>
+export type TerminosOcInput = z.infer<typeof terminosOcSchema>

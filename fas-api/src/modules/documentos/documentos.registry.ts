@@ -2,6 +2,7 @@ import { resolverOrdenCompra } from './resolvers/orden-compra.resolver.js'
 import { ordenCompraPdfPayloadSchema } from './schemas/orden-compra.schema.js'
 import { OrdenCompraV1 } from './templates/orden-compra/v1/index.js'
 import { OrdenCompraV2 } from './templates/orden-compra/v2/index.js'
+import { OrdenCompraV3 } from './templates/orden-compra/v3/index.js'
 import { resolverInstructivoEmbalaje } from './resolvers/instructivo-embalaje.resolver.js'
 import { instructivoEmbalajePdfPayloadSchema } from './schemas/instructivo-embalaje.schema.js'
 import { InstructivoEmbalajeV1 } from './templates/instructivo-embalaje/v1/index.js'
@@ -100,11 +101,13 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Orden de Compra',
     resolver: resolverOrdenCompra,
     schema: ordenCompraPdfPayloadSchema,
-    // v2 (2026-10-26): banner + bilingüe. v1 se conserva para reimpresiones de
-    // OC ya emitidas con esa versión (regla de versionado, Etapa 4 §4).
-    plantillaActual: 'v2',
-    plantillas: { v1: OrdenCompraV1, v2: OrdenCompraV2 },
-    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    // v2 (2026-10-26): banner + bilingüe. v3 (2026-11-06): formato corporativo
+    // + hoja de Términos por empresa + numeración de páginas. v1/v2 se
+    // conservan para reimpresiones de OC ya emitidas con esa versión (regla de
+    // versionado, Etapa 4 §4).
+    plantillaActual: 'v3',
+    plantillas: { v1: OrdenCompraV1, v2: OrdenCompraV2, v3: OrdenCompraV3 },
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '10mm 10mm 14mm' },
     itemMenu: 'COMPRAS_OC',
     controlCopia: true,
     nombreArchivo: (p) => `OC_${p.numero}.pdf`,

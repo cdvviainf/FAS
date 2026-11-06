@@ -209,6 +209,10 @@ model Empresa {
   giro           String?
   email          String?
   telefono       String?
+  // Nota final de la hoja de Términos y Condiciones del PDF de Orden de Compra
+  // (2026-11-06, plantilla v3), por idioma. Ver EmpresaClausulaOc.
+  notaTerminosOcEs String?
+  notaTerminosOcEn String?
   activo         Boolean   @default(true)
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -219,6 +223,7 @@ model Empresa {
 
   direcciones            EmpresaDireccion[]
   contactos              EmpresaContacto[]
+  clausulasOc            EmpresaClausulaOc[]
   usuarios               UsuarioEmpresa[]
   usuariosPredeterminada Usuario[]                   @relation("UsuarioEmpresaPredeterminada")
   mercados               Mercado[]
@@ -291,6 +296,42 @@ model Empresa {
   documentosManuales     DocumentoManual[]
 
   @@map("empresas")
+}
+
+// Términos y Condiciones del PDF de Orden de Compra (2026-11-06, plantilla v3,
+// QA/plan-oc-pdf-v3-nov2026.md): cláusulas editables por empresa, bilingües.
+// Si la empresa no tiene cláusulas, la OC sale sin hoja de términos. No es
+// modelo tenant (se administra desde el mantenedor Empresas para cualquier
+// empresa, igual que EmpresaDireccion/EmpresaContacto).
+model EmpresaClausulaOc {
+  id        Int            @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  orden     Int
+  icono     IconoClausula
+  tituloEs  String
+  textoEs   String
+  tituloEn  String
+  textoEn   String
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+
+  @@index([empresaId])
+  @@map("empresa_clausulas_oc")
+}
+
+enum IconoClausula {
+  CALIDAD
+  INOCUIDAD
+  COSTOS
+  TRIBUTARIO
+  EMBARQUE
+  ACEPTACION
+  DOCUMENTO
+  INFO
 }
 
 // Logo de marca para el Encabezado de los documentos PDF (Motor de

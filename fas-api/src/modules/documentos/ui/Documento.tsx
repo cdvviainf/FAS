@@ -10,6 +10,10 @@ interface DocumentoProps {
   marcaAgua?: 'BORRADOR' | 'COPIA'
   marcaAguaFecha?: string
   piePagina: string
+  // Numeración "Página X de Y" (2026-11-06, OC v3): texto con marcadores {p} y
+  // {t}. Viaja como <meta> y lo convierte render.ts en el pie de Playwright
+  // (displayHeaderFooter). Sin esta prop, no hay numeración (como hasta ahora).
+  numeracion?: string
   children: React.ReactNode
 }
 
@@ -18,12 +22,13 @@ interface DocumentoProps {
 // vez"). No hay <link>/<script> externos a propósito: el render no debe
 // tocar la red (§6 "el render no toca la red: más rápido, funciona sin
 // internet y es determinista").
-export function Documento({ titulo, paginaOpts, marcaAgua, marcaAguaFecha, piePagina, children }: DocumentoProps) {
+export function Documento({ titulo, paginaOpts, marcaAgua, marcaAguaFecha, piePagina, numeracion, children }: DocumentoProps) {
   return (
     <html lang='es-CL'>
       <head>
         <meta charSet='utf-8' />
         <title>{titulo}</title>
+        {numeracion && <meta name='fas-numeracion' content={numeracion} />}
         <style dangerouslySetInnerHTML={{ __html: printCss(paginaOpts) }} />
       </head>
       <body>

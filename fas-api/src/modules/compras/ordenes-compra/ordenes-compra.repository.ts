@@ -28,7 +28,8 @@ const includeDetalle = {
   formaPago: { select: mantenedorSelect },
   destinoMercado: { select: mantenedorSelect },
   incoterm: { select: mantenedorSelect },
-  responsable: { select: { id: true, nombre: true, email: true } },
+  // whatsapp: teléfono del comprador en el PDF de OC v3 (2026-11-06).
+  responsable: { select: { id: true, nombre: true, email: true, whatsapp: true } },
   condicionPago: {
     select: { id: true, codigo: true, descripcion: true },
   },

@@ -7,6 +7,7 @@ import type {
   ContactoCreateInput,
   PaisOption,
   ComunaOption,
+  TerminosOcInput,
 } from './types'
 
 export const empresasService = {
@@ -29,6 +30,11 @@ export const empresasService = {
 
   async update(id: number, data: Partial<EmpresaCreateInput>): Promise<EmpresaDetalle> {
     return api.patch(`config/empresas/${id}`, { json: data }).json()
+  },
+
+  // Términos del PDF de Orden de Compra (2026-11-06): reemplazo completo.
+  async updateTerminosOc(id: number, data: TerminosOcInput) {
+    return api.put(`config/empresas/${id}/terminos-oc`, { json: data }).json()
   },
 
   async remove(id: number): Promise<void> {

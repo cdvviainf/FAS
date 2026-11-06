@@ -20,7 +20,28 @@ export const ordenCompraPdfPayloadSchema = z.object({
     // data: URI (base64) — Playwright no toca la red al renderizar (Etapa 4
     // §6), así que el logo viaja embebido, nunca como <img src="http...">.
     logoDataUri: z.string().nullable(),
+    // v3 (2026-11-06): dirección completa en líneas (calle · comuna, región ·
+    // país, en el idioma del documento). v1/v2 siguen usando `direccion`.
+    direccionLineas: z.array(z.string()),
   }),
+  // v3: bloque Comprador — contacto = responsable de la OC (nombre, whatsapp
+  // como teléfono, email) y su firma PNG para la línea de firma.
+  comprador: z.object({
+    nombre: z.string().nullable(),
+    telefono: z.string().nullable(),
+    email: z.string().nullable(),
+  }),
+  firmaCompradorDataUri: z.string().nullable(),
+  // v3: Términos y Condiciones de la empresa en el idioma del documento
+  // ({empresa} ya reemplazado). null = la empresa no tiene cláusulas → sin hoja 2.
+  terminos: z.object({
+    clausulas: z.array(z.object({
+      icono: z.enum(['CALIDAD', 'INOCUIDAD', 'COSTOS', 'TRIBUTARIO', 'EMBARQUE', 'ACEPTACION', 'DOCUMENTO', 'INFO']),
+      titulo: z.string(),
+      texto: z.string(),
+    })),
+    nota: z.string().nullable(),
+  }).nullable(),
   numero: z.string(),
   // Modalidad de compra (2026-10-23): CAJAS o GRANEL — la plantilla elige las
   // columnas del detalle según esto.
@@ -32,6 +53,10 @@ export const ordenCompraPdfPayloadSchema = z.object({
     rut: z.string().nullable(),
     direccion: z.string().nullable(),
     contacto: z.string().nullable(),
+    // v3 (2026-11-06)
+    direccionLineas: z.array(z.string()),
+    contactoTelefono: z.string().nullable(),
+    contactoEmail: z.string().nullable(),
   }),
   formaPago: z.string().nullable(),
   moneda: z.string(),

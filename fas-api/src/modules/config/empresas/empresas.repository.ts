@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import type { IconoClausula } from '@prisma/client'
 import type {
   EmpresaCreateInput,
   EmpresaUpdateInput,
@@ -73,6 +74,8 @@ export async function findEmpresaById(id: number) {
       // Solo metadata del logo (nunca `datos`) — el binario se sirve aparte
       // vía descargarLogoEmpresa, igual que RecepcionAdjunto.
       logo: { select: { mime: true, subidoEn: true, subidoPor: true } },
+      // Términos del PDF de OC (2026-11-06); las notas ES/EN son escalares.
+      clausulasOc: { orderBy: { orden: 'asc' } },
       direcciones: {
         where: { eliminadoEn: null },
         select: {
@@ -419,4 +422,26 @@ export async function findLogoConDatos(empresaId: number) {
 
 export async function deleteLogo(empresaId: number) {
   await prisma.empresaLogo.deleteMany({ where: { empresaId } })
+}
+
+// Términos de la Orden de Compra (2026-11-06): reemplaza nota + cláusulas en una
+// sola transacción (orden = posición en el arreglo, desde 1).
+export async function reemplazarTerminosOc(
+  empresaId: number,
+  data: { notaEs: string | null; notaEn: string | null; clausulas: { icono: IconoClausula; tituloEs: string; textoEs: string; tituloEn: string; textoEn: string }[] },
+  userId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.empresa.update({
+      where: { id: empresaId },
+      data: { notaTerminosOcEs: data.notaEs, notaTerminosOcEn: data.notaEn, actualizadoPor: userId },
+    })
+    await tx.empresaClausulaOc.deleteMany({ where: { empresaId } })
+    if (data.clausulas.length > 0) {
+      await tx.empresaClausulaOc.createMany({
+        data: data.clausulas.map((c, i) => ({ empresaId, orden: i + 1, ...c, creadoPor: userId })),
+      })
+    }
+    return tx.empresaClausulaOc.findMany({ where: { empresaId }, orderBy: { orden: 'asc' } })
+  })
 }

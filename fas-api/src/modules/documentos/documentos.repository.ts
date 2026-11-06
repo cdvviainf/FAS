@@ -24,7 +24,12 @@ export async function getEmpresaParaDocumento(id: number) {
       telefono: true,
       direcciones: {
         where: { eliminadoEn: null },
-        select: { direccion: true },
+        select: {
+          direccion: true,
+          // Dirección completa (2026-11-06, OC v3): comuna, región y país.
+          comuna: { select: { descripcion: true, provincia: { select: { region: { select: { descripcion: true } } } } } },
+          pais: { select: { descripcion: true, descripcionExtranjera: true } },
+        },
         orderBy: [{ esPorDefecto: 'desc' }, { codigo: 'asc' }],
         take: 1,
       },
@@ -73,13 +78,18 @@ export async function getEntidadParaDocumento(id: number) {
       telefono: true,
       direcciones: {
         where: { eliminadoEn: null },
-        select: { direccion: true },
+        select: {
+          direccion: true,
+          // Dirección completa (2026-11-06, OC v3): comuna, región y país.
+          comuna: { select: { descripcion: true, provincia: { select: { region: { select: { descripcion: true } } } } } },
+          pais: { select: { descripcion: true, descripcionExtranjera: true } },
+        },
         orderBy: [{ esPorDefecto: 'desc' }, { codigo: 'asc' }],
         take: 1,
       },
       contactos: {
         where: { eliminadoEn: null },
-        select: { nombre: true, telefono: true },
+        select: { nombre: true, telefono: true, email: true },
         orderBy: [{ esRepresentanteLegal: 'desc' }, { codigo: 'asc' }],
         take: 1,
       },
@@ -227,4 +237,14 @@ export async function getDocumentoEmitidoById(id: number) {
 // itemMenu del registro antes de decidir si se entrega el PDF completo.
 export async function getTipoDeDocumentoEmitido(id: number) {
   return prisma.documentoEmitido.findFirst({ where: { id }, select: { tipo: true } })
+}
+
+// Términos y Condiciones del PDF de Orden de Compra (2026-11-06, v3). Filtro
+// explícito por empresa: EmpresaClausulaOc no es modelo tenant.
+export async function getTerminosOc(empresaId: number) {
+  const [empresa, clausulas] = await Promise.all([
+    prisma.empresa.findFirst({ where: { id: empresaId, eliminadoEn: null }, select: { notaTerminosOcEs: true, notaTerminosOcEn: true } }),
+    prisma.empresaClausulaOc.findMany({ where: { empresaId }, orderBy: { orden: 'asc' } }),
+  ])
+  return { notaEs: empresa?.notaTerminosOcEs ?? null, notaEn: empresa?.notaTerminosOcEn ?? null, clausulas }
 }

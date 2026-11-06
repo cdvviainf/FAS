@@ -6,6 +6,7 @@ import {
   createEmpresa,
   updateEmpresa,
   deleteEmpresa,
+  updateTerminosOc,
   createDireccion,
   updateDireccion,
   deleteDireccion,
@@ -45,6 +46,13 @@ export async function empresasRoutes(app: FastifyInstance) {
     '/empresas/:id',
     { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
     deleteEmpresa,
+  )
+
+  // ── Términos del PDF de Orden de Compra (2026-11-06) ───────────────────────
+  app.put(
+    '/empresas/:id/terminos-oc',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] },
+    updateTerminosOc,
   )
 
   // ── Direcciones ────────────────────────────────────────────────────────────

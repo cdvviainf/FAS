@@ -23,7 +23,22 @@ export async function renderPdf(html: string, pagina: OpcionesPaginaPdf): Promis
     await page.setContent(html, { waitUntil: 'load' })
     await page.evaluate(() => document.fonts.ready)
 
+    // Numeración de páginas opcional (2026-11-06): la plantilla la declara con
+    // <meta name="fas-numeracion" content="Página {p} de {t}">. Se pinta en el
+    // margen inferior con el pie nativo de Chromium (pageNumber/totalPages).
+    const numeracion = await page.evaluate(() => document.querySelector('meta[name="fas-numeracion"]')?.getAttribute('content') ?? null)
+    const pie = numeracion
+      ? {
+          displayHeaderFooter: true,
+          headerTemplate: '<div></div>',
+          footerTemplate: `<div style="width:100%;font-size:8px;color:#5b6475;text-align:right;padding:0 12mm;font-family:Helvetica,Arial,sans-serif">${escaparHtml(numeracion)
+            .replace('{p}', '<span class="pageNumber"></span>')
+            .replace('{t}', '<span class="totalPages"></span>')}</div>`,
+        }
+      : {}
+
     const pdf = await page.pdf({
+      ...pie,
       format: pagina.formato,
       landscape: pagina.orientacion === 'landscape',
       printBackground: true,
@@ -43,4 +58,8 @@ function parseMargen(margen: string): { top: string; right: string; bottom: stri
   const partes = margen.trim().split(/\s+/)
   const [top, right = top, bottom = top, left = right] = partes
   return { top, right, bottom, left }
+}
+
+function escaparHtml(t: string): string {
+  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }

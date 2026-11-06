@@ -66,6 +66,42 @@ export interface EmpresaDetalle {
   direcciones: DireccionItem[]
   contactos: ContactoItem[]
   logo: EmpresaLogoInfo | null
+  // Términos del PDF de Orden de Compra (2026-11-06, OC v3).
+  notaTerminosOcEs: string | null
+  notaTerminosOcEn: string | null
+  clausulasOc: ClausulaOc[]
+}
+
+export type IconoClausula = 'CALIDAD' | 'INOCUIDAD' | 'COSTOS' | 'TRIBUTARIO' | 'EMBARQUE' | 'ACEPTACION' | 'DOCUMENTO' | 'INFO'
+
+export const ICONO_CLAUSULA_LABELS: Record<IconoClausula, string> = {
+  CALIDAD: 'Calidad',
+  INOCUIDAD: 'Inocuidad / Fitosanitario',
+  COSTOS: 'Costos',
+  TRIBUTARIO: 'Tributario',
+  EMBARQUE: 'Embarque',
+  ACEPTACION: 'Aceptación',
+  DOCUMENTO: 'Documento',
+  INFO: 'Información',
+}
+
+export interface ClausulaOcInput {
+  icono: IconoClausula
+  tituloEs: string
+  textoEs: string
+  tituloEn: string
+  textoEn: string
+}
+
+export interface ClausulaOc extends ClausulaOcInput {
+  id: number
+  orden: number
+}
+
+export interface TerminosOcInput {
+  notaEs: string | null
+  notaEn: string | null
+  clausulas: ClausulaOcInput[]
 }
 
 export interface EmpresaListResponse {
