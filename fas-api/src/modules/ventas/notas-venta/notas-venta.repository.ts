@@ -661,6 +661,16 @@ export async function getUsuarioParaResponsable(id: string) {
   })
 }
 
+// Notify/Consignatario del cliente (2026-11-05, rev.): ¿la entidad está en la
+// lista del cliente para ese rol? (el propio cliente se resuelve en el service).
+export async function esRelacionDeCliente(clienteId: number, entidadId: number, rol: 'NOTIFY' | 'CONSIGNATARIO') {
+  const fila = await prisma.entidadRelacionCliente.findFirst({
+    where: { clienteId, entidadId, rol },
+    select: { id: true },
+  })
+  return fila != null
+}
+
 export async function getContactoDeEntidad(contactoId: number, entidadId: number) {
   return prisma.entidadContacto.findFirst({ where: { id: contactoId, entidadId, eliminadoEn: null } })
 }

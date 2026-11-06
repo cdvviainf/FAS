@@ -1730,9 +1730,12 @@ model Entidad {
   eliminadoPor                   String?
   direcciones                    EntidadDireccion[]
   contactos                      EntidadContacto[]           @relation("EntidadContactos")
-  // Contactos (de otros Clientes) que apuntan a esta Entidad como su Notify /
-  // Consignatario (2026-11-05, EntidadContacto.entidadVinculadaId).
-  contactosVinculados            EntidadContacto[]           @relation("EntidadContactoVinculada")
+  // Notify / Consignatarios de un Cliente Extranjero (2026-11-05, rev.): el
+  // propio cliente actúa como tal si tiene el tipo NOTIFY/CONSIGNATARIO; aquí
+  // solo van las OTRAS entidades. `relacionesComoCliente` = las del cliente;
+  // `relacionesComoRelacionada` = clientes que usan esta entidad.
+  relacionesComoCliente          EntidadRelacionCliente[]    @relation("RelacionClienteCliente")
+  relacionesComoRelacionada      EntidadRelacionCliente[]    @relation("RelacionClienteEntidad")
   solicitudesInspeccion          SolicitudInspeccion[]       @relation("SolicitudInspeccionProductor")
   solicitudesInspeccionCliente   SolicitudInspeccion[]       @relation("SolicitudInspeccionCliente")
   solicitudesInspeccionPlanta    SolicitudInspeccion[]       @relation("SolicitudInspeccionPlanta")
@@ -1816,9 +1819,9 @@ model EntidadDireccion {
 }
 
 model EntidadContacto {
-  id                   Int                 @id @default(autoincrement())
+  id                   Int       @id @default(autoincrement())
   entidadId            Int
-  entidad              Entidad             @relation("EntidadContactos", fields: [entidadId], references: [id])
+  entidad              Entidad   @relation("EntidadContactos", fields: [entidadId], references: [id])
   codigo               String
   nombre               String
   rut                  String?
@@ -1826,20 +1829,14 @@ model EntidadContacto {
   email                String?
   telefono             String?
   tipo                 String?
-  esRepresentanteLegal Boolean             @default(false)
-  // Categorías comerciales (2026-11-05): un contacto del Cliente puede ser su
-  // Comprador, Notify y/o Consignatario. Para NOTIFY/CONSIGNATARIO el contacto
-  // se vincula a la Entidad real (entidadVinculadaId, con TAXID/dirección para
-  // PDFs y DTE). categoriasPorDefecto ⊆ categorias: a lo sumo un contacto por
-  // (entidad, categoría) — validado en entidades.service.ts. El Cierre
-  // Comercial toma estos defaults al elegir el Cliente.
-  categorias           CategoriaContacto[] @default([])
-  categoriasPorDefecto CategoriaContacto[] @default([])
-  entidadVinculadaId   Int?
-  entidadVinculada     Entidad?            @relation("EntidadContactoVinculada", fields: [entidadVinculadaId], references: [id])
-  creadoEn             DateTime            @default(now())
+  esRepresentanteLegal Boolean   @default(false)
+  // Comprador (2026-11-05, rev.): el Cierre Comercial preselecciona el primer
+  // contacto comprador del Cliente. Notify/Consignatario ya no son contactos:
+  // viven en EntidadRelacionCliente.
+  esComprador          Boolean   @default(false)
+  creadoEn             DateTime  @default(now())
   creadoPor            String
-  actualizadoEn        DateTime?           @updatedAt
+  actualizadoEn        DateTime? @updatedAt
   actualizadoPor       String?
   eliminadoEn          DateTime?
   eliminadoPor         String?
@@ -1848,12 +1845,30 @@ model EntidadContacto {
   notasVentaComprador   NotaVenta[]
 
   @@index([entidadId])
-  @@index([entidadVinculadaId])
   @@map("entidad_contactos")
 }
 
-enum CategoriaContacto {
-  COMPRADOR
+// Notify / Consignatarios de un Cliente Extranjero (2026-11-05, rev.). Orden =
+// el del listado del Cierre (el primero se preselecciona). El propio cliente no
+// se guarda aquí: actúa como Notify/Consignatario si tiene ese TipoEntidad y va
+// siempre primero. Hija de Entidad (sin empresaId, como EntidadContacto): el
+// service valida que la entidad relacionada sea de la empresa activa.
+model EntidadRelacionCliente {
+  id        Int                @id @default(autoincrement())
+  clienteId Int
+  cliente   Entidad            @relation("RelacionClienteCliente", fields: [clienteId], references: [id])
+  entidadId Int
+  entidad   Entidad            @relation("RelacionClienteEntidad", fields: [entidadId], references: [id])
+  rol       RolRelacionCliente
+  orden     Int                @default(0)
+  creadoEn  DateTime           @default(now())
+
+  @@unique([clienteId, rol, entidadId])
+  @@index([entidadId])
+  @@map("entidad_relaciones_cliente")
+}
+
+enum RolRelacionCliente {
   NOTIFY
   CONSIGNATARIO
 }

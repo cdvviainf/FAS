@@ -40,15 +40,9 @@ import { notasVentaService } from '../service'
 import { CLIENTE_SIN_DEFINIR_CODIGO } from '../constants'
 import type { CalibreModo, NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleItem } from '../types'
 
-// Categorías comerciales del contacto (2026-11-05, EntidadContacto.categorias):
-// el Cierre toma de aquí los defaults de Comprador / Notify / Consignatario.
-type ContactoComercial = {
-  id: number
-  nombre: string
-  categorias?: string[]
-  categoriasPorDefecto?: string[]
-  entidadVinculadaId?: number | null
-}
+// Opción de Notify / Consignatario del Cliente (2026-11-05, rev.): el propio
+// cliente (si tiene el tipo) y luego las entidades de su ficha, en orden.
+type OpcionRelacion = { id: number; label: string }
 
 const tiposEmbarqueService = createMantenedorService('tipos-embarque')
 const mercadosService = createMantenedorService('mercados')
@@ -172,18 +166,10 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const { data: session } = authClient.useSession()
   const usuarioActualId = session?.user?.id ?? null
-  // Defaults comerciales del Cliente (Comprador/Notify/Consignatario): se
-  // aplican solo cuando el USUARIO elige un cliente (no al hidratar un Cierre
-  // guardado, que conserva sus valores).
+  // Defaults del Cliente (Comprador/Notify/Consignatario = el primero de cada
+  // lista de su ficha): se aplican solo cuando el USUARIO elige un cliente (no
+  // al hidratar un Cierre guardado, que conserva sus valores).
   const aplicarDefaultsClienteRef = useRef(false)
-  // Últimos defaults aplicados (CCN26-R1-003): al cambiar de Cliente, un campo
-  // solo se reemplaza si está vacío o si su valor sigue siendo ese default
-  // (no se pisa una elección manual).
-  const defaultsAplicadosRef = useRef<{ compradorContactoId: number | null; notifyId: number | null; consignatarioId: number | null }>({
-    compradorContactoId: null,
-    notifyId: null,
-    consignatarioId: null,
-  })
   const [linea, setLinea] = useState<NuevaLinea>(LINEA_EMPTY)
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
   // Estado del lookup de cajas por pallet (2026-10-13, CPP-QA-003): distingue
@@ -220,14 +206,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     staleTime: 60_000,
   })
   const entidades = entidadesData?.data ?? []
-  // El backend exige tipo CONSIGNATARIO al guardar (notas-venta.service.ts)
-  // — filtrar acá evita elegir una entidad que después falla al guardar
-  // (IMP-QA-R1-005).
-  const consignatarios = entidades.filter((e) => e.tipos.includes('CONSIGNATARIO'))
   const exportadores = entidades.filter((e) => e.tipos.includes('EXPORTADORA'))
-  // El backend exige tipo NOTIFY al fijar/cambiar el notify (2026-11-05); se
-  // conserva el ya guardado aunque no tenga el tipo (Cierres antiguos).
-  const notifies = entidades.filter((e) => e.tipos.includes('NOTIFY') || e.id === notaVenta?.data.notifyId)
   const { data: notasCalidadData } = useQuery({ queryKey: ['notas-calidad-options'], queryFn: () => notasCalidadService.list(), staleTime: 5 * 60_000 })
   const { data: notasCondicionData } = useQuery({ queryKey: ['notas-condicion-options'], queryFn: () => notasCondicionService.list(), staleTime: 5 * 60_000 })
   const porOrden = (a: { orden: number; codigo: string }, b: { orden: number; codigo: string }) => a.orden - b.orden || a.codigo.localeCompare(b.codigo)
@@ -292,15 +271,32 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     enabled: !!fields.clienteId,
   })
   const direccionesCliente = clienteDetalle?.direcciones ?? []
-  const contactosCliente = (clienteDetalle?.contactos ?? []) as ContactoComercial[]
-  const contactoPorDefecto = (cat: string) => contactosCliente.find((c) => (c.categoriasPorDefecto ?? []).includes(cat))
-  // Entidades vinculadas al Cliente como Notify / Consignatario (se listan primero).
-  const vinculadasCliente = (cat: string) =>
-    new Set(contactosCliente.filter((c) => (c.categorias ?? []).includes(cat) && c.entidadVinculadaId != null).map((c) => c.entidadVinculadaId!))
-  const notifyDelCliente = vinculadasCliente('NOTIFY')
-  const consignatarioDelCliente = vinculadasCliente('CONSIGNATARIO')
-  const ordenarDelCliente = <T extends { id: number }>(lista: T[], delCliente: Set<number>) =>
-    [...lista].sort((a, b) => Number(delCliente.has(b.id)) - Number(delCliente.has(a.id)))
+  // Comprador: contactos del cliente, compradores primero (el primero es el default).
+  const contactosCliente = [...(clienteDetalle?.contactos ?? [])].sort(
+    (a, b) => Number(b.esComprador ?? false) - Number(a.esComprador ?? false),
+  )
+  // Notify / Consignatario: SOLO los del cliente (2026-11-05, rev.) — él mismo
+  // si tiene el tipo, luego los de su ficha en orden. Se conserva el valor ya
+  // guardado aunque no esté en la lista (Cierres anteriores a la regla).
+  function opcionesDelCliente(rol: 'NOTIFY' | 'CONSIGNATARIO', guardadoId: number | null | undefined): OpcionRelacion[] {
+    if (!clienteDetalle || clienteDetalle.id !== fields.clienteId) return []
+    const ops: OpcionRelacion[] = []
+    if (clienteDetalle.tipos.includes(rol)) {
+      ops.push({ id: clienteDetalle.id, label: `${clienteDetalle.razonSocial || clienteDetalle.descripcion} (el mismo cliente)` })
+    }
+    for (const r of clienteDetalle.relacionesComoCliente ?? []) {
+      if (r.rol !== rol || r.entidad.activo === false || r.entidad.eliminadoEn) continue
+      ops.push({ id: r.entidad.id, label: r.entidad.razonSocial || r.entidad.descripcion })
+    }
+    if (guardadoId && !ops.some((o) => o.id === guardadoId)) {
+      const e = entidades.find((x) => x.id === guardadoId)
+      ops.push({ id: guardadoId, label: `${e?.descripcion ?? `#${guardadoId}`} (guardado, no está en la ficha del cliente)` })
+    }
+    return ops
+  }
+  const guardado = isEdit && notaVenta?.data.clienteId === fields.clienteId ? notaVenta?.data : undefined
+  const notifyOpciones = opcionesDelCliente('NOTIFY', guardado?.notifyId)
+  const consignatarioOpciones = opcionesDelCliente('CONSIGNATARIO', guardado?.consignatarioId)
 
   // Países elegibles: los que pertenecen a algún mercado de la empresa (más el
   // ya guardado, para no perderlo al editar).
@@ -327,32 +323,18 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
     }))
   }
 
-  // Al cambiar el Cliente (acción del usuario), se proponen sus defaults
-  // comerciales — o se limpian, porque los del cliente anterior ya no aplican.
+  // Al cambiar el Cliente (acción del usuario): Notify y Consignatario = el
+  // primero de su lista (siempre queda uno elegido si el cliente tiene);
+  // Comprador = el primer contacto comprador.
   useEffect(() => {
     if (!aplicarDefaultsClienteRef.current || !clienteDetalle || clienteDetalle.id !== fields.clienteId) return
     aplicarDefaultsClienteRef.current = false
-    const comprador = contactoPorDefecto('COMPRADOR')
-    const notify = contactoPorDefecto('NOTIFY')
-    const consignatario = contactoPorDefecto('CONSIGNATARIO')
-    const nuevos = {
-      compradorContactoId: comprador?.id ?? null,
-      notifyId: notify?.entidadVinculadaId ?? null,
-      consignatarioId: consignatario?.entidadVinculadaId ?? null,
-    }
-    const anteriores = defaultsAplicadosRef.current
-    defaultsAplicadosRef.current = nuevos
-    // Reemplazable = vacío o igual al default aplicado antes. El comprador es un
-    // contacto DEL cliente: si no pertenece al nuevo cliente, también se reemplaza.
-    const reemplazable = (actual: number | null, anterior: number | null) => actual == null || actual === anterior
+    const comprador = contactosCliente.find((c) => c.esComprador)
     setFields((f) => ({
       ...f,
-      compradorContactoId:
-        reemplazable(f.compradorContactoId, anteriores.compradorContactoId) || !contactosCliente.some((c) => c.id === f.compradorContactoId)
-          ? nuevos.compradorContactoId
-          : f.compradorContactoId,
-      notifyId: reemplazable(f.notifyId, anteriores.notifyId) ? nuevos.notifyId : f.notifyId,
-      consignatarioId: reemplazable(f.consignatarioId, anteriores.consignatarioId) ? nuevos.consignatarioId : f.consignatarioId,
+      compradorContactoId: comprador?.id ?? null,
+      notifyId: notifyOpciones[0]?.id ?? null,
+      consignatarioId: consignatarioOpciones[0]?.id ?? null,
     }))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteDetalle, fields.clienteId])
@@ -864,13 +846,11 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 <SelectTrigger><SelectValue placeholder={fields.clienteId ? 'Sin comprador' : 'Selecciona un cliente primero'} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value='none'>Sin comprador</SelectItem>
-                  {[...contactosCliente]
-                    .sort((a, b) => Number((b.categorias ?? []).includes('COMPRADOR')) - Number((a.categorias ?? []).includes('COMPRADOR')))
-                    .map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        {c.nombre}{(c.categorias ?? []).includes('COMPRADOR') ? ' (comprador)' : ''}
-                      </SelectItem>
-                    ))}
+                  {contactosCliente.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.nombre}{c.esComprador ? ' (comprador)' : ''}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -879,14 +859,10 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               <Combobox
                 value={fields.notifyId ? String(fields.notifyId) : ''}
                 onChange={(v) => setFields((f) => ({ ...f, notifyId: Number(v) }))}
-                placeholder='Sin notify'
+                placeholder={!fields.clienteId ? 'Selecciona un cliente primero' : notifyOpciones.length === 0 ? 'El cliente no tiene Notify' : 'Seleccionar notify'}
                 searchPlaceholder='Buscar entidad...'
-                noneLabel='Sin definir'
-                onNone={() => setFields((f) => ({ ...f, notifyId: null }))}
-                options={ordenarDelCliente(notifies, notifyDelCliente).map((e) => ({
-                  value: String(e.id),
-                  label: `${e.descripcion}${notifyDelCliente.has(e.id) ? ' (del cliente)' : ''}`,
-                }))}
+                disabled={notifyOpciones.length === 0}
+                options={notifyOpciones.map((o) => ({ value: String(o.id), label: o.label }))}
               />
             </div>
             <div className='space-y-1.5'>
@@ -894,14 +870,10 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               <Combobox
                 value={fields.consignatarioId ? String(fields.consignatarioId) : ''}
                 onChange={(v) => setFields((f) => ({ ...f, consignatarioId: Number(v) }))}
-                placeholder='Sin consignatario'
+                placeholder={!fields.clienteId ? 'Selecciona un cliente primero' : consignatarioOpciones.length === 0 ? 'El cliente no tiene Consignatario' : 'Seleccionar consignatario'}
                 searchPlaceholder='Buscar entidad...'
-                noneLabel='Sin definir'
-                onNone={() => setFields((f) => ({ ...f, consignatarioId: null }))}
-                options={ordenarDelCliente(consignatarios, consignatarioDelCliente).map((e) => ({
-                  value: String(e.id),
-                  label: `${e.descripcion}${consignatarioDelCliente.has(e.id) ? ' (del cliente)' : ''}`,
-                }))}
+                disabled={consignatarioOpciones.length === 0}
+                options={consignatarioOpciones.map((o) => ({ value: String(o.id), label: o.label }))}
               />
             </div>
             <div className='space-y-1.5'>

@@ -72,10 +72,25 @@ async function validarResponsableVenta(responsableVentaId: string | null | undef
 // NV-IE-004: valida existencia + vigencia (no eliminado/bloqueado) de cada
 // referencia del encabezado, y consistencia cruzada (dirección↔cliente,
 // puerto↔país/tipo de embarque).
-// `validarTipoNotify`: el tipo NOTIFY se exige solo cuando el notify se fija o
-// cambia (2026-11-05) — Cierres antiguos podían tener un notify sin ese tipo y
-// no deben quedar ineditables por eso.
-async function validarReferenciasHeader(r: ReferenciasHeader, validarTipoNotify = true) {
+// `validar.notify` / `validar.consignatario`: el tipo y la pertenencia a la
+// lista del cliente (2026-11-05, rev.: Notify/Consignatario = el propio
+// cliente si tiene ese tipo, o una entidad de EntidadRelacionCliente) se
+// exigen solo cuando el valor se fija o cambia, o cambia el cliente — Cierres
+// antiguos no deben quedar ineditables por datos previos a la regla.
+interface ValidarRelaciones {
+  notify: boolean
+  consignatario: boolean
+}
+const VALIDAR_TODO: ValidarRelaciones = { notify: true, consignatario: true }
+
+async function validarDelCliente(clienteId: number, entidadId: number, rol: 'NOTIFY' | 'CONSIGNATARIO', clienteTipos: string[]) {
+  if (entidadId === clienteId && clienteTipos.includes(rol)) return
+  if (entidadId !== clienteId && (await repo.esRelacionDeCliente(clienteId, entidadId, rol))) return
+  const label = rol === 'NOTIFY' ? 'notify' : 'consignatario'
+  throw new ValidationError(`El ${label} seleccionado no está asociado al cliente (revisa la ficha del cliente)`)
+}
+
+async function validarReferenciasHeader(r: ReferenciasHeader, validar: ValidarRelaciones = VALIDAR_TODO) {
   const entidadIds = [r.clienteId, r.exportadorId, r.notifyId, r.consignatarioId].filter(
     (v): v is number => v != null,
   )
@@ -97,11 +112,12 @@ async function validarReferenciasHeader(r: ReferenciasHeader, validarTipoNotify 
   if (cliente && !cliente.tipos.some((t) => TIPOS_CLIENTE.has(t))) {
     throw new ValidationError('La entidad seleccionada como cliente no tiene tipo Cliente Nacional/Extranjero')
   }
-  if (validarTipoNotify && r.notifyId != null) {
+  if (validar.notify && r.notifyId != null) {
     const notify = encontrados.get(r.notifyId)
     if (notify && !notify.tipos.includes('NOTIFY')) {
       throw new ValidationError('La entidad seleccionada como notify no tiene tipo Notify')
     }
+    await validarDelCliente(r.clienteId, r.notifyId, 'NOTIFY', cliente?.tipos ?? [])
   }
   // Supersesión 2026-08-13: antes "Cliente Final" sin validar tipo — ahora
   // exige CONSIGNATARIO, mismo criterio que el cliente.
@@ -109,6 +125,9 @@ async function validarReferenciasHeader(r: ReferenciasHeader, validarTipoNotify 
     const consignatario = encontrados.get(r.consignatarioId)
     if (consignatario && !consignatario.tipos.includes('CONSIGNATARIO')) {
       throw new ValidationError('La entidad seleccionada como consignatario no tiene tipo Consignatario')
+    }
+    if (validar.consignatario) {
+      await validarDelCliente(r.clienteId, r.consignatarioId, 'CONSIGNATARIO', cliente?.tipos ?? [])
     }
   }
 
@@ -354,7 +373,11 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
     tipoBlId: body.tipoBlId !== undefined ? body.tipoBlId : existente.tipoBlId,
     condicionPagoId: body.condicionPagoId !== undefined ? body.condicionPagoId : existente.condicionPagoId,
   }
-  await validarReferenciasHeader(efectivo, body.notifyId !== undefined && body.notifyId !== existente.notifyId)
+  const cambiaCliente = body.clienteId !== undefined && body.clienteId !== existente.clienteId
+  await validarReferenciasHeader(efectivo, {
+    notify: cambiaCliente || (body.notifyId !== undefined && body.notifyId !== existente.notifyId),
+    consignatario: cambiaCliente || (body.consignatarioId !== undefined && body.consignatarioId !== existente.consignatarioId),
+  })
   await validarCalidadHasta(
     body.notaCalidadHastaId !== undefined && body.notaCalidadHastaId !== existente.notaCalidadHastaId ? body.notaCalidadHastaId : null,
     body.notaCondicionHastaId !== undefined && body.notaCondicionHastaId !== existente.notaCondicionHastaId ? body.notaCondicionHastaId : null,
@@ -373,7 +396,7 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
 // entonces, se rechaza con el mismo mensaje que al crear.
 export async function duplicarNotaVenta(id: number, userId: string) {
   const origen = await obtenerNotaVenta(id)
-  await validarReferenciasHeader(origen, false)
+  await validarReferenciasHeader(origen, { notify: false, consignatario: false })
   await validarCalidadHasta(origen.notaCalidadHastaId, origen.notaCondicionHastaId)
   return ejecutarConFkTraducida(() => repo.duplicarNotaVenta(id, userId, userId))
 }

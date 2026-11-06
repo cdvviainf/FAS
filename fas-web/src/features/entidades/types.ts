@@ -77,22 +77,26 @@ export interface DireccionItem {
   puerto: { id: number; codigo: string; descripcion: string } | null
 }
 
-// Categorías comerciales del contacto (2026-11-05): el Cierre Comercial toma
-// como defaults el contacto "por defecto" de cada categoría del Cliente.
-export type CategoriaContacto = 'COMPRADOR' | 'NOTIFY' | 'CONSIGNATARIO'
-export const CATEGORIAS_CONTACTO: CategoriaContacto[] = ['COMPRADOR', 'NOTIFY', 'CONSIGNATARIO']
-export const CATEGORIA_CONTACTO_LABELS: Record<CategoriaContacto, string> = {
-  COMPRADOR: 'Comprador',
-  NOTIFY: 'Notify',
-  CONSIGNATARIO: 'Consignatario',
-}
+// Notify / Consignatarios de un Cliente Extranjero (2026-11-05, rev.): OTRAS
+// entidades en ese rol, en orden. El propio cliente actúa como tal si tiene el
+// tipo NOTIFY/CONSIGNATARIO (va siempre primero en el Cierre).
+export type RolRelacionCliente = 'NOTIFY' | 'CONSIGNATARIO'
 
-export interface EntidadVinculada {
+export interface EntidadRelacionada {
   id: number
   codigo: string
   descripcion: string
   razonSocial: string
-  tipos?: TipoEntidad[]
+  tipos: TipoEntidad[]
+  activo?: boolean
+  eliminadoEn?: string | null
+}
+
+export interface RelacionClienteItem {
+  rol: RolRelacionCliente
+  orden: number
+  entidadId: number
+  entidad: EntidadRelacionada
 }
 
 export interface ContactoItem {
@@ -105,11 +109,8 @@ export interface ContactoItem {
   telefono: string | null
   tipo: string | null
   esRepresentanteLegal: boolean
-  categorias?: CategoriaContacto[]
-  categoriasPorDefecto?: CategoriaContacto[]
-  // Entidad Notify/Consignatario real a la que apunta el contacto.
-  entidadVinculadaId?: number | null
-  entidadVinculada?: EntidadVinculada | null
+  // Comprador del Cliente (el Cierre preselecciona el primero).
+  esComprador?: boolean
 }
 
 export interface EntidadListItem {
@@ -142,6 +143,7 @@ export interface EntidadDetalle {
   pais: { id: number; codigo: string; descripcion: string; esPaisNacional: boolean }
   direcciones: DireccionItem[]
   contactos: ContactoItem[]
+  relacionesComoCliente?: RelacionClienteItem[]
 }
 
 export interface EntidadListResponse {
@@ -164,6 +166,8 @@ export interface EntidadCreateInput {
   taxId?: string
   activo: boolean
   tipos: TipoEntidad[]
+  notifyIds?: number[]
+  consignatarioIds?: number[]
 }
 
 export interface DireccionCreateInput {
@@ -189,7 +193,5 @@ export interface ContactoCreateInput {
   telefono?: string
   tipo?: string
   esRepresentanteLegal: boolean
-  categorias?: CategoriaContacto[]
-  categoriasPorDefecto?: CategoriaContacto[]
-  entidadVinculadaId?: number | null
+  esComprador?: boolean
 }

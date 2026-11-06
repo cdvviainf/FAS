@@ -139,6 +139,8 @@ model EntidadContacto {
 
 ---
 
+> **Supersesión 2026-11-05 — Notify/Consignatarios del Cliente Extranjero:** `EntidadContacto.esComprador` (flag) y nuevo modelo `EntidadRelacionCliente` (cliente → otras entidades NOTIFY/CONSIGNATARIO, con orden). El propio cliente actúa como tal si tiene el tipo; un Cliente Extranjero siempre tiene al menos un Notify y un Consignatario. Detalle y reglas en `Docs/ventas.md` §7 (revisión 2026-11-05).
+
 ## 5. Reglas de negocio / invariantes
 
 - **R1 — Al menos un tipo.** Toda `Entidad` debe tener ≥1 valor en `tipos` → 422.

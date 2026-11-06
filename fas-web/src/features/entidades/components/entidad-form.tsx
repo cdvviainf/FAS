@@ -43,10 +43,10 @@ import type {
   ContactoCreateInput,
   DireccionItem,
   ContactoItem,
-  CategoriaContacto,
-  EntidadVinculada,
+  RolRelacionCliente,
+  EntidadRelacionada,
 } from '../types'
-import { TIPOS_ENTIDAD_ORDEN, TIPO_ENTIDAD_LABELS, CATEGORIAS_CONTACTO, CATEGORIA_CONTACTO_LABELS } from '../types'
+import { TIPOS_ENTIDAD_ORDEN, TIPO_ENTIDAD_LABELS } from '../types'
 
 // Mapea cada campo validado a la pestaña donde vive su input, para poder saltar
 // automáticamente a la pestaña con el primer error (el formulario está dividido
@@ -57,6 +57,8 @@ const FIELD_TAB: Record<string, 'entidad' | 'direcciones' | 'contactos'> = {
   razonSocial: 'entidad',
   paisId: 'entidad',
   tipos: 'entidad',
+  notifyIds: 'entidad',
+  consignatarioIds: 'entidad',
   email: 'entidad',
   giro: 'entidad',
   identificador: 'entidad',
@@ -298,19 +300,17 @@ function DireccionDialog({ open, initial, defaultPaisId, onClose, onSave, isSavi
 
 // ─── Dialog de Contacto ───────────────────────────────────────────────────────
 
-type ContactoDialogData = ContactoCreateInput & { id?: number; entidadVinculada?: EntidadVinculada | null }
+type ContactoDialogData = ContactoCreateInput & { id?: number }
 
 interface ContactoDialogProps {
   open: boolean
   initial?: Partial<ContactoCreateInput> & { id?: number; rut?: string; whatsapp?: string }
-  // Id de la entidad que se edita (no puede vincularse a sí misma).
-  entidadId?: number
   onClose: () => void
   onSave: (data: ContactoDialogData) => Promise<void>
   isSaving: boolean
 }
 
-function ContactoDialog({ open, initial, entidadId, onClose, onSave, isSaving }: ContactoDialogProps) {
+function ContactoDialog({ open, initial, onClose, onSave, isSaving }: ContactoDialogProps) {
   const [form, setForm] = useState<ContactoCreateInput>({
     codigo: '',
     nombre: '',
@@ -320,57 +320,9 @@ function ContactoDialog({ open, initial, entidadId, onClose, onSave, isSaving }:
     telefono: '',
     tipo: '',
     esRepresentanteLegal: false,
-    categorias: [],
-    categoriasPorDefecto: [],
-    entidadVinculadaId: null,
+    esComprador: false,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
-
-  // Entidades vinculables como Notify / Consignatario (2026-11-05). Solo se
-  // consultan si el contacto tiene alguna de esas categorías.
-  const categorias = form.categorias ?? []
-  const requiereVinculo = categorias.includes('NOTIFY') || categorias.includes('CONSIGNATARIO')
-  const { data: notifyData } = useQuery({
-    queryKey: ['entidades-vinculables', 'NOTIFY'],
-    queryFn: () => entidadesService.list({ tipo: 'NOTIFY', activo: true, limit: 500 }),
-    enabled: open && categorias.includes('NOTIFY'),
-    staleTime: 60_000,
-  })
-  const { data: consignatarioData } = useQuery({
-    queryKey: ['entidades-vinculables', 'CONSIGNATARIO'],
-    queryFn: () => entidadesService.list({ tipo: 'CONSIGNATARIO', activo: true, limit: 500 }),
-    enabled: open && categorias.includes('CONSIGNATARIO'),
-    staleTime: 60_000,
-  })
-  // Si el contacto es Notify y Consignatario a la vez, la entidad vinculada
-  // debe tener ambos tipos (intersección).
-  const entidadesVinculables = (() => {
-    const listas: { id: number; codigo: string; descripcion: string; razonSocial: string }[][] = []
-    if (categorias.includes('NOTIFY')) listas.push(notifyData?.data ?? [])
-    if (categorias.includes('CONSIGNATARIO')) listas.push(consignatarioData?.data ?? [])
-    if (listas.length === 0) return []
-    const [primera, ...resto] = listas
-    return primera.filter((e) => e.id !== entidadId && resto.every((l) => l.some((x) => x.id === e.id)))
-  })()
-
-  function toggleCategoria(c: CategoriaContacto) {
-    setForm((f) => {
-      const actuales = f.categorias ?? []
-      const quitar = actuales.includes(c)
-      return {
-        ...f,
-        categorias: quitar ? actuales.filter((x) => x !== c) : [...actuales, c],
-        categoriasPorDefecto: quitar ? (f.categoriasPorDefecto ?? []).filter((x) => x !== c) : f.categoriasPorDefecto,
-      }
-    })
-  }
-
-  function togglePorDefecto(c: CategoriaContacto, v: boolean) {
-    setForm((f) => {
-      const actuales = f.categoriasPorDefecto ?? []
-      return { ...f, categoriasPorDefecto: v ? [...actuales.filter((x) => x !== c), c] : actuales.filter((x) => x !== c) }
-    })
-  }
 
   useEffect(() => {
     if (open) {
@@ -383,9 +335,7 @@ function ContactoDialog({ open, initial, entidadId, onClose, onSave, isSaving }:
         telefono: initial?.telefono ?? '',
         tipo: initial?.tipo ?? '',
         esRepresentanteLegal: initial?.esRepresentanteLegal ?? false,
-        categorias: initial?.categorias ?? [],
-        categoriasPorDefecto: initial?.categoriasPorDefecto ?? [],
-        entidadVinculadaId: initial?.entidadVinculadaId ?? null,
+        esComprador: initial?.esComprador ?? false,
       })
       setErrors({})
     }
@@ -404,9 +354,6 @@ function ContactoDialog({ open, initial, entidadId, onClose, onSave, isSaving }:
         e.rut = 'RUT inválido'
       }
     }
-    if (requiereVinculo && !form.entidadVinculadaId) {
-      e.entidadVinculadaId = 'Selecciona la entidad Notify/Consignatario'
-    }
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -422,12 +369,7 @@ function ContactoDialog({ open, initial, entidadId, onClose, onSave, isSaving }:
       telefono: form.telefono?.trim() || undefined,
       tipo: form.tipo?.trim() || undefined,
       esRepresentanteLegal: form.esRepresentanteLegal,
-      categorias: form.categorias ?? [],
-      categoriasPorDefecto: form.categoriasPorDefecto ?? [],
-      entidadVinculadaId: requiereVinculo ? (form.entidadVinculadaId ?? null) : null,
-      entidadVinculada: requiereVinculo
-        ? (entidadesVinculables.find((x) => x.id === form.entidadVinculadaId) ?? null)
-        : null,
+      esComprador: form.esComprador ?? false,
       id: initial?.id,
     })
   }
@@ -467,55 +409,14 @@ function ContactoDialog({ open, initial, entidadId, onClose, onSave, isSaving }:
             />
             {errors.nombre && <p className='text-xs text-destructive'>{errors.nombre}</p>}
           </div>
-          {/* Categorías comerciales (Cierre Comercial toma los "por defecto") */}
-          <div className='space-y-2 rounded-md border p-3'>
-            <Label>Categorías comerciales</Label>
-            <div className='grid gap-2'>
-              {CATEGORIAS_CONTACTO.map((c) => {
-                const activa = categorias.includes(c)
-                return (
-                  <div key={c} className='flex items-center justify-between gap-2'>
-                    <div className='flex items-center gap-2'>
-                      <Checkbox id={`cat-${c}`} checked={activa} onCheckedChange={() => toggleCategoria(c)} />
-                      <Label htmlFor={`cat-${c}`} className='font-normal'>{CATEGORIA_CONTACTO_LABELS[c]}</Label>
-                    </div>
-                    {activa && (
-                      <div className='flex items-center gap-2'>
-                        <Checkbox
-                          id={`def-${c}`}
-                          checked={(form.categoriasPorDefecto ?? []).includes(c)}
-                          onCheckedChange={(v) => togglePorDefecto(c, v === true)}
-                        />
-                        <Label htmlFor={`def-${c}`} className='text-muted-foreground text-xs font-normal'>Por defecto</Label>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            {requiereVinculo && (
-              <div className='space-y-1.5 pt-1'>
-                <Label>Entidad {categorias.includes('NOTIFY') && categorias.includes('CONSIGNATARIO') ? 'Notify / Consignatario' : categorias.includes('NOTIFY') ? 'Notify' : 'Consignatario'} <span className='text-destructive'>*</span></Label>
-                <Combobox
-                  value={form.entidadVinculadaId ? String(form.entidadVinculadaId) : ''}
-                  onChange={(v) => {
-                    const id = Number(v)
-                    const ent = entidadesVinculables.find((x) => x.id === id)
-                    setForm((f) => ({
-                      ...f,
-                      entidadVinculadaId: id,
-                      // Prefill del nombre desde la razón social si está vacío.
-                      nombre: f.nombre.trim() ? f.nombre : (ent?.razonSocial ?? f.nombre),
-                    }))
-                  }}
-                  placeholder='Seleccionar entidad...'
-                  searchPlaceholder='Buscar entidad...'
-                  emptyText='Sin entidades con ese tipo'
-                  options={entidadesVinculables.map((x) => ({ value: String(x.id), label: `${x.codigo} — ${x.razonSocial || x.descripcion}` }))}
-                />
-                {errors.entidadVinculadaId && <p className='text-xs text-destructive'>{errors.entidadVinculadaId}</p>}
-              </div>
-            )}
+          {/* Comprador: el Cierre Comercial preselecciona el primer comprador del cliente. */}
+          <div className='flex items-center gap-2'>
+            <Checkbox
+              id='esComprador'
+              checked={form.esComprador ?? false}
+              onCheckedChange={(v) => setForm((f) => ({ ...f, esComprador: v === true }))}
+            />
+            <Label htmlFor='esComprador' className='font-normal'>Es comprador</Label>
           </div>
           <div className='grid grid-cols-2 gap-3'>
             <div className='space-y-1.5'>
@@ -574,6 +475,105 @@ function ContactoDialog({ open, initial, entidadId, onClose, onSave, isSaving }:
   )
 }
 
+// ─── Notify / Consignatarios del Cliente Extranjero ──────────────────────────
+// (2026-11-05, rev.) El propio cliente actúa como Notify/Consignatario si
+// tiene ese tipo marcado (va primero). Aquí se agregan OTRAS entidades; el
+// orden es el del Cierre Comercial, que preselecciona el primero.
+
+type RelacionesState = Record<RolRelacionCliente, EntidadRelacionada[]>
+
+const ROL_LABELS: Record<RolRelacionCliente, { singular: string; plural: string }> = {
+  CONSIGNATARIO: { singular: 'Consignatario', plural: 'Consignatarios' },
+  NOTIFY: { singular: 'Notify', plural: 'Notify' },
+}
+
+interface RelacionRolListProps {
+  rol: RolRelacionCliente
+  selfActua: boolean
+  selfLabel: string
+  entidadId?: number
+  items: EntidadRelacionada[]
+  onChange: (items: EntidadRelacionada[]) => void
+  error?: string
+}
+
+function RelacionRolList({ rol, selfActua, selfLabel, entidadId, items, onChange, error }: RelacionRolListProps) {
+  const { data } = useQuery({
+    queryKey: ['entidades-relacionables', rol],
+    queryFn: () => entidadesService.list({ tipo: rol, activo: true, limit: 500 }),
+    staleTime: 60_000,
+  })
+  const candidatas = (data?.data ?? []).filter((e) => e.id !== entidadId && !items.some((i) => i.id === e.id))
+  const label = ROL_LABELS[rol]
+
+  function mover(idx: number, delta: number) {
+    const dest = idx + delta
+    if (dest < 0 || dest >= items.length) return
+    const copia = [...items]
+    ;[copia[idx], copia[dest]] = [copia[dest], copia[idx]]
+    onChange(copia)
+  }
+
+  return (
+    <div className='space-y-2'>
+      <Label>{label.plural} <span className='text-destructive'>*</span></Label>
+      <ol className='space-y-1'>
+        {selfActua && (
+          <li className='flex items-center justify-between rounded-md border bg-muted/40 px-3 py-1.5 text-sm'>
+            <span>
+              <span className='text-muted-foreground mr-2'>1.</span>
+              {selfLabel || 'Este cliente'} <Badge variant='secondary' className='ml-1 text-xs'>el mismo cliente</Badge>
+            </span>
+            <span className='text-muted-foreground text-xs'>desmarca el tipo {label.singular} para quitarlo</span>
+          </li>
+        )}
+        {items.map((e, idx) => (
+          <li key={e.id} className='flex items-center justify-between rounded-md border px-3 py-1.5 text-sm'>
+            <span>
+              <span className='text-muted-foreground mr-2'>{idx + (selfActua ? 2 : 1)}.</span>
+              {e.codigo} — {e.razonSocial || e.descripcion}
+              {(e.activo === false || e.eliminadoEn) && <Badge variant='outline' className='ml-2 text-xs'>inactiva</Badge>}
+            </span>
+            <span className='flex gap-1'>
+              <Button type='button' variant='ghost' size='icon' className='h-7 w-7' disabled={idx === 0} onClick={() => mover(idx, -1)} title='Subir'>
+                <Icons.chevronUp className='h-3.5 w-3.5' />
+              </Button>
+              <Button type='button' variant='ghost' size='icon' className='h-7 w-7' disabled={idx === items.length - 1} onClick={() => mover(idx, 1)} title='Bajar'>
+                <Icons.chevronDown className='h-3.5 w-3.5' />
+              </Button>
+              <Button
+                type='button'
+                variant='ghost'
+                size='icon'
+                className='h-7 w-7 text-destructive hover:text-destructive'
+                onClick={() => onChange(items.filter((x) => x.id !== e.id))}
+                title='Quitar'
+              >
+                <Icons.trash className='h-3.5 w-3.5' />
+              </Button>
+            </span>
+          </li>
+        ))}
+        {!selfActua && items.length === 0 && (
+          <li className='text-muted-foreground text-xs'>Sin {label.plural.toLowerCase()}: agrega al menos uno o marca el tipo {label.singular}.</li>
+        )}
+      </ol>
+      <Combobox
+        value=''
+        onChange={(v) => {
+          const e = candidatas.find((x) => String(x.id) === v)
+          if (e) onChange([...items, { id: e.id, codigo: e.codigo, descripcion: e.descripcion, razonSocial: e.razonSocial, tipos: e.tipos }])
+        }}
+        placeholder={`Agregar ${label.singular.toLowerCase()}...`}
+        searchPlaceholder='Buscar entidad...'
+        emptyText={`Sin entidades con tipo ${label.singular}`}
+        options={candidatas.map((x) => ({ value: String(x.id), label: `${x.codigo} — ${x.razonSocial || x.descripcion}` }))}
+      />
+      {error && <p className='text-xs text-destructive'>{error}</p>}
+    </div>
+  )
+}
+
 // ─── Tipo de entidad (default base fields) ────────────────────────────────────
 
 interface BaseFields {
@@ -626,7 +626,8 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
 
   // ── Sub-listas (para create: local state; para edit: desde API) ──
   const [localDirecciones, setLocalDirecciones] = useState<(DireccionCreateInput & { _localId: number })[]>([])
-  const [localContactos, setLocalContactos] = useState<(ContactoCreateInput & { _localId: number; entidadVinculada?: EntidadVinculada | null })[]>([])
+  const [localContactos, setLocalContactos] = useState<(ContactoCreateInput & { _localId: number })[]>([])
+  const [relaciones, setRelaciones] = useState<RelacionesState>({ NOTIFY: [], CONSIGNATARIO: [] })
   const [localIdCounter, setLocalIdCounter] = useState(0)
 
   // ── Dialogs ──
@@ -680,6 +681,11 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
         activo: entidad.activo,
         tipos: entidad.tipos,
       })
+      const rels = entidad.relacionesComoCliente ?? []
+      setRelaciones({
+        NOTIFY: rels.filter((r) => r.rol === 'NOTIFY').map((r) => r.entidad),
+        CONSIGNATARIO: rels.filter((r) => r.rol === 'CONSIGNATARIO').map((r) => r.entidad),
+      })
     }
   }, [entidad])
 
@@ -728,6 +734,14 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
     }
     if (cspRequerido && !fields.csp.trim()) e.csp = 'El CSP es requerido para Planta o Packing'
     if (esClienteExtranjero && !fields.taxId.trim()) e.taxId = 'El TAXID es requerido para Cliente Extranjero'
+    // Cliente Extranjero: al menos un Notify y un Consignatario (él mismo si
+    // tiene el tipo marcado, u otra entidad agregada).
+    if (esClienteExtranjero && !fields.tipos.includes('NOTIFY') && relaciones.NOTIFY.length === 0) {
+      e.notifyIds = 'Agrega al menos un Notify o marca el tipo Notify'
+    }
+    if (esClienteExtranjero && !fields.tipos.includes('CONSIGNATARIO') && relaciones.CONSIGNATARIO.length === 0) {
+      e.consignatarioIds = 'Agrega al menos un Consignatario o marca el tipo Consignatario'
+    }
     if (!isEdit && !esSoloPacking && localDirecciones.length === 0) e.direcciones = 'Debe agregar al menos una dirección'
     if (!isEdit && !esSoloPacking && !localDirecciones.some((d) => d.esPorDefecto)) e.direccionesPorDefecto = 'Una dirección debe ser la principal'
     setFieldErrors(e)
@@ -763,9 +777,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
             telefono: con.telefono || undefined,
             tipo: con.tipo || undefined,
             esRepresentanteLegal: con.esRepresentanteLegal,
-            categorias: con.categorias ?? [],
-            categoriasPorDefecto: con.categoriasPorDefecto ?? [],
-            entidadVinculadaId: con.entidadVinculadaId ?? null,
+            esComprador: con.esComprador ?? false,
           })
         }
       } catch (err) {
@@ -814,6 +826,8 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
       taxId: fields.taxId.trim() || undefined,
       activo: fields.activo,
       tipos: fields.tipos,
+      notifyIds: esClienteExtranjero ? relaciones.NOTIFY.map((e) => e.id) : [],
+      consignatarioIds: esClienteExtranjero ? relaciones.CONSIGNATARIO.map((e) => e.id) : [],
     }
 
     if (isEdit) {
@@ -825,10 +839,14 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
 
   // ── Helpers para tipos ──
   function toggleTipo(tipo: TipoEntidad) {
-    setFields((f) => ({
-      ...f,
-      tipos: f.tipos.includes(tipo) ? f.tipos.filter((t) => t !== tipo) : [...f.tipos, tipo],
-    }))
+    setFields((f) => {
+      if (f.tipos.includes(tipo)) return { ...f, tipos: f.tipos.filter((t) => t !== tipo) }
+      // Al marcar Cliente Extranjero, él mismo actúa como su Notify y
+      // Consignatario (se marcan esos tipos; el usuario puede desmarcarlos y
+      // agregar otras entidades en su lugar).
+      const extra: TipoEntidad[] = tipo === 'CLIENTE_EXTRANJERO' ? ['NOTIFY', 'CONSIGNATARIO'] : []
+      return { ...f, tipos: [...f.tipos, tipo, ...extra.filter((t) => !f.tipos.includes(t))] }
+    })
   }
 
   // ── Dirección handlers (create mode: local; edit mode: API) ──
@@ -894,27 +912,21 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
   // ── Contacto handlers ──
   const handleSaveContacto = useCallback(async (data: ContactoDialogData) => {
     if (!isEdit) {
-      // Un solo contacto "por defecto" por categoría (espejo de la regla del
-      // backend, que se aplica al persistir).
-      const defaults = data.categoriasPorDefecto ?? []
-      const liberar = <T extends { categoriasPorDefecto?: CategoriaContacto[] }>(c: T): T =>
-        defaults.length === 0 ? c : { ...c, categoriasPorDefecto: (c.categoriasPorDefecto ?? []).filter((x) => !defaults.includes(x)) }
       if (conDialog.localId !== undefined) {
         setLocalContactos((cons) =>
-          cons.map((c) => (c._localId === conDialog.localId ? { ...c, ...data } : liberar(c)))
+          cons.map((c) => (c._localId === conDialog.localId ? { ...c, ...data } : c))
         )
       } else {
         const newId = localIdCounter
         setLocalIdCounter((n) => n + 1)
-        setLocalContactos((cons) => [...cons.map(liberar), { ...data, _localId: newId }])
+        setLocalContactos((cons) => [...cons, { ...data, _localId: newId }])
       }
       setConDialog({ open: false })
       return
     }
     setSavingCon(true)
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { id, entidadVinculada, ...payload } = data
+      const { id, ...payload } = data
       if (id) {
         await entidadesService.updateContacto(entidadId!, id, payload)
       } else {
@@ -980,10 +992,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
         telefono: c.telefono ?? null,
         tipo: c.tipo ?? null,
         esRepresentanteLegal: c.esRepresentanteLegal,
-        categorias: c.categorias ?? [],
-        categoriasPorDefecto: c.categoriasPorDefecto ?? [],
-        entidadVinculadaId: c.entidadVinculadaId ?? null,
-        entidadVinculada: c.entidadVinculada ?? null,
+        esComprador: c.esComprador ?? false,
       }))
 
   // Próximo código de dirección: parte de la sugerencia del servidor y la
@@ -1207,6 +1216,32 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
               {fieldErrors.tipos && <p className='text-xs text-destructive mt-2'>{fieldErrors.tipos}</p>}
             </CardContent>
           </Card>
+
+          {/* Notify / Consignatarios del Cliente Extranjero */}
+          {esClienteExtranjero && (
+            <Card>
+              <CardHeader>
+                <CardTitle className='text-base'>Consignatarios y Notify del cliente</CardTitle>
+                <p className='text-muted-foreground text-sm'>
+                  El Cierre Comercial solo ofrece estas entidades y preselecciona la primera de cada lista.
+                </p>
+              </CardHeader>
+              <CardContent className='grid gap-6 md:grid-cols-2'>
+                {(['CONSIGNATARIO', 'NOTIFY'] as const).map((rol) => (
+                  <RelacionRolList
+                    key={rol}
+                    rol={rol}
+                    selfActua={fields.tipos.includes(rol)}
+                    selfLabel={fields.razonSocial || fields.descripcion}
+                    entidadId={entidadId}
+                    items={relaciones[rol]}
+                    onChange={(items) => setRelaciones((r) => ({ ...r, [rol]: items }))}
+                    error={fieldErrors[rol === 'NOTIFY' ? 'notifyIds' : 'consignatarioIds']}
+                  />
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* ── Tab 2: Direcciones ── */}
@@ -1340,7 +1375,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                     <tr className='border-b bg-muted/40'>
                       <th className='px-4 py-2 text-left font-medium'>Nombre</th>
                       <th className='px-4 py-2 text-left font-medium'>Tipo</th>
-                      <th className='px-4 py-2 text-left font-medium'>Categorías</th>
+                      <th className='px-4 py-2 text-center font-medium'>Comprador</th>
                       <th className='px-4 py-2 text-left font-medium'>Teléfono / Email</th>
                       <th className='px-4 py-2 text-center font-medium'>Rep. Legal</th>
                       <th className='px-4 py-2 w-20' />
@@ -1351,24 +1386,8 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                       <tr key={con.id} className='border-b hover:bg-muted/30 transition-colors'>
                         <td className='px-4 py-2 font-medium'>{con.nombre}</td>
                         <td className='px-4 py-2 text-muted-foreground'>{con.tipo ?? '—'}</td>
-                        <td className='px-4 py-2'>
-                          <div className='flex flex-wrap gap-1'>
-                            {(con.categorias ?? []).map((c) => (
-                              <Badge
-                                key={c}
-                                variant={(con.categoriasPorDefecto ?? []).includes(c) ? 'default' : 'outline'}
-                                className='text-xs'
-                                title={(con.categoriasPorDefecto ?? []).includes(c) ? 'Por defecto' : undefined}
-                              >
-                                {CATEGORIA_CONTACTO_LABELS[c]}
-                                {(con.categoriasPorDefecto ?? []).includes(c) && ' ★'}
-                              </Badge>
-                            ))}
-                            {(con.categorias ?? []).length === 0 && <span className='text-muted-foreground'>—</span>}
-                          </div>
-                          {con.entidadVinculada && (
-                            <div className='text-muted-foreground mt-0.5 text-xs'>→ {con.entidadVinculada.razonSocial || con.entidadVinculada.descripcion}</div>
-                          )}
+                        <td className='px-4 py-2 text-center'>
+                          {con.esComprador && <Badge variant='secondary' className='text-xs'>Sí</Badge>}
                         </td>
                         <td className='px-4 py-2 text-xs text-muted-foreground'>
                           {con.telefono && <div>{con.telefono}</div>}
@@ -1400,9 +1419,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                                     telefono: con.telefono ?? '',
                                     tipo: con.tipo ?? '',
                                     esRepresentanteLegal: con.esRepresentanteLegal,
-                                    categorias: con.categorias ?? [],
-                                    categoriasPorDefecto: con.categoriasPorDefecto ?? [],
-                                    entidadVinculadaId: con.entidadVinculadaId ?? null,
+                                    esComprador: con.esComprador ?? false,
                                   },
                                   localId: localCon?._localId,
                                 })
@@ -1463,7 +1480,6 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
       <ContactoDialog
         open={conDialog.open}
         initial={conDialog.initial}
-        entidadId={entidadId}
         onClose={() => setConDialog({ open: false })}
         onSave={handleSaveContacto}
         isSaving={savingCon}

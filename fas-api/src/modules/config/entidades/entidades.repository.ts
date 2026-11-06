@@ -1,6 +1,7 @@
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
-import type { TipoEntidad, Prisma, CategoriaContacto } from '@prisma/client'
+import type { TipoEntidad, Prisma } from '@prisma/client'
+import type { RelacionesCliente } from './entidades.service.js'
 import type {
   EntidadCreateInput,
   EntidadUpdateInput,
@@ -12,8 +13,29 @@ import type {
 
 // ─── Selectores reutilizables ─────────────────────────────────────────────────
 
-// Entidad Notify/Consignatario vinculada a un contacto (2026-11-05).
-const entidadVinculadaSelect = { id: true, codigo: true, descripcion: true, razonSocial: true, tipos: true }
+// Notify / Consignatarios del Cliente Extranjero (2026-11-05, rev.), en orden.
+const relacionesClienteInclude = {
+  relacionesComoCliente: {
+    orderBy: [{ rol: 'asc' }, { orden: 'asc' }, { id: 'asc' }],
+    select: {
+      rol: true,
+      orden: true,
+      entidadId: true,
+      entidad: { select: { id: true, codigo: true, descripcion: true, razonSocial: true, tipos: true, activo: true, eliminadoEn: true } },
+    },
+  },
+} satisfies Prisma.EntidadInclude
+
+// Reescribe (borra + inserta en orden) las relaciones de un cliente.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function reemplazarRelaciones(tx: any, clienteId: number, relaciones: RelacionesCliente) {
+  await tx.entidadRelacionCliente.deleteMany({ where: { clienteId } })
+  const filas = [
+    ...relaciones.notifyIds.map((entidadId, orden) => ({ clienteId, entidadId, rol: 'NOTIFY' as const, orden })),
+    ...relaciones.consignatarioIds.map((entidadId, orden) => ({ clienteId, entidadId, rol: 'CONSIGNATARIO' as const, orden })),
+  ]
+  if (filas.length > 0) await tx.entidadRelacionCliente.createMany({ data: filas })
+}
 
 const paisSelect = {
   id: true,
@@ -142,14 +164,12 @@ export async function findEntidadById(id: number) {
           telefono: true,
           tipo: true,
           esRepresentanteLegal: true,
-          categorias: true,
-          categoriasPorDefecto: true,
-          entidadVinculadaId: true,
-          entidadVinculada: { select: entidadVinculadaSelect },
+          esComprador: true,
           creadoEn: true,
         },
         orderBy: [{ esRepresentanteLegal: 'desc' }, { codigo: 'asc' }],
       },
+      ...relacionesClienteInclude,
     },
   })
 }
@@ -175,10 +195,12 @@ export async function findEntidadByIdentificador(identificador: string, excludeI
 }
 
 export async function createEntidad(
-  data: EntidadCreateInput,
+  data: Omit<EntidadCreateInput, 'notifyIds' | 'consignatarioIds'>,
+  relaciones: RelacionesCliente,
   creadoPor: string,
 ) {
-  return prisma.entidad.create({
+  return prisma.$transaction(async (tx) => {
+  const creada = await tx.entidad.create({
     data: {
       // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
       // valor con la empresa activa del contexto — se declara aquí solo para
@@ -206,14 +228,19 @@ export async function createEntidad(
       contactos: { where: { eliminadoEn: null } },
     },
   })
+  await reemplazarRelaciones(tx, creada.id, relaciones)
+  return creada
+  })
 }
 
 export async function updateEntidad(
   id: number,
-  data: EntidadUpdateInput,
+  data: Omit<EntidadUpdateInput, 'notifyIds' | 'consignatarioIds'>,
+  relaciones: RelacionesCliente | undefined,
   actualizadoPor: string,
 ) {
-  return prisma.entidad.update({
+  return prisma.$transaction(async (tx) => {
+  const actualizada = await tx.entidad.update({
     where: { id },
     data: {
       ...(data.codigo !== undefined ? { codigo: data.codigo } : {}),
@@ -238,6 +265,9 @@ export async function updateEntidad(
       contactos: { where: { eliminadoEn: null } },
     },
   })
+  if (relaciones) await reemplazarRelaciones(tx, id, relaciones)
+  return actualizada
+  })
 }
 
 export async function softDeleteEntidad(id: number, eliminadoPor: string) {
@@ -252,11 +282,13 @@ export async function countEntidadUsos(id: number): Promise<number> {
   // Cuando se implementen, agregar conteos aquí.
   // QAS-SI-001: solicitudes de inspección vigentes que usan esta entidad como productor.
   // QAS-SI-014: también como cliente (extranjero) del Documento 107.
-  const [comoProductor, comoCliente] = await Promise.all([
+  // 2026-11-05: también como Notify/Consignatario de un Cliente Extranjero vigente.
+  const [comoProductor, comoCliente, comoRelacionada] = await Promise.all([
     prisma.solicitudInspeccion.count({ where: { entidadProductorId: id, eliminadoEn: null } }),
     prisma.solicitudInspeccion.count({ where: { clienteId: id, eliminadoEn: null } }),
+    prisma.entidadRelacionCliente.count({ where: { entidadId: id, cliente: { eliminadoEn: null } } }),
   ])
-  return comoProductor + comoCliente
+  return comoProductor + comoCliente + comoRelacionada
 }
 
 /** Solicitudes de inspección vigentes que usan una dirección de entidad. */
@@ -399,27 +431,13 @@ export async function softDeleteDireccion(id: number, eliminadoPor: string) {
 
 // ─── Contactos ────────────────────────────────────────────────────────────────
 
-const contactoInclude = { entidadVinculada: { select: entidadVinculadaSelect } }
-
-// Entidad a vincular como Notify/Consignatario de un contacto: activa, no
-// eliminada y de la empresa activa (Entidad es tenant: la extensión filtra).
-export async function findEntidadVinculable(id: number) {
-  return prisma.entidad.findFirst({
-    where: { id, eliminadoEn: null, activo: true },
-    select: { id: true, tipos: true },
+// Entidades candidatas a Notify/Consignatario de un cliente: activas, no
+// eliminadas y de la empresa activa (Entidad es tenant: la extensión filtra).
+export async function findEntidadesRelacionables(ids: number[]) {
+  return prisma.entidad.findMany({
+    where: { id: { in: ids }, eliminadoEn: null, activo: true },
+    select: { id: true, descripcion: true, tipos: true },
   })
-}
-
-// Quita `categoria` de categoriasPorDefecto de los demás contactos de la
-// entidad: a lo sumo un contacto por defecto por (entidad, categoría).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function liberarDefaults(tx: any, entidadId: number, categorias: CategoriaContacto[], excludeId: number) {
-  for (const categoria of categorias) {
-    await tx.$executeRaw`
-      UPDATE "entidad_contactos"
-      SET "categoriasPorDefecto" = array_remove("categoriasPorDefecto", ${categoria}::"CategoriaContacto")
-      WHERE "entidadId" = ${entidadId} AND id <> ${excludeId} AND ${categoria}::"CategoriaContacto" = ANY("categoriasPorDefecto")`
-  }
 }
 
 export async function findContactoById(id: number, entidadId: number) {
@@ -459,13 +477,7 @@ export async function createContacto(
   data: ContactoCreateInput,
   creadoPor: string,
 ) {
-  return prisma.$transaction(async (tx) => {
-    // CCN26-R2-005: liberar PRIMERO los defaults de los demás contactos y
-    // recién después crear — al revés, el índice único parcial rechaza la
-    // inserción antes de llegar a liberar (el contacto aún no tiene id: -1
-    // no excluye a nadie).
-    await liberarDefaults(tx, entidadId, data.categoriasPorDefecto ?? [], -1)
-    const creado = await tx.entidadContacto.create({
+  return prisma.entidadContacto.create({
     data: {
       entidadId,
       codigo: data.codigo,
@@ -476,14 +488,9 @@ export async function createContacto(
       telefono: data.telefono,
       tipo: data.tipo,
       esRepresentanteLegal: data.esRepresentanteLegal,
-      categorias: data.categorias,
-      categoriasPorDefecto: data.categoriasPorDefecto,
-      entidadVinculadaId: data.entidadVinculadaId ?? null,
+      esComprador: data.esComprador ?? false,
       creadoPor,
     },
-    include: contactoInclude,
-    })
-    return creado
   })
 }
 
@@ -492,14 +499,7 @@ export async function updateContacto(
   data: ContactoUpdateInput,
   actualizadoPor: string,
 ) {
-  return prisma.$transaction(async (tx) => {
-    // CCN26-R2-005: liberar antes de escribir (ver createContacto). Solo si el
-    // PATCH trae categoriasPorDefecto; si no, los defaults no cambian.
-    if (data.categoriasPorDefecto !== undefined && data.categoriasPorDefecto.length > 0) {
-      const actual = await tx.entidadContacto.findUniqueOrThrow({ where: { id }, select: { entidadId: true } })
-      await liberarDefaults(tx, actual.entidadId, data.categoriasPorDefecto, id)
-    }
-    const actualizado = await tx.entidadContacto.update({
+  return prisma.entidadContacto.update({
     where: { id },
     data: {
       ...(data.codigo !== undefined ? { codigo: data.codigo } : {}),
@@ -510,14 +510,9 @@ export async function updateContacto(
       ...(data.telefono !== undefined ? { telefono: data.telefono } : {}),
       ...(data.tipo !== undefined ? { tipo: data.tipo } : {}),
       ...(data.esRepresentanteLegal !== undefined ? { esRepresentanteLegal: data.esRepresentanteLegal } : {}),
-      ...(data.categorias !== undefined ? { categorias: data.categorias } : {}),
-      ...(data.categoriasPorDefecto !== undefined ? { categoriasPorDefecto: data.categoriasPorDefecto } : {}),
-      ...(data.entidadVinculadaId !== undefined ? { entidadVinculadaId: data.entidadVinculadaId } : {}),
+      ...(data.esComprador !== undefined ? { esComprador: data.esComprador } : {}),
       actualizadoPor,
     },
-    include: contactoInclude,
-    })
-    return actualizado
   })
 }
 
