@@ -223,6 +223,7 @@ export const REGISTRO_MAESTROS: HojaSpec[] = [
       { encabezado: 'Teléfono', campo: 'telefono', tipo: 'texto' },
       { encabezado: 'Código Externo', campo: 'codigoExterno', tipo: 'texto' },
       { encabezado: 'Tipos (separados por coma)', campo: 'tipos', tipo: 'enumMulti', requerido: true, enumValores: ENUM_TIPO_ENTIDAD },
+      { encabezado: 'TAXID', campo: 'taxId', tipo: 'texto', ayuda: 'Identificador tributario del Cliente Extranjero (Notify/Consignatario). En la carga masiva puede quedar vacío y completarse después.' },
     ],
   },
   {

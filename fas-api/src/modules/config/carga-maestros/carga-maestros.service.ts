@@ -24,6 +24,7 @@ async function buscarExistentePorClaveNatural(
   claveNatural: string[],
   input: Record<string, any>,
 ): Promise<number | null> {
+  if (modelo === 'pais') return buscarPaisExistente(input)
   const where: Record<string, unknown> = {}
   for (const campo of claveNatural) {
     const val = input[campo]
@@ -35,6 +36,25 @@ async function buscarExistentePorClaveNatural(
   if (!delegate?.findFirst) return null
   const found = await delegate.findFirst({ where, select: { id: true } })
   return (found as { id: number } | null)?.id ?? null
+}
+
+// Países (maestro global, ~250 filas): se reconocen por descripción SIN distinguir
+// mayúsculas ni tildes ("CHILE" = "Chile", "PERU" = "Perú"), o por código cuando
+// el Excel ya trae el ISO. Antes la comparación exacta no reconocía "CHILE" y la
+// fila caía como país nuevo con nombre como código (PAIS_CODIGO_NO_ISO).
+const normalizarNombre = (t: unknown) =>
+  String(t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase()
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function buscarPaisExistente(input: Record<string, any>): Promise<number | null> {
+  const desc = normalizarNombre(input.descripcion)
+  const cod = normalizarNombre(input.codigo)
+  if (!desc && !cod) return null
+  const paises = await prisma.pais.findMany({ where: { eliminadoEn: null }, select: { id: true, codigo: true, descripcion: true } })
+  const porDesc = desc ? paises.find((p) => normalizarNombre(p.descripcion) === desc) : undefined
+  if (porDesc) return porDesc.id
+  const porCod = cod ? paises.find((p) => normalizarNombre(p.codigo) === cod) : undefined
+  return porCod?.id ?? null
 }
 
 // Services y repos que el cargador reutiliza (misma lógica de negocio que la API).
@@ -210,6 +230,18 @@ function validarConSchema<T>(schema: { parse: (d: unknown) => T }, data: any): T
   }
 }
 
+// Un País nuevo (no reconocido por descripción) debe traer código ISO alfa-3.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function errorPaisNoIso(hoja: string, fila: number, v: Record<string, any>): ErrorFila {
+  return {
+    hoja,
+    fila,
+    columna: 'Código',
+    codigo: 'PAIS_CODIGO_NO_ISO',
+    mensaje: `País nuevo "${v.descripcion ?? v.codigo}": el código "${v.codigo}" no es ISO alfa-3 (3 letras). Usa el código ISO, o verifica que el país ya exista (se reconoce por su descripción).`,
+  }
+}
+
 /** Despacha la creación al service correcto según el modelo de la hoja.
  * `opts.permitirSinTaxId`: relaja el TaxID obligatorio del Cliente Extranjero en
  * la carga masiva (se completa luego); el alta manual lo sigue exigiendo. */
@@ -316,9 +348,28 @@ export async function cargarMaestros(
   }
 
   if (dryRun) {
-    // Sin BD no se pueden validar unicidad ni FKs internas contra registros aún
-    // no insertados; el dry-run se queda con la validación estructural + FKs
-    // internas del archivo (ya incluidas arriba). El commit hace el resto.
+    // Sin escribir no se pueden validar unicidad ni FKs contra registros aún no
+    // insertados; el dry-run se queda con la validación estructural + FKs internas
+    // del archivo (ya incluidas arriba). El commit hace el resto.
+    // Excepción (2026-11-06): Países es un maestro global y su regla depende solo
+    // de la BD (existe por descripción → se salta; si no, exige código ISO alfa-3),
+    // así que se evalúa acá en solo-lectura. Antes la validación decía "0 errores"
+    // y recién la carga real rechazaba los países nuevos con nombre como código.
+    await empresaContext.run({ empresaId }, async () => {
+      const hojaPaises = registro.find((h) => h.modelo === 'pais')
+      if (!hojaPaises) return
+      for (const fila of parseo.hojas[hojaPaises.hoja]?.filas ?? []) {
+        const v = fila.valores
+        const existe = await buscarExistentePorClaveNatural('pais', hojaPaises.claveNatural ?? ['descripcion'], v)
+        if (existe != null) {
+          resumen[hojaPaises.hoja].existentes++
+          continue
+        }
+        const codigo = typeof v['codigo'] === 'string' ? v['codigo'] : ''
+        if (!/^[A-Za-z]{3}$/.test(codigo.trim())) errores.push(errorPaisNoIso(hojaPaises.hoja, fila.fila, v))
+        else resumen[hojaPaises.hoja].creados++
+      }
+    })
     return { dryRun, resumen, errores }
   }
 
@@ -364,13 +415,7 @@ export async function cargarMaestros(
         // Los países ya existentes se resolvieron por descripción (idempotencia) y
         // no llegan acá; esto solo frena crear un país no-ISO desde el Excel.
         if (hoja.modelo === 'pais' && typeof input.codigo === 'string' && !/^[A-Za-z]{3}$/.test(input.codigo.trim())) {
-          errores.push({
-            hoja: hoja.hoja,
-            fila: fila.fila,
-            columna: 'Código',
-            codigo: 'PAIS_CODIGO_NO_ISO',
-            mensaje: `País nuevo "${input.descripcion ?? input.codigo}": el código "${input.codigo}" no es ISO alfa-3 (3 letras). Usa el código ISO, o verifica que el país ya exista (se reconoce por su descripción).`,
-          })
+          errores.push(errorPaisNoIso(hoja.hoja, fila.fila, input))
           continue
         }
 
