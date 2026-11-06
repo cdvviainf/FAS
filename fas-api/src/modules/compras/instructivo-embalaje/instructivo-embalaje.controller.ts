@@ -8,8 +8,8 @@ import {
 import * as service from './instructivo-embalaje.service.js'
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
-  const { page, limit, entidadProductorId } = instructivoEmbalajeListQuerySchema.parse(req.query)
-  const result = await service.listarInstructivos(page, limit, entidadProductorId)
+  const { page, limit, entidadProductorId, temporadaId } = instructivoEmbalajeListQuerySchema.parse(req.query)
+  const result = await service.listarInstructivos(page, limit, entidadProductorId, temporadaId)
   return reply.send(result)
 }
 

@@ -154,10 +154,13 @@ export async function listEmbarques(
   notaVentaId?: number,
   estado?: string,
   sort?: string,
+  temporadaId?: number,
 ) {
   const where: Prisma.EmbarqueWhereInput = {
     eliminadoEn: null,
     ...(notaVentaId ? { notaVentaId } : {}),
+    // Temporada heredada del Cierre Comercial (2026-11-06).
+    ...(temporadaId ? { notaVenta: { temporadaId } } : {}),
     ...whereEstadoListado(estado),
   }
   const [data, total] = await Promise.all([

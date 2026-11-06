@@ -47,6 +47,9 @@ export const ordenCompraCreateSchema = z.object({
   // Modalidad de compra (2026-10-23): CAJAS (fruta embalada) o GRANEL (por kilos).
   modalidad: z.enum(['CAJAS', 'GRANEL']).optional().default('CAJAS'),
   fecha: z.coerce.date().optional(),
+  // Temporada (2026-11-06): la UI envía la temporada activa (editable). Si se
+  // omite al crear, se resuelve por fecha (o la predeterminada).
+  temporadaId: z.number().int().positive().optional().nullable(),
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
   monedaId: z.number().int().positive('La moneda es requerida'),
@@ -72,6 +75,9 @@ export const ordenCompraUpdateSchema = z.object({
   // valida en el service): cambiarla cambia qué campos exige cada línea.
   modalidad: z.enum(['CAJAS', 'GRANEL']).optional(),
   fecha: z.coerce.date().optional(),
+  // Temporada (2026-11-06): la UI envía la temporada activa (editable). Si se
+  // omite al crear, se resuelve por fecha (o la predeterminada).
+  temporadaId: z.number().int().positive().optional().nullable(),
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
   monedaId: z.number().int().positive().optional(),
@@ -115,6 +121,7 @@ export const ordenCompraListQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
   entidadProductorId: z.coerce.number().int().positive().optional(),
   estado: z.enum(['BORRADOR', 'EMITIDA', 'RECEPCIONADA']).optional(),
+  temporadaId: z.coerce.number().int().positive().optional(),
 })
 
 export type OrdenCompraCreateBody = z.infer<typeof ordenCompraCreateSchema>

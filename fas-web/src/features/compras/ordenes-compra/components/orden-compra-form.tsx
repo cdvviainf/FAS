@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useTemporada } from '@/contexts/temporada-context'
+import { TemporadaSelect } from '@/components/shared/temporada-select'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -74,6 +76,8 @@ interface HeaderFields {
   notaVentaId: number | null
   solicitudInspeccionIds: number[]
   fecha: string
+  // Temporada (2026-11-06): null en alta = usar la temporada activa.
+  temporadaId: number | null
   responsableId: string | null
   destinoMercadoId: number | null
   condicionPagoId: number | null
@@ -97,6 +101,7 @@ const HEADER_EMPTY: HeaderFields = {
   notaVentaId: null,
   solicitudInspeccionIds: [],
   fecha: new Date().toISOString().slice(0, 10),
+  temporadaId: null,
   responsableId: null,
   destinoMercadoId: null,
   condicionPagoId: null,
@@ -151,6 +156,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   }
 
   const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
+  // En alta, mientras el usuario no elija otra, la temporada es la activa.
+  const { temporada: temporadaActiva } = useTemporada()
+  const temporadaIdEfectiva = fields.temporadaId ?? (isEdit ? null : temporadaActiva?.id ?? null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [linea, setLinea] = useState<OrdenCompraLineaCreateInput>(LINEA_EMPTY)
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
@@ -269,6 +277,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
         notaVentaId: d.notaVentaId,
         solicitudInspeccionIds: d.solicitudes.map((s) => s.solicitudInspeccion.id),
         fecha: d.fecha.slice(0, 10),
+        temporadaId: d.temporadaId ?? null,
         responsableId: d.responsableId,
         destinoMercadoId: d.destinoMercadoId,
         condicionPagoId: d.condicionPagoId,
@@ -358,6 +367,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       notaVentaId: fields.origen === 'CIERRE' ? fields.notaVentaId : null,
       solicitudInspeccionIds: fields.solicitudInspeccionIds.length > 0 ? fields.solicitudInspeccionIds : undefined,
       fecha: fields.fecha,
+      temporadaId: temporadaIdEfectiva,
       responsableId: fields.responsableId,
       destinoMercadoId: fields.destinoMercadoId,
       condicionPagoId: fields.condicionPagoId,
@@ -686,8 +696,8 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
 
           <Separator />
 
-          {/* Fila 1: Origen + Cierre Comercial (si aplica) + Fecha */}
-          <div className={`grid gap-4 sm:grid-cols-2 ${fields.origen === 'CIERRE' ? 'md:grid-cols-3' : ''}`}>
+          {/* Fila 1: Origen + Cierre Comercial (si aplica) + Fecha + Temporada */}
+          <div className={`grid gap-4 sm:grid-cols-2 ${fields.origen === 'CIERRE' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
             <div className='space-y-1.5'>
               <Label>Origen</Label>
               <Select
@@ -728,6 +738,10 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
             <div className='space-y-1.5'>
               <Label>Fecha</Label>
               <Input type='date' value={fields.fecha} onChange={(e) => setFields((f) => ({ ...f, fecha: e.target.value }))} />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Temporada</Label>
+              <TemporadaSelect value={temporadaIdEfectiva} onChange={(id) => setFields((f) => ({ ...f, temporadaId: id }))} />
             </div>
           </div>
 

@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './notas-venta.repository.js'
 import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleUpdateInput, NotaVentaUpdateInput } from './notas-venta.types.js'
+import { temporadaParaCrear, validarTemporadaEnEdicion } from '../../../shared/temporada-documento.js'
 
 const TIPOS_CLIENTE = new Set(['CLIENTE_NACIONAL', 'CLIENTE_EXTRANJERO'])
 
@@ -275,8 +276,8 @@ async function ejecutarConFkTraducida<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-export async function listarNotasVenta(page: number, limit: number, clienteId?: number) {
-  const { data, total } = await repo.listNotasVenta(page, limit, clienteId)
+export async function listarNotasVenta(page: number, limit: number, clienteId?: number, temporadaId?: number) {
+  const { data, total } = await repo.listNotasVenta(page, limit, clienteId, temporadaId)
   return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
@@ -326,6 +327,8 @@ export async function crearNotaVenta(body: NotaVentaCreateInput, creadoPor: stri
   }
   // Responsable de venta: por defecto el usuario digitador (si se omite).
   if (body.responsableVentaId === undefined) body = { ...body, responsableVentaId: creadoPor }
+  // Temporada: la enviada (validada) o la que corresponde por fecha.
+  body = { ...body, temporadaId: await temporadaParaCrear(body.temporadaId, body.fecha) }
   await validarReferenciasHeader(body)
   await validarCalidadHasta(body.notaCalidadHastaId, body.notaCondicionHastaId)
   await validarResponsableVenta(body.responsableVentaId, creadoPor)
@@ -335,6 +338,7 @@ export async function crearNotaVenta(body: NotaVentaCreateInput, creadoPor: stri
 export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput, actualizadoPor: string) {
   const existente = await obtenerNotaVenta(id)
   requireAbierta(existente)
+  await validarTemporadaEnEdicion(body.temporadaId, existente.temporadaId)
 
   // Instructivo de Embalaje (compras.md) no bloquea edición/borrado de la
   // Nota de Venta: es un documento independiente, sin relación de herencia

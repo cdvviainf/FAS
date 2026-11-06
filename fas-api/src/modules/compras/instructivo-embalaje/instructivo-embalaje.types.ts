@@ -25,6 +25,7 @@ export interface InstructivoEmbalajeCreateInput {
   // Exportador (2026-10-05) — Entidad tipo EXPORTADORA, opcional.
   exportadorId?: number | null
   fechaInicioPrograma: Date
+  temporadaId?: number | null
   observaciones?: string | null
   calidadesPermitidas?: ParCalidad[]
   detalle: InstructivoEmbalajeDetalleInput[]
@@ -34,6 +35,7 @@ export interface InstructivoEmbalajeUpdateInput {
   entidadProductorId?: number
   exportadorId?: number | null
   fechaInicioPrograma?: Date
+  temporadaId?: number | null
   observaciones?: string | null
   calidadesPermitidas?: ParCalidad[]
   detalle?: InstructivoEmbalajeDetalleInput[]

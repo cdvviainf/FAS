@@ -623,3 +623,15 @@ Reemplaza el modelo anterior ("Nota de Venta → múltiples Instructivos, uno po
 > **InstructivoEmbarqueHijo** — 1..N por Embarque, **siempre ≥ 1**. Uno por planta / punto de retiro. Código **autogenerado** `{folio}-{n}` (ej. `001A-1`, `001A-2`). Contiene fecha/hora de retiro de esa planta. Con una sola planta hay un único hijo (`001A-1`), para mantener la nomenclatura actual.
 >
 > La partición en hijos se **deriva de la reserva de pallets** al embarque, agrupando por planta de retiro.
+
+---
+
+## Revisión 2026-11-06 — Temporada en OC, Instructivo de Embalaje, Recepción y Stock
+
+> Plan: `QA/plan-temporada-listados-nov2026.md`.
+
+- `temporadaId Int?` (FK compuesta a `Temporada(empresaId, id)`) en `OrdenCompra`, `InstructivoEmbalaje` y `Recepcion`.
+- **Alta:** la UI envía la temporada activa (editable). Si se omite: OC por `fecha`, Instructivo por `fechaInicioPrograma`, Recepción **de su OC** (si tiene) y si no por fecha actual; en todos, si ningún rango calza, la predeterminada. **Edición:** se valida solo si cambia; `null` explícito se rechaza.
+- **Pallets / Stock** heredan la temporada de su Recepción: `GET /api/operaciones/stock` y `/stock/pallets` aceptan `?temporadaId=` (filtra `recepcion.temporadaId`).
+- Listados `GET /api/compras/ordenes-compra`, `/instructivos-embalaje`, `/recepciones` aceptan `?temporadaId=`.
+- Migración `20261106150000_temporada_documentos`: todas las OC, Instructivos y Recepciones existentes (de prueba) quedan en la temporada `25-26` de su empresa (si no existe: predeterminada → NULL).

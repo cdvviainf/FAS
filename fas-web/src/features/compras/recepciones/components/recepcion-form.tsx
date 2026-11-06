@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useTemporada } from '@/contexts/temporada-context'
+import { TemporadaSelect } from '@/components/shared/temporada-select'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { isHTTPError } from 'ky'
@@ -89,6 +91,8 @@ interface HeaderFields {
   direccionPlantaId: number
   templateCargaId: number | null
   observaciones: string
+  // Temporada (2026-11-06): null en alta = la de la OC elegida o la activa.
+  temporadaId: number | null
 }
 
 const HEADER_EMPTY: HeaderFields = {
@@ -99,6 +103,7 @@ const HEADER_EMPTY: HeaderFields = {
   direccionPlantaId: 0,
   templateCargaId: null,
   observaciones: '',
+  temporadaId: null,
 }
 
 interface RecepcionFormProps {
@@ -171,6 +176,10 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
 
   const plantas = plantasData?.data ?? []
   const ordenesCompra = ordenesCompraData?.data ?? []
+  // Temporada efectiva: la elegida; en alta, la de la OC seleccionada o la activa.
+  const { temporada: temporadaActiva } = useTemporada()
+  const ocSeleccionada = fields.modo === 'OC' ? ordenesCompra.find((oc) => oc.id === fields.ordenCompraId) : undefined
+  const temporadaIdEfectiva = fields.temporadaId ?? (isEdit ? null : ocSeleccionada?.temporadaId ?? temporadaActiva?.id ?? null)
   const templatesCarga = templatesCargaData?.data ?? []
   const instructivos = instructivosData?.data ?? []
   const direccionesPlanta = plantaDetalle?.direcciones ?? []
@@ -187,6 +196,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
         direccionPlantaId: d.direccionPlantaId,
         templateCargaId: d.templateCargaId,
         observaciones: d.observaciones ?? '',
+        temporadaId: d.temporadaId ?? null,
       })
     }
   }, [recepcion])
@@ -212,6 +222,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
       direccionPlantaId: fields.direccionPlantaId,
       templateCargaId: fields.templateCargaId,
       observaciones: fields.observaciones.trim() || undefined,
+      temporadaId: temporadaIdEfectiva,
     }
   }
 
@@ -470,6 +481,17 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
               {errors.ordenCompraId && <p className='text-xs text-destructive'>{errors.ordenCompraId}</p>}
             </div>
           )}
+
+          <div className='grid gap-4 sm:grid-cols-3'>
+            <div className='space-y-1.5'>
+              <Label>Temporada</Label>
+              <TemporadaSelect
+                value={temporadaIdEfectiva}
+                onChange={(id) => setFields((f) => ({ ...f, temporadaId: id }))}
+                disabled={soloLectura}
+              />
+            </div>
+          </div>
 
           <Separator />
 

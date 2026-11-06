@@ -52,9 +52,10 @@ const LOCK_NAMESPACE_RECEPCION = 490237
 // carga de Excel concurrente generaba stock.
 const LOCK_NAMESPACE_RECEPCION_PROCESO = 490238
 
-export async function listRecepciones(page: number, limit: number, plantaId?: number, origen?: string, estado?: string) {
+export async function listRecepciones(page: number, limit: number, plantaId?: number, origen?: string, estado?: string, temporadaId?: number) {
   const where = {
     eliminadoEn: null,
+    ...(temporadaId ? { temporadaId } : {}),
     ...(plantaId ? { plantaId } : {}),
     ...(origen ? { origen: origen as 'COMPRA' | 'PROCESO' } : {}),
     ...(estado ? { estado: estado as 'CARGADA' | 'VALIDADA' | 'RECHAZADA' } : {}),
@@ -736,4 +737,10 @@ export async function getAdjuntoContenido(adjuntoId: number) {
 
 export async function deleteAdjunto(adjuntoId: number) {
   return prisma.recepcionAdjunto.delete({ where: { id: adjuntoId } })
+}
+
+// Temporada de la OC (2026-11-06): la Recepción con OC la hereda por defecto.
+export async function getTemporadaDeOrdenCompra(ordenCompraId: number): Promise<number | null> {
+  const oc = await prisma.ordenCompra.findFirst({ where: { id: ordenCompraId, eliminadoEn: null }, select: { temporadaId: true } })
+  return oc?.temporadaId ?? null
 }

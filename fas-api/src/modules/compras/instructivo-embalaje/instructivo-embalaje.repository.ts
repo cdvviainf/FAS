@@ -38,9 +38,10 @@ const includeDetalle = {
   },
 }
 
-export async function listInstructivos(page: number, limit: number, entidadProductorId?: number) {
+export async function listInstructivos(page: number, limit: number, entidadProductorId?: number, temporadaId?: number) {
   const where = {
     eliminadoEn: null,
+    ...(temporadaId ? { temporadaId } : {}),
     ...(entidadProductorId ? { entidadProductorId } : {}),
   }
 

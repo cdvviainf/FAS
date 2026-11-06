@@ -194,6 +194,8 @@ export const embarqueListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(500).default(20),
   estado: z.enum(ESTADOS_EMBARQUE_LISTADO).optional(),
+  // Temporada (2026-11-06): el Embarque la hereda de su Cierre Comercial.
+  temporadaId: z.coerce.number().int().positive().optional(),
   // JSON [{ id, desc }] (formato TanStack) — mismo patrón que los mantenedores.
   sort: z.string().optional(),
 })

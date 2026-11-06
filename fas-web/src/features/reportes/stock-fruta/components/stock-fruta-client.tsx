@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, useMemo, useState } from 'react'
+import { useTemporada } from '@/contexts/temporada-context'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Bar, BarChart, XAxis } from 'recharts'
@@ -118,9 +119,13 @@ export function StockFrutaClient() {
   const [antiguedadHasta, setAntiguedadHasta] = useState('')
   const [numeroPallet, setNumeroPallet] = useState('')
 
+  // Temporada activa (2026-11-06): filtra por la temporada de la Recepción del
+  // pallet y entra en la query key → refresca al cambiarla.
+  const { temporada, isLoading: temporadaCargando } = useTemporada()
   const { data, isLoading } = useQuery({
-    queryKey: ['stock-fruta'],
-    queryFn: () => stockFrutaService.list(),
+    queryKey: ['stock-fruta', temporada?.id ?? null],
+    queryFn: () => stockFrutaService.list(temporada?.id),
+    enabled: !temporadaCargando,
     staleTime: 30_000,
   })
 

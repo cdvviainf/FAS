@@ -9,11 +9,12 @@ import type {
 } from './types'
 
 export const notasVentaService = {
-  async list(params: { page?: number; limit?: number; clienteId?: number } = {}): Promise<NotaVentaListResponse> {
+  async list(params: { page?: number; limit?: number; clienteId?: number; temporadaId?: number } = {}): Promise<NotaVentaListResponse> {
     const sp: Record<string, string> = {}
     if (params.page) sp.page = String(params.page)
     if (params.limit) sp.limit = String(params.limit)
     if (params.clienteId) sp.clienteId = String(params.clienteId)
+    if (params.temporadaId) sp.temporadaId = String(params.temporadaId)
     return api.get('ventas/notas-venta', { searchParams: sp }).json()
   },
 

@@ -13,6 +13,7 @@ export const instructivoEmbalajeService = {
     if (params.page) sp.page = String(params.page)
     if (params.limit) sp.limit = String(params.limit)
     if (params.entidadProductorId) sp.entidadProductorId = String(params.entidadProductorId)
+    if (params.temporadaId) sp.temporadaId = String(params.temporadaId)
     return api.get('compras/instructivos-embalaje', { searchParams: sp }).json()
   },
 

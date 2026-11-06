@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useTemporada } from '@/contexts/temporada-context'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useQueryStates, parseAsInteger } from 'nuqs'
 import { DataTable } from '@/components/ui/table/data-table'
@@ -22,9 +23,12 @@ export function OrdenCompraListingClient() {
     perPage: parseAsInteger.withDefault(20),
   })
 
-  const filters = { page: params.page, limit: params.perPage }
+  // Temporada activa (2026-11-06): filtra el listado y entra en la query key →
+  // refresca al cambiarla. No se consulta mientras la temporada se (re)inicializa.
+  const { temporada, isLoading: temporadaCargando } = useTemporada()
+  const filters = { page: params.page, limit: params.perPage, ...(temporada ? { temporadaId: temporada.id } : {}) }
   // keepPreviousData: evita desmontar la tabla/buscador en búsqueda y paginación.
-  const { data, isPending } = useQuery({ ...ordenesCompraListOptions(filters), placeholderData: keepPreviousData })
+  const { data, isPending } = useQuery({ ...ordenesCompraListOptions(filters), placeholderData: keepPreviousData, enabled: !temporadaCargando })
   const pageCount = data ? Math.ceil(data.meta.total / params.perPage) : 0
 
   const { table } = useDataTable({

@@ -51,9 +51,10 @@ const includeDetalle = {
   },
 }
 
-export async function listOrdenesCompra(page: number, limit: number, entidadProductorId?: number, estado?: string) {
+export async function listOrdenesCompra(page: number, limit: number, entidadProductorId?: number, estado?: string, temporadaId?: number) {
   const where = {
     eliminadoEn: null,
+    ...(temporadaId ? { temporadaId } : {}),
     ...(entidadProductorId ? { entidadProductorId } : {}),
     ...(estado ? { estado: estado as 'BORRADOR' | 'EMITIDA' | 'RECEPCIONADA' } : {}),
   }

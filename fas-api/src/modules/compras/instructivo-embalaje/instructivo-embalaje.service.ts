@@ -1,5 +1,6 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { validarCalidadesPermitidas } from '../../../shared/calidades-permitidas.js'
+import { temporadaParaCrear, validarTemporadaEnEdicion } from '../../../shared/temporada-documento.js'
 import * as repo from './instructivo-embalaje.repository.js'
 import type { InstructivoEmbalajeCreateInput, InstructivoEmbalajeDetalleInput, InstructivoEmbalajeUpdateInput } from './instructivo-embalaje.types.js'
 import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
@@ -93,8 +94,8 @@ async function validarReferenciasHeader(data: { entidadProductorId?: number; exp
   }
 }
 
-export async function listarInstructivos(page: number, limit: number, entidadProductorId?: number) {
-  const { data, total } = await repo.listInstructivos(page, limit, entidadProductorId)
+export async function listarInstructivos(page: number, limit: number, entidadProductorId?: number, temporadaId?: number) {
+  const { data, total } = await repo.listInstructivos(page, limit, entidadProductorId, temporadaId)
   return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
@@ -105,6 +106,8 @@ export async function obtenerInstructivo(id: number) {
 }
 
 export async function crearInstructivo(body: InstructivoEmbalajeCreateInput, creadoPor: string) {
+  // Temporada: la enviada (validada) o la que corresponde por fecha de programa.
+  body = { ...body, temporadaId: await temporadaParaCrear(body.temporadaId, body.fechaInicioPrograma) }
   await validarReferenciasHeader(body)
   await validarCalidadesPermitidas(body.calidadesPermitidas ?? [])
 
@@ -118,7 +121,8 @@ export async function crearInstructivo(body: InstructivoEmbalajeCreateInput, cre
 // Sin máquina de estados (2026-09-02: Calidad ya no emite veredicto sobre el
 // Instructivo, ver compras.md §4.1) — editable/eliminable libremente.
 export async function actualizarInstructivo(id: number, body: InstructivoEmbalajeUpdateInput) {
-  await obtenerInstructivo(id)
+  const existente = await obtenerInstructivo(id)
+  await validarTemporadaEnEdicion(body.temporadaId, existente.temporadaId)
 
   await validarReferenciasHeader(body)
   if (body.calidadesPermitidas !== undefined) {

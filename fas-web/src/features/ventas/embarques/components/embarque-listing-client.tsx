@@ -1,6 +1,7 @@
 'use client'
 
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useTemporada } from '@/contexts/temporada-context'
 import { useQueryStates, parseAsInteger, parseAsString } from 'nuqs'
 import { DataTable } from '@/components/ui/table/data-table'
 import { DataTableToolbar } from '@/components/ui/table/data-table-toolbar'
@@ -24,14 +25,18 @@ export function EmbarqueListingClient() {
     sort: parseAsString.withDefault(''),
   })
 
+  // Temporada activa (2026-11-06): filtra el listado y entra en la query key →
+  // refresca al cambiarla. No se consulta mientras la temporada se (re)inicializa.
+  const { temporada, isLoading: temporadaCargando } = useTemporada()
   const filters = {
+    ...(temporada ? { temporadaId: temporada.id } : {}),
     page: params.page,
     limit: params.perPage,
     ...(params.estado ? { estado: params.estado } : {}),
     ...(params.sort ? { sort: params.sort } : {}),
   }
   // keepPreviousData: evita desmontar la tabla/buscador en búsqueda y paginación.
-  const { data, isPending } = useQuery({ ...embarquesListOptions(filters), placeholderData: keepPreviousData })
+  const { data, isPending } = useQuery({ ...embarquesListOptions(filters), placeholderData: keepPreviousData, enabled: !temporadaCargando })
   const pageCount = data ? Math.ceil(data.meta.total / params.perPage) : 0
 
   const { table } = useDataTable({

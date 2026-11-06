@@ -1598,6 +1598,10 @@ model Temporada {
 
   solicitudesInspeccion SolicitudInspeccion[]
   contratosProductor    ProductorContrato[]
+  notasVenta            NotaVenta[]           @relation("NotaVentaTemporada")
+  instructivosEmbalaje  InstructivoEmbalaje[] @relation("InstructivoEmbalajeTemporada")
+  ordenesCompra         OrdenCompra[]         @relation("OrdenCompraTemporada")
+  recepciones           Recepcion[]           @relation("RecepcionTemporada")
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -3238,14 +3242,19 @@ enum ContratoNaviero {
 }
 
 model NotaVenta {
-  id        Int       @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa   @relation(fields: [empresaId], references: [id])
-  folio     Int // correlativo autonumérico (R1), único por empresa
-  fecha     DateTime
+  id          Int        @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa    @relation(fields: [empresaId], references: [id])
+  folio       Int // correlativo autonumérico (R1), único por empresa
+  fecha       DateTime
+  // Temporada (2026-11-06): asignada al crear con la temporada activa (editable);
+  // los existentes se backfillean por fecha. Los listados filtran por ella.
+  // FK compuesta (empresaId, temporadaId) -> Temporada(empresaId, id).
+  temporadaId Int?
+  temporada   Temporada? @relation("NotaVentaTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
   // Exportación / Nacional (2026-10-06). Default EXPORTACION (los existentes se
   // backfillean a EXPORTACION — hoy todo el dominio de ventas es exportación).
-  tipoVenta TipoVenta @default(EXPORTACION)
+  tipoVenta   TipoVenta  @default(EXPORTACION)
 
   clienteId           Int
   // FK compuesta (empresaId, clienteId) -> Entidad(empresaId, id).
@@ -3345,6 +3354,7 @@ model NotaVenta {
   eliminadoPor   String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([clienteId])
   @@index([exportadorId])
   @@index([fecha])
@@ -4752,10 +4762,15 @@ model NotaCredito {
 // Instructivo — ver Docs/calidad.md — así que vuelve a ser editable/
 // eliminable libremente, como el diseño original antes de 2026-08-21).
 model InstructivoEmbalaje {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
-  numero    Int // correlativo propio, único por empresa
+  id          Int        @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa    @relation(fields: [empresaId], references: [id])
+  numero      Int // correlativo propio, único por empresa
+  // Temporada (2026-11-06): asignada al crear con la temporada activa (editable);
+  // los existentes se backfillean por fecha. Los listados filtran por ella.
+  // FK compuesta (empresaId, temporadaId) -> Temporada(empresaId, id).
+  temporadaId Int?
+  temporada   Temporada? @relation("InstructivoEmbalajeTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
 
   // Supersesión (2026-08-12): reemplaza notaVentaId — el instructivo ocurre
   // antes de que exista un Cierre Comercial asociado (compras.md §5.1/§5.2,
@@ -4787,6 +4802,7 @@ model InstructivoEmbalaje {
   eliminadoPor String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([entidadProductorId])
   @@index([exportadorId])
   @@index([empresaId])
@@ -4888,10 +4904,15 @@ enum ResponsableProductorExportadora {
 }
 
 model OrdenCompra {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
-  numero    String // OC-{AAAA}-{NNNN}, correlativo por año, único por empresa
+  id          Int        @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa    @relation(fields: [empresaId], references: [id])
+  numero      String // OC-{AAAA}-{NNNN}, correlativo por año, único por empresa
+  // Temporada (2026-11-06): asignada al crear con la temporada activa (editable);
+  // los existentes se backfillean por fecha. Los listados filtran por ella.
+  // FK compuesta (empresaId, temporadaId) -> Temporada(empresaId, id).
+  temporadaId Int?
+  temporada   Temporada? @relation("OrdenCompraTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
 
   entidadProductorId Int // Entidad tipo PRODUCTOR
   // FK compuesta (empresaId, entidadProductorId) -> Entidad(empresaId, id).
@@ -4957,6 +4978,7 @@ model OrdenCompra {
   eliminadoPor   String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([entidadProductorId])
   @@index([notaVentaId])
   @@index([formaPagoId])
@@ -5197,10 +5219,15 @@ enum EstadoRecepcion {
 }
 
 model Recepcion {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
-  numero    String // RC-{AAAA}-{NNNN}, correlativo por año (mismo patrón que OrdenCompra), único por empresa
+  id          Int        @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa    @relation(fields: [empresaId], references: [id])
+  numero      String // RC-{AAAA}-{NNNN}, correlativo por año (mismo patrón que OrdenCompra), único por empresa
+  // Temporada (2026-11-06): asignada al crear con la temporada activa (editable);
+  // los existentes se backfillean por fecha. Los listados filtran por ella.
+  // FK compuesta (empresaId, temporadaId) -> Temporada(empresaId, id).
+  temporadaId Int?
+  temporada   Temporada? @relation("RecepcionTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
 
   // Sin @unique de Prisma (no soporta índices parciales en el DSL): la
   // unicidad real es un índice único parcial a nivel de BD, solo entre filas
@@ -5253,6 +5280,7 @@ model Recepcion {
   eliminadoPor   String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([plantaId])
   @@index([templateCargaId])
   @@index([eliminadoEn])

@@ -72,6 +72,7 @@ export interface NotaVentaListItem {
   id: number
   folio: number
   fecha: string
+  temporadaId: number | null
   clienteId: number
   cliente: { id: number; codigo: string; descripcion: string; razonSocial: string }
   mercado: MantenedorRef
@@ -152,6 +153,7 @@ export interface NotaVentaListResponse {
 
 export interface NotaVentaCreateInput {
   fecha: string
+  temporadaId?: number | null
   tipoVenta?: 'EXPORTACION' | 'NACIONAL'
   clienteId: number
   exportadorId?: number | null

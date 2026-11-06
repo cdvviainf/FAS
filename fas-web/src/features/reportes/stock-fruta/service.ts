@@ -2,8 +2,8 @@ import { api } from '@/lib/api'
 import type { StockDetalleRow, Lote, LoteEditarInput } from './types'
 
 export const stockFrutaService = {
-  async list(): Promise<{ data: StockDetalleRow[] }> {
-    return api.get('operaciones/stock').json()
+  async list(temporadaId?: number): Promise<{ data: StockDetalleRow[] }> {
+    return api.get('operaciones/stock', { searchParams: temporadaId ? { temporadaId: String(temporadaId) } : {} }).json()
   },
 
   // Edición de Stock (2026-09-28, OPER_STOCK_EDICION).

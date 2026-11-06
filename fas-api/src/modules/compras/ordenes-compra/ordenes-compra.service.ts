@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { temporadaParaCrear, validarTemporadaEnEdicion } from '../../../shared/temporada-documento.js'
 import * as repo from './ordenes-compra.repository.js'
 import type {
   OrdenCompraCreateInput,
@@ -252,8 +253,8 @@ async function validarReferenciasHeader(data: {
   }
 }
 
-export async function listarOrdenesCompra(page: number, limit: number, entidadProductorId?: number, estado?: string) {
-  const { data, total } = await repo.listOrdenesCompra(page, limit, entidadProductorId, estado)
+export async function listarOrdenesCompra(page: number, limit: number, entidadProductorId?: number, estado?: string, temporadaId?: number) {
+  const { data, total } = await repo.listOrdenesCompra(page, limit, entidadProductorId, estado, temporadaId)
   return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
@@ -280,6 +281,8 @@ function normalizarCondicionesGranel<T extends OrdenCompraUpdateInput>(body: T, 
 export async function crearOrdenCompra(body: OrdenCompraCreateInput, creadoPor: string) {
   // La Inspección de Compra ya NO es requerida (2026-09-15): la OC puede
   // crearse sin solicitudes. Si se envían, validarReferenciasHeader las valida.
+  // Temporada: la enviada (validada) o la que corresponde por fecha.
+  body = { ...body, temporadaId: await temporadaParaCrear(body.temporadaId, body.fecha ?? new Date()) }
   await validarReferenciasHeader(body)
   try {
     return await repo.createOrdenCompra(normalizarCondicionesGranel(body, body.modalidad ?? 'CAJAS'), creadoPor)
@@ -303,6 +306,7 @@ function traducirColisionSolicitud(e: unknown): unknown {
 
 export async function actualizarOrdenCompra(id: number, body: OrdenCompraUpdateInput, actualizadoPor: string) {
   const existente = await obtenerOrdenCompra(id)
+  await validarTemporadaEnEdicion(body.temporadaId, existente.temporadaId)
   // Editable hasta Recepción (compras.md §6.2/§8): una vez recepcionada
   // (asignado por el futuro flujo de Recepción, no por este endpoint) la OC
   // queda bloqueada.

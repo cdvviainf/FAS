@@ -701,3 +701,29 @@ export async function updateBodegaConContactos(
     })
   })
 }
+
+// ─── Temporada de documentos (2026-11-06) ────────────────────────────────────
+// Temporada asignable a un documento: de la empresa activa (extensión tenant),
+// no eliminada y no bloqueada.
+export async function getTemporadaAsignable(id: number) {
+  return prisma.temporada.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+}
+
+// Temporada por fecha (misma regla que el backfill de la migración
+// 20261106150000_temporada_documentos): la que contiene la fecha (inicio más
+// reciente si hay solapamiento); si ninguna, la predeterminada; si no, null.
+export async function resolverTemporadaPorFecha(fecha: Date): Promise<number | null> {
+  const dia = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()))
+  const porRango = await prisma.temporada.findFirst({
+    where: { eliminadoEn: null, fechaInicio: { lte: dia }, fechaTermino: { gte: dia } },
+    orderBy: [{ fechaInicio: 'desc' }, { id: 'desc' }],
+    select: { id: true },
+  })
+  if (porRango) return porRango.id
+  const pred = await prisma.temporada.findFirst({
+    where: { eliminadoEn: null, predeterminada: true },
+    orderBy: { id: 'desc' },
+    select: { id: true },
+  })
+  return pred?.id ?? null
+}

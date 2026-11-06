@@ -42,8 +42,8 @@ function resolverEstadoListado(e: { estadoReserva: string; despachadoEn: Date | 
   return e.estadoReserva
 }
 
-export async function listarEmbarques(page: number, limit: number, notaVentaId?: number, estado?: string, sort?: string) {
-  const { data, total } = await repo.listEmbarques(page, limit, notaVentaId, estado, sort)
+export async function listarEmbarques(page: number, limit: number, notaVentaId?: number, estado?: string, sort?: string, temporadaId?: number) {
+  const { data, total } = await repo.listEmbarques(page, limit, notaVentaId, estado, sort, temporadaId)
   const conEstado = data.map((e) => ({ ...e, estadoListado: resolverEstadoListado(e) }))
   return { data: conEstado, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }

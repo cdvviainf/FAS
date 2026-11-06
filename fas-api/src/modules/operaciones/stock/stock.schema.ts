@@ -36,3 +36,9 @@ export const loteEditarSchema = z.object({
 
 export type PalletUpdateBody = z.infer<typeof palletUpdateSchema>
 export type LoteEditarBody = z.infer<typeof loteEditarSchema>
+
+// Listado de Stock / Pallets (2026-11-06): filtro opcional por temporada,
+// heredada de la Recepción del pallet.
+export const stockListQuerySchema = z.object({
+  temporadaId: z.coerce.number().int().positive().optional(),
+})

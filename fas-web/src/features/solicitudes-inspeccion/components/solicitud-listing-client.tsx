@@ -85,7 +85,7 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
   const tieneLecturaEnCualquiera = puedeLeerCompras || puedeLeerCalidad
   const { data: session } = authClient.useSession()
   const currentUserId = session?.user?.id
-  const { temporada } = useTemporada()
+  const { temporada, isLoading: temporadaCargando } = useTemporada()
 
   const [params, setParams] = useQueryStates({
     page: parseAsInteger.withDefault(1),
@@ -121,7 +121,9 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
   }
 
   // keepPreviousData: evita desmontar el buscador al tipear (ver mantenedor-table).
-  const { data, isPending } = useQuery({ ...solicitudesListOptions(filters), placeholderData: keepPreviousData })
+  // No consultar mientras la temporada se (re)inicializa (p.ej. al cambiar de
+  // empresa): sin temporada el filtro cae a "todas" y mostraba datos ajenos.
+  const { data, isPending } = useQuery({ ...solicitudesListOptions(filters), placeholderData: keepPreviousData, enabled: !temporadaCargando })
 
   const notificarMutation = useMutation({
     mutationFn: (id: number) => solicitudesService.notificar(id),

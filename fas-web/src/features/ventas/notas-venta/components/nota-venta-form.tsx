@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useTemporada } from '@/contexts/temporada-context'
+import { TemporadaSelect } from '@/components/shared/temporada-select'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -62,6 +64,8 @@ const clausulasVentaService = createMantenedorService('clausulas-venta')
 
 interface HeaderFields {
   fecha: string
+  // Temporada (2026-11-06): null en alta = usar la temporada activa.
+  temporadaId: number | null
   tipoVenta: 'EXPORTACION' | 'NACIONAL'
   clienteId: number
   exportadorId: number | null
@@ -91,6 +95,7 @@ interface HeaderFields {
 
 const HEADER_EMPTY: HeaderFields = {
   fecha: new Date().toISOString().slice(0, 10),
+  temporadaId: null,
   tipoVenta: 'EXPORTACION',
   clienteId: 0,
   exportadorId: null,
@@ -163,6 +168,9 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   const queryClient = useQueryClient()
 
   const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
+  // En alta, mientras el usuario no elija otra, la temporada es la activa.
+  const { temporada: temporadaActiva } = useTemporada()
+  const temporadaIdEfectiva = fields.temporadaId ?? (isEdit ? null : temporadaActiva?.id ?? null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const { data: session } = authClient.useSession()
   const usuarioActualId = session?.user?.id ?? null
@@ -360,6 +368,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación del form al cargar la NV a editar
       setFields({
         fecha: d.fecha.slice(0, 10),
+        temporadaId: d.temporadaId ?? null,
         tipoVenta: d.tipoVenta ?? 'EXPORTACION',
         clienteId: d.clienteId,
         exportadorId: d.exportadorId ?? null,
@@ -446,6 +455,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   function buildPayload(): NotaVentaCreateInput {
     return {
       fecha: fields.fecha,
+      temporadaId: temporadaIdEfectiva,
       tipoVenta: fields.tipoVenta,
       clienteId: fields.clienteId,
       exportadorId: fields.exportadorId,
@@ -766,7 +776,11 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
         <CardContent className='space-y-4'>
           {/* Línea 1: Fecha + Tipo de Venta (Exportación/Nacional, 2026-10-06)
               + Contrato naviero Agrosan (Sí/No). */}
-          <div className='grid gap-4 sm:grid-cols-3'>
+          <div className='grid gap-4 sm:grid-cols-4'>
+            <div className='space-y-1.5'>
+              <Label>Temporada</Label>
+              <TemporadaSelect value={temporadaIdEfectiva} onChange={(id) => setFields((f) => ({ ...f, temporadaId: id }))} />
+            </div>
             <div className='space-y-1.5'>
               <Label>Fecha <span className='text-destructive'>*</span></Label>
               <Input type='date' value={fields.fecha} onChange={(e) => setFields((f) => ({ ...f, fecha: e.target.value }))} />

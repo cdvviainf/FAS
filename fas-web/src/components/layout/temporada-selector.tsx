@@ -9,11 +9,13 @@ import { IconCalendarClock, IconCheck, IconChevronDown } from '@tabler/icons-rea
 import { createMantenedorQueries } from '@/features/mantenedor-simple/queries'
 import { useTemporada } from '@/contexts/temporada-context'
 import { cn } from '@/lib/utils'
+import { useSalirDeDocumento } from '@/hooks/use-salir-de-documento'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 
 export function TemporadaSelector() {
   const { temporada, setTemporada } = useTemporada()
   const [open, setOpen] = useState(false)
+  const salirDeDocumento = useSalirDeDocumento()
 
   const temporadasQueries = createMantenedorQueries('temporadas')
   const { data } = useQuery(temporadasQueries.listOptions({ limit: 100, soloActivos: true }))
@@ -45,7 +47,10 @@ export function TemporadaSelector() {
                 key={t.id}
                 value={t.descripcion}
                 onSelect={() => {
-                  setTemporada({ id: t.id, codigo: t.codigo, descripcion: t.descripcion })
+                  if (temporada?.id !== t.id) {
+                    setTemporada({ id: t.id, codigo: t.codigo, descripcion: t.descripcion })
+                    salirDeDocumento()
+                  }
                   setOpen(false)
                 }}
                 className='cursor-pointer'

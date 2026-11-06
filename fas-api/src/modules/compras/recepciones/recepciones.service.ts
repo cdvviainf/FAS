@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { temporadaParaCrear, validarTemporadaEnEdicion } from '../../../shared/temporada-documento.js'
 import * as repo from './recepciones.repository.js'
 import { procesarCargaExcel } from './recepciones.motor.js'
 import type { RecepcionCreateInput, RecepcionUpdateInput } from './recepciones.types.js'
@@ -88,8 +89,8 @@ function shapeRecepcion<T extends { estado: string; _count: { pallets: number } 
   return { ...resto, tienePallets, editable: ESTADOS_MODIFICABLES.has(resto.estado) && !tienePallets }
 }
 
-export async function listarRecepciones(page: number, limit: number, plantaId?: number, origen?: string, estado?: string) {
-  const { data, total } = await repo.listRecepciones(page, limit, plantaId, origen, estado)
+export async function listarRecepciones(page: number, limit: number, plantaId?: number, origen?: string, estado?: string, temporadaId?: number) {
+  const { data, total } = await repo.listRecepciones(page, limit, plantaId, origen, estado, temporadaId)
   return { data: data.map(shapeRecepcion), meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
@@ -127,6 +128,12 @@ export async function crearRecepcion(body: RecepcionCreateInput, creadoPor: stri
   await validarInstructivos(body.instructivoIds)
   await validarPlantaYDireccion(body.plantaId, body.direccionPlantaId)
   await validarTemplateCarga(body.templateCargaId)
+  // Temporada: la enviada (validada); si no, la de la OC; si no, por fecha.
+  if (body.temporadaId == null && body.ordenCompraId != null) {
+    const temporadaOc = await repo.getTemporadaDeOrdenCompra(body.ordenCompraId)
+    if (temporadaOc != null) body = { ...body, temporadaId: temporadaOc }
+  }
+  body = { ...body, temporadaId: await temporadaParaCrear(body.temporadaId, new Date()) }
   try {
     return shapeRecepcion(await repo.createRecepcion(body, creadoPor))
   } catch (err) {
@@ -158,6 +165,7 @@ export async function actualizarRecepcion(id: number, body: RecepcionUpdateInput
     body.direccionPlantaId ?? existente.direccionPlantaId,
   )
   await validarTemplateCarga(body.templateCargaId)
+  await validarTemporadaEnEdicion(body.temporadaId, existente.temporadaId)
   return shapeRecepcion(await repo.updateRecepcion(id, body, actualizadoPor))
 }
 

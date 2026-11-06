@@ -1,6 +1,7 @@
 export type TipoVenta = 'EXPORTACION' | 'NACIONAL'
 
 export interface NotaVentaCreateInput {
+  temporadaId?: number | null
   fecha: Date
   tipoVenta?: TipoVenta
   clienteId: number

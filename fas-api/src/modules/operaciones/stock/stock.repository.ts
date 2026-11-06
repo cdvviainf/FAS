@@ -14,9 +14,10 @@ const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 // alguna vez". Sin más filtros: el reporte en pantalla (fas-web) trae este
 // dataset completo una sola vez y filtra/agrupa/pagina en el cliente
 // (2026-08-24, ver compras.md §11 y stock.types.ts).
-export async function listPalletsConLineas() {
+// Temporada (2026-11-06): opcional, heredada de la Recepción del pallet.
+export async function listPalletsConLineas(temporadaId?: number) {
   return prisma.pallet.findMany({
-    where: { embarqueId: null, eliminadoEn: null },
+    where: { embarqueId: null, eliminadoEn: null, ...(temporadaId ? { recepcion: { temporadaId } } : {}) },
     include: {
       productor: { select: entidadSelect },
       recepcion: { select: { estado: true, plantaId: true, planta: { select: entidadSelect } } },

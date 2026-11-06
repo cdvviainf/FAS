@@ -116,6 +116,7 @@ export interface OrdenCompraListItem {
   id: number
   numero: string
   fecha: string
+  temporadaId: number | null
   estado: EstadoOrdenCompra
   modalidad: ModalidadCompra
   entidadProductorId: number
@@ -197,6 +198,7 @@ export interface OrdenCompraCreateInput {
   // vínculos existentes.
   solicitudInspeccionIds?: number[]
   fecha?: string
+  temporadaId?: number | null
   formaPagoId?: number | null
   condicionPagoId?: number | null
   monedaId: number

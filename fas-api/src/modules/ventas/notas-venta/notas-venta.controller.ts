@@ -11,8 +11,8 @@ import {
 import * as service from './notas-venta.service.js'
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
-  const { page, limit, clienteId } = notaVentaListQuerySchema.parse(req.query)
-  const result = await service.listarNotasVenta(page, limit, clienteId)
+  const { page, limit, clienteId, temporadaId } = notaVentaListQuerySchema.parse(req.query)
+  const result = await service.listarNotasVenta(page, limit, clienteId, temporadaId)
   return reply.send(result)
 }
 

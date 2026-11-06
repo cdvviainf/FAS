@@ -588,3 +588,16 @@ Basadas en el sistema legado (screenshots):
 - **✅ Q4 (RESUELTA por mecanismo, 2026-09-05).** El "gestor logístico" es AGL360, un sistema propio (no una `Entidad` genérica) — la respuesta llega por webhook a `SolicitudReserva` (§4.3): `numeroBooking`, `naviera`, `nave`, `numeroContenedor`, `fechaZarpe`, `fechaRetiroPlanta` (+ `payloadRespuesta` crudo). El formato exacto puede seguir ajustándose recién cuando AGL360 exista de verdad — la mecánica (webhook + estos campos) ya está definida y construida.
 - **Q5.** Niveles de permiso por perfil/ítem de menú (§3).
 - **Q6.** Programa Comercial: ¿se sistematiza o se descarta definitivamente?
+
+---
+
+## Revisión 2026-11-06 — Temporada en Cierre Comercial y Embarques
+
+> Supersede la ausencia de temporada en `NotaVenta`. Plan: `QA/plan-temporada-listados-nov2026.md`.
+
+- `NotaVenta.temporadaId Int?` con FK compuesta `(empresaId, temporadaId) → Temporada(empresaId, id)`.
+- **Alta:** la UI envía la temporada activa (editable en el form); si se omite, el service la resuelve por `fecha` (temporada de la empresa cuyo rango la contiene; si ninguna, la predeterminada). **Edición:** se valida solo si cambia (temporada de la empresa, no eliminada ni bloqueada); `null` explícito se rechaza.
+- **Duplicar** copia la temporada del original.
+- **Embarques** (e Instructivo de Embarque / Packing) heredan la temporada del Cierre: `GET /api/ventas/embarques?temporadaId=` filtra por `notaVenta.temporadaId`.
+- `GET /api/ventas/notas-venta?temporadaId=` filtra por temporada. Los listados web envían la temporada activa y se refrescan al cambiarla.
+- Migración `20261106150000_temporada_documentos`: todos los Cierres existentes (de prueba) quedan en la temporada `25-26` de su empresa (si no existe: predeterminada → NULL).

@@ -1,9 +1,10 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
-import { palletUpdateSchema, palletParamsSchema, loteEditarSchema } from './stock.schema.js'
+import { palletUpdateSchema, palletParamsSchema, loteEditarSchema, stockListQuerySchema } from './stock.schema.js'
 import * as service from './stock.service.js'
 
-export async function listar(_req: FastifyRequest, reply: FastifyReply) {
-  const data = await service.obtenerStock()
+export async function listar(req: FastifyRequest, reply: FastifyReply) {
+  const { temporadaId } = stockListQuerySchema.parse(req.query)
+  const data = await service.obtenerStock(temporadaId)
   return reply.send({ data })
 }
 

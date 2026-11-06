@@ -2,8 +2,8 @@ import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './stock.repository.js'
 import type { StockDetalleRow, PalletUpdateInput, LoteEditarInput } from './stock.types.js'
 
-export async function obtenerStock(): Promise<StockDetalleRow[]> {
-  const pallets = await repo.listPalletsConLineas()
+export async function obtenerStock(temporadaId?: number): Promise<StockDetalleRow[]> {
+  const pallets = await repo.listPalletsConLineas(temporadaId)
   const rows: StockDetalleRow[] = []
   for (const pallet of pallets) {
     for (const linea of pallet.lineas) {

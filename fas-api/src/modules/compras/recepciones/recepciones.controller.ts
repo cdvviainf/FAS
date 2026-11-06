@@ -23,8 +23,8 @@ export async function descargarFormatoBaseOc(req: FastifyRequest, reply: Fastify
 }
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
-  const { page, limit, plantaId, origen, estado } = recepcionListQuerySchema.parse(req.query)
-  const result = await service.listarRecepciones(page, limit, plantaId, origen, estado)
+  const { page, limit, plantaId, origen, estado, temporadaId } = recepcionListQuerySchema.parse(req.query)
+  const result = await service.listarRecepciones(page, limit, plantaId, origen, estado, temporadaId)
   return reply.send(result)
 }
 

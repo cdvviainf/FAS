@@ -115,10 +115,11 @@ async function resolverResumenReserva(notaVentaIds: number[]): Promise<Map<numbe
   return resumenPorNota
 }
 
-export async function listNotasVenta(page: number, limit: number, clienteId?: number) {
+export async function listNotasVenta(page: number, limit: number, clienteId?: number, temporadaId?: number) {
   const where = {
     eliminadoEn: null,
     ...(clienteId ? { clienteId } : {}),
+    ...(temporadaId ? { temporadaId } : {}),
   }
 
   const [data, total] = await Promise.all([
@@ -348,6 +349,8 @@ export async function duplicarNotaVenta(origenId: number, creadoPor: string, res
         empresaId: getEmpresaIdActual()!,
         folio,
         fecha: new Date(),
+        // Duplicar copia la temporada del original (editable después).
+        temporadaId: origen.temporadaId,
         tipoVenta: origen.tipoVenta,
         clienteId: origen.clienteId,
         exportadorId: origen.exportadorId,

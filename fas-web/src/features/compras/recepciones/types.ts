@@ -65,6 +65,7 @@ export interface RecepcionListItem {
   // tanto sigue siendo editable — no reimplementar el criterio en la UI.
   tienePallets: boolean
   editable: boolean
+  temporadaId: number | null
 }
 
 // Instructivos de Embalaje seleccionados (modo PROCESO, 2026-09-01) —
@@ -107,6 +108,8 @@ export interface RecepcionCreateInput {
   direccionPlantaId: number
   templateCargaId?: number | null
   observaciones?: string | null
+  // Temporada (2026-11-06): por defecto la de la OC o la temporada activa.
+  temporadaId?: number | null
 }
 
 export type RecepcionUpdateInput = Partial<Omit<RecepcionCreateInput, 'ordenCompraId' | 'esProceso' | 'instructivoIds'>>

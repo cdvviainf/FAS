@@ -12,8 +12,8 @@ import {
 import * as service from './ordenes-compra.service.js'
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
-  const { page, limit, entidadProductorId, estado } = ordenCompraListQuerySchema.parse(req.query)
-  const result = await service.listarOrdenesCompra(page, limit, entidadProductorId, estado)
+  const { page, limit, entidadProductorId, estado, temporadaId } = ordenCompraListQuerySchema.parse(req.query)
+  const result = await service.listarOrdenesCompra(page, limit, entidadProductorId, estado, temporadaId)
   return reply.send(result)
 }
 

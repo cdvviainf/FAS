@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useTemporada } from '@/contexts/temporada-context'
+import { TemporadaSelect } from '@/components/shared/temporada-select'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -107,6 +109,10 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   const [exportadorId, setExportadorId] = useState<number | null>(null)
   const [calidadesPermitidas, setCalidadesPermitidas] = useState<CalidadPermitidaPar[]>([])
   const [fechaInicioPrograma, setFechaInicioPrograma] = useState('')
+  // Temporada (2026-11-06): null en alta = usar la temporada activa.
+  const [temporadaId, setTemporadaId] = useState<number | null>(null)
+  const { temporada: temporadaActiva } = useTemporada()
+  const temporadaIdEfectiva = temporadaId ?? (isEdit ? null : temporadaActiva?.id ?? null)
   const [observaciones, setObservaciones] = useState('')
   const [detalle, setDetalle] = useState<InstructivoEmbalajeDetalleInput[]>([])
   const [linea, setLinea] = useState<NuevaLinea>(LINEA_EMPTY)
@@ -291,6 +297,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
       setExportadorId(d.exportadorId ?? null)
       setCalidadesPermitidas(d.calidadesPermitidas.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })))
       setFechaInicioPrograma(d.fechaInicioPrograma.slice(0, 10))
+      setTemporadaId(d.temporadaId ?? null)
       setObservaciones(d.observaciones ?? '')
       setDetalle(
         d.detalle.map((linea) => ({
@@ -448,7 +455,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   }
 
   const createMutation = useMutation({
-    mutationFn: () => instructivoEmbalajeService.create({ entidadProductorId, exportadorId, fechaInicioPrograma, observaciones: observaciones.trim() || undefined, calidadesPermitidas, detalle }),
+    mutationFn: () => instructivoEmbalajeService.create({ entidadProductorId, exportadorId, fechaInicioPrograma, temporadaId: temporadaIdEfectiva, observaciones: observaciones.trim() || undefined, calidadesPermitidas, detalle }),
     onSuccess: (res) => {
       toast.success(`Instructivo de Embalaje N° ${res.data.numero} creado`)
       queryClient.invalidateQueries({ queryKey: instructivosEmbalajeKeys.all })
@@ -458,7 +465,7 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   })
 
   const updateMutation = useMutation({
-    mutationFn: () => instructivoEmbalajeService.update(instructivoId!, { entidadProductorId, exportadorId, fechaInicioPrograma, observaciones: observaciones.trim() || null, calidadesPermitidas, detalle }),
+    mutationFn: () => instructivoEmbalajeService.update(instructivoId!, { entidadProductorId, exportadorId, fechaInicioPrograma, temporadaId: temporadaIdEfectiva, observaciones: observaciones.trim() || null, calidadesPermitidas, detalle }),
     onSuccess: () => {
       toast.success('Instructivo de Embalaje actualizado')
       queryClient.invalidateQueries({ queryKey: instructivosEmbalajeKeys.all })
@@ -601,6 +608,10 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
               <Label>Inicio de Programa <span className='text-destructive'>*</span></Label>
               <Input type='date' value={fechaInicioPrograma} onChange={(e) => setFechaInicioPrograma(e.target.value)} />
               {errors.fechaInicioPrograma && <p className='text-xs text-destructive'>{errors.fechaInicioPrograma}</p>}
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Temporada</Label>
+              <TemporadaSelect value={temporadaIdEfectiva} onChange={setTemporadaId} />
             </div>
           </div>
           <div className='space-y-1.5'>

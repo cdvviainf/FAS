@@ -11,12 +11,13 @@ import type {
 } from './types'
 
 export const ordenesCompraService = {
-  async list(params: { page?: number; limit?: number; entidadProductorId?: number; estado?: EstadoOrdenCompra } = {}): Promise<OrdenCompraListResponse> {
+  async list(params: { page?: number; limit?: number; entidadProductorId?: number; estado?: EstadoOrdenCompra; temporadaId?: number } = {}): Promise<OrdenCompraListResponse> {
     const sp: Record<string, string> = {}
     if (params.page) sp.page = String(params.page)
     if (params.limit) sp.limit = String(params.limit)
     if (params.entidadProductorId) sp.entidadProductorId = String(params.entidadProductorId)
     if (params.estado) sp.estado = params.estado
+    if (params.temporadaId) sp.temporadaId = String(params.temporadaId)
     return api.get('compras/ordenes-compra', { searchParams: sp }).json()
   },
 

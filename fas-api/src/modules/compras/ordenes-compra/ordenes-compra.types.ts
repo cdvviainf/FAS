@@ -25,6 +25,7 @@ export interface OrdenCompraCreateInput {
   // Modalidad de compra (2026-10-23): CAJAS (default) o GRANEL.
   modalidad?: 'CAJAS' | 'GRANEL'
   fecha?: Date
+  temporadaId?: number | null
   formaPagoId?: number | null
   condicionPagoId?: number | null
   monedaId: number

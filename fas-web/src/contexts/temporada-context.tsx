@@ -51,21 +51,25 @@ export function TemporadaProvider({ children }: { children: React.ReactNode }) {
   }, [empresaActiva])
 
   // Fetch predeterminada from API
-  const { data: predeterminada, isLoading } = useQuery({
-    queryKey: ['temporadas', 'predeterminada'],
+  // empresaId en la key: Temporada es por empresa; sin él, al volver a una
+  // empresa se reusaba la predeterminada cacheada de la otra.
+  const { data: predeterminada, isLoading, isFetching: fetchingPred } = useQuery({
+    queryKey: ['temporadas', 'predeterminada', empresaActiva?.id ?? null],
     queryFn: () => api.get('config/temporadas/predeterminada').json<TemporadaItem | null>(),
     staleTime: 60_000,
   })
 
   // Fetch all temporadas to validate stored selection is still active
   const temporadasQueries = createMantenedorQueries('temporadas')
-  const { data: temporadasData } = useQuery(temporadasQueries.listOptions({ limit: 100, soloActivos: true }))
+  const { data: temporadasData, isFetching: fetchingLista } = useQuery(temporadasQueries.listOptions({ limit: 100, soloActivos: true }))
   const temporadasActivas = temporadasData?.data ?? []
 
   // Initialize: use localStorage if the stored temporada is still active; otherwise use predeterminada API
   useEffect(() => {
     if (initialized) return
-    if (isLoading || !temporadasData) return
+    // Esperar datos FRESCOS: tras cambiar de empresa no inicializar con la
+    // respuesta de la empresa anterior mientras se refetchea.
+    if (isLoading || !temporadasData || fetchingPred || fetchingLista) return
 
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
@@ -89,7 +93,7 @@ export function TemporadaProvider({ children }: { children: React.ReactNode }) {
       setTemporadaState(predeterminada)
     }
     setInitialized(true)
-  }, [isLoading, predeterminada, initialized, temporadasData, temporadasActivas])
+  }, [isLoading, predeterminada, initialized, temporadasData, temporadasActivas, fetchingPred, fetchingLista])
 
   const setTemporada = useCallback((t: TemporadaItem) => {
     setTemporadaState(t)

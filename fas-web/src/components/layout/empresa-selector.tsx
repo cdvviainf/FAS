@@ -7,6 +7,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '
 import { IconBuilding, IconCheck, IconChevronDown } from '@tabler/icons-react'
 import { useEmpresa, type EmpresaItem } from '@/contexts/empresa-context'
 import { cn } from '@/lib/utils'
+import { useSalirDeDocumento } from '@/hooks/use-salir-de-documento'
 
 // Espejo de TemporadaSelector (decisión #7, Docs/empresas.md). Siempre
 // visible, igual que TemporadaSelector — con una sola empresa queda
@@ -14,6 +15,7 @@ import { cn } from '@/lib/utils'
 export function EmpresaSelector() {
   const { empresaActiva, empresas, setEmpresaActiva } = useEmpresa()
   const [open, setOpen] = useState(false)
+  const salirDeDocumento = useSalirDeDocumento()
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -41,7 +43,11 @@ export function EmpresaSelector() {
                 key={e.id}
                 value={e.razonSocial}
                 onSelect={() => {
-                  setEmpresaActiva(e)
+                  // Elegir la misma empresa no hace nada (no resetea cache ni navega).
+                  if (empresaActiva?.id !== e.id) {
+                    setEmpresaActiva(e)
+                    salirDeDocumento()
+                  }
                   setOpen(false)
                 }}
                 className='cursor-pointer'

@@ -91,10 +91,18 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
       // todavía no corrió, esos refetches saldrían con la empresa anterior.
       localStorage.setItem(STORAGE_KEY, String(empresa.id))
       setEmpresaActivaState(empresa)
-      // Decisión #8: cambiar de empresa invalida todo el cache de TanStack
-      // Query. La Temporada activa se resetea en su propio provider al
-      // detectar el cambio de empresaActiva (ver TemporadaProvider).
-      queryClient.invalidateQueries()
+      // Decisión #8: cambiar de empresa descarta el cache de TanStack Query.
+      // Las query keys no incluyen la empresa, así que un simple invalidate
+      // dejaba visibles los datos de la empresa anterior mientras refetcheaba
+      // — y la Temporada se reinicializaba con la predeterminada CACHEADA de la
+      // otra empresa (Temporada es por empresa) → listados en blanco
+      // (2026-11-06). resetQueries vacía los datos y refetchea los activos.
+      // Excepción: config/me/* (empresas del usuario, menú/accesos) solo se
+      // invalida: vaciarlos haría parpadear el sidebar y el route-guard
+      // desmontaría la página mientras recarga.
+      const esSesion = (q: { queryKey: readonly unknown[] }) => q.queryKey[0] === 'config' && q.queryKey[1] === 'me'
+      queryClient.invalidateQueries({ predicate: esSesion })
+      queryClient.resetQueries({ predicate: (q) => !esSesion(q) })
     },
     [queryClient],
   )

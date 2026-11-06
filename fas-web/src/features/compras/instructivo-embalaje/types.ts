@@ -48,6 +48,7 @@ export interface InstructivoEmbalajeListItem {
   exportador: EntidadRef | null
   // Fecha de inicio de programa — de ella se deriva la semana ISO (2026-10-14).
   fechaInicioPrograma: string
+  temporadaId: number | null
   creadoEn: string
 }
 
@@ -84,6 +85,7 @@ export interface InstructivoEmbalajeCreateInput {
   entidadProductorId: number
   exportadorId?: number | null
   fechaInicioPrograma: string
+  temporadaId?: number | null
   observaciones?: string | null
   calidadesPermitidas?: { notaCalidadId: number; notaCondicionId: number }[]
   detalle: InstructivoEmbalajeDetalleInput[]
@@ -93,12 +95,14 @@ export interface InstructivoEmbalajeListFilters {
   page?: number
   limit?: number
   entidadProductorId?: number
+  temporadaId?: number
 }
 
 export interface InstructivoEmbalajeUpdateInput {
   entidadProductorId?: number
   exportadorId?: number | null
   fechaInicioPrograma?: string
+  temporadaId?: number | null
   observaciones?: string | null
   calidadesPermitidas?: { notaCalidadId: number; notaCondicionId: number }[]
   detalle?: InstructivoEmbalajeDetalleInput[]

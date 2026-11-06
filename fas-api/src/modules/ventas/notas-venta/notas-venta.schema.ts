@@ -2,6 +2,9 @@ import { z } from 'zod'
 
 export const notaVentaCreateSchema = z.object({
   fecha: z.coerce.date(),
+  // Temporada (2026-11-06): la UI envía la temporada activa (editable). Si se
+  // omite al crear, se resuelve por fecha (o la predeterminada).
+  temporadaId: z.number().int().positive().optional().nullable(),
   // Exportación / Nacional (2026-10-06). Opcional en el body: si se omite, el
   // default del modelo (EXPORTACION) aplica.
   tipoVenta: z.enum(['EXPORTACION', 'NACIONAL']).optional(),
@@ -76,6 +79,7 @@ export const notaVentaListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(500).default(20),
   clienteId: z.coerce.number().int().positive().optional(),
+  temporadaId: z.coerce.number().int().positive().optional(),
 })
 
 export type NotaVentaCreateBody = z.infer<typeof notaVentaCreateSchema>

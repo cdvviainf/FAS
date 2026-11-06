@@ -8,6 +8,7 @@ export interface RecepcionCreateInput {
   direccionPlantaId: number
   templateCargaId?: number | null
   observaciones?: string | null
+  temporadaId?: number | null
 }
 
 // origen/instructivoIds (derivado de/asociado a ordenCompraId/esProceso) se
