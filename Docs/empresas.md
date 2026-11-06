@@ -345,3 +345,9 @@ Los 7 sub-lotes de Fase 3 (Config/Mantenedores, Entidades, Calidad, Materiales, 
 - `PUT /api/config/empresas/:id/terminos-oc` (CONFIG_EMPRESAS TOTAL): reemplazo completo `{ notaEs, notaEn, clausulas[] }` en transacción; `orden` = posición. El GET de la empresa incluye `clausulasOc` y las notas.
 - UI: pestaña "Términos OC" en la ficha de Empresa. `{empresa}` en el texto se reemplaza por la razón social al emitir.
 - Migración `20261106180000_oc_pdf_v3_terminos` siembra 6 cláusulas + nota para la empresa `AGROSAN`.
+
+## Revisión 2026-11-06 — SMTP solo en Empresas
+
+- Se elimina la pantalla **Configuración General** (`/dashboard/configuracion/general`) y su ítem de menú `CONFIG_GENERAL` (migración `20261106200000_eliminar_config_general`, borra también sus `perfil_accesos`). Solo contenía el SMTP.
+- `ConfiguracionCorreo` es una por empresa; se administra en **Empresas › SMTP** (de la empresa activa). `GET/PUT /api/config/correo` y `POST /api/config/correo/probar` pasan a exigir `CONFIG_EMPRESAS` (LECTURA/TOTAL).
+- Cada correo sale con la configuración de la empresa del documento (la cola lleva `empresaId`).

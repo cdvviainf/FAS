@@ -149,7 +149,6 @@ const itemsMenu: Array<{ codigo: string; nombre: string; grupo: string; seccion:
   { codigo: 'CONFIG_PREFIJOS_CODIGO', nombre: 'Prefijos de Código', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/prefijos-codigo', tipo: 'PANTALLA', orden: 8900 },
   { codigo: 'CONFIG_TEMPLATES_CARGA', nombre: 'Templates de Carga', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/templates-carga', tipo: 'PANTALLA', orden: 8910 },
   { codigo: 'CONFIG_INTEGRACIONES', nombre: 'Integraciones', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/integraciones', tipo: 'PANTALLA', orden: 8920 },
-  { codigo: 'CONFIG_GENERAL', nombre: 'Configuración General', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/general', tipo: 'PANTALLA', orden: 8930 },
   { codigo: 'CONFIG_AUDITORIA', nombre: 'Auditoría', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/auditoria', tipo: 'REPORTE', orden: 8940 },
 ]
 
@@ -307,6 +306,16 @@ async function main() {
     await prisma.perfilAcceso.deleteMany({ where: { itemMenuId: finFacturacionObsoleto.id } })
     await prisma.itemMenu.delete({ where: { id: finFacturacionObsoleto.id } })
     console.log('FIN_FACTURACION eliminado (superseded por FACT_EXPORTACION/FACT_NACIONAL).')
+  }
+
+  // Configuración General eliminada (2026-11-06): el SMTP se administra por
+  // empresa en Empresas › SMTP (permiso CONFIG_EMPRESAS). Misma limpieza que la
+  // migración 20261106200000_eliminar_config_general (idempotente).
+  const configGeneralObsoleto = await prisma.itemMenu.findUnique({ where: { codigo: 'CONFIG_GENERAL' } })
+  if (configGeneralObsoleto) {
+    await prisma.perfilAcceso.deleteMany({ where: { itemMenuId: configGeneralObsoleto.id } })
+    await prisma.itemMenu.delete({ where: { id: configGeneralObsoleto.id } })
+    console.log('CONFIG_GENERAL eliminado (SMTP en Empresas › SMTP).')
   }
 
   // Sincronizar accesos TOTAL para el perfil ADMIN a todos los ítems de menú.

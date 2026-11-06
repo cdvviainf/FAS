@@ -26,7 +26,7 @@ async function getTransport(): Promise<{ transport: Transporter; from: string }>
   if (!config) {
     throw new BusinessError(
       'SMTP_NO_CONFIGURADO',
-      'No hay configuración SMTP. Configúrala en Configuración › Configuración General.',
+      'No hay configuración SMTP para esta empresa. Configúrala en Sistema › Empresas › SMTP.',
       503,
     )
   }

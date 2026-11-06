@@ -13,16 +13,27 @@ export const ocV3Css = `
   .doc-footer-empresa { display: none; }
 
   /* ── Cabecera ── */
-  .oc3-cab { display: flex; justify-content: space-between; align-items: stretch; margin-bottom: 3mm; min-height: 31mm; }
-  .oc3-cab-izq { flex: 1; display: flex; flex-direction: column; justify-content: space-between; padding-right: 4mm; }
-  .oc3-cab-logo img { max-height: 17mm; max-width: 95mm; object-fit: contain; }
+  .oc3-cab { margin-bottom: 3mm; }
+  /* Banda: logo y especie con el mismo alto (ALTO_BANDA), imágenes completas. */
+  .oc3-cab-banda { display: flex; justify-content: space-between; align-items: center; height: 22mm; gap: 6mm; }
+  .oc3-cab-logo { height: 100%; display: flex; align-items: center; }
+  .oc3-cab-logo img { height: 100%; max-width: 100mm; object-fit: contain; object-position: left center; display: block; }
   .oc3-cab-titulo { font-size: 20pt; font-weight: 800; color: ${AZUL}; letter-spacing: 0.3pt; margin-top: 2mm; line-height: 1.1; }
   .oc3-cab-numero { font-size: 11pt; color: ${AZUL}; }
   .oc3-sep { color: ${BORDE}; margin: 0 2mm; }
-  .oc3-cab-especie { width: 66mm; overflow: hidden; clip-path: polygon(14% 0, 100% 0, 100% 100%, 0 100%); }
-  .oc3-cab-especie img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* Estado (Borrador/Copia) como etiqueta, no marca de agua (2026-11-06):
+     a la derecha del título, azul claro con texto azul marino. */
+  .oc3-cab-titulo-fila { display: flex; align-items: center; justify-content: space-between; gap: 4mm; margin-top: 3mm; }
+  .oc3-cab-titulo-fila .oc3-cab-titulo { margin-top: 0; }
+  .oc3-estado { display: inline-flex; align-items: center; gap: 1.5mm; padding: 1.6mm 5mm; border-radius: 1.8mm; font-weight: 800; font-size: 10.5pt; letter-spacing: 0.4pt; background: #D3E2F0; color: ${AZUL}; white-space: nowrap; }
+  .oc3-estado-fecha { font-weight: 600; font-size: 8.5pt; margin-left: 1mm; }
+  .oc3-estado-fila { margin-top: 1.5mm; }
+  .oc3-estado-fila .oc3-estado { font-size: 9pt; padding: 1.2mm 4mm; }
+  .oc3-cab-especie { height: 100%; display: flex; align-items: center; justify-content: flex-end; }
+  .oc3-cab-especie img { height: 100%; max-width: 90mm; object-fit: contain; object-position: right center; display: block; }
 
   .oc3-cab-compacta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5mm; padding-bottom: 3mm; }
+  .oc3-cab-compacta .oc3-cab-logo { height: 18mm; }
   .oc3-cab-compacta-info { text-align: right; color: ${AZUL}; font-size: 10pt; }
   .oc3-cab-compacta-titulo { font-size: 16pt; font-weight: 800; }
 

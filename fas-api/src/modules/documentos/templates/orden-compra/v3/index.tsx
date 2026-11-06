@@ -32,6 +32,7 @@ const T = {
     firmaAutorizada: 'Firma autorizada', proveedorFirma: 'Proveedor / Productor',
     terminos: 'TÉRMINOS Y CONDICIONES GENERALES', pagina: 'Página {p} de {t}',
     pie: 'Documento generado electrónicamente',
+    borrador: 'BORRADOR', copia: 'COPIA',
     notaGenerica: '* El precio unitario corresponde al Incoterm indicado conforme a Incoterms 2020. La aprobación del lote será hecha por el cliente final en destino.',
     fechaRef: { FACTURA: 'fecha de factura', ZARPE: 'zarpe', ENVIO_DOCUMENTOS: 'envío de documentos', ARRIBO: 'arribo' } as Record<string, string>,
     entregaGranel: { PUESTA_EN_CAMPO: 'Fruta puesta en campo, con retiro por la exportadora', ENTREGADA_EN_PLANTA: 'Fruta entregada en la planta de proceso' } as Record<string, string>,
@@ -54,6 +55,7 @@ const T = {
     firmaAutorizada: 'Authorized Signature', proveedorFirma: 'Supplier / Producer',
     terminos: 'GENERAL TERMS AND CONDITIONS', pagina: 'Page {p} of {t}',
     pie: 'Electronically generated document',
+    borrador: 'DRAFT', copia: 'COPY',
     notaGenerica: '* The unit price corresponds to the indicated Incoterm in accordance with Incoterms 2020. Lot approval will be made by the final customer at destination.',
     fechaRef: { FACTURA: 'invoice date', ZARPE: 'departure', ENVIO_DOCUMENTOS: 'document dispatch', ARRIBO: 'arrival' } as Record<string, string>,
     entregaGranel: { PUESTA_EN_CAMPO: 'Fruit left in field, picked up by the exporter', ENTREGADA_EN_PLANTA: 'Fruit delivered at the processing plant' } as Record<string, string>,
@@ -93,8 +95,23 @@ function Lineas({ lineas }: { lineas: string[] }) {
   return <>{lineas.map((l, i) => <div key={i}>{l}</div>)}</>
 }
 
+// Estado del documento como etiqueta junto al N° (2026-11-06): reemplaza la
+// marca de agua diagonal. BORRADOR = preview no emitido; COPIA = reimpresión
+// (con la fecha de reimpresión). Documento emitido → sin etiqueta.
+type MarcaEstado = { tipo: 'BORRADOR' | 'COPIA'; fecha?: string }
+function EtiquetaEstado({ marca, L }: { marca?: MarcaEstado; L: Labels }) {
+  if (!marca) return null
+  const esBorrador = marca.tipo === 'BORRADOR'
+  return (
+    <span className={`oc3-estado ${esBorrador ? 'oc3-estado--borrador' : 'oc3-estado--copia'}`}>
+      {esBorrador ? L.borrador : L.copia}
+      {!esBorrador && marca.fecha ? <span className='oc3-estado-fecha'>{marca.fecha}</span> : null}
+    </span>
+  )
+}
+
 // Cabecera completa (hoja 1) o compacta (hoja 2 y siguientes).
-function Cabecera({ d, L, compacta }: { d: OrdenCompraPdfPayload; L: Labels; compacta?: boolean }) {
+function Cabecera({ d, L, compacta, marca }: { d: OrdenCompraPdfPayload; L: Labels; compacta?: boolean; marca?: MarcaEstado }) {
   const fecha = fmt.fechaLarga(d.fecha, d.idioma)
   if (compacta) {
     return (
@@ -103,21 +120,27 @@ function Cabecera({ d, L, compacta }: { d: OrdenCompraPdfPayload; L: Labels; com
         <div className='oc3-cab-compacta-info'>
           <div className='oc3-cab-compacta-titulo'>{L.titulo}</div>
           <div><strong>{L.numero} {d.numero}</strong> <span className='oc3-sep'>|</span> {fecha}</div>
+          {marca && <div className='oc3-estado-fila'><EtiquetaEstado marca={marca} L={L} /></div>}
         </div>
       </header>
     )
   }
   return (
     <header className='oc3-cab'>
-      <div className='oc3-cab-izq'>
+      {/* Banda superior: logo (izq.) e imagen de la especie (der.) con el MISMO
+          alto, sin recortar ni deformar la imagen (2026-11-06). */}
+      <div className='oc3-cab-banda'>
         <div className='oc3-cab-logo'>{d.empresa.logoDataUri && <img src={d.empresa.logoDataUri} alt='' />}</div>
-        <div className='oc3-cab-titulo'>{L.titulo}</div>
-        <div className='oc3-cab-numero'>
-          <strong>{L.numero} {d.numero}</strong> <span className='oc3-sep'>|</span> {L.emision}: {fecha}
+        <div className='oc3-cab-especie'>
+          {d.especieImagenDataUri && <img src={d.especieImagenDataUri} alt='' />}
         </div>
       </div>
-      <div className='oc3-cab-especie'>
-        {d.especieImagenDataUri && <img src={d.especieImagenDataUri} alt='' />}
+      <div className='oc3-cab-titulo-fila'>
+        <div className='oc3-cab-titulo'>{L.titulo}</div>
+        <EtiquetaEstado marca={marca} L={L} />
+      </div>
+      <div className='oc3-cab-numero'>
+        <strong>{L.numero} {d.numero}</strong> <span className='oc3-sep'>|</span> {L.emision}: {fecha}
       </div>
     </header>
   )
@@ -139,20 +162,20 @@ export function OrdenCompraV3({ d, marcaAgua, marcaAguaFecha }: { d: OrdenCompra
   const n = (v: number | string | null | undefined, dec: number) => fmt.numeroIdioma(v ?? 0, dec, idioma)
   const esGranel = d.modalidad === 'GRANEL'
   const conMoneda = (s: string) => s.replace('{m}', m)
+  // Borrador/Copia como etiqueta en la cabecera (no marca de agua, 2026-11-06).
+  const marca: MarcaEstado | undefined = marcaAgua ? { tipo: marcaAgua, fecha: marcaAguaFecha } : undefined
 
   return (
     <Documento
       titulo={`${L.titulo} ${d.numero}`}
       paginaOpts={{ formato: 'A4', orientacion: 'portrait', margen: '10mm 10mm 14mm' }}
-      marcaAgua={marcaAgua}
-      marcaAguaFecha={marcaAguaFecha}
       piePagina={`${d.empresa.razonSocial} · ${L.pie}`}
       numeracion={L.pagina}
     >
       <style dangerouslySetInnerHTML={{ __html: ocV3Css }} />
 
       {/* ───────────────────────────── HOJA 1 ───────────────────────────── */}
-      <Cabecera d={d} L={L} />
+      <Cabecera d={d} L={L} marca={marca} />
 
       <div className='oc3-grid-2'>
         <Seccion titulo={L.comprador}>
@@ -316,7 +339,7 @@ export function OrdenCompraV3({ d, marcaAgua, marcaAguaFecha }: { d: OrdenCompra
       {/* ──────────────────── HOJA 2: Términos y Condiciones ──────────────────── */}
       {d.terminos && (
         <div className='oc3-hoja-terminos'>
-          <Cabecera d={d} L={L} compacta />
+          <Cabecera d={d} L={L} compacta marca={marca} />
           <div className='oc3-terminos'>
             <div className='oc3-seccion-titulo'>{L.terminos}</div>
             <div className='oc3-terminos-cuerpo'>

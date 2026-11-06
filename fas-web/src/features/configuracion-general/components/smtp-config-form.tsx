@@ -18,7 +18,8 @@ import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { correoConfigService, type CorreoConfigInput } from '../service'
 
-const ITEM = 'CONFIG_GENERAL'
+// Se usa en Empresas › SMTP (2026-11-06: se eliminó Configuración General).
+const ITEM = 'CONFIG_EMPRESAS'
 
 // Defaults Office365
 const DEFAULTS: CorreoConfigInput = {
