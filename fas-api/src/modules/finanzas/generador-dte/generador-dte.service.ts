@@ -1,6 +1,7 @@
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { obtenerPdf } from '../../documentos/documentos.service.js'
+import { getEntidadParaDte } from '../facturacion/dte-emitidos.repository.js'
 import * as repo from './generador-dte.repository.js'
 import type {
   ClaseDocumentoManual,
@@ -61,7 +62,7 @@ async function validarPorClase(
 ) {
   if (d.entidadId != null) await validarReceptor(d.entidadId)
   if (d.monedaId != null) await validarMoneda(d.monedaId)
-  if (clase === 'FACTURA_NACIONAL' && d.condicionPagoId != null) await validarCondicionPago(d.condicionPagoId)
+  if (repo.esClaseFactura(clase) && d.condicionPagoId != null) await validarCondicionPago(d.condicionPagoId)
   if (d.lineas != null) await validarLineas(d.lineas)
   if (clase === 'GUIA_DESPACHO' && d.transporte != null) await validarTransporte(d.transporte)
 }
@@ -116,4 +117,21 @@ export async function obtenerPdfBorrador(id: number) {
   if (empresaId == null) throw new ValidationError('No hay empresa activa en la sesión')
   const idioma = doc.idioma === 'EN' ? 'EN' : 'ES'
   return obtenerPdf('documento-manual', id, empresaId, idioma)
+}
+
+// Datos del receptor que van en el DTE (mismo origen que usa el emisor de DTE:
+// Entidad.identificador/razonSocial/giro + dirección por defecto). El SII exige
+// los cinco para Factura (33/34), Guía (52) y NC/ND (61/56); `faltantes` lista
+// los vacíos para marcarlos en rojo en el form (patrón Guía de Despacho).
+export async function obtenerDatosReceptor(entidadId: number) {
+  const c = await getEntidadParaDte(entidadId)
+  if (!c) throw new NotFoundError('Entidad', String(entidadId))
+  const campos = [
+    { campo: 'rut', etiqueta: 'RUT', valor: c.rut },
+    { campo: 'razonSocial', etiqueta: 'Razón social', valor: c.razonSocial },
+    { campo: 'giro', etiqueta: 'Giro', valor: c.giro },
+    { campo: 'direccion', etiqueta: 'Dirección', valor: c.direccion },
+    { campo: 'comuna', etiqueta: 'Comuna', valor: c.comuna },
+  ].map((x) => ({ ...x, valor: x.valor?.trim() ? x.valor.trim() : null }))
+  return { campos, faltantes: campos.filter((x) => x.valor == null).map((x) => x.etiqueta) }
 }

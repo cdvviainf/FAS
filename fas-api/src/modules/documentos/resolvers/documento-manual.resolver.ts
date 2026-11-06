@@ -6,6 +6,7 @@ import type { DocumentoManualPdfPayload } from '../schemas/documento-manual.sche
 
 const CLASE_LABELS: Record<string, string> = {
   FACTURA_NACIONAL: 'Factura Nacional',
+  FACTURA_NACIONAL_EXENTA: 'Factura Nacional Exenta',
   GUIA_DESPACHO: 'Guía de Despacho',
   NOTA_CREDITO: 'Nota de Crédito',
   NOTA_DEBITO: 'Nota de Débito',

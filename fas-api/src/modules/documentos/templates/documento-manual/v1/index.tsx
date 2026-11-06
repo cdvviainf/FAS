@@ -18,7 +18,6 @@ export function DocumentoManualV1({ d }: { d: DocumentoManualPdfPayload; marcaAg
     { titulo: 'Detalle', render: (l) => l.descripcion },
     { titulo: 'Cantidad', render: (l) => fmt.entero(l.cantidad), numerica: true },
     { titulo: 'Precio Unit.', render: (l) => fmt.moneda(l.precioUnitario, d.moneda), numerica: true },
-    { titulo: 'Afecto/Exento', render: (l) => (l.exento ? 'Exento' : 'Afecto') },
     { titulo: 'Monto', render: (l) => fmt.moneda(l.monto, d.moneda), numerica: true },
   ]
 

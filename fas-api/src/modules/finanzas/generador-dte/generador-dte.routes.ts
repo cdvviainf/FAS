@@ -8,6 +8,7 @@ const ITEM = 'GENERADOR_DTE'
 
 export async function generadorDteRoutes(app: FastifyInstance) {
   app.get('/', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
+  app.get('/receptor/:entidadId', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.datosReceptor)
   app.get('/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
   app.get('/:id/pdf-borrador', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.descargarPdfBorrador)
   app.post('/', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)

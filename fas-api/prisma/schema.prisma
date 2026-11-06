@@ -5619,6 +5619,7 @@ model AuditLog {
 // por eso el enum de estado ya contempla ENVIADA_SII/APROBADA/RECHAZADA.
 enum ClaseDocumentoManual {
   FACTURA_NACIONAL
+  FACTURA_NACIONAL_EXENTA
   GUIA_DESPACHO
   NOTA_CREDITO
   NOTA_DEBITO
@@ -5641,7 +5642,9 @@ model DocumentoManual {
 
   // Discriminador: la clase define qué secciones aplican (transporte solo guía,
   // referencias solo NC/ND, condición de pago solo factura). `tipoDte` es el
-  // código SII: 33/34 derivado por exento en FACTURA_NACIONAL; 52/56/61 fijo.
+  // código SII fijo por clase: FACTURA_NACIONAL=33, FACTURA_NACIONAL_EXENTA=34,
+  // GUIA_DESPACHO=52, NOTA_DEBITO=56, NOTA_CREDITO=61. La condición afecto/exento
+  // es del tipo de documento (2026-11-06), no de la línea.
   claseDocumento ClaseDocumentoManual
   tipoDte        Int
 
@@ -5723,6 +5726,8 @@ model DocumentoManualLinea {
 
   cantidad       Decimal @db.Decimal(14, 3)
   precioUnitario Decimal @db.Decimal(14, 4)
+  // Derivado de la clase del documento (true solo en FACTURA_NACIONAL_EXENTA);
+  // ya no se digita por línea (2026-11-06).
   exento         Boolean @default(false)
   montoLinea     Decimal @db.Decimal(14, 2)
   orden          Int     @default(0)

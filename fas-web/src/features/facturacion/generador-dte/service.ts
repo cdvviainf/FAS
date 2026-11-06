@@ -5,6 +5,7 @@ import type {
   DocumentoManualCreateInput,
   DocumentoManualUpdateInput,
   DocumentoManualListFilters,
+  ReceptorDatosDte,
 } from './types'
 
 export const generadorDteService = {
@@ -29,6 +30,10 @@ export const generadorDteService = {
 
   async update(id: number, data: DocumentoManualUpdateInput): Promise<{ data: DocumentoManualDetalle }> {
     return api.patch(`generador-dte/${id}`, { json: data }).json()
+  },
+
+  async datosReceptor(entidadId: number): Promise<{ data: ReceptorDatosDte }> {
+    return api.get(`generador-dte/receptor/${entidadId}`).json()
   },
 
   async anular(id: number): Promise<{ data: DocumentoManualDetalle }> {

@@ -1,9 +1,10 @@
 // Generador DTE — documentos manuales (2026-11-04). Tipos del feature FE.
-export type ClaseDocumentoManual = 'FACTURA_NACIONAL' | 'GUIA_DESPACHO' | 'NOTA_CREDITO' | 'NOTA_DEBITO'
+export type ClaseDocumentoManual = 'FACTURA_NACIONAL' | 'FACTURA_NACIONAL_EXENTA' | 'GUIA_DESPACHO' | 'NOTA_CREDITO' | 'NOTA_DEBITO'
 export type EstadoDocumentoManual = 'BORRADOR' | 'ENVIADA_SII' | 'APROBADA' | 'RECHAZADA' | 'ANULADA'
 
 export const CLASE_LABELS: Record<ClaseDocumentoManual, string> = {
   FACTURA_NACIONAL: 'Factura Nacional',
+  FACTURA_NACIONAL_EXENTA: 'Factura Nacional Exenta',
   GUIA_DESPACHO: 'Guía de Despacho',
   NOTA_CREDITO: 'Nota de Crédito',
   NOTA_DEBITO: 'Nota de Débito',
@@ -55,7 +56,6 @@ export interface DocumentoManualLineaInput {
   articuloId?: number | null
   cantidad: number
   precioUnitario: number
-  exento: boolean
 }
 
 export interface DocumentoManualLineaItem {
@@ -176,4 +176,16 @@ export interface DocumentoManualListFilters {
   claseDocumento?: ClaseDocumentoManual
   estado?: EstadoDocumentoManual
   entidadId?: number
+}
+
+// Datos del receptor tal como irán al DTE; valor null = falta (se marca en rojo).
+export interface ReceptorDatoDte {
+  campo: string
+  etiqueta: string
+  valor: string | null
+}
+
+export interface ReceptorDatosDte {
+  campos: ReceptorDatoDte[]
+  faltantes: string[]
 }

@@ -26,7 +26,7 @@ import { entidadesService } from '@/features/entidades/service'
 import { articulosService } from '@/features/materiales/articulos/service'
 import { facturaNacionalService } from '@/features/facturacion-nacional/service'
 import { formatMonto } from '@/lib/format'
-import { generadorDteDetailOptions, generadorDteKeys } from '../queries'
+import { generadorDteDetailOptions, generadorDteKeys, generadorDteReceptorOptions } from '../queries'
 import { generadorDteService } from '../service'
 import {
   CLASE_LABELS,
@@ -54,7 +54,6 @@ interface LineaEdit {
   articuloId: number | null
   cantidad: string
   precioUnitario: string
-  exento: boolean
 }
 
 interface ReferenciaEdit {
@@ -81,7 +80,7 @@ interface TransporteEdit {
   comunaDestino: string
 }
 
-const LINEA_EMPTY: LineaEdit = { descripcion: '', articuloId: null, cantidad: '1', precioUnitario: '0', exento: false }
+const LINEA_EMPTY: LineaEdit = { descripcion: '', articuloId: null, cantidad: '1', precioUnitario: '0' }
 const REF_EMPTY: ReferenciaEdit = { tipoDocRef: '', folioRef: '', fechaRef: hoyYmd(), codRef: '', razonRef: '', refOrigenTipo: null, refOrigenId: null }
 const TRANSPORTE_EMPTY: TransporteEdit = {
   indTraslado: '1', transporteId: null, choferChileno: true, choferRut: '', choferNombre: '',
@@ -154,7 +153,13 @@ export function GeneradorDteForm({ documentoId }: GeneradorDteFormProps) {
   const cuotasPreview = condicionPagoSeleccionada?.cuotas ?? []
 
   const esGuia = clase === 'GUIA_DESPACHO'
-  const esFactura = clase === 'FACTURA_NACIONAL'
+  const esFactura = clase === 'FACTURA_NACIONAL' || clase === 'FACTURA_NACIONAL_EXENTA'
+  // Afecto/exento lo define el tipo de documento, no la línea (2026-11-06).
+  const esExenta = clase === 'FACTURA_NACIONAL_EXENTA'
+
+  // Datos del receptor que irán en el DTE, con los faltantes en rojo.
+  const { data: receptorData, isFetching: receptorCargando } = useQuery(generadorDteReceptorOptions(entidadId))
+  const receptor = receptorData?.data
 
   useEffect(() => {
     if (documento) {
@@ -174,7 +179,6 @@ export function GeneradorDteForm({ documentoId }: GeneradorDteFormProps) {
           articuloId: l.articuloId,
           cantidad: l.cantidad,
           precioUnitario: l.precioUnitario,
-          exento: l.exento,
         })),
       )
       setReferencias(
@@ -236,7 +240,6 @@ export function GeneradorDteForm({ documentoId }: GeneradorDteFormProps) {
       articuloId: l.articuloId,
       cantidad: Number(l.cantidad),
       precioUnitario: Number(l.precioUnitario),
-      exento: l.exento,
     }))
   }
 
@@ -373,7 +376,7 @@ export function GeneradorDteForm({ documentoId }: GeneradorDteFormProps) {
   let exento = 0
   for (const l of lineas) {
     const monto = round2(Number(l.cantidad) * Number(l.precioUnitario))
-    if (l.exento) exento += monto
+    if (esExenta) exento += monto
     else neto += monto
   }
   neto = round2(neto)
@@ -450,6 +453,40 @@ export function GeneradorDteForm({ documentoId }: GeneradorDteFormProps) {
               />
               {errors.entidadId && <p className='text-xs text-destructive'>{errors.entidadId}</p>}
             </div>
+
+            {entidadId > 0 && (
+              <div className='rounded-md border p-3'>
+                <div className='flex items-center justify-between gap-2'>
+                  <span className='text-sm font-medium'>Datos del receptor en el documento</span>
+                  {receptor && (receptor.faltantes.length > 0 ? (
+                    <Badge variant='destructive'>Faltan {receptor.faltantes.length} dato(s)</Badge>
+                  ) : (
+                    <Badge className='bg-emerald-600'>Completo</Badge>
+                  ))}
+                </div>
+                {!receptor && receptorCargando ? (
+                  <p className='text-muted-foreground mt-2 text-xs'>Cargando…</p>
+                ) : receptor ? (
+                  <>
+                    <table className='mt-2 w-full text-sm'>
+                      <tbody>
+                        {receptor.campos.map((c) => (
+                          <tr key={c.campo} className={c.valor == null ? 'text-destructive' : ''}>
+                            <td className='w-40 py-0.5 pr-3'>{c.etiqueta} <span className='text-destructive'>*</span></td>
+                            <td className='py-0.5'>{c.valor ?? `⚠ Sin ${c.etiqueta.toLowerCase()}`}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {receptor.faltantes.length > 0 && (
+                      <p className='text-destructive mt-2 text-xs'>
+                        Completa los datos que faltan en la ficha de la entidad (Entidades) antes de emitir. La dirección y comuna salen de su dirección por defecto.
+                      </p>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            )}
 
             <div className='grid gap-4 sm:grid-cols-3'>
               <div className='space-y-1.5'>
@@ -674,7 +711,6 @@ export function GeneradorDteForm({ documentoId }: GeneradorDteFormProps) {
                     <TableHead className='min-w-[220px]'>Glosa</TableHead>
                     <TableHead className='w-28'>Cantidad</TableHead>
                     <TableHead className='w-32'>Precio Unitario</TableHead>
-                    <TableHead className='w-20 text-center'>Exento</TableHead>
                     <TableHead className='w-32 text-right'>Monto</TableHead>
                     {!soloLectura && <TableHead className='w-12' />}
                   </TableRow>
@@ -703,9 +739,6 @@ export function GeneradorDteForm({ documentoId }: GeneradorDteFormProps) {
                         <TableCell>
                           <Input type='number' step='0.01' min='0' className='w-28' value={l.precioUnitario} onChange={(e) => setLinea(idx, { precioUnitario: e.target.value })} />
                         </TableCell>
-                        <TableCell className='text-center'>
-                          <Checkbox checked={l.exento} disabled={soloLectura} onCheckedChange={(v) => setLinea(idx, { exento: v === true })} />
-                        </TableCell>
                         <TableCell className='text-right tabular-nums'>{formatMonto(monto)}</TableCell>
                         {!soloLectura && (
                           <TableCell className='text-right'>
@@ -727,9 +760,14 @@ export function GeneradorDteForm({ documentoId }: GeneradorDteFormProps) {
               </Button>
             )}
             <div className='flex flex-col items-end gap-0.5 text-sm'>
-              <div>Neto: <span className='tabular-nums font-medium'>{formatMonto(neto)}</span></div>
-              <div>Exento: <span className='tabular-nums font-medium'>{formatMonto(exento)}</span></div>
-              <div>IVA (19%): <span className='tabular-nums font-medium'>{formatMonto(iva)}</span></div>
+              {esExenta ? (
+                <div>Exento: <span className='tabular-nums font-medium'>{formatMonto(exento)}</span></div>
+              ) : (
+                <>
+                  <div>Neto: <span className='tabular-nums font-medium'>{formatMonto(neto)}</span></div>
+                  <div>IVA (19%): <span className='tabular-nums font-medium'>{formatMonto(iva)}</span></div>
+                </>
+              )}
               <div className='text-base font-semibold'>Total: <span className='tabular-nums'>{formatMonto(total)}</span></div>
             </div>
           </CardContent>

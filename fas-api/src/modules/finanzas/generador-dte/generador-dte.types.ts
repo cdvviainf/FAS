@@ -1,5 +1,5 @@
 // Generador DTE — documentos manuales (2026-11-04). Tipos del módulo.
-export type ClaseDocumentoManual = 'FACTURA_NACIONAL' | 'GUIA_DESPACHO' | 'NOTA_CREDITO' | 'NOTA_DEBITO'
+export type ClaseDocumentoManual = 'FACTURA_NACIONAL' | 'FACTURA_NACIONAL_EXENTA' | 'GUIA_DESPACHO' | 'NOTA_CREDITO' | 'NOTA_DEBITO'
 export type EstadoDocumentoManual = 'BORRADOR' | 'ENVIADA_SII' | 'APROBADA' | 'RECHAZADA' | 'ANULADA'
 
 export interface DocumentoManualLineaInput {
@@ -7,7 +7,6 @@ export interface DocumentoManualLineaInput {
   articuloId?: number | null
   cantidad: number
   precioUnitario: number
-  exento: boolean
 }
 
 export interface DocumentoManualReferenciaInput {

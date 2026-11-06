@@ -4,6 +4,7 @@ import {
   documentoManualUpdateSchema,
   documentoManualParamsSchema,
   documentoManualListQuerySchema,
+  receptorParamsSchema,
 } from './generador-dte.schema.js'
 import * as service from './generador-dte.service.js'
 
@@ -43,4 +44,11 @@ export async function descargarPdfBorrador(req: FastifyRequest, reply: FastifyRe
     .header('Content-Type', 'application/pdf')
     .header('Content-Disposition', `inline; filename="${nombreArchivo}"`)
     .send(buffer)
+}
+
+// Datos del receptor tal como irán al DTE (RUT, razón social, giro, dirección,
+// comuna), con la lista de los que faltan — el form los muestra en rojo.
+export async function datosReceptor(req: FastifyRequest, reply: FastifyReply) {
+  const { entidadId } = receptorParamsSchema.parse(req.params)
+  return reply.send({ data: await service.obtenerDatosReceptor(entidadId) })
 }

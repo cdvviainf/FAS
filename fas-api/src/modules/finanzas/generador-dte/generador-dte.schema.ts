@@ -2,17 +2,17 @@ import { z } from 'zod'
 
 // Generador DTE — documentos manuales (2026-11-04). Validación por clase.
 
-export const claseDocumentoEnum = z.enum(['FACTURA_NACIONAL', 'GUIA_DESPACHO', 'NOTA_CREDITO', 'NOTA_DEBITO'])
+export const claseDocumentoEnum = z.enum(['FACTURA_NACIONAL', 'FACTURA_NACIONAL_EXENTA', 'GUIA_DESPACHO', 'NOTA_CREDITO', 'NOTA_DEBITO'])
 export const estadoDocumentoEnum = z.enum(['BORRADOR', 'ENVIADA_SII', 'APROBADA', 'RECHAZADA', 'ANULADA'])
 
-// Línea de detalle: glosa libre (siempre) + artículo opcional + exento por línea.
-// Mismo criterio que la Proforma de Productor / Factura Nacional.
+// Línea de detalle: glosa libre (siempre) + artículo opcional. Afecto/exento NO
+// se digita por línea: lo define el tipo de documento (FACTURA_NACIONAL_EXENTA =
+// todas exentas; el resto afectas) — 2026-11-06.
 export const lineaSchema = z.object({
   descripcion: z.string().min(1, 'La glosa/descripción de la línea es requerida').max(1000),
   articuloId: z.number().int().positive().nullable().optional(),
   cantidad: z.number().positive('La cantidad debe ser mayor a 0'),
   precioUnitario: z.number().nonnegative('El precio no puede ser negativo'),
-  exento: z.boolean().default(false),
 })
 
 // Referencia (NC/ND): campos crudos SII siempre presentes; el enlace blando
@@ -76,6 +76,10 @@ export const documentoManualUpdateSchema = baseCreate.omit({ claseDocumento: tru
 
 export const documentoManualParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
+})
+
+export const receptorParamsSchema = z.object({
+  entidadId: z.coerce.number().int().positive(),
 })
 
 export const documentoManualListQuerySchema = z.object({

@@ -38,43 +38,44 @@ const includeDetalle = {
 } satisfies Prisma.DocumentoManualInclude
 
 // ─── Cálculo de montos + tipoDte ───────────────────────────────────────────────
-// FACTURA_NACIONAL deriva 33 (hay alguna afecta) / 34 (todas exentas). Las demás
-// clases tienen tipoDte fijo. El neto/exento/IVA/total se calcula igual para todas
-// (informativo; los totales reales los recalcula LibreDTE al timbrar — fase 2).
-const TIPO_DTE_FIJO: Record<Exclude<ClaseDocumentoManual, 'FACTURA_NACIONAL'>, number> = {
+// tipoDte fijo por clase. Afecto/exento lo define la clase (2026-11-06): en
+// FACTURA_NACIONAL_EXENTA todas las líneas son exentas; en el resto, afectas.
+// El neto/exento/IVA/total es informativo (LibreDTE recalcula al timbrar — fase 2).
+const TIPO_DTE: Record<ClaseDocumentoManual, number> = {
+  FACTURA_NACIONAL: 33,
+  FACTURA_NACIONAL_EXENTA: 34,
   GUIA_DESPACHO: 52,
   NOTA_CREDITO: 61,
   NOTA_DEBITO: 56,
 }
 
+export const esClaseExenta = (clase: ClaseDocumentoManual) => clase === 'FACTURA_NACIONAL_EXENTA'
+export const esClaseFactura = (clase: ClaseDocumentoManual) => clase === 'FACTURA_NACIONAL' || clase === 'FACTURA_NACIONAL_EXENTA'
+
 export function calcularMontosYTipoDte(clase: ClaseDocumentoManual, lineas: DocumentoManualLineaInput[]) {
+  const esExenta = esClaseExenta(clase)
   let neto = 0
   let exento = 0
   for (const l of lineas) {
     const monto = round2(l.cantidad * l.precioUnitario)
-    if (l.exento) exento += monto
+    if (esExenta) exento += monto
     else neto += monto
   }
   neto = round2(neto)
   exento = round2(exento)
   const iva = Math.round(neto * IVA_TASA)
   const total = round2(neto + iva + exento)
-  const tipoDte =
-    clase === 'FACTURA_NACIONAL'
-      ? lineas.every((l) => l.exento)
-        ? 34
-        : 33
-      : TIPO_DTE_FIJO[clase]
+  const tipoDte = TIPO_DTE[clase]
   return { montoNeto: neto, montoExento: exento, montoIva: iva, montoTotal: total, tipoDte }
 }
 
-function lineasPersistir(lineas: DocumentoManualLineaInput[]) {
+function lineasPersistir(clase: ClaseDocumentoManual, lineas: DocumentoManualLineaInput[]) {
   return lineas.map((l, i) => ({
     descripcion: l.descripcion.trim(),
     articuloId: l.articuloId ?? null,
     cantidad: l.cantidad,
     precioUnitario: l.precioUnitario,
-    exento: l.exento,
+    exento: esClaseExenta(clase),
     montoLinea: round2(l.cantidad * l.precioUnitario),
     orden: i,
   }))
@@ -188,7 +189,7 @@ export async function createDocumentoManual(data: DocumentoManualCreateInput, cr
         entidadId: data.entidadId,
         monedaId: data.monedaId,
         tipoCambio: data.tipoCambio ?? null,
-        condicionPagoId: data.claseDocumento === 'FACTURA_NACIONAL' ? (data.condicionPagoId ?? null) : null,
+        condicionPagoId: esClaseFactura(data.claseDocumento) ? (data.condicionPagoId ?? null) : null,
         montoNeto: montos.montoNeto,
         montoExento: montos.montoExento,
         montoIva: montos.montoIva,
@@ -199,7 +200,7 @@ export async function createDocumentoManual(data: DocumentoManualCreateInput, cr
         observaciones: data.observaciones ?? null,
         ...transporteCampos(data.claseDocumento, data.transporte),
         creadoPorId,
-        lineas: { create: lineasPersistir(data.lineas) },
+        lineas: { create: lineasPersistir(data.claseDocumento, data.lineas) },
         referencias:
           data.claseDocumento === 'NOTA_CREDITO' || data.claseDocumento === 'NOTA_DEBITO'
             ? { create: referenciasPersistir(data.referencias) }
@@ -230,7 +231,7 @@ export async function updateDocumentoManual(id: number, data: DocumentoManualUpd
       const montos = calcularMontosYTipoDte(clase, data.lineas)
       await tx.documentoManualLinea.deleteMany({ where: { documentoManualId: id } })
       await tx.documentoManualLinea.createMany({
-        data: lineasPersistir(data.lineas).map((l) => ({ documentoManualId: id, ...l })),
+        data: lineasPersistir(clase, data.lineas).map((l) => ({ documentoManualId: id, ...l })),
       })
       await tx.documentoManual.update({
         where: { id },
@@ -259,7 +260,7 @@ export async function updateDocumentoManual(id: number, data: DocumentoManualUpd
         ...(data.monedaId !== undefined ? { monedaId: data.monedaId } : {}),
         ...(data.tipoCambio !== undefined ? { tipoCambio: data.tipoCambio } : {}),
         ...(data.fechaDocumento !== undefined ? { fechaDocumento: new Date(data.fechaDocumento) } : {}),
-        ...(clase === 'FACTURA_NACIONAL' && data.condicionPagoId !== undefined ? { condicionPagoId: data.condicionPagoId } : {}),
+        ...(esClaseFactura(clase) && data.condicionPagoId !== undefined ? { condicionPagoId: data.condicionPagoId } : {}),
         ...(data.idioma !== undefined ? { idioma: data.idioma } : {}),
         ...(data.observaciones !== undefined ? { observaciones: data.observaciones } : {}),
         ...(clase === 'GUIA_DESPACHO' && data.transporte !== undefined ? transporteCampos(clase, data.transporte) : {}),
