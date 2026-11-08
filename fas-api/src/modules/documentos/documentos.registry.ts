@@ -218,12 +218,12 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     plantillas: { v1: ProformaV1 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'FACT_EXPORTACION',
-    // Sin distinción borrador/oficial (mismo criterio que Instructivo de
-    // Embarque/Embalaje): la emisión de negocio ya ocurrió al crear la
-    // Proforma (POST .../proforma, un solo paso) — el Motor de Documentos
-    // acá solo genera el PDF de un registro que ya es definitivo, no hay un
-    // segundo paso de "oficializar" (D12: documento interno, sin folio SII).
-    controlCopia: false,
+    // Control de copia (2026-11-07, supersede el criterio anterior "sin
+    // distinción"): como OC y Cierre, la vista previa/descarga sale con la
+    // etiqueta BORRADOR, "Emitir documento" congela el PDF oficial en
+    // documentos_emitidos y las reimpresiones salen como COPIA. El estado de
+    // negocio de la Proforma (EMITIDA/ANULADA) no cambia al emitir el PDF.
+    controlCopia: true,
     nombreArchivo: (p) => `Proforma_${p.codigo}.pdf`,
     folio: (p) => p.codigo,
   },

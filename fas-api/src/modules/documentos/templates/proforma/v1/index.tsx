@@ -19,6 +19,8 @@ type Vencimiento = ProformaPdfPayload['vencimientosEstimados'][number]
 const L = {
   EN: {
     titulo: 'PROFORMA INVOICE',
+    borrador: 'DRAFT',
+    copia: 'COPY',
     tituloFactura: 'COMMERCIAL EXPORT INVOICE',
     folio: 'Folio',
     exportador: 'Exporter',
@@ -74,6 +76,8 @@ const L = {
   },
   ES: {
     titulo: 'FACTURA PROFORMA',
+    borrador: 'BORRADOR',
+    copia: 'COPIA',
     tituloFactura: 'FACTURA COMERCIAL DE EXPORTACIÓN',
     folio: 'Folio',
     exportador: 'Exportador',
@@ -190,8 +194,6 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
     <Documento
       titulo={`${titulo} ${d.codigo}`}
       paginaOpts={{ formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' }}
-      marcaAgua={marcaAgua}
-      marcaAguaFecha={marcaAguaFecha}
       piePagina={t.pie}
     >
       <Encabezado
@@ -199,6 +201,10 @@ export function ProformaV1({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
         tituloDocumento={d.variante === 'FACTURA' && d.folio != null ? `${titulo} · ${t.folio} ${d.folio}` : titulo}
         numero={d.codigo}
         fecha={fmt.fecha(d.fechaEmision)}
+        // BORRADOR/COPIA como etiqueta bajo el folio (2026-11-07), no marca de
+        // agua. Solo la Proforma tiene control de copia; la Factura Comercial
+        // (variante FACTURA) nunca recibe marca.
+        marca={marcaAgua ? { tipo: marcaAgua, texto: marcaAgua === 'BORRADOR' ? t.borrador : t.copia, fecha: marcaAguaFecha } : undefined}
       />
 
       <div className='doc-fila-grupos'>

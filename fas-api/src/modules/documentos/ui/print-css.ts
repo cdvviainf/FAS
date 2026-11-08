@@ -71,6 +71,10 @@ export function printCss(pagina: { formato: 'A4' | 'Letter'; orientacion: 'portr
        .doc-folio y quedaba casi ilegible comparado con el N°. */
     .doc-header .doc-folio .doc-titulo { font-size: 16pt; font-weight: 700; margin-bottom: 1mm; }
     .doc-header .doc-folio .doc-numero { font-size: 13pt; font-weight: 700; color: ${T.tinta}; }
+    /* Etiqueta BORRADOR/COPIA (2026-11-07) — mismo estilo que .oc3-estado. */
+    .doc-estado-fila { margin-top: 1.5mm; }
+    .doc-estado { display: inline-flex; align-items: center; gap: 1.5mm; padding: 1.2mm 4mm; border-radius: 1.8mm; font-weight: 800; font-size: 9pt; letter-spacing: 0.4pt; background: #D3E2F0; color: #123E7C; white-space: nowrap; }
+    .doc-estado-fecha { font-weight: 600; font-size: 8pt; margin-left: 1mm; }
 
     /* Encabezado tipo BANNER (2026-10-26, EncabezadoBanner.tsx) — banda superior
        con el logo a la izquierda (50%) y la imagen de la especie a la derecha

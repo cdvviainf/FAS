@@ -33,8 +33,6 @@ export function OrdenCompraMaterialV1({ d, marcaAgua, marcaAguaFecha }: { d: Ord
     <Documento
       titulo={`Orden de Compra de Materiales ${d.numero}`}
       paginaOpts={{ formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' }}
-      marcaAgua={marcaAgua}
-      marcaAguaFecha={marcaAguaFecha}
       piePagina='Frutera Agrosan · Documento generado electrónicamente'
     >
       <Encabezado
@@ -42,6 +40,8 @@ export function OrdenCompraMaterialV1({ d, marcaAgua, marcaAguaFecha }: { d: Ord
         tituloDocumento='Orden de Compra de Materiales'
         numero={d.numero}
         fecha={fmt.fecha(d.fecha)}
+        // BORRADOR/COPIA como etiqueta bajo el folio (2026-11-07), no marca de agua.
+        marca={marcaAgua ? { tipo: marcaAgua, texto: marcaAgua, fecha: marcaAguaFecha } : undefined}
       />
 
       <div className='doc-fila-grupos'>

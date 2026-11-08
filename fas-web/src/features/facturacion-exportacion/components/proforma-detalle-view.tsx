@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -11,6 +12,7 @@ import { Icons } from '@/components/icons'
 import { formatMonto } from '@/lib/format'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { documentosService } from '@/features/documentos/service'
+import { DocumentoPreviewDialog } from '@/features/documentos/components/documento-preview-dialog'
 import { facturasKeys, proformasKeys } from '../queries'
 import { facturaExportacionService, proformaService } from '../service'
 import type { Proforma } from '../types'
@@ -25,6 +27,9 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
   const queryClient = useQueryClient()
   const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
+  // PDF con control de copia (2026-11-07): vista previa BORRADOR + "Emitir
+  // documento" (oficial) en el mismo diálogo que la OC y el Cierre.
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   // Desglose de la cláusula de venta. montoTotal es el valor cláusula/CIF; el
   // flete y el seguro restan para obtener el valor FOB de la mercadería. Cuando
@@ -116,7 +121,7 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
             </Button>
           )}
           {proforma.estado === 'EMITIDA' && (
-            <Button variant='outline' onClick={() => documentosService.abrirPdf('proforma', proforma.id)}>
+            <Button variant='outline' onClick={() => setPreviewOpen(true)}>
               <Icons.download className='mr-2 h-4 w-4' /> Ver PDF
             </Button>
           )}
@@ -193,6 +198,14 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
           </Table>
         </CardContent>
       </Card>
+      <DocumentoPreviewDialog
+        tipo='proforma'
+        id={proforma.id}
+        titulo={`Proforma ${proforma.codigo}`}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        puedeEmitir={puedeEscribir && proforma.estado === 'EMITIDA'}
+      />
     </div>
   )
 }
