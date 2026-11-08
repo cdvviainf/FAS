@@ -105,3 +105,39 @@ export const ocV3Css = `
   .oc3-clausula-texto { color: ${GRIS}; line-height: 1.45; text-align: justify; }
   .oc3-nota { display: flex; gap: 3mm; align-items: center; background: ${FONDO}; border-radius: 2.5mm; padding: 3mm 5mm; margin-top: 4mm; color: ${GRIS}; break-inside: avoid; }
 `
+
+// Cabecera corporativa única (2026-11-08) — banda logo + especie (mismo alto
+// 22 mm en TODOS los documentos), título grande, N° | fecha de emisión y
+// etiqueta Borrador/Copia. La usan CabeceraCorporativa (Cierre v3) y
+// EncabezadoCorporativo (v2 de las plantillas de cabecera simple). Es una copia
+// ampliada de las reglas de cabecera de ocV3Css: ocV3Css NO se toca para que la
+// OC v3 y el Cierre v2 emitidos se reimpriman idénticos (Etapa 4 §8).
+export const cabeceraCorporativaCss = `
+  /* ── Cabecera corporativa (compartida por TODOS los documentos, 2026-11-08) ── */
+  .oc3-cab { margin-bottom: 3mm; }
+  /* Banda: logo y especie con el mismo alto (ALTO_BANDA), imágenes completas. */
+  .oc3-cab-banda { display: flex; justify-content: space-between; align-items: center; height: 22mm; gap: 6mm; }
+  .oc3-cab-logo { height: 100%; display: flex; align-items: center; }
+  .oc3-cab-logo img { height: 100%; max-width: 100mm; object-fit: contain; object-position: left center; display: block; }
+  .oc3-cab-titulo { font-size: 20pt; font-weight: 800; color: ${AZUL}; letter-spacing: 0.3pt; margin-top: 2mm; line-height: 1.1; text-transform: uppercase; }
+  .oc3-cab-numero { font-size: 11pt; color: ${AZUL}; }
+  .oc3-sep { color: ${BORDE}; margin: 0 2mm; }
+  /* Estado (Borrador/Copia) como etiqueta, no marca de agua (2026-11-06):
+     a la derecha del título, azul claro con texto azul marino. */
+  .oc3-cab-titulo-fila { display: flex; align-items: center; justify-content: space-between; gap: 4mm; margin-top: 3mm; }
+  .oc3-cab-titulo-fila .oc3-cab-titulo { margin-top: 0; }
+  .oc3-estado { display: inline-flex; align-items: center; gap: 1.5mm; padding: 1.6mm 5mm; border-radius: 1.8mm; font-weight: 800; font-size: 10.5pt; letter-spacing: 0.4pt; background: #D3E2F0; color: ${AZUL}; white-space: nowrap; }
+  .oc3-estado-fecha { font-weight: 600; font-size: 8.5pt; margin-left: 1mm; }
+  .oc3-estado-fila { margin-top: 1.5mm; }
+  .oc3-estado-fila .oc3-estado { font-size: 9pt; padding: 1.2mm 4mm; }
+  .oc3-cab-especie { height: 100%; display: flex; align-items: center; justify-content: flex-end; }
+  .oc3-cab-especie img { height: 100%; max-width: 90mm; object-fit: contain; object-position: right center; display: block; }
+
+  .oc3-cab-compacta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5mm; padding-bottom: 3mm; }
+  .oc3-cab-compacta .oc3-cab-logo { height: 18mm; }
+  .oc3-cab-compacta-info { text-align: right; color: ${AZUL}; font-size: 10pt; }
+  .oc3-cab-compacta-titulo { font-size: 16pt; font-weight: 800; }
+
+  /* Subtítulo opcional bajo la línea de N°/fecha (ej. "Venta internacional"). */
+  .oc3-cab-subtitulo { font-size: 10pt; letter-spacing: 1.2pt; color: ${AZUL}; margin-top: 0.5mm; }
+`

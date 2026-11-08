@@ -3,7 +3,7 @@ import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek.js'
 import { NotFoundError } from '../../../shared/errors.js'
 import { getInstructivoById } from '../../compras/instructivo-embalaje/instructivo-embalaje.repository.js'
-import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
+import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri, getEspecieImagenDataUri } from '../documentos.repository.js'
 import type { InstructivoEmbalajePdfPayload } from '../schemas/instructivo-embalaje.schema.js'
 import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
@@ -52,7 +52,11 @@ export async function resolverInstructivoEmbalaje(id: number, empresaId: number)
     { pallets: 0, cajas: 0 },
   )
 
+  // Imagen de la especie (primera línea) para la cabecera corporativa (2026-11-08).
+  const especieImagenDataUri = await getEspecieImagenDataUri(instructivo.detalle[0]?.especieId ?? null)
+
   return {
+    especieImagenDataUri,
     empresa: {
       razonSocial: empresa?.razonSocial ?? '—',
       rut: empresa?.rut ?? null,

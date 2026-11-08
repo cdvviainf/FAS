@@ -4,7 +4,7 @@ import {
   getCuotasPagoNotaVenta,
   getProformaById,
 } from '../../ventas/cobranza/proforma.repository.js'
-import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
+import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri, getEspecieImagenDataUri } from '../documentos.repository.js'
 import { factorFob, subtotalFob as calcSubtotalFob, totalClausula, unitarioFob } from '../../ventas/cobranza/clausula-flete-seguro.js'
 import { descripcionLinea } from '../../ventas/cobranza/descripcion-idioma.js'
 import { resolverDatosEmbarqueExport } from './datos-embarque-export.js'
@@ -80,7 +80,11 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
 
   const idioma = proforma.idioma === 'EN' ? 'EN' : 'ES'
 
+  // Imagen de la especie (primera línea) para la cabecera corporativa (2026-11-08).
+  const especieImagenDataUri = await getEspecieImagenDataUri(proforma.lineas[0]?.especieId ?? null)
+
   return {
+    especieImagenDataUri,
     empresa: {
       razonSocial: empresa?.razonSocial ?? '—',
       rut: empresa?.rut ?? null,

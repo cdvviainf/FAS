@@ -4,6 +4,8 @@ import { z } from 'zod'
 // 4, ver documentos.types.ts#controlCopia): no hay distinción borrador/
 // oficial, así que este schema no lleva nada relativo a emisión.
 export const instructivoEmbalajePdfPayloadSchema = z.object({
+  // Imagen de la especie para la banda de la cabecera corporativa (2026-11-08).
+  especieImagenDataUri: z.string().nullable().optional(),
   empresa: z.object({
     razonSocial: z.string(),
     rut: z.string().nullable(),

@@ -6,6 +6,8 @@ import { z } from 'zod'
 // otro documento aún no construido (decisión de Christian, ver el ciclo que
 // aprobó este alcance). Sin control de copia — ver instructivo-embalaje.schema.ts.
 export const solicitudInspeccionPdfPayloadSchema = z.object({
+  // Imagen de la especie para la banda de la cabecera corporativa (2026-11-08).
+  especieImagenDataUri: z.string().nullable().optional(),
   empresa: z.object({
     razonSocial: z.string(),
     rut: z.string().nullable(),

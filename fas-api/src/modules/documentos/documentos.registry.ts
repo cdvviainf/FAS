@@ -6,39 +6,51 @@ import { OrdenCompraV3 } from './templates/orden-compra/v3/index.js'
 import { resolverInstructivoEmbalaje } from './resolvers/instructivo-embalaje.resolver.js'
 import { instructivoEmbalajePdfPayloadSchema } from './schemas/instructivo-embalaje.schema.js'
 import { InstructivoEmbalajeV1 } from './templates/instructivo-embalaje/v1/index.js'
+import { InstructivoEmbalajeV2 } from './templates/instructivo-embalaje/v2/index.js'
 import { resolverSolicitudInspeccion } from './resolvers/solicitud-inspeccion.resolver.js'
 import { solicitudInspeccionPdfPayloadSchema } from './schemas/solicitud-inspeccion.schema.js'
 import { SolicitudInspeccionV1 } from './templates/solicitud-inspeccion/v1/index.js'
+import { SolicitudInspeccionV2 } from './templates/solicitud-inspeccion/v2/index.js'
 import { resolverCierreComercial } from './resolvers/cierre-comercial.resolver.js'
 import { cierreComercialPdfPayloadSchema } from './schemas/cierre-comercial.schema.js'
 import { CierreComercialV1 } from './templates/cierre-comercial/v1/index.js'
 import { CierreComercialV2 } from './templates/cierre-comercial/v2/index.js'
+import { CierreComercialV3 } from './templates/cierre-comercial/v3/index.js'
 import { resolverMovimiento, resolverMovimientoGuiaDespacho } from './resolvers/movimiento.resolver.js'
 import { movimientoPdfPayloadSchema } from './schemas/movimiento.schema.js'
 import { MovimientoV1 } from './templates/movimiento/v1/index.js'
+import { MovimientoV2 } from './templates/movimiento/v2/index.js'
 import { MovimientoGuiaDespachoV1 } from './templates/movimiento-guia-despacho/v1/index.js'
+import { MovimientoGuiaDespachoV2 } from './templates/movimiento-guia-despacho/v2/index.js'
 import { resolverOrdenCompraMaterial } from './resolvers/orden-compra-material.resolver.js'
 import { ordenCompraMaterialPdfPayloadSchema } from './schemas/orden-compra-material.schema.js'
 import { OrdenCompraMaterialV1 } from './templates/orden-compra-material/v1/index.js'
+import { OrdenCompraMaterialV2 } from './templates/orden-compra-material/v2/index.js'
 import { resolverInstructivoEmbarque } from './resolvers/instructivo-embarque.resolver.js'
 import { instructivoEmbarquePdfPayloadSchema } from './schemas/instructivo-embarque.schema.js'
 import { InstructivoEmbarqueV1 } from './templates/instructivo-embarque/v1/index.js'
+import { InstructivoEmbarqueV2 } from './templates/instructivo-embarque/v2/index.js'
 import { resolverProforma } from './resolvers/proforma.resolver.js'
 import { resolverFacturaExportacion } from './resolvers/factura-exportacion.resolver.js'
 import { proformaPdfPayloadSchema } from './schemas/proforma.schema.js'
 import { ProformaV1 } from './templates/proforma/v1/index.js'
+import { ProformaV2 } from './templates/proforma/v2/index.js'
 import { resolverFichaProductor } from './resolvers/ficha-productor.resolver.js'
 import { fichaProductorPdfPayloadSchema } from './schemas/ficha-productor.schema.js'
 import { FichaProductorV1 } from './templates/ficha-productor/v1/index.js'
+import { FichaProductorV2 } from './templates/ficha-productor/v2/index.js'
 import { resolverProformaProductor } from './resolvers/proforma-productor.resolver.js'
 import { proformaProductorPdfPayloadSchema } from './schemas/proforma-productor.schema.js'
 import { ProformaProductorV1 } from './templates/proforma-productor/v1/index.js'
+import { ProformaProductorV2 } from './templates/proforma-productor/v2/index.js'
 import { resolverProformaMaterial } from './resolvers/proforma-material.resolver.js'
 import { proformaMaterialPdfPayloadSchema } from './schemas/proforma-material.schema.js'
 import { ProformaMaterialV1 } from './templates/proforma-material/v1/index.js'
+import { ProformaMaterialV2 } from './templates/proforma-material/v2/index.js'
 import { resolverDocumentoManual } from './resolvers/documento-manual.resolver.js'
 import { documentoManualPdfPayloadSchema } from './schemas/documento-manual.schema.js'
 import { DocumentoManualV1 } from './templates/documento-manual/v1/index.js'
+import { DocumentoManualV2 } from './templates/documento-manual/v2/index.js'
 import type { DocumentRegistry } from './documentos.types.js'
 
 // Registro central — Etapa 4 §4: "un solo lugar donde se declara todo".
@@ -49,8 +61,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Ficha de Productor',
     resolver: resolverFichaProductor,
     schema: fichaProductorPdfPayloadSchema,
-    plantillaActual: 'v1',
-    plantillas: { v1: FichaProductorV1 },
+    plantillaActual: 'v2',
+    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
+    plantillas: { v1: FichaProductorV1, v2: FichaProductorV2 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     // Mismo ítem que gatea el listado/ficha del productor (productores.routes.ts).
     itemMenu: 'PROD_FICHA',
@@ -63,8 +76,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Proforma de Servicios a Productor',
     resolver: resolverProformaProductor,
     schema: proformaProductorPdfPayloadSchema,
-    plantillaActual: 'v1',
-    plantillas: { v1: ProformaProductorV1 },
+    plantillaActual: 'v2',
+    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
+    plantillas: { v1: ProformaProductorV1, v2: ProformaProductorV2 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'PRODUCTORES_PROFORMA',
     // Previsualización para revisar antes de aceptar/rechazar — sin emisión oficial.
@@ -76,8 +90,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Proforma de Venta de Materiales',
     resolver: resolverProformaMaterial,
     schema: proformaMaterialPdfPayloadSchema,
-    plantillaActual: 'v1',
-    plantillas: { v1: ProformaMaterialV1 },
+    plantillaActual: 'v2',
+    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
+    plantillas: { v1: ProformaMaterialV1, v2: ProformaMaterialV2 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'MATERIALES_PROFORMA',
     controlCopia: false,
@@ -90,8 +105,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Documento Manual (Generador DTE)',
     resolver: resolverDocumentoManual,
     schema: documentoManualPdfPayloadSchema,
-    plantillaActual: 'v1',
-    plantillas: { v1: DocumentoManualV1 },
+    plantillaActual: 'v2',
+    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
+    plantillas: { v1: DocumentoManualV1, v2: DocumentoManualV2 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'GENERADOR_DTE',
     controlCopia: false,
@@ -118,8 +134,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Instructivo de Embalaje',
     resolver: resolverInstructivoEmbalaje,
     schema: instructivoEmbalajePdfPayloadSchema,
-    plantillaActual: 'v1',
-    plantillas: { v1: InstructivoEmbalajeV1 },
+    plantillaActual: 'v2',
+    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
+    plantillas: { v1: InstructivoEmbalajeV1, v2: InstructivoEmbalajeV2 },
     pagina: { formato: 'A4', orientacion: 'landscape', margen: '14mm 12mm 16mm' },
     itemMenu: 'COMPRAS_INSTRUCTIVO',
     // Solo previsualizar y descargar, sin marca de agua — sin versión oficial
@@ -132,8 +149,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Solicitud de Inspección',
     resolver: resolverSolicitudInspeccion,
     schema: solicitudInspeccionPdfPayloadSchema,
-    plantillaActual: 'v1',
-    plantillas: { v1: SolicitudInspeccionV1 },
+    plantillaActual: 'v2',
+    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
+    plantillas: { v1: SolicitudInspeccionV1, v2: SolicitudInspeccionV2 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     // Any-of: LECTURA en cualquiera de los dos ítems habilita ver/descargar —
     // mismo criterio que ya usan las rutas de detalle de Solicitud
@@ -149,8 +167,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     schema: cierreComercialPdfPayloadSchema,
     // v2 (2026-11-06): formato corporativo "Sales Order", bilingüe. v1 se
     // conserva para reimpresiones (regla de versionado, Etapa 4 §4).
-    plantillaActual: 'v2',
-    plantillas: { v1: CierreComercialV1, v2: CierreComercialV2 },
+    plantillaActual: 'v3',
+    // v3 = cabecera corporativa única (2026-11-08); v1/v2 se conservan para reimpresiones.
+    plantillas: { v1: CierreComercialV1, v2: CierreComercialV2, v3: CierreComercialV3 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '10mm 10mm 14mm' },
     itemMenu: 'VENTAS_NV',
     controlCopia: true,
@@ -161,8 +180,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Movimiento de Materiales',
     resolver: resolverMovimiento,
     schema: movimientoPdfPayloadSchema,
-    plantillaActual: 'v1',
-    plantillas: { v1: MovimientoV1 },
+    plantillaActual: 'v2',
+    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
+    plantillas: { v1: MovimientoV1, v2: MovimientoV2 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'OPER_MATERIALES',
     controlCopia: true,
@@ -175,8 +195,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Guía de Despacho (interna)',
     resolver: resolverMovimientoGuiaDespacho,
     schema: movimientoPdfPayloadSchema,
-    plantillaActual: 'v1',
-    plantillas: { v1: MovimientoGuiaDespachoV1 },
+    plantillaActual: 'v2',
+    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
+    plantillas: { v1: MovimientoGuiaDespachoV1, v2: MovimientoGuiaDespachoV2 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'OPER_MATERIALES',
     controlCopia: true,
@@ -187,8 +208,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Orden de Compra de Materiales',
     resolver: resolverOrdenCompraMaterial,
     schema: ordenCompraMaterialPdfPayloadSchema,
-    plantillaActual: 'v1',
-    plantillas: { v1: OrdenCompraMaterialV1 },
+    plantillaActual: 'v2',
+    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
+    plantillas: { v1: OrdenCompraMaterialV1, v2: OrdenCompraMaterialV2 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'MATERIALES_OC',
     controlCopia: true,
@@ -199,8 +221,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Instructivo de Embarque',
     resolver: resolverInstructivoEmbarque,
     schema: instructivoEmbarquePdfPayloadSchema,
-    plantillaActual: 'v1',
-    plantillas: { v1: InstructivoEmbarqueV1 },
+    plantillaActual: 'v2',
+    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
+    plantillas: { v1: InstructivoEmbarqueV1, v2: InstructivoEmbarqueV2 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'VENTAS_EMBARQUES',
     // Un documento por InstructivoHijo (Planta), regenerable en cualquier
@@ -214,8 +237,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Proforma de Exportación',
     resolver: resolverProforma,
     schema: proformaPdfPayloadSchema,
-    plantillaActual: 'v1',
-    plantillas: { v1: ProformaV1 },
+    plantillaActual: 'v2',
+    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
+    plantillas: { v1: ProformaV1, v2: ProformaV2 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'FACT_EXPORTACION',
     // Control de copia (2026-11-07, supersede el criterio anterior "sin
@@ -234,8 +258,9 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Factura Comercial de Exportación',
     resolver: resolverFacturaExportacion,
     schema: proformaPdfPayloadSchema, // misma forma de payload que la Proforma
-    plantillaActual: 'v1',
-    plantillas: { v1: ProformaV1 }, // reusa la plantilla (variante='FACTURA')
+    plantillaActual: 'v2',
+    // reusa la plantilla (variante='FACTURA'); v2 = cabecera corporativa (2026-11-08).
+    plantillas: { v1: ProformaV1, v2: ProformaV2 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'FACT_EXPORTACION',
     controlCopia: false,

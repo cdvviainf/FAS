@@ -3,7 +3,7 @@ import { getFacturaActivaById } from '../../ventas/cobranza/factura-exportacion.
 import { factorFob, subtotalFob as calcSubtotalFob, totalClausula, unitarioFob } from '../../ventas/cobranza/clausula-flete-seguro.js'
 import { descripcionLinea } from '../../ventas/cobranza/descripcion-idioma.js'
 import { esFacturaTimbrada } from '../../ventas/cobranza/sii-estado.js'
-import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
+import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri, getEspecieImagenDataUri } from '../documentos.repository.js'
 import { resolverDatosEmbarqueExport } from './datos-embarque-export.js'
 import { montoEnPalabras } from '../ui/monto-en-palabras.js'
 import type { ProformaPdfPayload } from '../schemas/proforma.schema.js'
@@ -53,7 +53,11 @@ export async function resolverFacturaExportacion(id: number, empresaId: number):
     fechaEstimada: c.fechaVencimiento ? new Date(c.fechaVencimiento).toISOString() : null,
   }))
 
+  // Imagen de la especie (primera línea) para la cabecera corporativa (2026-11-08).
+  const especieImagenDataUri = await getEspecieImagenDataUri(factura.lineas[0]?.especieId ?? null)
+
   return {
+    especieImagenDataUri,
     empresa: {
       razonSocial: empresa?.razonSocial ?? '—',
       rut: empresa?.rut ?? null,

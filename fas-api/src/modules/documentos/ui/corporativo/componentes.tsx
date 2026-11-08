@@ -48,4 +48,40 @@ export function EtiquetaEstado({ marca, textoBorrador, textoCopia }: { marca?: M
   )
 }
 
+// Cabecera corporativa única (2026-11-08): banda con logo (izq.) e imagen de la
+// especie (der.) del mismo alto, sin recortar; debajo el TIPO DE DOCUMENTO en
+// grande con la etiqueta Borrador/Copia a la derecha, y bajo el título el N° y
+// la fecha de emisión. Subtítulo opcional (ej. "Venta internacional", el
+// responsable). Estilos: cabeceraCorporativaCss (estilos.ts).
+export function CabeceraCorporativa(props: {
+  logoDataUri?: string | null
+  especieImagenDataUri?: string | null
+  titulo: string
+  etiquetaNumero: string
+  numero: string
+  etiquetaFecha: string
+  fecha: string
+  subtitulo?: string | null
+  marca?: MarcaEstado
+  textoBorrador: string
+  textoCopia: string
+}) {
+  return (
+    <header className='oc3-cab'>
+      <div className='oc3-cab-banda'>
+        <div className='oc3-cab-logo'>{props.logoDataUri && <img src={props.logoDataUri} alt='' />}</div>
+        <div className='oc3-cab-especie'>{props.especieImagenDataUri && <img src={props.especieImagenDataUri} alt='' />}</div>
+      </div>
+      <div className='oc3-cab-titulo-fila'>
+        <div className='oc3-cab-titulo'>{props.titulo}</div>
+        <EtiquetaEstado marca={props.marca} textoBorrador={props.textoBorrador} textoCopia={props.textoCopia} />
+      </div>
+      <div className='oc3-cab-numero'>
+        <strong>{props.etiquetaNumero} {props.numero}</strong> <span className='oc3-sep'>|</span> {props.etiquetaFecha}: {props.fecha}
+      </div>
+      {props.subtitulo ? <div className='oc3-cab-subtitulo'>{props.subtitulo}</div> : null}
+    </header>
+  )
+}
+
 export { ICONOS, type NombreIcono }

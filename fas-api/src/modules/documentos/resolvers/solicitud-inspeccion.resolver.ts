@@ -1,6 +1,6 @@
 import { NotFoundError } from '../../../shared/errors.js'
 import { getSolicitudById } from '../../calidad/solicitudes/solicitudes.repository.js'
-import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
+import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri, getEspecieImagenDataUri } from '../documentos.repository.js'
 import type { SolicitudInspeccionPdfPayload } from '../schemas/solicitud-inspeccion.schema.js'
 import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
@@ -57,7 +57,11 @@ export async function resolverSolicitudInspeccion(id: number, empresaId: number)
     solicitud.direccion.pais?.descripcion,
   ].filter(Boolean).join(', ')
 
+  // Imagen de la especie (primera línea) para la cabecera corporativa (2026-11-08).
+  const especieImagenDataUri = await getEspecieImagenDataUri(solicitud.lineas[0]?.especie.id ?? null)
+
   return {
+    especieImagenDataUri,
     empresa: {
       razonSocial: empresa?.razonSocial ?? '—',
       rut: empresa?.rut ?? null,

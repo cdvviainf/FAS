@@ -1,6 +1,6 @@
 import { NotFoundError } from '../../../shared/errors.js'
 import { getInstructivoHijoConDetalle } from '../../ventas/embarques/embarques.repository.js'
-import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
+import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri, getEspecieImagenDataUri } from '../documentos.repository.js'
 import type { InstructivoEmbarquePdfPayload } from '../schemas/instructivo-embarque.schema.js'
 import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
@@ -62,7 +62,11 @@ export async function resolverInstructivoEmbarque(id: number, empresaId: number)
     }),
   )
 
+  // Imagen de la especie (primera línea) para la cabecera corporativa (2026-11-08).
+  const especieImagenDataUri = await getEspecieImagenDataUri(pallets[0]?.lineas[0]?.especie.id ?? null)
+
   return {
+    especieImagenDataUri,
     empresa: {
       razonSocial: empresa?.razonSocial ?? '—',
       rut: empresa?.rut ?? null,

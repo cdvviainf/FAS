@@ -18,6 +18,8 @@ const actorCompletoSchema = z.object({
 // #controlCopia), mismo criterio que el Instructivo de Embalaje: no hay
 // distinción borrador/oficial.
 export const instructivoEmbarquePdfPayloadSchema = z.object({
+  // Imagen de la especie para la banda de la cabecera corporativa (2026-11-08).
+  especieImagenDataUri: z.string().nullable().optional(),
   empresa: z.object({
     razonSocial: z.string(),
     rut: z.string().nullable(),

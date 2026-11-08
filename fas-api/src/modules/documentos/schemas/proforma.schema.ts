@@ -5,6 +5,8 @@ import { z } from 'zod'
 // requiere folio SII ni CAF"), con control de copia (se envía al cliente,
 // admite reimpresión con marca de agua igual que la OC).
 export const proformaPdfPayloadSchema = z.object({
+  // Imagen de la especie para la banda de la cabecera corporativa (2026-11-08).
+  especieImagenDataUri: z.string().nullable().optional(),
   empresa: z.object({
     razonSocial: z.string(),
     rut: z.string().nullable(),
