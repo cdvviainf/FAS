@@ -140,6 +140,11 @@ export interface MantenedorConfig {
   // combo pero no administrarlo (p. ej. Generador DTE lee monedas). Mismo
   // criterio de "lectura por cualquiera de los ítems involucrados" de cobranza.md.
   lecturaItemsAdicionales?: string[]
+  // Lectura (list/getById) para CUALQUIER usuario autenticado, sin ítem de menú.
+  // Solo para maestros transversales a todas las transacciones (Temporada,
+  // 2026-11-08: el selector global de temporada lo usan todos los perfiles).
+  // Escritura sigue exigiendo TOTAL en itemCodigo.
+  lecturaAutenticados?: boolean
   tienePaisOrigen?: boolean
   schemaKey?: string     // para selección de schema en controller
 }

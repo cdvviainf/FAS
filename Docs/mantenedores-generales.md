@@ -382,3 +382,5 @@ Contrato **actual** del cargador general (`/api/config/carga-maestros`): el bot�
 - [ ] Tests CA1–CA11 en verde.
 - [ ] Menú Configuración (según perfil) con la pantalla genérica operativa.
 - [ ] Schema incorporado al `CLAUDE.md` global.
+
+> **Temporada — lectura para todos (2026-11-08, decisión de Christian).** La temporada es el concepto de temporalidad de todas las transacciones: `GET /api/config/temporadas`, `GET /api/config/temporadas/:id` y `GET /api/config/temporadas/predeterminada` los puede leer **cualquier usuario autenticado** (selector global de temporada y filtros por temporada). Crear/editar/eliminar siguen exigiendo `CONFIG_TEMPORADAS` con nivel TOTAL.

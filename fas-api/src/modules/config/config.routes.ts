@@ -60,7 +60,10 @@ const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'moneda', prefixRuta: 'monedas', label: 'Moneda', itemCodigo: 'CONFIG_MONEDAS', schemaKey: 'moneda', lecturaItemsAdicionales: ['GENERADOR_DTE'] },
   { modelo: 'conceptoCtaCte', prefixRuta: 'conceptos-cta-cte', label: 'Concepto Cta. Cte.', itemCodigo: 'CONFIG_CONCEPTOS_CTA_CTE', schemaKey: 'conceptoCtaCte' },
   // Lote 4
-  { modelo: 'temporada', prefixRuta: 'temporadas', label: 'Temporada', itemCodigo: 'CONFIG_TEMPORADAS', schemaKey: 'temporada' },
+  // Temporada: concepto de temporalidad de todas las transacciones → la lee
+  // cualquier usuario autenticado (selector global, filtros por temporada).
+  // Administrarla sigue exigiendo CONFIG_TEMPORADAS TOTAL (2026-11-08).
+  { modelo: 'temporada', prefixRuta: 'temporadas', label: 'Temporada', itemCodigo: 'CONFIG_TEMPORADAS', schemaKey: 'temporada', lecturaAutenticados: true },
   { modelo: 'bodega', prefixRuta: 'bodegas', label: 'Bodega', itemCodigo: 'CONFIG_BODEGAS', schemaKey: 'bodega' },
 ]
 
@@ -90,7 +93,8 @@ export async function configRoutes(app: FastifyInstance) {
   app.get('/me/empresas', { preHandler: [requireAuth] }, getMisEmpresas)
 
   // Ruta especial: temporada predeterminada (antes del loop para evitar que :id capture "predeterminada")
-  app.get('/temporadas/predeterminada', { preHandler: [requireAuth, requireLevel('CONFIG_TEMPORADAS', 'LECTURA')] }, getTemporadaPredeterminada)
+  // Cualquier usuario autenticado (temporada = concepto transversal, 2026-11-08).
+  app.get('/temporadas/predeterminada', { preHandler: [requireAuth] }, getTemporadaPredeterminada)
 
   for (const cfg of MANTENEDORES) {
     const ctrl = makeControllers(cfg.modelo, cfg.schemaKey)
@@ -100,9 +104,11 @@ export async function configRoutes(app: FastifyInstance) {
     const guardLectura = cfg.lecturaItemsAdicionales?.length
       ? requireAnyLevel([item, ...cfg.lecturaItemsAdicionales], 'LECTURA')
       : requireLevel(item, 'LECTURA')
+    // lecturaAutenticados: basta con estar autenticado para leer.
+    const preLectura = cfg.lecturaAutenticados ? [requireAuth] : [requireAuth, guardLectura]
 
-    app.get(`/${cfg.prefixRuta}`, { preHandler: [requireAuth, guardLectura] }, ctrl.list)
-    app.get(`/${cfg.prefixRuta}/:id`, { preHandler: [requireAuth, guardLectura] }, ctrl.getById)
+    app.get(`/${cfg.prefixRuta}`, { preHandler: preLectura }, ctrl.list)
+    app.get(`/${cfg.prefixRuta}/:id`, { preHandler: preLectura }, ctrl.getById)
     app.post(`/${cfg.prefixRuta}`, { preHandler: [requireAuth, requireLevel(item, 'TOTAL')] }, ctrl.create)
     app.patch(`/${cfg.prefixRuta}/:id`, { preHandler: [requireAuth, requireLevel(item, 'TOTAL')] }, ctrl.update)
     app.delete(`/${cfg.prefixRuta}/:id`, { preHandler: [requireAuth, requireLevel(item, 'TOTAL')] }, ctrl.remove)

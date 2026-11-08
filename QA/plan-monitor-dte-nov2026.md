@@ -43,3 +43,30 @@ Dentro de Facturación, un monitor de documentos electrónicos: por ahora solo l
 - Zona horaria: **decisión del usuario** — los límites del día se calculan en `America/Santiago` (offset −03/−04
   tomado al mediodía del día), independiente de la TZ del servidor.
 - Apertura del PDF con `window.open` tras await: se mantiene (mismo patrón que el resto de la app).
+
+## Ajuste 2026-11-08 (pedido del usuario)
+- Fechas por defecto = inicio y término de la temporada activa (`fechaInicio`/`fechaTermino` del listado de
+  temporadas que ya usa el `TemporadaProvider`). Al cambiar la temporada se reaplica su rango (el usuario puede
+  ajustarlo a mano). La consulta espera a conocer las fechas de la temporada para no listar todo primero; si la
+  temporada no aparece en el listado, no bloquea.
+
+## QA ronda 3 (2026-11-08)
+- FAS-MDTE-R3-002 (Media): el rango por temporada dependía de `CONFIG_TEMPORADAS`. **Decisión del usuario:** la
+  temporada es un concepto transversal a todas las transacciones → **lectura de temporadas para cualquier usuario
+  autenticado**: `GET /api/config/temporadas`, `GET /api/config/temporadas/:id` y `GET /api/config/temporadas/predeterminada`
+  solo exigen `requireAuth` (flag `lecturaAutenticados` en `MantenedorConfig`). Crear/editar/eliminar siguen con
+  `CONFIG_TEMPORADAS` TOTAL. Arregla también el selector global de temporada para perfiles sin ese ítem.
+- Monitor: si las temporadas no cargan (error) o la temporada activa no aparece, no se bloquea la consulta y se
+  muestra el aviso "No se pudo cargar la temporada; filtra por fechas manualmente".
+
+## QA ronda 4 (2026-11-08)
+- FAS-MDTE-R4-003 (Media): tras aplicar una temporada, cambiar a otra ausente (o el reset por cambio de empresa)
+  conservaba el rango anterior → corregido: el rango queda asociado a la temporada para la que se calculó
+  (`rango.clave`). Si la temporada actual (o null) no coincide, la consulta se deshabilita hasta resolver: con
+  fechas → se aplican; sin temporada / ausente / error → fechas en blanco + aviso. Mientras el provider
+  reinicializa (`isLoading`) o el listado de temporadas carga/refresca, no se resuelve ni se consulta.
+
+## QA ronda 5 + arbitraje (2026-11-08)
+- FAS-MDTE-R5-004 (Media, árbitro: BUG_REAL): en el primer render tras cambiar de empresa se podía consultar con
+  el rango anterior → corregido: la vigencia del rango es por **empresa + temporada** (`rango.empresaId` +
+  `rango.clave`), y la query solo se habilita con `rangoVigente && !resolviendo`.

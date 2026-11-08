@@ -11,6 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Icons } from '@/components/icons'
 import { formatFechaCorta, formatMonto } from '@/lib/format'
+import { useTemporada } from '@/contexts/temporada-context'
+import { useEmpresa } from '@/contexts/empresa-context'
+import { createMantenedorQueries } from '@/features/mantenedor-simple/queries'
 import { monitorDteKeys, monitorDteService } from '../service'
 import { ESTADO_SII_LABELS, TIPOS_DTE, type EstadoSiiDte, type MonitorDteFila } from '../types'
 
@@ -21,6 +24,11 @@ const ESTADO_VARIANT: Record<EstadoSiiDte, 'default' | 'secondary' | 'destructiv
 }
 
 const TODOS = '__all__'
+
+// Mismo listado que usa el TemporadaProvider (comparte caché): de ahí salen las
+// fechas de inicio/término de la temporada activa.
+const temporadasQueries = createMantenedorQueries('temporadas')
+type TemporadaConFechas = { id: number; fechaInicio?: string | null; fechaTermino?: string | null }
 
 // Monitor DTE (2026-11-07): documentos electrónicos firmados (todos los orígenes)
 // con su veredicto del SII; descarga de XML y PDF timbrado; consulta del estado.
@@ -34,6 +42,52 @@ export function MonitorDteClient() {
   const [receptor, setReceptor] = useState('')
   const [page, setPage] = useState(1)
   const limit = 20
+
+  // Rango por defecto = fechas de la temporada activa (2026-11-08). Al cambiar la
+  // temporada (o la empresa) se descarta el rango anterior y se aplica el de la
+  // nueva; el usuario puede ajustarlo a mano. El rango queda asociado a la
+  // temporada para la que se calculó (`rango.clave`), así nunca se consulta con
+  // las fechas de otra temporada (FAS-MDTE-R4-003). Se ajusta el estado durante
+  // el render (patrón de React para derivar estado de un contexto), no en un efecto.
+  const { temporada, isLoading: temporadaCargando } = useTemporada()
+  // La empresa activa es parte de la identidad del rango (FAS-MDTE-R5-004): al
+  // cambiar de empresa el rango anterior deja de ser vigente desde el primer
+  // render, antes de que el TemporadaProvider limpie su estado en su efecto.
+  const { empresaActiva } = useEmpresa()
+  const empresaId = empresaActiva?.id ?? null
+  const {
+    data: temporadasData,
+    isError: temporadasError,
+    isFetching: temporadasFetching,
+  } = useQuery(temporadasQueries.listOptions({ limit: 100, soloActivos: true }))
+  const clave = temporada?.id ?? null
+  const temporadaFechas = temporada
+    ? ((temporadasData?.data ?? []) as TemporadaConFechas[]).find((t) => t.id === temporada.id) ?? null
+    : null
+  // undefined = aún no se resolvió ningún rango.
+  const [rango, setRango] = useState<{ empresaId: number | null; clave: number | null; sinRango: boolean } | undefined>(undefined)
+  const rangoVigente = rango !== undefined && rango.empresaId === empresaId && rango.clave === clave
+  // Datos aún no disponibles para resolver el rango de la temporada actual: el
+  // provider reinicializando (p. ej. cambio de empresa) o el listado cargando.
+  const resolviendo = temporadaCargando || (!temporadasError && (temporadasData == null || temporadasFetching))
+  if (!rangoVigente && !resolviendo) {
+    if (temporadaFechas) {
+      setFechaDesde(temporadaFechas.fechaInicio?.slice(0, 10) ?? '')
+      setFechaHasta(temporadaFechas.fechaTermino?.slice(0, 10) ?? '')
+      setRango({ empresaId, clave, sinRango: false })
+    } else {
+      // Sin temporada activa, temporada fuera del listado o error de carga: no
+      // se arrastran las fechas anteriores; se avisa y se filtra a mano.
+      setFechaDesde('')
+      setFechaHasta('')
+      setRango({ empresaId, clave, sinRango: true })
+    }
+    setPage(1)
+  }
+  // No se consulta hasta tener el rango vigente de la empresa y temporada actuales,
+  // ni mientras el provider se reinicializa o el listado de temporadas carga.
+  const esperandoTemporada = !rangoVigente || resolviendo
+  const sinRangoTemporada = rangoVigente && rango.sinRango
 
   const filtros = {
     page,
@@ -49,6 +103,7 @@ export function MonitorDteClient() {
     queryKey: monitorDteKeys.list(filtros),
     queryFn: () => monitorDteService.list(filtros),
     placeholderData: keepPreviousData,
+    enabled: !esperandoTemporada,
   })
   const filas = data?.data ?? []
   const totalPages = data?.meta.totalPages ?? 1
@@ -132,6 +187,12 @@ export function MonitorDteClient() {
           <Input placeholder='RUT o razón social…' className='w-56' value={receptor} onChange={(e) => reset(setReceptor)(e.target.value)} />
         </div>
       </div>
+
+      {sinRangoTemporada && (
+        <p className='rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800'>
+          No se pudo cargar la temporada; filtra por fechas manualmente.
+        </p>
+      )}
 
       {isPending ? (
         <p className='text-muted-foreground text-sm'>Cargando...</p>
