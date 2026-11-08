@@ -6,6 +6,7 @@ import { env } from '../../../config/env.js'
 import { getEmpresasActivas } from './pago.repository.js'
 import { getFacturasNacionalEnviadasSii } from './factura-nacional.repository.js'
 import { getFacturasExportacionEnviadasSii } from './factura-exportacion.repository.js'
+import { getDocumentosDteSiiPendientes } from '../../finanzas/facturacion/dte-emitidos.repository.js'
 
 // Seguimiento automático del veredicto del SII, POR DOCUMENTO. Al timbrar, una
 // factura (Nacional o Exportación) queda ENVIADA_SII; el SII tarda minutos/horas
@@ -14,10 +15,12 @@ import { getFacturasExportacionEnviadasSii } from './factura-exportacion.reposit
 // APROBADA/RECHAZADA — ahí termina su ciclo. El botón manual "Consultar estado
 // SII" se conserva como disparo inmediato.
 //
-// Solo aplica a Factura Nacional (33/34) y Exportación (110): son los únicos DTE
-// con veredicto asíncrono. NC y Guías (52) se resuelven en el acto de emitir.
+// Factura Nacional (33/34) y Exportación (110) siguen por su estado ENVIADA_SII.
+// Desde el Monitor DTE (2026-11-07) también se sigue el veredicto de guías (52) y
+// notas de crédito (61/112) con el tipo 'documento-dte': ahí `facturaId` es el id
+// del DocumentoDte y el estado vive en documentos_dte.estadoSii.
 
-export type TipoSeguimientoSii = 'factura-nacional' | 'factura-exportacion'
+export type TipoSeguimientoSii = 'factura-nacional' | 'factura-exportacion' | 'documento-dte'
 type VeredictoSii = 'ACEPTADO' | 'RECHAZADO' | 'PENDIENTE'
 
 // Handler por tipo: la función consultarEstadoSii(id) del módulo correspondiente.
@@ -136,10 +139,15 @@ export async function reencolarSeguimientosPendientes() {
   let total = 0
   for (const e of empresas) {
     const pendientes = await empresaContext.run({ empresaId: e.id }, async () => {
-      const [nac, exp] = await Promise.all([getFacturasNacionalEnviadasSii(), getFacturasExportacionEnviadasSii()])
+      const [nac, exp, docs] = await Promise.all([
+        getFacturasNacionalEnviadasSii(),
+        getFacturasExportacionEnviadasSii(),
+        getDocumentosDteSiiPendientes(),
+      ])
       return [
         ...nac.map((f) => ({ tipo: 'factura-nacional' as const, facturaId: f.id, empresaId: f.empresaId })),
         ...exp.map((f) => ({ tipo: 'factura-exportacion' as const, facturaId: f.id, empresaId: f.empresaId })),
+        ...docs.map((d) => ({ tipo: 'documento-dte' as const, facturaId: d.id, empresaId: d.empresaId })),
       ]
     })
     for (const p of pendientes) {

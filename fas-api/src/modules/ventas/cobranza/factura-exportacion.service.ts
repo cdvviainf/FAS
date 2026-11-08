@@ -968,6 +968,8 @@ export async function consultarEstadoSii(id: number) {
   }
   const { veredicto, glosa } = interpretarEstadoSii(r.data)
   logger.info({ facturaId: id, folio: factura.folio, veredicto }, 'Factura exportación: estado SII consultado')
+  // Monitor DTE (2026-11-07): el veredicto también queda en el DocumentoDte.
+  await dteService.registrarEstadoSii(ORIGEN_TIPO, factura.id, veredicto, glosa)
   if (veredicto === 'RECHAZADO') {
     const actualizada = await repo.marcarRechazada(factura.id, glosa)
     return { factura: actualizada, sii: { veredicto, glosa } }

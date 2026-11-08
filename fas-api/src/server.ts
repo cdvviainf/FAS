@@ -5,6 +5,7 @@ import { iniciarWorkerCobranza, programarVencimientosDiarios } from './modules/v
 import { iniciarWorkerSeguimientoSii, reencolarSeguimientosPendientes, type HandlersSii } from './modules/ventas/cobranza/dte-seguimiento-sii.queue.js'
 import * as facturaNacionalService from './modules/ventas/cobranza/factura-nacional.service.js'
 import * as facturaExportacionService from './modules/ventas/cobranza/factura-exportacion.service.js'
+import * as monitorDteService from './modules/finanzas/monitor-dte/monitor-dte.service.js'
 import { buildApp } from './app.js'
 
 const app = await buildApp()
@@ -36,6 +37,8 @@ await programarVencimientosDiarios()
 const handlersSii: HandlersSii = {
   'factura-nacional': (id) => facturaNacionalService.consultarEstadoSii(id),
   'factura-exportacion': (id) => facturaExportacionService.consultarEstadoSii(id),
+  // Guías y notas de crédito (Monitor DTE): `id` = DocumentoDte.id.
+  'documento-dte': (id) => monitorDteService.consultarEstadoSii(id),
 }
 const workerSeguimientoSii = iniciarWorkerSeguimientoSii(handlersSii)
 workerSeguimientoSii.on('failed', (job, err) => {

@@ -38,6 +38,8 @@ const itemsMenu: Array<{ codigo: string; nombre: string; grupo: string; seccion:
   { codigo: 'VENTAS_COBRANZA', nombre: 'Cobranza / CRM', grupo: 'Gestión Comercial', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/cobranza', tipo: 'PANTALLA', orden: 2330 },
   // Generador DTE — digitación manual de documentos electrónicos (2026-11-04).
   { codigo: 'GENERADOR_DTE', nombre: 'Generador DTE', grupo: 'Gestión Comercial', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/generador-dte', tipo: 'PANTALLA', orden: 2340 },
+  // Monitor DTE — documentos electrónicos firmados y su estado SII (2026-11-07).
+  { codigo: 'FACT_MONITOR_DTE', nombre: 'Monitor DTE', grupo: 'Gestión Comercial', seccion: 'Facturación y Cobranza', ruta: '/dashboard/facturacion/monitor-dte', tipo: 'PANTALLA', orden: 2345 },
 
   // ── Operaciones › Materiales ────────────────────────────────────────────
   // OPER_MATERIALES queda para Movimientos de Materiales (operación); Artículos/

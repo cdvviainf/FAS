@@ -227,7 +227,42 @@ export async function marcarGenerado(
       generadoEn: new Date(),
       errorMensaje: null,
       actualizadoPor,
+      // Recién firmado: el veredicto del SII llega después (Monitor DTE).
+      estadoSii: 'PENDIENTE',
+      estadoSiiGlosa: null,
+      estadoSiiConsultadoEn: null,
     },
+  })
+}
+
+// ─── Estado SII (Monitor DTE, 2026-11-07) ───────────────────────────────────
+
+// Persiste el veredicto del SII en el DocumentoDte del origen. Solo toca filas
+// GENERADO (firmadas). Scoped a la empresa activa por la extensión de tenancy.
+export async function registrarEstadoSii(
+  origenTipo: string,
+  origenId: number,
+  veredicto: 'PENDIENTE' | 'ACEPTADO' | 'RECHAZADO',
+  glosa: string | null,
+) {
+  return prisma.documentoDte.updateMany({
+    where: { origenTipo, origenId, estado: 'GENERADO' },
+    data: { estadoSii: veredicto, estadoSiiGlosa: glosa ? glosa.slice(0, 2000) : null, estadoSiiConsultadoEn: new Date() },
+  })
+}
+
+// DTE firmados sin veredicto del SII que NO son facturas (guías y notas de
+// crédito) — las facturas tienen su propio seguimiento por estado ENVIADA_SII.
+// Para el resync de arranque del seguimiento automático (bajo empresaContext).
+export async function getDocumentosDteSiiPendientes() {
+  return prisma.documentoDte.findMany({
+    where: {
+      estado: 'GENERADO',
+      estadoSii: 'PENDIENTE',
+      folio: { not: null },
+      origenTipo: { notIn: ['factura-nacional', 'factura-exportacion'] },
+    },
+    select: { id: true, empresaId: true },
   })
 }
 

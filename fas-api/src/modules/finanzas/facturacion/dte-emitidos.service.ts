@@ -1,9 +1,11 @@
 import type { Prisma } from '@prisma/client'
 import { env } from '../../../config/env.js'
 import { ValidationError } from '../../../shared/errors.js'
+import { logger } from '../../../lib/logger.js'
 import * as repo from './dte-emitidos.repository.js'
 import * as libredte from './libredte.adapter.js'
 import type { LibredteDtePayload } from './libredte.types.js'
+import { encolarSeguimientoSii } from '../../ventas/cobranza/dte-seguimiento-sii.queue.js'
 
 export interface EmitirDteTemporalInput {
   origenTipo: string
@@ -189,7 +191,32 @@ export async function generarDteReal(input: GenerarDteRealInput) {
     )
   }
   const xml = extraerXml(resultado.data)
-  return repo.marcarGenerado(doc.id, folio, resultado.data ?? null, input.creadoPor, xml)
+  const generado = await repo.marcarGenerado(doc.id, folio, resultado.data ?? null, input.creadoPor, xml)
+  // Seguimiento automático del veredicto SII para guías y notas de crédito
+  // (Monitor DTE, 2026-11-07). Las facturas encolan el suyo al pasar a
+  // ENVIADA_SII. Best-effort: un fallo al encolar no revierte el timbrado.
+  if (!ORIGENES_FACTURA.has(input.origenTipo)) {
+    try {
+      await encolarSeguimientoSii({ tipo: 'documento-dte', facturaId: generado.id, empresaId: generado.empresaId })
+    } catch (err) {
+      // Queda la consulta manual desde el Monitor DTE y el resync de arranque.
+      logger.warn({ documentoDteId: generado.id, err: err instanceof Error ? err.message : String(err) }, 'Seguimiento SII: no se pudo encolar la guía/NC')
+    }
+  }
+  return generado
+}
+
+// Orígenes con seguimiento SII propio (estado ENVIADA_SII en su tabla).
+export const ORIGENES_FACTURA = new Set(['factura-nacional', 'factura-exportacion'])
+
+// Persiste el veredicto del SII en el DocumentoDte del origen (Monitor DTE).
+export async function registrarEstadoSii(
+  origenTipo: string,
+  origenId: number,
+  veredicto: 'PENDIENTE' | 'ACEPTADO' | 'RECHAZADO',
+  glosa: string | null,
+) {
+  await repo.registrarEstadoSii(origenTipo, origenId, veredicto, glosa)
 }
 
 // Extrae el XML timbrado de la respuesta de generar (getXML=1). LibreDTE suele

@@ -5615,6 +5615,14 @@ enum EstadoDocumentoDte {
   ERROR // el intento más reciente falló (ver errorMensaje)
 }
 
+// Veredicto del SII sobre un DTE firmado (Monitor DTE, 2026-11-07). Null mientras
+// el documento no está GENERADO.
+enum EstadoSiiDte {
+  PENDIENTE
+  ACEPTADO
+  RECHAZADO
+}
+
 model DocumentoDte {
   id        Int     @id @default(autoincrement())
   empresaId Int
@@ -5637,6 +5645,12 @@ model DocumentoDte {
   xml              String? // XML timbrado (getXML=1) — para descarga del documento
   generadoEn       DateTime?
 
+  // Veredicto del SII (Monitor DTE, 2026-11-07): PENDIENTE al firmar; lo actualiza
+  // "Consultar estado SII" (monitor, detalle de factura) y el seguimiento automático.
+  estadoSii             EstadoSiiDte?
+  estadoSiiGlosa        String?
+  estadoSiiConsultadoEn DateTime?
+
   creadoEn       DateTime  @default(now())
   creadoPor      String
   actualizadoEn  DateTime? @updatedAt
@@ -5645,6 +5659,7 @@ model DocumentoDte {
   // A lo más un DocumentoDte por origen — reintentar tras ERROR actualiza
   // esta misma fila, no duplica (emitirTemporal no consume folio).
   @@unique([empresaId, origenTipo, origenId])
+  @@index([empresaId, estado, generadoEn])
   @@map("documentos_dte")
 }
 

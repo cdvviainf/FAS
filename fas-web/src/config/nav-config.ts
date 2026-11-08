@@ -71,6 +71,7 @@ export const navGroups: NavGroup[] = [
           { title: 'Facturación Exportación', url: '/dashboard/facturacion/exportacion',   icon: 'post'    },
           { title: 'Facturación Nacional',    url: '/dashboard/facturacion/nacional',      icon: 'post'    },
           { title: 'Generador DTE',           url: '/dashboard/facturacion/generador-dte', icon: 'post'    },
+          { title: 'Monitor DTE',             url: '/dashboard/facturacion/monitor-dte',   icon: 'search'  },
           { title: 'Cobranza / CRM',          url: '/dashboard/facturacion/cobranza',      icon: 'billing' }
         ]
       }
