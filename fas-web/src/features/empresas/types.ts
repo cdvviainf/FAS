@@ -70,6 +70,11 @@ export interface EmpresaDetalle {
   notaTerminosOcEs: string | null
   notaTerminosOcEn: string | null
   clausulasOc: ClausulaOc[]
+  // Recuadro "Reclamos" del PDF de Cierre Comercial v2 (2026-11-06).
+  reclamosCierreEs: string | null
+  reclamosCierreEn: string | null
+  reclamosCierreRefEs: string | null
+  reclamosCierreRefEn: string | null
 }
 
 export type IconoClausula = 'CALIDAD' | 'INOCUIDAD' | 'COSTOS' | 'TRIBUTARIO' | 'EMBARQUE' | 'ACEPTACION' | 'DOCUMENTO' | 'INFO'
@@ -102,6 +107,7 @@ export interface TerminosOcInput {
   notaEs: string | null
   notaEn: string | null
   clausulas: ClausulaOcInput[]
+  reclamosCierre?: { textoEs: string | null; textoEn: string | null; refEs: string | null; refEn: string | null }
 }
 
 export interface EmpresaListResponse {

@@ -10,23 +10,33 @@ const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: 
 const includeDetalle = {
   cliente: { select: entidadSelect },
   exportador: { select: entidadSelect },
-  notaCalidadHasta: { select: { id: true, codigo: true, descripcion: true, orden: true } },
-  notaCondicionHasta: { select: { id: true, codigo: true, descripcion: true, orden: true } },
-  responsableVenta: { select: { id: true, nombre: true, email: true } },
+  notaCalidadHasta: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true, orden: true } },
+  notaCondicionHasta: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true, orden: true } },
+  // whatsapp: teléfono del vendedor en el PDF Cierre v2 (2026-11-06).
+  responsableVenta: { select: { id: true, nombre: true, email: true, whatsapp: true } },
   compradorContacto: { select: { id: true, nombre: true, email: true, telefono: true, whatsapp: true } },
   notify: { select: entidadSelect },
   consignatario: { select: entidadSelect },
-  tipoEmbarque: { select: { id: true, codigo: true, descripcion: true } },
-  mercado: { select: { id: true, codigo: true, descripcion: true } },
-  paisDestino: { select: { id: true, codigo: true, descripcion: true } },
-  puertoDestino: { select: { id: true, codigo: true, descripcion: true } },
-  direccion: { select: { id: true, codigo: true, direccion: true } },
+  tipoEmbarque: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
+  mercado: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
+  paisDestino: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
+  puertoDestino: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
+  // comuna/región/país: dirección completa del comprador en el PDF Cierre v2.
+  direccion: {
+    select: {
+      id: true, codigo: true, direccion: true,
+      comuna: { select: { descripcion: true, provincia: { select: { region: { select: { descripcion: true } } } } } },
+      pais: { select: { descripcion: true, descripcionExtranjera: true } },
+    },
+  },
   moneda: { select: { id: true, codigo: true, descripcion: true } },
-  modalidadVenta: { select: { id: true, codigo: true, descripcion: true } },
-  clausulaVenta: { select: { id: true, codigo: true, descripcion: true } },
-  tipoFlete: { select: { id: true, codigo: true, descripcion: true } },
-  tipoBl: { select: { id: true, codigo: true, descripcion: true } },
+  modalidadVenta: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
+  // requiereSeguro: el PDF v2 deriva "Seguro: Incluido / No incluido".
+  clausulaVenta: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true, requiereSeguro: true } },
+  tipoFlete: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
+  tipoBl: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
   condicionPago: { select: { id: true, codigo: true, descripcion: true } },
+  formaPago: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
   cuotasPago: {
     include: {
       moneda: { select: { id: true, codigo: true, descripcion: true } },
@@ -35,14 +45,15 @@ const includeDetalle = {
   },
   detalles: {
     include: {
-      especie: { select: { id: true, codigo: true, descripcion: true } },
-      variedad: { select: { id: true, codigo: true, descripcion: true } },
-      articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
-      etiqueta: { select: { id: true, codigo: true, descripcion: true } },
-      categoria: { select: { id: true, codigo: true, descripcion: true } },
-      tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
-      calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true, orden: true } } } },
+      especie: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
+      variedad: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
+      articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true, descripcionExtranjera: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
+      etiqueta: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
+      categoria: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
+      tipoPallet: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
+      calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true, orden: true } } } },
     },
+    orderBy: { id: 'asc' as const },
   },
 }
 
@@ -368,6 +379,7 @@ export async function duplicarNotaVenta(origenId: number, creadoPor: string, res
         tipoFleteId: origen.tipoFleteId,
         tipoBlId: origen.tipoBlId,
         condicionPagoId: origen.condicionPagoId,
+        formaPagoId: origen.formaPagoId,
         monedaId: origen.monedaId,
         observaciones: origen.observaciones,
         contratoNaviero: origen.contratoNaviero,
@@ -676,6 +688,10 @@ export async function esRelacionDeCliente(clienteId: number, entidadId: number, 
 
 export async function getContactoDeEntidad(contactoId: number, entidadId: number) {
   return prisma.entidadContacto.findFirst({ where: { id: contactoId, entidadId, eliminadoEn: null } })
+}
+
+export async function getFormaPago(id: number) {
+  return prisma.formaPago.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
 }
 
 export async function getCondicionPago(id: number) {

@@ -59,7 +59,7 @@ const PAGINA_A4_LANDSCAPE = { ancho: 1123, alto: 794 }
 // amplía a medida que cada plantilla migra a su v2 bilingüe. Los demás (incluidos
 // Proforma/Factura, que usan el idioma guardado en su registro) no muestran el
 // toggle para no prometer un cambio que no ocurre (FAS-DOC-IDI-R1-001).
-const TIPOS_CON_IDIOMA = new Set(['orden-compra'])
+const TIPOS_CON_IDIOMA = new Set(['orden-compra', 'cierre-comercial'])
 
 // Motor de Documentos — visor de preview (Etapa 4 §9, Sprint A: "iframe con
 // páginas A4 y sombra"). Es el MISMO HTML que Playwright fotografía para el

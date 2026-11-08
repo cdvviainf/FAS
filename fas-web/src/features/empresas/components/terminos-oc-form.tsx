@@ -31,6 +31,13 @@ export function TerminosOcForm({ empresa }: { empresa: EmpresaDetalle }) {
   )
   const [notaEs, setNotaEs] = useState(empresa.notaTerminosOcEs ?? '')
   const [notaEn, setNotaEn] = useState(empresa.notaTerminosOcEn ?? '')
+  // Reclamos del Cierre Comercial (2026-11-06): texto + línea de referencia, ES/EN.
+  const [reclamos, setReclamos] = useState({
+    textoEs: empresa.reclamosCierreEs ?? '',
+    textoEn: empresa.reclamosCierreEn ?? '',
+    refEs: empresa.reclamosCierreRefEs ?? '',
+    refEn: empresa.reclamosCierreRefEn ?? '',
+  })
   const [error, setError] = useState<string | null>(null)
 
   const mutation = useMutation({
@@ -39,9 +46,15 @@ export function TerminosOcForm({ empresa }: { empresa: EmpresaDetalle }) {
         notaEs: notaEs.trim() || null,
         notaEn: notaEn.trim() || null,
         clausulas: clausulas.map((c) => ({ ...c, tituloEs: c.tituloEs.trim(), textoEs: c.textoEs.trim(), tituloEn: c.tituloEn.trim(), textoEn: c.textoEn.trim() })),
+        reclamosCierre: {
+          textoEs: reclamos.textoEs.trim() || null,
+          textoEn: reclamos.textoEn.trim() || null,
+          refEs: reclamos.refEs.trim() || null,
+          refEn: reclamos.refEn.trim() || null,
+        },
       }),
     onSuccess: () => {
-      toast.success('Términos de la Orden de Compra guardados')
+      toast.success('Términos de documentos guardados')
       queryClient.invalidateQueries({ queryKey: empresasKeys.detail(empresa.id) })
     },
     onError: (e: Error) => toast.error(e.message || 'Error al guardar los términos'),
@@ -74,10 +87,11 @@ export function TerminosOcForm({ empresa }: { empresa: EmpresaDetalle }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className='text-base'>Términos de la Orden de Compra</CardTitle>
+        <CardTitle className='text-base'>Términos de documentos</CardTitle>
         <CardDescription>
-          Hoja de Términos y Condiciones del PDF de Orden de Compra, en español e inglés. Sin cláusulas, la OC sale sin
-          esa hoja. Usa <code>{'{empresa}'}</code> para insertar la razón social de la empresa.
+          Términos y Condiciones del PDF de Orden de Compra (sin cláusulas, la OC sale sin esa hoja) y recuadro de
+          Reclamos del Cierre Comercial, en español e inglés. En las cláusulas, <code>{'{empresa}'}</code> inserta la razón
+          social de la empresa.
         </CardDescription>
       </CardHeader>
       <CardContent className='space-y-4'>
@@ -143,11 +157,34 @@ export function TerminosOcForm({ empresa }: { empresa: EmpresaDetalle }) {
           </div>
         </div>
 
+        <div className='space-y-3 border-t pt-4'>
+          <div>
+            <p className='text-sm font-semibold'>Reclamos — Cierre Comercial</p>
+            <p className='text-xs text-muted-foreground'>
+              Recuadro «Reclamos / Claims» del PDF del Cierre Comercial. Sin texto, el recuadro no se muestra.
+            </p>
+          </div>
+          <div className='grid gap-3 md:grid-cols-2'>
+            <div className='space-y-1.5'>
+              <Label>Texto (español)</Label>
+              <Textarea value={reclamos.textoEs} onChange={(e) => setReclamos((r) => ({ ...r, textoEs: e.target.value }))} disabled={soloLectura} rows={4} maxLength={3000} />
+              <Label>Referencia (español)</Label>
+              <Input value={reclamos.refEs} onChange={(e) => setReclamos((r) => ({ ...r, refEs: e.target.value }))} disabled={soloLectura} maxLength={300} placeholder='Protocolo de Reclamos — Ver documento adjunto' />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Texto (inglés)</Label>
+              <Textarea value={reclamos.textoEn} onChange={(e) => setReclamos((r) => ({ ...r, textoEn: e.target.value }))} disabled={soloLectura} rows={4} maxLength={3000} />
+              <Label>Referencia (inglés)</Label>
+              <Input value={reclamos.refEn} onChange={(e) => setReclamos((r) => ({ ...r, refEn: e.target.value }))} disabled={soloLectura} maxLength={300} placeholder='Claim Protocol — See attached document' />
+            </div>
+          </div>
+        </div>
+
         {error && <p className='text-xs text-destructive'>{error}</p>}
         {!soloLectura && (
           <div className='flex justify-end'>
             <Button type='button' onClick={guardar} isLoading={mutation.isPending}>
-              <Icons.check className='mr-1 h-4 w-4' /> Guardar términos
+              <Icons.check className='mr-1 h-4 w-4' /> Guardar
             </Button>
           </div>
         )}

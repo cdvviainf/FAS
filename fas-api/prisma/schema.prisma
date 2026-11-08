@@ -213,6 +213,13 @@ model Empresa {
   // (2026-11-06, plantilla v3), por idioma. Ver EmpresaClausulaOc.
   notaTerminosOcEs String?
   notaTerminosOcEn String?
+  // Recuadro "Reclamos / Claims" del PDF de Cierre Comercial v2 (2026-11-06):
+  // texto y línea de referencia (ej. protocolo adjunto), por idioma. Sin texto,
+  // no se muestra el recuadro.
+  reclamosCierreEs    String?
+  reclamosCierreEn    String?
+  reclamosCierreRefEs String?
+  reclamosCierreRefEn String?
   activo         Boolean   @default(true)
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -737,6 +744,7 @@ model FormaPago {
   ordenesCompraMaterial OrdenCompraMaterial[]
   proformasMaterial     ProformaMaterial[]
   proformasProductor    ProformaProductor[]
+  notasVenta            NotaVenta[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -3350,6 +3358,9 @@ model NotaVenta {
   // CondicionPago pasa a ser tenant en Fase 3 lote Compras — FK compuesta.
   condicionPagoId Int?
   condicionPago   CondicionPago?       @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
+  // Forma de pago (2026-11-06, PDF Cierre v2 "Payment Method"), como OrdenCompra.
+  formaPagoId     Int?
+  formaPago       FormaPago?           @relation(fields: [empresaId, formaPagoId], references: [empresaId, id])
   cuotasPago      NotaVentaCuotaPago[]
 
   monedaId Int
@@ -3400,6 +3411,7 @@ model NotaVenta {
   @@index([exportadorId])
   @@index([fecha])
   @@index([condicionPagoId])
+  @@index([formaPagoId])
   @@index([empresaId])
   @@index([responsableVentaId])
   @@map("notas_venta")

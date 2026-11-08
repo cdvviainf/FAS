@@ -18,7 +18,7 @@ export const FECHA_REFERENCIA_LABEL: Record<string, string> = {
 // Artículo (2026-11-05): en ES usa su descripción comercial (fallback a
 // descripcion) — el helper es inocuo para los demás mantenedores.
 type Traducible = { descripcion: string; descripcionExtranjera?: string | null; descripcionComercial?: string | null }
-function valorIdioma(o: Traducible | null | undefined, idioma: 'ES' | 'EN'): string | null {
+export function valorIdioma(o: Traducible | null | undefined, idioma: 'ES' | 'EN'): string | null {
   if (!o) return null
   const base = descripcionComercialArticulo(o)
   return idioma === 'EN' ? (o.descripcionExtranjera?.trim() || base) : base
@@ -32,12 +32,12 @@ function valorIdioma(o: Traducible | null | undefined, idioma: 'ES' | 'EN'): str
 // endpoint normal de OC no expone (RUT, dirección por defecto).
 // Dirección completa en líneas (v3, 2026-11-06): calle · "comuna, región" · país
 // (país en el idioma del documento). Sin datos → arreglo vacío.
-interface DireccionDoc {
+export interface DireccionDoc {
   direccion: string
   comuna: { descripcion: string; provincia: { region: { descripcion: string } } } | null
   pais: { descripcion: string; descripcionExtranjera: string | null } | null
 }
-function lineasDireccion(d: DireccionDoc | undefined, idioma: 'ES' | 'EN'): string[] {
+export function lineasDireccion(d: DireccionDoc | undefined, idioma: 'ES' | 'EN'): string[] {
   if (!d) return []
   const zona = [d.comuna?.descripcion, d.comuna?.provincia.region.descripcion].filter(Boolean).join(', ')
   const pais = d.pais ? (idioma === 'EN' ? d.pais.descripcionExtranjera?.trim() || d.pais.descripcion : d.pais.descripcion) : ''

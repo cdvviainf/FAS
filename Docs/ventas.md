@@ -601,3 +601,13 @@ Basadas en el sistema legado (screenshots):
 - **Embarques** (e Instructivo de Embarque / Packing) heredan la temporada del Cierre: `GET /api/ventas/embarques?temporadaId=` filtra por `notaVenta.temporadaId`.
 - `GET /api/ventas/notas-venta?temporadaId=` filtra por temporada. Los listados web envían la temporada activa y se refrescan al cambiarla.
 - Migración `20261106150000_temporada_documentos`: todos los Cierres existentes (de prueba) quedan en la temporada `25-26` de su empresa (si no existe: predeterminada → NULL).
+
+## Revisión 2026-11-06 — PDF Cierre Comercial v2 (formato corporativo "Sales Order")
+
+> Plan: `QA/plan-cierre-pdf-v2-nov2026.md`. Supersede el PDF v1 (se conserva para reimpresiones) y la decisión del 2026-11-05 de quitar pesos bruto/totales del PDF.
+
+- Bilingüe ES/EN (toggle de idioma en la vista previa). Misma línea gráfica que la OC v3 (`ui/corporativo/`).
+- Secciones: cabecera (banda logo + especie, "Orden de Venta / Sales Order", subtítulo Venta Internacional/Nacional, N° y fecha, etiqueta Borrador/Copia), Vendedor/Exportador (contacto = responsable de venta: nombre, email, whatsapp), Comprador/Cliente (código interno, dirección del Cierre + detalle, contacto comprador), Condiciones comerciales (Incoterm, Destino, Mercado, Moneda, Calidad/Condición hasta), Condiciones de pago (Forma de pago, Condición de pago), Notify/Consignatario, Detalle (con peso bruto/caja y pesos totales), Embarque y condiciones de venta (Puerto de descarga, Destino final, Embalaje = tipos de pallet, Flete, Seguro derivado de `ClausulaVenta.requiereSeguro`, Tipo de venta) + recuadro Reclamos de la empresa, Instrucciones adicionales y firmas (**firma PNG del responsable de venta** sobre la línea del vendedor).
+- Sin Nave, Naviera, Fecha estimada de zarpe, Puerto de carga ni Versión (decisión del usuario).
+- `NotaVenta.formaPagoId` (FK a `FormaPago`), editable en el form, copiado al duplicar. El mantenedor Formas de Pago se puede leer con `VENTAS_NV`/`COMPRAS_OC`.
+- Migración `20261106210000_cierre_pdf_v2` (forma de pago + textos de Reclamos por empresa, sembrados para `AGROSAN`).

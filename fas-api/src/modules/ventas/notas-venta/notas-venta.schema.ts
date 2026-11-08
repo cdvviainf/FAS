@@ -27,6 +27,8 @@ export const notaVentaCreateSchema = z.object({
   // Se propone como valor por defecto al generar cada Embarque (editable ahí).
   tipoBlId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
+  // Forma de pago (2026-11-06, PDF Cierre v2).
+  formaPagoId: z.number().int().positive().optional().nullable(),
   monedaId: z.number().int().positive('La moneda es requerida'),
   observaciones: z.string().max(1000).trim().optional().nullable(),
   // Contrato naviero (solo informativo): AGROSAN_AGL (por defecto) o CLIENTE.

@@ -248,3 +248,11 @@ export async function getTerminosOc(empresaId: number) {
   ])
   return { notaEs: empresa?.notaTerminosOcEs ?? null, notaEn: empresa?.notaTerminosOcEn ?? null, clausulas }
 }
+
+// Recuadro "Reclamos" del PDF de Cierre Comercial v2 (2026-11-06), por idioma.
+export async function getReclamosCierre(empresaId: number) {
+  return prisma.empresa.findFirst({
+    where: { id: empresaId, eliminadoEn: null },
+    select: { reclamosCierreEs: true, reclamosCierreEn: true, reclamosCierreRefEs: true, reclamosCierreRefEn: true },
+  })
+}

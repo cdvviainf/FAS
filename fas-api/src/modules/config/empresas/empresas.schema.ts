@@ -122,6 +122,14 @@ export const terminosOcSchema = z.object({
   notaEs: z.string().max(2000).trim().nullable().optional(),
   notaEn: z.string().max(2000).trim().nullable().optional(),
   clausulas: z.array(clausulaOcSchema).max(20, 'Máximo 20 cláusulas'),
+  // Recuadro "Reclamos" del PDF de Cierre Comercial v2 (2026-11-06). Opcional:
+  // si no viene, no se toca lo guardado.
+  reclamosCierre: z.object({
+    textoEs: z.string().max(3000).trim().nullable().optional(),
+    textoEn: z.string().max(3000).trim().nullable().optional(),
+    refEs: z.string().max(300).trim().nullable().optional(),
+    refEn: z.string().max(300).trim().nullable().optional(),
+  }).optional(),
 })
 
 export type EmpresaCreateInput = z.infer<typeof empresaCreateSchema>

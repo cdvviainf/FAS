@@ -62,3 +62,31 @@ visual en la OC).
 
 - Una hoja A4 con ~5 líneas; con más, el detalle continúa en la hoja siguiente.
 - Mover estilos de OC v3 a módulo compartido: verificar que el PDF de la OC no cambie.
+
+## Estado de implementación (2026-11-06)
+
+Implementado por Claude, pendiente QA Codex. Ajustes respecto al plan:
+- Reclamos se guardan con el mismo `PUT /api/config/empresas/:id/terminos-oc` (campo opcional
+  `reclamosCierre`); la pestaña de Empresa se renombra "Términos de documentos".
+- Estilos/íconos/componentes base se movieron de `templates/orden-compra/v3/` a `ui/corporativo/`
+  (`estilos.ts`, `iconos.ts`, `componentes.tsx`); el PDF de la OC v3 queda idéntico (verificado byte a byte
+  con datos de ejemplo).
+- Formas de Pago: `lecturaItemsAdicionales: ['VENTAS_NV', 'COMPRAS_OC']` para poder usar el combo.
+- Vista previa: `cierre-comercial` agregado a `TIPOS_CON_IDIOMA` (toggle ES/EN).
+- Calibres en rango en EN: "From X to Y".
+Archivos: migración `20261106210000_cierre_pdf_v2`; `ventas/notas-venta` (schema, types, service, repository
+includeDetalle con descripcionExtranjera/whatsapp/dirección completa/formaPago, duplicar); `config/empresas`;
+`config/config.routes.ts`; `documentos` (schema, resolver, `templates/cierre-comercial/v2`, registry,
+`documentos.repository.ts getReclamosCierre`, `resolvers/orden-compra.resolver.ts` exporta helpers);
+fas-web: `nota-venta-form.tsx` (Forma de Pago), `notas-venta/types.ts`, `empresas` (types, terminos-oc-form,
+empresa-form), `documento-preview-dialog.tsx`.
+Render verificado con datos de ejemplo (5 líneas): 1 hoja A4 ES y EN.
+
+## QA Codex (2026-11-07)
+
+- Ronda 1 NO_APROBADO: R1-001 calidad/condición "hasta" sin traducir en EN; R1-002 Notify/Consignatario con
+  descripción en vez de razón social → corregidos.
+- Ronda 2 APROBADO_CON_OBSERVACIONES: R2-003 (Baja) imagen de especie por menor ID → corregido (detalles
+  ordenados por id, se usa la especie de la primera línea).
+- Ronda 3 APROBADO. Tests ronda 3: `TESTS_OK` (fallos de `ventas-compras.integration.test.ts` y ESLint global
+  preexistentes en main).

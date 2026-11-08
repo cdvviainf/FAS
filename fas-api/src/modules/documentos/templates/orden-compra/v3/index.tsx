@@ -1,8 +1,8 @@
 import { Documento } from '../../../ui/Documento.js'
 import { fmt } from '../../../ui/formato.js'
 import type { OrdenCompraPdfPayload } from '../../../schemas/orden-compra.schema.js'
-import { ocV3Css } from './estilos.js'
-import { ICONOS, type NombreIcono } from './iconos.js'
+import { ocV3Css } from '../../../ui/corporativo/estilos.js'
+import { Icono, Seccion, Fila, Lineas, EtiquetaEstado as EtiquetaEstadoBase, type MarcaEstado, type NombreIcono } from '../../../ui/corporativo/componentes.js'
 
 // v3 (2026-11-06, QA/plan-oc-pdf-v3-nov2026.md): formato corporativo
 // (Docs/Orden de Compra Corporativa de Frutas.png). Hoja 1: cabecera con logo +
@@ -65,49 +65,8 @@ const T = {
 
 type Labels = (typeof T)[Idioma]
 
-function Icono({ nombre }: { nombre: NombreIcono }) {
-  return <span className='oc3-icono' dangerouslySetInnerHTML={{ __html: ICONOS[nombre] }} />
-}
-
-function Seccion({ titulo, icono, children, className }: { titulo: string; icono?: NombreIcono; children: React.ReactNode; className?: string }) {
-  return (
-    <section className={`oc3-seccion ${className ?? ''}`}>
-      <div className='oc3-seccion-titulo'>
-        {icono && <Icono nombre={icono} />}
-        {titulo}
-      </div>
-      <div className='oc3-seccion-cuerpo'>{children}</div>
-    </section>
-  )
-}
-
-function Fila({ label, valor }: { label: string; valor: React.ReactNode }) {
-  return (
-    <div className='oc3-fila'>
-      <div className='oc3-fila-label'>{label}</div>
-      <div className='oc3-fila-valor'>{valor}</div>
-    </div>
-  )
-}
-
-function Lineas({ lineas }: { lineas: string[] }) {
-  if (lineas.length === 0) return <>—</>
-  return <>{lineas.map((l, i) => <div key={i}>{l}</div>)}</>
-}
-
-// Estado del documento como etiqueta junto al N° (2026-11-06): reemplaza la
-// marca de agua diagonal. BORRADOR = preview no emitido; COPIA = reimpresión
-// (con la fecha de reimpresión). Documento emitido → sin etiqueta.
-type MarcaEstado = { tipo: 'BORRADOR' | 'COPIA'; fecha?: string }
 function EtiquetaEstado({ marca, L }: { marca?: MarcaEstado; L: Labels }) {
-  if (!marca) return null
-  const esBorrador = marca.tipo === 'BORRADOR'
-  return (
-    <span className={`oc3-estado ${esBorrador ? 'oc3-estado--borrador' : 'oc3-estado--copia'}`}>
-      {esBorrador ? L.borrador : L.copia}
-      {!esBorrador && marca.fecha ? <span className='oc3-estado-fecha'>{marca.fecha}</span> : null}
-    </span>
-  )
+  return <EtiquetaEstadoBase marca={marca} textoBorrador={L.borrador} textoCopia={L.copia} />
 }
 
 // Cabecera completa (hoja 1) o compacta (hoja 2 y siguientes).

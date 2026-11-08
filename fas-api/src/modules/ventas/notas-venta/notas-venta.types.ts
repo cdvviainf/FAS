@@ -25,6 +25,7 @@ export interface NotaVentaCreateInput {
   tipoFleteId?: number | null
   tipoBlId?: number | null
   condicionPagoId?: number | null
+  formaPagoId?: number | null
   monedaId: number
   observaciones?: string | null
   contratoNaviero?: 'AGROSAN_AGL' | 'CLIENTE'

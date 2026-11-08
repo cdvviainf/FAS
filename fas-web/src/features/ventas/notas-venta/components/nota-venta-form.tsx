@@ -47,6 +47,7 @@ import type { CalibreModo, NotaVentaCreateInput, NotaVentaDetalleCreateInput, No
 type OpcionRelacion = { id: number; label: string }
 
 const tiposEmbarqueService = createMantenedorService('tipos-embarque')
+const formasPagoService = createMantenedorService('formas-pago')
 const mercadosService = createMantenedorService('mercados')
 const paisesService = createMantenedorService('paises')
 const puertosService = createMantenedorService('puertos')
@@ -84,6 +85,8 @@ interface HeaderFields {
   tipoFleteId: number | null
   tipoBlId: number | null
   condicionPagoId: number | null
+  // Forma de pago (2026-11-06, PDF Cierre v2).
+  formaPagoId: number | null
   observaciones: string
   contratoNaviero: 'AGROSAN_AGL' | 'CLIENTE'
   // Calidad / Condición "hasta" (2026-11-05). null = sin restricción.
@@ -114,6 +117,7 @@ const HEADER_EMPTY: HeaderFields = {
   tipoFleteId: null,
   tipoBlId: null,
   condicionPagoId: null,
+  formaPagoId: null,
   observaciones: '',
   contratoNaviero: 'AGROSAN_AGL',
   notaCalidadHastaId: null,
@@ -251,6 +255,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   const { data: calibresData } = useQuery({ queryKey: ['calibres-options', linea.especieId], queryFn: () => calibresService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
   const { data: tiposPalletData } = useQuery({ queryKey: ['tipos-pallet-options'], queryFn: () => tiposPalletService.list({ limit: 200 }), staleTime: 5 * 60_000 })
   const { data: articulosData } = useQuery({ queryKey: ['articulos-embalaje-options'], queryFn: () => articulosService.list({ limit: 500, tipo: 'EMBALAJE', activo: true }), staleTime: 60_000 })
+  const { data: formasPagoData } = useQuery({ queryKey: ['formas-pago-options'], queryFn: () => formasPagoService.list({ limit: 200, soloActivos: true }), staleTime: 5 * 60_000 })
   const { data: condicionesPagoData } = useQuery({ queryKey: ['condiciones-pago-options', 'VENTA'], queryFn: () => condicionesPagoService.list({ tipo: 'VENTA' }), staleTime: 60_000 })
 
   const { data: tiposParametroData } = useQuery({ queryKey: ['tipos-parametro-options'], queryFn: () => tiposParametroService.list({ limit: 200 }), staleTime: 5 * 60_000 })
@@ -387,6 +392,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
         tipoFleteId: d.tipoFleteId,
         tipoBlId: d.tipoBlId,
         condicionPagoId: d.condicionPagoId,
+        formaPagoId: d.formaPagoId ?? null,
         observaciones: d.observaciones ?? '',
         contratoNaviero: d.contratoNaviero ?? 'AGROSAN_AGL',
         notaCalidadHastaId: d.notaCalidadHastaId ?? null,
@@ -477,6 +483,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       tipoFleteId: fields.tipoFleteId,
       tipoBlId: fields.tipoBlId,
       condicionPagoId: fields.condicionPagoId,
+      formaPagoId: fields.formaPagoId,
       observaciones: fields.observaciones.trim() || undefined,
       contratoNaviero: fields.contratoNaviero,
     }
@@ -1059,6 +1066,18 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                   <SelectItem value='none'>Sin definir</SelectItem>
                   {(incotermsData?.data ?? []).map((p) => (
                     <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Forma de Pago</Label>
+              <Select value={fields.formaPagoId ? String(fields.formaPagoId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, formaPagoId: v === 'none' ? null : Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none'>Sin definir</SelectItem>
+                  {(formasPagoData?.data ?? []).filter((fp) => !fp.bloqueado || fp.id === fields.formaPagoId).map((fp) => (
+                    <SelectItem key={fp.id} value={String(fp.id)}>{fp.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

@@ -307,10 +307,19 @@ export async function eliminarLogo(empresaId: number) {
 export async function reemplazarTerminosOc(empresaId: number, input: TerminosOcInput, userId: string) {
   const empresa = await repo.findEmpresaById(empresaId)
   if (!empresa) throw new NotFoundError('Empresa', String(empresaId))
+  const vacioANull = (t: string | null | undefined) => t?.trim() || null
+  const reclamosCierre = input.reclamosCierre
+    ? {
+        textoEs: vacioANull(input.reclamosCierre.textoEs),
+        textoEn: vacioANull(input.reclamosCierre.textoEn),
+        refEs: vacioANull(input.reclamosCierre.refEs),
+        refEn: vacioANull(input.reclamosCierre.refEn),
+      }
+    : undefined
   const clausulas = await repo.reemplazarTerminosOc(
     empresaId,
-    { notaEs: input.notaEs?.trim() || null, notaEn: input.notaEn?.trim() || null, clausulas: input.clausulas },
+    { notaEs: vacioANull(input.notaEs), notaEn: vacioANull(input.notaEn), clausulas: input.clausulas, reclamosCierre },
     userId,
   )
-  return { notaTerminosOcEs: input.notaEs?.trim() || null, notaTerminosOcEn: input.notaEn?.trim() || null, clausulasOc: clausulas }
+  return { notaTerminosOcEs: vacioANull(input.notaEs), notaTerminosOcEn: vacioANull(input.notaEn), clausulasOc: clausulas, reclamosCierre }
 }

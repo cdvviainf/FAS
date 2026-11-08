@@ -5,6 +5,33 @@ import { z } from 'zod'
 // number. CON control de copia (documentos.types.ts#controlCopia) — tiene
 // versión BORRADOR y Emitir/reimpresión, igual que la Orden de Compra.
 export const cierreComercialPdfPayloadSchema = z.object({
+  // ─── v2 (2026-11-06, QA/plan-cierre-pdf-v2-nov2026.md) ─────────────────────
+  // Bilingüe: los textos de catálogo ya vienen en el idioma (descripcionExtranjera).
+  idioma: z.enum(['ES', 'EN']),
+  especieImagenDataUri: z.string().nullable(),
+  tipoVenta: z.enum(['EXPORTACION', 'NACIONAL']),
+  // Vendedor / Exportador: dirección completa + contacto = responsable de venta.
+  vendedor: z.object({
+    razonSocial: z.string(),
+    rut: z.string().nullable(),
+    direccionLineas: z.array(z.string()),
+    contacto: z.object({ nombre: z.string().nullable(), email: z.string().nullable(), telefono: z.string().nullable() }),
+  }),
+  // Comprador / Cliente: código interno, dirección del Cierre, contacto comprador.
+  comprador: z.object({
+    razonSocial: z.string(),
+    codigo: z.string().nullable(),
+    direccionLineas: z.array(z.string()),
+    contacto: z.object({ nombre: z.string().nullable(), email: z.string().nullable(), telefono: z.string().nullable() }),
+  }),
+  formaPago: z.string().nullable(),
+  // Derivado de la Cláusula de Venta (requiereSeguro). null = sin cláusula.
+  seguroIncluido: z.boolean().nullable(),
+  // Tipos de pallet distintos de las líneas (Embalaje / Packaging).
+  embalaje: z.string().nullable(),
+  // Recuadro Reclamos de la empresa en el idioma del documento. null = no se muestra.
+  reclamos: z.object({ texto: z.string(), referencia: z.string().nullable() }).nullable(),
+  // ─── v1 (se conservan) ─────────────────────────────────────────────────────
   empresa: z.object({
     razonSocial: z.string(),
     rut: z.string().nullable(),
@@ -65,6 +92,7 @@ export const cierreComercialPdfPayloadSchema = z.object({
     // Solo Kg Neto por envase (2026-11-05): se eliminaron Kg Bruto Envase
     // (unitario bruto) y los kilos totales Neto/Bruto, a pedido del cliente.
     kgNetoEnvase: z.string(),
+    kgBrutoEnvase: z.string(), // v2
     // fechaCompromiso: sacado (feedback Christian, 2026-08-19) — no está en
     // el documento original.
   })),
@@ -72,6 +100,8 @@ export const cierreComercialPdfPayloadSchema = z.object({
     pallets: z.number().int(),
     cajas: z.number().int(),
     totalMonto: z.string(),
+    kgNeto: z.string(), // v2
+    kgBruto: z.string(), // v2
   }),
 })
 

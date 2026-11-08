@@ -351,3 +351,7 @@ Los 7 sub-lotes de Fase 3 (Config/Mantenedores, Entidades, Calidad, Materiales, 
 - Se elimina la pantalla **Configuración General** (`/dashboard/configuracion/general`) y su ítem de menú `CONFIG_GENERAL` (migración `20261106200000_eliminar_config_general`, borra también sus `perfil_accesos`). Solo contenía el SMTP.
 - `ConfiguracionCorreo` es una por empresa; se administra en **Empresas › SMTP** (de la empresa activa). `GET/PUT /api/config/correo` y `POST /api/config/correo/probar` pasan a exigir `CONFIG_EMPRESAS` (LECTURA/TOTAL).
 - Cada correo sale con la configuración de la empresa del documento (la cola lleva `empresaId`).
+
+## Revisión 2026-11-06 (b) — Reclamos del Cierre Comercial
+
+- `Empresa.reclamosCierreEs/En` (texto) y `reclamosCierreRefEs/En` (línea de referencia). Se editan en la pestaña **"Términos de documentos"** (antes "Términos OC") y se guardan con el mismo `PUT /api/config/empresas/:id/terminos-oc` (campo opcional `reclamosCierre`; si no viene, no se toca). Sin texto, el PDF del Cierre no muestra el recuadro.

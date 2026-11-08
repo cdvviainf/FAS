@@ -428,13 +428,30 @@ export async function deleteLogo(empresaId: number) {
 // sola transacción (orden = posición en el arreglo, desde 1).
 export async function reemplazarTerminosOc(
   empresaId: number,
-  data: { notaEs: string | null; notaEn: string | null; clausulas: { icono: IconoClausula; tituloEs: string; textoEs: string; tituloEn: string; textoEn: string }[] },
+  data: {
+    notaEs: string | null
+    notaEn: string | null
+    clausulas: { icono: IconoClausula; tituloEs: string; textoEs: string; tituloEn: string; textoEn: string }[]
+    reclamosCierre?: { textoEs: string | null; textoEn: string | null; refEs: string | null; refEn: string | null }
+  },
   userId: string,
 ) {
   return prisma.$transaction(async (tx) => {
     await tx.empresa.update({
       where: { id: empresaId },
-      data: { notaTerminosOcEs: data.notaEs, notaTerminosOcEn: data.notaEn, actualizadoPor: userId },
+      data: {
+        notaTerminosOcEs: data.notaEs,
+        notaTerminosOcEn: data.notaEn,
+        ...(data.reclamosCierre
+          ? {
+              reclamosCierreEs: data.reclamosCierre.textoEs,
+              reclamosCierreEn: data.reclamosCierre.textoEn,
+              reclamosCierreRefEs: data.reclamosCierre.refEs,
+              reclamosCierreRefEn: data.reclamosCierre.refEn,
+            }
+          : {}),
+        actualizadoPor: userId,
+      },
     })
     await tx.empresaClausulaOc.deleteMany({ where: { empresaId } })
     if (data.clausulas.length > 0) {

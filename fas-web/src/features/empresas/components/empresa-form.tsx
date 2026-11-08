@@ -758,7 +758,7 @@ export function EmpresaForm({ empresaId }: EmpresaFormProps) {
           </TabsTrigger>
           {isEdit && <TabsTrigger value='logo'>Logo</TabsTrigger>}
           {isEdit && <TabsTrigger value='smtp'>SMTP</TabsTrigger>}
-          {isEdit && <TabsTrigger value='terminos-oc'>Términos OC</TabsTrigger>}
+          {isEdit && <TabsTrigger value='terminos-oc'>Términos de documentos</TabsTrigger>}
         </TabsList>
 
         {/* ── Tab 1: Empresa ── */}

@@ -139,6 +139,7 @@ export interface NotaVentaDetalle extends NotaVentaListItem {
   tipoBlId: number | null
   tipoBl: MantenedorRef | null
   condicionPagoId: number | null
+  formaPagoId?: number | null
   condicionPago: CondicionPagoRef | null
   cuotasPago: NotaVentaCuotaPagoRef[]
   observaciones: string | null
@@ -175,6 +176,7 @@ export interface NotaVentaCreateInput {
   tipoFleteId?: number | null
   tipoBlId?: number | null
   condicionPagoId?: number | null
+  formaPagoId?: number | null
   observaciones?: string | null
   contratoNaviero?: 'AGROSAN_AGL' | 'CLIENTE'
 }

@@ -12,6 +12,7 @@ import { SolicitudInspeccionV1 } from './templates/solicitud-inspeccion/v1/index
 import { resolverCierreComercial } from './resolvers/cierre-comercial.resolver.js'
 import { cierreComercialPdfPayloadSchema } from './schemas/cierre-comercial.schema.js'
 import { CierreComercialV1 } from './templates/cierre-comercial/v1/index.js'
+import { CierreComercialV2 } from './templates/cierre-comercial/v2/index.js'
 import { resolverMovimiento, resolverMovimientoGuiaDespacho } from './resolvers/movimiento.resolver.js'
 import { movimientoPdfPayloadSchema } from './schemas/movimiento.schema.js'
 import { MovimientoV1 } from './templates/movimiento/v1/index.js'
@@ -146,9 +147,11 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Cierre Comercial',
     resolver: resolverCierreComercial,
     schema: cierreComercialPdfPayloadSchema,
-    plantillaActual: 'v1',
-    plantillas: { v1: CierreComercialV1 },
-    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    // v2 (2026-11-06): formato corporativo "Sales Order", bilingüe. v1 se
+    // conserva para reimpresiones (regla de versionado, Etapa 4 §4).
+    plantillaActual: 'v2',
+    plantillas: { v1: CierreComercialV1, v2: CierreComercialV2 },
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '10mm 10mm 14mm' },
     itemMenu: 'VENTAS_NV',
     controlCopia: true,
     nombreArchivo: (p) => `CierreComercial_${p.folio}.pdf`,

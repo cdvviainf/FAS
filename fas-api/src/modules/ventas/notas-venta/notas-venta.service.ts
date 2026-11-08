@@ -43,6 +43,7 @@ interface ReferenciasHeader {
   tipoFleteId?: number | null
   tipoBlId?: number | null
   condicionPagoId?: number | null
+  formaPagoId?: number | null
 }
 
 // Calidad / Condición "hasta" (2026-11-05): cada una debe existir y estar
@@ -196,6 +197,11 @@ async function validarReferenciasHeader(r: ReferenciasHeader, validar: ValidarRe
   if (r.condicionPagoId != null) {
     const condicionPago = await repo.getCondicionPago(r.condicionPagoId)
     if (!condicionPago) throw new ValidationError('La forma de pago (condición de pago) seleccionada no existe o está bloqueada')
+  }
+
+  if (r.formaPagoId != null) {
+    const formaPago = await repo.getFormaPago(r.formaPagoId)
+    if (!formaPago) throw new ValidationError('La forma de pago seleccionada no existe o está bloqueada')
   }
 }
 
@@ -376,6 +382,7 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
     tipoFleteId: body.tipoFleteId !== undefined ? body.tipoFleteId : existente.tipoFleteId,
     tipoBlId: body.tipoBlId !== undefined ? body.tipoBlId : existente.tipoBlId,
     condicionPagoId: body.condicionPagoId !== undefined ? body.condicionPagoId : existente.condicionPagoId,
+    formaPagoId: body.formaPagoId !== undefined ? body.formaPagoId : existente.formaPagoId,
   }
   const cambiaCliente = body.clienteId !== undefined && body.clienteId !== existente.clienteId
   await validarReferenciasHeader(efectivo, {

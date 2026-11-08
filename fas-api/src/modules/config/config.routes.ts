@@ -26,7 +26,8 @@ const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'zona', prefixRuta: 'zonas', label: 'Zona', itemCodigo: 'CONFIG_ZONAS' },
   { modelo: 'grupoMercado', prefixRuta: 'grupos-mercado', label: 'Grupo de Mercado', itemCodigo: 'CONFIG_GRUPOS_MERCADO' },
   { modelo: 'tipoEmbarque', prefixRuta: 'tipos-embarque', label: 'Tipo de Embarque', itemCodigo: 'CONFIG_TIPOS_EMBARQUE', schemaKey: 'tipoEmbarque' },
-  { modelo: 'formaPago', prefixRuta: 'formas-pago', label: 'Forma de Pago', itemCodigo: 'CONFIG_FORMAS_PAGO' },
+  // Lectura para Cierre (Forma de pago, 2026-11-06) y OC, que la usan como combo.
+  { modelo: 'formaPago', prefixRuta: 'formas-pago', label: 'Forma de Pago', itemCodigo: 'CONFIG_FORMAS_PAGO', lecturaItemsAdicionales: ['VENTAS_NV', 'COMPRAS_OC'] },
   { modelo: 'unidadMedida', prefixRuta: 'unidades-medida', label: 'Unidad de Medida', itemCodigo: 'CONFIG_UNIDADES_MEDIDA' },
   { modelo: 'tipoPallet', prefixRuta: 'tipos-pallet', label: 'Tipo de Pallet', itemCodigo: 'CONFIG_TIPOS_PALLET' },
   { modelo: 'etiqueta', prefixRuta: 'etiquetas', label: 'Etiqueta', itemCodigo: 'CONFIG_ETIQUETAS' },
