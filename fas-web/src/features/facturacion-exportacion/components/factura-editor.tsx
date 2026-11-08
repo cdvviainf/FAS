@@ -215,6 +215,10 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
     onError: (e: Error) => toast.error(e.message || 'Error al reabrir la Factura'),
   })
 
+  // Faltantes del panel pre-vuelo (receptor + bloque Aduana): bloquean el envío
+  // al SII, igual que el gate del backend (2026-11-07).
+  const faltanDatosSii = (factura.validacion?.faltantes.length ?? 0) > 0
+
   // Validaciones comunes antes de tocar el SII.
   function validarPrevio(): boolean {
     if (!fechaDocumento) {
@@ -235,6 +239,10 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
     }
     if (esMonedaExtranjera && (!tipoCambio || Number(tipoCambio) <= 0)) {
       toast.error('Indica el tipo de cambio (el SII lo exige para facturar en moneda extranjera)')
+      return false
+    }
+    if (faltanDatosSii) {
+      toast.error(`No se puede enviar al SII hasta completar: ${factura.validacion!.faltantes.join('; ')}`)
       return false
     }
     if (enBloqueadoPorFaltantes) {
@@ -316,7 +324,7 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
       {factura.validacion && (
         <Card>
           <CardHeader className='flex-row items-center justify-between gap-2 space-y-0'>
-            <CardTitle className='text-sm'>Datos para el SII (bloque Aduana)</CardTitle>
+            <CardTitle className='text-sm'>Datos para el SII (receptor y bloque Aduana)</CardTitle>
             {factura.validacion.faltantes.length > 0 ? (
               <Badge variant='destructive'>Faltan {factura.validacion.faltantes.length} dato(s)</Badge>
             ) : (
@@ -326,10 +334,30 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
           <CardContent className='space-y-3'>
             {factura.validacion.faltantes.length > 0 && (
               <p className='text-destructive text-xs'>
-                Completa el <span className='font-medium'>Código de Aduana (SII)</span> del dato marcado
-                (en el mantenedor de Cláusula de Venta, Modalidad, Tipo de Embarque, Puerto o País) o selecciónalo
-                en el Cierre Comercial / Embarque. El envío al SII queda bloqueado hasta completarlo.
+                Completa los datos del cliente marcados en la ficha de la entidad (Entidades) y el{' '}
+                <span className='font-medium'>Código de Aduana (SII)</span> del dato marcado (en el mantenedor de
+                Cláusula de Venta, Modalidad, Tipo de Embarque, Puerto o País) o selecciónalo en el Cierre Comercial /
+                Embarque. El envío al SII queda bloqueado hasta completarlo.
               </p>
+            )}
+            {/* Receptor (cliente extranjero) — 2026-11-07. Bloquea igual que Aduana. */}
+            {factura.validacion.receptor?.length > 0 && (
+              <div className='rounded-md border p-3'>
+                <p className='mb-1 text-xs font-medium'>Receptor (cliente)</p>
+                <table className='w-full text-sm'>
+                  <tbody>
+                    {factura.validacion.receptor.map((c) => (
+                      <tr key={c.campo} className={c.falta ? 'text-destructive' : ''}>
+                        <td className='w-40 py-0.5 pr-3'>{c.etiqueta} <span className='text-destructive'>*</span></td>
+                        <td className='py-0.5'>
+                          {c.valor ?? `⚠ Sin ${c.etiqueta.toLowerCase()}`}
+                          {c.valor != null && c.falta && <span className='font-medium'> ⚠ supera 20 caracteres</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
             <div className='overflow-x-auto'>
               <table className='w-full text-sm'>
@@ -609,7 +637,8 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
             variant={borradorEnviado ? 'outline' : 'default'}
             onClick={handleEnviarSii}
             isLoading={enviarSii.isPending}
-            disabled={regrupando || lineas.length === 0}
+            disabled={regrupando || lineas.length === 0 || faltanDatosSii}
+            title={faltanDatosSii ? 'Completa los datos marcados en rojo en «Datos para el SII»' : undefined}
           >
             <Icons.upload className='mr-2 h-4 w-4' /> {borradorEnviado ? 'Reenviar borrador al SII' : 'Enviar borrador al SII'}
           </Button>

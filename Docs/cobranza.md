@@ -705,3 +705,7 @@ Prefijo: `/api/ventas/cobranza/nacionales`
 - [ ] Prorrateo de NC/ND (CB8) validado con datos de prueba de Alejandro Véliz.
 - [ ] Anexos a `entidades.md` y al spec de Reclamos entregados y confirmados por el equipo.
 - [ ] Revisión de Codex sin hallazgos críticos abiertos.
+
+> **Validación previa (pre-vuelo) — 2026-11-07.** Igual que la Guía de despacho y el Generador DTE:
+> - **Factura Nacional (DTE 33/34):** el detalle muestra emisor (Empresa) y receptor (Cliente) con RUT, razón social, giro, dirección y comuna (dirección por defecto), faltantes en rojo; "Enviar borrador al SII" queda deshabilitado y el backend bloquea con la misma lista (`construirValidacionFacturaNacional`).
+> - **Factura de Exportación (DTE 110):** el panel "Datos para el SII" suma el **receptor** (razón social, TAXID = primer código ≤ 20, dirección por defecto) al bloque Aduana; ambos bloquean el envío (`receptorFactura` + `faltantesAduana`).

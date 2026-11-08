@@ -201,8 +201,17 @@ export interface FacturaAduanaItem {
   falta: boolean
 }
 
+// Dato del receptor (cliente extranjero) del DTE 110 — 2026-11-07.
+export interface FacturaReceptorItem {
+  campo: string
+  etiqueta: string
+  valor: string | null
+  falta: boolean
+}
+
 export interface FacturaValidacion {
   bloqueAduana: FacturaAduanaItem[]
+  receptor: FacturaReceptorItem[]
   transporte: {
     naviera: string | null
     nave: string | null

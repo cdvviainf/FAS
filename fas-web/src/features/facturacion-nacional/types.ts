@@ -134,6 +134,23 @@ export interface FacturaNacional {
   notasCredito?: NotaCreditoNacionalRef[]
   // Solo en el detalle (obtenerFactura).
   dte?: FacturaNacionalDteEstado | null
+  // Resumen pre-vuelo de emisor/receptor (2026-11-07), solo en el detalle.
+  validacion?: ValidacionFacturaNacional
+}
+
+export interface CampoContraparteDte {
+  campo: string
+  etiqueta: string
+  valor: string | null
+}
+export interface ContraparteValidacion {
+  campos: CampoContraparteDte[]
+  faltantes: string[]
+}
+export interface ValidacionFacturaNacional {
+  emisor: ContraparteValidacion
+  receptor: ContraparteValidacion
+  faltantes: string[]
 }
 
 export interface NotaCreditoNacionalRef {

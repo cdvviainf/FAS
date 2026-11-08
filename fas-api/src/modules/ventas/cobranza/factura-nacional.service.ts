@@ -463,25 +463,17 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
 
   // FAS-FN-QA-009: el DTE 33/34 timbrado exige razón social, giro, dirección y
   // comuna del emisor y del receptor. Se valida aquí (antes de LibreDTE) para
-  // devolver un error de negocio accionable en vez de un rechazo del SII.
-  const faltantesEmisor: string[] = []
-  if (!emisor.razonSocial?.trim()) faltantesEmisor.push('razón social')
-  if (!emisor.giro?.trim()) faltantesEmisor.push('giro')
-  if (!emisor.direccion?.trim()) faltantesEmisor.push('dirección')
-  if (!emisor.comuna?.trim()) faltantesEmisor.push('comuna')
-  if (faltantesEmisor.length > 0) {
+  // devolver un error de negocio accionable en vez de un rechazo del SII. Misma
+  // lista que el panel pre-vuelo del detalle (construirValidacionFacturaNacional).
+  const validacion = construirValidacionFacturaNacional(factura, emisor)
+  if (validacion.emisor.faltantes.length > 0) {
     throw new ValidationError(
-      `La Empresa emisora no tiene ${faltantesEmisor.join(', ')} — complétalo en Configuración → Empresas antes de enviar al SII`,
+      `La Empresa emisora no tiene ${validacion.emisor.faltantes.map((f) => f.toLowerCase()).join(', ')} — complétalo en Configuración → Empresas antes de enviar al SII`,
     )
   }
-  const faltantesReceptor: string[] = []
-  if (!factura.cliente.razonSocial?.trim()) faltantesReceptor.push('razón social')
-  if (!factura.cliente.giro?.trim()) faltantesReceptor.push('giro')
-  if (!dirCliente?.direccion?.trim()) faltantesReceptor.push('dirección')
-  if (!dirCliente?.comuna?.descripcion?.trim()) faltantesReceptor.push('comuna')
-  if (faltantesReceptor.length > 0) {
+  if (validacion.receptor.faltantes.length > 0) {
     throw new ValidationError(
-      `El cliente no tiene ${faltantesReceptor.join(', ')} — complétalo en Entidades antes de enviar al SII`,
+      `El cliente no tiene ${validacion.receptor.faltantes.map((f) => f.toLowerCase()).join(', ')} — complétalo en Entidades antes de enviar al SII`,
     )
   }
   const payload = mapFacturaNacionalADte({
@@ -681,11 +673,61 @@ async function construirCuotasNacional(
 }
 
 // ─── Lecturas / anulación ─────────────────────────────────────────────────────
+// Resumen pre-vuelo (2026-11-07) de los datos de emisor y receptor que van en el
+// DTE 33/34 — mismo criterio que la Guía de despacho y el Generador DTE: el
+// detalle lo muestra con los faltantes en rojo y deshabilita "Enviar al SII";
+// enviarBorradorSiiInterno bloquea con esta misma lista.
+type ContraparteCampos = { rut?: string | null; razonSocial?: string | null; giro?: string | null; direccion?: string | null; comuna?: string | null }
+function camposContraparte(c: ContraparteCampos) {
+  const campos = [
+    { campo: 'rut', etiqueta: 'RUT', valor: c.rut ?? null },
+    { campo: 'razonSocial', etiqueta: 'Razón social', valor: c.razonSocial ?? null },
+    { campo: 'giro', etiqueta: 'Giro', valor: c.giro ?? null },
+    { campo: 'direccion', etiqueta: 'Dirección', valor: c.direccion ?? null },
+    { campo: 'comuna', etiqueta: 'Comuna', valor: c.comuna ?? null },
+  ].map((x) => ({ ...x, valor: x.valor?.trim() ? x.valor.trim() : null }))
+  return { campos, faltantes: campos.filter((x) => x.valor == null).map((x) => x.etiqueta) }
+}
+
+export function construirValidacionFacturaNacional(
+  factura: {
+    cliente: {
+      identificador: string | null
+      razonSocial: string | null
+      giro: string | null
+      direcciones: Array<{ direccion: string | null; comuna: { descripcion: string } | null }>
+    }
+  },
+  emisor: ContraparteCampos | null,
+) {
+  const dir = factura.cliente.direcciones[0]
+  const emisorV = camposContraparte(emisor ?? {})
+  const receptorV = camposContraparte({
+    rut: factura.cliente.identificador,
+    razonSocial: factura.cliente.razonSocial,
+    giro: factura.cliente.giro,
+    direccion: dir?.direccion ?? null,
+    comuna: dir?.comuna?.descripcion ?? null,
+  })
+  return {
+    emisor: emisorV,
+    receptor: receptorV,
+    faltantes: [...emisorV.faltantes.map((f) => `Emisor: ${f}`), ...receptorV.faltantes.map((f) => `Receptor: ${f}`)],
+  }
+}
+
 export async function obtenerFactura(id: number) {
   const factura = await repo.getFacturaByIdConHistorial(id)
   if (!factura) throw new NotFoundError('Factura Nacional', String(id))
-  const dte = await dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id)
-  return { ...factura, dte: dte ? { estado: dte.estado, folio: dte.folio, tieneXml: !!dte.xml } : null }
+  const [dte, emisor] = await Promise.all([
+    dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id),
+    dteRepo.getEmpresaParaDte(factura.empresaId),
+  ])
+  return {
+    ...factura,
+    dte: dte ? { estado: dte.estado, folio: dte.folio, tieneXml: !!dte.xml } : null,
+    validacion: construirValidacionFacturaNacional(factura, emisor),
+  }
 }
 
 // PDF de la Proforma de ORIGEN de la Factura (Productor o Materiales), servido

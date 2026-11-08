@@ -28,6 +28,7 @@ import { facturaNacionalPorIdOptions, facturasNacionalKeys } from '../queries'
 import { facturaNacionalService, hoyFecha } from '../service'
 import type { EstadoFacturaNacional, FacturaNacional, FacturaNacionalLineaInput } from '../types'
 import { ESTADO_FN_LABELS, ORIGEN_FN_LABELS } from '../types'
+import { ValidacionContrapartesPanel } from './validacion-contrapartes-panel'
 
 const ITEM = 'FACT_NACIONAL'
 
@@ -253,6 +254,10 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
   }
 
   function handleEnviarSii() {
+    if (faltanDatosDte) {
+      toast.error(`Faltan datos para el DTE: ${factura.validacion!.faltantes.join(', ')}`)
+      return
+    }
     if (!fechaDocumento) {
       toast.error('La fecha del documento es obligatoria')
       return
@@ -279,6 +284,8 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
     setConfirmarFirma(true)
   }
 
+  // Faltantes de emisor/receptor (panel pre-vuelo): bloquean "Enviar al SII".
+  const faltanDatosDte = (factura.validacion?.faltantes.length ?? 0) > 0
   const trabajando = guardar.isPending || enviarSii.isPending || firmar.isPending || reabrir.isPending || anular.isPending
 
   return (
@@ -324,7 +331,7 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
             </Button>
           )}
           {editable && puedeEscribir && !borradorEnviado && (
-            <Button disabled={trabajando} onClick={handleEnviarSii}>
+            <Button disabled={trabajando || faltanDatosDte} title={faltanDatosDte ? 'Completa los datos de emisor y receptor marcados en rojo' : undefined} onClick={handleEnviarSii}>
               <Icons.send className='mr-1 h-4 w-4' />
               Enviar borrador al SII
             </Button>
@@ -413,6 +420,9 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
           <strong>Rechazo del SII:</strong> {factura.errorMensajeSii}
         </div>
       )}
+
+      {/* ── Pre-vuelo: emisor y receptor (solo mientras se puede enviar al SII) ── */}
+      {editable && factura.validacion && <ValidacionContrapartesPanel validacion={factura.validacion} />}
 
       {/* ── Datos del documento ── */}
       <Card>

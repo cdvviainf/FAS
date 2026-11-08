@@ -49,6 +49,13 @@ const MAX_NUMID_RECEPTOR = 20
 // pipe, salto de línea, " - " y " / " con espacios — NO el guion pegado, para no
 // romper códigos como "99-1234567"), se quita la etiqueta (lo anterior al último
 // ":") y se toma el primer segmento no vacío. Devuelve null si no hay nada.
+// NumId del cliente (FAS-DTE-PREFLIGHT-QA-001): TAXID y, si viene vacío o sin
+// código, el `identificador` (clientes previos al campo TAXID). Fuente única para
+// el panel, el gate de envío y el payload del DTE 110.
+function numIdCliente(c: { taxId: string | null; identificador: string | null }): string | null {
+  return resolverNumIdReceptor(c.taxId) ?? resolverNumIdReceptor(c.identificador)
+}
+
 function resolverNumIdReceptor(raw: string | null | undefined): string | null {
   if (!raw) return null
   const segmentos = raw.split(/\s*[\n,;|]\s*|\s+-\s+|\s+\/\s+/)
@@ -373,6 +380,39 @@ function faltantesAduana(embarque: EmbarqueFacturaDte): string[] {
     )
 }
 
+// Receptor del DTE 110 (2026-11-07): datos del cliente extranjero que van en el
+// documento, con los faltantes marcados — mismo criterio que la Guía de despacho
+// y la Factura Nacional. Fuente ÚNICA para el panel (`construirValidacionFactura`)
+// y el gate de envío (`validarReceptorFactura`). Razón social, TAXID (NumId: el
+// primer código, máx. 20) y dirección por defecto son obligatorios; el país
+// (nacionalidad) ya se valida en el bloque Aduana ("País de destino").
+function receptorFactura(embarque: EmbarqueFacturaDte) {
+  const c = embarque.notaVenta.cliente
+  const razonSocial = c.razonSocial?.trim() || null
+  const numId = numIdCliente(c)
+  const direccion = c.direcciones[0]?.direccion?.trim() || null
+  const numIdLargo = numId != null && numId.length > MAX_NUMID_RECEPTOR
+  const campos = [
+    { campo: 'razonSocial', etiqueta: 'Razón social', valor: razonSocial, falta: razonSocial == null },
+    { campo: 'taxId', etiqueta: 'TAXID (NumId)', valor: numId, falta: numId == null || numIdLargo },
+    { campo: 'direccion', etiqueta: 'Dirección', valor: direccion, falta: direccion == null },
+  ]
+  const nombre = razonSocial ?? `#${c.id}`
+  const faltantes: string[] = []
+  if (razonSocial == null) faltantes.push(`El cliente "${nombre}" no tiene razón social — complétala en Entidades`)
+  if (numId == null) faltantes.push(`El cliente "${nombre}" no tiene TAXID — complétalo en Entidades`)
+  else if (numIdLargo) faltantes.push(`El TAXID del cliente "${nombre}" supera ${MAX_NUMID_RECEPTOR} caracteres — deja un solo identificador en Entidades`)
+  if (direccion == null) faltantes.push(`El cliente "${nombre}" no tiene dirección por defecto — complétala en Entidades`)
+  return { campos, faltantes }
+}
+
+function validarReceptorFactura(embarque: EmbarqueFacturaDte) {
+  const { faltantes } = receptorFactura(embarque)
+  if (faltantes.length > 0) {
+    throw new ValidationError(`No se puede enviar al SII hasta completar: ${faltantes.join('; ')}.`)
+  }
+}
+
 function validarCodigosAduana(embarque: EmbarqueFacturaDte) {
   const faltantes = faltantesAduana(embarque)
   if (faltantes.length > 0) {
@@ -423,7 +463,14 @@ async function construirValidacionFactura(
     totBultos: factura.lineas.reduce((s, l) => s + Number(l.cantidadCajas), 0),
   }
 
-  return { bloqueAduana, transporte, pesos, faltantes: faltantesAduana(embarque) }
+  const receptor = receptorFactura(embarque)
+  return {
+    bloqueAduana,
+    receptor: receptor.campos,
+    transporte,
+    pesos,
+    faltantes: [...faltantesAduana(embarque), ...receptor.faltantes],
+  }
 }
 
 // Ejecuta el armado/envío del DTE 110 con manejo de errores: los de negocio
@@ -604,7 +651,7 @@ export async function construirPayloadDte(
       // `identificador` para clientes creados antes del campo TAXID (2026-10-09).
       // Se envía SOLO el primer código (el TAXID puede traer varios IDs); el
       // largo ≤20 lo exige el guard de enviarBorradorSii antes de ir al SII.
-      taxId: resolverNumIdReceptor(nv.cliente.taxId ?? nv.cliente.identificador),
+      taxId: numIdCliente(nv.cliente),
       giro: nv.cliente.giro,
       // DirRecep del DTE 110 (2026-10-13): dirección por defecto del cliente.
       direccion: nv.cliente.direcciones[0]?.direccion ?? null,
@@ -736,7 +783,7 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
   // DTE v2.5, campo 53). Se valida el PRIMER código extraído del TAXID ANTES de
   // enviar — si aun así supera 20, se bloquea con mensaje accionable en vez de
   // dejar que el SII rechace el documento y queme el folio del CAF.
-  const numIdReceptor = resolverNumIdReceptor(embarque.notaVenta.cliente.taxId ?? embarque.notaVenta.cliente.identificador)
+  const numIdReceptor = numIdCliente(embarque.notaVenta.cliente)
   if (numIdReceptor && numIdReceptor.length > MAX_NUMID_RECEPTOR) {
     throw new ValidationError(
       `El identificador tributario (TAXID) del cliente "${embarque.notaVenta.cliente.razonSocial}" tiene ` +
@@ -744,6 +791,8 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
         'en el campo NumId. Corrígelo en Entidades → TAXID dejando un solo identificador válido (máx. 20 caracteres).',
     )
   }
+  // Datos del receptor (razón social, TAXID, dirección) — misma lista que el panel.
+  validarReceptorFactura(embarque)
 
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
   if (!emisor?.rut) {
