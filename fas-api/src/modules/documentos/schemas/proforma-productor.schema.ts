@@ -23,6 +23,11 @@ export const proformaProductorPdfPayloadSchema = z.object({
   formaPago: z.string().nullable(),
   condicionPago: z.string().nullable(),
   observaciones: z.string().nullable(),
+  // Tipo de documento a facturar (2026-11-09, v3): 'Factura Nacional' / 'Factura Exenta'.
+  tipoDocumento: z.string().optional(),
+  // Discriminante tipado (BCOG-R8-001): 33 afecta / 34 exenta. v3 decide las
+  // filas de totales por este valor, no por el monto.
+  tipoDte: z.union([z.literal(33), z.literal(34)]).optional(),
   lineas: z.array(z.object({
     descripcion: z.string(),
     cantidad: z.string(), // Decimal como string
@@ -36,6 +41,10 @@ export const proformaProductorPdfPayloadSchema = z.object({
     fechaReferencia: z.string(), // label ya resuelto
     plazoDias: z.number().int(),
     porcentaje: z.string().nullable(),
+    // Vencimiento estimado (2026-11-09, plantilla v3): fecha de la Proforma +
+    // plazo, solo referencia FACTURA (YYYY-MM-DD); null si no se conoce.
+    // Opcional para no romper reimpresiones v1/v2.
+    vencimientoEstimado: z.string().nullable().optional(),
   })),
   totales: z.object({
     neto: z.string(),

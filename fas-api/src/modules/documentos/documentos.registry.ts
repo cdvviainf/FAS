@@ -44,10 +44,12 @@ import { resolverProformaProductor } from './resolvers/proforma-productor.resolv
 import { proformaProductorPdfPayloadSchema } from './schemas/proforma-productor.schema.js'
 import { ProformaProductorV1 } from './templates/proforma-productor/v1/index.js'
 import { ProformaProductorV2 } from './templates/proforma-productor/v2/index.js'
+import { ProformaProductorV3 } from './templates/proforma-productor/v3/index.js'
 import { resolverProformaMaterial } from './resolvers/proforma-material.resolver.js'
 import { proformaMaterialPdfPayloadSchema } from './schemas/proforma-material.schema.js'
 import { ProformaMaterialV1 } from './templates/proforma-material/v1/index.js'
 import { ProformaMaterialV2 } from './templates/proforma-material/v2/index.js'
+import { ProformaMaterialV3 } from './templates/proforma-material/v3/index.js'
 import { resolverDocumentoManual } from './resolvers/documento-manual.resolver.js'
 import { documentoManualPdfPayloadSchema } from './schemas/documento-manual.schema.js'
 import { DocumentoManualV1 } from './templates/documento-manual/v1/index.js'
@@ -77,9 +79,10 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Proforma de Servicios a Productor',
     resolver: resolverProformaProductor,
     schema: proformaProductorPdfPayloadSchema,
-    plantillaActual: 'v2',
-    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
-    plantillas: { v1: ProformaProductorV1, v2: ProformaProductorV2 },
+    plantillaActual: 'v3',
+    // v3 = Tipo de documento + vencimiento estimado por cuota (2026-11-09); v2 =
+    // cabecera corporativa (2026-11-08); v1/v2 congeladas para reimpresiones.
+    plantillas: { v1: ProformaProductorV1, v2: ProformaProductorV2, v3: ProformaProductorV3 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'PRODUCTORES_PROFORMA',
     // Previsualización para revisar antes de aceptar/rechazar — sin emisión oficial.
@@ -91,9 +94,10 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Proforma de Venta de Materiales',
     resolver: resolverProformaMaterial,
     schema: proformaMaterialPdfPayloadSchema,
-    plantillaActual: 'v2',
-    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
-    plantillas: { v1: ProformaMaterialV1, v2: ProformaMaterialV2 },
+    plantillaActual: 'v3',
+    // v3 = Tipo de documento + vencimiento estimado por cuota (2026-11-09); v2 =
+    // cabecera corporativa (2026-11-08); v1/v2 congeladas para reimpresiones.
+    plantillas: { v1: ProformaMaterialV1, v2: ProformaMaterialV2, v3: ProformaMaterialV3 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'MATERIALES_PROFORMA',
     controlCopia: false,

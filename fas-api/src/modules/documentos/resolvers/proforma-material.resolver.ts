@@ -1,6 +1,7 @@
 import { NotFoundError } from '../../../shared/errors.js'
 import { getProformaMaterialById } from '../../materiales/proformas-venta/proformas-venta.repository.js'
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
+import { vencimientoEstimadoIso } from './vencimiento-estimado.js'
 import type { ProformaMaterialPdfPayload } from '../schemas/proforma-material.schema.js'
 
 // IVA 19% — mismo criterio que la Proforma a Productor / Factura Nacional.
@@ -59,6 +60,8 @@ export async function resolverProformaMaterial(id: number, empresaId: number): P
     formaPago: proforma.formaPago?.descripcion ?? null,
     condicionPago: proforma.condicionPago?.descripcion ?? null,
     observaciones: proforma.observaciones,
+    tipoDocumento: proforma.tipoDte === 34 ? 'Factura Exenta' : 'Factura Nacional',
+    tipoDte: proforma.tipoDte === 34 ? 34 : 33,
     lineas: proforma.lineas.map((l) => ({
       descripcion: l.articulo.descripcion,
       cantidad: l.cantidad.toString(),
@@ -70,9 +73,11 @@ export async function resolverProformaMaterial(id: number, empresaId: number): P
       fechaReferencia: FECHA_REFERENCIA_LABELS[c.fechaReferencia] ?? c.fechaReferencia,
       plazoDias: c.plazoDias,
       porcentaje: c.porcentaje != null ? c.porcentaje.toString() : null,
+      vencimientoEstimado: vencimientoEstimadoIso(c.fechaReferencia, c.plazoDias, proforma.creadoEn),
     })),
     totales: {
       neto: neto.toString(),
+      exento: (proforma.tipoDte === 34 ? neto : 0).toString(),
       iva: iva.toString(),
       total: total.toString(),
     },

@@ -63,3 +63,13 @@ Decisión del usuario: "No puede haber un registro sin temporada activa; debe se
 
 ## 11. Fixtures de integración (temporada obligatoria)
 - Codex actualizó los fixtures de `embarques-gestor-logistico`, `embarques-agl-webhook` y `productores` para crear/usar una Temporada y enviar `temporadaId` (solo tests). Ejecutadas por Claude contra fas_test: 26/26 OK.
+
+## 12. Vencimiento estimado de cuotas en el PDF de las Proformas (agregado 2026-11-09, post push 9beed7a)
+- Plantillas nuevas **v3** de `proforma-material` y `proforma-productor` (v1/v2 congeladas, Etapa 4 §8); `plantillaActual: 'v3'`.
+- Tabla "Cuotas de Pago" con columna "Vence (estimado)" = fecha de la Proforma + plazo, solo referencia Factura (otras "—"); helper `resolvers/vencimiento-estimado.ts`, mismo criterio que la pantalla.
+- Cabecera muestra "Tipo de documento" (Factura Nacional / Factura Exenta). Totales según `tipoDte` del payload (BCOG-R8-001, no según el monto): 34 → solo fila Exento (también con total 0); 33 → Neto + IVA. Proforma Productor v3 sin columna Afecto/Exento por línea.
+- Schemas de payload: `cuotas[].vencimientoEstimado`, `tipoDocumento`, `totales.exento` (material) opcionales para no romper v1/v2.
+
+## 13. Fix producción: crear Factura desde Proforma a Productor → 500 (2026-11-09)
+- Causa: `getProformaProductorParaFactura` (factura-nacional.repository.ts) seguía seleccionando `lineas.exento`, columna eliminada por la migración 20261110090000. Prisma rechaza la consulta en runtime (tsc no lo detectó por el tipado extendido del cliente). Afectaba toda creación de Factura desde Proforma a Productor (no solo tras anular).
+- Corrección: se quita `exento` del select (afecto/exento sale de `proformaProductor.tipoDte`). Verificado ejecutando la consulta contra fas_test: falla con el select viejo, OK con el nuevo. Revisadas las demás columnas eliminadas hoy (`notas_venta.notaCalidadHastaId/notaCondicionHastaId`): sus referencias restantes son a nivel de detalle (válidas).

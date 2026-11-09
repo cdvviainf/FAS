@@ -1,6 +1,7 @@
 import { NotFoundError } from '../../../shared/errors.js'
 import { getProformaProductorById } from '../../productores/proformas/proformas.repository.js'
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri } from '../documentos.repository.js'
+import { vencimientoEstimadoIso } from './vencimiento-estimado.js'
 import type { ProformaProductorPdfPayload } from '../schemas/proforma-productor.schema.js'
 
 // IVA 19% — mismo criterio que la Factura Nacional (factura-nacional.service.ts:
@@ -69,6 +70,8 @@ export async function resolverProformaProductor(id: number, empresaId: number): 
     formaPago: proforma.formaPago?.descripcion ?? null,
     condicionPago: proforma.condicionPago?.descripcion ?? null,
     observaciones: proforma.observaciones,
+    tipoDocumento: proforma.tipoDte === 34 ? 'Factura Exenta' : 'Factura Nacional',
+    tipoDte: proforma.tipoDte === 34 ? 34 : 33,
     lineas: proforma.lineas.map((l) => ({
       descripcion: l.glosa,
       cantidad: l.cantidad.toString(),
@@ -81,6 +84,7 @@ export async function resolverProformaProductor(id: number, empresaId: number): 
       fechaReferencia: FECHA_REFERENCIA_LABELS[c.fechaReferencia] ?? c.fechaReferencia,
       plazoDias: c.plazoDias,
       porcentaje: c.porcentaje != null ? c.porcentaje.toString() : null,
+      vencimientoEstimado: vencimientoEstimadoIso(c.fechaReferencia, c.plazoDias, proforma.creadoEn),
     })),
     totales: {
       neto: neto.toString(),

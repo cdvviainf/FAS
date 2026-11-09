@@ -157,7 +157,8 @@ export async function getProformaProductorParaFactura(id: number) {
           glosa: true,
           cantidad: true,
           precioUnitario: true,
-          exento: true,
+          // Sin `exento` (2026-11-09): la columna se eliminó; afecto/exento lo
+          // define proformaProductor.tipoDte.
         },
         orderBy: { id: 'asc' },
       },
