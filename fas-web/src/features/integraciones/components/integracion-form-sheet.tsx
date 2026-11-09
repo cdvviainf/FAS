@@ -38,6 +38,8 @@ export function IntegracionFormSheet({ item, open, onOpenChange, onCreated }: In
   const [url, setUrl] = useState('')
   const [activo, setActivo] = useState(true)
   const [gestorLogisticoId, setGestorLogisticoId] = useState<number | null>(null)
+  // Prioridad de las fuentes de tipo de cambio (codigo TC_*, 2026-11-09).
+  const [prioridad, setPrioridad] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   // Gestor Logístico (2026-09-07, ventas.md §4.3) — opcional: vincula esta
@@ -61,15 +63,19 @@ export function IntegracionFormSheet({ item, open, onOpenChange, onCreated }: In
       setUrl(item.url ?? '')
       setActivo(item.activo)
       setGestorLogisticoId(item.gestorLogisticoId)
+      setPrioridad(item.prioridad != null ? String(item.prioridad) : '')
     } else {
       setCodigo('')
       setDescripcion('')
       setUrl('')
       setActivo(true)
       setGestorLogisticoId(null)
+      setPrioridad('')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item?.id])
+
+  const esTipoCambio = codigo.trim().toUpperCase().startsWith('TC_')
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -78,6 +84,7 @@ export function IntegracionFormSheet({ item, open, onOpenChange, onCreated }: In
         url: url.trim() || null,
         activo,
         gestorLogisticoId,
+        prioridad: esTipoCambio && prioridad.trim() ? Number(prioridad) : null,
       }
       if (isEdit) return integracionesService.update(item!.id, payload)
       return integracionesService.create({ ...payload, codigo: codigo.trim() })
@@ -95,6 +102,7 @@ export function IntegracionFormSheet({ item, open, onOpenChange, onCreated }: In
     const e: Record<string, string> = {}
     if (!isEdit && !codigo.trim()) e.codigo = 'El código es requerido'
     if (!descripcion.trim()) e.descripcion = 'La descripción es requerida'
+    if (esTipoCambio && prioridad.trim() && !/^\d{1,2}$/.test(prioridad.trim())) e.prioridad = 'La prioridad debe ser un número entre 1 y 99'
     if (url.trim()) {
       try {
         new URL(url.trim())
@@ -145,6 +153,19 @@ export function IntegracionFormSheet({ item, open, onOpenChange, onCreated }: In
             <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder='https://api.ejemplo.com' />
             {errors.url && <p className='text-xs text-destructive'>{errors.url}</p>}
           </div>
+
+          {esTipoCambio && (
+            <div className='space-y-1.5 rounded-md border p-3'>
+              <Label>Prioridad de consulta</Label>
+              <Input inputMode='numeric' className='w-24' value={prioridad} onChange={(e) => setPrioridad(e.target.value.replace(/\D/g, ''))} placeholder='1' />
+              {errors.prioridad && <p className='text-xs text-destructive'>{errors.prioridad}</p>}
+              <p className='text-xs text-muted-foreground'>
+                Fuente de tipo de cambio. Se consultan las activas en orden de prioridad (1 primero); si una falla se pasa a la
+                siguiente. Códigos y parámetros: <strong>TC_CMF</strong> (API_KEY, sensible) · <strong>TC_BCENTRAL</strong> (USUARIO y
+                PASSWORD, sensible) · <strong>TC_MINDICADOR</strong> (sin parámetros). La URL base es opcional.
+              </p>
+            </div>
+          )}
 
           <div className='flex items-center gap-2'>
             <Switch id='activo-integracion' checked={activo} onCheckedChange={setActivo} />

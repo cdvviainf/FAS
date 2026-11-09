@@ -196,6 +196,7 @@ export async function createProformaMaterial(data: ProformaMaterialCreateInput, 
         formaPagoId: data.formaPagoId,
         condicionPagoId: data.condicionPagoId,
         monedaId: data.monedaId,
+        tipoCambio: data.tipoCambio ?? null,
         observaciones: data.observaciones,
         creadoPor,
         // Líneas copiadas 1:1 desde el Movimiento — cantidad no editable
@@ -309,7 +310,7 @@ export async function anularProformaMaterial(id: number) {
 // ─── Validación de referencias ───────────────────────────────────────────────
 
 export async function getMoneda(id: number) {
-  return prisma.moneda.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true } })
+  return prisma.moneda.findFirst({ where: { id, eliminadoEn: null, bloqueado: false }, select: { id: true, codigo: true } })
 }
 
 export async function getFormaPago(id: number) {

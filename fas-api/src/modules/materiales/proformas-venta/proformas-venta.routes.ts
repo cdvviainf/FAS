@@ -8,6 +8,8 @@ export async function proformasVentaMaterialRoutes(app: FastifyInstance) {
   app.get('/proformas', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
   // Landing: Movimientos que requieren proforma + estado de emisión (estático antes de :id).
   app.get('/proformas/movimientos', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.listMovimientos)
+  // Tipo de cambio sugerido (2026-11-09) — estático antes de :id.
+  app.get('/proformas/tipo-cambio', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.tipoCambio)
   app.get('/proformas/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
   app.post('/proformas', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)
   app.patch('/proformas/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.update)

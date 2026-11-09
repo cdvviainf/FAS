@@ -73,6 +73,7 @@ export async function getProformaMaterialParaFactura(id: number) {
       entidadId: true,
       monedaId: true,
       moneda: { select: { codigo: true, esMonedaBase: true } },
+      tipoCambio: true,
       condicionPagoId: true,
       observaciones: true,
       entidad: {

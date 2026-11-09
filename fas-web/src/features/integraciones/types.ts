@@ -40,6 +40,7 @@ export interface Integracion {
   activo: boolean
   gestorLogisticoId: number | null
   gestorLogistico: GestorLogisticoRef | null
+  prioridad: number | null
   parametros: IntegracionParametro[]
 }
 
@@ -51,6 +52,7 @@ export interface IntegracionListItem {
   activo: boolean
   gestorLogisticoId: number | null
   gestorLogistico: GestorLogisticoRef | null
+  prioridad: number | null
 }
 
 export interface IntegracionCreateInput {
@@ -59,6 +61,7 @@ export interface IntegracionCreateInput {
   url?: string | null
   activo?: boolean
   gestorLogisticoId?: number | null
+  prioridad?: number | null
 }
 
 export type IntegracionUpdateInput = Partial<Omit<IntegracionCreateInput, 'codigo'>>

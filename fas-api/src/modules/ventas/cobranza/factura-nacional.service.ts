@@ -97,20 +97,32 @@ export async function crearBorradorDesdeProforma(proformaMaterialId: number, use
   if (!proforma.entidad.tipos.includes('CLIENTE_NACIONAL')) {
     throw new ValidationError('El cliente de la Proforma no es un Cliente Nacional — no se puede facturar nacionalmente')
   }
-  // La Factura Nacional es en CLP: se exige explícitamente el código CLP (no
-  // "moneda base", que es configurable y podría ser otra — FAS-FN-QA-006).
-  if (proforma.moneda.codigo !== 'CLP') {
-    throw new ValidationError('La Factura Nacional solo admite proformas en pesos chilenos (CLP)')
+  // La Factura Nacional es en CLP (se exige el código CLP, no la "moneda base"
+  // — FAS-FN-QA-006). Si la proforma está en otra moneda, se convierte con el
+  // tipo de cambio capturado en la proforma (2026-11-09, igual que la Proforma
+  // de Servicios a Productor).
+  const esClp = proforma.moneda.codigo === 'CLP'
+  let tipoCambio = 1
+  if (!esClp) {
+    const tc = proforma.tipoCambio != null ? Number(proforma.tipoCambio) : null
+    if (tc == null || tc <= 0) {
+      throw new ValidationError('La Proforma no está en CLP y no tiene tipo de cambio — indícalo en la proforma antes de facturar')
+    }
+    tipoCambio = tc
   }
+  const clp = await repo.getMonedaClp()
+  if (!clp) throw new ValidationError('No existe la moneda CLP en el maestro de Monedas')
 
-  // Líneas iniciales: artículo + cantidad + precio de la proforma; afectas por
-  // defecto (el usuario marca las exentas en el borrador).
+  // Líneas iniciales: artículo + cantidad + precio de la proforma (convertido a
+  // CLP si corresponde, con el precio de origen en precioUnitarioOrigen); afectas
+  // por defecto (el usuario marca las exentas en el borrador).
   const lineas = lineasPersistir(
     proforma.lineas.map((l) => ({
       descripcion: l.articulo?.descripcion ?? 'Ítem',
       articuloId: l.articuloId,
       cantidad: Number(l.cantidad),
-      precioUnitario: Number(l.precioUnitario),
+      precioUnitario: esClp ? Number(l.precioUnitario) : round4(Number(l.precioUnitario) * tipoCambio),
+      precioUnitarioOrigen: esClp ? null : Number(l.precioUnitario),
       exento: false,
     })),
   )
@@ -127,10 +139,11 @@ export async function crearBorradorDesdeProforma(proformaMaterialId: number, use
         proformaMaterialId,
         codigo,
         clienteId: proforma.entidadId,
-        monedaId: proforma.monedaId,
+        monedaId: esClp ? proforma.monedaId : clp.id,
         condicionPagoId: proforma.condicionPagoId,
         idioma: 'ES',
         tipoDte: montos.tipoDte,
+        tipoCambio: esClp ? null : tipoCambio,
         montoNeto: montos.montoNeto,
         montoExento: montos.montoExento,
         montoIva: montos.montoIva,

@@ -2290,6 +2290,10 @@ model Integracion {
   descripcion String
   url         String?
   activo      Boolean @default(true)
+  // Prioridad de consulta (2026-11-09): para las fuentes de tipo de cambio
+  // (codigo TC_*) se consultan en orden ascendente; si una falla se pasa a la
+  // siguiente. Null = al final. Sin uso para el resto de integraciones.
+  prioridad   Int?
 
   // Vincula esta Integración a un Gestor Logístico (Entidad tipo
   // GESTOR_LOGISTICO) — 2026-09-07, ventas.md §4.3: al generar un Embarque,
@@ -2821,6 +2825,10 @@ model ProformaMaterial {
   condicionPago   CondicionPago?         @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
   monedaId        Int
   moneda          Moneda                 @relation(fields: [monedaId], references: [id])
+  // Tipo de cambio (CLP por 1 unidad de la moneda) para convertir la Factura
+  // Nacional a CLP cuando la proforma NO está en CLP (2026-11-09, igual que
+  // ProformaProductor). Obligatorio si moneda≠CLP; null cuando es CLP.
+  tipoCambio      Decimal?               @db.Decimal(14, 4)
   observaciones   String?
   estado          EstadoProformaMaterial @default(BORRADOR)
 
@@ -5856,4 +5864,23 @@ model DocumentoManualReferencia {
 
   @@index([documentoManualId])
   @@map("documento_manual_referencias")
+}
+
+// Respaldo local de tipos de cambio obtenidos (2026-11-09). Global (no tenant,
+// como Pais): la paridad oficial es la misma para todas las empresas. Una fila
+// por (moneda, fecha consultada). Se usa: (1) para no repetir la llamada si la
+// fecha ya pasó y está guardada; (2) como último recurso si fallan todas las
+// fuentes configuradas.
+model TipoCambioHistorico {
+  id            Int      @id @default(autoincrement())
+  monedaCodigo  String // ISO 4217 ('USD', 'EUR')
+  fechaConsulta DateTime @db.Date // fecha pedida (la del documento)
+  fechaParidad  DateTime @db.Date // fecha de la paridad devuelta (día hábil <= fechaConsulta)
+  valor         Decimal  @db.Decimal(14, 4)
+  fuente        String // codigo de la Integración que respondió (TC_CMF, TC_BCENTRAL, TC_MINDICADOR)
+  creadoEn      DateTime @default(now())
+
+  @@unique([monedaCodigo, fechaConsulta])
+  @@index([monedaCodigo, fechaParidad])
+  @@map("tipos_cambio_historico")
 }

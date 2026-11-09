@@ -1,5 +1,6 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { decrypt, encrypt } from '../../../lib/crypto.js'
+import { FUENTES_TIPO_CAMBIO } from '../../finanzas/facturacion/tipo-cambio.fuentes.js'
 import * as repo from './integraciones.repository.js'
 import type {
   IntegracionCreateInput,
@@ -33,7 +34,18 @@ async function validarGestorLogistico(gestorLogisticoId: number) {
   }
 }
 
-export async function crearIntegracion(body: IntegracionCreateInput, creadoPor: string) {
+// Códigos de Integración con adaptador de tipo de cambio (fuente única: tipo-cambio.fuentes.ts).
+const CODIGOS_TIPO_CAMBIO = Object.keys(FUENTES_TIPO_CAMBIO)
+
+export async function crearIntegracion(input: IntegracionCreateInput, creadoPor: string) {
+  // Fuentes de tipo de cambio (2026-11-09): el código se normaliza a mayúsculas
+  // (el adapter y la consulta usan el código canónico, TCQA-R1-001) y solo se
+  // aceptan los que tienen adaptador. La unicidad se verifica ya normalizada.
+  const esTipoCambio = input.codigo.toUpperCase().startsWith('TC_')
+  const body: IntegracionCreateInput = esTipoCambio ? { ...input, codigo: input.codigo.toUpperCase() } : input
+  if (esTipoCambio && !CODIGOS_TIPO_CAMBIO.includes(body.codigo)) {
+    throw new ValidationError(`Fuente de tipo de cambio no soportada. Códigos válidos: ${CODIGOS_TIPO_CAMBIO.join(', ')}`)
+  }
   const existente = await repo.findIntegracionByCodigo(body.codigo)
   if (existente) throw new ValidationError(`Ya existe una Integración con código "${body.codigo}"`)
   if (body.gestorLogisticoId) {

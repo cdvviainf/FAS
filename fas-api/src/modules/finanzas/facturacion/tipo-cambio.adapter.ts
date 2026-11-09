@@ -1,90 +1,105 @@
-// Tipo de cambio observado (paridad peso chileno / moneda extranjera) para el
-// DTE 110 de exportación. Fuente: mindicador.cl, que publica el "dólar/euro
-// observado" del Banco Central de Chile — el mismo valor que el SII espera en el
-// Encabezado.OtraMoneda del documento. API pública sin credenciales (a
-// diferencia de LibreDTE/AGL360, que usan el mantenedor de Integraciones).
+// Tipo de cambio observado (CLP por 1 unidad de moneda extranjera) para DTE 110,
+// Factura Nacional, Pagos y Proformas (Servicios y Materiales).
 //
-// Se mapea la moneda por su `codigo` ISO (Moneda.codigo = 'USD'/'EUR'/...). Si
-// no hay serie para la moneda, el caller cae a ingreso manual del valor.
+// 2026-11-09: fuentes configurables con prioridad (Configuración → Integraciones,
+// codigo TC_CMF / TC_BCENTRAL / TC_MINDICADOR, ver tipo-cambio.fuentes.ts). Se
+// consultan en orden de prioridad; si una falla (error, timeout, sin dato) se
+// pasa a la siguiente. Respaldo local (tipos_cambio_historico):
+//   - fecha ya pasada y guardada → se devuelve sin llamar a nadie;
+//   - si fallan todas → último valor guardado con paridad <= fecha (≤ 10 días).
+// Sin ninguna fuente configurada se usa mindicador.cl (comportamiento previo).
+// Firma pública sin cambios: los callers siguen usando obtenerTipoCambio().
+import { logger } from '../../../lib/logger.js'
+import * as integracionesRepo from '../../config/integraciones/integraciones.repository.js'
+import * as repo from './tipo-cambio.repository.js'
+import { FUENTES_TIPO_CAMBIO, type TipoCambioObtenido } from './tipo-cambio.fuentes.js'
 
-const MINDICADOR_BASE = 'https://mindicador.cl/api'
+export type { TipoCambioObtenido } from './tipo-cambio.fuentes.js'
 
-// Moneda.codigo (ISO 4217) -> código de serie de mindicador.cl.
-const SERIE_POR_MONEDA: Record<string, string> = {
-  USD: 'dolar',
-  EUR: 'euro',
+const ZONA = 'America/Santiago'
+function hoySantiagoIso() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 }
 
-export interface TipoCambioObtenido {
-  valor: number // pesos chilenos por 1 unidad de la moneda extranjera
-  fecha: string // 'YYYY-MM-DD' de la paridad observada
-}
+type Fuente = { codigo: string; url: string | null }
 
-type SerieMindicador = { serie?: { fecha?: string; valor?: number }[] }
-
-async function fetchJson(url: string): Promise<SerieMindicador | { error: string }> {
-  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(6_000) })
-  if (!res.ok) {
-    return { error: `El servicio de tipo de cambio respondió ${res.status}. Intenta de nuevo o ingrésalo manualmente.` }
+async function fuentesConfiguradas(): Promise<Fuente[]> {
+  try {
+    const filas = await repo.getFuentesTipoCambio()
+    const conocidas = filas.filter((f) => FUENTES_TIPO_CAMBIO[f.codigo])
+    if (conocidas.length) return conocidas.map((f) => ({ codigo: f.codigo, url: f.url }))
+  } catch (err) {
+    // Sin contexto de empresa u otro error al leer la configuración: se cae al default.
+    logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'Tipo de cambio: no se pudieron leer las fuentes configuradas')
   }
-  return ((await res.json().catch(() => null)) as SerieMindicador | null) ?? { error: 'Respuesta inválida del servicio de tipo de cambio' }
-}
-
-function fechaIsoUtc(d: Date): string {
-  return d.toISOString().slice(0, 10)
-}
-
-// Dentro de la serie del año `anio`, el valor del día hábil MÁS RECIENTE cuya
-// fecha sea <= `hastaIso` (2026-10-06, "día hábil anterior más cercano"). Las
-// fechas ISO comparan lexicográficamente.
-function valorHastaFecha(data: SerieMindicador, hastaIso: string): TipoCambioObtenido | null {
-  const candidatos = (data.serie ?? [])
-    .map((s) => ({ fecha: String(s.fecha ?? '').slice(0, 10), valor: Number(s.valor) }))
-    .filter((s) => s.fecha && Number.isFinite(s.valor) && s.fecha <= hastaIso)
-    .sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
-  const top = candidatos[0]
-  return top ? { valor: top.valor, fecha: top.fecha } : null
+  return [{ codigo: 'TC_MINDICADOR', url: null }]
 }
 
 export async function obtenerTipoCambio(
   monedaCodigo: string,
-  // Fecha del documento (2026-10-06): si se entrega, se toma la paridad de esa
-  // fecha o la del día hábil anterior más cercano. Sin fecha → valor más reciente.
+  // Fecha del documento: paridad de esa fecha o del día hábil anterior más
+  // cercano. Sin fecha → valor más reciente publicado.
   fecha?: Date,
-): Promise<TipoCambioObtenido | { error: string }> {
-  const serie = SERIE_POR_MONEDA[monedaCodigo?.toUpperCase?.() ?? '']
-  if (!serie) {
+): Promise<(TipoCambioObtenido & { fuente: string }) | { error: string }> {
+  const moneda = (monedaCodigo ?? '').toUpperCase()
+  if (!['USD', 'EUR'].includes(moneda)) {
     return { error: `No hay una fuente automática de tipo de cambio para la moneda ${monedaCodigo}. Ingrésalo manualmente.` }
   }
-  try {
-    if (!fecha) {
-      // Sin fecha: valor más reciente publicado (comportamiento previo).
-      const data = await fetchJson(`${MINDICADOR_BASE}/${serie}`)
-      if ('error' in data) return data
-      const ultimo = data.serie?.[0]
-      if (!ultimo?.valor || !Number.isFinite(Number(ultimo.valor))) {
-        return { error: 'El servicio de tipo de cambio no devolvió un valor válido. Ingrésalo manualmente.' }
-      }
-      return { valor: Number(ultimo.valor), fecha: String(ultimo.fecha ?? '').slice(0, 10) }
-    }
-
-    // Con fecha: se consulta la serie del año y se toma el día hábil <= fecha más
-    // reciente. Si la fecha cae a comienzos de año sin día hábil previo en ese
-    // año, se consulta el año anterior (borde de año).
-    const hastaIso = fechaIsoUtc(fecha)
-    const anio = fecha.getUTCFullYear()
-    const dataAnio = await fetchJson(`${MINDICADOR_BASE}/${serie}/${anio}`)
-    if ('error' in dataAnio) return dataAnio
-    let tc = valorHastaFecha(dataAnio, hastaIso)
-    if (!tc) {
-      const dataPrev = await fetchJson(`${MINDICADOR_BASE}/${serie}/${anio - 1}`)
-      if (!('error' in dataPrev)) tc = valorHastaFecha(dataPrev, hastaIso)
-    }
-    if (!tc) {
-      return { error: `No se encontró tipo de cambio publicado para la fecha ${hastaIso} ni días hábiles anteriores. Ingrésalo manualmente.` }
-    }
-    return tc
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Error de red al obtener el tipo de cambio' }
+  // Defensa: una fecha inválida no debe llegar a toISOString() (TCQA-R1-002).
+  if (fecha && Number.isNaN(fecha.getTime())) {
+    return { error: 'Fecha inválida para consultar el tipo de cambio' }
   }
+  const fechaIso = fecha ? fecha.toISOString().slice(0, 10) : null
+
+  // 1) Fecha ya pasada y guardada: la paridad publicada no cambia.
+  if (fechaIso && fechaIso < hoySantiagoIso()) {
+    try {
+      const h = await repo.getHistoricoExacto(moneda, fechaIso)
+      if (h) return { valor: Number(h.valor), fecha: h.fechaParidad.toISOString().slice(0, 10), fuente: `${h.fuente} (guardado)` }
+    } catch {
+      // sin respaldo disponible: se consulta normalmente
+    }
+  }
+
+  // 2) Fuentes en orden de prioridad.
+  const errores: string[] = []
+  for (const f of await fuentesConfiguradas()) {
+    const def = FUENTES_TIPO_CAMBIO[f.codigo]
+    try {
+      const r = await def.consultar(moneda, fecha, {
+        url: f.url,
+        parametro: (id) => integracionesRepo.getValorParametro(f.codigo, id),
+      })
+      if ('error' in r) {
+        errores.push(`${def.nombre}: ${r.error}`)
+        continue
+      }
+      // Se guarda solo si es definitivo: fecha ya pasada, o la paridad es del
+      // mismo día pedido. Hoy antes de la publicación la fuente devuelve el día
+      // hábil anterior; guardarlo como "hoy" dejaría un valor viejo en el respaldo.
+      const definitivo = !fechaIso || fechaIso < hoySantiagoIso() || r.fecha === fechaIso
+      try {
+        if (definitivo) {
+          await repo.guardarHistorico({ monedaCodigo: moneda, fechaConsultaIso: fechaIso ?? r.fecha, fechaParidadIso: r.fecha, valor: r.valor, fuente: f.codigo })
+        }
+      } catch (err) {
+        logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'Tipo de cambio: no se pudo guardar el respaldo local')
+      }
+      return { ...r, fuente: f.codigo }
+    } catch (e) {
+      errores.push(`${def.nombre}: ${e instanceof Error ? e.message : 'error de red'}`)
+    }
+  }
+
+  // 3) Último recurso: valor guardado más cercano (<= fecha, ventana 10 días).
+  try {
+    const h = await repo.getHistoricoCercano(moneda, fechaIso)
+    if (h) {
+      logger.warn({ moneda, fechaIso, errores }, 'Tipo de cambio: fuentes fallaron, se usa el respaldo local')
+      return { valor: Number(h.valor), fecha: h.fechaParidad.toISOString().slice(0, 10), fuente: `${h.fuente} (respaldo)` }
+    }
+  } catch {
+    // sin respaldo
+  }
+  return { error: `No se pudo obtener el tipo de cambio (${errores.join('; ')}). Ingrésalo manualmente.` }
 }

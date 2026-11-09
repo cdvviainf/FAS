@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -44,6 +44,7 @@ interface HeaderFields {
   formaPagoId: number | null
   condicionPagoId: number | null
   monedaId: number
+  tipoCambio: string // CLP por 1 unidad de la moneda (vacío si CLP)
   observaciones: string
 }
 
@@ -52,6 +53,7 @@ const HEADER_EMPTY: HeaderFields = {
   formaPagoId: null,
   condicionPagoId: null,
   monedaId: 0,
+  tipoCambio: '',
   observaciones: '',
 }
 
@@ -105,6 +107,15 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
   const { data: formasPagoData } = useQuery({ queryKey: ['formas-pago-options'], queryFn: () => formasPagoService.list({ limit: 200, soloActivos: true }), staleTime: 5 * 60_000 })
   const { data: monedasData } = useQuery({ queryKey: ['monedas-options'], queryFn: () => monedasService.list({ limit: 200 }), staleTime: 5 * 60_000 })
 
+  const monedaSeleccionada = (monedasData?.data ?? []).find((m) => m.id === fields.monedaId)
+  // Si la moneda no es CLP, la Factura Nacional (CLP) exige tipo de cambio (2026-11-09).
+  const esMonedaNoClp = !!monedaSeleccionada && monedaSeleccionada.codigo !== 'CLP'
+  // Moneda vigente para descartar respuestas tardías de "Obtener" si cambió la moneda.
+  const monedaIdActualRef = useRef(fields.monedaId)
+  useEffect(() => {
+    monedaIdActualRef.current = fields.monedaId
+  }, [fields.monedaId])
+
   const movimientosElegibles = movimientosData?.data ?? []
   const movimientoSeleccionado = movimientosElegibles.find((m) => m.id === fields.movimientoId)
 
@@ -120,6 +131,7 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
         formaPagoId: d.formaPagoId,
         condicionPagoId: d.condicionPagoId,
         monedaId: d.monedaId,
+        tipoCambio: d.tipoCambio ?? '',
         observaciones: d.observaciones ?? '',
       })
       setPreciosPorLinea(Object.fromEntries(d.lineas.map((l) => [l.id, l.precioUnitario])))
@@ -130,6 +142,7 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
     const e: Record<string, string> = {}
     if (!isEdit && !fields.movimientoId) e.movimientoId = 'El movimiento es requerido'
     if (!fields.monedaId) e.monedaId = 'La moneda es requerida'
+    if (esMonedaNoClp && !(Number(fields.tipoCambio) > 0)) e.tipoCambio = 'Indica el tipo de cambio (la moneda no es CLP)'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -140,6 +153,7 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
       formaPagoId: fields.formaPagoId,
       condicionPagoId: fields.condicionPagoId,
       monedaId: fields.monedaId,
+      tipoCambio: esMonedaNoClp && Number(fields.tipoCambio) > 0 ? Number(fields.tipoCambio) : null,
       observaciones: fields.observaciones.trim() || undefined,
     }
   }
@@ -149,9 +163,20 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
       formaPagoId: fields.formaPagoId,
       condicionPagoId: fields.condicionPagoId,
       monedaId: fields.monedaId,
+      tipoCambio: esMonedaNoClp && Number(fields.tipoCambio) > 0 ? Number(fields.tipoCambio) : null,
       observaciones: fields.observaciones.trim() || undefined,
     }
   }
+
+  const obtenerTcMutation = useMutation({
+    mutationFn: (v: { monedaId: number; codigo: string }) => proformasVentaMaterialService.obtenerTipoCambio(v.codigo),
+    onSuccess: (res, v) => {
+      if (monedaIdActualRef.current !== v.monedaId) return
+      setFields((f) => ({ ...f, tipoCambio: String(res.data.valor) }))
+      toast.success(`Tipo de cambio ${res.data.valor}${res.data.fecha ? ` (${res.data.fecha})` : ''}`)
+    },
+    onError: (e: Error) => toast.error(e.message || 'No se pudo obtener el tipo de cambio — ingrésalo manualmente'),
+  })
 
   const createMutation = useMutation({
     mutationFn: (data: ProformaMaterialCreateInput) => proformasVentaMaterialService.create(data),
@@ -350,7 +375,7 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
               <div className='space-y-1.5'>
                 <Label>Moneda <span className='text-destructive'>*</span></Label>
                 <div className='flex gap-2'>
-                  <Select value={fields.monedaId ? String(fields.monedaId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, monedaId: Number(v) }))}>
+                  <Select value={fields.monedaId ? String(fields.monedaId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, monedaId: Number(v), tipoCambio: '' }))}>
                     <SelectTrigger className='flex-1'><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                     <SelectContent>
                       {(monedasData?.data ?? []).map((m) => (
@@ -361,12 +386,47 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
                   <MonedaQuickCreate
                     onCreated={(m) => {
                       agregarAOpciones(['monedas-options'], m)
-                      setFields((f) => ({ ...f, monedaId: m.id }))
+                      // Limpiar el tipo de cambio: corresponde a la moneda anterior.
+                      setFields((f) => ({ ...f, monedaId: m.id, tipoCambio: '' }))
                     }}
                   />
                 </div>
                 {errors.monedaId && <p className='text-xs text-destructive'>{errors.monedaId}</p>}
+                <p className='text-xs text-muted-foreground'>
+                  La Factura Nacional es en CLP. Si eliges otra moneda, indica el tipo de cambio para convertirla.
+                </p>
               </div>
+              {esMonedaNoClp && (
+                <div className='space-y-1.5'>
+                  <Label>Tipo de cambio <span className='text-destructive'>*</span></Label>
+                  <div className='flex gap-2'>
+                    <Input
+                      type='number'
+                      min='0'
+                      step='0.0001'
+                      inputMode='decimal'
+                      placeholder={`CLP por 1 ${monedaSeleccionada?.codigo ?? ''}`}
+                      value={fields.tipoCambio}
+                      onChange={(e) => setFields((f) => ({ ...f, tipoCambio: e.target.value }))}
+                      disabled={soloLectura}
+                      className='flex-1'
+                    />
+                    <Button
+                      type='button'
+                      variant='outline'
+                      onClick={() => obtenerTcMutation.mutate({ monedaId: fields.monedaId, codigo: monedaSeleccionada?.codigo ?? '' })}
+                      isLoading={obtenerTcMutation.isPending}
+                      disabled={soloLectura || !monedaSeleccionada}
+                    >
+                      Obtener
+                    </Button>
+                  </div>
+                  {errors.tipoCambio && <p className='text-xs text-destructive'>{errors.tipoCambio}</p>}
+                  <p className='text-xs text-muted-foreground'>
+                    CLP por 1 {monedaSeleccionada?.codigo ?? 'unidad'}. Se usa para convertir la Factura Nacional a CLP.
+                  </p>
+                </div>
+              )}
             </div>
 
             {cuotasPreview.length > 0 && (

@@ -72,6 +72,8 @@ export interface ProformaMaterialDetalle extends Omit<ProformaMaterialListItem, 
   formaPago: MantenedorRef | null
   condicionPagoId: number | null
   condicionPago: CondicionPagoRef | null
+  // Tipo de cambio CLP por 1 unidad (2026-11-09) — null si la moneda es CLP.
+  tipoCambio: string | null
   observaciones: string | null
   lineas: ProformaMaterialLineaItem[]
   cuotasPago: ProformaMaterialCuotaPagoItem[]
@@ -89,6 +91,7 @@ export interface ProformaMaterialCreateInput {
   formaPagoId?: number | null
   condicionPagoId?: number | null
   monedaId: number
+  tipoCambio?: number | null
   observaciones?: string | null
 }
 

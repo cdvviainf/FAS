@@ -30,8 +30,17 @@ export const proformaProductorParamsSchema = z.object({
 
 export const proformaTipoCambioQuerySchema = z.object({
   moneda: z.string().trim().min(1, 'La moneda es requerida'),
-  // ISO YYYY-MM-DD opcional — validado para no pasar basura a new Date().
-  fecha: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida (YYYY-MM-DD)').optional(),
+  // Fecha calendario real (rechaza 2026-02-30 / 2026-99-99 — TCQA-R1-002).
+  fecha: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida (YYYY-MM-DD)')
+    .refine((v) => {
+      const [a, m, d] = v.split('-').map(Number)
+      const f = new Date(Date.UTC(a, m - 1, d))
+      return f.getUTCFullYear() === a && f.getUTCMonth() === m - 1 && f.getUTCDate() === d
+    }, 'Fecha inválida')
+    .optional(),
 })
 
 export const proformaProductorListQuerySchema = z.object({

@@ -1,4 +1,5 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
 import * as repo from './proformas-venta.repository.js'
 import type {
   ProformaMaterialCreateInput,
@@ -56,15 +57,58 @@ export async function obtenerProformaMaterial(id: number) {
   return proforma
 }
 
+// Tipo de cambio sugerido (botón "Obtener", 2026-11-09) — mismo criterio que la
+// Proforma de Servicios: CLP = 1; otra moneda = fuentes configuradas (TC_*).
+export async function obtenerTipoCambioSugerido(monedaCodigo: string, fecha?: string) {
+  if (monedaCodigo.toUpperCase() === 'CLP') return { valor: 1, fecha: null, moneda: 'CLP', fuente: null }
+  const tc = await obtenerTipoCambio(monedaCodigo, fecha ? new Date(fecha) : undefined)
+  if ('error' in tc) throw new ValidationError(tc.error)
+  return { valor: tc.valor, fecha: tc.fecha, moneda: monedaCodigo, fuente: tc.fuente }
+}
+
+// La Factura Nacional es en CLP: si la moneda de la proforma no es CLP, se exige
+// el tipo de cambio (CLP por 1 unidad) para convertir al facturar.
+function validarTipoCambio(codigoMoneda: string, tipoCambio: number | null | undefined) {
+  if (codigoMoneda === 'CLP') return
+  if (tipoCambio == null || tipoCambio <= 0) {
+    throw new ValidationError('La moneda no es CLP: indica el tipo de cambio (CLP por 1 unidad de la moneda) para poder facturar')
+  }
+}
+
 export async function crearProformaMaterial(body: ProformaMaterialCreateInput, creadoPor: string) {
   await validarReferenciasHeader(body)
-  return repo.createProformaMaterial(body, creadoPor)
+  const moneda = await repo.getMoneda(body.monedaId)
+  if (!moneda) throw new ValidationError('La moneda seleccionada no existe o está bloqueada')
+  validarTipoCambio(moneda.codigo, body.tipoCambio)
+  // CLP no lleva tipo de cambio: se normaliza a null.
+  const tipoCambio = moneda.codigo === 'CLP' ? null : body.tipoCambio
+  return repo.createProformaMaterial({ ...body, tipoCambio }, creadoPor)
 }
 
 export async function actualizarProformaMaterial(id: number, body: ProformaMaterialUpdateInput, actualizadoPor: string) {
-  await obtenerProformaMaterial(id)
+  const actual = await obtenerProformaMaterial(id)
   await validarReferenciasHeader(body)
-  return repo.updateProformaMaterial(id, body, actualizadoPor)
+  const patch: ProformaMaterialUpdateInput = { ...body }
+  // Valida/normaliza el tipo de cambio contra la moneda EFECTIVA (la del patch o,
+  // si no cambia, la actual). Si la moneda cambia a una no-CLP, el tipo de cambio
+  // del mismo PATCH es obligatorio (el anterior era de otra moneda).
+  if (body.monedaId !== undefined || body.tipoCambio !== undefined) {
+    const moneda = await repo.getMoneda(body.monedaId ?? actual.monedaId)
+    if (!moneda) throw new ValidationError('La moneda seleccionada no existe o está bloqueada')
+    if (moneda.codigo === 'CLP') {
+      patch.tipoCambio = null
+    } else {
+      const monedaCambia = body.monedaId !== undefined && body.monedaId !== actual.monedaId
+      const tc = body.tipoCambio !== undefined
+        ? body.tipoCambio
+        : monedaCambia
+          ? null
+          : actual.tipoCambio != null ? Number(actual.tipoCambio) : null
+      validarTipoCambio(moneda.codigo, tc)
+      if (monedaCambia && body.tipoCambio === undefined) patch.tipoCambio = null
+    }
+  }
+  return repo.updateProformaMaterial(id, patch, actualizadoPor)
 }
 
 export async function actualizarPrecioLinea(proformaMaterialId: number, lineaId: number, body: ProformaMaterialLineaUpdateInput) {
@@ -73,7 +117,9 @@ export async function actualizarPrecioLinea(proformaMaterialId: number, lineaId:
 }
 
 export async function enviarValidacionProformaMaterial(id: number) {
-  await obtenerProformaMaterial(id)
+  const proforma = await obtenerProformaMaterial(id)
+  // Sin tipo de cambio no se puede convertir la Factura Nacional a CLP.
+  validarTipoCambio(proforma.moneda.codigo, proforma.tipoCambio != null ? Number(proforma.tipoCambio) : null)
   return repo.enviarValidacion(id)
 }
 

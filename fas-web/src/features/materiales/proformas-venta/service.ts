@@ -48,6 +48,14 @@ export const proformasVentaMaterialService = {
     return api.post(`materiales/proformas/${id}/enviar-validacion`).json()
   },
 
+  // Tipo de cambio sugerido (CLP por 1 unidad) — fuentes configuradas en
+  // Integraciones (TC_*), con respaldo local. Para el botón "Obtener".
+  async obtenerTipoCambio(moneda: string, fecha?: string): Promise<{ data: { valor: number; fecha: string | null; moneda: string; fuente: string | null } }> {
+    const sp: Record<string, string> = { moneda }
+    if (fecha) sp.fecha = fecha
+    return api.get('materiales/proformas/tipo-cambio', { searchParams: sp }).json()
+  },
+
   async anular(id: number): Promise<{ data: ProformaMaterialDetalle }> {
     return api.post(`materiales/proformas/${id}/anular`).json()
   },

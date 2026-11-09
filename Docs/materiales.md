@@ -796,3 +796,5 @@ UI con shadcn/ui. Los campos condicionales (valor estándar, bloque DTE) se mues
 - [ ] Pantallas de §7 navegables, con campos condicionales (valor estándar, bloque DTE) y badges de estado en la consulta.
 - [ ] Schema incorporado al `CLAUDE.md` global.
 - [ ] Orden de Compra de Materiales: invariantes R19–R23 garantizadas por el service, tests CA20–CA30 en verde, pantalla `/ordenes-compra` navegable.
+
+> **Tipo de cambio en la Proforma de Venta de Materiales — 2026-11-09.** Igual que la Proforma de Servicios a Productor: `ProformaMaterial.tipoCambio Decimal(14,4)?` (CLP por 1 unidad), **obligatorio si la moneda no es CLP** (crear/editar/enviar a validación), normalizado a null en CLP; al cambiar la moneda se limpia. Botón "Obtener" (`GET /api/materiales/proformas/tipo-cambio?moneda=&fecha=`, LECTURA en `MATERIALES_PROFORMA`) con las fuentes configuradas en Integraciones (`TC_*`). La Factura Nacional ya no exige CLP para la Proforma de Materiales: convierte cada precio a CLP con ese tipo de cambio (precio original en `precioUnitarioOrigen`) y guarda el tipo de cambio en la factura.

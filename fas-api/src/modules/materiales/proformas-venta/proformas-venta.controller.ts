@@ -6,6 +6,7 @@ import {
   proformaMaterialListQuerySchema,
   proformaMaterialLineaUpdateSchema,
   proformaMaterialLineaParamsSchema,
+  proformaMaterialTipoCambioQuerySchema,
 } from './proformas-venta.schema.js'
 import * as service from './proformas-venta.service.js'
 
@@ -58,4 +59,9 @@ export async function anular(req: FastifyRequest, reply: FastifyReply) {
   const { id } = proformaMaterialParamsSchema.parse(req.params)
   const proforma = await service.anularProformaMaterial(id)
   return reply.send({ data: proforma })
+}
+
+export async function tipoCambio(req: FastifyRequest, reply: FastifyReply) {
+  const { moneda, fecha } = proformaMaterialTipoCambioQuerySchema.parse(req.query)
+  return reply.send({ data: await service.obtenerTipoCambioSugerido(moneda, fecha) })
 }

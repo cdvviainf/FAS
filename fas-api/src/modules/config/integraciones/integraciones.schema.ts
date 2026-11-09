@@ -12,6 +12,9 @@ export const integracionCreateSchema = z.object({
   // gestor dispara la reserva automática al generar un Embarque; si no,
   // cae a manual. A lo más una Integración por gestor (@@unique).
   gestorLogisticoId: z.number().int().positive().optional().nullable(),
+  // Prioridad de consulta de las fuentes de tipo de cambio (codigo TC_*,
+  // 2026-11-09): 1 = primera. Null = al final.
+  prioridad: z.number().int().min(1).max(99).optional().nullable(),
 })
 
 export const integracionUpdateSchema = integracionCreateSchema.omit({ codigo: true }).partial()
