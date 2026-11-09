@@ -100,7 +100,6 @@ function lineasPersistir(lineas: ProformaProductorLineaInput[]) {
     cantidad: l.cantidad,
     precioUnitario: l.precioUnitario,
     monto: round2(l.cantidad * l.precioUnitario),
-    exento: l.exento,
   }))
 }
 
@@ -138,6 +137,7 @@ export async function createProformaProductor(data: ProformaProductorCreateInput
         conceptoCtaCteId: data.conceptoCtaCteId,
         monedaId: data.monedaId,
         tipoCambio: data.tipoCambio ?? null,
+        ...(data.tipoDte !== undefined ? { tipoDte: data.tipoDte } : {}),
         observaciones: data.observaciones,
         creadoPor,
         lineas: { create: lineasPersistir(data.lineas) },
@@ -175,6 +175,7 @@ export async function updateProformaProductor(id: number, data: ProformaProducto
         ...(data.entidadId !== undefined ? { entidadId: data.entidadId } : {}),
         ...(data.monedaId !== undefined ? { monedaId: data.monedaId } : {}),
         ...(data.tipoCambio !== undefined ? { tipoCambio: data.tipoCambio } : {}),
+        ...(data.tipoDte !== undefined ? { tipoDte: data.tipoDte } : {}),
         ...(data.formaPagoId !== undefined ? { formaPagoId: data.formaPagoId } : {}),
         ...(data.condicionPagoId !== undefined ? { condicionPagoId: data.condicionPagoId } : {}),
         ...(data.conceptoCtaCteId !== undefined ? { conceptoCtaCteId: data.conceptoCtaCteId } : {}),

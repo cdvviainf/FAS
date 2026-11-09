@@ -14,6 +14,7 @@ export interface Usuario {
   perfilId: number
   perfil: { id: number; codigo: string; descripcion: string }
   esResponsableVenta: boolean
+  puedeEditarCierresAjenos: boolean
   // Tiene firma PNG cargada (binario por GET /config/usuarios/:id/firma).
   tieneFirma: boolean
   empresaPredeterminadaId: number | null
@@ -33,6 +34,7 @@ export interface UsuarioCreateInput {
   whatsapp?: string
   perfilId: number
   esResponsableVenta?: boolean
+  puedeEditarCierresAjenos?: boolean
   password: string
   passwordConfirm: string
   empresas: number[]
@@ -44,6 +46,7 @@ export interface UsuarioUpdateInput {
   whatsapp?: string | null
   perfilId?: number
   esResponsableVenta?: boolean
+  puedeEditarCierresAjenos?: boolean
   empresas?: number[]
   empresaPredeterminadaId?: number | null
 }

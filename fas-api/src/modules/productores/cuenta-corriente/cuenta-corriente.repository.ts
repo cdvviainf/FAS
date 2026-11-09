@@ -47,7 +47,7 @@ export async function calcularSaldo(entidadId: number): Promise<number> {
   return Number(haber._sum.monto ?? 0) - Number(debe._sum.monto ?? 0)
 }
 
-export async function createMovimiento(entidadId: number, data: MovimientoCCCreateInput, usuarioId: string) {
+export async function createMovimiento(entidadId: number, data: MovimientoCCCreateInput & { temporadaId: number }, usuarioId: string) {
   const { fecha, ...rest } = data
   return prisma.movimientoCuentaCorriente.create({
     // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
@@ -62,11 +62,7 @@ export async function getTipoCtaCteActivo(id: number) {
   return prisma.conceptoCtaCte.findFirst({ where: { id, eliminadoEn: null, bloqueado: false } })
 }
 
-// PROD-03: moneda y temporada deben existir, no estar eliminadas ni bloqueadas
+// PROD-03: moneda (y temporada, vía shared/temporada-documento) deben existir, no estar eliminadas ni bloqueadas
 export async function getMonedaActiva(id: number) {
   return prisma.moneda.findFirst({ where: { id, eliminadoEn: null, bloqueado: false } })
-}
-
-export async function getTemporadaActiva(id: number) {
-  return prisma.temporada.findFirst({ where: { id, eliminadoEn: null, bloqueado: false } })
 }

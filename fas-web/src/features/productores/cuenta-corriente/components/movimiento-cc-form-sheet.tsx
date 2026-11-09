@@ -24,6 +24,8 @@ import { Label } from '@/components/ui/label'
 import { Icons } from '@/components/icons'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { cuentaCorrienteService } from '../service'
+import { useTemporada } from '@/contexts/temporada-context'
+import { AvisoSinTemporada } from '@/components/shared/aviso-sin-temporada'
 import type { NaturalezaMovimientoCC } from '../types'
 
 const conceptosCtaCteService = createMantenedorService('conceptos-cta-cte')
@@ -79,6 +81,10 @@ export function MovimientoCCFormSheet({ entidadId, open, onOpenChange }: Movimie
     }
   }, [tipoSel])
 
+  // Temporada obligatoria (2026-11-09): el movimiento toma la temporada activa.
+  const { temporada: temporadaActiva, isLoading: temporadaCargando } = useTemporada()
+  const sinTemporada = temporadaActiva == null
+
   const mutation = useMutation({
     mutationFn: () => cuentaCorrienteService.imputar(entidadId, {
       tipoId: tipoId!,
@@ -88,6 +94,7 @@ export function MovimientoCCFormSheet({ entidadId, open, onOpenChange }: Movimie
       monto: Number(monto),
       monedaId,
       referencia: referencia.trim() || null,
+      temporadaId: temporadaActiva?.id ?? null,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cuenta-corriente', entidadId] })
@@ -180,9 +187,10 @@ export function MovimientoCCFormSheet({ entidadId, open, onOpenChange }: Movimie
           </div>
         </div>
 
+        <AvisoSinTemporada mostrar={sinTemporada && !temporadaCargando} className='mx-4' />
         <SheetFooter>
           <Button variant='outline' onClick={() => onOpenChange(false)} disabled={mutation.isPending}>Cancelar</Button>
-          <Button onClick={handleSubmit} isLoading={mutation.isPending}>
+          <Button onClick={handleSubmit} isLoading={mutation.isPending} disabled={sinTemporada}>
             <Icons.check className='mr-1 h-4 w-4' /> Registrar
           </Button>
         </SheetFooter>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useTemporada } from '@/contexts/temporada-context'
+import { AvisoSinTemporada } from '@/components/shared/aviso-sin-temporada'
 import { TemporadaSelect } from '@/components/shared/temporada-select'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -137,13 +138,40 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
     queryFn: () => entidadesService.list({ tipo: 'PLANTA', limit: 500, activo: true }),
     staleTime: 60_000,
   })
+  // Al asociar OC / Instructivos (2026-11-09): en alta solo se ofrecen los de la
+  // temporada activa (selector general). En edición la asociación ya está
+  // bloqueada y se listan sin filtro para no perder el nombre de una OC /
+  // Instructivo de otra temporada.
+  const { temporada: temporadaActiva, isLoading: temporadaCargando } = useTemporada()
+  const temporadaFiltro = isEdit ? undefined : temporadaActiva?.id
+  // Sin temporada activa (BCOG-R3-001) no se listan OC / Instructivos: se
+  // mostrarían los de todas las temporadas.
+  const sinTemporadaActiva = !isEdit && !temporadaCargando && temporadaFiltro == null
+  const opcionesHabilitadas = isEdit || (!temporadaCargando && temporadaFiltro != null)
+  // BCOG-R2-001: en alta, si cambia la temporada activa se descarta la OC /
+  // Instructivos ya elegidos (pertenecían a la temporada anterior). Ajuste de
+  // estado durante el render (sin useEffect), comparando con la temporada previa.
+  const [temporadaFiltroPrevia, setTemporadaFiltroPrevia] = useState(temporadaFiltro)
+  if (temporadaFiltro !== temporadaFiltroPrevia) {
+    setTemporadaFiltroPrevia(temporadaFiltro)
+    if (!isEdit) setFields((f) => (f.ordenCompraId == null && f.instructivoIds.length === 0 ? f : { ...f, ordenCompraId: null, instructivoIds: [] }))
+  }
   const { data: ordenesCompraData } = useQuery({
-    queryKey: ['ordenes-compra-emitidas-options'],
+    queryKey: ['ordenes-compra-emitidas-options', temporadaFiltro ?? null],
     // limit 100 = tope del contrato del listado de OC (ordenes-compra.schema.ts
-    // .max(100)); pedir más devuelve 400 y dejaba el combo vacío.
-    queryFn: () => ordenesCompraService.list({ estado: 'EMITIDA', limit: 100 }),
+    // .max(100)); se recorren todas las páginas (BCOG-R4-001) para que una
+    // temporada con más de 100 OC emitidas no deje OC válidas fuera del combo.
+    queryFn: async () => {
+      const primera = await ordenesCompraService.list({ estado: 'EMITIDA', limit: 100, page: 1, temporadaId: temporadaFiltro })
+      const restantes = await Promise.all(
+        Array.from({ length: Math.max(primera.meta.totalPages - 1, 0) }, (_, i) =>
+          ordenesCompraService.list({ estado: 'EMITIDA', limit: 100, page: i + 2, temporadaId: temporadaFiltro }),
+        ),
+      )
+      return { ...primera, data: [...primera.data, ...restantes.flatMap((r) => r.data)] }
+    },
     staleTime: 60_000,
-    enabled: fields.modo === 'OC',
+    enabled: fields.modo === 'OC' && opcionesHabilitadas,
   })
   const { data: templatesCargaData } = useQuery({
     queryKey: ['templates-carga-options', 'RECEPCION'],
@@ -151,23 +179,23 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
     staleTime: 60_000,
   })
   const { data: instructivosData } = useQuery({
-    queryKey: ['instructivos-embalaje-options'],
+    queryKey: ['instructivos-embalaje-options', temporadaFiltro ?? null],
     // El backend pagina de a 100 (límite del contrato) — se recorren todas
     // las páginas acá porque el picker necesita el catálogo completo de una
     // vez (IMP-QA-R1-008, ronda 2: no hay búsqueda remota en SelectMultiple).
     // Sin filtro de estado (2026-09-02): el Instructivo ya no tiene veredicto,
     // así que todos los no eliminados son seleccionables.
     queryFn: async () => {
-      const primera = await instructivoEmbalajeService.list({ limit: 100, page: 1 })
+      const primera = await instructivoEmbalajeService.list({ limit: 100, page: 1, temporadaId: temporadaFiltro })
       const restantes = await Promise.all(
         Array.from({ length: primera.meta.totalPages - 1 }, (_, i) =>
-          instructivoEmbalajeService.list({ limit: 100, page: i + 2 }),
+          instructivoEmbalajeService.list({ limit: 100, page: i + 2, temporadaId: temporadaFiltro }),
         ),
       )
       return { ...primera, data: [...primera.data, ...restantes.flatMap((r) => r.data)] }
     },
     staleTime: 60_000,
-    enabled: fields.modo === 'PROCESO',
+    enabled: fields.modo === 'PROCESO' && opcionesHabilitadas,
   })
   const { data: plantaDetalle } = useQuery({
     ...entidadDetailOptions(fields.plantaId || 0),
@@ -177,7 +205,6 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   const plantas = plantasData?.data ?? []
   const ordenesCompra = ordenesCompraData?.data ?? []
   // Temporada efectiva: la elegida; en alta, la de la OC seleccionada o la activa.
-  const { temporada: temporadaActiva } = useTemporada()
   const ocSeleccionada = fields.modo === 'OC' ? ordenesCompra.find((oc) => oc.id === fields.ordenCompraId) : undefined
   const temporadaIdEfectiva = fields.temporadaId ?? (isEdit ? null : ocSeleccionada?.temporadaId ?? temporadaActiva?.id ?? null)
   const templatesCarga = templatesCargaData?.data ?? []
@@ -206,6 +233,18 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
     if (fields.modo === 'OC' && !fields.ordenCompraId) e.ordenCompraId = 'Selecciona la Orden de Compra'
     if (fields.modo === 'PROCESO' && fields.instructivoIds.length === 0) {
       e.instructivoIds = 'Selecciona al menos un Instructivo de Embalaje'
+    }
+    if (sinTemporadaActiva) {
+      if (fields.modo === 'OC') e.ordenCompraId = 'Selecciona una temporada en el selector general para asociar la Orden de Compra'
+      if (fields.modo === 'PROCESO') e.instructivoIds = 'Selecciona una temporada en el selector general para asociar Instructivos'
+    }
+    // En alta, la OC / Instructivos deben estar entre las opciones de la
+    // temporada activa (defensa ante una selección que quedó de otra temporada).
+    if (!isEdit && fields.modo === 'OC' && fields.ordenCompraId && !ordenesCompra.some((oc) => oc.id === fields.ordenCompraId)) {
+      e.ordenCompraId = 'La Orden de Compra no pertenece a la temporada activa'
+    }
+    if (!isEdit && fields.modo === 'PROCESO' && fields.instructivoIds.some((id) => !instructivos.some((i) => i.id === id))) {
+      e.instructivoIds = 'Uno o más Instructivos no pertenecen a la temporada activa'
     }
     if (!fields.plantaId) e.plantaId = 'La planta es requerida'
     if (!fields.direccionPlantaId) e.direccionPlantaId = 'La dirección de la planta es requerida'
@@ -242,6 +281,8 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
       toast.success('Recepción actualizada')
       queryClient.invalidateQueries({ queryKey: recepcionesKeys.all })
       queryClient.invalidateQueries({ queryKey: recepcionesKeys.detail(recepcionId!) })
+      // Al guardar cambios se vuelve al listado (2026-11-09).
+      router.push('/dashboard/compras/recepciones')
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar la Recepción'),
   })
@@ -458,8 +499,11 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
                 selectedIds={fields.instructivoIds}
                 onChange={(ids) => setFields((f) => ({ ...f, instructivoIds: ids }))}
                 placeholder='Agregar instructivo...'
-                disabled={soloLectura || isEdit}
+                disabled={soloLectura || isEdit || sinTemporadaActiva}
               />
+              {sinTemporadaActiva && (
+                <p className='text-xs text-amber-600'>Selecciona una temporada en el selector general para asociar Instructivos.</p>
+              )}
               <p className='text-xs text-muted-foreground'>
                 Se validará que la fruta del Excel coincida con las características de alguna línea de los Instructivos seleccionados. Si hay diferencias, se te pedirá confirmar si deseas cargar de todas formas.
               </p>
@@ -476,8 +520,11 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
                 placeholder='Seleccionar Orden de Compra...'
                 searchPlaceholder='Buscar OC...'
                 options={ordenesCompra.map((oc) => ({ value: String(oc.id), label: `${oc.numero} — ${oc.entidadProductor.descripcion}` }))}
-                disabled={soloLectura || isEdit}
+                disabled={soloLectura || isEdit || sinTemporadaActiva}
               />
+              {sinTemporadaActiva && (
+                <p className='text-xs text-amber-600'>Selecciona una temporada en el selector general para asociar la Orden de Compra.</p>
+              )}
               {errors.ordenCompraId && <p className='text-xs text-destructive'>{errors.ordenCompraId}</p>}
             </div>
           )}
@@ -631,9 +678,10 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
         </CardContent>
       </Card>
 
+      {!soloLectura && <AvisoSinTemporada mostrar={sinTemporadaActiva} />}
       {!soloLectura && (
         <div className='flex justify-end'>
-          <Button onClick={handleSubmit} isLoading={isPending}>
+          <Button onClick={handleSubmit} isLoading={isPending} disabled={!isEdit && (temporadaCargando || temporadaFiltro == null)}>
             <Icons.check className='mr-1 h-4 w-4' /> {isEdit ? 'Guardar cambios' : 'Crear Recepción'}
           </Button>
         </div>

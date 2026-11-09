@@ -7,6 +7,8 @@ export const proformaMaterialCreateSchema = z.object({
   monedaId: z.number().int().positive('La moneda es requerida'),
   // Tipo de cambio (CLP por 1 unidad) — obligatorio si la moneda no es CLP (2026-11-09).
   tipoCambio: z.number().positive('El tipo de cambio debe ser mayor a 0').max(9_999_999_999.9999, 'El tipo de cambio es demasiado grande').optional().nullable(),
+  // Tipo de documento (2026-11-09): 33 Factura Nacional (afecta) / 34 Factura Exenta.
+  tipoDte: z.union([z.literal(33), z.literal(34)]).optional(),
   observaciones: z.string().max(2000).trim().optional().nullable(),
 })
 

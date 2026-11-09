@@ -81,10 +81,16 @@ export async function sugerirLineas(embarqueId: number, dimensiones: DimensionPr
     repo.getPalletsReservadosConDetalle(embarqueId),
     repo.getNotaVentaParaPrecios(embarque.notaVentaId),
   ])
-  const detalleNV = (notaVenta?.detalles ?? []).map((d) => ({ ...d, precio: Number(d.precio) }))
+  const detalleNV = (notaVenta?.detalles ?? []).map((d) => ({
+    ...d,
+    precio: Number(d.precio),
+    calidadHastaOrden: d.notaCalidadHasta?.orden ?? null,
+    condicionHastaOrden: d.notaCondicionHasta?.orden ?? null,
+  }))
 
   const grupos = new Map<string, GrupoAcumulado>()
   for (const pallet of pallets) {
+    const notas = { calidadOrden: pallet.notaCalidad?.orden ?? null, condicionOrden: pallet.notaCondicion?.orden ?? null }
     for (const l of pallet.lineas) {
       const precio =
         precioNVParaLineaPallet(
@@ -96,6 +102,7 @@ export async function sugerirLineas(embarqueId: number, dimensiones: DimensionPr
             calibreId: l.calibreId,
           },
           detalleNV,
+          notas,
         ) ?? 0
 
       const key = claveGrupo(l, dimensiones)

@@ -10,7 +10,7 @@ import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
 import * as libredte from '../../finanzas/facturacion/libredte.adapter.js'
 import { esFacturaTimbrada, esFacturaConDocumentoDescargable, interpretarEstadoSii } from './sii-estado.js'
-import { mapFacturaNacionalADte } from '../../finanzas/facturacion/mappers/factura-nacional.mapper.js'
+import { mapFacturaNacionalADte, MAX_OBSERVACIONES_SII } from '../../finanzas/facturacion/mappers/factura-nacional.mapper.js'
 import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
 import * as proformaService from './proforma.service.js'
 import { obtenerPdf } from '../../documentos/documentos.service.js'
@@ -28,6 +28,31 @@ const IVA_TASA = 0.19
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 const round4 = (n: number) => Math.round(n * 10000) / 10000
+
+// Observaciones iniciales de la Factura creada desde una Proforma (2026-11-09):
+// las de la Proforma y, si la Proforma está en moneda extranjera, el NETO total
+// en esa moneda (Σ líneas, sin IVA ni detalle por línea) y el tipo de cambio.
+// Ej.: "USD 2.500 a 998,56". Máx. 100 caracteres (límite SII de TermPagoGlosa):
+// si no cabe, se recorta el texto de la Proforma para conservar el del TC.
+const fmtMontoCl = new Intl.NumberFormat('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+const fmtTcCl = new Intl.NumberFormat('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
+function observacionesDesdeProforma(
+  observacionesProforma: string | null,
+  monedaCodigo: string,
+  esClp: boolean,
+  tipoCambio: number,
+  lineasOrigen: Array<{ cantidad: number; precioUnitario: number }>,
+): string | null {
+  const obs = observacionesProforma?.replace(/\s+/g, ' ').trim() ?? ''
+  if (esClp) return obs ? obs.slice(0, MAX_OBSERVACIONES_SII).trim() : null
+  const neto = round2(lineasOrigen.reduce((a, l) => a + round2(l.cantidad * l.precioUnitario), 0))
+  const tc = `${monedaCodigo} ${fmtMontoCl.format(neto)} a ${fmtTcCl.format(tipoCambio)}`
+  if (!obs) return tc
+  const sep = ' / '
+  const disponible = MAX_OBSERVACIONES_SII - tc.length - sep.length
+  if (disponible <= 0) return tc.slice(0, MAX_OBSERVACIONES_SII)
+  return `${obs.slice(0, disponible).trim()}${sep}${tc}`
+}
 
 // Tope de las columnas Decimal(14,2): 12 enteros + 2 decimales. El producto
 // cantidad × precio (o un total acumulado) no puede excederlo — se valida en el
@@ -114,8 +139,10 @@ export async function crearBorradorDesdeProforma(proformaMaterialId: number, use
   if (!clp) throw new ValidationError('No existe la moneda CLP en el maestro de Monedas')
 
   // Líneas iniciales: artículo + cantidad + precio de la proforma (convertido a
-  // CLP si corresponde, con el precio de origen en precioUnitarioOrigen); afectas
-  // por defecto (el usuario marca las exentas en el borrador).
+  // CLP si corresponde, con el precio de origen en precioUnitarioOrigen).
+  // Afecto/exento lo define el tipo de documento de la Proforma (2026-11-09):
+  // 33 → todas afectas, 34 → todas exentas (sin marca por línea).
+  const esExentaMat = proforma.tipoDte === 34
   const lineas = lineasPersistir(
     proforma.lineas.map((l) => ({
       descripcion: l.articulo?.descripcion ?? 'Ítem',
@@ -123,7 +150,7 @@ export async function crearBorradorDesdeProforma(proformaMaterialId: number, use
       cantidad: Number(l.cantidad),
       precioUnitario: esClp ? Number(l.precioUnitario) : round4(Number(l.precioUnitario) * tipoCambio),
       precioUnitarioOrigen: esClp ? null : Number(l.precioUnitario),
-      exento: false,
+      exento: esExentaMat,
     })),
   )
   const montos = calcularMontosYTipoDte(lineas)
@@ -137,6 +164,13 @@ export async function crearBorradorDesdeProforma(proformaMaterialId: number, use
       {
         origenClase: 'PROFORMA_MATERIAL',
         proformaMaterialId,
+        observaciones: observacionesDesdeProforma(
+          proforma.observaciones,
+          proforma.moneda.codigo,
+          esClp,
+          tipoCambio,
+          proforma.lineas.map((l) => ({ cantidad: Number(l.cantidad), precioUnitario: Number(l.precioUnitario) })),
+        ),
         codigo,
         clienteId: proforma.entidadId,
         monedaId: esClp ? proforma.monedaId : clp.id,
@@ -193,8 +227,8 @@ export async function crearBorradorDesdeProformaProductor(proformaProductorId: n
   const clp = await repo.getMonedaClp()
   if (!clp) throw new ValidationError('No existe la moneda CLP en el maestro de Monedas')
 
-  // Líneas: descripción = descripción del artículo de servicio; afecto/exento
-  // según la línea de la proforma. Precio convertido a CLP si la moneda no es CLP
+  // Líneas: descripción = glosa de la proforma; afecto/exento según el tipo de
+  // documento de la Proforma (2026-11-09: 34 → todas exentas, 33 → afectas). Precio convertido a CLP si la moneda no es CLP
   // (se guarda el precio de origen en precioUnitarioOrigen).
   const lineas = lineasPersistir(
     proforma.lineas.map((l) => ({
@@ -205,7 +239,7 @@ export async function crearBorradorDesdeProformaProductor(proformaProductorId: n
       cantidad: Number(l.cantidad),
       precioUnitario: esClp ? Number(l.precioUnitario) : round4(Number(l.precioUnitario) * tipoCambio),
       precioUnitarioOrigen: esClp ? null : Number(l.precioUnitario),
-      exento: l.exento,
+      exento: proforma.tipoDte === 34,
     })),
   )
   const montos = calcularMontosYTipoDte(lineas)
@@ -219,6 +253,13 @@ export async function crearBorradorDesdeProformaProductor(proformaProductorId: n
       {
         origenClase: 'PROFORMA_PRODUCTOR',
         proformaProductorId,
+        observaciones: observacionesDesdeProforma(
+          proforma.observaciones,
+          proforma.moneda.codigo,
+          esClp,
+          tipoCambio,
+          proforma.lineas.map((l) => ({ cantidad: Number(l.cantidad), precioUnitario: Number(l.precioUnitario) })),
+        ),
         codigo,
         clienteId: proforma.entidadId,
         monedaId: esClp ? proforma.monedaId : clp.id,
@@ -393,7 +434,10 @@ export async function actualizarBorrador(id: number, body: FacturaNacionalActual
       const invalido = articuloIds.find((aid) => !validos.has(aid))
       if (invalido != null) throw new ValidationError('Una de las líneas referencia un artículo que no existe en la empresa')
     }
-    const lineas = lineasPersistir(body.lineas)
+    // Afecto/exento lo fija el tipo de documento heredado de la Proforma
+    // (2026-11-09): se ignora la marca por línea que venga en el request.
+    const esExenta = factura.tipoDte === 34
+    const lineas = lineasPersistir(body.lineas.map((l) => ({ ...l, exento: esExenta })))
     const montos = calcularMontosYTipoDte(lineas)
     data.lineas = lineas
     data.tipoDte = montos.tipoDte
@@ -507,6 +551,14 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
       exento: l.exento,
     })),
     observaciones: factura.observaciones,
+    // Fecha de vencimiento y cuotas al SII (2026-11-09): mismas cuotas que se
+    // generan al firmar (Condición de Pago, referencia FACTURA = fecha del
+    // documento); las de zarpe/arribo/envío sin fecha conocida no se informan.
+    cuotas: (await construirCuotasNacional(factura, factura.fechaDocumento ?? new Date())).map((c) => ({
+      glosa: `Cuota ${c.numeroCuota}`,
+      fechaVencimiento: c.fechaVencimiento ? c.fechaVencimiento.toISOString().slice(0, 10) : null,
+      monto: Math.round(c.montoCuota),
+    })),
   })
 
   const versionAlLeer = factura.actualizadoEn?.getTime() ?? null

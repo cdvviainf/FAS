@@ -8,6 +8,7 @@ const usuarioSelect = {
   imagenUrl: true,
   perfilId: true,
   esResponsableVenta: true,
+  puedeEditarCierresAjenos: true,
   empresaPredeterminadaId: true,
   // Solo presencia de la firma (nunca el binario) → se aplana a `tieneFirma`.
   firma: { select: { usuarioId: true } },
@@ -94,6 +95,7 @@ export async function createUsuario(data: {
   imagenUrl?: string | null
   perfilId: number
   esResponsableVenta?: boolean
+  puedeEditarCierresAjenos?: boolean
   empresaPredeterminadaId?: number | null
   empresas: number[]
   creadoPor?: string
@@ -108,6 +110,7 @@ export async function createUsuario(data: {
         imagenUrl: data.imagenUrl ?? null,
         perfilId: data.perfilId,
         esResponsableVenta: data.esResponsableVenta ?? false,
+        puedeEditarCierresAjenos: data.puedeEditarCierresAjenos ?? false,
         empresaPredeterminadaId: data.empresaPredeterminadaId ?? null,
         creadoPor: data.creadoPor ?? null,
       },
@@ -143,6 +146,7 @@ export async function updateUsuario(
     imagenUrl?: string | null
     perfilId?: number
     esResponsableVenta?: boolean
+  puedeEditarCierresAjenos?: boolean
     empresaPredeterminadaId?: number | null
     empresas?: number[]
     actualizadoPor?: string
@@ -157,6 +161,7 @@ export async function updateUsuario(
         ...(data.imagenUrl !== undefined ? { imagenUrl: data.imagenUrl } : {}),
         ...(data.perfilId !== undefined ? { perfilId: data.perfilId } : {}),
         ...(data.esResponsableVenta !== undefined ? { esResponsableVenta: data.esResponsableVenta } : {}),
+        ...(data.puedeEditarCierresAjenos !== undefined ? { puedeEditarCierresAjenos: data.puedeEditarCierresAjenos } : {}),
         ...(data.empresaPredeterminadaId !== undefined ? { empresaPredeterminadaId: data.empresaPredeterminadaId } : {}),
         ...(data.actualizadoPor !== undefined ? { actualizadoPor: data.actualizadoPor } : {}),
       },

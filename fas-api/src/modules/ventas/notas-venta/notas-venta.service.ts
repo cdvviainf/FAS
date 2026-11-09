@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client'
-import { NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { ForbiddenError, NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './notas-venta.repository.js'
 import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleUpdateInput, NotaVentaUpdateInput } from './notas-venta.types.js'
 import { temporadaParaCrear, validarTemporadaEnEdicion } from '../../../shared/temporada-documento.js'
@@ -46,8 +46,10 @@ interface ReferenciasHeader {
   formaPagoId?: number | null
 }
 
-// Calidad / Condición "hasta" (2026-11-05): cada una debe existir y estar
-// vigente en la empresa activa. null/undefined = sin restricción.
+// Calidad / Condición "hasta" (2026-11-05; por línea desde 2026-11-09): cada
+// una debe existir y estar vigente en la empresa activa. null/undefined = sin
+// restricción. NotaVentaDetalle no es tenant: esta validación (consulta
+// tenant-scoped) es la que impide referenciar una nota de otra empresa.
 async function validarCalidadHasta(notaCalidadHastaId?: number | null, notaCondicionHastaId?: number | null) {
   if (notaCalidadHastaId != null && !(await repo.getNotaCalidad(notaCalidadHastaId))) {
     throw new ValidationError('La Nota de Calidad "hasta" seleccionada no existe o está bloqueada')
@@ -282,9 +284,15 @@ async function ejecutarConFkTraducida<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-export async function listarNotasVenta(page: number, limit: number, clienteId?: number, temporadaId?: number) {
-  const { data, total } = await repo.listNotasVenta(page, limit, clienteId, temporadaId)
-  return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
+export async function listarNotasVenta(page: number, limit: number, userId: string, clienteId?: number, temporadaId?: number) {
+  const [{ data, total }, editaAjenos] = await Promise.all([
+    repo.listNotasVenta(page, limit, clienteId, temporadaId),
+    repo.usuarioPuedeEditarCierresAjenos(userId),
+  ])
+  // puedeEditar por fila (2026-11-09): la UI ofrece Editar/Cerrar/Eliminar
+  // solo si el usuario es el creador o tiene el permiso de editar ajenos.
+  const conPermiso = data.map((d) => ({ ...d, puedeEditar: d.creadoPor === userId || editaAjenos }))
+  return { data: conPermiso, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
 export async function obtenerNotaVenta(id: number) {
@@ -301,9 +309,36 @@ function requireAbierta(nv: { cerradoEn: Date | null }) {
   }
 }
 
+// Edición restringida al creador (2026-11-09): mientras el Cierre está abierto,
+// solo quien lo creó puede modificarlo (encabezado, líneas, eliminar, cerrar),
+// salvo un usuario con el permiso de USUARIO `puedeEditarCierresAjenos`. Se
+// suma al nivel TOTAL del perfil (requireLevel en las rutas). Ver, duplicar y
+// reabrir no se restringen (reabrir sigue con VENTAS_REABRIR_CIERRE).
+export async function puedeEditarCierre(nv: { creadoPor: string }, userId: string): Promise<boolean> {
+  if (nv.creadoPor === userId) return true
+  return repo.usuarioPuedeEditarCierresAjenos(userId)
+}
+
+async function requireEditorCierre(nv: { creadoPor: string }, userId: string) {
+  if (await puedeEditarCierre(nv, userId)) return
+  const nombre = await repo.getNombreUsuario(nv.creadoPor)
+  throw new ForbiddenError(
+    `Este Cierre Comercial fue creado por ${nombre ?? 'otro usuario'}; solo quien lo creó (o un usuario autorizado para editar Cierres de otros) puede modificarlo.`,
+  )
+}
+
+// GET de un Cierre para la pantalla: agrega el nombre del creador y si el
+// usuario actual puede editarlo (la UI deja el Cierre en solo lectura si no).
+export async function obtenerNotaVentaParaUsuario(id: number, userId: string) {
+  const nv = await obtenerNotaVenta(id)
+  const [creadoPorNombre, puedeEditar] = await Promise.all([repo.getNombreUsuario(nv.creadoPor), puedeEditarCierre(nv, userId)])
+  return { ...nv, creadoPorNombre, puedeEditar }
+}
+
 export async function cerrarNotaVenta(id: number, userId: string) {
   const nv = await obtenerNotaVenta(id)
   if (nv.cerradoEn) throw new ValidationError('Este Cierre Comercial ya está cerrado')
+  await requireEditorCierre(nv, userId)
   return repo.cerrarNotaVenta(id, userId)
 }
 
@@ -334,16 +369,17 @@ export async function crearNotaVenta(body: NotaVentaCreateInput, creadoPor: stri
   // Responsable de venta: por defecto el usuario digitador (si se omite).
   if (body.responsableVentaId === undefined) body = { ...body, responsableVentaId: creadoPor }
   // Temporada: la enviada (validada) o la que corresponde por fecha.
-  body = { ...body, temporadaId: await temporadaParaCrear(body.temporadaId, body.fecha) }
+  const temporadaId = await temporadaParaCrear(body.temporadaId, body.fecha)
+  body = { ...body, temporadaId }
   await validarReferenciasHeader(body)
-  await validarCalidadHasta(body.notaCalidadHastaId, body.notaCondicionHastaId)
   await validarResponsableVenta(body.responsableVentaId, creadoPor)
-  return ejecutarConFkTraducida(() => repo.createNotaVenta(body, creadoPor))
+  return ejecutarConFkTraducida(() => repo.createNotaVenta({ ...body, temporadaId }, creadoPor))
 }
 
 export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput, actualizadoPor: string) {
   const existente = await obtenerNotaVenta(id)
   requireAbierta(existente)
+  await requireEditorCierre(existente, actualizadoPor)
   await validarTemporadaEnEdicion(body.temporadaId, existente.temporadaId)
 
   // Instructivo de Embalaje (compras.md) no bloquea edición/borrado de la
@@ -389,10 +425,6 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
     notify: cambiaCliente || (body.notifyId !== undefined && body.notifyId !== existente.notifyId),
     consignatario: cambiaCliente || (body.consignatarioId !== undefined && body.consignatarioId !== existente.consignatarioId),
   })
-  await validarCalidadHasta(
-    body.notaCalidadHastaId !== undefined && body.notaCalidadHastaId !== existente.notaCalidadHastaId ? body.notaCalidadHastaId : null,
-    body.notaCondicionHastaId !== undefined && body.notaCondicionHastaId !== existente.notaCondicionHastaId ? body.notaCondicionHastaId : null,
-  )
   if (body.responsableVentaId !== undefined) {
     await validarResponsableVenta(body.responsableVentaId, actualizadoPor, existente.responsableVentaId)
   }
@@ -408,13 +440,16 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
 export async function duplicarNotaVenta(id: number, userId: string) {
   const origen = await obtenerNotaVenta(id)
   await validarReferenciasHeader(origen, { notify: false, consignatario: false })
-  await validarCalidadHasta(origen.notaCalidadHastaId, origen.notaCondicionHastaId)
+  for (const d of origen.detalles) {
+    await validarCalidadHasta(d.notaCalidadHasta?.id ?? null, d.notaCondicionHasta?.id ?? null)
+  }
   return ejecutarConFkTraducida(() => repo.duplicarNotaVenta(id, userId, userId))
 }
 
 export async function eliminarNotaVenta(id: number, eliminadoPor: string) {
   const nv = await obtenerNotaVenta(id)
   requireAbierta(nv)
+  await requireEditorCierre(nv, eliminadoPor)
   // R3 (Docs/ventas.md): no se puede eliminar una NV con Embarque asociado.
   const embarques = await repo.countEmbarques(id)
   if (embarques > 0) {
@@ -423,20 +458,23 @@ export async function eliminarNotaVenta(id: number, eliminadoPor: string) {
   await repo.softDeleteNotaVenta(id, eliminadoPor)
 }
 
-export async function agregarDetalle(notaVentaId: number, body: NotaVentaDetalleCreateInput) {
+export async function agregarDetalle(notaVentaId: number, body: NotaVentaDetalleCreateInput, userId: string) {
   const nv = await obtenerNotaVenta(notaVentaId)
   requireAbierta(nv)
+  await requireEditorCierre(nv, userId)
   const { etiquetaId } = await validarDetalle(body)
+  await validarCalidadHasta(body.notaCalidadHastaId, body.notaCondicionHastaId)
   return repo.addDetalle(notaVentaId, { ...body, etiquetaId })
 }
 
-async function obtenerDetalleDeNotaVenta(notaVentaId: number, detalleId: number) {
+async function obtenerDetalleDeNotaVenta(notaVentaId: number, detalleId: number, userId: string) {
   // La Nota de Venta se valida primero vía la consulta tenant-scoped
   // (obtenerNotaVenta) — NotaVentaDetalle no es un modelo tenant, así que sin
   // esto una línea de otra empresa sería alcanzable si el atacante conoce
   // ambos IDs (FAS-EMP-F3-VEN-R1-001).
   const nv = await obtenerNotaVenta(notaVentaId)
   requireAbierta(nv)
+  await requireEditorCierre(nv, userId)
   const detalle = await repo.getDetalleById(detalleId)
   if (!detalle || detalle.notaVentaId !== notaVentaId) {
     throw new NotFoundError('Línea de detalle', String(detalleId))
@@ -455,8 +493,8 @@ function calibresIguales(a: number[], b: number[]): boolean {
 // valores server-side (ordenes-compra.service.ts resolverLineaDesdeCierre) y
 // cambiarlos acá los dejaría desincronizados. `cajas` sigue editable, pero
 // nunca por debajo de lo ya comprometido.
-export async function actualizarDetalle(notaVentaId: number, detalleId: number, body: NotaVentaDetalleUpdateInput) {
-  await obtenerDetalleDeNotaVenta(notaVentaId, detalleId)
+export async function actualizarDetalle(notaVentaId: number, detalleId: number, body: NotaVentaDetalleUpdateInput, userId: string) {
+  await obtenerDetalleDeNotaVenta(notaVentaId, detalleId, userId)
   const comprometido = await repo.getCajasComprometidas(detalleId)
   if (comprometido > 0) {
     const actual = await repo.getDetalleParaComparar(detalleId)
@@ -479,11 +517,19 @@ export async function actualizarDetalle(notaVentaId: number, detalleId: number, 
     }
   }
   const { etiquetaId } = await validarDetalle(body)
+  // Solo se re-valida la nota que cambia: una línea cuya nota se bloqueó
+  // después puede seguir editándose en sus otros campos (mismo criterio que
+  // tenía el encabezado).
+  const hastaActual = await repo.getDetalleCalidadHasta(detalleId)
+  await validarCalidadHasta(
+    body.notaCalidadHastaId != null && body.notaCalidadHastaId !== hastaActual?.notaCalidadHastaId ? body.notaCalidadHastaId : null,
+    body.notaCondicionHastaId != null && body.notaCondicionHastaId !== hastaActual?.notaCondicionHastaId ? body.notaCondicionHastaId : null,
+  )
   return repo.updateDetalle(detalleId, { ...body, etiquetaId })
 }
 
-export async function eliminarDetalle(notaVentaId: number, detalleId: number) {
-  await obtenerDetalleDeNotaVenta(notaVentaId, detalleId)
+export async function eliminarDetalle(notaVentaId: number, detalleId: number, userId: string) {
+  await obtenerDetalleDeNotaVenta(notaVentaId, detalleId, userId)
   const comprometido = await repo.getCajasComprometidas(detalleId)
   if (comprometido > 0) {
     throw new ValidationError('No se puede eliminar una línea del Cierre Comercial que ya tiene cajas comprometidas por una Orden de Compra')

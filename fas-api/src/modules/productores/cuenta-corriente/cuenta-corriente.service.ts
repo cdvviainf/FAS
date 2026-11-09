@@ -1,5 +1,6 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './cuenta-corriente.repository.js'
+import { temporadaParaCrear } from '../../../shared/temporada-documento.js'
 import { findEntidadById } from '../../config/entidades/entidades.repository.js'
 import type { MovimientoCCCreateInput, CuentaCorrienteFilters } from './cuenta-corriente.types.js'
 
@@ -38,10 +39,9 @@ export async function imputarMovimiento(entidadId: number, body: MovimientoCCCre
     const moneda = await repo.getMonedaActiva(body.monedaId)
     if (!moneda) throw new ValidationError('La moneda seleccionada no existe, está bloqueada o fue eliminada')
   }
-  if (body.temporadaId != null) {
-    const temporada = await repo.getTemporadaActiva(body.temporadaId)
-    if (!temporada) throw new ValidationError('La temporada seleccionada no existe, está bloqueada o fue eliminada')
-  }
+  // Temporada obligatoria (2026-11-09): la enviada (vigente) o la que
+  // corresponde por fecha; sin ninguna, no se imputa.
+  const temporadaId = await temporadaParaCrear(body.temporadaId, new Date(body.fecha))
 
-  return repo.createMovimiento(entidadId, body, usuarioId)
+  return repo.createMovimiento(entidadId, { ...body, temporadaId }, usuarioId)
 }

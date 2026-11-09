@@ -6,10 +6,6 @@ export interface NotaVentaCreateInput {
   tipoVenta?: TipoVenta
   clienteId: number
   exportadorId?: number | null
-  // Calidad / Condición "hasta" (2026-11-05): restringen qué pallets se pueden
-  // reservar en el Embarque de este Cierre (orden <= hasta). null = sin restricción.
-  notaCalidadHastaId?: number | null
-  notaCondicionHastaId?: number | null
   responsableVentaId?: string | null
   compradorContactoId?: number | null
   notifyId?: number | null
@@ -49,6 +45,10 @@ export interface NotaVentaDetalleCreateInput {
   precio: number
   calibreIds: number[]
   calibreModo?: 'ESPECIFICOS' | 'RANGO'
+  // Calidad / Condición "hasta" de la línea (2026-11-09): restringen qué pallets
+  // se pueden reservar contra esta línea (orden <= hasta). null = sin restricción.
+  notaCalidadHastaId?: number | null
+  notaCondicionHastaId?: number | null
 }
 
 export type NotaVentaDetalleUpdateInput = NotaVentaDetalleCreateInput

@@ -183,6 +183,8 @@ export function OrdenCompraMaterialForm({ ordenCompraMaterialId }: OrdenCompraMa
       toast.success('Orden de Compra actualizada')
       queryClient.invalidateQueries({ queryKey: ordenesCompraMaterialKeys.all })
       queryClient.invalidateQueries({ queryKey: ordenesCompraMaterialKeys.detail(ordenCompraMaterialId!) })
+      // Al guardar cambios se vuelve al listado (2026-11-09).
+      router.push('/dashboard/operaciones/materiales/ordenes-compra')
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar la Orden de Compra'),
   })

@@ -55,6 +55,12 @@ export interface NotaVentaDetalleItem {
   cajas: number
   precio: string
   calibres: { calibre: MantenedorRef & { orden?: number } }[]
+  // Calidad / Condición "hasta" de la línea (2026-11-09, antes en el
+  // encabezado): admite todo lo de orden <= al elegido. null = sin restricción.
+  notaCalidadHastaId: number | null
+  notaCalidadHasta: (MantenedorRef & { orden: number }) | null
+  notaCondicionHastaId: number | null
+  notaCondicionHasta: (MantenedorRef & { orden: number }) | null
   // Presentación de calibres en el PDF (sin efecto funcional).
   calibreModo: CalibreModo
 }
@@ -80,6 +86,9 @@ export interface NotaVentaListItem {
   // Bloqueo del Cierre (2026-09-28): cerrado = solo lectura hasta reabrir.
   cerradoEn: string | null
   cerradoPor: string | null
+  // Creador y si el usuario actual puede editar el Cierre (2026-11-09).
+  creadoPorNombre?: string | null
+  puedeEditar?: boolean
 }
 
 // Solo el listado trae este campo calculado (2026-08-23) — el GET de un
@@ -106,11 +115,6 @@ export interface NotaVentaDetalle extends NotaVentaListItem {
   tipoVenta: 'EXPORTACION' | 'NACIONAL'
   exportadorId: number | null
   exportador: { id: number; codigo: string; descripcion: string; razonSocial: string } | null
-  // Calidad / Condición "hasta" (2026-11-05): admite todo lo de orden <= al elegido.
-  notaCalidadHastaId: number | null
-  notaCalidadHasta: (MantenedorRef & { orden: number }) | null
-  notaCondicionHastaId: number | null
-  notaCondicionHasta: (MantenedorRef & { orden: number }) | null
   responsableVentaId: string | null
   responsableVenta: { id: string; nombre: string; email: string } | null
   compradorContactoId: number | null
@@ -145,6 +149,11 @@ export interface NotaVentaDetalle extends NotaVentaListItem {
   observaciones: string | null
   contratoNaviero: 'AGROSAN_AGL' | 'CLIENTE'
   detalles: NotaVentaDetalleItem[]
+  // Edición restringida al creador (2026-11-09), calculado por el backend para
+  // el usuario actual.
+  creadoPor: string
+  creadoPorNombre: string | null
+  puedeEditar: boolean
 }
 
 export interface NotaVentaListResponse {
@@ -158,8 +167,6 @@ export interface NotaVentaCreateInput {
   tipoVenta?: 'EXPORTACION' | 'NACIONAL'
   clienteId: number
   exportadorId?: number | null
-  notaCalidadHastaId?: number | null
-  notaCondicionHastaId?: number | null
   responsableVentaId?: string | null
   compradorContactoId?: number | null
   notifyId?: number | null
@@ -169,7 +176,6 @@ export interface NotaVentaCreateInput {
   paisDestinoId: number
   puertoDestinoId?: number | null
   direccionId?: number | null
-  direccionDetalle?: string | null
   monedaId: number
   modalidadVentaId?: number | null
   clausulaVentaId?: number | null
@@ -198,4 +204,6 @@ export interface NotaVentaDetalleCreateInput {
   precio: number
   calibreIds: number[]
   calibreModo?: CalibreModo
+  notaCalidadHastaId?: number | null
+  notaCondicionHastaId?: number | null
 }

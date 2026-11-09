@@ -1,5 +1,6 @@
 'use client'
 
+import { vencimientoEstimado } from '@/lib/vencimiento-estimado'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -8,7 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
+import { TipoDocumentoProformaSelect } from '@/components/shared/tipo-documento-proforma-select'
+import { totalesProforma, type TipoDteProforma } from '@/lib/tipo-documento-proforma'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -46,6 +48,7 @@ interface HeaderFields {
   conceptoCtaCteId: number | null
   monedaId: number
   tipoCambio: string // CLP por 1 unidad de la moneda (vacío si CLP)
+  tipoDte: TipoDteProforma
   observaciones: string
 }
 
@@ -54,7 +57,6 @@ interface LineaEdit {
   glosa: string
   cantidad: string
   precioUnitario: string
-  exento: boolean
 }
 
 const HEADER_EMPTY: HeaderFields = {
@@ -64,10 +66,11 @@ const HEADER_EMPTY: HeaderFields = {
   conceptoCtaCteId: null,
   monedaId: 0,
   tipoCambio: '',
+  tipoDte: 33,
   observaciones: '',
 }
 
-const LINEA_EMPTY: LineaEdit = { glosa: '', cantidad: '1', precioUnitario: '0', exento: false }
+const LINEA_EMPTY: LineaEdit = { glosa: '', cantidad: '1', precioUnitario: '0' }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
@@ -147,6 +150,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
         conceptoCtaCteId: d.conceptoCtaCteId,
         monedaId: d.monedaId,
         tipoCambio: d.tipoCambio ?? '',
+        tipoDte: d.tipoDte ?? 33,
         observaciones: d.observaciones ?? '',
       })
       setLineas(
@@ -154,7 +158,6 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
           glosa: l.glosa,
           cantidad: l.cantidad,
           precioUnitario: l.precioUnitario,
-          exento: l.exento,
         })),
       )
     }
@@ -178,7 +181,6 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
       glosa: l.glosa.trim(),
       cantidad: Number(l.cantidad),
       precioUnitario: Number(l.precioUnitario),
-      exento: l.exento,
     }))
   }
 
@@ -190,6 +192,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
       formaPagoId: fields.formaPagoId,
       condicionPagoId: fields.condicionPagoId,
       conceptoCtaCteId: fields.conceptoCtaCteId,
+      tipoDte: fields.tipoDte,
       observaciones: fields.observaciones.trim() || undefined,
       lineas: buildLineasPayload(),
     }
@@ -210,6 +213,9 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
     onSuccess: () => {
       toast.success('Proforma actualizada')
       queryClient.invalidateQueries({ queryKey: proformasProductorKeys.detail(proformaProductorId!) })
+      queryClient.invalidateQueries({ queryKey: proformasProductorKeys.all })
+      // Al guardar cambios se vuelve al listado (2026-11-09).
+      router.push('/dashboard/productores/proformas')
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar la Proforma'),
   })
@@ -300,6 +306,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
   const puedeEnviarValidacion = puedeEscribir && editable && todasConPrecio && fields.conceptoCtaCteId != null
 
   const totalProforma = lineas.reduce((acc, l) => acc + round2(Number(l.cantidad) * Number(l.precioUnitario)), 0)
+  const totales = totalesProforma(totalProforma, fields.tipoDte)
 
   return (
     <div className='space-y-6'>
@@ -451,6 +458,10 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
               )}
             </div>
 
+            <div className='sm:max-w-md'>
+              <TipoDocumentoProformaSelect value={fields.tipoDte} onChange={(v) => setFields((f) => ({ ...f, tipoDte: v }))} />
+            </div>
+
             <div className='space-y-1.5'>
               <Label>Concepto de Cuenta Corriente</Label>
               <Select
@@ -477,6 +488,7 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
                   {cuotasPreview.map((c, i) => (
                     <Badge key={i} variant='outline'>
                       {c.porcentaje}% a {c.plazoDias} días desde {FECHA_REFERENCIA_LABELS[c.fechaReferencia]}{c.descripcion ? ` — ${c.descripcion}` : ''}
+                      {' · vence '}{vencimientoEstimado(c.fechaReferencia, c.plazoDias, isEdit ? proforma?.data.creadoEn : null) ?? '—'}{c.fechaReferencia === 'FACTURA' ? ' (estimado)' : ''}
                     </Badge>
                   ))}
                 </div>
@@ -504,7 +516,6 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
                     <TableHead className='min-w-[260px]'>Glosa</TableHead>
                     <TableHead className='w-28'>Cantidad</TableHead>
                     <TableHead className='w-32'>Precio Unitario</TableHead>
-                    <TableHead className='w-20 text-center'>Exento</TableHead>
                     <TableHead className='w-32 text-right'>Monto</TableHead>
                     {!soloLectura && <TableHead className='w-12' />}
                   </TableRow>
@@ -536,13 +547,6 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
                             onChange={(e) => setLinea(idx, { precioUnitario: e.target.value })}
                           />
                         </TableCell>
-                        <TableCell className='text-center'>
-                          <Checkbox
-                            checked={l.exento}
-                            disabled={soloLectura}
-                            onCheckedChange={(v) => setLinea(idx, { exento: v === true })}
-                          />
-                        </TableCell>
                         <TableCell className='text-right tabular-nums'>{formatMonto(monto)}</TableCell>
                         {!soloLectura && (
                           <TableCell className='text-right'>
@@ -567,8 +571,16 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
                 <Icons.add className='mr-1 h-4 w-4' /> Agregar línea
               </Button>
             )}
-            <div className='flex justify-end text-sm font-medium'>
-              Total: {formatMonto(totalProforma)}
+            <div className='flex flex-col items-end gap-0.5 text-sm'>
+              {fields.tipoDte === 34 ? (
+                <div className='text-muted-foreground'>Exento: <span className='tabular-nums'>{formatMonto(totales.exento)}</span></div>
+              ) : (
+                <>
+                  <div className='text-muted-foreground'>Neto: <span className='tabular-nums'>{formatMonto(totales.neto)}</span></div>
+                  <div className='text-muted-foreground'>IVA 19%: <span className='tabular-nums'>{formatMonto(totales.iva)}</span></div>
+                </>
+              )}
+              <div className='font-medium'>Total: <span className='tabular-nums'>{formatMonto(totales.total)}</span></div>
             </div>
           </CardContent>
         </Card>

@@ -1,5 +1,8 @@
 'use client'
 
+import { vencimientoEstimado } from '@/lib/vencimiento-estimado'
+import { TipoDocumentoProformaSelect } from '@/components/shared/tipo-documento-proforma-select'
+import type { TipoDteProforma } from '@/lib/tipo-documento-proforma'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -45,6 +48,7 @@ interface HeaderFields {
   condicionPagoId: number | null
   monedaId: number
   tipoCambio: string // CLP por 1 unidad de la moneda (vacío si CLP)
+  tipoDte: TipoDteProforma
   observaciones: string
 }
 
@@ -54,6 +58,7 @@ const HEADER_EMPTY: HeaderFields = {
   condicionPagoId: null,
   monedaId: 0,
   tipoCambio: '',
+  tipoDte: 33,
   observaciones: '',
 }
 
@@ -132,6 +137,7 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
         condicionPagoId: d.condicionPagoId,
         monedaId: d.monedaId,
         tipoCambio: d.tipoCambio ?? '',
+        tipoDte: d.tipoDte ?? 33,
         observaciones: d.observaciones ?? '',
       })
       setPreciosPorLinea(Object.fromEntries(d.lineas.map((l) => [l.id, l.precioUnitario])))
@@ -154,6 +160,7 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
       condicionPagoId: fields.condicionPagoId,
       monedaId: fields.monedaId,
       tipoCambio: esMonedaNoClp && Number(fields.tipoCambio) > 0 ? Number(fields.tipoCambio) : null,
+      tipoDte: fields.tipoDte,
       observaciones: fields.observaciones.trim() || undefined,
     }
   }
@@ -164,6 +171,7 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
       condicionPagoId: fields.condicionPagoId,
       monedaId: fields.monedaId,
       tipoCambio: esMonedaNoClp && Number(fields.tipoCambio) > 0 ? Number(fields.tipoCambio) : null,
+      tipoDte: fields.tipoDte,
       observaciones: fields.observaciones.trim() || undefined,
     }
   }
@@ -193,6 +201,9 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
     onSuccess: () => {
       toast.success('Proforma de Venta actualizada')
       queryClient.invalidateQueries({ queryKey: proformasVentaMaterialKeys.detail(proformaMaterialId!) })
+      queryClient.invalidateQueries({ queryKey: proformasVentaMaterialKeys.all })
+      // Al guardar cambios se vuelve al listado (2026-11-09).
+      router.push('/dashboard/operaciones/materiales/proformas')
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar la Proforma de Venta'),
   })
@@ -436,11 +447,16 @@ export function ProformaMaterialForm({ proformaMaterialId }: ProformaMaterialFor
                   {cuotasPreview.map((c, i) => (
                     <Badge key={i} variant='outline'>
                       {c.porcentaje}% a {c.plazoDias} días desde {FECHA_REFERENCIA_LABELS[c.fechaReferencia]}{c.descripcion ? ` — ${c.descripcion}` : ''}
+                      {' · vence '}{vencimientoEstimado(c.fechaReferencia, c.plazoDias, isEdit ? proforma?.data.creadoEn : null) ?? '—'}{c.fechaReferencia === 'FACTURA' ? ' (estimado)' : ''}
                     </Badge>
                   ))}
                 </div>
               </div>
             )}
+
+            <div className='sm:max-w-md'>
+              <TipoDocumentoProformaSelect value={fields.tipoDte} onChange={(v) => setFields((f) => ({ ...f, tipoDte: v }))} />
+            </div>
 
             <Separator />
 

@@ -13,7 +13,10 @@ import { useSalirDeDocumento } from '@/hooks/use-salir-de-documento'
 import type { MantenedorSimple } from '@/features/mantenedor-simple/types'
 
 export function TemporadaSelector() {
-  const { temporada, setTemporada } = useTemporada()
+  const { temporada, setTemporada, isLoading } = useTemporada()
+  // Temporada obligatoria (2026-11-09): sin temporada activa no se puede crear
+  // ningún registro — el selector se destaca para que el usuario elija una.
+  const sinTemporada = !isLoading && !temporada
   const [open, setOpen] = useState(false)
   const salirDeDocumento = useSalirDeDocumento()
 
@@ -27,12 +30,15 @@ export function TemporadaSelector() {
         <Button
           variant='outline'
           size='sm'
-          className='h-8 gap-1.5 text-xs font-medium'
-          title='Cambiar temporada activa'
+          className={cn(
+            'h-8 gap-1.5 text-xs font-medium',
+            sinTemporada && 'border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200',
+          )}
+          title={sinTemporada ? 'Selecciona una temporada: es obligatoria para crear registros' : 'Cambiar temporada activa'}
         >
-          <IconCalendarClock className='h-3.5 w-3.5 text-muted-foreground' />
-          <span className='hidden sm:inline'>
-            {temporada ? temporada.codigo : 'Sin temporada'}
+          <IconCalendarClock className={cn('h-3.5 w-3.5', sinTemporada ? 'text-amber-600' : 'text-muted-foreground')} />
+          <span className={sinTemporada ? 'inline' : 'hidden sm:inline'}>
+            {temporada ? temporada.codigo : 'Selecciona temporada'}
           </span>
           <IconChevronDown className='h-3 w-3 text-muted-foreground' />
         </Button>

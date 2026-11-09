@@ -35,6 +35,8 @@ const usuarioBaseSchema = z.object({
   whatsapp: z.string().max(50).trim().optional().or(z.literal('')),
   perfilId: z.coerce.number().int().min(1, 'El perfil es requerido'),
   esResponsableVenta: z.boolean(),
+  // Permiso de usuario (2026-11-09): editar Cierres Comerciales de otros.
+  puedeEditarCierresAjenos: z.boolean(),
   // Multi-empresa (Fase 4b): empresas asignadas + predeterminada. Invariante
   // §2 de empresas.md (la predeterminada debe estar entre las asignadas) se
   // valida con .refine() en cada schema final, no acá — .extend() no está
@@ -112,6 +114,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
         whatsapp: values.whatsapp || undefined,
         perfilId: values.perfilId,
         esResponsableVenta: values.esResponsableVenta,
+        puedeEditarCierresAjenos: values.puedeEditarCierresAjenos,
         password: values.password,
         passwordConfirm: values.passwordConfirm,
         empresas: values.empresas,
@@ -148,6 +151,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
         whatsapp: values.whatsapp || null,
         perfilId: values.perfilId,
         esResponsableVenta: values.esResponsableVenta,
+        puedeEditarCierresAjenos: values.puedeEditarCierresAjenos,
         empresas: values.empresas,
         empresaPredeterminadaId: values.empresaPredeterminadaId ?? null,
       }),
@@ -170,6 +174,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       whatsapp: '',
       perfilId: 0,
       esResponsableVenta: false,
+      puedeEditarCierresAjenos: false,
       password: '',
       passwordConfirm: '',
       empresas: [],
@@ -189,6 +194,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       whatsapp: usuario?.whatsapp ?? '',
       perfilId: usuario?.perfilId ?? 0,
       esResponsableVenta: usuario?.esResponsableVenta ?? false,
+      puedeEditarCierresAjenos: usuario?.puedeEditarCierresAjenos ?? false,
       empresas: usuario?.empresas.map((e) => e.id) ?? [],
       empresaPredeterminadaId: usuario?.empresaPredeterminadaId ?? null,
     } as UsuarioEditValues,
@@ -205,6 +211,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       editForm.setFieldValue('whatsapp', usuario.whatsapp ?? '')
       editForm.setFieldValue('perfilId', usuario.perfilId)
       editForm.setFieldValue('esResponsableVenta', usuario.esResponsableVenta)
+      editForm.setFieldValue('puedeEditarCierresAjenos', usuario.puedeEditarCierresAjenos ?? false)
       editForm.setFieldValue('empresas', usuario.empresas.map((e) => e.id))
       editForm.setFieldValue('empresaPredeterminadaId', usuario.empresaPredeterminadaId)
     }
@@ -319,6 +326,22 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
                         onCheckedChange={(v) => field.handleChange(v === true)}
                       />
                       <Label htmlFor='esResponsableVenta-edit'>Responsable de Venta</Label>
+                    </div>
+                  )}
+                </editForm.Field>
+
+                <editForm.Field name='puedeEditarCierresAjenos'>
+                  {(field) => (
+                    <div className='flex items-start gap-2 sm:col-span-2'>
+                      <Checkbox
+                        id='puedeEditarCierresAjenos-edit'
+                        checked={field.state.value}
+                        onCheckedChange={(v) => field.handleChange(v === true)}
+                      />
+                      <div className='space-y-0.5'>
+                        <Label htmlFor='puedeEditarCierresAjenos-edit'>Puede editar Cierres Comerciales de otros usuarios</Label>
+                        <p className='text-muted-foreground text-xs'>Sin este permiso, un Cierre abierto solo lo modifica quien lo creó.</p>
+                      </div>
                     </div>
                   )}
                 </editForm.Field>
@@ -523,6 +546,22 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
                       onCheckedChange={(v) => field.handleChange(v === true)}
                     />
                     <Label htmlFor='esResponsableVenta-create'>Responsable de Venta</Label>
+                  </div>
+                )}
+              </createForm.Field>
+
+              <createForm.Field name='puedeEditarCierresAjenos'>
+                {(field) => (
+                  <div className='flex items-start gap-2 sm:col-span-2'>
+                    <Checkbox
+                      id='puedeEditarCierresAjenos-create'
+                      checked={field.state.value}
+                      onCheckedChange={(v) => field.handleChange(v === true)}
+                    />
+                    <div className='space-y-0.5'>
+                      <Label htmlFor='puedeEditarCierresAjenos-create'>Puede editar Cierres Comerciales de otros usuarios</Label>
+                      <p className='text-muted-foreground text-xs'>Sin este permiso, un Cierre abierto solo lo modifica quien lo creó.</p>
+                    </div>
                   </div>
                 )}
               </createForm.Field>

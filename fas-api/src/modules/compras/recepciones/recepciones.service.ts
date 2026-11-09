@@ -133,9 +133,10 @@ export async function crearRecepcion(body: RecepcionCreateInput, creadoPor: stri
     const temporadaOc = await repo.getTemporadaDeOrdenCompra(body.ordenCompraId)
     if (temporadaOc != null) body = { ...body, temporadaId: temporadaOc }
   }
-  body = { ...body, temporadaId: await temporadaParaCrear(body.temporadaId, new Date()) }
+  const temporadaId = await temporadaParaCrear(body.temporadaId, new Date())
+  body = { ...body, temporadaId }
   try {
-    return shapeRecepcion(await repo.createRecepcion(body, creadoPor))
+    return shapeRecepcion(await repo.createRecepcion({ ...body, temporadaId }, creadoPor))
   } catch (err) {
     // El check-then-create de arriba no es atómico: si dos solicitudes
     // concurrentes pasan la validación a la vez, el índice único parcial de

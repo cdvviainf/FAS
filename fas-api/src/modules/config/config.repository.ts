@@ -712,6 +712,17 @@ export async function getTemporadaAsignable(id: number) {
 // Temporada por fecha (misma regla que el backfill de la migración
 // 20261106150000_temporada_documentos): la que contiene la fecha (inicio más
 // reciente si hay solapamiento); si ninguna, la predeterminada; si no, null.
+// Última temporada de la empresa activa (no eliminada), por fecha de inicio.
+// Respaldo SOLO para movimientos automáticos (no hay usuario que elija).
+export async function getTemporadaMasReciente(): Promise<number | null> {
+  const t = await prisma.temporada.findFirst({
+    where: { eliminadoEn: null },
+    orderBy: [{ fechaInicio: 'desc' }, { id: 'desc' }],
+    select: { id: true },
+  })
+  return t?.id ?? null
+}
+
 export async function resolverTemporadaPorFecha(fecha: Date): Promise<number | null> {
   const dia = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()))
   const porRango = await prisma.temporada.findFirst({

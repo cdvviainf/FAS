@@ -127,7 +127,6 @@ async function intentarReservaAgl(
     ...(idConsignee ? { idConsignee: Number(idConsignee) } : {}),
     ...(idPod ? { idPod: Number(idPod) } : {}),
     ...(idProducto ? { idProducto: Number(idProducto) } : {}),
-    ...(nv.direccionDetalle ? { direccionRetiro: nv.direccionDetalle } : {}),
     ...(datosContenedor?.temperatura != null ? { temperatura: datosContenedor.temperatura } : {}),
     ...(datosContenedor?.cbm != null ? { cbm: datosContenedor.cbm } : {}),
     observaciones: `Cierre Comercial folio ${nv.folio} — generado desde FAS`,
@@ -448,7 +447,7 @@ export async function listarPalletsDisponibles(embarqueId: number) {
   const embarque = await obtenerEmbarque(embarqueId)
   const notaVenta = await repo.getNotaVentaConDetalle(embarque.notaVentaId)
   if (!notaVenta) throw new ValidationError('El Cierre Comercial de este Embarque ya no existe')
-  return repo.getPalletsDisponibles(notaVenta.detalles, repo.calidadHastaDeNotaVenta(notaVenta))
+  return repo.getPalletsDisponibles(notaVenta.detalles)
 }
 
 // Reclamo atómico en el repositorio (reservarPalletsEnEmbarque) es la
@@ -463,8 +462,7 @@ export async function agregarPallets(embarqueId: number, palletIds: number[]) {
   const notaVenta = await repo.getNotaVentaConDetalle(embarque.notaVentaId)
   if (!notaVenta) throw new ValidationError('El Cierre Comercial de este Embarque ya no existe')
 
-  const hasta = repo.calidadHastaDeNotaVenta(notaVenta)
-  const disponibles = await repo.getPalletsDisponibles(notaVenta.detalles, hasta)
+  const disponibles = await repo.getPalletsDisponibles(notaVenta.detalles)
   const disponiblesIds = new Set(disponibles.map((p) => p.id))
   const fueraDeAlcance = unicos.filter((id) => !disponiblesIds.has(id))
   if (fueraDeAlcance.length > 0) {
@@ -473,7 +471,7 @@ export async function agregarPallets(embarqueId: number, palletIds: number[]) {
     )
   }
 
-  await repo.reservarPalletsEnEmbarque(unicos, embarqueId, hasta)
+  await repo.reservarPalletsEnEmbarque(unicos, embarqueId, notaVenta.detalles)
   return repo.getEmbarqueById(embarqueId)
 }
 

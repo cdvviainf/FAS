@@ -34,6 +34,23 @@ async function obtenerEmpresaTest() {
   return prisma.empresa.create({ data: { codigo: 'EMP-TEST-AGLWH', razonSocial: 'Empresa de prueba (webhook AGL)', creadoPor: 'test' } })
 }
 
+async function obtenerTemporadaTest(empresaId: number) {
+  const existente = await prisma.temporada.findFirst({
+    where: { empresaId, codigo: 'T26-AGLWH', eliminadoEn: null },
+  })
+  if (existente) return existente
+  return prisma.temporada.create({
+    data: {
+      empresaId,
+      codigo: 'T26-AGLWH',
+      descripcion: 'Temporada 2026 (webhook AGL)',
+      fechaInicio: new Date('2026-01-01'),
+      fechaTermino: new Date('2026-12-31'),
+      creadoPor: 'test',
+    },
+  })
+}
+
 async function limpiarDatos() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
@@ -52,6 +69,7 @@ async function limpiarDatos() {
 
 async function crearFixtures() {
   const empresa = await obtenerEmpresaTest()
+  const temporada = await obtenerTemporadaTest(empresa.id)
   const pais = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', creadoPor: 'test' } })
   const grupoMercado = await prisma.grupoMercado.create({ data: { empresaId: empresa.id, codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
   const mercado = await prisma.mercado.create({ data: { empresaId: empresa.id, codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, creadoPor: 'test' } })
@@ -65,7 +83,7 @@ async function crearFixtures() {
 
   const notaVenta = await prisma.notaVenta.create({
     data: {
-      empresaId: empresa.id, folio: 1, fecha: new Date(),
+      empresaId: empresa.id, temporadaId: temporada.id, folio: 1, fecha: new Date(),
       clienteId: cliente.id, tipoEmbarqueId: tipoEmbarque.id, mercadoId: mercado.id,
       paisDestinoId: pais.id, monedaId: moneda.id, creadoPor: 'test',
     },

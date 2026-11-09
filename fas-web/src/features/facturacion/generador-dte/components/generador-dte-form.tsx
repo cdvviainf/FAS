@@ -302,6 +302,9 @@ export function GeneradorDteForm({ documentoId }: GeneradorDteFormProps) {
     onSuccess: () => {
       toast.success('Documento actualizado')
       queryClient.invalidateQueries({ queryKey: generadorDteKeys.detail(documentoId!) })
+      queryClient.invalidateQueries({ queryKey: generadorDteKeys.all })
+      // Al guardar cambios se vuelve al listado (2026-11-09).
+      router.push('/dashboard/facturacion/generador-dte')
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar el documento'),
   })

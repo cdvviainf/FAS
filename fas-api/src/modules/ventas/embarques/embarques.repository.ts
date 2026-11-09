@@ -8,7 +8,7 @@ import {
   LOCK_NAMESPACE_EMBARQUE_CORRELATIVO,
   LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION,
 } from '../../../shared/advisory-locks.js'
-import { palletCalzaConDetalleNV } from './embarques.comparacion.js'
+import { palletCalzaConDetalleNV, type LineaNotaVentaParaComparar, type NotasPalletParaComparar } from './embarques.comparacion.js'
 import type { DatoPalletReconciliado } from './embarques.packing-list.motor.js'
 import type { DatosReservaManualInput, DatosReservaBaseInput, DatosInstructivoInput, InstructivoHijoUpdateInput, DatosContenedorInput } from './embarques.types.js'
 
@@ -280,25 +280,45 @@ export async function getNotaVentaConDetalle(id: number) {
   return prisma.notaVenta.findFirst({
     where: { id, eliminadoEn: null },
     include: {
-      detalles: { include: { calibres: { select: { calibreId: true } } } },
-      // Calidad / Condición "hasta" (2026-11-05): restringen qué pallets se
-      // pueden reservar (orden del pallet <= orden del "hasta").
-      notaCalidadHasta: { select: { orden: true } },
-      notaCondicionHasta: { select: { orden: true } },
+      detalles: {
+        include: {
+          calibres: { select: { calibreId: true } },
+          // Calidad / Condición "hasta" por línea (2026-11-09): restringen qué
+          // pallets se pueden reservar contra esa línea (orden <= hasta).
+          notaCalidadHasta: { select: { orden: true } },
+          notaCondicionHasta: { select: { orden: true } },
+        },
+      },
     },
   })
 }
 
+type DetalleNVConHasta = NonNullable<Awaited<ReturnType<typeof getNotaVentaConDetalle>>>['detalles']
+
+// Líneas de la NV en el formato del motor puro de comparación, con el orden
+// "hasta" de cada línea.
+export function detalleParaComparar(detalleNV: DetalleNVConHasta): LineaNotaVentaParaComparar[] {
+  return detalleNV.map((d) => ({
+    especieId: d.especieId,
+    variedadId: d.variedadId,
+    categoriaId: d.categoriaId,
+    articuloId: d.articuloId,
+    calibres: d.calibres,
+    calidadHastaOrden: d.notaCalidadHasta?.orden ?? null,
+    condicionHastaOrden: d.notaCondicionHasta?.orden ?? null,
+  }))
+}
+
+function notasDePallet(p: { notaCalidad: { orden: number } | null; notaCondicion: { orden: number } | null }): NotasPalletParaComparar {
+  return { calidadOrden: p.notaCalidad?.orden ?? null, condicionOrden: p.notaCondicion?.orden ?? null }
+}
+
 // Pallets sin reservar (embarqueId null) que calzan con el detalle de la NV
 // de este Embarque — candidatos para el paso "Seleccionar Pallets". El match
-// es solo de catálogo (embarques.comparacion.ts), sin tope de cantidad.
-export async function getPalletsDisponibles(
-  detalleNV: NonNullable<Awaited<ReturnType<typeof getNotaVentaConDetalle>>>['detalles'],
-  // Calidad / Condición "hasta" del Cierre (2026-11-05, supersede los pares):
-  // si hay, solo se ofrecen pallets con orden <= al del "hasta" en cada
-  // dimensión. null = sin restricción en esa dimensión.
-  hasta: CalidadHasta = { calidadOrden: null, condicionOrden: null },
-) {
+// es de catálogo (embarques.comparacion.ts), sin tope de cantidad, y desde
+// 2026-11-09 la línea que calza debe además admitir la Nota de Calidad /
+// Condición del pallet (regla "hasta" por línea).
+export async function getPalletsDisponibles(detalleNV: DetalleNVConHasta) {
   // 2026-09-28 (decisión de negocio Christian): se muestran TODOS los pallets
   // sin reservar que calzan con el detalle de la NV, calificados o no — el
   // frontend deshabilita la selección de los NO calificados (Nota Calidad +
@@ -307,32 +327,16 @@ export async function getPalletsDisponibles(
   const pallets = await prisma.pallet.findMany({
     // eliminadoEn: null (2026-10-12) — un pallet eliminado desde Edición de
     // Stock no es stock disponible y no debe poder reservarse a un Embarque.
-    where: { embarqueId: null, eliminadoEn: null, ...filtroCalidadHasta(hasta) },
-    include: palletInclude,
+    where: { embarqueId: null, eliminadoEn: null },
+    include: {
+      ...palletInclude,
+      notaCalidad: { select: { ...mantenedorSelect, orden: true } },
+      notaCondicion: { select: { ...mantenedorSelect, orden: true } },
+    },
     orderBy: { creadoEn: 'asc' },
   })
-  return pallets.filter((p) => palletCalzaConDetalleNV(p.lineas, detalleNV))
-}
-
-export interface CalidadHasta {
-  calidadOrden: number | null
-  condicionOrden: number | null
-}
-
-export function calidadHastaDeNotaVenta(nv: {
-  notaCalidadHasta: { orden: number } | null
-  notaCondicionHasta: { orden: number } | null
-}): CalidadHasta {
-  return { calidadOrden: nv.notaCalidadHasta?.orden ?? null, condicionOrden: nv.notaCondicionHasta?.orden ?? null }
-}
-
-// Filtro Prisma de la regla "hasta": un pallet sin nota en una dimensión
-// restringida no califica (mismo criterio que tenían los pares).
-function filtroCalidadHasta(hasta: CalidadHasta) {
-  return {
-    ...(hasta.calidadOrden != null ? { notaCalidad: { orden: { lte: hasta.calidadOrden } } } : {}),
-    ...(hasta.condicionOrden != null ? { notaCondicion: { orden: { lte: hasta.condicionOrden } } } : {}),
-  }
+  const lineasNV = detalleParaComparar(detalleNV)
+  return pallets.filter((p) => palletCalzaConDetalleNV(p.lineas, lineasNV, notasDePallet(p)))
 }
 
 // Reclamo atómico (mismo patrón que folios de Instructivo/Recepción de
@@ -342,11 +346,8 @@ function filtroCalidadHasta(hasta: CalidadHasta) {
 // (otro Embarque se llevó uno de los pallets en el medio) dejaba los demás
 // ya asignados aunque el service lanzara error — el throw dentro de
 // `$transaction` revierte todo el lote, no solo informa el fallo.
-export async function reservarPalletsEnEmbarque(
-  palletIds: number[],
-  embarqueId: number,
-  hasta: CalidadHasta = { calidadOrden: null, condicionOrden: null },
-) {
+export async function reservarPalletsEnEmbarque(palletIds: number[], embarqueId: number, detalleNV: DetalleNVConHasta) {
+  const lineasNV = detalleParaComparar(detalleNV)
   await prisma.$transaction(async (tx) => {
     // FAS-IE-QA-005 (QA ronda 4): mismo lock que desvincularPallet/
     // confirmarDespacho/generarInstructivosHijos — sin esto, una generación
@@ -355,26 +356,45 @@ export async function reservarPalletsEnEmbarque(
     // los pallets realmente reservados.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_DESPACHO}::int, ${embarqueId}::int)`
 
-    // Calificado (2026-09-28) = Completo + Nota Calidad + Nota Condición.
-    // Defensa en profundidad / anti-carrera: aunque el frontend deshabilita
-    // los no calificados, esto rechaza un pallet que se descalifique justo
-    // entre el listado y la reserva (o un llamado directo a la API).
-    const claim = await tx.pallet.updateMany({
-      where: {
-        id: { in: palletIds },
-        embarqueId: null,
-        eliminadoEn: null,
-        completo: true,
-        notaCalidadId: { not: null },
-        notaCondicionId: { not: null },
-        // Regla "hasta" del Cierre (2026-11-05) re-chequeada en el claim:
-        // la nota del pallet pudo cambiar entre el listado y la reserva.
-        ...filtroCalidadHasta(hasta),
+    // Regla "hasta" por línea (2026-11-09) re-chequeada dentro de la
+    // transacción: se relee cada pallet y el claim se condiciona a que sus
+    // notas sigan siendo las leídas (si cambian entre la lectura y el UPDATE,
+    // el claim no toca la fila y se revierte todo el lote).
+    const pallets = await tx.pallet.findMany({
+      where: { id: { in: palletIds } },
+      select: {
+        id: true,
+        notaCalidadId: true,
+        notaCondicionId: true,
+        notaCalidad: { select: { orden: true } },
+        notaCondicion: { select: { orden: true } },
+        lineas: { select: { especieId: true, variedadId: true, categoriaId: true, articuloId: true, calibreId: true } },
       },
-      data: { embarqueId },
     })
-    if (claim.count !== palletIds.length) {
-      throw new ValidationError('Uno o más pallets ya no están disponibles o no están calificados (requieren Nota de Calidad, Nota de Condición y estar Completos)')
+    const noCalzan = pallets.filter((p) => !palletCalzaConDetalleNV(p.lineas, lineasNV, notasDePallet(p)))
+    if (pallets.length !== palletIds.length || noCalzan.length > 0) {
+      throw new ValidationError('Uno o más pallets no calzan con el detalle del Cierre Comercial o su calidad no está permitida')
+    }
+
+    for (const p of pallets) {
+      // Calificado (2026-09-28) = Completo + Nota Calidad + Nota Condición.
+      // Defensa en profundidad / anti-carrera: aunque el frontend deshabilita
+      // los no calificados, esto rechaza un pallet que se descalifique justo
+      // entre el listado y la reserva (o un llamado directo a la API).
+      const claim = await tx.pallet.updateMany({
+        where: {
+          id: p.id,
+          embarqueId: null,
+          eliminadoEn: null,
+          completo: true,
+          notaCalidadId: p.notaCalidadId ?? { not: null },
+          notaCondicionId: p.notaCondicionId ?? { not: null },
+        },
+        data: { embarqueId },
+      })
+      if (claim.count !== 1) {
+        throw new ValidationError('Uno o más pallets ya no están disponibles o no están calificados (requieren Nota de Calidad, Nota de Condición y estar Completos)')
+      }
     }
   })
 }
@@ -894,7 +914,6 @@ export async function getNotaVentaParaReserva(id: number) {
       consignatarioId: true,
       tipoEmbarqueId: true,
       puertoDestinoId: true,
-      direccionDetalle: true,
       detalles: { select: { especieId: true } },
     },
   })

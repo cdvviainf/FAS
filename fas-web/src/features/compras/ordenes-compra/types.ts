@@ -49,6 +49,8 @@ export interface OrdenCompraLineaItem {
   etiquetaId: number | null
   etiqueta: MantenedorRef | null
   calibres: { calibre: MantenedorRef }[]
+  // Presentación de calibres en el PDF (2026-11-09): RANGO = "Desde X hasta Y".
+  calibreModo?: 'ESPECIFICOS' | 'RANGO'
   tipoPalletId: number | null
   tipoPallet: MantenedorRef | null
   cantidadPallets: number | null
@@ -84,6 +86,7 @@ export interface NotaVentaDetalleDisponibilidad {
   cajasPorPallet: number
   cajas: number
   calibres: { calibre: MantenedorRef }[]
+  calibreModo?: 'ESPECIFICOS' | 'RANGO'
   cajasComprometidas: number
   cajasDisponibles: number
 }
@@ -172,6 +175,9 @@ export interface OrdenCompraLineaInput {
   categoriaId?: number | null
   etiquetaId?: number | null
   calibreIds?: number[]
+  // Presentación de calibres en el PDF (2026-11-09). Si se omite al tomar una
+  // línea del Cierre, el backend usa la del Cierre.
+  calibreModo?: 'ESPECIFICOS' | 'RANGO'
   tipoPalletId?: number | null
   cantidadPallets?: number | null
   cajasPorPallet?: number | null

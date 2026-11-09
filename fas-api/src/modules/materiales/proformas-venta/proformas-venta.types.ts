@@ -4,6 +4,7 @@ export interface ProformaMaterialCreateInput {
   condicionPagoId?: number | null
   monedaId: number
   tipoCambio?: number | null
+  tipoDte?: 33 | 34
   observaciones?: string | null
 }
 

@@ -34,13 +34,15 @@ export async function resolverProformaProductor(id: number, empresaId: number): 
     getEntidadParaDocumento(proforma.entidadId),
   ])
 
-  // Totales: neto = Σ montos de líneas afectas, exento = Σ montos exentas,
-  // IVA = 19% del neto (pesos enteros), total = neto + iva + exento.
+  // Afecto/exento lo define el tipo de documento de la cabecera (2026-11-09):
+  // 33 → todas las líneas afectas; 34 → todas exentas. Totales: neto = Σ afectas,
+  // exento = Σ exentas, IVA = 19% del neto (pesos enteros), total = neto+iva+exento.
+  const esExenta = proforma.tipoDte === 34
   let neto = 0
   let exento = 0
   for (const l of proforma.lineas) {
     const monto = Number(l.monto)
-    if (l.exento) exento += monto
+    if (esExenta) exento += monto
     else neto += monto
   }
   neto = round2(neto)
@@ -72,7 +74,7 @@ export async function resolverProformaProductor(id: number, empresaId: number): 
       cantidad: l.cantidad.toString(),
       precioUnitario: l.precioUnitario.toString(),
       monto: l.monto.toString(),
-      exento: l.exento,
+      exento: esExenta,
     })),
     cuotas: proforma.cuotasPago.map((c) => ({
       descripcion: c.descripcion,

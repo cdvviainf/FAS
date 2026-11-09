@@ -7,6 +7,7 @@ import { LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION, LOCK_NAMESPACE_EMBARQUE_DESPACHO,
 import type { CuotaCalculada } from './cobranza-estado.js'
 import type { FacturasNacionalListFilters } from './factura-nacional.types.js'
 import { esFacturaTimbrada } from './sii-estado.js'
+import { temporadaParaMovimientoAutomatico } from '../../../shared/temporada-documento.js'
 
 // Forma de una cuota a persistir al firmar (= CuotaCalculada del helper).
 export type CuotaCobranzaPersistir = CuotaCalculada
@@ -74,6 +75,7 @@ export async function getProformaMaterialParaFactura(id: number) {
       monedaId: true,
       moneda: { select: { codigo: true, esMonedaBase: true } },
       tipoCambio: true,
+      tipoDte: true,
       condicionPagoId: true,
       observaciones: true,
       entidad: {
@@ -132,6 +134,7 @@ export async function getProformaProductorParaFactura(id: number) {
       monedaId: true,
       moneda: { select: { codigo: true, esMonedaBase: true } },
       tipoCambio: true,
+      tipoDte: true,
       condicionPagoId: true,
       observaciones: true,
       entidad: {
@@ -478,6 +481,9 @@ export interface CrearBorradorData {
   montoExento: number
   montoIva: number
   montoTotal: number
+  // Observaciones iniciales (2026-11-09): desde la Proforma + total en moneda
+  // extranjera y TC.
+  observaciones?: string | null
   lineas: LineaPersistir[]
 }
 
@@ -494,6 +500,7 @@ export async function crearBorrador(data: CrearBorradorData, creadoPorId: string
       clienteId: data.clienteId,
       monedaId: data.monedaId,
       condicionPagoId: data.condicionPagoId,
+      observaciones: data.observaciones ?? null,
       idioma: data.idioma,
       tipoDte: data.tipoDte,
       tipoCambio: data.tipoCambio ?? null,
@@ -756,7 +763,8 @@ export async function marcarFirmada(
             monto: factura.montoTotal,
             monedaId: factura.monedaId,
             referencia: factura.codigo,
-            temporadaId: null,
+            // Temporada obligatoria (2026-11-09): por fecha de emisión.
+            temporadaId: await temporadaParaMovimientoAutomatico(datos.fechaEmision),
             usuarioId: userId,
           },
         })

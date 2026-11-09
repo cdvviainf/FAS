@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useTemporada } from '@/contexts/temporada-context'
+import { AvisoSinTemporada } from '@/components/shared/aviso-sin-temporada'
 import { TemporadaSelect } from '@/components/shared/temporada-select'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -94,13 +95,21 @@ interface HeaderFields {
   encargadoDescartePor: 'PRODUCTOR' | 'EXPORTADORA' | null
 }
 
+// Fecha de hoy (YYYY-MM-DD) en la zona horaria del navegador.
+function hoyLocal(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 const HEADER_EMPTY: HeaderFields = {
   origen: 'MANUAL',
   modalidad: 'CAJAS',
   entidadProductorId: 0,
   notaVentaId: null,
   solicitudInspeccionIds: [],
-  fecha: new Date().toISOString().slice(0, 10),
+  // Fecha del día en hora LOCAL (2026-11-09): toISOString() es UTC y después de
+  // las 21:00 en Chile proponía el día siguiente.
+  fecha: hoyLocal(),
   temporadaId: null,
   responsableId: null,
   destinoMercadoId: null,
@@ -123,6 +132,7 @@ const LINEA_EMPTY: OrdenCompraLineaCreateInput = {
   articuloId: 0,
   etiquetaId: null,
   calibreIds: [],
+  calibreModo: 'ESPECIFICOS',
   tipoPalletId: null,
   cantidadPallets: 0,
   cajasPorPallet: 0,
@@ -157,8 +167,10 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
 
   const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
   // En alta, mientras el usuario no elija otra, la temporada es la activa.
-  const { temporada: temporadaActiva } = useTemporada()
+  const { temporada: temporadaActiva, isLoading: temporadaCargando } = useTemporada()
   const temporadaIdEfectiva = fields.temporadaId ?? (isEdit ? null : temporadaActiva?.id ?? null)
+  // Temporada obligatoria (2026-11-09): sin temporada no se crea la OC.
+  const sinTemporada = !isEdit && temporadaIdEfectiva == null
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [linea, setLinea] = useState<OrdenCompraLineaCreateInput>(LINEA_EMPTY)
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
@@ -400,6 +412,8 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       toast.success('Orden de Compra actualizada')
       queryClient.invalidateQueries({ queryKey: ordenesCompraKeys.all })
       queryClient.invalidateQueries({ queryKey: ordenesCompraKeys.detail(ordenCompraId!) })
+      // Al guardar cambios del encabezado se vuelve al listado (2026-11-09).
+      router.push('/dashboard/compras/ordenes')
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar la Orden de Compra'),
   })
@@ -521,6 +535,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       articuloId: l.articuloId,
       etiquetaId: l.etiquetaId,
       calibreIds: l.calibres.map((c) => c.calibre.id),
+      calibreModo: l.calibreModo ?? 'ESPECIFICOS',
       tipoPalletId: l.tipoPalletId,
       cantidadPallets: l.cantidadPallets,
       cajasPorPallet: l.cajasPorPallet,
@@ -547,6 +562,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       articuloId: l.articuloId,
       etiquetaId: l.etiquetaId,
       calibreIds: l.calibres.map((c) => c.calibre.id),
+      calibreModo: l.calibreModo ?? 'ESPECIFICOS',
       tipoPalletId: l.tipoPalletId,
       cantidadPallets: l.cantidadPallets,
       cajasPorPallet: l.cajasPorPallet,
@@ -579,6 +595,8 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       // re-validada contra el set permitido del artículo (2026-10-18).
       etiquetaId: detalle.etiquetaId,
       calibreIds: detalle.calibres.map((c) => c.calibre.id),
+      // Hereda la presentación de calibres de la línea del Cierre (editable).
+      calibreModo: detalle.calibreModo ?? 'ESPECIFICOS',
       tipoPalletId: detalle.tipoPalletId,
       cantidadPallets: pallets,
       cajasPorPallet: detalle.cajasPorPallet,
@@ -723,7 +741,11 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 <Select
                   value={fields.notaVentaId ? String(fields.notaVentaId) : ''}
                   disabled={tieneLineasDeCierre}
-                  onValueChange={(v) => setFields((f) => ({ ...f, notaVentaId: Number(v) }))}
+                  onValueChange={(v) => {
+                    // Mercado (2026-11-09): se toma del Cierre elegido (el backend lo impone igual).
+                    const nv = (notasVentaData?.data ?? []).find((x) => x.id === Number(v))
+                    setFields((f) => ({ ...f, notaVentaId: Number(v), destinoMercadoId: nv?.mercado?.id ?? f.destinoMercadoId }))
+                  }}
                 >
                   <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                   <SelectContent>
@@ -747,7 +769,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
 
           <Separator />
 
-          {/* Fila 2: Productor + Responsable + Destino */}
+          {/* Fila 2: Productor + Responsable + Mercado */}
           <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Productor <span className='text-destructive'>*</span></Label>
@@ -773,8 +795,9 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
               </Select>
             </div>
             <div className='space-y-1.5'>
-              <Label>Destino</Label>
-              <Select value={fields.destinoMercadoId ? String(fields.destinoMercadoId) : '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, destinoMercadoId: v === '__none__' ? null : Number(v) }))}>
+              <Label>Mercado</Label>
+              {/* Con Cierre Comercial, el Mercado es el del Cierre (2026-11-09): bloqueado. */}
+              <Select value={fields.destinoMercadoId ? String(fields.destinoMercadoId) : '__none__'} onValueChange={(v) => setFields((f) => ({ ...f, destinoMercadoId: v === '__none__' ? null : Number(v) }))} disabled={fields.origen === 'CIERRE'}>
                 <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value='__none__'>Sin definir</SelectItem>
@@ -783,6 +806,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   ))}
                 </SelectContent>
               </Select>
+              {fields.origen === 'CIERRE' && <p className='text-muted-foreground text-xs'>Se toma del Cierre Comercial.</p>}
             </div>
           </div>
 
@@ -1186,7 +1210,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   si la línea viene del Cierre: los calibres ya se precargan
                   completos y solo se pueden QUITAR (mantiene el subconjunto
                   exigido por el backend), no agregar otros fuera de la lista. */}
-              <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-3'>
+              <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
                 <div className='min-w-0 space-y-1.5'>
                   <Label>Calibre Inicio</Label>
                   <Select value={calibreDesdeId ? String(calibreDesdeId) : ''} onValueChange={(v) => setCalibreDesdeId(Number(v))} disabled={!linea.especieId || lineaBloqueadaPorCierre}>
@@ -1214,6 +1238,17 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                   <Button type='button' variant='secondary' className='w-full' onClick={agregarRangoCalibre} disabled={!linea.especieId || !calibreDesdeId || lineaBloqueadaPorCierre}>
                     <Icons.add className='mr-1 h-4 w-4' /> Agregar
                   </Button>
+                </div>
+                {/* Presentación de calibres en el PDF (2026-11-09, igual que el Cierre). */}
+                <div className='space-y-1.5'>
+                  <Label>Calibres en PDF</Label>
+                  <Select value={linea.calibreModo ?? 'ESPECIFICOS'} onValueChange={(v) => setLinea((l) => ({ ...l, calibreModo: v as 'ESPECIFICOS' | 'RANGO' }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='ESPECIFICOS'>Calibres específicos</SelectItem>
+                      <SelectItem value='RANGO'>Desde – hasta</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -1414,6 +1449,7 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                                 <Badge key={c.calibre.id} variant='outline' className='text-xs'>{c.calibre.descripcion}</Badge>
                               ))}
                             </div>
+                            {l.calibreModo === 'RANGO' && <p className='mt-1 text-[11px]'>PDF: desde – hasta</p>}
                           </TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{l.cantidadKilos != null ? `${formatMonto(l.cantidadKilos, 0)} kg` : `${formatMonto(l.cantidadPallets ?? 0, 0)} pallets · ${formatMonto(l.cajas ?? 0, 0)} cajas`}</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{l.precioUsdKilo != null ? `$${formatMonto(l.precioUsdKilo, decimalesPrecio)}/kg` : `$${formatMonto(l.precioUsdCaja ?? 0, decimalesPrecio)}/cj`}</TableCell>
@@ -1449,12 +1485,13 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
         </fieldset>
       )}
 
+      <AvisoSinTemporada mostrar={sinTemporada && !temporadaCargando} />
       <div className='flex justify-end gap-2'>
         <Button type='button' variant='outline' onClick={() => router.push('/dashboard/compras/ordenes')} disabled={isPending}>
           {soloLectura ? 'Volver' : 'Cancelar'}
         </Button>
         {!soloLectura && (
-          <Button type='button' onClick={handleSubmit} isLoading={isPending}>
+          <Button type='button' onClick={handleSubmit} isLoading={isPending} disabled={sinTemporada}>
             <Icons.check className='mr-1 h-4 w-4' /> {isEdit ? 'Guardar cambios' : 'Crear Orden de Compra'}
           </Button>
         )}

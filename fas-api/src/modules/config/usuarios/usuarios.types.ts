@@ -14,6 +14,7 @@ export interface UsuarioListItem {
   perfilId: number
   perfil: { id: number; codigo: string; descripcion: string }
   esResponsableVenta: boolean
+  puedeEditarCierresAjenos: boolean
   empresaPredeterminadaId: number | null
   empresas: EmpresaAsignada[]
   creadoEn: Date
@@ -30,6 +31,7 @@ export interface UsuarioCreateInput {
   imagenUrl?: string
   perfilId: number
   esResponsableVenta?: boolean
+  puedeEditarCierresAjenos?: boolean
   password: string
   passwordConfirm: string
   empresas: number[]
@@ -42,6 +44,7 @@ export interface UsuarioUpdateInput {
   imagenUrl?: string
   perfilId?: number
   esResponsableVenta?: boolean
+  puedeEditarCierresAjenos?: boolean
   empresas?: number[]
   empresaPredeterminadaId?: number | null
 }

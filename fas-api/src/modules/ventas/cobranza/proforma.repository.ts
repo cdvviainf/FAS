@@ -57,6 +57,10 @@ export async function getPalletsReservadosConDetalle(embarqueId: number) {
   return prisma.pallet.findMany({
     where: { embarqueId },
     select: {
+      // Orden de las notas del pallet: elige la línea del Cierre por calidad
+      // (Calidad / Condición "hasta" por línea, 2026-11-09).
+      notaCalidad: { select: { orden: true } },
+      notaCondicion: { select: { orden: true } },
       lineas: {
         select: {
           especieId: true,
@@ -94,6 +98,8 @@ export async function getNotaVentaParaPrecios(notaVentaId: number) {
           categoriaId: true,
           precio: true,
           calibres: { select: { calibreId: true } },
+          notaCalidadHasta: { select: { orden: true } },
+          notaCondicionHasta: { select: { orden: true } },
         },
       },
     },

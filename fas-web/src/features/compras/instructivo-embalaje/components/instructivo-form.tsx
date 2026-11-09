@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useTemporada } from '@/contexts/temporada-context'
+import { AvisoSinTemporada } from '@/components/shared/aviso-sin-temporada'
 import { TemporadaSelect } from '@/components/shared/temporada-select'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -111,8 +112,10 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
   const [fechaInicioPrograma, setFechaInicioPrograma] = useState('')
   // Temporada (2026-11-06): null en alta = usar la temporada activa.
   const [temporadaId, setTemporadaId] = useState<number | null>(null)
-  const { temporada: temporadaActiva } = useTemporada()
+  const { temporada: temporadaActiva, isLoading: temporadaCargando } = useTemporada()
   const temporadaIdEfectiva = temporadaId ?? (isEdit ? null : temporadaActiva?.id ?? null)
+  // Temporada obligatoria (2026-11-09): sin temporada no se emite el Instructivo.
+  const sinTemporada = !isEdit && temporadaIdEfectiva == null
   const [observaciones, setObservaciones] = useState('')
   const [detalle, setDetalle] = useState<InstructivoEmbalajeDetalleInput[]>([])
   const [linea, setLinea] = useState<NuevaLinea>(LINEA_EMPTY)
@@ -470,6 +473,8 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
       toast.success('Instructivo de Embalaje actualizado')
       queryClient.invalidateQueries({ queryKey: instructivosEmbalajeKeys.all })
       queryClient.invalidateQueries({ queryKey: instructivosEmbalajeKeys.detail(instructivoId!) })
+      // Al guardar cambios se vuelve al listado (2026-11-09).
+      router.push('/dashboard/compras/instructivo-embalaje')
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar el Instructivo de Embalaje'),
   })
@@ -976,12 +981,13 @@ export function InstructivoEmbalajeForm({ instructivoId }: InstructivoEmbalajeFo
       </Card>
       </fieldset>
 
+      <AvisoSinTemporada mostrar={sinTemporada && !temporadaCargando} />
       <div className='flex justify-end gap-2'>
         <Button variant='outline' onClick={() => router.push('/dashboard/compras/instructivo-embalaje')} disabled={isPending}>
           {soloLectura ? 'Volver' : 'Cancelar'}
         </Button>
         {!soloLectura && (
-          <Button onClick={handleSubmit} isLoading={isPending}>
+          <Button onClick={handleSubmit} isLoading={isPending} disabled={sinTemporada}>
             <Icons.check className='mr-1 h-4 w-4' /> {isEdit ? 'Guardar cambios' : 'Emitir Instructivo'}
           </Button>
         )}

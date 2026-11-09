@@ -1,3 +1,4 @@
+import type { TipoDteProforma } from '@/lib/tipo-documento-proforma'
 export interface MantenedorRef {
   id: number
   codigo: string
@@ -74,6 +75,8 @@ export interface ProformaMaterialDetalle extends Omit<ProformaMaterialListItem, 
   condicionPago: CondicionPagoRef | null
   // Tipo de cambio CLP por 1 unidad (2026-11-09) — null si la moneda es CLP.
   tipoCambio: string | null
+  // 33 Factura Nacional / 34 Factura Exenta (2026-11-09).
+  tipoDte: TipoDteProforma
   observaciones: string | null
   lineas: ProformaMaterialLineaItem[]
   cuotasPago: ProformaMaterialCuotaPagoItem[]
@@ -92,6 +95,7 @@ export interface ProformaMaterialCreateInput {
   condicionPagoId?: number | null
   monedaId: number
   tipoCambio?: number | null
+  tipoDte?: TipoDteProforma
   observaciones?: string | null
 }
 

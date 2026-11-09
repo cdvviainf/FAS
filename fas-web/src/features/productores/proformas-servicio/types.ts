@@ -1,3 +1,4 @@
+import type { TipoDteProforma } from '@/lib/tipo-documento-proforma'
 export interface MantenedorRef {
   id: number
   codigo: string
@@ -46,7 +47,6 @@ export interface ProformaProductorLineaItem {
   cantidad: string
   precioUnitario: string
   monto: string
-  exento: boolean
 }
 
 export interface ProformaProductorListItem {
@@ -64,6 +64,8 @@ export interface ProformaProductorListItem {
 export interface ProformaProductorDetalle extends Omit<ProformaProductorListItem, 'estadoEmision'> {
   monedaId: number
   tipoCambio: string | null
+  // 33 Factura Nacional / 34 Factura Exenta (2026-11-09).
+  tipoDte: TipoDteProforma
   formaPagoId: number | null
   formaPago: MantenedorRef | null
   condicionPagoId: number | null
@@ -86,7 +88,6 @@ export interface ProformaProductorLineaInput {
   glosa: string
   cantidad: number
   precioUnitario: number
-  exento: boolean
 }
 
 export interface ProformaProductorCreateInput {
@@ -96,6 +97,7 @@ export interface ProformaProductorCreateInput {
   formaPagoId?: number | null
   condicionPagoId?: number | null
   conceptoCtaCteId?: number | null
+  tipoDte?: TipoDteProforma
   observaciones?: string | null
   lineas: ProformaProductorLineaInput[]
 }

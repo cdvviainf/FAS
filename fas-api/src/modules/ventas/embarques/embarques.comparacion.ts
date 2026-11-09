@@ -22,21 +22,51 @@ export interface LineaNotaVentaParaComparar {
   categoriaId: number | null
   articuloId: number
   calibres: Array<{ calibreId: number }>
+  // Calidad / Condición "hasta" de la línea (2026-11-09, antes del encabezado):
+  // orden máximo admitido. null/undefined = sin restricción en esa dimensión.
+  calidadHastaOrden?: number | null
+  condicionHastaOrden?: number | null
+}
+
+// Notas del pallet (orden de su Nota de Calidad / Condición). null = el
+// pallet no tiene nota en esa dimensión.
+export interface NotasPalletParaComparar {
+  calidadOrden: number | null
+  condicionOrden: number | null
+}
+
+// Regla "hasta" por línea: un pallet sin nota en una dimensión restringida no
+// califica (mismo criterio que tenía la regla de encabezado).
+export function lineaAdmiteNotas(ln: LineaNotaVentaParaComparar, notas: NotasPalletParaComparar): boolean {
+  if (ln.calidadHastaOrden != null && (notas.calidadOrden == null || notas.calidadOrden > ln.calidadHastaOrden)) return false
+  if (ln.condicionHastaOrden != null && (notas.condicionOrden == null || notas.condicionOrden > ln.condicionHastaOrden)) return false
+  return true
+}
+
+function lineaCalzaCatalogo(ln: LineaNotaVentaParaComparar, lp: LineaPalletParaComparar): boolean {
+  return (
+    ln.especieId === lp.especieId &&
+    ln.variedadId === lp.variedadId &&
+    ln.articuloId === lp.articuloId &&
+    (ln.categoriaId === null || ln.categoriaId === lp.categoriaId) &&
+    ln.calibres.some((c) => c.calibreId === lp.calibreId)
+  )
 }
 
 // Un pallet "calza" con el detalle de la NV si TODAS sus líneas encuentran
 // alguna línea de la NV compatible (especie+variedad+artículo iguales,
 // categoría igual o sin exigencia, calibre dentro de la lista de esa línea).
-export function palletCalzaConDetalleNV(lineasPallet: LineaPalletParaComparar[], detalleNV: LineaNotaVentaParaComparar[]): boolean {
+//
+// `notas` (2026-11-09): si se pasa, la línea de la NV que calza debe además
+// admitir la Nota de Calidad / Condición del pallet (regla "hasta" por línea).
+// Sin `notas` se compara solo catálogo (usos que no reservan pallets).
+export function palletCalzaConDetalleNV(
+  lineasPallet: LineaPalletParaComparar[],
+  detalleNV: LineaNotaVentaParaComparar[],
+  notas?: NotasPalletParaComparar,
+): boolean {
   return lineasPallet.every((lp) =>
-    detalleNV.some(
-      (ln) =>
-        ln.especieId === lp.especieId &&
-        ln.variedadId === lp.variedadId &&
-        ln.articuloId === lp.articuloId &&
-        (ln.categoriaId === null || ln.categoriaId === lp.categoriaId) &&
-        ln.calibres.some((c) => c.calibreId === lp.calibreId),
-    ),
+    detalleNV.some((ln) => lineaCalzaCatalogo(ln, lp) && (!notas || lineaAdmiteNotas(ln, notas))),
   )
 }
 
@@ -50,18 +80,17 @@ export interface LineaNotaVentaConPrecioParaComparar extends LineaNotaVentaParaC
   precio: number
 }
 
+//
+// `notas` (2026-11-09): con Calidad / Condición por línea, dos líneas pueden
+// diferir solo en la calidad (y en el precio) — se prefiere la que admite las
+// notas del pallet; si ninguna, cae a la primera que calza por catálogo.
 export function precioNVParaLineaPallet(
   lineaPallet: LineaPalletParaComparar,
   detalleNV: LineaNotaVentaConPrecioParaComparar[],
+  notas?: NotasPalletParaComparar,
 ): number | null {
-  const match = detalleNV.find(
-    (ln) =>
-      ln.especieId === lineaPallet.especieId &&
-      ln.variedadId === lineaPallet.variedadId &&
-      ln.articuloId === lineaPallet.articuloId &&
-      (ln.categoriaId === null || ln.categoriaId === lineaPallet.categoriaId) &&
-      ln.calibres.some((c) => c.calibreId === lineaPallet.calibreId),
-  )
+  const candidatas = detalleNV.filter((ln) => lineaCalzaCatalogo(ln, lineaPallet))
+  const match = (notas ? candidatas.find((ln) => lineaAdmiteNotas(ln, notas)) : undefined) ?? candidatas[0]
   return match ? match.precio : null
 }
 

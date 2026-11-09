@@ -275,6 +275,16 @@ describe('maestro de Productores contra PostgreSQL', () => {
   it('CA5/CA6: calcula saldo y valida la naturaleza del concepto', async () => {
     const empresa = await obtenerEmpresaTest()
     const productor = await crearEntidad(['PRODUCTOR'], 'PROD-01')
+    const temporada = await prisma.temporada.create({
+      data: {
+        empresaId: empresa.id,
+        codigo: 'T26-CC',
+        descripcion: 'Temporada 2026 (cuenta corriente)',
+        fechaInicio: new Date('2026-01-01'),
+        fechaTermino: new Date('2026-12-31'),
+        creadoPor: 'test',
+      },
+    })
     const haber = await prisma.conceptoCtaCte.create({
       data: {
         empresaId: empresa.id,
@@ -299,12 +309,14 @@ describe('maestro de Productores contra PostgreSQL', () => {
     // request HTTP no existe por defecto).
     await empresaContext.run({ empresaId: empresa.id }, async () => {
       await imputarMovimiento(productor.id, {
+        temporadaId: temporada.id,
         tipoId: haber.id,
         naturaleza: 'HABER',
         fecha: '2026-07-23',
         monto: 1_000,
       }, 'test')
       await imputarMovimiento(productor.id, {
+        temporadaId: temporada.id,
         tipoId: ambos.id,
         naturaleza: 'DEBE',
         fecha: '2026-07-23',
@@ -312,6 +324,7 @@ describe('maestro de Productores contra PostgreSQL', () => {
       }, 'test')
 
       await expect(imputarMovimiento(productor.id, {
+        temporadaId: temporada.id,
         tipoId: haber.id,
         naturaleza: 'DEBE',
         fecha: '2026-07-23',

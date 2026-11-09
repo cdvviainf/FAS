@@ -85,7 +85,7 @@ export async function getRecepcionById(id: number) {
   return prisma.recepcion.findFirst({ where: { id, eliminadoEn: null }, include: includeDetalle })
 }
 
-export async function createRecepcion(data: RecepcionCreateInput, creadoPor: string) {
+export async function createRecepcion(data: RecepcionCreateInput & { temporadaId: number }, creadoPor: string) {
   const anio = new Date().getFullYear()
   const prefijo = `RC-${anio}-`
   const { ordenCompraId, esProceso, instructivoIds, ...resto } = data
@@ -142,9 +142,11 @@ async function relockYReleerModificable(tx: Prisma.TransactionClient, id: number
 export async function updateRecepcion(id: number, data: RecepcionUpdateInput, actualizadoPor: string) {
   return prisma.$transaction(async (tx) => {
     await relockYReleerModificable(tx, id)
+    // temporadaId null no se persiste (columna NOT NULL; el service lo rechaza).
+    const { temporadaId, ...resto } = data
     return tx.recepcion.update({
       where: { id },
-      data: { ...data, actualizadoPor },
+      data: { ...resto, ...(temporadaId != null ? { temporadaId } : {}), actualizadoPor },
       include: includeDetalle,
     })
   })

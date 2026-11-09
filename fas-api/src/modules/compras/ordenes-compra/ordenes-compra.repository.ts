@@ -40,7 +40,8 @@ const includeDetalle = {
       categoria: { select: mantenedorSelect },
       articulo: { select: { id: true, codigo: true, descripcion: true, descripcionComercial: true, descripcionExtranjera: true, etiqueta: true, kgNetoEnvase: true, kgBrutoEnvase: true } },
       etiqueta: { select: mantenedorSelect },
-      calibres: { select: { calibre: { select: mantenedorSelect } } },
+      // orden: presentación "Desde X hasta Y" en el PDF (calibreModo, 2026-11-09).
+      calibres: { select: { calibre: { select: { ...mantenedorSelect, orden: true } } } },
       tipoPallet: { select: mantenedorSelect },
     },
   },
@@ -229,7 +230,7 @@ async function recalcularCuotasMontoUnitario(tx: Tx, ordenCompraId: number) {
   }
 }
 
-export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor: string) {
+export async function createOrdenCompra(data: OrdenCompraCreateInput & { temporadaId: number }, creadoPor: string) {
   const anio = (data.fecha ?? new Date()).getFullYear()
   const prefijo = `OC-${anio}-`
   const { solicitudInspeccionIds, ...resto } = data
@@ -266,7 +267,8 @@ export async function createOrdenCompra(data: OrdenCompraCreateInput, creadoPor:
 }
 
 export async function updateOrdenCompra(id: number, data: OrdenCompraUpdateInput, actualizadoPor: string) {
-  const { solicitudInspeccionIds, ...resto } = data
+  // temporadaId null no se persiste (columna NOT NULL; el service lo rechaza).
+  const { solicitudInspeccionIds, temporadaId, ...resto } = data
   return prisma.$transaction(async (tx) => {
     await lockYVerificarEditable(tx, id)
     // Autoridad bajo lock (lee estado/modalidad/condición/notaVenta una sola vez):
@@ -329,6 +331,7 @@ export async function updateOrdenCompra(id: number, data: OrdenCompraUpdateInput
       where: { id },
       data: {
         ...resto,
+        ...(temporadaId != null ? { temporadaId } : {}),
         ...condicionesGranelNulas,
         actualizadoPor,
         // N:M (2026-08-22, Etapa 2): si viene, reemplaza el conjunto completo
@@ -584,7 +587,7 @@ export async function getEntidadProductor(id: number) {
 }
 
 export async function getNotaVenta(id: number) {
-  return prisma.notaVenta.findFirst({ where: { id, eliminadoEn: null }, select: { id: true } })
+  return prisma.notaVenta.findFirst({ where: { id, eliminadoEn: null }, select: { id: true, mercadoId: true } })
 }
 
 // ─── Línea de Cierre Comercial → Línea de OC (2026-08-23) ─────────────────
@@ -598,6 +601,7 @@ const notaVentaDetalleSelect = {
   articuloId: true,
   tipoPalletId: true,
   cajas: true,
+  calibreModo: true,
   calibres: { select: { calibreId: true } },
 }
 

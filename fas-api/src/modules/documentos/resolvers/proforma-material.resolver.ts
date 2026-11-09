@@ -22,7 +22,9 @@ const FECHA_REFERENCIA_LABELS: Record<string, string> = {
 }
 
 // Resolver de la Proforma de Venta de Materiales — snapshot para previsualizar.
-// id = id de la ProformaMaterial. Materiales son todos afectos (sin exento).
+// id = id de la ProformaMaterial. Afecta (33) o exenta (34) según el tipo de
+// documento de la cabecera (2026-11-09). La plantilla v2 (congelada) no tiene
+// fila "Exento": en una exenta el monto va como base con IVA 0.
 export async function resolverProformaMaterial(id: number, empresaId: number): Promise<ProformaMaterialPdfPayload> {
   const proforma = await getProformaMaterialById(id)
   if (!proforma) throw new NotFoundError('Proforma de Venta de Materiales', String(id))
@@ -35,7 +37,7 @@ export async function resolverProformaMaterial(id: number, empresaId: number): P
   let neto = 0
   for (const l of proforma.lineas) neto += Number(l.monto)
   neto = round2(neto)
-  const iva = Math.round(neto * IVA_TASA)
+  const iva = proforma.tipoDte === 34 ? 0 : Math.round(neto * IVA_TASA)
   const total = round2(neto + iva)
 
   return {

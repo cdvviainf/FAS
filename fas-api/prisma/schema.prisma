@@ -135,24 +135,27 @@ model PerfilAcceso {
 }
 
 model Usuario {
-  id                      String    @id
-  nombre                  String
-  email                   String
-  whatsapp                String?
-  imagenUrl               String?
-  perfilId                Int
-  perfil                  Perfil    @relation(fields: [perfilId], references: [id])
-  esResponsableVenta      Boolean   @default(false)
+  id                       String    @id
+  nombre                   String
+  email                    String
+  whatsapp                 String?
+  imagenUrl                String?
+  perfilId                 Int
+  perfil                   Perfil    @relation(fields: [perfilId], references: [id])
+  esResponsableVenta       Boolean   @default(false)
+  // Permiso a nivel de USUARIO (no de perfil, 2026-11-09): puede editar Cierres
+  // Comerciales abiertos creados por otros usuarios. Sin él, solo el creador.
+  puedeEditarCierresAjenos Boolean   @default(false)
   // Empresa activa por defecto al iniciar sesión (multi-empresa). Nullable:
   // un usuario recién creado puede no tener empresas asignadas todavía.
-  empresaPredeterminadaId Int?
-  empresaPredeterminada   Empresa?  @relation("UsuarioEmpresaPredeterminada", fields: [empresaPredeterminadaId], references: [id])
-  creadoEn                DateTime  @default(now())
-  creadoPor               String?
-  actualizadoEn           DateTime? @updatedAt
-  actualizadoPor          String?
-  eliminadoEn             DateTime?
-  eliminadoPor            String?
+  empresaPredeterminadaId  Int?
+  empresaPredeterminada    Empresa?  @relation("UsuarioEmpresaPredeterminada", fields: [empresaPredeterminadaId], references: [id])
+  creadoEn                 DateTime  @default(now())
+  creadoPor                String?
+  actualizadoEn            DateTime? @updatedAt
+  actualizadoPor           String?
+  eliminadoEn              DateTime?
+  eliminadoPor             String?
 
   solicitudesAsignadas          SolicitudInspeccionAsignado[]
   solicitudesComoSolicitante    SolicitudInspeccion[]         @relation("SolicitudInspeccionSolicitante")
@@ -201,18 +204,18 @@ model UsuarioFirma {
 // se crea el modelo de Empresa + membresía de usuarios. El scoping por
 // `empresaId` en el resto de las tablas se agrega en la fase de tenancy.
 model Empresa {
-  id             Int       @id @default(autoincrement())
-  codigo         String    @unique
-  razonSocial    String
-  nombreFantasia String?
-  rut            String?
-  giro           String?
-  email          String?
-  telefono       String?
+  id                  Int       @id @default(autoincrement())
+  codigo              String    @unique
+  razonSocial         String
+  nombreFantasia      String?
+  rut                 String?
+  giro                String?
+  email               String?
+  telefono            String?
   // Nota final de la hoja de Términos y Condiciones del PDF de Orden de Compra
   // (2026-11-06, plantilla v3), por idioma. Ver EmpresaClausulaOc.
-  notaTerminosOcEs String?
-  notaTerminosOcEn String?
+  notaTerminosOcEs    String?
+  notaTerminosOcEn    String?
   // Recuadro "Reclamos / Claims" del PDF de Cierre Comercial v2 (2026-11-06):
   // texto y línea de referencia (ej. protocolo adjunto), por idioma. Sin texto,
   // no se muestra el recuadro.
@@ -220,13 +223,13 @@ model Empresa {
   reclamosCierreEn    String?
   reclamosCierreRefEs String?
   reclamosCierreRefEn String?
-  activo         Boolean   @default(true)
-  creadoEn       DateTime  @default(now())
-  creadoPor      String
-  actualizadoEn  DateTime? @updatedAt
-  actualizadoPor String?
-  eliminadoEn    DateTime?
-  eliminadoPor   String?
+  activo              Boolean   @default(true)
+  creadoEn            DateTime  @default(now())
+  creadoPor           String
+  actualizadoEn       DateTime? @updatedAt
+  actualizadoPor      String?
+  eliminadoEn         DateTime?
+  eliminadoPor        String?
 
   direcciones            EmpresaDireccion[]
   contactos              EmpresaContacto[]
@@ -311,9 +314,9 @@ model Empresa {
 // modelo tenant (se administra desde el mantenedor Empresas para cualquier
 // empresa, igual que EmpresaDireccion/EmpresaContacto).
 model EmpresaClausulaOc {
-  id        Int            @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   empresaId Int
-  empresa   Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa   Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   orden     Int
   icono     IconoClausula
   tituloEs  String
@@ -1647,10 +1650,12 @@ model Temporada {
 
   solicitudesInspeccion SolicitudInspeccion[]
   contratosProductor    ProductorContrato[]
-  notasVenta            NotaVenta[]           @relation("NotaVentaTemporada")
-  instructivosEmbalaje  InstructivoEmbalaje[] @relation("InstructivoEmbalajeTemporada")
-  ordenesCompra         OrdenCompra[]         @relation("OrdenCompraTemporada")
-  recepciones           Recepcion[]           @relation("RecepcionTemporada")
+  notasVenta            NotaVenta[]                 @relation("NotaVentaTemporada")
+  instructivosEmbalaje  InstructivoEmbalaje[]       @relation("InstructivoEmbalajeTemporada")
+  ordenesCompra         OrdenCompra[]               @relation("OrdenCompraTemporada")
+  recepciones           Recepcion[]                 @relation("RecepcionTemporada")
+  reclamos              Reclamo[]                   @relation("ReclamoTemporada")
+  movimientosCtaCte     MovimientoCuentaCorriente[] @relation("MovimientoCCTemporada")
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -2829,6 +2834,10 @@ model ProformaMaterial {
   // Nacional a CLP cuando la proforma NO está en CLP (2026-11-09, igual que
   // ProformaProductor). Obligatorio si moneda≠CLP; null cuando es CLP.
   tipoCambio      Decimal?               @db.Decimal(14, 4)
+  // Tipo de documento a facturar (2026-11-09): 33 = Factura Nacional (afecta,
+  // IVA 19%), 34 = Factura Exenta. Reemplaza la marca exento por línea; la
+  // Factura Nacional generada desde la proforma hereda este tipo.
+  tipoDte         Int                    @default(33)
   observaciones   String?
   estado          EstadoProformaMaterial @default(BORRADOR)
 
@@ -2918,6 +2927,10 @@ model ProformaProductor {
   // Nacional a CLP cuando la proforma NO está en CLP. Obligatorio si moneda≠CLP
   // (se valida en el service / al enviar a validación); null/1 cuando es CLP.
   tipoCambio       Decimal?                @db.Decimal(14, 4)
+  // Tipo de documento a facturar (2026-11-09): 33 = Factura Nacional (afecta,
+  // IVA 19%), 34 = Factura Exenta. Reemplaza la marca exento por línea; la
+  // Factura Nacional generada desde la proforma hereda este tipo.
+  tipoDte          Int                     @default(33)
   // Concepto de cuenta corriente que impactará la CC del productor cuando la
   // Factura Nacional de origen PROFORMA_PRODUCTOR se timbre (R16/VN5). La factura
   // es un cargo al productor → el concepto debe ser de naturaleza DEBE o AMBOS.
@@ -2950,12 +2963,12 @@ model ProformaProductorLinea {
 
   // Glosa libre digitada (2026-11-03): el detalle ya no referencia un Artículo
   // SERVICIO; la clasificación va por el Concepto de Cta. Cte. de la cabecera y
-  // cada línea lleva su texto, cantidad, precio y exento manuales.
+  // cada línea lleva su texto, cantidad y precio manuales. Afecto/exento lo
+  // define el tipoDte de la cabecera (2026-11-09; se eliminó `exento` por línea).
   glosa          String
   cantidad       Decimal @db.Decimal(14, 3)
   precioUnitario Decimal @db.Decimal(14, 4)
   monto          Decimal @db.Decimal(14, 2)
-  exento         Boolean @default(false)
 
   @@index([proformaProductorId])
   @@map("proforma_productor_linea")
@@ -3146,7 +3159,9 @@ model MovimientoCuentaCorriente {
   monedaId    Int?
   moneda      Moneda?                @relation(fields: [monedaId], references: [id])
   referencia  String?
-  temporadaId Int?
+  // Temporada obligatoria (2026-11-09). FK compuesta (empresaId, temporadaId).
+  temporadaId Int
+  temporada   Temporada              @relation("MovimientoCCTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
   usuarioId   String
   creadoEn    DateTime               @default(now())
 
@@ -3217,7 +3232,7 @@ model NotaCalidad {
   especies               NotaCalidadEspecie[]
   pallets                Pallet[]
   solicitudesCalidad     SolicitudInspeccionLineaCalidad[]
-  notasVentaCalidadHasta NotaVenta[]                           @relation("NotaVentaCalidadHasta")
+  notasVentaCalidadHasta NotaVentaDetalle[]                    @relation("NotaVentaDetalleCalidadHasta")
   instructivosCalidad    InstructivoEmbalajeCalidadPermitida[]
 
   @@unique([empresaId, id])
@@ -3259,7 +3274,7 @@ model NotaCondicion {
   especies                 NotaCondicionEspecie[]
   pallets                  Pallet[]
   solicitudesCondicion     SolicitudInspeccionLineaCalidad[]
-  notasVentaCondicionHasta NotaVenta[]                           @relation("NotaVentaCondicionHasta")
+  notasVentaCondicionHasta NotaVentaDetalle[]                    @relation("NotaVentaDetalleCondicionHasta")
   instructivosCondicion    InstructivoEmbalajeCalidadPermitida[]
 
   @@unique([empresaId, id])
@@ -3299,19 +3314,19 @@ enum ContratoNaviero {
 }
 
 model NotaVenta {
-  id          Int        @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   empresaId   Int
-  empresa     Empresa    @relation(fields: [empresaId], references: [id])
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
   folio       Int // correlativo autonumérico (R1), único por empresa
   fecha       DateTime
   // Temporada (2026-11-06): asignada al crear con la temporada activa (editable);
   // los existentes se backfillean por fecha. Los listados filtran por ella.
   // FK compuesta (empresaId, temporadaId) -> Temporada(empresaId, id).
-  temporadaId Int?
-  temporada   Temporada? @relation("NotaVentaTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+  temporadaId Int
+  temporada   Temporada @relation("NotaVentaTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
   // Exportación / Nacional (2026-10-06). Default EXPORTACION (los existentes se
   // backfillean a EXPORTACION — hoy todo el dominio de ventas es exportación).
-  tipoVenta   TipoVenta  @default(EXPORTACION)
+  tipoVenta   TipoVenta @default(EXPORTACION)
 
   clienteId           Int
   // FK compuesta (empresaId, clienteId) -> Entidad(empresaId, id).
@@ -3382,14 +3397,7 @@ model NotaVenta {
   responsableVentaId String?
   responsableVenta   Usuario? @relation("NotaVentaResponsableVenta", fields: [responsableVentaId], references: [id])
 
-  // Calidad / Condición "hasta" (2026-11-05, supersede los pares
-  // NotaVentaCalidadPermitida de 55022c4): un pallet califica para el Cierre
-  // si notaCalidad.orden <= notaCalidadHasta.orden Y notaCondicion.orden <=
-  // notaCondicionHasta.orden. Null = sin restricción en esa dimensión.
-  notaCalidadHastaId   Int?
-  notaCalidadHasta     NotaCalidad?   @relation("NotaVentaCalidadHasta", fields: [empresaId, notaCalidadHastaId], references: [empresaId, id])
-  notaCondicionHastaId Int?
-  notaCondicionHasta   NotaCondicion? @relation("NotaVentaCondicionHasta", fields: [empresaId, notaCondicionHastaId], references: [empresaId, id])
+  // Calidad / Condición "hasta": movidas a NotaVentaDetalle (2026-11-09).
 
   // Contrato naviero (2026-10-30): bajo qué contrato naviero se contrata el
   // flete marítimo — AGROSAN_AGL (contrato propio Agrosan-AGL, por defecto) o
@@ -3484,6 +3492,17 @@ model NotaVentaDetalle {
   // Cómo se presentan los calibres en el PDF (2026-11-05): RANGO = "Desde X
   // hasta Y" (menor/mayor por orden), ESPECIFICOS = lista. Sin efecto funcional.
   calibreModo CalibreModo               @default(ESPECIFICOS)
+
+  // Calidad / Condición "hasta" por línea (2026-11-09, antes en el encabezado
+  // NotaVenta): un pallet califica para la línea con la que calza si
+  // notaCalidad.orden <= notaCalidadHasta.orden Y notaCondicion.orden <=
+  // notaCondicionHasta.orden. Null = sin restricción en esa dimensión. FK
+  // simple (la línea no lleva empresaId); el service valida que la nota
+  // pertenezca a la empresa activa.
+  notaCalidadHastaId   Int?
+  notaCalidadHasta     NotaCalidad?   @relation("NotaVentaDetalleCalidadHasta", fields: [notaCalidadHastaId], references: [id], onDelete: Restrict)
+  notaCondicionHastaId Int?
+  notaCondicionHasta   NotaCondicion? @relation("NotaVentaDetalleCondicionHasta", fields: [notaCondicionHastaId], references: [id], onDelete: Restrict)
 
   // Líneas de Orden de Compra tomadas (completas o parciales) desde esta
   // línea del Cierre — 2026-08-23, ver OrdenCompraLinea.notaVentaDetalleId.
@@ -3986,7 +4005,9 @@ model Reclamo {
   valorizadoPor     String?
   fechaValorizacion DateTime?
 
-  temporadaId Int?
+  // Temporada obligatoria (2026-11-09). FK compuesta (empresaId, temporadaId).
+  temporadaId Int
+  temporada   Temporada @relation("ReclamoTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
 
   lineas       ReclamoPalletLinea[]
   defectos     ReclamoDefecto[]
@@ -4823,15 +4844,15 @@ model NotaCredito {
 // Instructivo — ver Docs/calidad.md — así que vuelve a ser editable/
 // eliminable libremente, como el diseño original antes de 2026-08-21).
 model InstructivoEmbalaje {
-  id          Int        @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   empresaId   Int
-  empresa     Empresa    @relation(fields: [empresaId], references: [id])
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
   numero      Int // correlativo propio, único por empresa
   // Temporada (2026-11-06): asignada al crear con la temporada activa (editable);
   // los existentes se backfillean por fecha. Los listados filtran por ella.
   // FK compuesta (empresaId, temporadaId) -> Temporada(empresaId, id).
-  temporadaId Int?
-  temporada   Temporada? @relation("InstructivoEmbalajeTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+  temporadaId Int
+  temporada   Temporada @relation("InstructivoEmbalajeTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
 
   // Supersesión (2026-08-12): reemplaza notaVentaId — el instructivo ocurre
   // antes de que exista un Cierre Comercial asociado (compras.md §5.1/§5.2,
@@ -4965,15 +4986,15 @@ enum ResponsableProductorExportadora {
 }
 
 model OrdenCompra {
-  id          Int        @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   empresaId   Int
-  empresa     Empresa    @relation(fields: [empresaId], references: [id])
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
   numero      String // OC-{AAAA}-{NNNN}, correlativo por año, único por empresa
   // Temporada (2026-11-06): asignada al crear con la temporada activa (editable);
   // los existentes se backfillean por fecha. Los listados filtran por ella.
   // FK compuesta (empresaId, temporadaId) -> Temporada(empresaId, id).
-  temporadaId Int?
-  temporada   Temporada? @relation("OrdenCompraTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+  temporadaId Int
+  temporada   Temporada @relation("OrdenCompraTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
 
   entidadProductorId Int // Entidad tipo PRODUCTOR
   // FK compuesta (empresaId, entidadProductorId) -> Entidad(empresaId, id).
@@ -5225,7 +5246,11 @@ model OrdenCompraLinea {
 
   // Multiselect de calibres (antes: rango calibreMinId/calibreMaxId — ver
   // supersesión 2026-08-15, mismo patrón que NotaVentaDetalleCalibre).
-  calibres OrdenCompraLineaCalibre[]
+  calibres    OrdenCompraLineaCalibre[]
+  // Cómo se presentan los calibres en el PDF (2026-11-09, mismo criterio que
+  // NotaVentaDetalle.calibreModo): RANGO = "Desde X hasta Y", ESPECIFICOS =
+  // lista. Sin efecto funcional. Una línea tomada de un Cierre lo hereda.
+  calibreModo CalibreModo               @default(ESPECIFICOS)
 
   // Origen opcional: línea tomada (completa o parcial) de una línea del
   // Cierre Comercial de la propia OC (2026-08-23). Bloquea
@@ -5280,15 +5305,15 @@ enum EstadoRecepcion {
 }
 
 model Recepcion {
-  id          Int        @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   empresaId   Int
-  empresa     Empresa    @relation(fields: [empresaId], references: [id])
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
   numero      String // RC-{AAAA}-{NNNN}, correlativo por año (mismo patrón que OrdenCompra), único por empresa
   // Temporada (2026-11-06): asignada al crear con la temporada activa (editable);
   // los existentes se backfillean por fecha. Los listados filtran por ella.
   // FK compuesta (empresaId, temporadaId) -> Temporada(empresaId, id).
-  temporadaId Int?
-  temporada   Temporada? @relation("RecepcionTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+  temporadaId Int
+  temporada   Temporada @relation("RecepcionTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
 
   // Sin @unique de Prisma (no soporta índices parciales en el DSL): la
   // unicidad real es un índice único parcial a nivel de BD, solo entre filas

@@ -39,6 +39,16 @@ export const navGroups: NavGroup[] = [
     label: 'Gestión Comercial',
     items: [
       {
+        title: 'Ventas',
+        url: '#',
+        icon: 'ventas',
+        isActive: false,
+        items: [
+          { title: 'Cierre Comercial',   url: '/dashboard/ventas/cierre',     icon: 'forms'   },
+          { title: 'Embarques',         url: '/dashboard/ventas/embarques',  icon: 'post'    }
+        ]
+      },
+      {
         title: 'Compras',
         url: '#',
         icon: 'compras',
@@ -48,16 +58,6 @@ export const navGroups: NavGroup[] = [
           { title: 'Órdenes de Compra',          url: '/dashboard/compras/ordenes',         icon: 'post'    },
           { title: 'Instructivo de Embalaje',    url: '/dashboard/compras/instructivo-embalaje', icon: 'forms' },
           { title: 'Recepción de Stock',         url: '/dashboard/compras/recepciones',    icon: 'bodega'  }
-        ]
-      },
-      {
-        title: 'Ventas',
-        url: '#',
-        icon: 'ventas',
-        isActive: false,
-        items: [
-          { title: 'Cierre Comercial',   url: '/dashboard/ventas/cierre',     icon: 'forms'   },
-          { title: 'Embarques',         url: '/dashboard/ventas/embarques',  icon: 'post'    }
         ]
       },
       // Facturación y Cobranza pasa a ser submódulo de Gestión Comercial

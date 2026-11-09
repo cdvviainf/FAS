@@ -8,6 +8,7 @@ export interface OrdenCompraLineaInput {
   categoriaId?: number | null
   etiquetaId?: number | null
   calibreIds: number[]
+  calibreModo?: 'ESPECIFICOS' | 'RANGO'
   tipoPalletId?: number | null
   cantidadPallets?: number | null
   cajasPorPallet?: number | null

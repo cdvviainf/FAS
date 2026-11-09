@@ -27,6 +27,9 @@ const lineaSchema = z.object({
   // artículo tiene etiqueta FIJA se resuelve en el service; si es DINÁMICA debe venir.
   etiquetaId: z.number().int().positive().optional().nullable(),
   calibreIds: z.array(z.number().int().positive()).optional().default([]),
+  // Presentación de calibres en el PDF (2026-11-09). Si se omite: al crear,
+  // la de la línea del Cierre (si viene de uno) o ESPECIFICOS; al editar, no cambia.
+  calibreModo: z.enum(['ESPECIFICOS', 'RANGO']).optional(),
   tipoPalletId: z.number().int().positive().optional().nullable(),
   cantidadPallets: z.number().int().positive().optional().nullable(),
   cajasPorPallet: z.number().int().positive().optional().nullable(),

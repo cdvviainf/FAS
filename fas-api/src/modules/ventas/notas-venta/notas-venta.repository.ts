@@ -10,8 +10,6 @@ const entidadSelect = { id: true, codigo: true, descripcion: true, razonSocial: 
 const includeDetalle = {
   cliente: { select: entidadSelect },
   exportador: { select: entidadSelect },
-  notaCalidadHasta: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true, orden: true } },
-  notaCondicionHasta: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true, orden: true } },
   // whatsapp: teléfono del vendedor en el PDF Cierre v2 (2026-11-06).
   responsableVenta: { select: { id: true, nombre: true, email: true, whatsapp: true } },
   compradorContacto: { select: { id: true, nombre: true, email: true, telefono: true, whatsapp: true } },
@@ -52,6 +50,8 @@ const includeDetalle = {
       categoria: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
       tipoPallet: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true } },
       calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true, orden: true } } } },
+      notaCalidadHasta: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true, orden: true } },
+      notaCondicionHasta: { select: { id: true, codigo: true, descripcion: true, descripcionExtranjera: true, orden: true } },
     },
     orderBy: { id: 'asc' as const },
   },
@@ -149,12 +149,15 @@ export async function listNotasVenta(page: number, limit: number, clienteId?: nu
   ])
 
   const notaVentaIds = data.map((d) => d.id)
-  const [estadoOcPorNota, resumenReservaPorNota] = await Promise.all([
+  const [estadoOcPorNota, resumenReservaPorNota, nombresCreador] = await Promise.all([
     resolverEstadoOc(notaVentaIds),
     resolverResumenReserva(notaVentaIds),
+    getNombresUsuarios(data.map((d) => d.creadoPor)),
   ])
   const dataConEstadoOc = data.map((d) => ({
     ...d,
+    // Columna "Creado por" (2026-11-09): solo el creador edita el Cierre abierto.
+    creadoPorNombre: nombresCreador.get(d.creadoPor) ?? null,
     estadoOc: estadoOcPorNota.get(d.id) ?? 'PENDIENTE',
     resumenReserva: resumenReservaPorNota.get(d.id) ?? { totalEmbarques: 0, pendientes: 0, solicitadas: 0, confirmadas: 0 },
   }))
@@ -288,7 +291,7 @@ async function recalcularCuotasMontoUnitario(tx: Tx, notaVentaId: number) {
   }
 }
 
-export async function createNotaVenta(data: NotaVentaCreateInput, creadoPor: string) {
+export async function createNotaVenta(data: NotaVentaCreateInput & { temporadaId: number }, creadoPor: string) {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_NOTA_VENTA}::int, 0)`
 
@@ -326,9 +329,11 @@ export async function updateNotaVenta(id: number, data: NotaVentaUpdateInput, ac
         await tx.notaVentaCuotaPago.createMany({ data: cuotasPago.map((c) => ({ notaVentaId: id, ...c })) })
       }
     }
+    // temporadaId null no se persiste (columna NOT NULL; el service lo rechaza).
+    const { temporadaId, ...resto } = data
     return tx.notaVenta.update({
       where: { id },
-      data: { ...data, actualizadoPor },
+      data: { ...resto, ...(temporadaId != null ? { temporadaId } : {}), actualizadoPor },
       include: includeDetalle,
     })
   })
@@ -383,8 +388,6 @@ export async function duplicarNotaVenta(origenId: number, creadoPor: string, res
         monedaId: origen.monedaId,
         observaciones: origen.observaciones,
         contratoNaviero: origen.contratoNaviero,
-        notaCalidadHastaId: origen.notaCalidadHastaId,
-        notaCondicionHastaId: origen.notaCondicionHastaId,
         responsableVentaId,
         creadoPor,
         cuotasPago: { create: cuotasPago },
@@ -402,6 +405,8 @@ export async function duplicarNotaVenta(origenId: number, creadoPor: string, res
             cajas: d.cajas,
             precio: d.precio,
             calibreModo: d.calibreModo,
+            notaCalidadHastaId: d.notaCalidadHastaId,
+            notaCondicionHastaId: d.notaCondicionHastaId,
             calibres: { create: d.calibres.map((c) => ({ calibreId: c.calibreId })) },
           })),
         },
@@ -447,6 +452,8 @@ const detalleInclude = {
   categoria: { select: { id: true, codigo: true, descripcion: true } },
   tipoPallet: { select: { id: true, codigo: true, descripcion: true } },
   calibres: { select: { calibre: { select: { id: true, codigo: true, descripcion: true, orden: true } } } },
+  notaCalidadHasta: { select: { id: true, codigo: true, descripcion: true, orden: true } },
+  notaCondicionHasta: { select: { id: true, codigo: true, descripcion: true, orden: true } },
 }
 
 export async function addDetalle(notaVentaId: number, data: NotaVentaDetalleCreateInput) {
@@ -459,6 +466,10 @@ export async function addDetalle(notaVentaId: number, data: NotaVentaDetalleCrea
     await recalcularCuotasMontoUnitario(tx, notaVentaId)
     return detalle
   })
+}
+
+export async function getDetalleCalidadHasta(id: number) {
+  return prisma.notaVentaDetalle.findUnique({ where: { id }, select: { notaCalidadHastaId: true, notaCondicionHastaId: true } })
 }
 
 export async function getDetalleById(id: number) {
@@ -715,4 +726,22 @@ export async function getClausulaVenta(id: number) {
     where: { id, eliminadoEn: null, bloqueado: false },
     select: { id: true },
   })
+}
+
+// Edición restringida al creador (2026-11-09). Usuario es global (no tenant).
+export async function usuarioPuedeEditarCierresAjenos(userId: string): Promise<boolean> {
+  const u = await prisma.usuario.findUnique({ where: { id: userId }, select: { puedeEditarCierresAjenos: true, eliminadoEn: true } })
+  return !!u && u.eliminadoEn == null && u.puedeEditarCierresAjenos
+}
+
+export async function getNombreUsuario(id: string): Promise<string | null> {
+  const u = await prisma.usuario.findUnique({ where: { id }, select: { nombre: true } })
+  return u?.nombre ?? null
+}
+
+async function getNombresUsuarios(ids: string[]): Promise<Map<string, string>> {
+  const unicos = [...new Set(ids)]
+  if (unicos.length === 0) return new Map()
+  const usuarios = await prisma.usuario.findMany({ where: { id: { in: unicos } }, select: { id: true, nombre: true } })
+  return new Map(usuarios.map((u) => [u.id, u.nombre]))
 }

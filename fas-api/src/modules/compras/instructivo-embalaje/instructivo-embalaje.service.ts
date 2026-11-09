@@ -107,7 +107,8 @@ export async function obtenerInstructivo(id: number) {
 
 export async function crearInstructivo(body: InstructivoEmbalajeCreateInput, creadoPor: string) {
   // Temporada: la enviada (validada) o la que corresponde por fecha de programa.
-  body = { ...body, temporadaId: await temporadaParaCrear(body.temporadaId, body.fechaInicioPrograma) }
+  const temporadaId = await temporadaParaCrear(body.temporadaId, body.fechaInicioPrograma)
+  body = { ...body, temporadaId }
   await validarReferenciasHeader(body)
   await validarCalidadesPermitidas(body.calidadesPermitidas ?? [])
 
@@ -115,7 +116,7 @@ export async function crearInstructivo(body: InstructivoEmbalajeCreateInput, cre
     await validarLinea(linea, index)
   }
 
-  return repo.createInstructivo(body, creadoPor)
+  return repo.createInstructivo({ ...body, temporadaId }, creadoPor)
 }
 
 // Sin máquina de estados (2026-09-02: Calidad ya no emite veredicto sobre el

@@ -53,6 +53,8 @@ Permitir a Patricia administrar la ficha de cada productor, sus predios, su cont
 | PR2 | Representante legal | El productor exige ≥1 `EntidadContacto` con `esRepresentanteLegal = true` y `rut` (cambio ya aplicado en entidades.md). |
 | PR3 | Predio | Maestro: `Int`, código único por productor, softdelete, auditoría. **Sin** descripción extranjera. |
 | PR4 | Contrato | Múltiples contratos por productor (historial), con `temporadaId` y `especieId` obligatorios; **un solo contrato activo por combinación especie-temporada**. Documentos adjuntos múltiples (no solo PDF). |
+| PR4b | Contrato — Temporada (2026-11-09) | La temporada **no es un input**: al crear se asigna la temporada activa del selector general (sin temporada activa no se puede guardar); al editar se conserva la del contrato. Las fechas de inicio/término se precargan con el rango de esa temporada. |
+| PR-PVP-TD | Proforma a Productor — Tipo de documento (2026-11-09) | Se elimina la marca "Exento" por línea. La cabecera lleva **Tipo de documento**: Factura Nacional (33, afecta IVA 19%) o Factura Exenta (34). Aplica a todas las líneas, al PDF y a la Factura Nacional generada (que lo hereda y no permite marcar líneas). Proformas previas migradas como Factura Nacional. Igual en Proforma de Materiales. |
 | PR5 | Cuenta corriente | Movimientos **inmutables**; saldo = Σ HABER − Σ DEBE; corrección por reverso. |
 | PR6 | Concepto de liquidación | Cabecera (código, descripción, forma de aplicación, naturaleza COBRO/ABONO) + valor por especie (matriz tipo lista de precios). |
 | PR7 | Forma de aplicación | `POR_KILO`, `POR_CAJA`, `PORCENTAJE_VENTA` y **`MONTO_TOTAL`** (añadido para el caso "transporte por X dólares totales"). |

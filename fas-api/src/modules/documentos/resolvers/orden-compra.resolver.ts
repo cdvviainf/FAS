@@ -5,6 +5,7 @@ import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri, getEspec
 import type { ResolverOpciones } from '../documentos.types.js'
 import type { OrdenCompraPdfPayload } from '../schemas/orden-compra.schema.js'
 import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
+import { textoCalibres } from './calibres-texto.js'
 
 export const FECHA_REFERENCIA_LABEL: Record<string, string> = {
   FACTURA: 'Factura',
@@ -121,7 +122,9 @@ export async function resolverOrdenCompra(id: number, empresaId: number, opcione
     const precioCaja = new Prisma.Decimal(l.precioUsdCaja ?? 0)
     return {
       ...base,
-      calibres: l.calibres.map((c) => valorIdioma(c.calibre, idioma)).join(', '),
+      // Calibres según calibreModo de la línea (2026-11-09, mismo criterio que
+      // el Cierre): RANGO = "Desde X hasta Y", ESPECIFICOS = lista.
+      calibres: textoCalibres(l.calibres.map((c) => ({ descripcion: valorIdioma(c.calibre, idioma)!, orden: c.calibre.orden })), l.calibreModo, idioma),
       categoria: valorIdioma(l.categoria, idioma),
       cantidadPallets: l.cantidadPallets,
       cajas: l.cajas,

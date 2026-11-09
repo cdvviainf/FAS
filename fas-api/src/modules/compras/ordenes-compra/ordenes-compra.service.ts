@@ -173,7 +173,24 @@ async function resolverLineaDesdeCierre(
     categoriaId: detalle.categoriaId,
     articuloId: detalle.articuloId,
     tipoPalletId: detalle.tipoPalletId,
+    // Presentación de calibres (2026-11-09): la elegida en la OC o, si no
+    // viene, la de la línea del Cierre.
+    calibreModo: linea.calibreModo ?? detalle.calibreModo,
   }
+}
+
+// Mercado desde el Cierre (2026-11-09): si la OC tiene Cierre Comercial, su
+// Mercado (destinoMercadoId) es SIEMPRE el del Cierre — el form lo muestra
+// bloqueado y aquí se impone server-side. Sin Cierre, queda el elegido.
+async function mercadoDesdeCierre<T extends { notaVentaId?: number | null; destinoMercadoId?: number | null }>(
+  body: T,
+  notaVentaIdVigente: number | null,
+): Promise<T> {
+  const notaVentaId = body.notaVentaId !== undefined ? body.notaVentaId : notaVentaIdVigente
+  if (notaVentaId == null) return body
+  const notaVenta = await repo.getNotaVenta(notaVentaId)
+  if (!notaVenta) return body // validarReferenciasHeader rechaza el Cierre inexistente
+  return { ...body, destinoMercadoId: notaVenta.mercadoId }
 }
 
 async function validarReferenciasHeader(data: {
@@ -282,10 +299,12 @@ export async function crearOrdenCompra(body: OrdenCompraCreateInput, creadoPor: 
   // La Inspección de Compra ya NO es requerida (2026-09-15): la OC puede
   // crearse sin solicitudes. Si se envían, validarReferenciasHeader las valida.
   // Temporada: la enviada (validada) o la que corresponde por fecha.
-  body = { ...body, temporadaId: await temporadaParaCrear(body.temporadaId, body.fecha ?? new Date()) }
+  const temporadaId = await temporadaParaCrear(body.temporadaId, body.fecha ?? new Date())
+  body = { ...body, temporadaId }
+  body = await mercadoDesdeCierre(body, null)
   await validarReferenciasHeader(body)
   try {
-    return await repo.createOrdenCompra(normalizarCondicionesGranel(body, body.modalidad ?? 'CAJAS'), creadoPor)
+    return await repo.createOrdenCompra({ ...normalizarCondicionesGranel(body, body.modalidad ?? 'CAJAS'), temporadaId }, creadoPor)
   } catch (e) {
     throw traducirColisionSolicitud(e)
   }
@@ -337,6 +356,7 @@ export async function actualizarOrdenCompra(id: number, body: OrdenCompraUpdateI
       )
     }
   }
+  body = await mercadoDesdeCierre(body, existente.notaVentaId)
   await validarReferenciasHeader(body, {
     entidadProductorId: existente.entidadProductorId,
     solicitudInspeccionIds: existente.solicitudes.map((s) => s.solicitudInspeccion.id),

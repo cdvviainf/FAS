@@ -80,6 +80,7 @@ export async function getEmbarqueParaReclamo(embarqueId: number) {
         select: {
           clienteId: true,
           monedaId: true,
+          temporadaId: true,
           cliente: { select: mantenedorSelect },
           moneda: { select: mantenedorSelect },
         },
@@ -178,7 +179,7 @@ interface DatosReclamo {
   tipoReclamoId: number
   fechaReclamo: Date
   resumenCliente?: string | null
-  temporadaId?: number | null
+  temporadaId: number
   tieneTermografos?: boolean
   tieneReporte?: boolean
   lineas: ReclamoLineaInput[]
@@ -284,7 +285,7 @@ export async function crearReclamoTransaccional(
         tipoReclamoId: datos.tipoReclamoId,
         fechaReclamo: datos.fechaReclamo,
         resumenCliente: datos.resumenCliente ?? undefined,
-        temporadaId: datos.temporadaId ?? undefined,
+        temporadaId: datos.temporadaId,
         tieneTermografos: datos.tieneTermografos ?? false,
         tieneReporte: datos.tieneReporte ?? false,
         creadoPor,
@@ -333,6 +334,12 @@ interface DatosReclamoUpdate {
 // (no un merge) — mismos locks y validación R-NEW1/R-NEW2 que al crear,
 // excluyendo las líneas propias del reclamo del cálculo de "ya reclamado"
 // (se están reemplazando, no sumando).
+// Temporada persistida del reclamo (para validar un cambio en la edición).
+export async function getTemporadaReclamo(id: number): Promise<number | null> {
+  const r = await prisma.reclamo.findFirst({ where: { id, eliminadoEn: null }, select: { temporadaId: true } })
+  return r?.temporadaId ?? null
+}
+
 export async function actualizarReclamoTransaccional(
   id: number,
   embarqueId: number,
@@ -414,7 +421,7 @@ export async function actualizarReclamoTransaccional(
         ...(datos.fechaReclamo !== undefined ? { fechaReclamo: datos.fechaReclamo } : {}),
         ...(datos.tipoReclamoId !== undefined ? { tipoReclamoId: datos.tipoReclamoId } : {}),
         ...(datos.resumenCliente !== undefined ? { resumenCliente: datos.resumenCliente } : {}),
-        ...(datos.temporadaId !== undefined ? { temporadaId: datos.temporadaId } : {}),
+        ...(datos.temporadaId != null ? { temporadaId: datos.temporadaId } : {}),
         ...(datos.tieneTermografos !== undefined ? { tieneTermografos: datos.tieneTermografos } : {}),
         ...(datos.tieneReporte !== undefined ? { tieneReporte: datos.tieneReporte } : {}),
         actualizadoPor,

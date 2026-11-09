@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -32,6 +32,8 @@ import { usuariosService } from '@/features/usuarios/service'
 import { contratosService } from '../service'
 import type { Contrato, ContratoLineaInput } from '../types'
 import { articuloDescripcionComercial } from '@/lib/articulo'
+import { useTemporada } from '@/contexts/temporada-context'
+import { AvisoSinTemporada } from '@/components/shared/aviso-sin-temporada'
 
 const temporadasService = createMantenedorService('temporadas')
 const especiesService = createMantenedorService('especies')
@@ -72,7 +74,32 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
   const isEdit = !!item
   const queryClient = useQueryClient()
 
-  const [temporadaId, setTemporadaId] = useState<number | null>(null)
+  // Temporada (2026-11-09): ya no es un input. Al crear se usa la temporada
+  // activa del selector general; al editar se conserva la del contrato.
+  const { temporada: temporadaActiva, isLoading: temporadaCargando } = useTemporada()
+  const temporadaId = isEdit ? item!.temporadaId : temporadaActiva?.id ?? null
+  const temporadaCodigo = isEdit ? item!.temporada?.codigo : temporadaActiva?.codigo
+  const sinTemporada = !isEdit && temporadaId == null
+  // El contrato es de la temporada en curso (BCOG-R6-001, decisión del usuario):
+  // si la temporada activa cambia mientras se crea uno, el borrador se descarta
+  // (se cierra el formulario) en vez de mezclar temporada nueva y fechas viejas.
+  const temporadaAlAbrir = useRef<number | null | undefined>(undefined)
+  useEffect(() => {
+    if (!open || isEdit) {
+      temporadaAlAbrir.current = undefined
+      return
+    }
+    if (temporadaId == null) return
+    if (temporadaAlAbrir.current === undefined) {
+      temporadaAlAbrir.current = temporadaId
+      return
+    }
+    if (temporadaAlAbrir.current !== temporadaId) {
+      temporadaAlAbrir.current = undefined
+      toast.info('Cambió la temporada activa: se descartó el contrato en edición')
+      onOpenChange(false)
+    }
+  }, [open, isEdit, temporadaId, onOpenChange])
   const [especieId, setEspecieId] = useState<number | null>(null)
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaTermino, setFechaTermino] = useState('')
@@ -130,7 +157,6 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
     if (!open) return
     if (item) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación del form al cargar el contrato a editar
-      setTemporadaId(item.temporadaId)
       setEspecieId(item.especieId)
       setFechaInicio(item.fechaInicio.slice(0, 10))
       setFechaTermino(item.fechaTermino.slice(0, 10))
@@ -148,7 +174,6 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
         minimoGarantizado: Number(l.minimoGarantizado),
       })) : [nuevaLineaVacia()])
     } else {
-      setTemporadaId(null)
       setEspecieId(null)
       setFechaInicio('')
       setFechaTermino('')
@@ -161,15 +186,12 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item?.id])
 
-  function seleccionarTemporada(id: number) {
-    setTemporadaId(id)
-    if (!fechasTocadas) {
-      const temporada = (temporadasData?.data ?? []).find((t) => t.id === id)
-      if (temporada) {
-        setFechaInicio(temporada.fechaInicio.slice(0, 10))
-        setFechaTermino(temporada.fechaTermino.slice(0, 10))
-      }
-    }
+  // Al crear, las fechas parten con el rango de la temporada activa mientras el
+  // usuario no las modifique (antes se precargaban al elegir la temporada).
+  const temporadaRango = !isEdit ? (temporadasData?.data ?? []).find((t) => t.id === temporadaId) : undefined
+  if (open && !isEdit && !fechasTocadas && temporadaRango && (fechaInicio === '' || fechaTermino === '')) {
+    setFechaInicio(temporadaRango.fechaInicio.slice(0, 10))
+    setFechaTermino(temporadaRango.fechaTermino.slice(0, 10))
   }
 
   function actualizarLinea(index: number, cambios: Partial<ContratoLineaInput>) {
@@ -184,7 +206,7 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
 
   function validate(): boolean {
     const e: Record<string, string> = {}
-    if (!temporadaId) e.temporadaId = 'La temporada es requerida'
+    if (!temporadaId) e.temporadaId = 'No hay temporada activa: selecciónala en el selector general'
     if (!especieId) e.especieId = 'La especie es requerida'
     if (!fechaInicio) e.fechaInicio = 'La fecha de inicio es requerida'
     if (!fechaTermino) e.fechaTermino = 'La fecha de término es requerida'
@@ -250,15 +272,10 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
             <CardContent className='space-y-4'>
               <div className='grid gap-3 sm:grid-cols-2'>
                 <div className='space-y-1.5'>
-                  <Label>Temporada <span className='text-destructive'>*</span></Label>
-                  <Select value={temporadaId ? String(temporadaId) : ''} onValueChange={(v) => seleccionarTemporada(Number(v))}>
-                    <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
-                    <SelectContent>
-                      {(temporadasData?.data ?? []).map((t) => (
-                        <SelectItem key={t.id} value={String(t.id)}>{t.codigo} — {t.descripcion}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Temporada</Label>
+                  <p className='flex h-9 items-center text-sm text-muted-foreground'>
+                    {temporadaCodigo ?? '—'}{!isEdit && ' (temporada activa)'}
+                  </p>
                   {errors.temporadaId && <p className='text-xs text-destructive'>{errors.temporadaId}</p>}
                 </div>
                 <div className='space-y-1.5'>
@@ -362,9 +379,10 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
           </Card>
         </div>
 
+        <AvisoSinTemporada mostrar={sinTemporada && !temporadaCargando} className='mx-4' />
         <SheetFooter>
           <Button variant='outline' onClick={() => onOpenChange(false)} disabled={mutation.isPending}>Cancelar</Button>
-          <Button onClick={handleSubmit} isLoading={mutation.isPending}>
+          <Button onClick={handleSubmit} isLoading={mutation.isPending} disabled={sinTemporada}>
             <Icons.check className='mr-1 h-4 w-4' /> {isEdit ? 'Guardar cambios' : 'Crear contrato'}
           </Button>
         </SheetFooter>

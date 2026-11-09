@@ -6,6 +6,7 @@ import type { ResolverOpciones } from '../documentos.types.js'
 import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 import { FECHA_REFERENCIA_LABEL, valorIdioma, lineasDireccion } from './orden-compra.resolver.js'
 import type { CierreComercialPdfPayload } from '../schemas/cierre-comercial.schema.js'
+import { textoCalibres } from './calibres-texto.js'
 
 // Resolver del Cierre Comercial (modelo NotaVenta) — mismo criterio que
 // orden-compra.resolver.ts, del que reusa FECHA_REFERENCIA_LABEL (mismo enum
@@ -58,7 +59,19 @@ export async function resolverCierreComercial(id: number, empresaId: number, opc
     total: total.toString(),
     kgNetoEnvase: kgNetoEnvase.toString(),
     kgBrutoEnvase: kgBrutoEnvase.toString(),
+    // Calidad / Condición "hasta" de la línea (2026-11-09): solo el código
+    // (columna compacta de la tabla v4).
+    calidadHasta: l.notaCalidadHasta?.codigo ?? null,
+    condicionHasta: l.notaCondicionHasta?.codigo ?? null,
   }))
+
+  // Plantillas v1–v3 (encabezado): valor común a todas las líneas, o null si
+  // difieren / no hay restricción.
+  const hastaComun = (notas: ({ codigo: string; descripcion: string; descripcionExtranjera?: string | null } | null)[]) => {
+    const primera = notas[0]
+    if (!primera || notas.some((x) => x?.codigo !== primera.codigo)) return null
+    return `${primera.codigo} — ${tx(primera)}`
+  }
 
   const totales = calculadas.reduce(
     (acc, c) => ({
@@ -73,10 +86,10 @@ export async function resolverCierreComercial(id: number, empresaId: number, opc
 
   // v2: Vendedor = exportador del Cierre (o la empresa); contacto = responsable de venta.
   const vendedorDireccion = exportador ? exportador.direcciones[0] : empresa?.direcciones[0]
-  // Comprador: la dirección elegida en el Cierre (+ detalle) o la por defecto del cliente.
+  // Comprador: la dirección elegida en el Cierre o la por defecto del cliente.
+  // El Detalle de Dirección dejó de usarse (2026-11-09).
   const direccionComprador = nv.direccion ?? cliente?.direcciones[0]
   const lineasComprador = lineasDireccion(direccionComprador as Parameters<typeof lineasDireccion>[0], idioma)
-  if (nv.direccionDetalle?.trim()) lineasComprador.splice(1, 0, nv.direccionDetalle.trim())
   const tiposPallet = [...new Set(lineas.map((l) => l.tipoPallet).filter((t): t is string => !!t))]
   const reclamosTexto = idioma === 'EN' ? reclamosEmpresa?.reclamosCierreEn : reclamosEmpresa?.reclamosCierreEs
   const reclamosRef = idioma === 'EN' ? reclamosEmpresa?.reclamosCierreRefEn : reclamosEmpresa?.reclamosCierreRefEs
@@ -129,8 +142,8 @@ export async function resolverCierreComercial(id: number, empresaId: number, opc
         },
     responsableVenta: nv.responsableVenta?.nombre ?? null,
     firmaResponsableDataUri: firmaResponsable,
-    calidadHasta: nv.notaCalidadHasta ? `${nv.notaCalidadHasta.codigo} — ${tx(nv.notaCalidadHasta)}` : null,
-    condicionHasta: nv.notaCondicionHasta ? `${nv.notaCondicionHasta.codigo} — ${tx(nv.notaCondicionHasta)}` : null,
+    calidadHasta: hastaComun(nv.detalles.map((l) => l.notaCalidadHasta)),
+    condicionHasta: hastaComun(nv.detalles.map((l) => l.notaCondicionHasta)),
     folio: String(nv.folio),
     fecha: nv.fecha.toISOString(),
     cliente: {
@@ -163,21 +176,8 @@ export async function resolverCierreComercial(id: number, empresaId: number, opc
   }
 }
 
-// Calibres en el PDF (2026-11-05): RANGO = "Desde {menor} hasta {mayor}" según
-// el orden del mantenedor de calibres; ESPECIFICOS = lista. Con un solo calibre
-// se muestra tal cual en ambos modos.
-export function textoCalibres(
-  calibres: { descripcion: string; orden: number }[],
-  modo: 'ESPECIFICOS' | 'RANGO',
-  idioma: 'ES' | 'EN' = 'ES',
-): string {
-  const ordenados = [...calibres].sort((a, b) => a.orden - b.orden)
-  if (modo === 'RANGO' && ordenados.length > 1) {
-    const [desde, hasta] = [ordenados[0].descripcion, ordenados[ordenados.length - 1].descripcion]
-    return idioma === 'EN' ? `From ${desde} to ${hasta}` : `Desde ${desde} hasta ${hasta}`
-  }
-  return ordenados.map((c) => c.descripcion).join(', ')
-}
+// textoCalibres vive en ./calibres-texto.ts (compartido con la OC, 2026-11-09).
+export { textoCalibres } from './calibres-texto.js'
 
 // Reexport — el título "FECHA_REFERENCIA_LABEL" queda dueño de
 // orden-compra.resolver.ts (primer documento en usarlo); la plantilla de

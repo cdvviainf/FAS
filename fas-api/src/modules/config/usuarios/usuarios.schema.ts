@@ -6,6 +6,7 @@ export const usuarioCreateSchema = z.object({
   whatsapp: z.string().max(50).trim().optional(),
   perfilId: z.number().int().positive('El perfil es requerido'),
   esResponsableVenta: z.boolean().default(false),
+  puedeEditarCierresAjenos: z.boolean().default(false),
   password: z.string().min(1, 'La contraseña es requerida'),
   passwordConfirm: z.string().min(1, 'Confirma la contraseña'),
   // Multi-empresa (Fase 4b): empresas a las que se asigna el usuario y cuál
@@ -24,6 +25,7 @@ export const usuarioUpdateSchema = z.object({
   whatsapp: z.string().max(50).trim().optional().nullable(),
   perfilId: z.number().int().positive().optional(),
   esResponsableVenta: z.boolean().optional(),
+  puedeEditarCierresAjenos: z.boolean().optional(),
   // Si `empresas` no viene, las membresías actuales no se tocan. Si viene,
   // reemplaza el set completo. La consistencia final con `empresaPredeterminadaId`
   // (incluido el caso donde no se toca ninguno de los dos) se resuelve en el

@@ -78,7 +78,7 @@ export async function softDeleteInstructivo(id: number, eliminadoPor: string) {
 
 const LOCK_NAMESPACE_INSTRUCTIVO_EMBALAJE = 490235
 
-export async function createInstructivo(body: InstructivoEmbalajeCreateInput, creadoPor: string) {
+export async function createInstructivo(body: InstructivoEmbalajeCreateInput & { temporadaId: number }, creadoPor: string) {
   const { detalle, calidadesPermitidas, ...resto } = body
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_INSTRUCTIVO_EMBALAJE}::int, 0)`
@@ -117,7 +117,8 @@ export async function createInstructivo(body: InstructivoEmbalajeCreateInput, cr
 // crea/edita como documento completo, no por línea individual (a diferencia
 // de la OC).
 export async function updateInstructivo(id: number, data: InstructivoEmbalajeUpdateInput) {
-  const { detalle, calidadesPermitidas, ...resto } = data
+  // temporadaId null no se persiste (columna NOT NULL; el service lo rechaza).
+  const { detalle, calidadesPermitidas, temporadaId, ...resto } = data
   return prisma.$transaction(async (tx) => {
     const claim = await tx.instructivoEmbalaje.updateMany({ where: { id, eliminadoEn: null }, data: {} })
     if (claim.count === 0) return null
@@ -126,6 +127,7 @@ export async function updateInstructivo(id: number, data: InstructivoEmbalajeUpd
       where: { id },
       data: {
         ...resto,
+        ...(temporadaId != null ? { temporadaId } : {}),
         ...(detalle
           ? {
               detalle: {

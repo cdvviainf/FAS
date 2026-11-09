@@ -43,6 +43,9 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
   const puedeEscribirEmbarques = usePuedeEscribir(ITEM_EMBARQUES)
   const puedeReabrir = usePuedeEscribir(ITEM_REABRIR)
   const cerrado = notaVenta.cerradoEn != null
+  // Edición restringida al creador (2026-11-09): Editar/Cerrar/Eliminar exigen
+  // además ser el creador o tener el permiso de usuario "editar Cierres de otros".
+  const esEditor = puedeEscribir && notaVenta.puedeEditar !== false
 
   const cerrarMutation = useMutation({
     mutationFn: () => notasVentaService.cerrar(notaVenta.id),
@@ -123,7 +126,7 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => router.push(`/dashboard/ventas/cierre/${notaVenta.id}`)}>
             <Icons.edit className='mr-2 h-4 w-4' />
-            {puedeEscribir && !cerrado ? 'Editar' : 'Ver detalle'}
+            {esEditor && !cerrado ? 'Editar' : 'Ver detalle'}
           </DropdownMenuItem>
           {puedeEscribir && (
             <DropdownMenuItem onClick={() => setDuplicarOpen(true)} disabled={duplicarMutation.isPending}>
@@ -137,7 +140,7 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
               Solicitar espacio
             </DropdownMenuItem>
           )}
-          {puedeEscribir && !cerrado && (
+          {esEditor && !cerrado && (
             <DropdownMenuItem onClick={() => cerrarMutation.mutate()} disabled={cerrarMutation.isPending}>
               <Icons.lock className='mr-2 h-4 w-4' />
               Cerrar (bloquear)
@@ -157,7 +160,7 @@ function NotaVentaCellAction({ notaVenta }: { notaVenta: NotaVentaListItem }) {
             <Icons.download className='mr-2 h-4 w-4' />
             Descargar PDF
           </DropdownMenuItem>
-          {puedeEscribir && !cerrado && (
+          {esEditor && !cerrado && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -216,6 +219,11 @@ export const notaVentaColumns: ColumnDef<NotaVentaListItemConEstadoOc>[] = [
         <p className='text-xs text-muted-foreground'>{row.original.cliente.razonSocial}</p>
       </div>
     ),
+  },
+  {
+    id: 'creadoPor',
+    header: 'Creado por',
+    cell: ({ row }) => <span className='text-sm text-muted-foreground'>{row.original.creadoPorNombre ?? '—'}</span>,
   },
   {
     id: 'mercado',

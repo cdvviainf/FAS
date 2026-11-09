@@ -2,7 +2,6 @@ export interface ProformaProductorLineaInput {
   glosa: string
   cantidad: number
   precioUnitario: number
-  exento: boolean
 }
 
 export interface ProformaProductorCreateInput {
@@ -14,6 +13,7 @@ export interface ProformaProductorCreateInput {
   formaPagoId?: number | null
   condicionPagoId?: number | null
   conceptoCtaCteId?: number | null
+  tipoDte?: 33 | 34
   observaciones?: string | null
   lineas: ProformaProductorLineaInput[]
 }

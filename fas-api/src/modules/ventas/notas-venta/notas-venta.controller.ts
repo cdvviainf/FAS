@@ -12,13 +12,13 @@ import * as service from './notas-venta.service.js'
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {
   const { page, limit, clienteId, temporadaId } = notaVentaListQuerySchema.parse(req.query)
-  const result = await service.listarNotasVenta(page, limit, clienteId, temporadaId)
+  const result = await service.listarNotasVenta(page, limit, req.fasUserId!, clienteId, temporadaId)
   return reply.send(result)
 }
 
 export async function getById(req: FastifyRequest, reply: FastifyReply) {
   const { id } = notaVentaParamsSchema.parse(req.params)
-  const notaVenta = await service.obtenerNotaVenta(id)
+  const notaVenta = await service.obtenerNotaVentaParaUsuario(id, req.fasUserId!)
   return reply.send({ data: notaVenta })
 }
 
@@ -72,19 +72,19 @@ export async function reabrir(req: FastifyRequest, reply: FastifyReply) {
 export async function addDetalle(req: FastifyRequest, reply: FastifyReply) {
   const { id } = notaVentaParamsSchema.parse(req.params)
   const body = notaVentaDetalleCreateSchema.parse(req.body)
-  const detalle = await service.agregarDetalle(id, body)
+  const detalle = await service.agregarDetalle(id, body, req.fasUserId!)
   return reply.status(201).send({ data: detalle })
 }
 
 export async function updateDetalle(req: FastifyRequest, reply: FastifyReply) {
   const { id, detalleId } = notaVentaDetalleParamsSchema.parse(req.params)
   const body = notaVentaDetalleUpdateSchema.parse(req.body)
-  const detalle = await service.actualizarDetalle(id, detalleId, body)
+  const detalle = await service.actualizarDetalle(id, detalleId, body, req.fasUserId!)
   return reply.send({ data: detalle })
 }
 
 export async function removeDetalle(req: FastifyRequest, reply: FastifyReply) {
   const { id, detalleId } = notaVentaDetalleParamsSchema.parse(req.params)
-  await service.eliminarDetalle(id, detalleId)
+  await service.eliminarDetalle(id, detalleId, req.fasUserId!)
   return reply.status(204).send()
 }

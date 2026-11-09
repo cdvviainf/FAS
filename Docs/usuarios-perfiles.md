@@ -221,3 +221,6 @@ model Usuario {
 - [ ] Tests CA1–CA10 en verde.
 - [ ] Editor de perfiles con matriz dinámica + usuarios con avatar + sidebar dinámico, responsivos.
 - [ ] Schema incorporado al `CLAUDE.md` global.
+
+
+> **Agregado 2026-11-09 — `Usuario.puedeEditarCierresAjenos` (Boolean, default false).** Permiso a nivel de **usuario** (no de perfil): permite editar Cierres Comerciales abiertos creados por otros usuarios (por defecto solo el creador los edita, ver `ventas.md`). Se administra en el formulario de Usuarios (checkbox) y se lista como columna "Edita Cierres de otros".

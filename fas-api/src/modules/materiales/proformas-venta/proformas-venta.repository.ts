@@ -197,6 +197,7 @@ export async function createProformaMaterial(data: ProformaMaterialCreateInput, 
         condicionPagoId: data.condicionPagoId,
         monedaId: data.monedaId,
         tipoCambio: data.tipoCambio ?? null,
+        ...(data.tipoDte !== undefined ? { tipoDte: data.tipoDte } : {}),
         observaciones: data.observaciones,
         creadoPor,
         // Líneas copiadas 1:1 desde el Movimiento — cantidad no editable

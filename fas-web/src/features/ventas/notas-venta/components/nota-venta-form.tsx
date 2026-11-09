@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useTemporada } from '@/contexts/temporada-context'
-import { TemporadaSelect } from '@/components/shared/temporada-select'
+import { AvisoSinTemporada } from '@/components/shared/aviso-sin-temporada'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -65,7 +65,9 @@ const clausulasVentaService = createMantenedorService('clausulas-venta')
 
 interface HeaderFields {
   fecha: string
-  // Temporada (2026-11-06): null en alta = usar la temporada activa.
+  // Temporada (2026-11-06): null en alta = usar la temporada activa del
+  // selector general. Desde 2026-11-09 no se muestra en el form: al editar se
+  // reenvía la ya guardada.
   temporadaId: number | null
   tipoVenta: 'EXPORTACION' | 'NACIONAL'
   clienteId: number
@@ -78,7 +80,6 @@ interface HeaderFields {
   paisDestinoId: number
   puertoDestinoId: number | null
   direccionId: number | null
-  direccionDetalle: string
   monedaId: number
   modalidadVentaId: number | null
   clausulaVentaId: number | null
@@ -89,9 +90,6 @@ interface HeaderFields {
   formaPagoId: number | null
   observaciones: string
   contratoNaviero: 'AGROSAN_AGL' | 'CLIENTE'
-  // Calidad / Condición "hasta" (2026-11-05). null = sin restricción.
-  notaCalidadHastaId: number | null
-  notaCondicionHastaId: number | null
   // Responsable de venta (2026-11-05): por defecto el usuario digitador.
   responsableVentaId: string | null
 }
@@ -110,7 +108,6 @@ const HEADER_EMPTY: HeaderFields = {
   paisDestinoId: 0,
   puertoDestinoId: null,
   direccionId: null,
-  direccionDetalle: '',
   monedaId: 0,
   modalidadVentaId: null,
   clausulaVentaId: null,
@@ -120,8 +117,6 @@ const HEADER_EMPTY: HeaderFields = {
   formaPagoId: null,
   observaciones: '',
   contratoNaviero: 'AGROSAN_AGL',
-  notaCalidadHastaId: null,
-  notaCondicionHastaId: null,
   responsableVentaId: null,
 }
 
@@ -144,6 +139,9 @@ interface NuevaLinea {
   calibreIds: number[]
   // Presentación de calibres en el PDF (sin efecto funcional).
   calibreModo: CalibreModo
+  // Calidad / Condición "hasta" de la línea (2026-11-09). null = sin restricción.
+  notaCalidadHastaId: number | null
+  notaCondicionHastaId: number | null
 }
 
 const LINEA_EMPTY: NuevaLinea = {
@@ -160,6 +158,8 @@ const LINEA_EMPTY: NuevaLinea = {
   precio: '',
   calibreIds: [],
   calibreModo: 'ESPECIFICOS',
+  notaCalidadHastaId: null,
+  notaCondicionHastaId: null,
 }
 
 interface NotaVentaFormProps {
@@ -173,8 +173,10 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
 
   const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
   // En alta, mientras el usuario no elija otra, la temporada es la activa.
-  const { temporada: temporadaActiva } = useTemporada()
+  const { temporada: temporadaActiva, isLoading: temporadaCargando } = useTemporada()
   const temporadaIdEfectiva = fields.temporadaId ?? (isEdit ? null : temporadaActiva?.id ?? null)
+  // Temporada obligatoria (2026-11-09): sin temporada no se crea el Cierre.
+  const sinTemporada = !isEdit && temporadaIdEfectiva == null
   const [errors, setErrors] = useState<Record<string, string>>({})
   const { data: session } = authClient.useSession()
   const usuarioActualId = session?.user?.id ?? null
@@ -223,8 +225,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   const { data: notasCondicionData } = useQuery({ queryKey: ['notas-condicion-options'], queryFn: () => notasCondicionService.list(), staleTime: 5 * 60_000 })
   const porOrden = (a: { orden: number; codigo: string }, b: { orden: number; codigo: string }) => a.orden - b.orden || a.codigo.localeCompare(b.codigo)
   // Vigentes + la ya guardada (aunque hoy esté bloqueada) para no perderla al editar.
-  const notasCalidad = (notasCalidadData?.data ?? []).filter((n) => !n.bloqueado || n.id === fields.notaCalidadHastaId).sort(porOrden)
-  const notasCondicion = (notasCondicionData?.data ?? []).filter((n) => !n.bloqueado || n.id === fields.notaCondicionHastaId).sort(porOrden)
+  const notasCalidad = (notasCalidadData?.data ?? []).filter((n) => !n.bloqueado || n.id === linea.notaCalidadHastaId).sort(porOrden)
+  const notasCondicion = (notasCondicionData?.data ?? []).filter((n) => !n.bloqueado || n.id === linea.notaCondicionHastaId).sort(porOrden)
   const { data: responsablesData } = useQuery({
     queryKey: ['cierre-responsables-venta-options'],
     queryFn: () => notasVentaService.responsablesVenta(),
@@ -385,7 +387,6 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
         paisDestinoId: d.paisDestinoId,
         puertoDestinoId: d.puertoDestinoId,
         direccionId: d.direccionId,
-        direccionDetalle: d.direccionDetalle ?? '',
         monedaId: d.monedaId,
         modalidadVentaId: d.modalidadVentaId,
         clausulaVentaId: d.clausulaVentaId,
@@ -395,8 +396,6 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
         formaPagoId: d.formaPagoId ?? null,
         observaciones: d.observaciones ?? '',
         contratoNaviero: d.contratoNaviero ?? 'AGROSAN_AGL',
-        notaCalidadHastaId: d.notaCalidadHastaId ?? null,
-        notaCondicionHastaId: d.notaCondicionHastaId ?? null,
         responsableVentaId: d.responsableVentaId ?? null,
       })
     }
@@ -465,8 +464,6 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       tipoVenta: fields.tipoVenta,
       clienteId: fields.clienteId,
       exportadorId: fields.exportadorId,
-      notaCalidadHastaId: fields.notaCalidadHastaId,
-      notaCondicionHastaId: fields.notaCondicionHastaId,
       responsableVentaId: fields.responsableVentaId,
       compradorContactoId: fields.compradorContactoId,
       notifyId: fields.notifyId,
@@ -476,7 +473,6 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       paisDestinoId: fields.paisDestinoId,
       puertoDestinoId: fields.puertoDestinoId,
       direccionId: fields.direccionId,
-      direccionDetalle: fields.direccionDetalle.trim() || undefined,
       monedaId: fields.monedaId,
       modalidadVentaId: fields.modalidadVentaId,
       clausulaVentaId: fields.clausulaVentaId,
@@ -505,6 +501,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       toast.success('Cierre Comercial actualizado')
       queryClient.invalidateQueries({ queryKey: notasVentaKeys.all })
       queryClient.invalidateQueries({ queryKey: notasVentaKeys.detail(notaVentaId!) })
+      // Al guardar cambios del encabezado se vuelve al listado (2026-11-09).
+      router.push('/dashboard/ventas/cierre')
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar el Cierre Comercial'),
   })
@@ -655,6 +653,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       precio: Number(linea.precio),
       calibreIds: linea.calibreIds,
       calibreModo: linea.calibreModo,
+      notaCalidadHastaId: linea.notaCalidadHastaId,
+      notaCondicionHastaId: linea.notaCondicionHastaId,
     }
     if (editingDetalleId) updateDetalleMutation.mutate(payload)
     else addDetalleMutation.mutate(payload)
@@ -676,6 +676,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       precio: d.precio,
       calibreIds: d.calibres.map((c) => c.calibre.id),
       calibreModo: d.calibreModo ?? 'ESPECIFICOS',
+      notaCalidadHastaId: d.notaCalidadHastaId ?? null,
+      notaCondicionHastaId: d.notaCondicionHastaId ?? null,
     })
     invalidarLookupCajas()
     setLineaErrors({})
@@ -700,6 +702,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       precio: d.precio,
       calibreIds: d.calibres.map((c) => c.calibre.id),
       calibreModo: d.calibreModo ?? 'ESPECIFICOS',
+      notaCalidadHastaId: d.notaCalidadHastaId ?? null,
+      notaCondicionHastaId: d.notaCondicionHastaId ?? null,
     })
     invalidarLookupCajas()
     setLineaErrors({})
@@ -758,6 +762,12 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   }
 
   const isPending = createMutation.isPending || updateMutation.isPending
+  // Solo lectura (2026-11-09): un Cierre abierto solo lo edita su creador o un
+  // usuario con el permiso "editar Cierres de otros" (el backend lo impone); un
+  // Cierre cerrado tampoco se edita hasta reabrirlo.
+  const cerrado = isEdit && notaVenta?.data.cerradoEn != null
+  const sinPermisoCreador = isEdit && notaVenta?.data.puedeEditar === false
+  const soloLectura = cerrado || sinPermisoCreador
 
   return (
     <div className='space-y-6'>
@@ -781,13 +791,28 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
           />
         </CardHeader>
         <CardContent className='space-y-4'>
-          {/* Línea 1: Fecha + Tipo de Venta (Exportación/Nacional, 2026-10-06)
-              + Contrato naviero Agrosan (Sí/No). */}
-          <div className='grid gap-4 sm:grid-cols-4'>
-            <div className='space-y-1.5'>
-              <Label>Temporada</Label>
-              <TemporadaSelect value={temporadaIdEfectiva} onChange={(id) => setFields((f) => ({ ...f, temporadaId: id }))} />
+          {sinPermisoCreador && (
+            <div className='flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm'>
+              <Icons.lock className='h-4 w-4 shrink-0' />
+              <span>
+                Este Cierre fue creado por <strong>{notaVenta?.data.creadoPorNombre ?? 'otro usuario'}</strong>; solo quien lo creó puede modificarlo. Lo ves en modo solo lectura.
+              </span>
             </div>
+          )}
+          {cerrado && !sinPermisoCreador && (
+            <div className='flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm'>
+              <Icons.lock className='h-4 w-4 shrink-0' />
+              <span>Este Cierre Comercial está cerrado (bloqueado). Reábrelo para poder modificarlo.</span>
+            </div>
+          )}
+          {/* fieldset disabled: deshabilita todos los controles nativos/Radix del encabezado en solo lectura. */}
+          <fieldset disabled={soloLectura} className='min-w-0 space-y-4'>
+          {/* Encabezado reordenado (2026-11-09). La Temporada ya no se muestra:
+              al crear se asigna la temporada activa del selector general y al
+              editar se conserva la del Cierre. Calidad / Condición "hasta" pasaron
+              a cada línea; el Detalle de Dirección dejó de usarse. */}
+          {/* Fila 1: Fecha, Tipo de Venta, Contrato naviero */}
+          <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Fecha <span className='text-destructive'>*</span></Label>
               <Input type='date' value={fields.fecha} onChange={(e) => setFields((f) => ({ ...f, fecha: e.target.value }))} />
@@ -815,89 +840,9 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
             </div>
           </div>
 
-          {/* Línea 2: Cliente + Dirección + Detalle de Dirección. */}
+          {/* Fila 2: Exportador (2 columnas), Responsable de Venta */}
           <div className='grid gap-4 sm:grid-cols-3'>
-            <div className='space-y-1.5'>
-              <Label className='flex items-center gap-2'>
-                Cliente <span className='text-destructive'>*</span>
-                {clientePlaceholder && fields.clienteId === clientePlaceholder.id && (
-                  <Badge variant='secondary'>Cliente sin definir</Badge>
-                )}
-              </Label>
-              <Combobox
-                value={fields.clienteId ? String(fields.clienteId) : ''}
-                onChange={(v) => elegirCliente(Number(v))}
-                placeholder='Seleccionar cliente...'
-                searchPlaceholder='Buscar cliente...'
-                options={clientes
-                  .filter((c) => c.id !== clientePlaceholder?.id)
-                  .map((c) => ({ value: String(c.id), label: `${c.descripcion} — ${c.razonSocial}` }))}
-                // Volver a "Cliente sin definir" (placeholder CLIENTE-SD) en cualquier momento.
-                noneLabel={clientePlaceholder ? 'Cliente sin definir' : undefined}
-                onNone={() => clientePlaceholder && elegirCliente(clientePlaceholder.id)}
-              />
-              {errors.clienteId && <p className='text-xs text-destructive'>{errors.clienteId}</p>}
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Dirección</Label>
-              <Select value={fields.direccionId ? String(fields.direccionId) : NONE_VALUE} onValueChange={(v) => setFields((f) => ({ ...f, direccionId: v === NONE_VALUE ? null : Number(v) }))} disabled={!fields.clienteId}>
-                <SelectTrigger className='w-full'><SelectValue placeholder={fields.clienteId ? 'Sin dirección' : 'Elige un cliente primero'} /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE_VALUE}>Sin definir</SelectItem>
-                  {direccionesCliente.map((d) => (
-                    <SelectItem key={d.id} value={String(d.id)}>{d.descripcion} — {d.direccion}{d.esPorDefecto ? ' (por defecto)' : ''}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Detalle de Dirección</Label>
-              <Input value={fields.direccionDetalle} onChange={(e) => setFields((f) => ({ ...f, direccionDetalle: e.target.value }))} />
-            </div>
-          </div>
-
-          <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
-            <div className='space-y-1.5'>
-              <Label>Comprador (Contacto del Cliente)</Label>
-              <Select
-                value={fields.compradorContactoId ? String(fields.compradorContactoId) : 'none'}
-                onValueChange={(v) => setFields((f) => ({ ...f, compradorContactoId: v === 'none' ? null : Number(v) }))}
-                disabled={!fields.clienteId}
-              >
-                <SelectTrigger><SelectValue placeholder={fields.clienteId ? 'Sin comprador' : 'Selecciona un cliente primero'} /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='none'>Sin comprador</SelectItem>
-                  {contactosCliente.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.nombre}{c.esComprador ? ' (comprador)' : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Notify</Label>
-              <Combobox
-                value={fields.notifyId ? String(fields.notifyId) : ''}
-                onChange={(v) => setFields((f) => ({ ...f, notifyId: Number(v) }))}
-                placeholder={!fields.clienteId ? 'Selecciona un cliente primero' : notifyOpciones.length === 0 ? 'El cliente no tiene Notify' : 'Seleccionar notify'}
-                searchPlaceholder='Buscar entidad...'
-                disabled={notifyOpciones.length === 0}
-                options={notifyOpciones.map((o) => ({ value: String(o.id), label: o.label }))}
-              />
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Consignatario</Label>
-              <Combobox
-                value={fields.consignatarioId ? String(fields.consignatarioId) : ''}
-                onChange={(v) => setFields((f) => ({ ...f, consignatarioId: Number(v) }))}
-                placeholder={!fields.clienteId ? 'Selecciona un cliente primero' : consignatarioOpciones.length === 0 ? 'El cliente no tiene Consignatario' : 'Seleccionar consignatario'}
-                searchPlaceholder='Buscar entidad...'
-                disabled={consignatarioOpciones.length === 0}
-                options={consignatarioOpciones.map((o) => ({ value: String(o.id), label: o.label }))}
-              />
-            </div>
-            <div className='space-y-1.5'>
+            <div className='space-y-1.5 sm:col-span-2'>
               <Label>Exportador</Label>
               <Combobox
                 value={fields.exportadorId ? String(fields.exportadorId) : ''}
@@ -926,47 +871,91 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </Select>
               <p className='text-muted-foreground text-xs'>Por defecto, el usuario que digita. Su firma sale en el PDF.</p>
             </div>
-            <div className='space-y-1.5'>
-              <Label>Calidad hasta</Label>
-              <Select
-                value={fields.notaCalidadHastaId ? String(fields.notaCalidadHastaId) : NONE_VALUE}
-                onValueChange={(v) => setFields((f) => ({ ...f, notaCalidadHastaId: v === NONE_VALUE ? null : Number(v) }))}
-              >
-                <SelectTrigger><SelectValue placeholder='Sin restricción' /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE_VALUE}>Sin restricción</SelectItem>
-                  {notasCalidad.map((n) => (
-                    <SelectItem key={n.id} value={String(n.id)}>{n.codigo} — {n.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {(() => {
-                const sel = notasCalidad.find((n) => n.id === fields.notaCalidadHastaId)
-                const admitidas = sel ? notasCalidad.filter((n) => n.orden <= sel.orden).map((n) => n.codigo) : []
-                return sel ? <p className='text-muted-foreground text-xs'>Admite: {admitidas.join(', ')}</p> : null
-              })()}
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Condición hasta</Label>
-              <Select
-                value={fields.notaCondicionHastaId ? String(fields.notaCondicionHastaId) : NONE_VALUE}
-                onValueChange={(v) => setFields((f) => ({ ...f, notaCondicionHastaId: v === NONE_VALUE ? null : Number(v) }))}
-              >
-                <SelectTrigger><SelectValue placeholder='Sin restricción' /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE_VALUE}>Sin restricción</SelectItem>
-                  {notasCondicion.map((n) => (
-                    <SelectItem key={n.id} value={String(n.id)}>{n.codigo} — {n.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {(() => {
-                const sel = notasCondicion.find((n) => n.id === fields.notaCondicionHastaId)
-                const admitidas = sel ? notasCondicion.filter((n) => n.orden <= sel.orden).map((n) => n.codigo) : []
-                return sel ? <p className='text-muted-foreground text-xs'>Admite: {admitidas.join(', ')}</p> : null
-              })()}
-            </div>
+          </div>
 
+          {/* Fila 3: Cliente, Dirección (2 columnas) */}
+          <div className='grid gap-4 sm:grid-cols-3'>
+            <div className='space-y-1.5'>
+              <Label className='flex items-center gap-2'>
+                Cliente <span className='text-destructive'>*</span>
+                {clientePlaceholder && fields.clienteId === clientePlaceholder.id && (
+                  <Badge variant='secondary'>Cliente sin definir</Badge>
+                )}
+              </Label>
+              <Combobox
+                value={fields.clienteId ? String(fields.clienteId) : ''}
+                onChange={(v) => elegirCliente(Number(v))}
+                placeholder='Seleccionar cliente...'
+                searchPlaceholder='Buscar cliente...'
+                options={clientes
+                  .filter((c) => c.id !== clientePlaceholder?.id)
+                  .map((c) => ({ value: String(c.id), label: `${c.descripcion} — ${c.razonSocial}` }))}
+                // Volver a "Cliente sin definir" (placeholder CLIENTE-SD) en cualquier momento.
+                noneLabel={clientePlaceholder ? 'Cliente sin definir' : undefined}
+                onNone={() => clientePlaceholder && elegirCliente(clientePlaceholder.id)}
+              />
+              {errors.clienteId && <p className='text-xs text-destructive'>{errors.clienteId}</p>}
+            </div>
+            <div className='space-y-1.5 sm:col-span-2'>
+              <Label>Dirección</Label>
+              <Select value={fields.direccionId ? String(fields.direccionId) : NONE_VALUE} onValueChange={(v) => setFields((f) => ({ ...f, direccionId: v === NONE_VALUE ? null : Number(v) }))} disabled={!fields.clienteId}>
+                <SelectTrigger className='w-full'><SelectValue placeholder={fields.clienteId ? 'Sin dirección' : 'Elige un cliente primero'} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_VALUE}>Sin definir</SelectItem>
+                  {direccionesCliente.map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>{d.descripcion} — {d.direccion}{d.esPorDefecto ? ' (por defecto)' : ''}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Fila 4: Comprador, Consignatario, Notify */}
+          <div className='grid gap-4 sm:grid-cols-3'>
+            <div className='space-y-1.5'>
+              <Label>Comprador (Contacto del Cliente)</Label>
+              <Select
+                value={fields.compradorContactoId ? String(fields.compradorContactoId) : 'none'}
+                onValueChange={(v) => setFields((f) => ({ ...f, compradorContactoId: v === 'none' ? null : Number(v) }))}
+                disabled={!fields.clienteId}
+              >
+                <SelectTrigger><SelectValue placeholder={fields.clienteId ? 'Sin comprador' : 'Selecciona un cliente primero'} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none'>Sin comprador</SelectItem>
+                  {contactosCliente.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.nombre}{c.esComprador ? ' (comprador)' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Consignatario</Label>
+              <Combobox
+                value={fields.consignatarioId ? String(fields.consignatarioId) : ''}
+                onChange={(v) => setFields((f) => ({ ...f, consignatarioId: Number(v) }))}
+                placeholder={!fields.clienteId ? 'Selecciona un cliente primero' : consignatarioOpciones.length === 0 ? 'El cliente no tiene Consignatario' : 'Seleccionar consignatario'}
+                searchPlaceholder='Buscar entidad...'
+                disabled={consignatarioOpciones.length === 0}
+                options={consignatarioOpciones.map((o) => ({ value: String(o.id), label: o.label }))}
+              />
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Notify</Label>
+              <Combobox
+                value={fields.notifyId ? String(fields.notifyId) : ''}
+                onChange={(v) => setFields((f) => ({ ...f, notifyId: Number(v) }))}
+                placeholder={!fields.clienteId ? 'Selecciona un cliente primero' : notifyOpciones.length === 0 ? 'El cliente no tiene Notify' : 'Seleccionar notify'}
+                searchPlaceholder='Buscar entidad...'
+                disabled={notifyOpciones.length === 0}
+                options={notifyOpciones.map((o) => ({ value: String(o.id), label: o.label }))}
+              />
+            </div>
+          </div>
+
+          {/* Fila 5: Tipo de Embarque, País, Mercado */}
+          <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Tipo de Embarque <span className='text-destructive'>*</span></Label>
               <Select value={fields.tipoEmbarqueId ? String(fields.tipoEmbarqueId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, tipoEmbarqueId: Number(v) }))}>
@@ -1009,6 +998,10 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </p>
               {errors.mercadoId && <p className='text-xs text-destructive'>{errors.mercadoId}</p>}
             </div>
+          </div>
+
+          {/* Fila 6: Puerto Destino, Tipo de Flete, Tipo de BL */}
+          <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Puerto Destino</Label>
               <Select value={fields.puertoDestinoId ? String(fields.puertoDestinoId) : NONE_VALUE} onValueChange={(v) => setFields((f) => ({ ...f, puertoDestinoId: v === NONE_VALUE ? null : Number(v) }))} disabled={!fields.paisDestinoId}>
@@ -1022,25 +1015,41 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </Select>
             </div>
             <div className='space-y-1.5'>
-              <Label>Moneda <span className='text-destructive'>*</span></Label>
-              <Select value={fields.monedaId ? String(fields.monedaId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, monedaId: Number(v) }))}>
-                <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
-                <SelectContent>
-                  {(monedasData?.data ?? []).map((m) => (
-                    <SelectItem key={m.id} value={String(m.id)}>{m.codigo} — {m.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.monedaId && <p className='text-xs text-destructive'>{errors.monedaId}</p>}
-            </div>
-
-            <div className='space-y-1.5'>
               <Label>Tipo de Flete</Label>
               <Select value={fields.tipoFleteId ? String(fields.tipoFleteId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, tipoFleteId: v === 'none' ? null : Number(v) }))}>
                 <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value='none'>Sin definir</SelectItem>
                   {(tiposFleteData?.data ?? []).map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-1.5'>
+              <Label>Tipo de BL</Label>
+              <Select value={fields.tipoBlId ? String(fields.tipoBlId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, tipoBlId: v === 'none' ? null : Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none'>Sin definir</SelectItem>
+                  {(tiposBlData?.data ?? []).map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className='text-muted-foreground text-xs'>Se propone como valor por defecto al generar cada Embarque.</p>
+            </div>
+          </div>
+
+          {/* Fila 7: Incoterm, Modalidad de Venta, Condición de Pago */}
+          <div className='grid gap-4 sm:grid-cols-3'>
+            <div className='space-y-1.5'>
+              <Label>Incoterm (Cláusula de Venta)</Label>
+              <Select value={fields.clausulaVentaId ? String(fields.clausulaVentaId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, clausulaVentaId: v === 'none' ? null : Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none'>Sin definir</SelectItem>
+                  {(incotermsData?.data ?? []).map((p) => (
                     <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1059,17 +1068,21 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </Select>
             </div>
             <div className='space-y-1.5'>
-              <Label>Incoterm (Cláusula de Venta)</Label>
-              <Select value={fields.clausulaVentaId ? String(fields.clausulaVentaId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, clausulaVentaId: v === 'none' ? null : Number(v) }))}>
+              <Label>Condición de Pago</Label>
+              <Select value={fields.condicionPagoId ? String(fields.condicionPagoId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, condicionPagoId: v === 'none' ? null : Number(v) }))}>
                 <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value='none'>Sin definir</SelectItem>
-                  {(incotermsData?.data ?? []).map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
+                  {(condicionesPagoData?.data ?? []).map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Fila 8: Forma de Pago, Moneda */}
+          <div className='grid gap-4 sm:grid-cols-3'>
             <div className='space-y-1.5'>
               <Label>Forma de Pago</Label>
               <Select value={fields.formaPagoId ? String(fields.formaPagoId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, formaPagoId: v === 'none' ? null : Number(v) }))}>
@@ -1083,29 +1096,16 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
               </Select>
             </div>
             <div className='space-y-1.5'>
-              <Label>Condición de Pago</Label>
-              <Select value={fields.condicionPagoId ? String(fields.condicionPagoId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, condicionPagoId: v === 'none' ? null : Number(v) }))}>
-                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
+              <Label>Moneda <span className='text-destructive'>*</span></Label>
+              <Select value={fields.monedaId ? String(fields.monedaId) : ''} onValueChange={(v) => setFields((f) => ({ ...f, monedaId: Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value='none'>Sin definir</SelectItem>
-                  {(condicionesPagoData?.data ?? []).map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>
+                  {(monedasData?.data ?? []).map((m) => (
+                    <SelectItem key={m.id} value={String(m.id)}>{m.codigo} — {m.descripcion}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className='space-y-1.5'>
-              <Label>Tipo de BL</Label>
-              <Select value={fields.tipoBlId ? String(fields.tipoBlId) : 'none'} onValueChange={(v) => setFields((f) => ({ ...f, tipoBlId: v === 'none' ? null : Number(v) }))}>
-                <SelectTrigger><SelectValue placeholder='Sin definir' /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='none'>Sin definir</SelectItem>
-                  {(tiposBlData?.data ?? []).map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.descripcion}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className='text-muted-foreground text-xs'>Se propone como valor por defecto al generar cada Embarque.</p>
+              {errors.monedaId && <p className='text-xs text-destructive'>{errors.monedaId}</p>}
             </div>
           </div>
 
@@ -1128,12 +1128,16 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
             <Label>Observaciones</Label>
             <Textarea value={fields.observaciones} onChange={(e) => setFields((f) => ({ ...f, observaciones: e.target.value }))} rows={3} />
           </div>
+          </fieldset>
 
+          <AvisoSinTemporada mostrar={sinTemporada && !temporadaCargando} />
           <div className='flex justify-end gap-2'>
-            <Button variant='outline' onClick={() => router.push('/dashboard/ventas/cierre')} disabled={isPending}>Cancelar</Button>
-            <Button onClick={handleSubmit} isLoading={isPending}>
-              <Icons.check className='mr-1 h-4 w-4' /> {isEdit ? 'Guardar cambios' : 'Crear Cierre Comercial'}
-            </Button>
+            <Button variant='outline' onClick={() => router.push('/dashboard/ventas/cierre')} disabled={isPending}>{soloLectura ? 'Volver' : 'Cancelar'}</Button>
+            {!soloLectura && (
+              <Button onClick={handleSubmit} isLoading={isPending} disabled={sinTemporada}>
+                <Icons.check className='mr-1 h-4 w-4' /> {isEdit ? 'Guardar cambios' : 'Crear Cierre Comercial'}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1144,6 +1148,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
             <CardTitle>Detalle de fruta comprometida</CardTitle>
           </CardHeader>
           <CardContent className='space-y-4'>
+            {!soloLectura && (
+            <>
             <div className='space-y-3'>
               {/* Fila 1: Especie, Variedad, Categoría */}
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
@@ -1185,7 +1191,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 </div>
               </div>
 
-              {/* Fila 2: Artículo (2 columnas), Tipo Pallet */}
+              {/* Fila 2: Artículo (2 columnas), Etiqueta */}
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
                 <div className='space-y-1.5 sm:col-span-2'>
                   <Label>Artículo (Embalaje) <span className='text-destructive'>*</span></Label>
@@ -1230,77 +1236,9 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                   )}
                   {lineaErrors.etiquetaId && <p className='text-xs text-destructive'>{lineaErrors.etiquetaId}</p>}
                 </div>
-                <div className='space-y-1.5'>
-                  <Label>Tipo Pallet</Label>
-                  <Select value={linea.tipoPalletId ? String(linea.tipoPalletId) : ''} onValueChange={(v) => { const id = v ? Number(v) : null; setLinea((l) => ({ ...l, tipoPalletId: id })); void aplicarTeoricaCajas(linea.articuloId, id) }}>
-                    <SelectTrigger><SelectValue placeholder='Sin tipo pallet' /></SelectTrigger>
-                    <SelectContent>
-                      {(tiposPalletData?.data ?? []).map((t) => (
-                        <SelectItem key={t.id} value={String(t.id)}>{t.descripcion}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
 
-              {/* Fila 3: Cant. Pallets, Cajas (auto = pallets × cajas/pallet, editable), Valor por Caja */}
-              <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
-                <div className='space-y-1.5'>
-                  <Label>Cant. Pallets <span className='text-destructive'>*</span></Label>
-                  <Input
-                    type='number'
-                    value={linea.cantidadPallets}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      setLinea((l) => ({ ...l, cantidadPallets: v, cajas: v && cajasPorPalletValor ? String(Number(v) * cajasPorPalletValor) : l.cajas }))
-                    }}
-                  />
-                  {lineaErrors.cantidadPallets && <p className='text-xs text-destructive'>{lineaErrors.cantidadPallets}</p>}
-                </div>
-                <div className='space-y-1.5'>
-                  <Label>Cajas{cajasPorPalletValor > 0 ? ` (${cajasPorPalletValor} por pallet)` : ''} <span className='text-destructive'>*</span></Label>
-                  <Input type='number' value={linea.cajas} onChange={(e) => setLinea((l) => ({ ...l, cajas: e.target.value }))} />
-                  {lineaErrors.cajas && <p className='text-xs text-destructive'>{lineaErrors.cajas}</p>}
-                </div>
-                <div className='space-y-1.5'>
-                  <Label>Valor por Caja <span className='text-destructive'>*</span></Label>
-                  <Input type='number' step='0.01' value={linea.precio} onChange={(e) => setLinea((l) => ({ ...l, precio: e.target.value }))} />
-                  <p className='text-xs text-muted-foreground'>En la moneda del encabezado ({(monedasData?.data ?? []).find((m) => m.id === fields.monedaId)?.codigo ?? '—'})</p>
-                  {lineaErrors.precio && <p className='text-xs text-destructive'>{lineaErrors.precio}</p>}
-                </div>
-              </div>
-
-              {linea.articuloId > 0 && linea.tipoPalletId == null && (
-                <div className='flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2'>
-                  <Icons.alertCircle className='text-destructive h-4 w-4 shrink-0' />
-                  <span className='text-destructive text-xs'>Selecciona el tipo de pallet para obtener la cantidad de cajas por pallet.</span>
-                </div>
-              )}
-              {linea.articuloId > 0 && linea.tipoPalletId != null && cajasLookup === 'loading' && (
-                <p className='text-muted-foreground text-xs'>Verificando cantidad de cajas por pallet…</p>
-              )}
-              {linea.articuloId > 0 && linea.tipoPalletId != null && cajasLookup === 'error' && (
-                <div className='flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2'>
-                  <Icons.alertCircle className='text-destructive h-4 w-4 shrink-0' />
-                  <span className='text-destructive text-xs'>No se pudo verificar la cantidad de cajas por pallet.</span>
-                  <Button type='button' variant='outline' size='sm' onClick={() => void aplicarTeoricaCajas(linea.articuloId, linea.tipoPalletId)}>
-                    <Icons.reopen className='mr-1 h-4 w-4' /> Reintentar
-                  </Button>
-                </div>
-              )}
-              {linea.articuloId > 0 && linea.tipoPalletId != null && cajasLookup === 'notFound' && (
-                <div className='flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2'>
-                  <Icons.alertCircle className='text-destructive h-4 w-4 shrink-0' />
-                  <span className='text-destructive text-xs'>No hay cantidad de cajas configurada para este embalaje y tipo de pallet.</span>
-                  <CajasPorPalletQuickCreate
-                    articuloId={linea.articuloId}
-                    tipoPalletId={linea.tipoPalletId}
-                    onCreated={aplicarCajasCreadas}
-                  />
-                </div>
-              )}
-
-              {/* Fila 4: Calibre Inicio, Calibre Fin, Agregar */}
+              {/* Fila 3: Calibre Inicio, Calibre Fin, Agregar, Calibres en PDF */}
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
                 <div className='min-w-0 space-y-1.5'>
                   <Label>Calibre Inicio</Label>
@@ -1368,14 +1306,127 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 {lineaErrors.calibreIds && <p className='text-xs text-destructive'>{lineaErrors.calibreIds}</p>}
               </div>
 
-              {/* Fila 5: Fecha Compromiso */}
+              {/* Fila 4: Calidad / Condición "hasta" de la línea (2026-11-09, antes en el encabezado) */}
               <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
+                <div className='space-y-1.5'>
+                  <Label>Calidad hasta</Label>
+                  <Select
+                    value={linea.notaCalidadHastaId ? String(linea.notaCalidadHastaId) : NONE_VALUE}
+                    onValueChange={(v) => setLinea((l) => ({ ...l, notaCalidadHastaId: v === NONE_VALUE ? null : Number(v) }))}
+                  >
+                    <SelectTrigger><SelectValue placeholder='Sin restricción' /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE_VALUE}>Sin restricción</SelectItem>
+                      {notasCalidad.map((n) => (
+                        <SelectItem key={n.id} value={String(n.id)}>{n.codigo} — {n.descripcion}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(() => {
+                    const sel = notasCalidad.find((n) => n.id === linea.notaCalidadHastaId)
+                    const admitidas = sel ? notasCalidad.filter((n) => n.orden <= sel.orden).map((n) => n.codigo) : []
+                    return sel ? <p className='text-muted-foreground text-xs'>Admite: {admitidas.join(', ')}</p> : null
+                  })()}
+                </div>
+                <div className='space-y-1.5'>
+                  <Label>Condición hasta</Label>
+                  <Select
+                    value={linea.notaCondicionHastaId ? String(linea.notaCondicionHastaId) : NONE_VALUE}
+                    onValueChange={(v) => setLinea((l) => ({ ...l, notaCondicionHastaId: v === NONE_VALUE ? null : Number(v) }))}
+                  >
+                    <SelectTrigger><SelectValue placeholder='Sin restricción' /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE_VALUE}>Sin restricción</SelectItem>
+                      {notasCondicion.map((n) => (
+                        <SelectItem key={n.id} value={String(n.id)}>{n.codigo} — {n.descripcion}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(() => {
+                    const sel = notasCondicion.find((n) => n.id === linea.notaCondicionHastaId)
+                    const admitidas = sel ? notasCondicion.filter((n) => n.orden <= sel.orden).map((n) => n.codigo) : []
+                    return sel ? <p className='text-muted-foreground text-xs'>Admite: {admitidas.join(', ')}</p> : null
+                  })()}
+                </div>
+              </div>
+
+              {/* Fila 5: Tipo Pallet, Cant. Pallets, Cajas (auto = pallets × cajas/pallet, editable) */}
+              <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
+                <div className='space-y-1.5'>
+                  <Label>Tipo Pallet</Label>
+                  <Select value={linea.tipoPalletId ? String(linea.tipoPalletId) : ''} onValueChange={(v) => { const id = v ? Number(v) : null; setLinea((l) => ({ ...l, tipoPalletId: id })); void aplicarTeoricaCajas(linea.articuloId, id) }}>
+                    <SelectTrigger><SelectValue placeholder='Sin tipo pallet' /></SelectTrigger>
+                    <SelectContent>
+                      {(tiposPalletData?.data ?? []).map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)}>{t.descripcion}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className='space-y-1.5'>
+                  <Label>Cant. Pallets <span className='text-destructive'>*</span></Label>
+                  <Input
+                    type='number'
+                    value={linea.cantidadPallets}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setLinea((l) => ({ ...l, cantidadPallets: v, cajas: v && cajasPorPalletValor ? String(Number(v) * cajasPorPalletValor) : l.cajas }))
+                    }}
+                  />
+                  {lineaErrors.cantidadPallets && <p className='text-xs text-destructive'>{lineaErrors.cantidadPallets}</p>}
+                </div>
+                <div className='space-y-1.5'>
+                  <Label>Cajas{cajasPorPalletValor > 0 ? ` (${cajasPorPalletValor} por pallet)` : ''} <span className='text-destructive'>*</span></Label>
+                  <Input type='number' value={linea.cajas} onChange={(e) => setLinea((l) => ({ ...l, cajas: e.target.value }))} />
+                  {lineaErrors.cajas && <p className='text-xs text-destructive'>{lineaErrors.cajas}</p>}
+                </div>
+              </div>
+
+              {linea.articuloId > 0 && linea.tipoPalletId == null && (
+                <div className='flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2'>
+                  <Icons.alertCircle className='text-destructive h-4 w-4 shrink-0' />
+                  <span className='text-destructive text-xs'>Selecciona el tipo de pallet para obtener la cantidad de cajas por pallet.</span>
+                </div>
+              )}
+              {linea.articuloId > 0 && linea.tipoPalletId != null && cajasLookup === 'loading' && (
+                <p className='text-muted-foreground text-xs'>Verificando cantidad de cajas por pallet…</p>
+              )}
+              {linea.articuloId > 0 && linea.tipoPalletId != null && cajasLookup === 'error' && (
+                <div className='flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2'>
+                  <Icons.alertCircle className='text-destructive h-4 w-4 shrink-0' />
+                  <span className='text-destructive text-xs'>No se pudo verificar la cantidad de cajas por pallet.</span>
+                  <Button type='button' variant='outline' size='sm' onClick={() => void aplicarTeoricaCajas(linea.articuloId, linea.tipoPalletId)}>
+                    <Icons.reopen className='mr-1 h-4 w-4' /> Reintentar
+                  </Button>
+                </div>
+              )}
+              {linea.articuloId > 0 && linea.tipoPalletId != null && cajasLookup === 'notFound' && (
+                <div className='flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-2'>
+                  <Icons.alertCircle className='text-destructive h-4 w-4 shrink-0' />
+                  <span className='text-destructive text-xs'>No hay cantidad de cajas configurada para este embalaje y tipo de pallet.</span>
+                  <CajasPorPalletQuickCreate
+                    articuloId={linea.articuloId}
+                    tipoPalletId={linea.tipoPalletId}
+                    onCreated={aplicarCajasCreadas}
+                  />
+                </div>
+              )}
+
+              {/* Fila 6: Valor por Caja, Fecha Compromiso */}
+              <div className='grid gap-3 sm:grid-cols-2 md:grid-cols-4'>
+                <div className='space-y-1.5'>
+                  <Label>Valor por Caja <span className='text-destructive'>*</span></Label>
+                  <Input type='number' step='0.01' value={linea.precio} onChange={(e) => setLinea((l) => ({ ...l, precio: e.target.value }))} />
+                  <p className='text-xs text-muted-foreground'>En la moneda del encabezado ({(monedasData?.data ?? []).find((m) => m.id === fields.monedaId)?.codigo ?? '—'})</p>
+                  {lineaErrors.precio && <p className='text-xs text-destructive'>{lineaErrors.precio}</p>}
+                </div>
                 <div className='space-y-1.5'>
                   <Label>Fecha Compromiso <span className='text-destructive'>*</span></Label>
                   <Input type='date' value={linea.fechaCompromiso} onChange={(e) => setLinea((l) => ({ ...l, fechaCompromiso: e.target.value }))} />
                   {lineaErrors.fechaCompromiso && <p className='text-xs text-destructive'>{lineaErrors.fechaCompromiso}</p>}
                 </div>
               </div>
+
             </div>
 
             {articuloSeleccionado && (articuloSeleccionado.etiqueta || articuloSeleccionado.kgNetoEnvase) && (
@@ -1394,6 +1445,8 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 {editingDetalleId ? <><Icons.check className='mr-1 h-4 w-4' /> Guardar cambios de línea</> : <><Icons.add className='mr-1 h-4 w-4' /> Agregar línea</>}
               </Button>
             </div>
+            </>
+            )}
 
             {(notaVenta?.data.detalles.length ?? 0) > 0 && (
               <>
@@ -1407,6 +1460,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                         <TableHead>Etiqueta</TableHead>
                         <TableHead>Categoría</TableHead>
                         <TableHead className='min-w-[240px]'>Calibre</TableHead>
+                        <TableHead className='whitespace-nowrap'>Calidad / Cond.</TableHead>
                         <TableHead>Cantidad</TableHead>
                         <TableHead>Precio</TableHead>
                         <TableHead className='w-20 text-right'>Acciones</TableHead>
@@ -1427,9 +1481,13 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                             </div>
                             {d.calibreModo === 'RANGO' && <p className='mt-1 text-[11px]'>PDF: desde – hasta</p>}
                           </TableCell>
+                          <TableCell className='whitespace-nowrap text-muted-foreground' title='Calidad / Condición hasta'>
+                            {d.notaCalidadHasta?.codigo ?? '—'} / {d.notaCondicionHasta?.codigo ?? '—'}
+                          </TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>{d.cantidadPallets} pallets × {d.cajasPorPallet} cj</TableCell>
                           <TableCell className='whitespace-nowrap text-muted-foreground'>${d.precio}/cj</TableCell>
                           <TableCell className='text-right'>
+                            {!soloLectura && (
                             <div className='flex justify-end gap-1'>
                               <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => handleEditarLinea(d)} title='Editar'>
                                 <Icons.edit className='h-4 w-4' />
@@ -1441,6 +1499,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                                 <Icons.trash className='h-4 w-4' />
                               </Button>
                             </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}

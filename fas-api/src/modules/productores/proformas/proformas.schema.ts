@@ -4,7 +4,6 @@ const lineaSchema = z.object({
   glosa: z.string().trim().min(1, 'La glosa es requerida'),
   cantidad: z.number().positive('La cantidad debe ser mayor a 0'),
   precioUnitario: z.number().nonnegative('El precio no puede ser negativo'),
-  exento: z.boolean().default(false),
 })
 
 export const proformaProductorCreateSchema = z.object({
@@ -18,6 +17,8 @@ export const proformaProductorCreateSchema = z.object({
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
   conceptoCtaCteId: z.number().int().positive().optional().nullable(),
+  // Tipo de documento (2026-11-09): 33 Factura Nacional (afecta) / 34 Factura Exenta.
+  tipoDte: z.union([z.literal(33), z.literal(34)]).optional(),
   observaciones: z.string().max(2000).trim().optional().nullable(),
   lineas: z.array(lineaSchema).min(1, 'Debe tener al menos una línea'),
 })

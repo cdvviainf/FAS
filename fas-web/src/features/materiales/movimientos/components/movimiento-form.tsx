@@ -249,6 +249,9 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
     onSuccess: () => {
       toast.success('Cabecera actualizada')
       queryClient.invalidateQueries({ queryKey: movimientosKeys.detail(movimientoId!) })
+      queryClient.invalidateQueries({ queryKey: movimientosKeys.all })
+      // Al guardar cambios se vuelve al listado (2026-11-09).
+      router.push('/dashboard/operaciones/movimientos')
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar la cabecera'),
   })

@@ -48,7 +48,9 @@ export const cierreComercialPdfPayloadSchema = z.object({
   // Responsable de venta (cabecera) + su firma PNG (sobre la línea de firma).
   responsableVenta: z.string().nullable(),
   firmaResponsableDataUri: z.string().nullable(),
-  // Calidad / Condición "hasta" (2026-11-05).
+  // Calidad / Condición "hasta" (2026-11-05). Desde 2026-11-09 viven en cada
+  // línea; aquí queda el valor común a todas las líneas (null si difieren o
+  // no hay restricción) solo para las plantillas v1–v3.
   calidadHasta: z.string().nullable(),
   condicionHasta: z.string().nullable(),
   folio: z.string(),
@@ -93,6 +95,10 @@ export const cierreComercialPdfPayloadSchema = z.object({
     // (unitario bruto) y los kilos totales Neto/Bruto, a pedido del cliente.
     kgNetoEnvase: z.string(),
     kgBrutoEnvase: z.string(), // v2
+    // Calidad / Condición "hasta" de la línea (v4, 2026-11-09): código de la
+    // nota. null = sin restricción.
+    calidadHasta: z.string().nullable(),
+    condicionHasta: z.string().nullable(),
     // fechaCompromiso: sacado (feedback Christian, 2026-08-19) — no está en
     // el documento original.
   })),

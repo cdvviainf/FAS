@@ -45,10 +45,24 @@ export interface FacturaNacionalMapeo {
   lineas: LineaFacturaNacional[]
   // Forma de pago genérica del SII (1=contado, 2=crédito, 3=sin costo). Opcional.
   fmaPago?: number | null
-  // Observaciones libres → IdDoc.TermPagoGlosa (glosa en el PDF).
+  // Observaciones libres → IdDoc.TermPagoGlosa (glosa en el PDF). Máx. 100
+  // caracteres según el SII (el schema de entrada ya lo acota; aquí se recorta
+  // como resguardo).
   observaciones?: string | null
   referencias?: ReferenciaFacturaNacional[]
+  // Programación de pagos (cuotas de la Condición de Pago, 2026-11-09) →
+  // IdDoc.MntPagos; FchVenc de cabecera = vencimiento de la última cuota con
+  // fecha. Mismo criterio que la Factura de Exportación (DTE 110).
+  cuotas?: CuotaFacturaNacional[]
 }
+
+export interface CuotaFacturaNacional {
+  glosa: string // GlosaPagos: "Cuota 1", …
+  fechaVencimiento: string | null // FchPago (YYYY-MM-DD); sin fecha no se emite
+  monto: number // MntPago (CLP)
+}
+
+export const MAX_OBSERVACIONES_SII = 100
 
 function fmtFecha(d: Date): string {
   return d.toISOString().slice(0, 10) // YYYY-MM-DD
@@ -59,13 +73,28 @@ function fmtFecha(d: Date): string {
 // IVA (19%) y MntTotal a partir del detalle (QtyItem × PrcItem, con IndExe por
 // línea). Montos en CLP — sin OtraMoneda/TpoCambio ni bloque Aduana.
 export function mapFacturaNacionalADte(data: FacturaNacionalMapeo): LibredteDtePayload {
+  // Solo cuotas con vencimiento (FchPago es obligatorio dentro de MntPagos; SII
+  // admite hasta 30 repeticiones).
+  const cuotasConFecha = (data.cuotas ?? []).filter((c) => c.fechaVencimiento).slice(0, 30)
+  const fchVenc = cuotasConFecha.length > 0 ? cuotasConFecha[cuotasConFecha.length - 1].fechaVencimiento : null
+  const glosa = data.observaciones?.trim().slice(0, MAX_OBSERVACIONES_SII).trim()
   return {
     Encabezado: {
       IdDoc: {
         TipoDTE: data.tipoDte,
         FchEmis: fmtFecha(data.fechaEmision),
         ...(data.fmaPago != null ? { FmaPago: data.fmaPago } : {}),
-        ...(data.observaciones?.trim() ? { TermPagoGlosa: data.observaciones.trim() } : {}),
+        ...(fchVenc ? { FchVenc: fchVenc } : {}),
+        ...(cuotasConFecha.length > 0
+          ? {
+              MntPagos: cuotasConFecha.map((c) => ({
+                FchPago: c.fechaVencimiento,
+                MntPago: c.monto,
+                GlosaPagos: c.glosa,
+              })),
+            }
+          : {}),
+        ...(glosa ? { TermPagoGlosa: glosa } : {}),
       },
       Emisor: {
         RUTEmisor: data.emisor.rut,

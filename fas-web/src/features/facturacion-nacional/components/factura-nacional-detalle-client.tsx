@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
@@ -89,7 +88,9 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
       cantidad: l.cantidad,
       // En venta el precio editable es el de origen (USD); en materiales, CLP.
       precioUnitario: esVenta ? (l.precioUnitarioOrigen ?? l.precioUnitario) : l.precioUnitario,
-      exento: l.exento,
+      // Desde Proforma (2026-11-09): afecto/exento lo define el tipo de documento
+      // heredado de la Proforma (33 afecta / 34 exenta), no la línea.
+      exento: esVenta ? l.exento : factura.tipoDte === 34,
     })),
   )
   const [dirty, setDirty] = useState(false)
@@ -109,13 +110,14 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
   const iva = Math.round(neto * 0.19)
   const total = neto + iva + exento
   const tipoDtePrevisto = lineas.length > 0 && lineas.every((l) => l.exento) ? 34 : 33
+  const tipoDocumentoLabel = tipoDtePrevisto === 34 ? 'Factura Exenta' : 'Factura Nacional'
 
   function patch<K extends keyof LineaEdit>(i: number, key: K, value: LineaEdit[K]) {
     setLineas((prev) => prev.map((l, idx) => (idx === i ? { ...l, [key]: value } : l)))
     setDirty(true)
   }
   function agregarLinea() {
-    setLineas((prev) => [...prev, { descripcion: '', articuloId: null, cantidad: '1', precioUnitario: '0', exento: false }])
+    setLineas((prev) => [...prev, { descripcion: '', articuloId: null, cantidad: '1', precioUnitario: '0', exento: !esVenta && factura.tipoDte === 34 }])
     setDirty(true)
   }
   function quitarLinea(i: number) {
@@ -475,15 +477,21 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
           )}
           <div className='grid gap-1.5 sm:col-span-2'>
             <Label>Observaciones</Label>
+            {/* Máx. 100 caracteres = límite del SII (TermPagoGlosa, 2026-11-09):
+                lo que se ve aquí es exactamente lo que llega al SII. */}
             <Textarea
               value={observaciones}
               disabled={soloLectura}
               rows={2}
+              maxLength={100}
               onChange={(e) => {
                 setObservaciones(e.target.value)
                 setDirty(true)
               }}
             />
+            <p className={`text-right text-xs ${observaciones.length > 100 ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {observaciones.length}/100 — límite del SII
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -492,7 +500,7 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
       <Card>
         <CardHeader className='flex flex-row items-center justify-between'>
           <CardTitle className='text-base'>
-            Líneas <span className='text-muted-foreground font-normal'>· DTE previsto {tipoDtePrevisto}</span>
+            Líneas <span className='text-muted-foreground font-normal'>· {tipoDocumentoLabel} (DTE {tipoDtePrevisto}){!esVenta && ' — tipo definido en la Proforma'}</span>
           </CardTitle>
           {!soloLectura && (
             <Button size='sm' variant='outline' onClick={agregarLinea}>
@@ -508,7 +516,6 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
                 <TableHead className='w-[45%]'>Descripción</TableHead>
                 <TableHead className='text-right'>Cantidad</TableHead>
                 <TableHead className='text-right'>{esVenta ? `Precio (${monedaOrigen})` : 'Precio'}</TableHead>
-                {!esVenta && <TableHead className='text-center'>Exenta</TableHead>}
                 <TableHead className='text-right'>Monto {esVenta ? '(CLP)' : ''}</TableHead>
                 {!soloLectura && <TableHead />}
               </TableRow>
@@ -516,7 +523,7 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
             <TableBody>
               {lineas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={(esVenta ? 3 : 4) + (soloLectura ? 0 : 1)} className='text-muted-foreground py-6 text-center'>
+                  <TableCell colSpan={4 + (soloLectura ? 0 : 1)} className='text-muted-foreground py-6 text-center'>
                     Sin líneas.
                   </TableCell>
                 </TableRow>
@@ -548,15 +555,6 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
                         onChange={(e) => patch(i, 'precioUnitario', e.target.value)}
                       />
                     </TableCell>
-                    {!esVenta && (
-                      <TableCell className='text-center'>
-                        <Checkbox
-                          checked={l.exento}
-                          disabled={soloLectura}
-                          onCheckedChange={(v) => patch(i, 'exento', v === true)}
-                        />
-                      </TableCell>
-                    )}
                     <TableCell className='text-right tabular-nums'>{formatMonto(montoLinea(l))}</TableCell>
                     {!soloLectura && (
                       <TableCell>
