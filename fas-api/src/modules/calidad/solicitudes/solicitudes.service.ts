@@ -211,7 +211,16 @@ export async function obtenerSolicitud(id: number) {
   return solicitud
 }
 
+// Al crear/editar la solicitud (Compras) los asignados son NOTIFICADOS; quién
+// asiste (ACUDIR) se registra solo en "Editar inspección" (2026-11-10).
+function requireSoloNotificados(asignados: { funcion: string }[] | undefined) {
+  if (asignados?.some((a) => a.funcion !== 'NOTIFICAR')) {
+    throw new ValidationError('Al crear o editar la solicitud solo se asignan notificados; quién asiste se registra en "Editar inspección" (Calidad)')
+  }
+}
+
 export async function crearSolicitud(body: SolicitudCreateBody, userId: string) {
+  requireSoloNotificados(body.asignados)
   const temporada = await repo.getTemporadaActiva(body.temporadaId)
   if (!temporada) throw new ValidationError('La temporada seleccionada no existe o fue eliminada')
 
@@ -264,6 +273,17 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
   const actual = await obtenerSolicitud(id)
   if (estaCerrada(actual.estado)) {
     throw new ConflictError('No se puede editar una solicitud cerrada')
+  }
+  requireSoloNotificados(body.asignados)
+  // Se conservan los asistentes (ACUDIR) ya registrados por Calidad: Compras
+  // solo reemplaza la lista de notificados. Las listas no se mezclan.
+  if (body.asignados !== undefined) {
+    const acude = actual.asignados.filter((a) => a.funcion === 'ACUDIR')
+    const acudeIds = new Set(acude.map((a) => a.usuarioId))
+    if (body.asignados.some((a) => acudeIds.has(a.usuarioId))) {
+      throw new ValidationError('Un usuario que asiste a la inspección no puede agregarse también como notificado')
+    }
+    body.asignados = [...body.asignados, ...acude.map((a) => ({ usuarioId: a.usuarioId, funcion: 'ACUDIR' as const }))]
   }
 
   await validarReferencias(
@@ -429,11 +449,18 @@ async function normalizarMadurezCierre(
 }
 
 // Quién puede registrar/cerrar la inspección: asignado ACUDIR o nivel TOTAL.
-function requireInspectorOTotal(solicitud: SolicitudDetalle, userId: string, tieneNivelTotal: boolean, accion: string) {
-  const esInspector = solicitud.asignados.some((a) => a.usuarioId === userId && a.funcion === 'ACUDIR')
-  if (!esInspector && !tieneNivelTotal) {
-    throw new ForbiddenError(`Solo un asignado con función Acudir (o un usuario con acceso total) puede ${accion} la inspección`)
+// Quién puede registrar/cerrar la inspección: asignado ACUDIR, usuario con el
+// permiso Inspector Calidad (2026-11-10) o nivel TOTAL. `esInspectorCalidad`
+// se resuelve una vez por request (ver puedeGestionarInspeccion).
+function requireInspectorOTotal(solicitud: SolicitudDetalle, userId: string, tieneNivelTotal: boolean, accion: string, esInspectorCalidad = false) {
+  const esAsistente = solicitud.asignados.some((a) => a.usuarioId === userId && a.funcion === 'ACUDIR')
+  if (!esAsistente && !esInspectorCalidad && !tieneNivelTotal) {
+    throw new ForbiddenError(`Solo un Inspector Calidad, un asignado que asiste o un usuario con acceso total puede ${accion} la inspección`)
   }
+}
+
+async function esUsuarioInspectorCalidad(userId: string): Promise<boolean> {
+  return (await repo.getInspectoresCalidad([userId])).length > 0
 }
 
 function requireNotificada(solicitud: SolicitudDetalle) {
@@ -455,7 +482,7 @@ export async function guardarCierreBorrador(
 ) {
   const solicitud = await obtenerSolicitud(id)
   requireNotificada(solicitud)
-  requireInspectorOTotal(solicitud, userId, tieneNivelTotal, 'registrar')
+  requireInspectorOTotal(solicitud, userId, tieneNivelTotal, 'registrar', await esUsuarioInspectorCalidad(userId))
 
   const notificar = solicitud.asignados.filter((a) => a.funcion === 'NOTIFICAR')
   const notificarIds = new Set(notificar.map((a) => a.usuarioId))
@@ -552,12 +579,13 @@ export async function cerrarSolicitud(
   // Chequeo temprano (404/permiso) fuera de la transacción; la validación
   // definitiva se repite sobre la fila bloqueada (CIG-001).
   const previa = await obtenerSolicitud(id)
+  const esInspectorCalidad = await esUsuarioInspectorCalidad(userId)
   requireNotificada(previa)
-  requireInspectorOTotal(previa, userId, tieneNivelTotal, 'cerrar')
+  requireInspectorOTotal(previa, userId, tieneNivelTotal, 'cerrar', esInspectorCalidad)
 
   const cerrada = await repo.cerrarConValidacion(id, userId, (solicitud) => {
     requireNotificada(solicitud as SolicitudDetalle)
-    requireInspectorOTotal(solicitud as SolicitudDetalle, userId, tieneNivelTotal, 'cerrar')
+    requireInspectorOTotal(solicitud as SolicitudDetalle, userId, tieneNivelTotal, 'cerrar', esInspectorCalidad)
     return resultadoCierre(solicitud as SolicitudDetalle, body)
   })
   const resultado = cerrada.estado as 'APROBADA' | 'RECHAZADA' | 'OBJETADA' | 'MIXTO'

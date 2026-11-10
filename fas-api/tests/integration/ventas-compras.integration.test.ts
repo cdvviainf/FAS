@@ -23,6 +23,7 @@ import {
 import {
   crearSolicitud as crearSolicitudSvc,
   notificarSolicitud as notificarSolicitudSvc,
+  guardarCierreBorrador as guardarCierreBorradorSvc,
   cerrarSolicitud as cerrarSolicitudSvc,
 } from '../../src/modules/calidad/solicitudes/solicitudes.service.js'
 import type { NotaVentaCreateInput, NotaVentaUpdateInput, NotaVentaDetalleCreateInput } from '../../src/modules/ventas/notas-venta/notas-venta.types.js'
@@ -52,20 +53,20 @@ async function actualizarNotaVenta(empresaId: number, id: number, body: NotaVent
 async function eliminarNotaVenta(empresaId: number, id: number, userId: string) {
   return empresaContext.run({ empresaId }, () => eliminarNotaVentaSvc(id, userId))
 }
-async function agregarDetalle(empresaId: number, notaVentaId: number, body: NotaVentaDetalleCreateInput) {
-  return empresaContext.run({ empresaId }, () => agregarDetalleSvc(notaVentaId, body))
+async function agregarDetalle(empresaId: number, notaVentaId: number, body: NotaVentaDetalleCreateInput, userId: string) {
+  return empresaContext.run({ empresaId }, () => agregarDetalleSvc(notaVentaId, body, userId))
 }
 async function crearInstructivo(empresaId: number, body: InstructivoEmbalajeCreateInput, userId: string) {
   return empresaContext.run({ empresaId }, () => crearInstructivoSvc(body, userId))
 }
-async function actualizarDetalleNV(empresaId: number, notaVentaId: number, detalleId: number, body: NotaVentaDetalleCreateInput) {
-  return empresaContext.run({ empresaId }, () => actualizarDetalleSvc(notaVentaId, detalleId, body))
+async function actualizarDetalleNV(empresaId: number, notaVentaId: number, detalleId: number, body: NotaVentaDetalleCreateInput, userId: string) {
+  return empresaContext.run({ empresaId }, () => actualizarDetalleSvc(notaVentaId, detalleId, body, userId))
 }
-async function eliminarDetalleNV(empresaId: number, notaVentaId: number, detalleId: number) {
-  return empresaContext.run({ empresaId }, () => eliminarDetalleSvc(notaVentaId, detalleId))
+async function eliminarDetalleNV(empresaId: number, notaVentaId: number, detalleId: number, userId: string) {
+  return empresaContext.run({ empresaId }, () => eliminarDetalleSvc(notaVentaId, detalleId, userId))
 }
-async function listarNotasVenta(empresaId: number) {
-  return empresaContext.run({ empresaId }, () => listarNotasVentaSvc(1, 20))
+async function listarNotasVenta(empresaId: number, userId: string) {
+  return empresaContext.run({ empresaId }, () => listarNotasVentaSvc(1, 20, userId))
 }
 
 // OrdenCompra es por-empresa desde Fase 3 (lote Compras) — createOrdenCompra
@@ -106,14 +107,18 @@ async function notificarSolicitudInspeccion(empresaId: number, id: number, userI
 }
 async function cerrarSolicitudInspeccion(
   empresaId: number,
-  id: number,
+  solicitud: Awaited<ReturnType<typeof crearSolicitudSvc>>,
   resultado: 'APROBADA' | 'RECHAZADA',
   userId: string,
   asignadoUserId: string,
 ) {
-  return empresaContext.run({ empresaId }, () =>
-    cerrarSolicitudSvc(id, { comentarios: 'OK', resultado, asignados: [{ usuarioId: asignadoUserId, funcion: 'ACUDIR' }] }, userId, true),
-  )
+  await empresaContext.run({ empresaId }, () => guardarCierreBorradorSvc(solicitud.id, {
+    comentarios: 'OK',
+    fechaHora: new Date('2026-08-01T15:00:00Z').toISOString(),
+    acudeIds: [asignadoUserId],
+    lineas: solicitud.lineas.map((linea) => ({ solicitudLineaId: linea.id, veredicto: resultado })),
+  }, userId, true))
+  return empresaContext.run({ empresaId }, () => cerrarSolicitudSvc(solicitud.id, {}, userId, true))
 }
 
 const databaseName = new URL(process.env.DATABASE_URL ?? '').pathname.slice(1)
@@ -155,7 +160,7 @@ async function limpiarDatos() {
   `)
 }
 
-async function crearUsuarioResponsable(esResponsableVenta: boolean, codigoSufijo: string) {
+async function crearUsuarioResponsable(esResponsableVenta: boolean, codigoSufijo: string, empresaId: number) {
   const perfil = await prisma.perfil.create({
     data: { codigo: `PERFIL-${codigoSufijo}`, descripcion: 'Perfil de prueba', creadoPor: 'test' },
   })
@@ -167,6 +172,7 @@ async function crearUsuarioResponsable(esResponsableVenta: boolean, codigoSufijo
       perfilId: perfil.id,
       esResponsableVenta,
       creadoPor: 'test',
+      empresas: { create: { empresaId, creadoPor: 'test' } },
     },
   })
 }
@@ -210,6 +216,7 @@ async function entrarContextoEmpresa() {
 
 async function crearFixtures() {
   const empresa = await obtenerEmpresaTest()
+  const responsableVenta = await crearUsuarioResponsable(true, 'fixture', empresa.id)
   const grupoMercado = await prisma.grupoMercado.create({ data: { empresaId: empresa.id, codigo: 'GM1', descripcion: 'Grupo 1', creadoPor: 'test' } })
   const mercado = await prisma.mercado.create({ data: { empresaId: empresa.id, codigo: 'MK1', descripcion: 'Mercado 1', grupoMercadoId: grupoMercado.id, creadoPor: 'test' } })
   const pais = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', creadoPor: 'test' } })
@@ -256,7 +263,10 @@ async function crearFixtures() {
   // que los tests de OC de este archivo la referencien.
   const perfilInspector = await prisma.perfil.create({ data: { codigo: 'PERFIL-INSPECTOR', descripcion: 'Inspector', creadoPor: 'test' } })
   const usuarioInspector = await prisma.usuario.create({
-    data: { id: 'usuario-inspector', nombre: 'Usuario Inspector', email: 'inspector@example.invalid', perfilId: perfilInspector.id, creadoPor: 'test' },
+    data: { id: 'usuario-inspector', nombre: 'Usuario Inspector', email: 'inspector@example.invalid', perfilId: perfilInspector.id, esInspectorCalidad: true, creadoPor: 'test' },
+  })
+  const usuarioNotificado = await prisma.usuario.create({
+    data: { id: 'usuario-notificado', nombre: 'Usuario Notificado', email: 'notificado@example.invalid', perfilId: perfilInspector.id, creadoPor: 'test' },
   })
   const temporada = await prisma.temporada.create({
     data: { empresaId: empresa.id, codigo: 'TEMP-1', descripcion: 'Temporada 1', fechaInicio: new Date('2026-01-01'), fechaTermino: new Date('2026-12-31'), creadoPor: 'test' },
@@ -272,19 +282,19 @@ async function crearFixtures() {
     fechaHora: new Date('2026-08-01T15:00:00Z').toISOString(),
     // Detalle de producto por línea (2026-10-27).
     lineas: [{ especieId: especie.id, articuloId: articulo.id, variedadId: variedad.id, categoriaIds: [categoria.id], calibreIds: [calibreChico.id], cantidadPallets: 10 }],
-    asignados: [{ usuarioId: usuarioInspector.id, funcion: 'ACUDIR' }],
+    asignados: [{ usuarioId: usuarioNotificado.id, funcion: 'NOTIFICAR' }],
   }, 'test')
   await notificarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'test')
-  const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'APROBADA', 'test', usuarioInspector.id)
+  const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada, 'APROBADA', 'test', usuarioInspector.id)
 
   return {
     empresa, pais, cliente, productor, tipoEmbarque, mercado, grupoMercado, moneda, especie, variedad, categoria,
-    calibreChico, calibreGrande, articulo, altura, tipoPallet, solicitudInspeccionCompraAprobada,
+    calibreChico, calibreGrande, articulo, altura, tipoPallet, responsableVenta, solicitudInspeccionCompraAprobada,
     // Expuestos para crearOtraSolicitudAprobada (Etapa 2, N:M OC↔Solicitud):
     // cada Solicitud solo puede vincularse a una OC, así que los tests que
     // crean más de una OC dentro del mismo `f` necesitan poder generar una
     // segunda Solicitud Aprobada reutilizando el mismo productor/temporada.
-    temporada, direccionProductor, usuarioInspector,
+    temporada, direccionProductor, usuarioInspector, usuarioNotificado,
   }
 }
 
@@ -297,10 +307,10 @@ async function crearOtraSolicitudAprobada(f: Awaited<ReturnType<typeof crearFixt
     fechaHora: new Date('2026-08-02T15:00:00Z').toISOString(),
     // Detalle de producto por línea (2026-10-27).
     lineas: [{ especieId: f.especie.id, articuloId: f.articulo.id, variedadId: f.variedad.id, categoriaIds: [f.categoria.id], calibreIds: [f.calibreChico.id], cantidadPallets: 10 }],
-    asignados: [{ usuarioId: f.usuarioInspector.id, funcion: 'ACUDIR' }],
+    asignados: [{ usuarioId: f.usuarioNotificado.id, funcion: 'NOTIFICAR' }],
   }, 'test')
   await notificarSolicitudInspeccion(f.empresa.id, solicitud.id, 'test')
-  return cerrarSolicitudInspeccion(f.empresa.id, solicitud.id, 'APROBADA', 'test', f.usuarioInspector.id)
+  return cerrarSolicitudInspeccion(f.empresa.id, solicitud, 'APROBADA', 'test', f.usuarioInspector.id)
 }
 
 function nvBase(f: Awaited<ReturnType<typeof crearFixtures>>) {
@@ -311,6 +321,7 @@ function nvBase(f: Awaited<ReturnType<typeof crearFixtures>>) {
     mercadoId: f.mercado.id,
     paisDestinoId: f.pais.id,
     monedaId: f.moneda.id,
+    responsableVentaId: f.responsableVenta.id,
   }
 }
 
@@ -353,7 +364,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
         cajas: 1,
         precio: 1,
         calibreIds: [f.calibreChico.id],
-      }),
+      }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     const noEmbalaje = await prisma.articulo.create({
@@ -370,7 +381,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
         cajas: 1,
         precio: 1,
         calibreIds: [f.calibreChico.id],
-      }),
+      }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     const detalle = await agregarDetalle(f.empresa.id, nv.id, {
@@ -383,7 +394,7 @@ describe('Nota de Venta e Instructivo de Embalaje contra PostgreSQL', () => {
       cajas: 1,
       precio: 1,
       calibreIds: [f.calibreChico.id],
-    })
+    }, 'test')
     expect(detalle.notaVentaId).toBe(nv.id)
   })
 
@@ -546,7 +557,7 @@ describe('Orden de Compra contra PostgreSQL', () => {
 
   it('rechaza notaVentaId, destinoMercadoId, condicionPagoId y responsableId inexistentes o inválidos', async () => {
     const f = await crearFixtures()
-    const usuarioSinFlag = await crearUsuarioResponsable(false, 'no-resp')
+    const usuarioSinFlag = await crearUsuarioResponsable(false, 'no-resp', f.empresa.id)
 
     await expect(
       crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id, notaVentaId: 999999 }, 'test'),
@@ -569,7 +580,7 @@ describe('Orden de Compra contra PostgreSQL', () => {
       crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id, responsableId: usuarioSinFlag.id }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
-    const usuarioResponsable = await crearUsuarioResponsable(true, 'si-resp')
+    const usuarioResponsable = await crearUsuarioResponsable(true, 'si-resp', f.empresa.id)
     const oc = await crearOrdenCompra(f.empresa.id, {
       entidadProductorId: f.productor.id,
       solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id],
@@ -643,7 +654,7 @@ describe('Orden de Compra ↔ Cierre Comercial: línea tomada de una línea del 
       calibreIds: [f.calibreChico.id, f.calibreGrande.id],
       tipoPalletId: f.tipoPallet.id,
       ...overrides,
-    })
+    }, 'test')
     return { nv, detalle }
   }
 
@@ -696,7 +707,7 @@ describe('Orden de Compra ↔ Cierre Comercial: línea tomada de una línea del 
     })
     expect(linea1.cajas).toBe(228)
 
-    const listado1 = await listarNotasVenta(f.empresa.id)
+    const listado1 = await listarNotasVenta(f.empresa.id, 'test')
     expect(listado1.data.find((n) => n.id === nv.id)?.estadoOc).toBe('PENDIENTE')
     const disponibilidad1 = await obtenerDisponibilidadCierre(f.empresa.id, nv.id)
     expect(disponibilidad1.find((d) => d.id === detalle.id)?.cajasDisponibles).toBe(228)
@@ -713,7 +724,7 @@ describe('Orden de Compra ↔ Cierre Comercial: línea tomada de una línea del 
     })
     expect(linea2.cajas).toBe(228)
 
-    const listado2 = await listarNotasVenta(f.empresa.id)
+    const listado2 = await listarNotasVenta(f.empresa.id, 'test')
     expect(listado2.data.find((n) => n.id === nv.id)?.estadoOc).toBe('COMPLETA')
     const disponibilidad2 = await obtenerDisponibilidadCierre(f.empresa.id, nv.id)
     expect(disponibilidad2.find((d) => d.id === detalle.id)?.cajasDisponibles).toBe(0)
@@ -751,7 +762,7 @@ describe('Orden de Compra ↔ Cierre Comercial: línea tomada de una línea del 
     // filtrado en getCajasComprometidas/groupBy) — el disponible vuelve a 456.
     const despues = await obtenerDisponibilidadCierre(f.empresa.id, nv.id)
     expect(despues.find((d) => d.id === detalle.id)?.cajasDisponibles).toBe(456)
-    const listado = await listarNotasVenta(f.empresa.id)
+    const listado = await listarNotasVenta(f.empresa.id, 'test')
     expect(listado.data.find((n) => n.id === nv.id)?.estadoOc).toBe('PENDIENTE')
 
     // Y ese cupo liberado es realmente usable por otra OC, no solo un número.
@@ -813,7 +824,7 @@ describe('Orden de Compra ↔ Cierre Comercial: línea tomada de una línea del 
       precio: 12,
       calibreIds: [f.calibreChico.id, f.calibreGrande.id],
       tipoPalletId: f.tipoPallet.id,
-    })
+    }, 'test')
     expect(detalleSinCategoria.categoriaId).toBeNull()
 
     const oc = await crearOrdenCompra(f.empresa.id, {
@@ -839,7 +850,7 @@ describe('Orden de Compra ↔ Cierre Comercial: línea tomada de una línea del 
     }, 'test')
     await agregarLinea(f.empresa.id, oc.id, { ...ocLinea(f), cantidadPallets: 2, cajas: 228, notaVentaDetalleId: detalle.id })
 
-    await expect(eliminarDetalleNV(f.empresa.id, nv.id, detalle.id)).rejects.toMatchObject({ statusCode: 422 })
+    await expect(eliminarDetalleNV(f.empresa.id, nv.id, detalle.id, 'test')).rejects.toMatchObject({ statusCode: 422 })
 
     const detalleBase: NotaVentaDetalleCreateInput = {
       fechaCompromiso: new Date(),
@@ -857,14 +868,14 @@ describe('Orden de Compra ↔ Cierre Comercial: línea tomada de una línea del 
 
     const otraEspecie = await prisma.especie.create({ data: { empresaId: f.empresa.id, codigo: 'CZ2', descripcion: 'Cereza', creadoPor: 'test' } })
     await expect(
-      actualizarDetalleNV(f.empresa.id, nv.id, detalle.id, { ...detalleBase, especieId: otraEspecie.id }),
+      actualizarDetalleNV(f.empresa.id, nv.id, detalle.id, { ...detalleBase, especieId: otraEspecie.id }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
     await expect(
-      actualizarDetalleNV(f.empresa.id, nv.id, detalle.id, { ...detalleBase, cajas: 100 }),
+      actualizarDetalleNV(f.empresa.id, nv.id, detalle.id, { ...detalleBase, cajas: 100 }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
 
-    const actualizado = await actualizarDetalleNV(f.empresa.id, nv.id, detalle.id, { ...detalleBase, cajas: 500 })
+    const actualizado = await actualizarDetalleNV(f.empresa.id, nv.id, detalle.id, { ...detalleBase, cajas: 500 }, 'test')
     expect(actualizado.cajas).toBe(500)
   })
 

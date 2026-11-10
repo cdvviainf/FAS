@@ -8,7 +8,7 @@ import {
   actualizarOrdenCompra as actualizarOrdenCompraSvc,
   agregarLinea as agregarLineaSvc,
 } from '../../src/modules/compras/ordenes-compra/ordenes-compra.service.js'
-import { crearSolicitud as crearSolicitudSvc, notificarSolicitud as notificarSolicitudSvc, cerrarSolicitud as cerrarSolicitudSvc } from '../../src/modules/calidad/solicitudes/solicitudes.service.js'
+import { crearSolicitud as crearSolicitudSvc, notificarSolicitud as notificarSolicitudSvc, guardarCierreBorrador as guardarCierreBorradorSvc, cerrarSolicitud as cerrarSolicitudSvc } from '../../src/modules/calidad/solicitudes/solicitudes.service.js'
 import type { RecepcionCreateInput } from '../../src/modules/compras/recepciones/recepciones.types.js'
 import type { OrdenCompraCreateInput, OrdenCompraLineaCreateInput } from '../../src/modules/compras/ordenes-compra/ordenes-compra.types.js'
 import type { SolicitudCreateBody } from '../../src/modules/calidad/solicitudes/solicitudes.schema.js'
@@ -45,14 +45,18 @@ async function notificarSolicitudInspeccion(empresaId: number, id: number, userI
 }
 async function cerrarSolicitudInspeccion(
   empresaId: number,
-  id: number,
+  solicitud: Awaited<ReturnType<typeof crearSolicitudSvc>>,
   resultado: 'APROBADA' | 'RECHAZADA',
   userId: string,
   asignadoUserId: string,
 ) {
-  return empresaContext.run({ empresaId }, () =>
-    cerrarSolicitudSvc(id, { comentarios: 'OK', resultado, asignados: [{ usuarioId: asignadoUserId, funcion: 'ACUDIR' }] }, userId, true),
-  )
+  await empresaContext.run({ empresaId }, () => guardarCierreBorradorSvc(solicitud.id, {
+    comentarios: 'OK',
+    fechaHora: new Date('2026-08-01T15:00:00Z').toISOString(),
+    acudeIds: [asignadoUserId],
+    lineas: solicitud.lineas.map((linea) => ({ solicitudLineaId: linea.id, veredicto: resultado })),
+  }, userId, true))
+  return empresaContext.run({ empresaId }, () => cerrarSolicitudSvc(solicitud.id, {}, userId, true))
 }
 
 const databaseName = new URL(process.env.DATABASE_URL ?? '').pathname.slice(1)
@@ -155,7 +159,10 @@ async function crearFixtures() {
 
   const perfilInspector = await prisma.perfil.create({ data: { codigo: 'PERFIL-INSPECTOR', descripcion: 'Inspector', creadoPor: 'test' } })
   const usuarioInspector = await prisma.usuario.create({
-    data: { id: 'usuario-inspector', nombre: 'Usuario Inspector', email: 'inspector@example.invalid', perfilId: perfilInspector.id, creadoPor: 'test' },
+    data: { id: 'usuario-inspector', nombre: 'Usuario Inspector', email: 'inspector@example.invalid', perfilId: perfilInspector.id, esInspectorCalidad: true, creadoPor: 'test' },
+  })
+  const usuarioNotificado = await prisma.usuario.create({
+    data: { id: 'usuario-notificado', nombre: 'Usuario Notificado', email: 'notificado@example.invalid', perfilId: perfilInspector.id, creadoPor: 'test' },
   })
   const temporada = await prisma.temporada.create({
     data: { empresaId: empresa.id, codigo: 'TEMP-1', descripcion: 'Temporada 1', fechaInicio: new Date('2026-01-01'), fechaTermino: new Date('2026-12-31'), creadoPor: 'test' },
@@ -168,10 +175,10 @@ async function crearFixtures() {
     fechaHora: new Date('2026-08-01T15:00:00Z').toISOString(),
     // Detalle de producto por línea (2026-10-27): especie + embalaje + variedad.
     lineas: [{ especieId: especie.id, articuloId: articulo.id, variedadId: variedad.id, categoriaIds: [categoria.id], calibreIds: [calibreChico.id], cantidadPallets: 10 }],
-    asignados: [{ usuarioId: usuarioInspector.id, funcion: 'ACUDIR' }],
+    asignados: [{ usuarioId: usuarioNotificado.id, funcion: 'NOTIFICAR' }],
   }, 'test')
   await notificarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'test')
-  const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada.id, 'APROBADA', 'test', usuarioInspector.id)
+  const solicitudInspeccionCompraAprobada = await cerrarSolicitudInspeccion(empresa.id, solicitudCreada, 'APROBADA', 'test', usuarioInspector.id)
 
   return { empresa, pais, productor, predioProductor, planta, direccionPlanta, especie, variedad, categoria, calibreChico, calibreGrande, tipoPallet, articulo, etiqueta, packing, solicitudInspeccionCompraAprobada }
 }

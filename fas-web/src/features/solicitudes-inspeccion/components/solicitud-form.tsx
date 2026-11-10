@@ -31,8 +31,8 @@ import { useTemporada } from '@/contexts/temporada-context'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { solicitudDetailOptions, solicitudesKeys } from '../queries'
 import { solicitudesService } from '../service'
-import { FUNCION_LABELS, TIPO_INSPECCION_LABELS } from '../types'
-import type { AsignadoInput, FuncionAsignado, SolicitudCreateInput, TipoInspeccion } from '../types'
+import { TIPO_INSPECCION_LABELS } from '../types'
+import type { AsignadoInput, SolicitudCreateInput, TipoInspeccion } from '../types'
 import { SelectMultiple } from '@/components/shared/select-multiple'
 import { CalidadesPermitidasInput, type CalidadPermitidaPar } from '@/components/shared/calidades-permitidas-input'
 import { articuloDescripcionComercial } from '@/lib/articulo'
@@ -225,21 +225,23 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
         calibreLabels: l.calibres.map((c) => c.calibre.descripcion),
         calidadLabels: l.calidades.map((c) => `${c.notaCalidad.descripcion}/${c.notaCondicion.descripcion}`),
       })))
-      setAsignados(d.asignados.map((a) => ({ usuarioId: a.usuarioId, funcion: a.funcion })))
+      // Solo los NOTIFICADOS se editan aquí (2026-11-10); quién asiste (ACUDIR)
+      // lo registra Calidad en "Editar inspección" y el backend lo conserva.
+      setAsignados(d.asignados.filter((a) => a.funcion === 'NOTIFICAR').map((a) => ({ usuarioId: a.usuarioId, funcion: a.funcion })))
       setObservaciones(d.observaciones ?? '')
     }
   }, [solicitud])
 
+  // Asistentes ya registrados por Calidad (solo lectura en este formulario).
+  const asistentes = useMemo(() => (solicitud?.data?.asignados ?? []).filter((a) => a.funcion === 'ACUDIR'), [solicitud])
+
   const usuariosDisponibles = useMemo(() => {
-    const asignadosIds = new Set(asignados.map((a) => a.usuarioId))
+    const asignadosIds = new Set([...asignados.map((a) => a.usuarioId), ...asistentes.map((a) => a.usuarioId)])
     return (usuarios?.data ?? []).filter((u) => !asignadosIds.has(u.id))
-  }, [usuarios, asignados])
+  }, [usuarios, asignados, asistentes])
 
   function agregarAsignado(usuarioId: string) {
-    setAsignados((prev) => [...prev, { usuarioId, funcion: 'ACUDIR' }])
-  }
-  function cambiarFuncion(usuarioId: string, funcion: FuncionAsignado) {
-    setAsignados((prev) => prev.map((a) => (a.usuarioId === usuarioId ? { ...a, funcion } : a)))
+    setAsignados((prev) => [...prev, { usuarioId, funcion: 'NOTIFICAR' }])
   }
   function quitarAsignado(usuarioId: string) {
     setAsignados((prev) => prev.filter((a) => a.usuarioId !== usuarioId))
@@ -279,7 +281,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
     // visita o en el cierre.
     // 2026-10-05: ya no se exige un asignado con función Acudir — basta con al
     // menos un asignado (puede ser solo Notificar).
-    if (asignados.length === 0) e.asignados = 'Debe asignar al menos un usuario'
+    if (asignados.length === 0) e.asignados = 'Debe agregar al menos un notificado'
     // Detalle de producto (2026-10-27): al menos una línea y cada línea con
     // especie, embalaje y variedad.
     if (editandoLinea !== null) e.lineas = 'Guarda o cancela la línea en edición antes de continuar'
@@ -618,11 +620,12 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
             {errors.lineas && <p className='text-xs text-destructive'>{errors.lineas}</p>}
           </div>
 
-          {/* Fila 6: Personas asignadas */}
+          {/* Fila 6: Notificados (2026-11-10). Quién asiste se registra en
+              "Editar inspección" (Calidad), no aquí. */}
           <div className='space-y-2'>
-            <Label>Personas asignadas <span className='text-destructive'>*</span></Label>
+            <Label>Notificados <span className='text-destructive'>*</span></Label>
             <Select value='' onValueChange={agregarAsignado} disabled={usuariosDisponibles.length === 0}>
-              <SelectTrigger><SelectValue placeholder='Agregar persona...' /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder='Agregar notificado...' /></SelectTrigger>
               <SelectContent>
                 {usuariosDisponibles.map((u) => (
                   <SelectItem key={u.id} value={u.id}>{u.nombre} — {u.email}</SelectItem>
@@ -634,14 +637,6 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
                 {asignados.map((a) => (
                   <div key={a.usuarioId} className='flex items-center gap-2'>
                     <span className='flex-1 text-sm'>{nombreUsuario(a.usuarioId)}</span>
-                    <Select value={a.funcion} onValueChange={(v) => cambiarFuncion(a.usuarioId, v as FuncionAsignado)}>
-                      <SelectTrigger className='h-8 w-[130px]'><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {(Object.keys(FUNCION_LABELS) as FuncionAsignado[]).map((f) => (
-                          <SelectItem key={f} value={f}>{FUNCION_LABELS[f]}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                     <Button type='button' variant='ghost' size='icon' className='h-8 w-8' onClick={() => quitarAsignado(a.usuarioId)}>
                       <Icons.trash className='h-4 w-4' />
                     </Button>
@@ -650,9 +645,13 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
               </div>
             )}
             <p className='text-xs text-muted-foreground'>
-              <Badge variant='outline' className='mr-1'>Acudir</Badge> asiste a la inspección ·
-              <Badge variant='outline' className='mx-1'>Notificar</Badge> solo recibe aviso
+              Reciben los avisos de la solicitud. Quién asiste a la visita lo registra Calidad en &quot;Editar inspección&quot;.
             </p>
+            {asistentes.length > 0 && (
+              <p className='text-xs text-muted-foreground'>
+                Asisten (registrado por Calidad): {asistentes.map((a) => a.usuario.nombre).join(', ')}
+              </p>
+            )}
             {errors.asignados && <p className='text-xs text-destructive'>{errors.asignados}</p>}
           </div>
 

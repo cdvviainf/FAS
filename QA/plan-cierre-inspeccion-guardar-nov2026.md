@@ -46,3 +46,16 @@ Pedido del usuario sobre el cierre de la Solicitud de Inspección (Calidad). Dec
 - CIG-002 (Media) — ACEPTADO sin cambio (usuario: "No te preocupes por las antiguas, no hay data válida"): las solicitudes legacy sin líneas no se ajustan.
 - CIG-003 (Media) — CORREGIR (aprobado, texto del usuario): label público del mantenedor en `config.routes.ts` = "Indicadores de Madurez".
 - CIG-003 (ronda 2): botón del mantenedor "Nueva Característica" → "Nuevo Indicador" (misma corrección aprobada).
+
+## Ronda 3 — Bug reportado post-push ecee2ed (2026-11-10): notificados aparecían como asistentes
+Causa: el formulario de creación/edición de la Solicitud asignaba ACUDIR por defecto a cada persona agregada; en "Editar inspección" aparecían en "Quién asiste" y Notificados quedaba vacío. Decisiones del usuario (OK):
+1. Crear/editar Solicitud (Compras): sección "Notificados" sin selector de función — todo asignado es NOTIFICAR. Backend `crearSolicitud`/`actualizarSolicitud` rechazan asignados con función ≠ NOTIFICAR. En la edición, el backend CONSERVA los ACUDIR ya registrados por Calidad (los anexa al set) y rechaza agregar como notificado a quien ya asiste. El formulario muestra los asistentes registrados solo como texto informativo y no los ofrece como notificados.
+2. Editar/Cerrar inspección: además de ACUDIR o TOTAL, puede el usuario con permiso Inspector Calidad (`requireInspectorOTotal(..., esInspectorCalidad)`; en el listado de Calidad se resuelve con `GET /solicitudes/inspectores`).
+3. Migración `20261110180000_solicitud_asignados_notificar`: en solicitudes PENDIENTE/NOTIFICADA no eliminadas, los asignados ACUDIR pasan a NOTIFICAR. Cerradas sin cambios.
+
+## Tests (autorizado por el usuario)
+Codex actualiza los fixtures de `tests/integration/recepciones.integration.test.ts` y `tests/integration/ventas-compras.integration.test.ts` (y los de `solicitudes.integration.test.ts` que lo requieran) al contrato nuevo: crear con asignados NOTIFICAR, registrar con `guardarCierreBorrador`/`PUT /cierre` (comentarios, fecha, quién asiste = Inspector Calidad o Servicio Tercero, veredictos) y luego `cerrarSolicitud`/`POST /cerrar`. Agrega tests del flujo nuevo: guardar incompleto, cerrar con faltantes (400), nuevo asistente sin permiso Inspector Calidad (400), notificado como asistente (400), notificados intactos al guardar, Servicio Tercero, creación con ACUDIR rechazada, edición conserva ACUDIR.
+
+## Ronda 4 — CIG-004 (tests)
+- Codex (modo escritura, solo fas-api/tests/, autorizado por el usuario) actualizó recepciones/ventas-compras/solicitudes al contrato nuevo y agregó los 9 casos del flujo nuevo. Además corrigió deuda previa de ventas-compras: fixture de responsable de venta vinculado a la empresa y userId del creador en mutaciones/listado del Cierre (regla 2026-11-09).
+- Ejecutado por Claude contra fas_test: integración 158/158 (13 archivos), unitarios 58/58.

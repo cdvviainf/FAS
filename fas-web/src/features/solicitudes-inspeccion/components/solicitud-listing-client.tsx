@@ -86,6 +86,9 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
   const tieneLecturaEnCualquiera = puedeLeerCompras || puedeLeerCalidad
   const { data: session } = authClient.useSession()
   const currentUserId = session?.user?.id
+  // ¿El usuario actual tiene el permiso Inspector Calidad? (lista de inspectores)
+  const { data: inspectores } = useQuery({ queryKey: ['inspectores-calidad'], queryFn: () => solicitudesService.inspectores(), staleTime: 5 * 60_000, enabled: contexto !== 'COMPRAS' })
+  const esInspectorCalidad = !!currentUserId && (inspectores?.data ?? []).some((u) => u.id === currentUserId)
   const { temporada, isLoading: temporadaCargando } = useTemporada()
 
   const [params, setParams] = useQueryStates({
@@ -196,7 +199,8 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
         const esInspectorAcudir = s.asignados.some((a) => a.usuarioId === currentUserId && a.funcion === 'ACUDIR')
         // El cierre es una acción de Calidad: NO se permite desde el link de
         // Compras (solo desde Inspección de Compra / Calidad).
-        const puedeCerrar = !esCompras && esNotificada && (tieneTotalEnCualquiera || (esInspectorAcudir && tieneLecturaEnCualquiera))
+        // Inspector Calidad (permiso de usuario, 2026-11-10) también registra y cierra.
+        const puedeCerrar = !esCompras && esNotificada && (tieneTotalEnCualquiera || ((esInspectorAcudir || esInspectorCalidad) && tieneLecturaEnCualquiera))
         return (
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
@@ -260,7 +264,7 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
         )
       },
     },
-  ], [puedeEscribir, tieneTotalEnCualquiera, tieneLecturaEnCualquiera, currentUserId, notificarMutation, reabrirMutation, esCompras, basePath, router, descargarPdf, descargandoId])
+  ], [puedeEscribir, tieneTotalEnCualquiera, tieneLecturaEnCualquiera, currentUserId, esInspectorCalidad, notificarMutation, reabrirMutation, esCompras, basePath, router, descargarPdf, descargandoId])
 
   const pageCount = data ? Math.ceil(data.meta.total / params.perPage) : 0
   const { table } = useDataTable({

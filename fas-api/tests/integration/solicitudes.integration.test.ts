@@ -5,9 +5,12 @@ import {
   crearSolicitud as crearSolicitudSvc,
   actualizarSolicitud as actualizarSolicitudSvc,
   obtenerSolicitud as obtenerSolicitudSvc,
+  notificarSolicitud as notificarSolicitudSvc,
+  guardarCierreBorrador as guardarCierreBorradorSvc,
+  cerrarSolicitud as cerrarSolicitudSvc,
 } from '../../src/modules/calidad/solicitudes/solicitudes.service.js'
 import { eliminarMantenedor as eliminarMantenedorSvc } from '../../src/modules/config/config.service.js'
-import type { SolicitudCreateBody, SolicitudUpdateBody } from '../../src/modules/calidad/solicitudes/solicitudes.schema.js'
+import type { SolicitudCreateBody, SolicitudUpdateBody, SolicitudCierreBorradorBody, SolicitudCerrarBody } from '../../src/modules/calidad/solicitudes/solicitudes.schema.js'
 import type { MantenedorModelo } from '../../src/modules/config/config.types.js'
 
 // SolicitudInspeccion es por-empresa desde Fase 3 (lote Calidad) — los
@@ -24,6 +27,15 @@ async function actualizarSolicitud(empresaId: number, id: number, body: Solicitu
 }
 async function obtenerSolicitud(empresaId: number, id: number) {
   return empresaContext.run({ empresaId }, () => obtenerSolicitudSvc(id))
+}
+async function notificarSolicitud(empresaId: number, id: number, userId: string) {
+  return empresaContext.run({ empresaId }, () => notificarSolicitudSvc(id, userId))
+}
+async function guardarCierreBorrador(empresaId: number, id: number, body: SolicitudCierreBorradorBody, userId: string, tieneNivelTotal = false) {
+  return empresaContext.run({ empresaId }, () => guardarCierreBorradorSvc(id, body, userId, tieneNivelTotal))
+}
+async function cerrarSolicitud(empresaId: number, id: number, body: SolicitudCerrarBody, userId: string, tieneNivelTotal = false) {
+  return empresaContext.run({ empresaId }, () => cerrarSolicitudSvc(id, body, userId, tieneNivelTotal))
 }
 async function eliminarMantenedor(empresaId: number, modelo: MantenedorModelo, id: number) {
   return empresaContext.run({ empresaId }, () => eliminarMantenedorSvc(modelo, id))
@@ -129,11 +141,17 @@ async function crearFixtures() {
   const usuario = await prisma.usuario.create({
     data: { id: 'usuario-1', nombre: 'Usuario Uno', email: 'usuario1@example.invalid', perfilId: perfil.id, creadoPor: 'test' },
   })
+  const inspector = await prisma.usuario.create({
+    data: { id: 'inspector-1', nombre: 'Inspector Calidad', email: 'inspector@example.invalid', perfilId: perfil.id, esInspectorCalidad: true, creadoPor: 'test' },
+  })
+  const usuarioSinPermiso = await prisma.usuario.create({
+    data: { id: 'sin-permiso-1', nombre: 'Sin permiso', email: 'sin-permiso@example.invalid', perfilId: perfil.id, creadoPor: 'test' },
+  })
 
   return {
     empresa, chile, usa, productor, direccion, clienteExtranjero, clienteNoExtranjero,
     temporada, especie, otraEspecie, variedad, variedadOtraEspecie, calibre, categoria,
-    grupoMercado, mercado, unidad, embalaje, noEmbalaje, usuario,
+    grupoMercado, mercado, unidad, embalaje, noEmbalaje, usuario, inspector, usuarioSinPermiso,
   }
 }
 
@@ -159,7 +177,21 @@ function payloadBase(f: Fixtures): SolicitudCreateBody {
     direccionId: f.direccion.id,
     fechaHora: new Date('2026-08-01T15:00:00Z').toISOString(),
     lineas: [lineaBase(f)],
-    asignados: [{ usuarioId: f.usuario.id, funcion: 'ACUDIR' as const }],
+    asignados: [{ usuarioId: f.usuario.id, funcion: 'NOTIFICAR' as const }],
+  }
+}
+
+async function crearNotificada(f: Fixtures) {
+  const solicitud = await crearSolicitud(f.empresa.id, payloadBase(f), 'test')
+  return notificarSolicitud(f.empresa.id, solicitud.id, 'test')
+}
+
+function cierreCompleto(solicitud: Awaited<ReturnType<typeof crearSolicitudSvc>>, f: Fixtures): SolicitudCierreBorradorBody {
+  return {
+    comentarios: 'Inspección conforme',
+    fechaHora: '2026-08-01T15:00:00.000Z',
+    acudeIds: [f.inspector.id],
+    lineas: solicitud.lineas.map((linea) => ({ solicitudLineaId: linea.id, veredicto: 'APROBADA' })),
   }
 }
 
@@ -321,5 +353,101 @@ describe('Solicitud de Inspección — cabecera + detalle (especie por línea) c
     expect(detalle.mercado?.id).toBe(f.mercado.id)
     expect(detalle.lineas).toHaveLength(1)
     expect(detalle.lineas[0].especie.id).toBe(f.especie.id)
+  })
+
+  it('guarda un cierre incompleto y mantiene la solicitud NOTIFICADA', async () => {
+    const f = await crearFixtures()
+    const solicitud = await crearNotificada(f)
+
+    const guardada = await guardarCierreBorrador(f.empresa.id, solicitud.id, { comentarios: 'Pendiente de visita', acudeIds: [] }, f.inspector.id)
+
+    expect(guardada.estado).toBe('NOTIFICADA')
+    expect(guardada.comentariosCierre).toBe('Pendiente de visita')
+  })
+
+  it('rechaza cerrar cuando faltan datos obligatorios del borrador', async () => {
+    const f = await crearFixtures()
+    const solicitud = await crearNotificada(f)
+    await guardarCierreBorrador(f.empresa.id, solicitud.id, { comentarios: 'Aún incompleto', acudeIds: [] }, f.inspector.id)
+
+    await expect(cerrarSolicitud(f.empresa.id, solicitud.id, {}, f.inspector.id))
+      .rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('rechaza agregar como nuevo asistente a un usuario sin permiso Inspector Calidad', async () => {
+    const f = await crearFixtures()
+    const solicitud = await crearNotificada(f)
+
+    await expect(guardarCierreBorrador(f.empresa.id, solicitud.id, { acudeIds: [f.usuarioSinPermiso.id] }, f.inspector.id))
+      .rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('rechaza registrar a un notificado como asistente', async () => {
+    const f = await crearFixtures()
+    const solicitud = await crearNotificada(f)
+
+    await expect(guardarCierreBorrador(f.empresa.id, solicitud.id, { acudeIds: [f.usuario.id] }, f.inspector.id))
+      .rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('conserva intactos los notificados al guardar la inspección', async () => {
+    const f = await crearFixtures()
+    const solicitud = await crearNotificada(f)
+
+    const guardada = await guardarCierreBorrador(f.empresa.id, solicitud.id, cierreCompleto(solicitud, f), f.inspector.id)
+
+    expect(guardada.asignados.filter((a) => a.funcion === 'NOTIFICAR').map((a) => a.usuarioId)).toEqual([f.usuario.id])
+    expect(guardada.asignados.filter((a) => a.funcion === 'ACUDIR').map((a) => a.usuarioId)).toEqual([f.inspector.id])
+  })
+
+  it('permite cerrar con Servicio Tercero sin asistentes ACUDIR', async () => {
+    const f = await crearFixtures()
+    const solicitud = await crearNotificada(f)
+    await guardarCierreBorrador(f.empresa.id, solicitud.id, {
+      ...cierreCompleto(solicitud, f),
+      acudeIds: [],
+      servicioTercero: 'Laboratorio externo',
+    }, f.inspector.id)
+
+    const cerrada = await cerrarSolicitud(f.empresa.id, solicitud.id, {}, f.inspector.id)
+
+    expect(cerrada.estado).toBe('APROBADA')
+    expect(cerrada.asignados.some((a) => a.funcion === 'ACUDIR')).toBe(false)
+  })
+
+  it('rechaza crear una solicitud con asignados ACUDIR', async () => {
+    const f = await crearFixtures()
+
+    await expect(crearSolicitud(f.empresa.id, {
+      ...payloadBase(f),
+      asignados: [{ usuarioId: f.inspector.id, funcion: 'ACUDIR' }],
+    }, 'test')).rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('al editar la solicitud conserva los asistentes ACUDIR registrados por Calidad', async () => {
+    const f = await crearFixtures()
+    const solicitud = await crearNotificada(f)
+    await guardarCierreBorrador(f.empresa.id, solicitud.id, { acudeIds: [f.inspector.id] }, f.inspector.id)
+
+    const editada = await actualizarSolicitud(f.empresa.id, solicitud.id, {
+      observaciones: 'Edición desde Compras',
+      asignados: [{ usuarioId: f.usuario.id, funcion: 'NOTIFICAR' }],
+    }, 'test')
+
+    expect(editada.asignados).toEqual(expect.arrayContaining([
+      expect.objectContaining({ usuarioId: f.usuario.id, funcion: 'NOTIFICAR' }),
+      expect.objectContaining({ usuarioId: f.inspector.id, funcion: 'ACUDIR' }),
+    ]))
+  })
+
+  it('permite a un Inspector Calidad no asignado guardar y cerrar la inspección', async () => {
+    const f = await crearFixtures()
+    const solicitud = await crearNotificada(f)
+
+    const guardada = await guardarCierreBorrador(f.empresa.id, solicitud.id, cierreCompleto(solicitud, f), f.inspector.id)
+    expect(guardada.estado).toBe('NOTIFICADA')
+
+    const cerrada = await cerrarSolicitud(f.empresa.id, solicitud.id, {}, f.inspector.id)
+    expect(cerrada.estado).toBe('APROBADA')
   })
 })
