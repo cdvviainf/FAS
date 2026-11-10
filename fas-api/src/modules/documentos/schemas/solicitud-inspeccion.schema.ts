@@ -40,11 +40,16 @@ export const solicitudInspeccionPdfPayloadSchema = z.object({
     calidadesPermitidas: z.string().nullable(),
     cantidadPallets: z.number().int().nullable(),
     // Resultado del cierre por línea (2026-11-03): label del veredicto + textos
-    // ya formateados de defectos y características de madurez. null/[]= pendiente.
+    // ya formateados de defectos e indicadores de madurez. null/[]= pendiente.
     estadoCierre: z.string().nullable(),
     defectos: z.array(z.string()),
     madurez: z.array(z.string()),
+    // v3 (2026-11-10): mismo contenido, estructurado para listarlo uno por fila.
+    defectosDetalle: z.array(z.object({ grupo: z.string(), defecto: z.string(), valor: z.string() })).optional(),
+    madurezDetalle: z.array(z.object({ indicador: z.string(), valor: z.string() })).optional(),
   })),
+  // "Servicio Tercero" que asiste a la visita (v3, 2026-11-10). null = no hay.
+  servicioTercero: z.string().nullable().optional(),
   asignados: z.array(z.object({
     nombre: z.string(),
     funcion: z.string(), // label ya resuelto

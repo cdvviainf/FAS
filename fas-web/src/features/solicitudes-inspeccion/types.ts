@@ -102,6 +102,8 @@ export interface SolicitudInspeccion {
   estado: EstadoSolicitud
   notificadaEn: string | null
   comentariosCierre: string | null
+  // "Servicio Tercero" que asiste a la visita (2026-11-10).
+  servicioTercero?: string | null
   fechaCierre: string | null
   cerradaPor: string | null
   creadoEn: string
@@ -204,26 +206,28 @@ export type SolicitudUpdateInput = Partial<Omit<SolicitudCreateInput, 'temporada
 // Cierre POR LÍNEA (2026-11-03): cada línea lleva su veredicto + defectos + madurez.
 export interface SolicitudCierreLineaInput {
   solicitudLineaId: number
-  veredicto: EstadoLineaInspeccion
+  // null = aún sin veredicto (borrador de "Editar inspección").
+  veredicto: EstadoLineaInspeccion | null
   defectos: SolicitudDefectoInput[]
   caracteristicas: SolicitudMadurezInput[]
 }
 
-export interface SolicitudCerrarInput {
-  comentarios: string
-  // Fecha/hora de la visita (se ingresa/edita en el cierre). Opcional solo si la
-  // solicitud ya la tenía fijada; el backend exige una fecha efectiva.
+// "Editar inspección" (2026-11-10): guarda sin cerrar. Los NOTIFICAR no se
+// envían (lista fija en el backend); acudeIds = quién asiste (ACUDIR).
+export interface SolicitudCierreBorradorInput {
+  comentarios?: string | null
   fechaHora?: string | null
-  // Asignados (incluye a quién asiste = ACUDIR): REEMPLAZA el set, obligatorio.
-  asignados: AsignadoInput[]
-  // Flujo POR LÍNEA (solicitudes con líneas): veredicto + defectos + madurez por
-  // línea. El estado de la cabecera lo calcula (rollup) el backend.
+  acudeIds: string[]
+  servicioTercero?: string | null
   lineas?: SolicitudCierreLineaInput[]
-  // Flujo LEGACY (solicitudes sin líneas): un veredicto de cabecera + defectos/
-  // madurez a nivel solicitud.
-  resultado?: ResultadoCierre
   defectos?: SolicitudDefectoInput[]
   caracteristicas?: SolicitudMadurezInput[]
+}
+
+// "Cerrar inspección" (2026-11-10): solo cambia el estado con lo guardado.
+// `resultado` solo para solicitudes legacy sin líneas.
+export interface SolicitudCerrarInput {
+  resultado?: ResultadoCierre
 }
 
 export interface SolicitudListResponse {

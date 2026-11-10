@@ -5,7 +5,7 @@ import { CaracteristicaMadurezFormSheetTrigger } from '@/features/caracteristica
 import { CaracteristicaMadurezListingClient } from '@/features/caracteristicas-madurez/components/caracteristica-madurez-listing-client'
 
 export const metadata = {
-  title: 'FAS — Características de Madurez'
+  title: 'FAS — Indicadores de Madurez'
 }
 
 type PageProps = {
@@ -18,8 +18,8 @@ export default async function Page(props: PageProps) {
 
   return (
     <PageContainer
-      pageTitle='Características de Madurez'
-      pageDescription='Características de calidad/madurez (ej. Firmeza, Brix) configurables por especie, capturadas en el cierre de la inspección.'
+      pageTitle='Indicadores de Madurez'
+      pageDescription='Indicadores de madurez (ej. Firmeza, Brix) configurables por especie, capturadas en el cierre de la inspección.'
       pageHeaderAction={<CaracteristicaMadurezFormSheetTrigger />}
     >
       <CaracteristicaMadurezListingClient />

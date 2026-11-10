@@ -12,6 +12,9 @@ const ITEMS_LECTURA = [ITEM_COMPRAS, ITEM_CALIDAD]
 export async function solicitudesRoutes(app: FastifyInstance) {
   // Lectura — ambos ítems (Compras y Calidad) ven el mismo recurso.
   app.get('/solicitudes', { preHandler: [requireAuth, requireAnyLevel(ITEMS_LECTURA, 'LECTURA')] }, ctrl.list)
+  // Opciones de "Quién asiste" (usuarios con permiso Inspector Calidad). Antes
+  // de '/solicitudes/:id' por legibilidad (Fastify prioriza la ruta estática).
+  app.get('/solicitudes/inspectores', { preHandler: [requireAuth, requireAnyLevel(ITEMS_LECTURA, 'LECTURA')] }, ctrl.listInspectores)
   app.get('/solicitudes/:id', { preHandler: [requireAuth, requireAnyLevel(ITEMS_LECTURA, 'LECTURA')] }, ctrl.getById)
   app.get('/solicitudes/:id/adjuntos/:adjuntoId/descarga', { preHandler: [requireAuth, requireAnyLevel(ITEMS_LECTURA, 'LECTURA')] }, ctrl.descargarAdjunto)
 
@@ -26,6 +29,8 @@ export async function solicitudesRoutes(app: FastifyInstance) {
   // service exige además ser asignado ACUDIR (o tener nivel TOTAL en
   // cualquiera de los dos) para cerrar. Un inspector puede tener solo lectura
   // del módulo y aun así completar su inspección.
+  // "Editar inspección" (2026-11-10): guarda sin cerrar; mismo control que cerrar.
+  app.put('/solicitudes/:id/cierre', { preHandler: [requireAuth, requireAnyLevel(ITEMS_LECTURA, 'LECTURA')] }, ctrl.guardarCierre)
   app.post('/solicitudes/:id/cerrar', { preHandler: [requireAuth, requireAnyLevel(ITEMS_LECTURA, 'LECTURA')] }, ctrl.cerrar)
   app.post('/solicitudes/:id/adjuntos', { preHandler: [requireAuth, requireAnyLevel(ITEMS_LECTURA, 'LECTURA')] }, ctrl.subirAdjunto)
   app.delete('/solicitudes/:id/adjuntos/:adjuntoId', { preHandler: [requireAuth, requireAnyLevel(ITEMS_LECTURA, 'LECTURA')] }, ctrl.eliminarAdjunto)

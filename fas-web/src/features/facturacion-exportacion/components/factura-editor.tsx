@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +21,14 @@ import { facturasKeys } from '../queries'
 import { facturaExportacionService, hoyFecha, proformaService } from '../service'
 import { DIMENSION_LABELS } from '../types'
 import type { DimensionProforma, FacturaExportacion, ProformaLineaSugerida } from '../types'
+import { FilaSeparacion, IncluirLoteCheckbox, SeparacionCantidadesControl } from './separacion-lote-controles'
+import {
+  aplicarSeparacionGeneral,
+  aplicarSeparacionLinea,
+  hayPrecioNegativo,
+  montoLinea as calcularMontoLinea,
+  separacionGeneral,
+} from '../separacion-lote'
 
 // "YYYY-MM-DD" para el input date desde una fecha ISO (o null).
 function aFechaInput(iso: string | null): string {
@@ -42,7 +50,20 @@ function lineasDesdeFactura(factura: FacturaExportacion): ProformaLineaSugerida[
     cantidadCajas: l.cantidadCajas,
     montoLinea: Number(l.montoLinea),
     precioUnitario: Number(l.precioUnitario),
+    separacion:
+      l.separacionDescripcion != null && l.separacionPrecioUnitario != null
+        ? { descripcion: l.separacionDescripcion, precioUnitario: Number(l.separacionPrecioUnitario) }
+        : null,
   }))
+}
+
+// Separación general inicial = la de la primera línea separada (todas nacen con
+// el mismo texto/valor general; el valor puede ajustarse por línea).
+function separacionInicial(factura: FacturaExportacion): { activa: boolean; texto: string; valor: string } {
+  const l = factura.lineas.find((x) => x.separacionDescripcion != null && x.separacionPrecioUnitario != null)
+  return l
+    ? { activa: true, texto: l.separacionDescripcion ?? '', valor: String(Number(l.separacionPrecioUnitario)) }
+    : { activa: false, texto: '', valor: '' }
 }
 
 export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
@@ -53,6 +74,11 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   const [dimensiones, setDimensiones] = useState<DimensionProforma[]>(factura.dimensionesAgrupacion)
   const [lineas, setLineas] = useState<ProformaLineaSugerida[]>(() => lineasDesdeFactura(factura))
   const [regrupando, setRegrupando] = useState(false)
+  // "Separar cantidades" (2026-11-10): texto y valor general aplicados a cada línea.
+  const [sepInicial] = useState(() => separacionInicial(factura))
+  const [sepActiva, setSepActiva] = useState(sepInicial.activa)
+  const [sepTexto, setSepTexto] = useState(sepInicial.texto)
+  const [sepValor, setSepValor] = useState(sepInicial.valor)
   const [confirmarFirma, setConfirmarFirma] = useState(false)
   // Cambios locales sin persistir: mientras `dirty`, el temporal enviado no
   // refleja la pantalla, así que Firmar se bloquea y Enviar guarda primero
@@ -110,7 +136,8 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
     setRegrupando(true)
     try {
       const res = await proformaService.sugerirLineas(embarqueId, nuevas)
-      setLineas(res.data)
+      // Las líneas nuevas vuelven a llevar la separación general vigente.
+      setLineas(aplicarSeparacionGeneral(res.data, separacionGeneral(sepActiva, sepTexto, sepValor)))
     } catch {
       toast.error('No se pudieron recalcular las líneas')
     } finally {
@@ -124,15 +151,50 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
       prev.map((l, i) => {
         if (i !== index) return l
         const actualizada = { ...l, ...cambios }
-        actualizada.montoLinea = Math.round(actualizada.precioUnitario * actualizada.cantidadCajas * 100) / 100
+        actualizada.montoLinea = calcularMontoLinea(actualizada.cantidadCajas, actualizada.precioUnitario, actualizada.separacion)
         return actualizada
       }),
     )
   }
 
+  function cambiarSeparacion(cambios: { activa?: boolean; texto?: string; valor?: string }) {
+    const activa = cambios.activa ?? sepActiva
+    const texto = cambios.texto ?? sepTexto
+    const valor = cambios.valor ?? sepValor
+    setSepActiva(activa)
+    setSepTexto(texto)
+    setSepValor(valor)
+    setDirty(true)
+    setLineas((prev) => aplicarSeparacionGeneral(prev, separacionGeneral(activa, texto, valor)))
+  }
+
+  function cambiarValorSeparacion(index: number, valor: number) {
+    setDirty(true)
+    setLineas((prev) =>
+      prev.map((l, i) =>
+        i === index && l.separacion ? aplicarSeparacionLinea(l, { descripcion: l.separacion.descripcion, precioUnitario: valor }) : l,
+      ),
+    )
+  }
+
+  // Validación local de "Separar cantidades" antes de guardar (el backend
+  // también la exige). Devuelve el mensaje de error o null.
+  function errorSeparacion(): string | null {
+    if (sepActiva && !separacionGeneral(sepActiva, sepTexto, sepValor)) {
+      return 'Separar cantidades: indica el texto y un valor unitario mayor a 0'
+    }
+    if (lineas.some((l) => l.separacion && !(l.separacion.precioUnitario > 0))) {
+      return 'Separar cantidades: el valor separado de cada línea debe ser mayor a 0'
+    }
+    if (hayPrecioNegativo(lineas)) return 'Separar cantidades: el valor separado no puede superar el precio de la línea'
+    return null
+  }
+
   const guardar = useMutation({
-    mutationFn: () =>
-      facturaExportacionService.actualizar(factura.id, {
+    mutationFn: () => {
+      const errSep = errorSeparacion()
+      if (errSep) return Promise.reject(new Error(errSep))
+      return facturaExportacionService.actualizar(factura.id, {
         dimensiones,
         lineas: lineas.map((l) => ({
           descripcion: l.descripcion,
@@ -144,6 +206,7 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
           etiquetaId: l.etiquetaId,
           cantidadCajas: l.cantidadCajas,
           precioUnitario: l.precioUnitario,
+          separacion: l.separacion ?? null,
         })),
         idioma,
         fechaDocumento: fechaDocumento || null,
@@ -156,7 +219,8 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
         // de edición. BRT-R1-003.
         fechaTipoCambio: esMonedaExtranjera ? (fechaTipoCambio ? fechaTipoCambio.slice(0, 10) : null) : null,
         observaciones: observaciones.trim() || null,
-      }),
+      })
+    },
     onSuccess: () => {
       setDirty(false)
       toast.success('Factura guardada')
@@ -452,7 +516,15 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
             </p>
           )}
           <div className='w-full space-y-1.5'>
-            <Label>Observaciones</Label>
+            <div className='flex items-center justify-between gap-4'>
+              <Label>Observaciones</Label>
+              <IncluirLoteCheckbox
+                observaciones={observaciones}
+                numeroInstructivo={factura.embarque.numeroInstructivo ?? null}
+                disabled={!puedeEscribir}
+                onChange={(v) => { setObservaciones(v); setDirty(true) }}
+              />
+            </div>
             <Textarea
               value={observaciones}
               onChange={(e) => { setObservaciones(e.target.value); setDirty(true) }}
@@ -483,6 +555,13 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
               </label>
             ))}
           </div>
+          <SeparacionCantidadesControl
+            activa={sepActiva}
+            texto={sepTexto}
+            valor={sepValor}
+            disabled={regrupando || !puedeEscribir}
+            onChange={cambiarSeparacion}
+          />
         </CardContent>
       </Card>
 
@@ -503,7 +582,8 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
               </TableHeader>
               <TableBody>
                 {lineas.map((l, i) => (
-                  <TableRow key={i}>
+                  <Fragment key={i}>
+                  <TableRow>
                     {/* Descripción derivada de los mantenedores según idioma (se
                         arma en el PDF/DTE); no es texto libre. */}
                     <TableCell className='text-sm'>{l.descripcion}</TableCell>
@@ -519,8 +599,12 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
                         disabled={!puedeEscribir}
                       />
                     </TableCell>
-                    <TableCell className='text-right tabular-nums'>{formatMonto(l.montoLinea)}</TableCell>
+                    <TableCell className='text-right tabular-nums'>
+                      {formatMonto(l.separacion ? Math.round(l.precioUnitario * l.cantidadCajas * 100) / 100 : l.montoLinea)}
+                    </TableCell>
                   </TableRow>
+                  <FilaSeparacion linea={l} disabled={!puedeEscribir} onValorChange={(v) => cambiarValorSeparacion(i, v)} />
+                  </Fragment>
                 ))}
               </TableBody>
               <TableFooter>

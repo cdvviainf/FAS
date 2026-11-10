@@ -33,6 +33,14 @@ function fmtDefecto(d: { grupoDefecto: { descripcion: string }; defecto: { descr
   const sufijo = d.defecto.tipoMedida === 'PORCENTAJE' ? '%' : ' u.'
   return `${d.grupoDefecto.descripcion} · ${d.defecto.descripcion}: ${String(d.valor).replace('.', ',')}${sufijo}`
 }
+function valorDefecto(d: { defecto: { tipoMedida: string }; valor: unknown }): string {
+  return `${String(d.valor).replace('.', ',')}${d.defecto.tipoMedida === 'PORCENTAJE' ? '%' : ' u.'}`
+}
+function valorMadurez(m: { caracteristica: { tipoDato: string; unidad: { codigo: string } | null }; valorNumerico: unknown; valorTexto: string | null }): string {
+  if (m.valorTexto != null) return m.valorTexto
+  const sufijo = m.caracteristica.tipoDato === 'PORCENTAJE' ? '%' : m.caracteristica.unidad ? ` ${m.caracteristica.unidad.codigo}` : ''
+  return `${String(m.valorNumerico ?? '').replace('.', ',')}${sufijo}`
+}
 function fmtMadurez(m: { caracteristica: { descripcion: string; tipoDato: string; unidad: { codigo: string } | null }; valorNumerico: unknown; valorTexto: string | null }): string {
   if (m.valorTexto != null) return `${m.caracteristica.descripcion}: ${m.valorTexto}`
   const sufijo = m.caracteristica.tipoDato === 'PORCENTAJE' ? '%' : m.caracteristica.unidad ? ` ${m.caracteristica.unidad.codigo}` : ''
@@ -97,7 +105,14 @@ export async function resolverSolicitudInspeccion(id: number, empresaId: number)
       estadoCierre: l.estadoCierre ? (ESTADO_LABELS[l.estadoCierre] ?? l.estadoCierre) : null,
       defectos: solicitud.defectos.filter((d) => d.solicitudLineaId === l.id).map(fmtDefecto),
       madurez: solicitud.madurez.filter((m) => m.solicitudLineaId === l.id).map(fmtMadurez),
+      defectosDetalle: solicitud.defectos
+        .filter((d) => d.solicitudLineaId === l.id)
+        .map((d) => ({ grupo: d.grupoDefecto.descripcion, defecto: d.defecto.descripcion, valor: valorDefecto(d) })),
+      madurezDetalle: solicitud.madurez
+        .filter((m) => m.solicitudLineaId === l.id)
+        .map((m) => ({ indicador: m.caracteristica.descripcion, valor: valorMadurez(m) })),
     })),
+    servicioTercero: solicitud.servicioTercero ?? null,
     asignados: solicitud.asignados.map((a) => ({
       nombre: a.usuario.nombre,
       funcion: FUNCION_LABELS[a.funcion] ?? a.funcion,

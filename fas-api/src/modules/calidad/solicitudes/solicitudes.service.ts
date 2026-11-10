@@ -5,7 +5,7 @@ import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ParCalidad } from '../../../shared/calidades-permitidas.js'
 import * as repo from './solicitudes.repository.js'
 import * as emails from './solicitudes.emails.js'
-import type { SolicitudCreateBody, SolicitudUpdateBody, SolicitudCerrarBody } from './solicitudes.schema.js'
+import type { SolicitudCreateBody, SolicitudUpdateBody, SolicitudCerrarBody, SolicitudCierreBorradorBody } from './solicitudes.schema.js'
 import type { SolicitudListFilters, EtapaAdjunto } from './solicitudes.types.js'
 
 const HORAS_RECORDATORIO = 24
@@ -409,11 +409,11 @@ async function normalizarMadurezCierre(
 ): Promise<{ caracteristicaId: number; valorNumerico: number | null; valorTexto: string | null }[]> {
   const out: { caracteristicaId: number; valorNumerico: number | null; valorTexto: string | null }[] = []
   for (const [i, c] of cs.entries()) {
-    const prefijo = `${prefBase}característica ${i + 1}:`
+    const prefijo = `${prefBase}indicador de madurez ${i + 1}:`
     const caracteristica = await repo.getCaracteristicaMadurezActiva(c.caracteristicaId)
-    if (!caracteristica) throw new ValidationError(`${prefijo} la característica seleccionada no existe o está bloqueada`)
+    if (!caracteristica) throw new ValidationError(`${prefijo} el indicador seleccionado no existe o está bloqueado`)
     if (especieId != null && caracteristica.especies.length > 0 && !caracteristica.especies.some((e) => e.especieId === especieId)) {
-      throw new ValidationError(`${prefijo} la característica no es válida para la especie`)
+      throw new ValidationError(`${prefijo} el indicador no es válido para la especie`)
     }
     if (caracteristica.tipoDato === 'TEXTO') {
       if (c.valorTexto == null || c.valorTexto.trim() === '') throw new ValidationError(`${prefijo} debe registrar un valor de texto`)
@@ -428,96 +428,152 @@ async function normalizarMadurezCierre(
   return out
 }
 
+// Quién puede registrar/cerrar la inspección: asignado ACUDIR o nivel TOTAL.
+function requireInspectorOTotal(solicitud: SolicitudDetalle, userId: string, tieneNivelTotal: boolean, accion: string) {
+  const esInspector = solicitud.asignados.some((a) => a.usuarioId === userId && a.funcion === 'ACUDIR')
+  if (!esInspector && !tieneNivelTotal) {
+    throw new ForbiddenError(`Solo un asignado con función Acudir (o un usuario con acceso total) puede ${accion} la inspección`)
+  }
+}
+
+function requireNotificada(solicitud: SolicitudDetalle) {
+  if (estaCerrada(solicitud.estado)) throw new ConflictError('La solicitud ya está cerrada')
+  if (solicitud.estado !== 'NOTIFICADA') {
+    throw new ConflictError('La solicitud debe estar notificada antes de registrar o cerrar la inspección')
+  }
+}
+
+// "Editar inspección" (2026-11-10): guarda los datos de la visita sin cerrar.
+// Sin correo; la solicitud sigue NOTIFICADA. Los NOTIFICAR son una lista fija:
+// se conservan tal cual. Quién asiste (ACUDIR): los ya asignados se conservan;
+// los NUEVOS deben tener el permiso de usuario "Inspector Calidad".
+export async function guardarCierreBorrador(
+  id: number,
+  body: SolicitudCierreBorradorBody,
+  userId: string,
+  tieneNivelTotal: boolean,
+) {
+  const solicitud = await obtenerSolicitud(id)
+  requireNotificada(solicitud)
+  requireInspectorOTotal(solicitud, userId, tieneNivelTotal, 'registrar')
+
+  const notificar = solicitud.asignados.filter((a) => a.funcion === 'NOTIFICAR')
+  const notificarIds = new Set(notificar.map((a) => a.usuarioId))
+  const acudeActuales = new Set(solicitud.asignados.filter((a) => a.funcion === 'ACUDIR').map((a) => a.usuarioId))
+  if (body.acudeIds.some((u) => notificarIds.has(u))) {
+    throw new ValidationError('Un usuario notificado no puede registrarse como asistente: las listas no se mezclan')
+  }
+  const nuevos = body.acudeIds.filter((u) => !acudeActuales.has(u))
+  const inspectores = await repo.getInspectoresCalidad(nuevos)
+  if (inspectores.length !== nuevos.length) {
+    throw new ValidationError('Solo usuarios con el permiso Inspector Calidad pueden registrarse como asistentes')
+  }
+  const asignados = [
+    ...body.acudeIds.map((usuarioId) => ({ usuarioId, funcion: 'ACUDIR' as const })),
+    ...notificar.map((a) => ({ usuarioId: a.usuarioId, funcion: 'NOTIFICAR' as const })),
+  ]
+  // Usuarios activos + con email (misma regla que creación/edición).
+  if (asignados.length > 0) await validarReferencias({ asignados })
+
+  let extra: Pick<repo.CierreBorradorData, 'lineas' | 'defectosCabecera' | 'caracteristicasCabecera'>
+  if (solicitud.lineas.length > 0) {
+    const lineasSolicitud = new Map(solicitud.lineas.map((l) => [l.id, l]))
+    const enviadas = new Map((body.lineas ?? []).map((l) => [l.solicitudLineaId, l]))
+    for (const l of body.lineas ?? []) {
+      if (!lineasSolicitud.has(l.solicitudLineaId)) throw new ValidationError('Una de las líneas no pertenece a la solicitud')
+    }
+    const lineas: repo.CierreLineaData[] = []
+    for (const [idx, linea] of solicitud.lineas.entries()) {
+      const enviada = enviadas.get(linea.id)
+      const defectos = enviada?.defectos ?? []
+      await validarDefectosCierre(defectos, linea.especie.id, `Línea ${idx + 1}: `)
+      const caracteristicas = await normalizarMadurezCierre(enviada?.caracteristicas ?? [], linea.especie.id, `Línea ${idx + 1}: `)
+      lineas.push({ solicitudLineaId: linea.id, veredicto: enviada?.veredicto ?? null, defectos, caracteristicas })
+    }
+    extra = { lineas }
+  } else {
+    await validarDefectosCierre(body.defectos ?? [], null, '')
+    const caracteristicasCabecera = await normalizarMadurezCierre(body.caracteristicas ?? [], null, '')
+    extra = { defectosCabecera: body.defectos ?? [], caracteristicasCabecera }
+  }
+
+  return repo.guardarCierreBorrador(
+    id,
+    {
+      comentarios: body.comentarios?.trim() || null,
+      fechaHora: body.fechaHora !== undefined ? (body.fechaHora ? new Date(body.fechaHora) : null) : undefined,
+      servicioTercero: body.servicioTercero?.trim() || null,
+      asignados,
+      ...extra,
+    },
+    userId,
+  )
+}
+
+// Completitud para cerrar (sobre lo guardado) → resultado de la cabecera.
+// Lanza ValidationError indicando qué falta completar en "Editar inspección".
+function resultadoCierre(solicitud: SolicitudDetalle, body: SolicitudCerrarBody): 'APROBADA' | 'RECHAZADA' | 'OBJETADA' | 'MIXTO' {
+  const faltantes: string[] = []
+  if (!solicitud.comentariosCierre?.trim()) faltantes.push('los comentarios')
+  if (!solicitud.fechaHora) faltantes.push('la fecha y hora de la visita')
+  if (!solicitud.asignados.some((a) => a.funcion === 'ACUDIR') && !solicitud.servicioTercero?.trim()) {
+    faltantes.push('quién asiste (un inspector o un Servicio Tercero)')
+  }
+  let resultado: 'APROBADA' | 'RECHAZADA' | 'OBJETADA' | 'MIXTO' | null = null
+  if (solicitud.lineas.length > 0) {
+    const veredictos = solicitud.lineas.map((l) => l.estadoCierre)
+    if (veredictos.some((v) => v !== 'APROBADA' && v !== 'RECHAZADA' && v !== 'OBJETADA')) {
+      faltantes.push('el veredicto de todas las líneas')
+    } else {
+      const todas = (v: string) => veredictos.every((x) => x === v)
+      resultado = todas('APROBADA') ? 'APROBADA' : todas('RECHAZADA') ? 'RECHAZADA' : todas('OBJETADA') ? 'OBJETADA' : 'MIXTO'
+    }
+  } else if (body.resultado) {
+    resultado = body.resultado
+  } else {
+    faltantes.push('el resultado de la inspección')
+  }
+  if (faltantes.length > 0 || !resultado) {
+    throw new ValidationError(`No se puede cerrar: falta ${faltantes.join(', ')}. Complétalo con "Editar inspección" y guarda.`)
+  }
+  return resultado
+}
+
+// "Cerrar inspección" (2026-11-10): solo cambia el estado con lo ya guardado en
+// "Editar inspección". Valida completitud: comentarios, fecha de visita, quién
+// asiste (≥1 inspector o Servicio Tercero) y veredicto en todas las líneas (o
+// `resultado` de cabecera en solicitudes legacy sin líneas). Envía el correo.
 export async function cerrarSolicitud(
   id: number,
   body: SolicitudCerrarBody,
   userId: string,
   tieneNivelTotal: boolean,
 ) {
-  const solicitud = await obtenerSolicitud(id)
-  // QAS-SI-003: solo se cierra una solicitud ya notificada.
-  if (estaCerrada(solicitud.estado)) {
-    throw new ConflictError('La solicitud ya está cerrada')
-  }
-  if (solicitud.estado !== 'NOTIFICADA') {
-    throw new ConflictError('La solicitud debe estar notificada antes de poder cerrarse')
-  }
+  // Chequeo temprano (404/permiso) fuera de la transacción; la validación
+  // definitiva se repite sobre la fila bloqueada (CIG-001).
+  const previa = await obtenerSolicitud(id)
+  requireNotificada(previa)
+  requireInspectorOTotal(previa, userId, tieneNivelTotal, 'cerrar')
 
-  const esInspector = solicitud.asignados.some((a) => a.usuarioId === userId && a.funcion === 'ACUDIR')
-  if (!esInspector && !tieneNivelTotal) {
-    throw new ForbiddenError('Solo un asignado con función Acudir (o un usuario con acceso total) puede cerrar la inspección')
-  }
-
-  // Fecha de visita efectiva: la del cierre o la ya registrada. El cierre exige
-  // una fecha (no se puede cerrar sin visita; null explícito se rechaza).
-  const fechaEfectiva = body.fechaHora !== undefined ? body.fechaHora : (solicitud.fechaHora ? solicitud.fechaHora.toISOString() : null)
-  if (!fechaEfectiva) {
-    throw new ValidationError('Debes indicar la fecha y hora de la visita para cerrar la inspección')
-  }
-
-  // Asignados del cierre (obligatorios): usuarios activos + con email (misma
-  // regla que creación/edición) y al menos un ACUDIR (quién asiste).
-  await validarReferencias({ asignados: body.asignados })
-  if (!body.asignados.some((a) => a.funcion === 'ACUDIR')) {
-    throw new ValidationError('Debe registrar al menos una persona que asiste (función Acudir)')
-  }
-
-  // Cierre POR LÍNEA (solicitudes con líneas) o de CABECERA (legacy sin líneas).
-  let resultado: 'APROBADA' | 'RECHAZADA' | 'OBJETADA' | 'MIXTO'
-  let cierreExtra: {
-    lineas?: repo.CierreLineaData[]
-    defectosCabecera?: { grupoDefectoId: number; defectoId: number; valor: number }[]
-    caracteristicasCabecera?: { caracteristicaId: number; valorNumerico: number | null; valorTexto: string | null }[]
-  }
-
-  if (solicitud.lineas.length > 0) {
-    // Flujo POR LÍNEA: cada línea debe tener su veredicto; sus defectos/madurez se
-    // validan contra la especie de SU línea.
-    if (!body.lineas) throw new ValidationError('Debes registrar el veredicto de cada línea de la solicitud')
-    const lineasSolicitud = new Map(solicitud.lineas.map((l) => [l.id, l]))
-    const lineaIdsCierre = new Set(body.lineas.map((l) => l.solicitudLineaId))
-    for (const l of body.lineas) {
-      if (!lineasSolicitud.has(l.solicitudLineaId)) throw new ValidationError('Una de las líneas del cierre no pertenece a la solicitud')
-    }
-    for (const l of solicitud.lineas) {
-      if (!lineaIdsCierre.has(l.id)) throw new ValidationError('Debes registrar el veredicto de todas las líneas antes de cerrar la inspección')
-    }
-    const lineasCierre: repo.CierreLineaData[] = []
-    for (const [idx, lineaCierre] of body.lineas.entries()) {
-      const especieLinea = lineasSolicitud.get(lineaCierre.solicitudLineaId)!.especie.id
-      await validarDefectosCierre(lineaCierre.defectos, especieLinea, `Línea ${idx + 1}: `)
-      const caracteristicasNormalizadas = await normalizarMadurezCierre(lineaCierre.caracteristicas, especieLinea, `Línea ${idx + 1}: `)
-      lineasCierre.push({ solicitudLineaId: lineaCierre.solicitudLineaId, veredicto: lineaCierre.veredicto, defectos: lineaCierre.defectos, caracteristicas: caracteristicasNormalizadas })
-    }
-    // Rollup de la cabecera: todas igual -> ese veredicto; mixto -> MIXTO.
-    const veredictos = body.lineas.map((l) => l.veredicto)
-    const todas = (v: 'APROBADA' | 'RECHAZADA' | 'OBJETADA') => veredictos.every((x) => x === v)
-    resultado = todas('APROBADA') ? 'APROBADA' : todas('RECHAZADA') ? 'RECHAZADA' : todas('OBJETADA') ? 'OBJETADA' : 'MIXTO'
-    cierreExtra = { lineas: lineasCierre }
-  } else {
-    // Flujo LEGACY (solicitud sin líneas): un veredicto de cabecera + defectos/
-    // madurez a nivel solicitud (sin filtro por especie).
-    if (!body.resultado) throw new ValidationError('Debes indicar el resultado de la inspección')
-    await validarDefectosCierre(body.defectos ?? [], null, '')
-    const caracteristicasCabecera = await normalizarMadurezCierre(body.caracteristicas ?? [], null, '')
-    resultado = body.resultado
-    cierreExtra = { defectosCabecera: body.defectos ?? [], caracteristicasCabecera }
-  }
-
-  const cerrada = await repo.cerrarSolicitud(id, {
-    comentarios: body.comentarios,
-    resultado,
-    fechaHora: body.fechaHora ? new Date(body.fechaHora) : undefined,
-    asignados: body.asignados,
-    ...cierreExtra,
-  }, userId)
+  const cerrada = await repo.cerrarConValidacion(id, userId, (solicitud) => {
+    requireNotificada(solicitud as SolicitudDetalle)
+    requireInspectorOTotal(solicitud as SolicitudDetalle, userId, tieneNivelTotal, 'cerrar')
+    return resultadoCierre(solicitud as SolicitudDetalle, body)
+  })
+  const resultado = cerrada.estado as 'APROBADA' | 'RECHAZADA' | 'OBJETADA' | 'MIXTO'
   await cancelarCorreoDiferido(recordatorioJobId(id))
 
   const adjuntosCierre = cerrada.adjuntos.filter((a) => a.etapa === 'CIERRE').length
-  const { subject, html } = emails.correoCierre(cerrada, body.comentarios, adjuntosCierre, resultado)
+  const comentarios = cerrada.comentariosCierre ?? ''
+  const { subject, html } = emails.correoCierre(cerrada, comentarios, adjuntosCierre, resultado)
   await encolarCorreo({ to: await destinatariosDe(cerrada), subject, html, empresaId: getEmpresaIdActual() })
 
   return cerrada
+}
+
+// Opciones de "Quién asiste": usuarios con el permiso Inspector Calidad.
+export async function listarInspectoresCalidad() {
+  return repo.listInspectoresCalidad()
 }
 
 export async function reabrirSolicitud(id: number, userId: string) {

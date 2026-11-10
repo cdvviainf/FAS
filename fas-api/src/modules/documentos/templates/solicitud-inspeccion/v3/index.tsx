@@ -1,0 +1,166 @@
+// v2 (2026-11-08, QA/plan-cabecera-corporativa-nov2026.md): igual a v1 con la cabecera
+// corporativa única (EncabezadoCorporativo). v1 queda congelada para reimpresiones.
+import { Documento } from '../../../ui/Documento.js'
+import { EncabezadoCorporativo } from '../../../ui/EncabezadoCorporativo.js'
+import { GrupoCampos } from '../../../ui/GrupoCampos.js'
+import { PieFirma } from '../../../ui/PieFirma.js'
+import { TablaLineas, type ColumnaTabla } from '../../../ui/TablaLineas.js'
+import { fmt } from '../../../ui/formato.js'
+import type { SolicitudInspeccionPdfPayload } from '../../../schemas/solicitud-inspeccion.schema.js'
+
+type LineaSolicitud = SolicitudInspeccionPdfPayload['lineas'][number]
+
+function listaOGuion(valores: string[]): string {
+  return valores.length > 0 ? valores.join(', ') : '—'
+}
+
+const columnasLineas: ColumnaTabla<LineaSolicitud>[] = [
+  { titulo: 'Especie', render: (l) => l.especie },
+  { titulo: 'Variedad', render: (l) => l.variedad },
+  { titulo: 'Embalaje', render: (l) => l.embalaje },
+  { titulo: 'Categorías', render: (l) => listaOGuion(l.categorias) },
+  { titulo: 'Calibres', render: (l) => listaOGuion(l.calibres) },
+  { titulo: 'Calidades', render: (l) => l.calidadesPermitidas ?? '—' },
+  { titulo: 'Pallets', render: (l) => (l.cantidadPallets != null ? fmt.entero(l.cantidadPallets) : '—'), numerica: true },
+  // Veredicto del cierre por línea (2026-11-03).
+  { titulo: 'Estado', render: (l) => l.estadoCierre ?? '—' },
+]
+
+// v1 — sin control de copia (Etapa 4 §8). Sin tabla de líneas: la Solicitud
+// no trae montos ni cajas por línea, es el pedido de visita en sí (ver nota
+// en solicitud-inspeccion.schema.ts).
+interface FilaResultado {
+  tipo: string
+  grupo: string
+  descripcion: string
+  valor: string
+}
+
+const columnasResultado: ColumnaTabla<FilaResultado>[] = [
+  { titulo: 'Tipo', render: (f) => f.tipo },
+  { titulo: 'Grupo', render: (f) => f.grupo },
+  { titulo: 'Descripción', render: (f) => f.descripcion },
+  { titulo: 'Valor', render: (f) => f.valor, numerica: true },
+]
+
+export function SolicitudInspeccionV3({ d, marcaAgua, marcaAguaFecha }: { d: SolicitudInspeccionPdfPayload; marcaAgua?: 'BORRADOR' | 'COPIA'; marcaAguaFecha?: string }) {
+  return (
+    <Documento
+      titulo={`Solicitud de Inspección ${d.codigo}`}
+      paginaOpts={{ formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' }}
+      marcaAgua={marcaAgua}
+      marcaAguaFecha={marcaAguaFecha}
+      piePagina='Frutera Agrosan · Documento generado electrónicamente'
+    >
+      <EncabezadoCorporativo
+        logoDataUri={d.empresa.logoDataUri ?? undefined}
+        especieImagenDataUri={d.especieImagenDataUri ?? null}
+        tituloDocumento='Solicitud de Inspección'
+        numero={d.codigo}
+        fecha={fmt.fecha(d.fecha)}
+        subtitulo={`Estado: ${d.estado}`}
+      />
+
+      <div className='doc-fila-grupos'>
+        <GrupoCampos
+          titulo='Exportador'
+          campos={[
+            { label: 'Razón social', valor: d.empresa.razonSocial },
+            { label: 'RUT', valor: fmt.rut(d.empresa.rut) },
+          ]}
+        />
+        <GrupoCampos
+          titulo='Productor'
+          campos={[
+            { label: 'Razón social', valor: d.productor.razonSocial },
+            { label: 'RUT', valor: fmt.rut(d.productor.rut) },
+            { label: 'Dirección de la visita', valor: d.productor.direccion ?? '—' },
+            { label: 'Contacto', valor: d.productor.contacto ?? '—' },
+          ]}
+        />
+      </div>
+
+      {/* Reagrupación 2026-08-19 (feedback Christian): Especie/Cantidad de
+          pallets/Calificación se mueven a "Producto a Inspeccionar" (antes
+          "Alcance") y Países se mueve para acá, junto al resto de los datos
+          de la visita en sí. */}
+      <GrupoCampos
+        titulo='Detalle de la visita'
+        campos={[
+          { label: 'Fecha y hora', valor: d.fechaHoraVisita ? fmt.fechaHora(d.fechaHoraVisita) : 'Por definir' },
+          { label: 'Tipo de inspección', valor: d.tipoInspeccion ?? '—' },
+          { label: 'Mercado', valor: d.mercado ?? '—' },
+          { label: 'Cliente', valor: d.cliente ?? '—' },
+          { label: 'Fecha de despacho', valor: d.fechaDespacho ? fmt.fecha(d.fechaDespacho) : '—' },
+          { label: 'Países', valor: listaOGuion(d.paises) },
+        ]}
+      />
+
+      {/* Producto a inspeccionar por LÍNEA como grilla (2026-10-30): especie +
+          variedad + embalaje + categorías/calibres/calidades + pallets. */}
+      {d.lineas.length > 0 ? (
+        <TablaLineas titulo='Producto a Inspeccionar' filas={d.lineas} columnas={columnasLineas} />
+      ) : (
+        <GrupoCampos titulo='Producto a Inspeccionar' campos={[{ label: 'Producto', valor: '—' }]} />
+      )}
+
+      <GrupoCampos
+        titulo='Asignados'
+        campos={
+          d.asignados.length > 0 || d.servicioTercero
+            ? [
+                ...d.asignados.map((a) => ({ label: a.funcion, valor: a.nombre })),
+                ...(d.servicioTercero ? [{ label: 'Servicio Tercero', valor: d.servicioTercero }] : []),
+              ]
+            : [{ label: 'Asignados', valor: '—' }]
+        }
+      />
+
+      {d.observaciones && (
+        <GrupoCampos titulo='Observaciones' campos={[{ label: '', valor: d.observaciones }]} />
+      )}
+
+      {d.cierre && (
+        <GrupoCampos
+          titulo='Cierre'
+          campos={[
+            { label: 'Resultado', valor: d.cierre.resultado },
+            { label: 'Fecha de cierre', valor: d.cierre.fecha ? fmt.fecha(d.cierre.fecha) : '—' },
+            { label: 'Comentarios', valor: d.cierre.comentarios ?? '—' },
+          ]}
+        />
+      )}
+
+      {/* Resultado general histórico (cierre a nivel solicitud, sin línea). */}
+      {d.cierre && d.cierre.historico.length > 0 && (
+        <GrupoCampos
+          titulo='Resultado general (histórico)'
+          campos={[{ label: '', valor: d.cierre.historico.join(' · ') }]}
+        />
+      )}
+
+      {/* Resultado del cierre POR LÍNEA (v3, 2026-11-10): una tabla por línea
+          con su veredicto en el título; defectos e indicadores de madurez uno
+          por fila (antes iban en una sola línea y se superponían al label). */}
+      {d.cierre &&
+        d.lineas
+          .filter((l) => l.estadoCierre || l.defectos.length > 0 || l.madurez.length > 0)
+          .map((l, i) => {
+            const filas: FilaResultado[] = [
+              ...(l.defectosDetalle ?? []).map((x) => ({ tipo: 'Defecto', grupo: x.grupo, descripcion: x.defecto, valor: x.valor })),
+              ...(l.madurezDetalle ?? []).map((x) => ({ tipo: 'Indicador de madurez', grupo: '—', descripcion: x.indicador, valor: x.valor })),
+            ]
+            return (
+              <TablaLineas
+                key={i}
+                titulo={`Resultado · ${l.especie} · ${l.variedad} · ${l.embalaje}${l.estadoCierre ? ` — ${l.estadoCierre}` : ''}`}
+                filas={filas.length > 0 ? filas : [{ tipo: 'Sin defectos ni mediciones', grupo: '', descripcion: '', valor: '' }]}
+                columnas={columnasResultado}
+              />
+            )
+          })}
+
+      <PieFirma firmantes={[d.usuarioSolicitante, 'Productor']} />
+    </Documento>
+  )
+}

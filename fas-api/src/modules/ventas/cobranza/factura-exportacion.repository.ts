@@ -53,6 +53,8 @@ const facturaInclude = {
       cantidadCajas: true,
       precioUnitario: true,
       montoLinea: true,
+      separacionDescripcion: true,
+      separacionPrecioUnitario: true,
       // Relaciones para reconstruir la descripción por idioma (ES/EN).
       especie: descSelect,
       variedad: descSelect,
@@ -114,6 +116,8 @@ export async function getProformaEmitidaParaFactura(proformaId: number) {
           cantidadCajas: true,
           precioUnitario: true,
           montoLinea: true,
+          separacionDescripcion: true,
+          separacionPrecioUnitario: true,
           especie: descSelect,
           variedad: descSelect,
           articulo: articuloDescSelect,
@@ -295,6 +299,8 @@ export interface LineaFacturaPersistir {
   cantidadCajas: number
   precioUnitario: number
   montoLinea: number
+  separacionDescripcion: string | null
+  separacionPrecioUnitario: number | null
 }
 
 interface DatosCrearFactura {
@@ -358,6 +364,8 @@ function toLineaCreate(l: LineaFacturaPersistir) {
     cantidadCajas: l.cantidadCajas,
     precioUnitario: l.precioUnitario,
     montoLinea: l.montoLinea,
+    separacionDescripcion: l.separacionDescripcion,
+    separacionPrecioUnitario: l.separacionPrecioUnitario,
   }
 }
 

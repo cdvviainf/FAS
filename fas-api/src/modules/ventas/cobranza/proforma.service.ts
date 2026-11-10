@@ -156,6 +156,8 @@ export async function obtenerContextoEmbarque(embarqueId: number) {
   const c = embarque.notaVenta.clausulaVenta
   return {
     notaVentaId: embarque.notaVentaId,
+    // N° de Instructivo del Embarque — para "Incluir LOTE" en Observaciones.
+    numeroInstructivo: embarque.numeroInstructivo ?? null,
     clausula: c ? { descripcion: c.descripcion, requiereFlete: c.requiereFlete, requiereSeguro: c.requiereSeguro } : null,
   }
 }
@@ -207,6 +209,7 @@ export async function validarYCompletarLineas(embarqueId: number, dimensiones: D
     }
     vistas.add(clave)
     const precioUnitario = l.precioUnitario
+    const separacion = l.separacion ?? null
     return {
       descripcion: l.descripcion?.trim() || canonica.descripcion,
       especieId: canonica.especieId,
@@ -217,7 +220,9 @@ export async function validarYCompletarLineas(embarqueId: number, dimensiones: D
       etiquetaId: canonica.etiquetaId,
       cantidadCajas: canonica.cantidadCajas,
       precioUnitario,
-      montoLinea: Math.round(precioUnitario * canonica.cantidadCajas * 100) / 100,
+      separacionDescripcion: separacion?.descripcion ?? null,
+      separacionPrecioUnitario: separacion?.precioUnitario ?? null,
+      montoLinea: montoLineaConSeparacion(canonica.cantidadCajas, precioUnitario, separacion?.precioUnitario ?? null),
     }
   })
 
@@ -226,6 +231,16 @@ export async function validarYCompletarLineas(embarqueId: number, dimensiones: D
   }
 
   return resultado
+}
+
+// Monto de una línea con "Separar cantidades" (2026-11-10): fruta y cantidad
+// separada se redondean por separado a 2 decimales (son dos ítems en el PDF y en
+// el DTE 110) y se suman en centavos, para que el total del documento sea
+// exactamente la suma de las filas que se muestran.
+export function montoLineaConSeparacion(cajas: number, precioUnitario: number, separacionPrecio: number | null): number {
+  const fruta = Math.round(precioUnitario * cajas * 100)
+  const separado = separacionPrecio != null ? Math.round(separacionPrecio * cajas * 100) : 0
+  return (fruta + separado) / 100
 }
 
 // Suma en centavos (enteros) para que `montoTotal` sea exactamente Σ

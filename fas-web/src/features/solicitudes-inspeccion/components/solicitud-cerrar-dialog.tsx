@@ -25,7 +25,6 @@ import {
 } from '@/components/ui/select'
 import { MultiCombobox } from '@/components/shared/multi-combobox'
 import { Icons } from '@/components/icons'
-import { usuariosService } from '@/features/usuarios/service'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { solicitudesService } from '../service'
 import { solicitudesKeys } from '../queries'
@@ -35,7 +34,6 @@ import type {
   SolicitudLinea,
   ResultadoCierre,
   EstadoLineaInspeccion,
-  AsignadoInput,
   SolicitudDefectoInput,
   TipoMedidaDefecto,
   SolicitudMadurezInput,
@@ -154,8 +152,8 @@ function LineaCierreEditor({ linea, valor, onChange, grupos, defectosCatalogo, c
   }
 
   function agregarCaracteristica() {
-    if (!caracSel || !caracElegida) { toast.error('Selecciona una característica'); return }
-    if (valor.caracteristicas.some((c) => c.caracteristicaId === Number(caracSel))) { toast.error('Esa característica ya está agregada'); return }
+    if (!caracSel || !caracElegida) { toast.error('Selecciona un indicador de madurez'); return }
+    if (valor.caracteristicas.some((c) => c.caracteristicaId === Number(caracSel))) { toast.error('Ese indicador ya está agregado'); return }
     if (caracElegida.tipoDato === 'TEXTO') {
       const texto = caracValor.trim()
       if (!texto) { toast.error('Ingresa un valor'); return }
@@ -186,7 +184,7 @@ function LineaCierreEditor({ linea, valor, onChange, grupos, defectosCatalogo, c
             ? <>{linea.especie.descripcion} · {linea.variedad.descripcion}<span className='text-muted-foreground'> · {articuloDescripcionComercial(linea.articulo)}</span></>
             : 'Resultado general (solicitud sin líneas)'}
         </div>
-        <div className='w-56 space-y-1'>
+        {linea && <div className='w-56 space-y-1'>
           <Label className='text-xs'>Veredicto <span className='text-destructive'>*</span></Label>
           <Select value={valor.veredicto} onValueChange={(v) => onChange({ ...valor, veredicto: v as EstadoLineaInspeccion })}>
             <SelectTrigger><SelectValue placeholder='Selecciona...' /></SelectTrigger>
@@ -196,7 +194,7 @@ function LineaCierreEditor({ linea, valor, onChange, grupos, defectosCatalogo, c
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </div>}
       </div>
 
       {/* Defectos de la línea */}
@@ -236,9 +234,9 @@ function LineaCierreEditor({ linea, valor, onChange, grupos, defectosCatalogo, c
         </div>
       </div>
 
-      {/* Características de madurez de la línea */}
+      {/* Indicadores de madurez de la línea */}
       <div className='space-y-2'>
-        <Label className='text-xs'>Características de calidad</Label>
+        <Label className='text-xs'>Indicadores de madurez</Label>
         {valor.caracteristicas.length > 0 && (
           <div className='flex flex-wrap gap-1.5'>
             {valor.caracteristicas.map((c, i) => (
@@ -253,7 +251,7 @@ function LineaCierreEditor({ linea, valor, onChange, grupos, defectosCatalogo, c
         )}
         <div className='grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end'>
           <Select value={caracSel} onValueChange={(v) => { setCaracSel(v); setCaracValor('') }}>
-            <SelectTrigger><SelectValue placeholder='Característica...' /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder='Indicador...' /></SelectTrigger>
             <SelectContent>{caracteristicasDisponibles.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.descripcion}</SelectItem>)}</SelectContent>
           </Select>
           <Input
@@ -278,11 +276,19 @@ interface SolicitudCerrarDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
+// Valor especial de "Quién asiste" para el Servicio Tercero (2026-11-10).
+const SERVICIO_TERCERO = '__SERVICIO_TERCERO__'
+
+// "Editar inspección" (2026-11-10): registra la visita (fecha, quién asiste,
+// comentarios, veredictos, defectos, indicadores de madurez y adjuntos) y la
+// GUARDA sin cerrar. "Cerrar inspección" (acción del listado) luego solo cambia
+// el estado. No se cierra al pinchar fuera ni con Esc, para no perder datos.
 export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: SolicitudCerrarDialogProps) {
   const queryClient = useQueryClient()
   const [comentarios, setComentarios] = useState('')
   const [fechaHora, setFechaHora] = useState('')
   const [acudeIds, setAcudeIds] = useState<string[]>([])
+  const [servicioTercero, setServicioTercero] = useState('')
   // Estado de cierre por línea, indexado por id de línea.
   const [lineasCierre, setLineasCierre] = useState<Record<number, LineaCierreState>>({})
   // Estado de cierre de CABECERA (legacy, solicitud sin líneas).
@@ -291,12 +297,20 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
   const [pendientes, setPendientes] = useState<File[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Prefill al abrir con lo que ya tenga la solicitud (por línea).
+  // Notificados: lista fija (no editable aquí; el backend la conserva).
+  const notificados = solicitud.asignados.filter((a) => a.funcion === 'NOTIFICAR')
+  const notificadosIds = new Set(notificados.map((a) => a.usuarioId))
+
+  // Prefill al abrir con lo ya guardado en la solicitud.
   useEffect(() => {
     if (!open) return
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación al abrir
     setFechaHora(solicitud.fechaHora ? toLocalInput(solicitud.fechaHora) : '')
-    setAcudeIds(solicitud.asignados.filter((a) => a.funcion === 'ACUDIR').map((a) => a.usuarioId))
+    setComentarios(solicitud.comentariosCierre ?? '')
+    setServicioTercero(solicitud.servicioTercero ?? '')
+    const acude = solicitud.asignados.filter((a) => a.funcion === 'ACUDIR').map((a) => a.usuarioId)
+    setAcudeIds(solicitud.servicioTercero ? [...acude, SERVICIO_TERCERO] : acude)
+    setPendientes([])
     const porLinea: Record<number, LineaCierreState> = {}
     for (const l of solicitud.lineas) {
       porLinea[l.id] = {
@@ -322,7 +336,7 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
     })
   }, [open, solicitud])
 
-  const { data: usuarios } = useQuery({ queryKey: ['usuarios-options'], queryFn: () => usuariosService.list({ limit: 500 }), staleTime: 5 * 60_000, enabled: open })
+  const { data: inspectores } = useQuery({ queryKey: ['inspectores-calidad'], queryFn: () => solicitudesService.inspectores(), staleTime: 5 * 60_000, enabled: open })
   const { data: gruposData } = useQuery({ queryKey: ['grupos-defecto-options'], queryFn: () => gruposDefectoService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000, enabled: open })
   const { data: defectosData } = useQuery({ queryKey: ['defectos-options'], queryFn: () => defectosService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000, enabled: open })
   const { data: caracteristicasData } = useQuery({ queryKey: ['caracteristicas-madurez-options'], queryFn: () => caracteristicasMadurezService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000, enabled: open })
@@ -331,49 +345,60 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
   const defectosCatalogo = (defectosData?.data ?? []) as unknown as DefectoOption[]
   const caracteristicasCatalogo = (caracteristicasData?.data ?? []) as unknown as CaracteristicaMadurezOption[]
 
-  const cerrarMutation = useMutation({
+  // Opciones de "Quién asiste": usuarios Inspector Calidad + los asistentes ya
+  // asignados (se conservan aunque no tengan el permiso) + Servicio Tercero.
+  // Nunca los notificados (las listas no se mezclan).
+  const opcionesAsiste = (() => {
+    const mapa = new Map<string, string>()
+    for (const a of solicitud.asignados) if (a.funcion === 'ACUDIR') mapa.set(a.usuarioId, a.usuario.nombre)
+    for (const u of inspectores?.data ?? []) if (!mapa.has(u.id)) mapa.set(u.id, u.nombre)
+    const usuarios = [...mapa.entries()]
+      .filter(([id]) => !notificadosIds.has(id))
+      .map(([value, label]) => ({ value, label }))
+    return [...usuarios, { value: SERVICIO_TERCERO, label: 'Servicio Tercero' }]
+  })()
+  const conServicioTercero = acudeIds.includes(SERVICIO_TERCERO)
+
+  const guardarMutation = useMutation({
     mutationFn: async () => {
       for (const archivo of pendientes) {
         await solicitudesService.subirAdjunto(solicitud.id, archivo, 'CIERRE')
       }
-      const acudeSet = new Set(acudeIds)
-      const notificar = solicitud.asignados
-        .filter((a) => a.funcion === 'NOTIFICAR' && !acudeSet.has(a.usuarioId))
-        .map((a) => ({ usuarioId: a.usuarioId, funcion: 'NOTIFICAR' as const }))
-      const asignados: AsignadoInput[] = [...acudeIds.map((usuarioId) => ({ usuarioId, funcion: 'ACUDIR' as const })), ...notificar]
       const base = {
-        comentarios: comentarios.trim(),
+        comentarios: comentarios.trim() || null,
         fechaHora: fechaHora ? new Date(fechaHora).toISOString() : null,
-        asignados,
+        acudeIds: acudeIds.filter((id) => id !== SERVICIO_TERCERO),
+        servicioTercero: conServicioTercero ? servicioTercero.trim() : null,
       }
       if (sinLineas) {
-        // Legacy: veredicto de cabecera + defectos/madurez a nivel solicitud.
-        return solicitudesService.cerrar(solicitud.id, {
+        return solicitudesService.guardarCierre(solicitud.id, {
           ...base,
-          resultado: legacyCierre.veredicto as EstadoLineaInspeccion,
           defectos: legacyCierre.defectos,
           caracteristicas: legacyCierre.caracteristicas,
         })
       }
       const lineas = solicitud.lineas.map((l) => {
-        const estado = lineasCierre[l.id]
+        const estado = lineasCierre[l.id] ?? { veredicto: '', defectos: [], caracteristicas: [] }
         return {
           solicitudLineaId: l.id,
-          veredicto: estado.veredicto as EstadoLineaInspeccion,
+          veredicto: (estado.veredicto || null) as EstadoLineaInspeccion | null,
           defectos: estado.defectos,
           caracteristicas: estado.caracteristicas,
         }
       })
-      return solicitudesService.cerrar(solicitud.id, { ...base, lineas })
+      return solicitudesService.guardarCierre(solicitud.id, { ...base, lineas })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: solicitudesKeys.all })
-      toast.success('Inspección cerrada. Se notificó a los involucrados.')
-      onOpenChange(false)
-      setComentarios('')
+      toast.success('Inspección guardada. Para cerrarla usa "Cerrar inspección" en el listado.')
       setPendientes([])
+      onOpenChange(false)
     },
-    onError: (e: Error) => toast.error(e.message || 'Error al cerrar la inspección'),
+    onError: (e: Error) => {
+      // Los adjuntos ya subidos no se reintentan.
+      queryClient.invalidateQueries({ queryKey: solicitudesKeys.all })
+      toast.error(e.message || 'Error al guardar la inspección')
+    },
   })
 
   function agregarArchivos(files: FileList | null) {
@@ -387,27 +412,28 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
     if (inputRef.current) inputRef.current.value = ''
   }
 
-  function handleCerrar() {
-    if (!comentarios.trim()) { toast.error('Los comentarios de cierre son requeridos'); return }
-    if (!fechaHora) { toast.error('Ingresa la fecha y hora de la visita'); return }
-    if (acudeIds.length === 0) { toast.error('Indica quién asiste a la visita'); return }
-    if (sinLineas) {
-      if (!legacyCierre.veredicto) { toast.error('Debes indicar el resultado de la inspección'); return }
-    } else if (solicitud.lineas.some((l) => !lineasCierre[l.id]?.veredicto)) {
-      toast.error('Debes indicar el veredicto de todas las líneas')
+  function handleGuardar() {
+    if (conServicioTercero && !servicioTercero.trim()) {
+      toast.error('Indica el nombre del Servicio Tercero')
       return
     }
-    cerrarMutation.mutate()
+    guardarMutation.mutate()
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-h-[92vh] sm:max-w-[900px] overflow-auto'>
+      <DialogContent
+        className='max-h-[92vh] sm:max-w-[900px] overflow-auto'
+        // No se cierra al pinchar fuera ni con Esc: se perderían los datos.
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
-          <DialogTitle>Cerrar inspección {solicitud.codigo}</DialogTitle>
+          <DialogTitle>Editar inspección {solicitud.codigo}</DialogTitle>
           <DialogDescription>
-            Registra la fecha de la visita, quién asistió, y el veredicto con los defectos/características de
-            cada línea. Al cerrar se notificará a los asignados y al solicitante.
+            Registra la fecha de la visita, quién asistió, y el veredicto con los defectos e indicadores de madurez
+            de cada línea. Al guardar la solicitud sigue abierta; ciérrala luego con &quot;Cerrar inspección&quot;
+            en el listado.
           </DialogDescription>
         </DialogHeader>
 
@@ -420,12 +446,33 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
             <div className='space-y-1.5'>
               <Label>Quién asiste <span className='text-destructive'>*</span></Label>
               <MultiCombobox
-                options={(usuarios?.data ?? []).map((u) => ({ value: u.id, label: u.nombre }))}
+                options={opcionesAsiste}
                 selected={acudeIds}
                 onChange={setAcudeIds}
-                placeholder='Selecciona quién asiste a la visita...'
+                placeholder='Selecciona inspectores o Servicio Tercero...'
               />
+              {conServicioTercero && (
+                <Input
+                  value={servicioTercero}
+                  maxLength={200}
+                  onChange={(e) => setServicioTercero(e.target.value)}
+                  placeholder='Nombre del Servicio Tercero *'
+                />
+              )}
             </div>
+          </div>
+
+          <div className='space-y-1.5'>
+            <Label>Notificados</Label>
+            {notificados.length > 0 ? (
+              <div className='flex flex-wrap gap-1.5'>
+                {notificados.map((a) => (
+                  <Badge key={a.usuarioId} variant='outline'>{a.usuario.nombre}</Badge>
+                ))}
+              </div>
+            ) : (
+              <p className='text-muted-foreground text-sm'>Sin notificados.</p>
+            )}
           </div>
 
           <div className='space-y-1.5'>
@@ -486,9 +533,9 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
         </div>
 
         <DialogFooter>
-          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={cerrarMutation.isPending}>Cancelar</Button>
-          <Button onClick={handleCerrar} isLoading={cerrarMutation.isPending}>
-            <Icons.check className='mr-1 h-4 w-4' /> Cerrar inspección
+          <Button variant='outline' onClick={() => onOpenChange(false)} disabled={guardarMutation.isPending}>Cancelar</Button>
+          <Button onClick={handleGuardar} isLoading={guardarMutation.isPending}>
+            <Icons.check className='mr-1 h-4 w-4' /> Guardar
           </Button>
         </DialogFooter>
       </DialogContent>

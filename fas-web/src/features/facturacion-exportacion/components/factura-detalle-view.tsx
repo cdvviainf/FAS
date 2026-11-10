@@ -1,5 +1,7 @@
 'use client'
 
+import { Fragment } from 'react'
+
 import { toast } from 'sonner'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
@@ -310,14 +312,29 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
               </TableRow>
             </TableHeader>
             <TableBody>
-              {factura.lineas.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell>{l.descripcion}</TableCell>
-                  <TableCell className='text-right tabular-nums'>{formatMonto(l.cantidadCajas, 0)}</TableCell>
-                  <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(Number(l.precioUnitario) * factor, 4)}</TableCell>
-                  <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(Number(l.montoLinea) * factor)}</TableCell>
-                </TableRow>
-              ))}
+              {factura.lineas.map((l) => {
+                // "Separar cantidades": la sublínea va como fila propia debajo.
+                const sep = l.separacionPrecioUnitario != null ? Number(l.separacionPrecioUnitario) : null
+                const montoFruta = sep != null ? Number(l.precioUnitario) * l.cantidadCajas : Number(l.montoLinea)
+                return (
+                  <Fragment key={l.id}>
+                    <TableRow>
+                      <TableCell>{l.descripcion}</TableCell>
+                      <TableCell className='text-right tabular-nums'>{formatMonto(l.cantidadCajas, 0)}</TableCell>
+                      <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(Number(l.precioUnitario) * factor, 4)}</TableCell>
+                      <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(montoFruta * factor)}</TableCell>
+                    </TableRow>
+                    {sep != null && l.separacionDescripcion && (
+                      <TableRow className='bg-muted/30'>
+                        <TableCell className='pl-6'>↳ {l.separacionDescripcion}</TableCell>
+                        <TableCell className='text-right tabular-nums'>{formatMonto(l.cantidadCajas, 0)}</TableCell>
+                        <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(sep * factor, 4)}</TableCell>
+                        <TableCell className='text-right tabular-nums'>{moneda} {formatMonto(sep * l.cantidadCajas * factor)}</TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                )
+              })}
             </TableBody>
             <TableFooter>
               <TableRow>

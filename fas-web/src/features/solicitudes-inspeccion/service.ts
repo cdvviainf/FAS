@@ -8,6 +8,7 @@ import type {
   SolicitudAdjunto,
   EtapaAdjunto,
   SolicitudCerrarInput,
+  SolicitudCierreBorradorInput,
 } from './types'
 
 export const solicitudesService = {
@@ -45,8 +46,17 @@ export const solicitudesService = {
     return api.post(`calidad/solicitudes/${id}/notificar`).json()
   },
 
-  async cerrar(id: number, data: SolicitudCerrarInput): Promise<{ data: SolicitudInspeccion }> {
+  async guardarCierre(id: number, data: SolicitudCierreBorradorInput): Promise<{ data: SolicitudInspeccion }> {
+    return api.put(`calidad/solicitudes/${id}/cierre`, { json: data }).json()
+  },
+
+  async cerrar(id: number, data: SolicitudCerrarInput = {}): Promise<{ data: SolicitudInspeccion }> {
     return api.post(`calidad/solicitudes/${id}/cerrar`, { json: data }).json()
+  },
+
+  // Usuarios con permiso "Inspector Calidad" (opciones de "Quién asiste").
+  async inspectores(): Promise<{ data: { id: string; nombre: string; email: string | null }[] }> {
+    return api.get('calidad/solicitudes/inspectores').json()
   },
 
   async reabrir(id: number): Promise<{ data: SolicitudInspeccion }> {

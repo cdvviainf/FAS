@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,15 @@ import { abrirCierreComercial, hoyFecha, proformaService } from '../service'
 import { DIMENSION_LABELS } from '../types'
 import type { DimensionProforma, ProformaLineaSugerida } from '../types'
 import { ProformaDetalleView } from './proforma-detalle-view'
+import { FilaSeparacion, IncluirLoteCheckbox, SeparacionCantidadesControl } from './separacion-lote-controles'
+import {
+  aplicarSeparacionGeneral,
+  aplicarSeparacionLinea,
+  hayPrecioNegativo,
+  montoLinea as calcularMontoLinea,
+  separacionGeneral,
+} from '../separacion-lote'
+import type { SeparacionLinea } from '../types'
 
 const ITEM = 'FACT_EXPORTACION'
 const TODAS_LAS_DIMENSIONES: DimensionProforma[] = ['VARIEDAD', 'ARTICULO', 'CALIBRE', 'CATEGORIA', 'MARCA']
@@ -43,6 +52,12 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   const [montoSeguro, setMontoSeguro] = useState<string>('')
   const [fleteSumaAlPrecio, setFleteSumaAlPrecio] = useState<boolean>(false)
   const [observaciones, setObservaciones] = useState<string>('')
+  // "Separar cantidades" (2026-11-10): texto y valor general aplicados a cada línea.
+  const [sepActiva, setSepActiva] = useState(false)
+  const [sepTexto, setSepTexto] = useState('')
+  const [sepValor, setSepValor] = useState('')
+  // Separación vigente para re-aplicarla cuando cambia la sugerencia (agrupación).
+  const sepGeneralRef = useRef<SeparacionLinea | null>(null)
 
   const { data: sugerencia, isPending: cargandoSugerencia } = useQuery({
     queryKey: ['proforma-sugerencia', embarqueId, dimensiones],
@@ -51,9 +66,28 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   })
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLineas(sugerencia?.data ?? [])
+    setLineas(aplicarSeparacionGeneral(sugerencia?.data ?? [], sepGeneralRef.current))
   }, [sugerencia])
+
+  function cambiarSeparacion(cambios: { activa?: boolean; texto?: string; valor?: string }) {
+    const activa = cambios.activa ?? sepActiva
+    const texto = cambios.texto ?? sepTexto
+    const valor = cambios.valor ?? sepValor
+    setSepActiva(activa)
+    setSepTexto(texto)
+    setSepValor(valor)
+    const sep = separacionGeneral(activa, texto, valor)
+    sepGeneralRef.current = sep
+    setLineas((prev) => aplicarSeparacionGeneral(prev, sep))
+  }
+
+  function cambiarValorSeparacion(index: number, valor: number) {
+    setLineas((prev) =>
+      prev.map((l, i) =>
+        i === index && l.separacion ? aplicarSeparacionLinea(l, { descripcion: l.separacion.descripcion, precioUnitario: valor }) : l,
+      ),
+    )
+  }
 
   const clausula = sugerencia?.clausula ?? null
   const requiereFlete = clausula?.requiereFlete ?? false
@@ -72,7 +106,7 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
         if (i !== index) return l
         const actualizada = { ...l, ...cambios }
         // El usuario edita el precio unitario; el monto de línea se deriva.
-        actualizada.montoLinea = Math.round(actualizada.precioUnitario * actualizada.cantidadCajas * 100) / 100
+        actualizada.montoLinea = calcularMontoLinea(actualizada.cantidadCajas, actualizada.precioUnitario, actualizada.separacion)
         return actualizada
       }),
     )
@@ -100,6 +134,7 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
           etiquetaId: l.etiquetaId,
           cantidadCajas: l.cantidadCajas,
           precioUnitario: l.precioUnitario,
+          separacion: l.separacion ?? null,
         })),
         montoFlete: requiereFlete ? Number(montoFlete) || 0 : null,
         montoSeguro: requiereSeguro ? Number(montoSeguro) || 0 : null,
@@ -117,6 +152,18 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
   function handleEmitir() {
     if (lineas.length === 0) {
       toast.error('No hay líneas para emitir — este Embarque no tiene pallets con fruta')
+      return
+    }
+    if (sepActiva && !separacionGeneral(sepActiva, sepTexto, sepValor)) {
+      toast.error('Separar cantidades: indica el texto y un valor unitario mayor a 0')
+      return
+    }
+    if (lineas.some((l) => l.separacion && !(l.separacion.precioUnitario > 0))) {
+      toast.error('Separar cantidades: el valor separado de cada línea debe ser mayor a 0')
+      return
+    }
+    if (hayPrecioNegativo(lineas)) {
+      toast.error('Separar cantidades: el valor separado no puede superar el precio de la línea')
       return
     }
     if (requiereFlete && (!montoFlete || Number(montoFlete) <= 0)) {
@@ -160,6 +207,7 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
               </label>
             ))}
           </div>
+          <SeparacionCantidadesControl activa={sepActiva} texto={sepTexto} valor={sepValor} onChange={cambiarSeparacion} />
           <div className='flex flex-wrap items-end gap-4'>
             <div className='w-[180px] space-y-1.5'>
               <Label>Idioma del PDF</Label>
@@ -182,7 +230,14 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
             )}
           </div>
           <div className='space-y-1.5'>
-            <Label>Observaciones</Label>
+            <div className='flex items-center justify-between gap-4'>
+              <Label>Observaciones</Label>
+              <IncluirLoteCheckbox
+                observaciones={observaciones}
+                numeroInstructivo={sugerencia?.numeroInstructivo ?? null}
+                onChange={setObservaciones}
+              />
+            </div>
             <Textarea
               value={observaciones}
               onChange={(e) => setObservaciones(e.target.value)}
@@ -221,7 +276,8 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
               </TableHeader>
               <TableBody>
                 {lineas.map((l, i) => (
-                  <TableRow key={i}>
+                  <Fragment key={i}>
+                  <TableRow>
                     {/* Descripción derivada de los mantenedores según idioma
                         (se arma en el PDF); no es texto libre. */}
                     <TableCell className='text-sm'>{l.descripcion}</TableCell>
@@ -236,8 +292,12 @@ function EmitirProformaForm({ embarqueId }: { embarqueId: number }) {
                         className='h-8 text-right'
                       />
                     </TableCell>
-                    <TableCell className='text-right tabular-nums'>{formatMonto(l.montoLinea)}</TableCell>
+                    <TableCell className='text-right tabular-nums'>
+                      {formatMonto(l.separacion ? Math.round(l.precioUnitario * l.cantidadCajas * 100) / 100 : l.montoLinea)}
+                    </TableCell>
                   </TableRow>
+                  <FilaSeparacion linea={l} onValorChange={(v) => cambiarValorSeparacion(i, v)} />
+                  </Fragment>
                 ))}
               </TableBody>
               <TableFooter>

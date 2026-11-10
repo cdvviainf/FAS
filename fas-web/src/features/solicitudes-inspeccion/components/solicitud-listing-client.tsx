@@ -38,6 +38,7 @@ import { solicitudesService } from '../service'
 import { ESTADO_LABELS } from '../types'
 import type { SolicitudInspeccion, EstadoSolicitud } from '../types'
 import { SolicitudCerrarDialog } from './solicitud-cerrar-dialog'
+import { SolicitudConfirmarCierreDialog } from './solicitud-confirmar-cierre-dialog'
 import { SolicitudDetalleDialog } from './solicitud-detalle-dialog'
 import { documentosService } from '@/features/documentos/service'
 import { DocumentoPreviewDialog } from '@/features/documentos/components/documento-preview-dialog'
@@ -96,6 +97,8 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
 
   // Dialog state
   const [cerrarItem, setCerrarItem] = useState<SolicitudInspeccion | undefined>()
+  // "Cerrar inspección" (2026-11-10): confirma y solo cambia el estado.
+  const [confirmarCierreItem, setConfirmarCierreItem] = useState<SolicitudInspeccion | undefined>()
   const [detalleItem, setDetalleItem] = useState<SolicitudInspeccion | undefined>()
   const [deleteItem, setDeleteItem] = useState<SolicitudInspeccion | undefined>()
   const [pdfItem, setPdfItem] = useState<SolicitudInspeccion | undefined>()
@@ -227,9 +230,14 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
                 </DropdownMenuItem>
               )}
               {puedeCerrar && (
-                <DropdownMenuItem onClick={() => setCerrarItem(s)}>
-                  <Icons.check className='mr-2 h-4 w-4' /> Cerrar inspección
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem onClick={() => setCerrarItem(s)}>
+                    <Icons.edit className='mr-2 h-4 w-4' /> Editar inspección
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setConfirmarCierreItem(s)}>
+                    <Icons.check className='mr-2 h-4 w-4' /> Cerrar inspección
+                  </DropdownMenuItem>
+                </>
               )}
               {esCompras && puedeEscribir && !esCerrada && (
                 <>
@@ -315,6 +323,13 @@ export function SolicitudListingClient({ contexto = 'CALIDAD' }: SolicitudListin
           solicitud={cerrarItem}
           open={!!cerrarItem}
           onOpenChange={(v) => !v && setCerrarItem(undefined)}
+        />
+      )}
+      {confirmarCierreItem && (
+        <SolicitudConfirmarCierreDialog
+          solicitud={confirmarCierreItem}
+          open={!!confirmarCierreItem}
+          onOpenChange={(v) => !v && setConfirmarCierreItem(undefined)}
         />
       )}
       {detalleItem && (

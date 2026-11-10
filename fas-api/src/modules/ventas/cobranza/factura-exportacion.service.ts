@@ -155,6 +155,8 @@ export async function crearBorradorDesdeProforma(proformaId: number, userId: str
     cantidadCajas: l.cantidadCajas,
     precioUnitario: Number(l.precioUnitario),
     montoLinea: Number(l.montoLinea),
+    separacionDescripcion: l.separacionDescripcion,
+    separacionPrecioUnitario: l.separacionPrecioUnitario == null ? null : Number(l.separacionPrecioUnitario),
   }))
   const montoTotal = sumarMontos(lineas.map((l) => l.montoLinea))
 
@@ -638,6 +640,28 @@ export async function construirPayloadDte(
   }
   if (opts?.referenciasExtra?.length) referencias.push(...opts.referenciasExtra)
 
+  // Ítems del DTE: cada línea de fruta y, si tiene "Separar cantidades"
+  // (2026-11-10), su sublínea a continuación (texto libre, misma cantidad, su
+  // propio valor unitario a FOB). Los bultos siguen contando solo la fruta.
+  const itemsDte = parcial
+    ? [{ descripcion: parcial.glosa, cantidadCajas: 1, precioUnitario: Math.round(parcial.monto * 100) / 100 }]
+    : factura.lineas.flatMap((l) => {
+        const fruta = {
+          descripcion: descripcionLinea(l, idioma),
+          cantidadCajas: l.cantidadCajas,
+          precioUnitario: unitarioFob(Number(l.precioUnitario), factor),
+        }
+        if (l.separacionDescripcion == null || l.separacionPrecioUnitario == null) return [fruta]
+        return [
+          fruta,
+          {
+            descripcion: l.separacionDescripcion,
+            cantidadCajas: l.cantidadCajas,
+            precioUnitario: unitarioFob(Number(l.separacionPrecioUnitario), factor),
+          },
+        ]
+      })
+
   return mapFacturaExportacionA110({
     tipoDte: opts?.tipoDte ?? 110,
     fechaEmision: fechaDocumento,
@@ -658,13 +682,7 @@ export async function construirPayloadDte(
       // SII espera el código de país de SU tabla de Aduana (no "COL").
       nacionalidadCodigo: nv.paisDestino?.codigoAduana ?? null,
     },
-    lineas: parcial
-      ? [{ descripcion: parcial.glosa, cantidadCajas: 1, precioUnitario: Math.round(parcial.monto * 100) / 100 }]
-      : factura.lineas.map((l) => ({
-          descripcion: descripcionLinea(l, idioma),
-          cantidadCajas: l.cantidadCajas,
-          precioUnitario: unitarioFob(Number(l.precioUnitario), factor),
-        })),
+    lineas: itemsDte,
     // Se mandan los códigos de la tabla de Aduana del SII (codigoAduana), no el
     // `codigo` de negocio — LibreDTE descarta los que no son de su tabla. El
     // service valida que estén presentes antes de enviar (validarCodigosAduana).
@@ -686,7 +704,7 @@ export async function construirPayloadDte(
       booking,
       pesoNeto: parcial ? null : pesoNeto,
       pesoBruto: parcial ? null : pesoBruto,
-      totItems: parcial ? 1 : factura.lineas.length,
+      totItems: itemsDte.length,
       totBultos: parcial ? null : (totBultos > 0 ? totBultos : null),
       // El bulto es la caja (CantBultos = total de cajas → CodTpoBultos=22
       // siempre); el contenedor va aparte en IdContainer con su Sello/EmisorSello

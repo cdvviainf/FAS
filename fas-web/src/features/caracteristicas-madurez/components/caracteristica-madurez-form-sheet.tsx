@@ -117,10 +117,10 @@ export function CaracteristicaMadurezFormSheet({ item, open, onOpenChange }: Pro
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: keys.all })
-      toast.success(isEdit ? 'Característica actualizada' : 'Característica creada')
+      toast.success(isEdit ? 'Indicador actualizado' : 'Indicador creado')
       onOpenChange(false)
     },
-    onError: (e: Error) => toast.error(e.message || 'Error al guardar la característica'),
+    onError: (e: Error) => toast.error(e.message || 'Error al guardar el indicador'),
   })
 
   function validar(): boolean {
@@ -143,8 +143,8 @@ export function CaracteristicaMadurezFormSheet({ item, open, onOpenChange }: Pro
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className='flex w-full flex-col sm:max-w-lg'>
         <SheetHeader>
-          <SheetTitle>{isEdit ? `Editar Característica ${item?.codigo}` : 'Nueva Característica de Madurez'}</SheetTitle>
-          <SheetDescription>Característica de calidad/madurez (ej. Firmeza, Brix): tipo de dato, unidad y especies para las que aplica.</SheetDescription>
+          <SheetTitle>{isEdit ? `Editar Indicador ${item?.codigo}` : 'Nuevo Indicador de Madurez'}</SheetTitle>
+          <SheetDescription>Indicador de madurez (ej. Firmeza, Brix): tipo de dato, unidad y especies para las que aplica.</SheetDescription>
         </SheetHeader>
 
         <div className='flex-1 space-y-4 overflow-auto px-1 py-2'>
@@ -202,7 +202,7 @@ export function CaracteristicaMadurezFormSheet({ item, open, onOpenChange }: Pro
               onChange={setEspecieIds}
               placeholder='Agregar especie...'
             />
-            <p className='text-muted-foreground text-xs'>Opcional. Sin especies, la característica aplica a todas.</p>
+            <p className='text-muted-foreground text-xs'>Opcional. Sin especies, el indicador aplica a todas.</p>
           </div>
 
           {isEdit && (
@@ -219,7 +219,7 @@ export function CaracteristicaMadurezFormSheet({ item, open, onOpenChange }: Pro
         <SheetFooter>
           <Button variant='outline' onClick={() => onOpenChange(false)} disabled={mutation.isPending}>Cancelar</Button>
           <Button onClick={handleSubmit} isLoading={mutation.isPending}>
-            <Icons.check className='mr-1 h-4 w-4' /> {isEdit ? 'Guardar cambios' : 'Crear Característica'}
+            <Icons.check className='mr-1 h-4 w-4' /> {isEdit ? 'Guardar cambios' : 'Crear Indicador'}
           </Button>
         </SheetFooter>
       </SheetContent>
@@ -234,7 +234,7 @@ export function CaracteristicaMadurezFormSheetTrigger() {
   return (
     <>
       <Button onClick={() => setOpen(true)}>
-        <Icons.add className='mr-2 h-4 w-4' /> Nueva Característica
+        <Icons.add className='mr-2 h-4 w-4' /> Nuevo Indicador
       </Button>
       <CaracteristicaMadurezFormSheet open={open} onOpenChange={setOpen} />
     </>

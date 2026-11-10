@@ -11,6 +11,13 @@ export interface ProformaLineaInput {
   etiquetaId?: number | null
   cantidadCajas: number
   precioUnitario: number
+  // "Separar cantidades": sublínea con texto y valor unitario (misma cantidad).
+  separacion?: SeparacionLinea | null
+}
+
+export interface SeparacionLinea {
+  descripcion: string
+  precioUnitario: number
 }
 
 export interface ProformaEmitirInput {

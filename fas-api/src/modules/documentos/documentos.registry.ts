@@ -11,6 +11,7 @@ import { resolverSolicitudInspeccion } from './resolvers/solicitud-inspeccion.re
 import { solicitudInspeccionPdfPayloadSchema } from './schemas/solicitud-inspeccion.schema.js'
 import { SolicitudInspeccionV1 } from './templates/solicitud-inspeccion/v1/index.js'
 import { SolicitudInspeccionV2 } from './templates/solicitud-inspeccion/v2/index.js'
+import { SolicitudInspeccionV3 } from './templates/solicitud-inspeccion/v3/index.js'
 import { resolverCierreComercial } from './resolvers/cierre-comercial.resolver.js'
 import { cierreComercialPdfPayloadSchema } from './schemas/cierre-comercial.schema.js'
 import { CierreComercialV1 } from './templates/cierre-comercial/v1/index.js'
@@ -31,6 +32,7 @@ import { resolverInstructivoEmbarque } from './resolvers/instructivo-embarque.re
 import { instructivoEmbarquePdfPayloadSchema } from './schemas/instructivo-embarque.schema.js'
 import { InstructivoEmbarqueV1 } from './templates/instructivo-embarque/v1/index.js'
 import { InstructivoEmbarqueV2 } from './templates/instructivo-embarque/v2/index.js'
+import { InstructivoEmbarqueV3 } from './templates/instructivo-embarque/v3/index.js'
 import { resolverProforma } from './resolvers/proforma.resolver.js'
 import { resolverFacturaExportacion } from './resolvers/factura-exportacion.resolver.js'
 import { proformaPdfPayloadSchema } from './schemas/proforma.schema.js'
@@ -154,9 +156,10 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Solicitud de Inspección',
     resolver: resolverSolicitudInspeccion,
     schema: solicitudInspeccionPdfPayloadSchema,
-    plantillaActual: 'v2',
-    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
-    plantillas: { v1: SolicitudInspeccionV1, v2: SolicitudInspeccionV2 },
+    plantillaActual: 'v3',
+    // v2 = cabecera corporativa (2026-11-08); v3 = resultado por línea en tabla
+    // (un defecto/indicador por fila) + Servicio Tercero (2026-11-10). v1/v2 congeladas.
+    plantillas: { v1: SolicitudInspeccionV1, v2: SolicitudInspeccionV2, v3: SolicitudInspeccionV3 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     // Any-of: LECTURA en cualquiera de los dos ítems habilita ver/descargar —
     // mismo criterio que ya usan las rutas de detalle de Solicitud
@@ -227,9 +230,10 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Instructivo de Embarque',
     resolver: resolverInstructivoEmbarque,
     schema: instructivoEmbarquePdfPayloadSchema,
-    plantillaActual: 'v2',
-    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
-    plantillas: { v1: InstructivoEmbarqueV1, v2: InstructivoEmbarqueV2 },
+    plantillaActual: 'v3',
+    // v2 = cabecera corporativa (2026-11-08, plantilla propia); v3 = todos los
+    // Notify del Cliente (2026-11-10). v1/v2 congeladas para reimpresiones.
+    plantillas: { v1: InstructivoEmbarqueV1, v2: InstructivoEmbarqueV2, v3: InstructivoEmbarqueV3 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'VENTAS_EMBARQUES',
     // Un documento por InstructivoHijo (Planta), regenerable en cualquier

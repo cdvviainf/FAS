@@ -1,6 +1,6 @@
 import { NotFoundError } from '../../../shared/errors.js'
 import { getInstructivoHijoConDetalle } from '../../ventas/embarques/embarques.repository.js'
-import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri, getEspecieImagenDataUri } from '../documentos.repository.js'
+import { getEmpresaParaDocumento, getEntidadParaDocumento, getNotifiesCliente, logoDataUri, getEspecieImagenDataUri } from '../documentos.repository.js'
 import type { InstructivoEmbarquePdfPayload } from '../schemas/instructivo-embarque.schema.js'
 import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 
@@ -32,7 +32,7 @@ export async function resolverInstructivoEmbarque(id: number, empresaId: number)
   const embarque = instructivo.embarque
   const nv = embarque.notaVenta
 
-  const [empresa, planta, cliente, consignatario, notify, agenteAduana, embarcador, naviera] = await Promise.all([
+  const [empresa, planta, cliente, consignatario, notify, agenteAduana, embarcador, naviera, notifiesCliente] = await Promise.all([
     getEmpresaParaDocumento(empresaId),
     getEntidadParaDocumento(instructivo.plantaId),
     getEntidadParaDocumento(nv.clienteId),
@@ -41,6 +41,7 @@ export async function resolverInstructivoEmbarque(id: number, empresaId: number)
     embarque.agenteAduanaId ? getEntidadParaDocumento(embarque.agenteAduanaId) : Promise.resolve(null),
     embarque.embarcadorId ? getEntidadParaDocumento(embarque.embarcadorId) : Promise.resolve(null),
     embarque.navieraId ? getEntidadParaDocumento(embarque.navieraId) : Promise.resolve(null),
+    getNotifiesCliente(nv.clienteId),
   ])
 
   const lineas = pallets.flatMap((p) =>
@@ -97,6 +98,9 @@ export async function resolverInstructivoEmbarque(id: number, empresaId: number)
     // no hay uno asignado) el bloque queda null y no se repite en el PDF.
     consignatario: nv.consignatarioId != null && nv.consignatarioId !== nv.clienteId ? actorCompleto(consignatario) : null,
     notify: nv.notifyId != null && nv.notifyId !== nv.clienteId ? actorCompleto(notify) : null,
+    // v3 (2026-11-10): todos los Notify asociados al Cliente en su ficha.
+    clienteEsNotify: notifiesCliente.clienteEsNotify,
+    notifies: notifiesCliente.notifies.map((n) => actorCompleto(n)!).filter(Boolean),
     tipoEmbarque: nv.tipoEmbarque?.descripcion ?? null,
     tipoFlete: nv.tipoFlete?.descripcion ?? null,
     modalidadVenta: nv.modalidadVenta?.descripcion ?? null,

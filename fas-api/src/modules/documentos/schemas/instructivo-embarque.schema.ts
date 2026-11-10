@@ -48,6 +48,11 @@ export const instructivoEmbarquePdfPayloadSchema = z.object({
   // Cliente (2026-10-12). null = no corresponde / coincide con el Cliente.
   consignatario: actorCompletoSchema.nullable(),
   notify: actorCompletoSchema.nullable(),
+  // Todos los Notify del Cliente según su ficha (v3, 2026-11-10), en orden.
+  // `clienteEsNotify` = el propio cliente actúa como Notify (se lista primero
+  // sin repetir sus datos, ya presentes en el bloque Cliente). v1/v2 lo ignoran.
+  clienteEsNotify: z.boolean().optional(),
+  notifies: z.array(actorCompletoSchema).optional(),
   tipoEmbarque: z.string().nullable(),
   tipoFlete: z.string().nullable(),
   modalidadVenta: z.string().nullable(),

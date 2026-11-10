@@ -112,7 +112,9 @@ export const solicitudMadurezSchema = z.object({
 export const solicitudCierreLineaSchema = z.object({
   solicitudLineaId: z.number().int().positive(),
   // OBJETADA (2026-08-10): tercer veredicto, terminal — mismo tratamiento que RECHAZADA.
-  veredicto: z.enum(['APROBADA', 'RECHAZADA', 'OBJETADA'], { message: 'El veredicto (Aprobado/Rechazado/Objetado) es requerido por línea' }),
+  // Opcional en el borrador ("Editar inspección", 2026-11-10); "Cerrar inspección"
+  // exige el veredicto de todas las líneas guardadas.
+  veredicto: z.enum(['APROBADA', 'RECHAZADA', 'OBJETADA']).nullable().optional(),
   defectos: z
     .array(solicitudDefectoSchema)
     .refine((ds) => new Set(ds.map((d) => `${d.grupoDefectoId}-${d.defectoId}`)).size === ds.length, {
@@ -122,35 +124,34 @@ export const solicitudCierreLineaSchema = z.object({
   caracteristicas: z
     .array(solicitudMadurezSchema)
     .refine((cs) => new Set(cs.map((c) => c.caracteristicaId)).size === cs.length, {
-      message: 'Hay características de madurez repetidas en una línea',
+      message: 'Hay indicadores de madurez repetidos en una línea',
     })
     .default([]),
 })
 
-export const solicitudCerrarSchema = z.object({
-  comentarios: z.string().min(1, 'Los comentarios de cierre son requeridos').max(5000),
-  // Fecha/hora de la visita (2026-10-13): se ingresa/edita en el cierre. Puede
-  // omitirse si la solicitud ya la tenía fijada; el service exige una fecha
-  // efectiva (body o la vigente) y rechaza null.
+// "Editar inspección" (2026-11-10): guarda los datos de la visita SIN cerrar
+// (la solicitud sigue NOTIFICADA, sin correo). Todo es opcional/incompleto;
+// "Cerrar inspección" valida la completitud sobre lo guardado.
+export const solicitudCierreBorradorSchema = z.object({
+  comentarios: z.string().trim().max(5000).nullable().optional(),
+  // Fecha/hora de la visita. undefined = no tocar; null = sin fecha.
   fechaHora: z.string().datetime({ offset: true, message: 'Fecha/hora inválida (ISO 8601)' }).nullable().optional(),
-  // Asignados (incluye a quién asiste = ACUDIR): REEMPLAZA el set y es obligatorio
-  // en el cierre — debe registrar quién asistió (el service exige ≥1 ACUDIR).
-  asignados: z
-    .array(asignadoSchema)
-    .min(1, 'Debe registrar al menos una persona que asiste')
-    .refine((a) => new Set(a.map((x) => x.usuarioId)).size === a.length, { message: 'Hay usuarios repetidos en los asignados' }),
-  // Flujo POR LÍNEA (solicitudes con líneas): veredicto + defectos + madurez de
-  // cada línea. El estado de la cabecera se calcula (rollup) en el service.
+  // Quién asiste (función ACUDIR). Los NOTIFICAR no se envían: se conservan tal
+  // cual (lista fija). Nuevos asistentes deben tener el permiso Inspector Calidad.
+  acudeIds: z
+    .array(z.string().min(1))
+    .refine((a) => new Set(a).size === a.length, { message: 'Hay usuarios repetidos en quién asiste' })
+    .default([]),
+  // "Servicio Tercero": nombre del servicio/inspector externo que asiste.
+  servicioTercero: z.string().trim().min(1, 'Indica el nombre del Servicio Tercero').max(200).nullable().optional(),
+  // Por línea (solicitudes con líneas).
   lineas: z
     .array(solicitudCierreLineaSchema)
     .refine((ls) => new Set(ls.map((l) => l.solicitudLineaId)).size === ls.length, {
       message: 'Hay líneas repetidas en el cierre',
     })
     .optional(),
-  // Flujo LEGACY (solicitudes SIN líneas): un veredicto de cabecera + defectos/
-  // madurez a nivel solicitud (compatibilidad con solicitudes previas al detalle
-  // por línea — ver backfill 20261027140000 que no creó línea sin variedades).
-  resultado: z.enum(['APROBADA', 'RECHAZADA', 'OBJETADA']).optional(),
+  // LEGACY (solicitud sin líneas): defectos/madurez de cabecera.
   defectos: z
     .array(solicitudDefectoSchema)
     .refine((ds) => new Set(ds.map((d) => `${d.grupoDefectoId}-${d.defectoId}`)).size === ds.length, {
@@ -160,19 +161,20 @@ export const solicitudCerrarSchema = z.object({
   caracteristicas: z
     .array(solicitudMadurezSchema)
     .refine((cs) => new Set(cs.map((c) => c.caracteristicaId)).size === cs.length, {
-      message: 'Hay características de madurez repetidas',
+      message: 'Hay indicadores de madurez repetidos',
     })
     .optional(),
-}).superRefine((v, ctx) => {
-  const tieneLineas = v.lineas != null && v.lineas.length > 0
-  const tieneResultado = v.resultado != null
-  // Exactamente una vía: por línea (con líneas) o de cabecera (legacy sin líneas).
-  if (tieneLineas === tieneResultado) {
-    ctx.addIssue({ code: 'custom', message: 'Debes enviar el veredicto por línea o un resultado de cabecera (legacy sin líneas), no ambos ni ninguno', path: ['lineas'] })
-  }
 })
+
+// "Cerrar inspección" (2026-11-10): solo cambia el estado con lo ya guardado.
+// `resultado` solo aplica a solicitudes LEGACY sin líneas (no hay dónde guardar
+// un veredicto de cabecera en borrador).
+export const solicitudCerrarSchema = z
+  .object({ resultado: z.enum(['APROBADA', 'RECHAZADA', 'OBJETADA']).optional() })
+  .default({})
 
 export type SolicitudLineaBody = z.infer<typeof solicitudLineaSchema>
 export type SolicitudCreateBody = z.infer<typeof solicitudCreateSchema>
 export type SolicitudUpdateBody = z.infer<typeof solicitudUpdateSchema>
 export type SolicitudCerrarBody = z.infer<typeof solicitudCerrarSchema>
+export type SolicitudCierreBorradorBody = z.infer<typeof solicitudCierreBorradorSchema>

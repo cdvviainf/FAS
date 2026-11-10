@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client'
 import { prisma } from '../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../lib/empresa-context.js'
 import { LOCK_NAMESPACE_DOCUMENTOS_EMISION } from '../../shared/advisory-locks.js'
@@ -66,35 +67,59 @@ export async function getEspecieImagenDataUri(especieId: number | null | undefin
   return img ? `data:${img.mime};base64,${Buffer.from(img.datos).toString('base64')}` : null
 }
 
+const entidadDocumentoSelect = {
+  razonSocial: true,
+    identificador: true,
+    taxId: true,
+    // telefono de la entidad + datos del contacto (nombre/teléfono): usados
+    // por la AGA en el Instructivo para Notify/Consignatario (2026-10-12).
+    telefono: true,
+    direcciones: {
+      where: { eliminadoEn: null },
+      select: {
+        direccion: true,
+        // Dirección completa (2026-11-06, OC v3): comuna, región y país.
+        comuna: { select: { descripcion: true, provincia: { select: { region: { select: { descripcion: true } } } } } },
+        pais: { select: { descripcion: true, descripcionExtranjera: true } },
+      },
+      orderBy: [{ esPorDefecto: 'desc' }, { codigo: 'asc' }],
+      take: 1,
+    },
+    contactos: {
+      where: { eliminadoEn: null },
+      select: { nombre: true, telefono: true, email: true },
+      orderBy: [{ esRepresentanteLegal: 'desc' }, { codigo: 'asc' }],
+      take: 1,
+    },
+} satisfies Prisma.EntidadSelect
+
 export async function getEntidadParaDocumento(id: number) {
   return prisma.entidad.findFirst({
     where: { id, eliminadoEn: null },
+    select: entidadDocumentoSelect,
+  })
+}
+
+// Notify del Cliente (Instructivo de Embarque v3, 2026-11-10): todas las
+// entidades relacionadas con rol NOTIFY en la ficha del cliente, en su orden, y
+// si el propio cliente tiene el TipoEntidad NOTIFY (actúa como tal). Las
+// relacionadas eliminadas se omiten.
+export async function getNotifiesCliente(clienteId: number) {
+  const cliente = await prisma.entidad.findFirst({
+    where: { id: clienteId, eliminadoEn: null },
     select: {
-      razonSocial: true,
-      identificador: true,
-      taxId: true,
-      // telefono de la entidad + datos del contacto (nombre/teléfono): usados
-      // por la AGA en el Instructivo para Notify/Consignatario (2026-10-12).
-      telefono: true,
-      direcciones: {
-        where: { eliminadoEn: null },
-        select: {
-          direccion: true,
-          // Dirección completa (2026-11-06, OC v3): comuna, región y país.
-          comuna: { select: { descripcion: true, provincia: { select: { region: { select: { descripcion: true } } } } } },
-          pais: { select: { descripcion: true, descripcionExtranjera: true } },
-        },
-        orderBy: [{ esPorDefecto: 'desc' }, { codigo: 'asc' }],
-        take: 1,
-      },
-      contactos: {
-        where: { eliminadoEn: null },
-        select: { nombre: true, telefono: true, email: true },
-        orderBy: [{ esRepresentanteLegal: 'desc' }, { codigo: 'asc' }],
-        take: 1,
+      tipos: true,
+      relacionesComoCliente: {
+        where: { rol: 'NOTIFY', entidad: { eliminadoEn: null } },
+        orderBy: [{ orden: 'asc' }, { id: 'asc' }],
+        select: { entidad: { select: entidadDocumentoSelect } },
       },
     },
   })
+  return {
+    clienteEsNotify: cliente?.tipos.includes('NOTIFY') ?? false,
+    notifies: (cliente?.relacionesComoCliente ?? []).map((r) => r.entidad),
+  }
 }
 
 // Datos ricos del Embarque + Nota de Venta para los PDF de exportación

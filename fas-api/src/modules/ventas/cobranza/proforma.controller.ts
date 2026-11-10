@@ -20,6 +20,7 @@ export async function sugerirLineas(req: FastifyRequest, reply: FastifyReply) {
     data: lineas,
     clausula: contexto.clausula,
     notaVentaId: contexto.notaVentaId,
+    numeroInstructivo: contexto.numeroInstructivo,
     faltantesExtranjera,
   })
 }

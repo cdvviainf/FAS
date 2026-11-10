@@ -9,6 +9,7 @@ const usuarioSelect = {
   perfilId: true,
   esResponsableVenta: true,
   puedeEditarCierresAjenos: true,
+  esInspectorCalidad: true,
   empresaPredeterminadaId: true,
   // Solo presencia de la firma (nunca el binario) → se aplana a `tieneFirma`.
   firma: { select: { usuarioId: true } },
@@ -96,6 +97,7 @@ export async function createUsuario(data: {
   perfilId: number
   esResponsableVenta?: boolean
   puedeEditarCierresAjenos?: boolean
+  esInspectorCalidad?: boolean
   empresaPredeterminadaId?: number | null
   empresas: number[]
   creadoPor?: string
@@ -111,6 +113,7 @@ export async function createUsuario(data: {
         perfilId: data.perfilId,
         esResponsableVenta: data.esResponsableVenta ?? false,
         puedeEditarCierresAjenos: data.puedeEditarCierresAjenos ?? false,
+        esInspectorCalidad: data.esInspectorCalidad ?? false,
         empresaPredeterminadaId: data.empresaPredeterminadaId ?? null,
         creadoPor: data.creadoPor ?? null,
       },
@@ -147,6 +150,7 @@ export async function updateUsuario(
     perfilId?: number
     esResponsableVenta?: boolean
   puedeEditarCierresAjenos?: boolean
+  esInspectorCalidad?: boolean
     empresaPredeterminadaId?: number | null
     empresas?: number[]
     actualizadoPor?: string
@@ -162,6 +166,7 @@ export async function updateUsuario(
         ...(data.perfilId !== undefined ? { perfilId: data.perfilId } : {}),
         ...(data.esResponsableVenta !== undefined ? { esResponsableVenta: data.esResponsableVenta } : {}),
         ...(data.puedeEditarCierresAjenos !== undefined ? { puedeEditarCierresAjenos: data.puedeEditarCierresAjenos } : {}),
+        ...(data.esInspectorCalidad !== undefined ? { esInspectorCalidad: data.esInspectorCalidad } : {}),
         ...(data.empresaPredeterminadaId !== undefined ? { empresaPredeterminadaId: data.empresaPredeterminadaId } : {}),
         ...(data.actualizadoPor !== undefined ? { actualizadoPor: data.actualizadoPor } : {}),
       },

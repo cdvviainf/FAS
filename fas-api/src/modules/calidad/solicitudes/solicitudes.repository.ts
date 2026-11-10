@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ConflictError } from '../../../shared/errors.js'
 import type { ParCalidad } from '../../../shared/calidades-permitidas.js'
@@ -360,41 +360,36 @@ export async function marcarNotificada(id: number, userId: string) {
 
 export interface CierreLineaData {
   solicitudLineaId: number
-  veredicto: 'APROBADA' | 'RECHAZADA' | 'OBJETADA'
+  // null = aún sin veredicto (borrador guardado con "Editar inspección").
+  veredicto: 'APROBADA' | 'RECHAZADA' | 'OBJETADA' | null
   defectos: { grupoDefectoId: number; defectoId: number; valor: number }[]
   caracteristicas: { caracteristicaId: number; valorNumerico: number | null; valorTexto: string | null }[]
 }
 
-export interface CierreData {
-  comentarios: string
-  // Estado de la cabecera (rollup de los veredictos de línea, o el veredicto de
-  // cabecera en el flujo legacy), calculado en el service.
-  resultado: 'APROBADA' | 'RECHAZADA' | 'OBJETADA' | 'MIXTO'
-  // Fecha/hora de la visita (2026-10-13): se fija/edita en el cierre. undefined = no tocar.
-  fechaHora?: Date
-  // Si vienen, reemplazan el set de asignados (incluye quién asiste = ACUDIR).
-  asignados?: AsignadoInput[]
-  // Cierre POR LÍNEA: veredicto + defectos + madurez de cada línea. undefined en
-  // el flujo legacy (solicitud sin líneas).
+// Datos de la inspección guardados con "Editar inspección" (2026-11-10): la
+// solicitud sigue NOTIFICADA; "Cerrar inspección" luego solo cambia el estado.
+export interface CierreBorradorData {
+  comentarios: string | null
+  // Fecha/hora de la visita. undefined = no tocar.
+  fechaHora?: Date | null
+  servicioTercero: string | null
+  // Set COMPLETO de asignados (ACUDIR elegidos + NOTIFICAR vigentes, intactos).
+  asignados: AsignadoInput[]
+  // Por línea (solicitudes con líneas) o de cabecera (legacy sin líneas).
   lineas?: CierreLineaData[]
-  // Flujo LEGACY (solicitud sin líneas): defectos/madurez a nivel solicitud
-  // (solicitudLineaId NULL).
   defectosCabecera?: { grupoDefectoId: number; defectoId: number; valor: number }[]
   caracteristicasCabecera?: { caracteristicaId: number; valorNumerico: number | null; valorTexto: string | null }[]
 }
 
-// Cierre atómico (CAS NOTIFICADA -> resultado) + fecha de visita + asignados +
-// defectos, todo en una transacción (mismo criterio anti-carrera que
-// transicionAtomica).
-export async function cerrarSolicitud(id: number, data: CierreData, userId: string) {
+// Guarda el borrador de la inspección (CAS: solo NOTIFICADA) en una transacción:
+// comentarios, visita, servicio tercero, asignados, veredictos/defectos/madurez.
+export async function guardarCierreBorrador(id: number, data: CierreBorradorData, userId: string) {
   return prisma.$transaction(async (tx) => {
     const result = await tx.solicitudInspeccion.updateMany({
       where: { id, estado: 'NOTIFICADA', eliminadoEn: null },
       data: {
-        estado: data.resultado,
         comentariosCierre: data.comentarios,
-        fechaCierre: new Date(),
-        cerradaPor: userId,
+        servicioTercero: data.servicioTercero,
         actualizadoPor: userId,
         ...(data.fechaHora !== undefined ? { fechaHora: data.fechaHora } : {}),
       },
@@ -404,18 +399,16 @@ export async function cerrarSolicitud(id: number, data: CierreData, userId: stri
         'La solicitud ya no está en el estado esperado: probablemente fue modificada por otro usuario. Recarga e intenta de nuevo.',
       )
     }
-    if (data.asignados !== undefined) {
-      await tx.solicitudInspeccionAsignado.deleteMany({ where: { solicitudId: id } })
+    await tx.solicitudInspeccionAsignado.deleteMany({ where: { solicitudId: id } })
+    if (data.asignados.length > 0) {
       await tx.solicitudInspeccionAsignado.createMany({ data: data.asignados.map((a) => ({ solicitudId: id, ...a })) })
     }
 
-    // Se parte de cero (cerrar solo procede desde NOTIFICADA): se limpian
-    // defectos/madurez previos y se reescriben.
+    // Se reescriben defectos/madurez completos con lo enviado.
     await tx.solicitudInspeccionDefecto.deleteMany({ where: { solicitudId: id } })
     await tx.solicitudInspeccionMadurez.deleteMany({ where: { solicitudId: id } })
 
     if (data.lineas !== undefined) {
-      // Flujo POR LÍNEA: veredicto + defectos + madurez de cada línea.
       for (const linea of data.lineas) {
         await tx.solicitudInspeccionLinea.update({
           where: { id: linea.solicitudLineaId },
@@ -445,8 +438,6 @@ export async function cerrarSolicitud(id: number, data: CierreData, userId: stri
         }
       }
     } else {
-      // Flujo LEGACY (solicitud sin líneas): defectos/madurez a nivel solicitud
-      // (solicitudLineaId NULL).
       if (data.defectosCabecera && data.defectosCabecera.length > 0) {
         await tx.solicitudInspeccionDefecto.createMany({
           data: data.defectosCabecera.map((d) => ({ solicitudId: id, solicitudLineaId: null, grupoDefectoId: d.grupoDefectoId, defectoId: d.defectoId, valor: d.valor })),
@@ -459,6 +450,60 @@ export async function cerrarSolicitud(id: number, data: CierreData, userId: stri
       }
     }
     return tx.solicitudInspeccion.findUniqueOrThrow({ where: { id }, include: includeDetalle })
+  })
+}
+
+export type SolicitudConDetalle = Prisma.SolicitudInspeccionGetPayload<{ include: typeof includeDetalle }>
+
+// "Cerrar inspección" (2026-11-10): solo cambia el estado sobre los datos ya
+// guardados. CIG-001: bloqueo + relectura + validación + transición en UNA
+// transacción. `SELECT … FOR UPDATE` toma el lock de la fila; "Guardar"
+// (guardarCierreBorrador) escribe esa misma fila primero en su transacción, así
+// que ambas operaciones se serializan y el cierre siempre valida lo vigente.
+// `decidir` valida la solicitud releída y devuelve el resultado (o lanza).
+export async function cerrarConValidacion(
+  id: number,
+  userId: string,
+  decidir: (solicitud: SolicitudConDetalle) => 'APROBADA' | 'RECHAZADA' | 'OBJETADA' | 'MIXTO',
+) {
+  const empresaId = getEmpresaIdActual()!
+  return prisma.$transaction(async (tx) => {
+    const bloqueada = await tx.$queryRaw<{ id: number }[]>(
+      Prisma.sql`SELECT id FROM solicitudes_inspeccion WHERE id = ${id} AND "empresaId" = ${empresaId} AND "eliminadoEn" IS NULL FOR UPDATE`,
+    )
+    if (bloqueada.length === 0) {
+      throw new ConflictError('La solicitud ya no existe o fue eliminada. Recarga e intenta de nuevo.')
+    }
+    const actual = await tx.solicitudInspeccion.findUniqueOrThrow({ where: { id }, include: includeDetalle })
+    const resultado = decidir(actual)
+    const result = await tx.solicitudInspeccion.updateMany({
+      where: { id, estado: 'NOTIFICADA', eliminadoEn: null },
+      data: { estado: resultado, fechaCierre: new Date(), cerradaPor: userId, actualizadoPor: userId },
+    })
+    if (result.count === 0) {
+      throw new ConflictError(
+        'La solicitud ya no está en el estado esperado: probablemente fue modificada por otro usuario. Recarga e intenta de nuevo.',
+      )
+    }
+    return tx.solicitudInspeccion.findUniqueOrThrow({ where: { id }, include: includeDetalle })
+  })
+}
+
+// Usuarios con el permiso "Inspector Calidad" (2026-11-10): opciones de "Quién
+// asiste". Activos (no eliminados) y con email (los asignados reciben correos).
+export async function listInspectoresCalidad() {
+  return prisma.usuario.findMany({
+    where: { esInspectorCalidad: true, eliminadoEn: null },
+    select: { id: true, nombre: true, email: true },
+    orderBy: { nombre: 'asc' },
+  })
+}
+
+export async function getInspectoresCalidad(ids: string[]) {
+  if (ids.length === 0) return []
+  return prisma.usuario.findMany({
+    where: { id: { in: ids }, esInspectorCalidad: true, eliminadoEn: null },
+    select: { id: true },
   })
 }
 

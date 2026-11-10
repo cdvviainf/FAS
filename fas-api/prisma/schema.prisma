@@ -146,6 +146,9 @@ model Usuario {
   // Permiso a nivel de USUARIO (no de perfil, 2026-11-09): puede editar Cierres
   // Comerciales abiertos creados por otros usuarios. Sin él, solo el creador.
   puedeEditarCierresAjenos Boolean   @default(false)
+  // Permiso a nivel de USUARIO (2026-11-10): "Inspector Calidad". Solo estos
+  // usuarios se ofrecen en "Quién asiste" al registrar la inspección.
+  esInspectorCalidad       Boolean   @default(false)
   // Empresa activa por defecto al iniciar sesión (multi-empresa). Nullable:
   // un usuario recién creado puede no tener empresas asignadas todavía.
   empresaPredeterminadaId  Int?
@@ -2020,6 +2023,9 @@ model SolicitudInspeccion {
   notificadaEn          DateTime?
   recordatorioEnviadoEn DateTime?
   comentariosCierre     String?
+  // "Servicio Tercero" (2026-11-10): nombre del servicio/inspector externo que
+  // asiste a la visita (alternativa o complemento a los inspectores internos).
+  servicioTercero       String?
   fechaCierre           DateTime?
   cerradaPor            String? // Usuario
   creadoEn              DateTime                  @default(now())
@@ -4239,8 +4245,14 @@ model ProformaLinea {
   etiqueta    Etiqueta?  @relation(fields: [etiquetaId], references: [id])
 
   cantidadCajas  Int
-  precioUnitario Decimal @db.Decimal(14, 4) // = montoLinea / cantidadCajas
-  montoLinea     Decimal @db.Decimal(14, 2) // sugerido, editable
+  precioUnitario Decimal @db.Decimal(14, 4) // precio de la FRUTA (sin la cantidad separada)
+  montoLinea     Decimal @db.Decimal(14, 2) // = round(cajas×precio,2) + round(cajas×separación,2)
+
+  // "Separar cantidades" (2026-11-10): sublínea con texto libre (p. ej. "CAJAS
+  // PLASTICAS") y valor unitario por la misma cantidad de cajas. Ambos null o
+  // ambos informados. Se muestra como una fila aparte en PDF y DTE 110.
+  separacionDescripcion    String?
+  separacionPrecioUnitario Decimal? @db.Decimal(14, 4)
 
   @@index([proformaId])
   @@map("proforma_lineas")
@@ -4404,6 +4416,10 @@ model FacturaExportacionLinea {
   cantidadCajas  Int
   precioUnitario Decimal @db.Decimal(14, 4)
   montoLinea     Decimal @db.Decimal(14, 2)
+
+  // "Separar cantidades" — mismo criterio que ProformaLinea (2026-11-10).
+  separacionDescripcion    String?
+  separacionPrecioUnitario Decimal? @db.Decimal(14, 4)
 
   @@index([facturaExportacionId])
   @@map("factura_exportacion_lineas")

@@ -13,6 +13,18 @@ export const sugerenciaQuerySchema = z.object({
     .pipe(z.array(dimensionSchema)),
 })
 
+// "Separar cantidades" (2026-11-10): sublínea opcional con texto libre y valor
+// unitario por la MISMA cantidad de cajas de la línea (p. ej. "CAJAS PLASTICAS"
+// a USD 0,50). El precio de la línea es el de la fruta (ya descontado). El texto
+// va como NmbItem del DTE 110, que el SII limita a 80 caracteres.
+export const separacionLineaSchema = z
+  .object({
+    descripcion: z.string().trim().min(1, 'Indica el texto de la cantidad separada').max(80),
+    precioUnitario: z.number().positive('El valor separado debe ser mayor a 0').max(9_999_999_999),
+  })
+  .nullable()
+  .optional()
+
 const lineaSchema = z.object({
   descripcion: z.string().trim().min(1),
   especieId: z.number().int().positive(),
@@ -29,6 +41,7 @@ const lineaSchema = z.object({
   // exacta porque montoLinea se redondea a 2 decimales antes de sumar en
   // centavos (FAS-PROF-EXP-007, QA ronda 2).
   precioUnitario: z.number().min(0).max(9_999_999_999),
+  separacion: separacionLineaSchema,
 })
 
 export const proformaEmitirSchema = z.object({

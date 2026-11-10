@@ -5,6 +5,7 @@ import {
   solicitudParamsSchema,
   solicitudListQuerySchema,
   solicitudCerrarSchema,
+  solicitudCierreBorradorSchema,
   adjuntoParamsSchema,
 } from './solicitudes.schema.js'
 import * as service from './solicitudes.service.js'
@@ -58,9 +59,20 @@ export async function notificar(req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ data: solicitud })
 }
 
+export async function guardarCierre(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = solicitudParamsSchema.parse(req.params)
+  const body = solicitudCierreBorradorSchema.parse(req.body)
+  const solicitud = await service.guardarCierreBorrador(id, body, req.fasUserId!, tieneNivelTotal(req))
+  return reply.send({ data: solicitud })
+}
+
+export async function listInspectores(_req: FastifyRequest, reply: FastifyReply) {
+  return reply.send({ data: await service.listarInspectoresCalidad() })
+}
+
 export async function cerrar(req: FastifyRequest, reply: FastifyReply) {
   const { id } = solicitudParamsSchema.parse(req.params)
-  const body = solicitudCerrarSchema.parse(req.body)
+  const body = solicitudCerrarSchema.parse(req.body ?? {})
   const solicitud = await service.cerrarSolicitud(id, body, req.fasUserId!, tieneNivelTotal(req))
   return reply.send({ data: solicitud })
 }

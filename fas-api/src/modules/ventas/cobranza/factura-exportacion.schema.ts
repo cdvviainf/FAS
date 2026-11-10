@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { fechaDocumentoSchema } from './fecha-documento.schema.js'
+import { separacionLineaSchema } from './proforma.schema.js'
 
 const dimensionSchema = z.enum(['VARIEDAD', 'ARTICULO', 'CALIBRE', 'CATEGORIA', 'MARCA'])
 
@@ -17,6 +18,7 @@ const lineaSchema = z.object({
   etiquetaId: z.number().int().positive().optional().nullable(),
   cantidadCajas: z.number().int().positive(),
   precioUnitario: z.number().min(0).max(9_999_999_999),
+  separacion: separacionLineaSchema,
 })
 
 // Body para emitir la NC parcial de un reclamo aprobado del embarque.

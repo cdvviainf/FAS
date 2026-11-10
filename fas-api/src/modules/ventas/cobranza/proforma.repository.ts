@@ -142,6 +142,8 @@ const proformaInclude = {
       cantidadCajas: true,
       precioUnitario: true,
       montoLinea: true,
+      separacionDescripcion: true,
+      separacionPrecioUnitario: true,
       // Relaciones para reconstruir la descripción por idioma (ES/EN).
       especie: descSelect,
       variedad: descSelect,
@@ -269,6 +271,8 @@ export interface LineaProformaPersistir {
   cantidadCajas: number
   precioUnitario: number
   montoLinea: number
+  separacionDescripcion: string | null
+  separacionPrecioUnitario: number | null
 }
 
 interface MetaCrearProforma {
@@ -308,6 +312,8 @@ export async function crearProforma(datos: DatosCrearProforma, meta: MetaCrearPr
           cantidadCajas: l.cantidadCajas,
           precioUnitario: l.precioUnitario,
           montoLinea: l.montoLinea,
+          separacionDescripcion: l.separacionDescripcion,
+          separacionPrecioUnitario: l.separacionPrecioUnitario,
         })),
       },
     },

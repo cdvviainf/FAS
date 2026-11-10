@@ -111,13 +111,31 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
     // Detalle a valor FOB: si la cláusula exige Flete/Seguro, el precio unitario
     // cláusula/CIF se lleva a FOB con el factor. Sin flete/seguro el factor es 1
     // y las líneas quedan idénticas al valor cláusula.
-    lineas: proforma.lineas.map((l) => ({
-      // Descripción reconstruida en el idioma del documento (ES/EN).
-      descripcion: descripcionLinea(l, proforma.idioma === 'EN' ? 'EN' : 'ES'),
-      cantidadCajas: l.cantidadCajas,
-      precioUnitario: unitarioFob(Number(l.precioUnitario), factor),
-      montoLinea: round2(Number(l.montoLinea) * factor),
-    })),
+    // "Separar cantidades" (2026-11-10): la sublínea va como fila propia debajo
+    // de su línea de fruta (texto libre, misma cantidad, su valor a FOB). Los
+    // montos de cada fila se redondean por separado, igual que en el DTE 110.
+    lineas: proforma.lineas.flatMap((l) => {
+      const cajas = l.cantidadCajas
+      const precioFruta = unitarioFob(Number(l.precioUnitario), factor)
+      const sep = l.separacionPrecioUnitario == null ? null : Number(l.separacionPrecioUnitario)
+      const fruta = {
+        // Descripción reconstruida en el idioma del documento (ES/EN).
+        descripcion: descripcionLinea(l, proforma.idioma === 'EN' ? 'EN' : 'ES'),
+        cantidadCajas: cajas,
+        precioUnitario: precioFruta,
+        montoLinea: sep == null ? round2(Number(l.montoLinea) * factor) : round2(Number(l.precioUnitario) * cajas * factor),
+      }
+      if (sep == null || !l.separacionDescripcion) return [fruta]
+      return [
+        fruta,
+        {
+          descripcion: l.separacionDescripcion,
+          cantidadCajas: cajas,
+          precioUnitario: unitarioFob(sep, factor),
+          montoLinea: round2(sep * cajas * factor),
+        },
+      ]
+    }),
     montoFlete,
     montoSeguro,
     subtotalFob,

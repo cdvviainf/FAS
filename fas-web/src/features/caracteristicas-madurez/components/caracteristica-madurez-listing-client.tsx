@@ -8,7 +8,7 @@ export function CaracteristicaMadurezListingClient() {
   return (
     <MantenedorListing
       recurso='caracteristicas-madurez'
-      titulo='Característica de Madurez'
+      titulo='Indicador de Madurez'
       extraColumns={caracteristicaMadurezExtraColumns}
       renderEditSheet={({ item, open, onOpenChange }) => (
         <CaracteristicaMadurezFormSheet

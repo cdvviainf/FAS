@@ -158,6 +158,12 @@ export function SolicitudDetalleDialog({ solicitud, open, onOpenChange }: Solici
                   <span className='text-muted-foreground'>{a.usuario.email}</span>
                 </div>
               ))}
+              {solicitud.servicioTercero && (
+                <div className='flex items-center gap-2 text-sm'>
+                  <Badge variant='outline' className='text-xs'>Servicio Tercero</Badge>
+                  <span>{solicitud.servicioTercero}</span>
+                </div>
+              )}
             </div>
           </div>
 

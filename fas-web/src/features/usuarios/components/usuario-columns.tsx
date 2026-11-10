@@ -121,6 +121,11 @@ export const usuarioColumns: ColumnDef<Usuario>[] = [
     cell: ({ row }) => row.original.esResponsableVenta ? <Badge variant='default'>Sí</Badge> : <span className='text-sm text-muted-foreground'>—</span>,
   },
   {
+    id: 'esInspectorCalidad',
+    header: 'Inspector Calidad',
+    cell: ({ row }) => row.original.esInspectorCalidad ? <Badge variant='default'>Sí</Badge> : <span className='text-sm text-muted-foreground'>—</span>,
+  },
+  {
     id: 'puedeEditarCierresAjenos',
     header: 'Edita Cierres de otros',
     cell: ({ row }) => row.original.puedeEditarCierresAjenos ? <Badge variant='default'>Sí</Badge> : <span className='text-sm text-muted-foreground'>—</span>,

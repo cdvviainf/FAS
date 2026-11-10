@@ -33,6 +33,13 @@ export interface ProformaLineaSugerida {
   cantidadCajas: number
   montoLinea: number
   precioUnitario: number
+  // "Separar cantidades": sublínea (texto + valor unitario, misma cantidad).
+  separacion?: SeparacionLinea | null
+}
+
+export interface SeparacionLinea {
+  descripcion: string
+  precioUnitario: number
 }
 
 export interface ProformaLineaInput {
@@ -45,6 +52,7 @@ export interface ProformaLineaInput {
   etiquetaId?: number | null
   cantidadCajas: number
   precioUnitario: number
+  separacion?: SeparacionLinea | null
 }
 
 export interface ProformaLinea {
@@ -53,6 +61,8 @@ export interface ProformaLinea {
   cantidadCajas: number
   precioUnitario: string
   montoLinea: string
+  separacionDescripcion: string | null
+  separacionPrecioUnitario: string | null
 }
 
 export interface Proforma {
@@ -96,6 +106,8 @@ export interface ProformaSugerenciaResponse {
   data: ProformaLineaSugerida[]
   clausula: ClausulaVentaFlags | null
   notaVentaId: number | null
+  // N° de Instructivo del Embarque — "Incluir LOTE" en Observaciones.
+  numeroInstructivo: string | null
   faltantesExtranjera: string[]
 }
 
@@ -129,6 +141,8 @@ export interface FacturaExportacionLinea {
   cantidadCajas: number
   precioUnitario: string
   montoLinea: string
+  separacionDescripcion: string | null
+  separacionPrecioUnitario: string | null
 }
 
 export interface FacturaExportacionCuota {
