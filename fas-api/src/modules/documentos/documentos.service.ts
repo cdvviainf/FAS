@@ -59,11 +59,29 @@ export async function obtenerPreviewHtml(tipo: string, id: number, empresaId: nu
 }
 
 // ─── PDF bajo demanda (sin emitir) ─────────────────────────────────────────
+// Documentos con control de copia (2026-11-11): si ya hay una emisión oficial,
+// se entrega ese PDF (el congelado, sin marca) en vez de uno BORRADOR — la
+// marca BORRADOR solo aplica mientras no se haya emitido el oficial. Se
+// prefiere la emisión más reciente en el idioma pedido; si no hay, la última.
 export async function obtenerPdf(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES', accesos?: AccesosUsuario): Promise<{ buffer: Buffer; nombreArchivo: string }> {
+  const oficial = await pdfOficialSiExiste(tipo, id, idioma)
+  if (oficial) return oficial
   const { def, payload } = await resolverYValidar(tipo, id, empresaId, idioma, accesos)
   const html = armarHtml(def, payload, def.plantillaActual, def.controlCopia ? 'BORRADOR' : undefined)
   const buffer = await renderPdf(html, def.pagina)
   return { buffer, nombreArchivo: def.nombreArchivo(payload) }
+}
+
+async function pdfOficialSiExiste(tipo: string, id: number, idioma: IdiomaDocumento): Promise<{ buffer: Buffer; nombreArchivo: string } | null> {
+  const def = getDefinicionOFallar(tipo)
+  if (!def.controlCopia) return null
+  const emisiones = await repo.listarEmisionesDocumento(tipo, id)
+  if (emisiones.length === 0) return null
+  const idiomaDe = (p: unknown) => (p && typeof p === 'object' ? (p as { idioma?: string }).idioma ?? 'ES' : 'ES')
+  const elegida = emisiones.find((e) => idiomaDe(e.payload) === idioma) ?? emisiones[0]!
+  const emitido = await repo.getDocumentoEmitidoById(elegida.id)
+  if (!emitido) return null
+  return { buffer: Buffer.from(emitido.pdf), nombreArchivo: def.nombreArchivo(emitido.payload as never) }
 }
 
 // Hash de idempotencia — DOC-QA-003 (ronda 1): tiene que ser del PAYLOAD

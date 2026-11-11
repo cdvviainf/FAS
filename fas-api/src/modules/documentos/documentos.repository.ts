@@ -258,6 +258,17 @@ export async function crearDocumentoEmitidoIdempotente(data: DatosDocumentoEmiti
   })
 }
 
+// Emisiones oficiales de un documento, más reciente primero (2026-11-11): la
+// descarga desde el listado entrega el oficial si existe, no el BORRADOR. Sin
+// `pdf` (pesado): se lee después solo el elegido con getDocumentoEmitidoById.
+export async function listarEmisionesDocumento(tipo: string, documentoId: number) {
+  return prisma.documentoEmitido.findMany({
+    where: { tipo, documentoId },
+    select: { id: true, payload: true },
+    orderBy: [{ creadoEn: 'desc' }, { id: 'desc' }],
+  })
+}
+
 export async function getDocumentoEmitidoById(id: number) {
   return prisma.documentoEmitido.findFirst({ where: { id } })
 }
