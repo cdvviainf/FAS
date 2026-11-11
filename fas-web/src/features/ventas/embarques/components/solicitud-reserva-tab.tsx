@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Combobox } from '@/components/ui/combobox'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { inputLocalAIso, isoAInputLocal } from '@/lib/fecha-hora-local'
 import { entidadesService } from '@/features/entidades/service'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { embarquesService } from '../service'
@@ -48,13 +49,6 @@ function soloFecha(iso: string | null): string {
   return iso ? iso.slice(0, 10) : ''
 }
 
-// Valor para un input `datetime-local` (formato `YYYY-MM-DDTHH:mm`, sin zona).
-function soloFechaHora(iso: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 interface DatosInstructivoForm {
   puertoZarpeId: string
@@ -76,7 +70,7 @@ function formInstructivoInicial(embarque: EmbarqueDetalle): DatosInstructivoForm
     voyageNumber: embarque.voyageNumber ?? '',
     deposito: embarque.deposito ?? '',
     awbBl: embarque.awbBl ?? '',
-    cutoffDate: soloFecha(embarque.cutoffDate),
+    cutoffDate: isoAInputLocal(embarque.cutoffDate),
     tipoBultos: embarque.tipoBultos ?? '',
     agenteAduanaId: embarque.agenteAduanaId ? String(embarque.agenteAduanaId) : '',
     embarcadorId: embarque.embarcadorId ? String(embarque.embarcadorId) : '',
@@ -94,7 +88,7 @@ interface RangoForm {
 }
 
 function rangosInicial(embarque: EmbarqueDetalle): RangoForm[] {
-  return embarque.stackingRangos.map((r) => ({ desde: soloFechaHora(r.desde), hasta: soloFechaHora(r.hasta) }))
+  return embarque.stackingRangos.map((r) => ({ desde: isoAInputLocal(r.desde), hasta: isoAInputLocal(r.hasta) }))
 }
 
 export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle }) {
@@ -195,7 +189,7 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
         toast.error('En cada rango de Stacking, "hasta" debe ser posterior a "desde"')
         return null
       }
-      completos.push({ desde: r.desde, hasta: r.hasta })
+      completos.push({ desde: inputLocalAIso(r.desde), hasta: inputLocalAIso(r.hasta) })
     }
     return completos
   }
@@ -227,7 +221,7 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
         voyageNumber: formInstructivo.voyageNumber || null,
         deposito: formInstructivo.deposito || null,
         awbBl: formInstructivo.awbBl || null,
-        cutoffDate: formInstructivo.cutoffDate || null,
+        cutoffDate: inputLocalAIso(formInstructivo.cutoffDate),
         tipoBultos: formInstructivo.tipoBultos || null,
         agenteAduanaId: formInstructivo.agenteAduanaId ? Number(formInstructivo.agenteAduanaId) : null,
         embarcadorId: formInstructivo.embarcadorId ? Number(formInstructivo.embarcadorId) : null,
@@ -392,7 +386,7 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
         </div>
         <div className='space-y-1.5'>
           <Label>Cutoff</Label>
-          <Input type='date' value={formInstructivo.cutoffDate} onChange={(e) => setFormInstructivo((f) => ({ ...f, cutoffDate: e.target.value }))} disabled={!puedeEscribir} />
+          <Input type='datetime-local' value={formInstructivo.cutoffDate} onChange={(e) => setFormInstructivo((f) => ({ ...f, cutoffDate: e.target.value }))} disabled={!puedeEscribir} />
         </div>
       </div>
 

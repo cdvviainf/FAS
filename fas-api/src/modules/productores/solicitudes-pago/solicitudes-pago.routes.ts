@@ -7,6 +7,7 @@ import { ITEM_SOLICITUD_PAGO as ITEM, ITEM_SOLICITUD_PAGO_CONFIRMAR as ITEM_CONF
 // = TOTAL en la pantalla; confirmar pago = permiso aparte (ACCION).
 export async function solicitudesPagoRoutes(app: FastifyInstance) {
   app.get('/solicitudes-pago/despachado', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.despachado)
+  app.get('/solicitudes-pago/pendientes', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.pendientes)
   app.get('/solicitudes-pago', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
   app.get('/solicitudes-pago/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
   app.post('/solicitudes-pago', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)

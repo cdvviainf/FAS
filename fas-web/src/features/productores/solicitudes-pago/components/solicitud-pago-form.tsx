@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -46,7 +46,7 @@ function lineasDesdeSeleccion(grupos: GrupoDespachado[], seleccion: Record<strin
   return { lineas, total: Math.round(total * 100) / 100, error: null }
 }
 
-export function SolicitudPagoForm({ solicitudId }: { solicitudId?: number }) {
+export function SolicitudPagoForm({ solicitudId, prefill }: { solicitudId?: number; prefill?: { productorId: number; cuotas: string[] } }) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { temporada } = useTemporada()
@@ -62,7 +62,7 @@ export function SolicitudPagoForm({ solicitudId }: { solicitudId?: number }) {
   const solicitud: SolicitudPago | undefined = detalle?.data
   const editable = !isEdit || (solicitud?.estado === 'SOLICITADA' && puedeEscribir)
 
-  const [productorId, setProductorId] = useState<number | null>(null)
+  const [productorId, setProductorId] = useState<number | null>(prefill?.productorId ?? null)
   const [observaciones, setObservaciones] = useState('')
   const [seleccion, setSeleccion] = useState<Record<string, string>>({})
   const [confirmarOpen, setConfirmarOpen] = useState(false)
@@ -106,6 +106,22 @@ export function SolicitudPagoForm({ solicitudId }: { solicitudId?: number }) {
     enabled: productorId != null && temporadaIdDespachado != null && editable,
   })
   const grupos = useMemo(() => despachadoData?.data ?? [], [despachadoData])
+
+  // Prellenado desde "Pendientes de pago": marca las cuotas elegidas con su saldo (una sola vez).
+  const prefillAplicado = useRef(false)
+  useEffect(() => {
+    if (isEdit || !prefill || prefillAplicado.current || !despachadoData) return
+    prefillAplicado.current = true
+    const elegidas = new Set(prefill.cuotas)
+    const next: Record<string, string> = {}
+    for (const g of grupos) {
+      for (const c of g.cuotas) {
+        const k = claveCuota(g.ordenCompra.id, g.embarque.id, c.ordenCompraCuotaPagoId)
+        if (elegidas.has(k) && !c.bloqueada && c.saldo > 0) next[k] = String(c.saldo)
+      }
+    }
+    setSeleccion(next)
+  }, [isEdit, prefill, despachadoData, grupos])
   const { total, error: errorSeleccion } = lineasDesdeSeleccion(grupos, seleccion)
   const monedasSeleccion = new Set(
     grupos.filter((g) => g.cuotas.some((c) => claveCuota(g.ordenCompra.id, g.embarque.id, c.ordenCompraCuotaPagoId) in seleccion)).map((g) => g.ordenCompra.moneda.codigo),

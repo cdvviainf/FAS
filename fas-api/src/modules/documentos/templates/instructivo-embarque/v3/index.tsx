@@ -30,12 +30,22 @@ const columnas: ColumnaTabla<Linea>[] = [
 // por Embarque completo — ver resolvers/instructivo-embarque.resolver.ts.
 type Actor = NonNullable<InstructivoEmbarquePdfPayload['consignatario']>
 
+// Identificación fiscal (2026-11-11): nacional → RUT, extranjero → TaxId.
+// Payloads anteriores sin `esNacional` muestran ambos, como antes.
+function idFiscal(a: { rut: string | null; taxId: string | null; esNacional?: boolean }) {
+  if (a.esNacional === true) return [{ label: 'RUT', valor: fmt.rut(a.rut) }]
+  if (a.esNacional === false) return [{ label: 'TaxId', valor: a.taxId ?? '—' }]
+  return [
+    { label: 'RUT', valor: fmt.rut(a.rut) },
+    { label: 'TaxId', valor: a.taxId ?? '—' },
+  ]
+}
+
 // Datos completos de un actor (Consignatario/Notify) que exige la AGA.
 function camposActor(a: Actor) {
   return [
     { label: 'Razón social', valor: a.razonSocial },
-    { label: 'RUT', valor: fmt.rut(a.rut) },
-    { label: 'TaxId', valor: a.taxId ?? '—' },
+    ...idFiscal(a),
     { label: 'Dirección', valor: a.direccion ?? '—' },
     { label: 'Teléfono', valor: a.telefono ?? '—' },
     { label: 'Contacto', valor: [a.contacto, a.contactoTelefono].filter(Boolean).join(' · ') || '—' },
@@ -81,51 +91,41 @@ export function InstructivoEmbarqueV3({ d, marcaAgua, marcaAguaFecha }: { d: Ins
           titulo='Cliente'
           campos={[
             { label: 'Razón social', valor: d.cliente.razonSocial },
-            { label: 'RUT', valor: fmt.rut(d.cliente.rut) },
-            { label: 'TaxId', valor: d.cliente.taxId ?? '—' },
+            ...idFiscal(d.cliente),
             { label: 'Dirección', valor: d.cliente.direccion ?? '—' },
           ]}
         />
       </div>
 
-      {/* Consignatario (AGA) — sólo cuando difiere del Cliente, con sus datos
-          completos. Notify (v3, 2026-11-10): TODOS los asociados al Cliente en
-          su ficha, en orden; si el propio cliente actúa como Notify va primero
-          sin repetir sus datos (ya están en el bloque Cliente). */}
+      {/* Consignatario (izquierda) | Notify (derecha) — 2026-11-11. El
+          Consignatario siempre se muestra con sus datos completos; si es el
+          propio cliente, con los datos del cliente. Notify: TODOS los asociados
+          al Cliente en su ficha, en orden, apilados en la columna derecha; si
+          el propio cliente actúa como Notify va primero sin repetir sus datos. */}
       {(() => {
         const notifies = d.notifies ?? []
-        const grupos = [
-          ...(d.consignatario
-            ? [
-                <GrupoCampos
-                  key='consignatario'
-                  titulo='Consignatario'
-                  campos={camposActor(d.consignatario)}
-                />,
-              ]
-            : []),
-          ...(d.clienteEsNotify
-            ? [
-                <GrupoCampos
-                  key='notify-cliente'
-                  titulo={notifies.length > 0 ? 'Notify 1' : 'Notify'}
-                  campos={[{ label: 'Razón social', valor: `${d.cliente.razonSocial} (el mismo cliente)` }]}
-                />,
-              ]
-            : []),
-          ...notifies.map((n, i) => {
-            const total = notifies.length + (d.clienteEsNotify ? 1 : 0)
-            const numero = i + 1 + (d.clienteEsNotify ? 1 : 0)
-            return <GrupoCampos key={`notify-${i}`} titulo={total > 1 ? `Notify ${numero}` : 'Notify'} campos={camposActor(n)} />
-          }),
-        ]
-        const filas: (typeof grupos)[] = []
-        for (let k = 0; k < grupos.length; k += 2) filas.push(grupos.slice(k, k + 2))
-        return filas.map((fila, k) => (
-          <div key={`fila-actores-${k}`} className='doc-fila-grupos'>
-            {fila}
+        const total = notifies.length + (d.clienteEsNotify ? 1 : 0)
+        const tituloNotify = (n: number) => (total > 1 ? `Notify ${n}` : 'Notify')
+        const consignatario = d.consignatario ?? d.clienteCompleto ?? null
+        return (
+          <div className='doc-fila-grupos'>
+            <div>
+              {consignatario ? (
+                <GrupoCampos titulo='Consignatario' campos={camposActor(consignatario)} />
+              ) : (
+                <GrupoCampos titulo='Consignatario' campos={[{ label: 'Razón social', valor: `${d.cliente.razonSocial} (el mismo cliente)` }]} />
+              )}
+            </div>
+            <div>
+              {d.clienteEsNotify && (
+                <GrupoCampos titulo={tituloNotify(1)} campos={[{ label: 'Razón social', valor: `${d.cliente.razonSocial} (el mismo cliente)` }]} />
+              )}
+              {notifies.map((n, i) => (
+                <GrupoCampos key={`notify-${i}`} titulo={tituloNotify(i + 1 + (d.clienteEsNotify ? 1 : 0))} campos={camposActor(n)} />
+              ))}
+            </div>
           </div>
-        ))
+        )
       })()}
 
       {/* Tipo de venta: sección propia en la columna izquierda, sobre Planta de
@@ -180,7 +180,7 @@ export function InstructivoEmbarqueV3({ d, marcaAgua, marcaAguaFecha }: { d: Ins
           campos={[
             { label: 'AWB / BL', valor: d.awbBl ?? '—' },
             { label: 'Depósito', valor: d.deposito ?? '—' },
-            { label: 'Cutoff', valor: d.cutoffDate ? fmt.fecha(d.cutoffDate) : '—' },
+            { label: 'Cutoff', valor: d.cutoffDate ? fmt.fechaHora(d.cutoffDate) : '—' },
             { label: 'Tipo de bultos', valor: d.tipoBultos ?? '—' },
             { label: 'Agente de aduana', valor: d.agenteAduana ?? '—' },
             { label: 'Embarcador', valor: d.embarcador ?? '—' },

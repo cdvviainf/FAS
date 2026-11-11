@@ -11,6 +11,13 @@ export const despachadoQuerySchema = z.object({
   excluirSolicitudId: idPos.optional(),
 })
 
+// Pendientes de pago: lo despachado con saldo por cuota, de todos los
+// productores (o uno) en OC de la temporada indicada (= temporada activa).
+export const pendientesQuerySchema = z.object({
+  temporadaId: idPos,
+  entidadProductorId: idPos.optional(),
+})
+
 export const solicitudesListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(200).default(20),
@@ -62,6 +69,7 @@ export const confirmarPagoSchema = z.object({
 })
 
 export type DespachadoQuery = z.infer<typeof despachadoQuerySchema>
+export type PendientesQuery = z.infer<typeof pendientesQuerySchema>
 export type SolicitudesListQuery = z.infer<typeof solicitudesListQuerySchema>
 export type SolicitudCreateBody = z.infer<typeof solicitudCreateSchema>
 export type SolicitudUpdateBody = z.infer<typeof solicitudUpdateSchema>

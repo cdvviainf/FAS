@@ -18,6 +18,7 @@ function actorCompleto(ent: EntidadDocumento) {
     telefono: ent.telefono ?? null,
     contacto: ent.contactos[0]?.nombre ?? null,
     contactoTelefono: ent.contactos[0]?.telefono ?? null,
+    esNacional: ent.pais?.esPaisNacional ?? false,
   }
 }
 
@@ -86,7 +87,9 @@ export async function resolverInstructivoEmbarque(id: number, empresaId: number)
       rut: cliente?.identificador ?? null,
       taxId: cliente?.taxId ?? null,
       direccion: cliente?.direcciones[0]?.direccion ?? null,
+      esNacional: cliente?.pais?.esPaisNacional ?? false,
     },
+    clienteCompleto: actorCompleto(cliente),
     // Venta NACIONAL (2026-10-17): el exportador es el cliente (exportadora),
     // no la empresa. En exportación queda null (exporta la empresa emisora).
     exportador:

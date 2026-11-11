@@ -11,7 +11,8 @@ const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 // ─── Despachado ──────────────────────────────────────────────────────────────
 
 export interface FiltrosDespachado {
-  entidadProductorId: number
+  // Sin productor = todos (listado de pendientes de pago).
+  entidadProductorId?: number
   ordenCompraId?: number
   embarqueId?: number
   temporadaId?: number
@@ -33,7 +34,7 @@ export async function getPalletsDespachados(f: FiltrosDespachado, db: Tx | typeo
         eliminadoEn: null,
         ordenCompra: {
           eliminadoEn: null,
-          entidadProductorId: f.entidadProductorId,
+          ...(f.entidadProductorId ? { entidadProductorId: f.entidadProductorId } : {}),
           ...(f.ordenCompraId ? { id: f.ordenCompraId } : {}),
           ...(f.temporadaId ? { temporadaId: f.temporadaId } : {}),
         },
@@ -85,6 +86,7 @@ export async function getOrdenesParaPago(ids: number[], db: Tx | typeof prisma =
       id: true,
       numero: true,
       modalidad: true,
+      entidadProductor: { select: { id: true, codigo: true, razonSocial: true } },
       monedaId: true,
       moneda: { select: mantenedorSelect },
       temporadaId: true,

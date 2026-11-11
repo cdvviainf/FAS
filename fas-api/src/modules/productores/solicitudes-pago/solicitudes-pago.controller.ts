@@ -3,6 +3,7 @@ import * as service from './solicitudes-pago.service.js'
 import {
   confirmarPagoSchema,
   despachadoQuerySchema,
+  pendientesQuerySchema,
   solicitudCreateSchema,
   solicitudesListQuerySchema,
   solicitudParamsSchema,
@@ -13,6 +14,11 @@ import { ITEM_SOLICITUD_PAGO_CONFIRMAR } from './solicitudes-pago.types.js'
 export async function despachado(req: FastifyRequest, reply: FastifyReply) {
   const q = despachadoQuerySchema.parse(req.query)
   return reply.send({ data: await service.calcularDespachado(q) })
+}
+
+export async function pendientes(req: FastifyRequest, reply: FastifyReply) {
+  const q = pendientesQuerySchema.parse(req.query)
+  return reply.send({ data: await service.listarPendientes(q) })
 }
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {

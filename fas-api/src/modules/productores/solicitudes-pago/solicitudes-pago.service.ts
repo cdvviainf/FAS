@@ -5,7 +5,7 @@ import { temporadaParaCrear } from '../../../shared/temporada-documento.js'
 import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 import * as repo from './solicitudes-pago.repository.js'
 import { calcularGrupo, claveCuota, type CuotaOc, type FechaReferencia, type LineaPalletDespachada } from './solicitudes-pago.calculo.js'
-import type { ConfirmarPagoBody, DespachadoQuery, SolicitudCreateBody, SolicitudesListQuery, SolicitudUpdateBody } from './solicitudes-pago.schema.js'
+import type { ConfirmarPagoBody, PendientesQuery, SolicitudCreateBody, SolicitudesListQuery, SolicitudUpdateBody } from './solicitudes-pago.schema.js'
 
 type Tx = Prisma.TransactionClient
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -13,7 +13,7 @@ const TX_OPTS = { timeout: 30_000, maxWait: 10_000 }
 
 // ─── Lo despachado por OC × Embarque, con sus cuotas y saldos ────────────────
 
-export async function calcularDespachado(f: DespachadoQuery, db: Tx | typeof prisma = prisma) {
+export async function calcularDespachado(f: repo.FiltrosDespachado & { excluirSolicitudId?: number }, db: Tx | typeof prisma = prisma) {
   const pallets = await repo.getPalletsDespachados(f, db)
   const ocIds = [...new Set(pallets.map((p) => p.recepcion.ordenCompraId).filter((x): x is number => x != null))]
   const [ordenes, solicitado] = await Promise.all([
@@ -92,6 +92,7 @@ export async function calcularDespachado(f: DespachadoQuery, db: Tx | typeof pri
     )
     const bloqueado = r.bloqueos.length > 0
     return {
+      productor: oc.entidadProductor,
       ordenCompra: { id: oc.id, numero: oc.numero, moneda: oc.moneda, monedaId: oc.monedaId, condicionPago: oc.condicionPago },
       embarque: { id: emb.id, numeroInstructivo: emb.numeroInstructivo, fechaZarpe, fechaArribo: emb.fechaArribo },
       pallets: g.pallets.size,
@@ -106,6 +107,15 @@ export async function calcularDespachado(f: DespachadoQuery, db: Tx | typeof pri
       }),
     }
   })
+}
+
+// Pendientes de pago: grupos con al menos una cuota con saldo (los bloqueados
+// por precio pendiente también se listan, para que se vea por qué no se pagan).
+export async function listarPendientes(f: PendientesQuery) {
+  const grupos = await calcularDespachado({ entidadProductorId: f.entidadProductorId, temporadaId: f.temporadaId })
+  return grupos
+    .filter((g) => g.cuotas.some((c) => c.saldo > 0.005))
+    .sort((a, b) => a.productor.razonSocial.localeCompare(b.productor.razonSocial) || a.ordenCompra.numero.localeCompare(b.ordenCompra.numero))
 }
 
 type GrupoDespachado = Awaited<ReturnType<typeof calcularDespachado>>[number]

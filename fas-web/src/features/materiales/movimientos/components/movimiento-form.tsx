@@ -22,6 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertModal } from '@/components/modal/alert-modal'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { isoAInputLocal } from '@/lib/fecha-hora-local'
 import { entidadesService } from '@/features/entidades/service'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { articulosService } from '../../articulos/service'
@@ -179,8 +180,8 @@ export function MovimientoForm({ movimientoId }: MovimientoFormProps) {
       choferNombre: movimiento.choferNombre ?? '',
       placaCamion: movimiento.placaCamion ?? '',
       placaRemolque: movimiento.placaRemolque ?? '',
-      horaSalida: movimiento.horaSalida ? movimiento.horaSalida.slice(0, 16) : '',
-      horaEstimadaLlegada: movimiento.horaEstimadaLlegada ? movimiento.horaEstimadaLlegada.slice(0, 16) : '',
+      horaSalida: isoAInputLocal(movimiento.horaSalida),
+      horaEstimadaLlegada: isoAInputLocal(movimiento.horaEstimadaLlegada),
     })
   }, [movimiento])
 

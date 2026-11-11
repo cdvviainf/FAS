@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { Icons } from '@/components/icons'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
+import { inputLocalAIso, isoAInputLocal } from '@/lib/fecha-hora-local'
 import { DocumentoPreviewDialog } from '@/features/documentos/components/documento-preview-dialog'
 import { embarquesService } from '../service'
 import { embarquesKeys } from '../queries'
@@ -25,16 +26,6 @@ import type { EmbarqueDetalle, InstructivoHijo, InstructivoHijoUpdateInput } fro
 
 const ITEM = 'VENTAS_EMBARQUES'
 
-// Valor para un input `datetime-local` (formato `YYYY-MM-DDTHH:mm`, sin
-// zona) — FAS-IE-QA-002 (QA ronda 1): R11 exige fecha/hora para los hitos
-// por planta, no solo fecha; la columna en BD ya es DateTime completo, esto
-// deja de truncarla en la captura.
-function soloFechaHora(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 // Edición de un InstructivoHijo (hitos por Planta, ventas.md R11) — la
 // pertenencia (planta/secuencia/código) es siempre derivada, nunca editable.
@@ -51,7 +42,7 @@ function InstructivoHijoEditDialog({
 }) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState(() => ({
-    fechaCargaPlanta: soloFechaHora(instructivo.fechaCargaPlanta),
+    fechaCargaPlanta: isoAInputLocal(instructivo.fechaCargaPlanta),
     observaciones: instructivo.observaciones ?? '',
   }))
 
@@ -89,7 +80,7 @@ function InstructivoHijoEditDialog({
             isLoading={mutation.isPending}
             onClick={() =>
               mutation.mutate({
-                fechaCargaPlanta: form.fechaCargaPlanta || null,
+                fechaCargaPlanta: inputLocalAIso(form.fechaCargaPlanta),
                 observaciones: form.observaciones || null,
               })
             }

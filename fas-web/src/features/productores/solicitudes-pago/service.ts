@@ -9,6 +9,11 @@ export const solicitudesPagoService = {
     if (params.excluirSolicitudId) sp.excluirSolicitudId = String(params.excluirSolicitudId)
     return api.get(`${BASE}/despachado`, { searchParams: sp }).json()
   },
+  async pendientes(params: { temporadaId: number; entidadProductorId?: number }): Promise<{ data: GrupoDespachado[] }> {
+    const sp: Record<string, string> = { temporadaId: String(params.temporadaId) }
+    if (params.entidadProductorId) sp.entidadProductorId = String(params.entidadProductorId)
+    return api.get(`${BASE}/pendientes`, { searchParams: sp }).json()
+  },
   async list(params: { page?: number; limit?: number; q?: string; estado?: EstadoSolicitudPago } = {}): Promise<SolicitudPagoListResponse> {
     const sp: Record<string, string> = {}
     if (params.page) sp.page = String(params.page)
@@ -40,6 +45,7 @@ export const solicitudesPagoService = {
 export const solicitudesPagoKeys = {
   all: ['solicitudes-pago'] as const,
   list: (p: object) => ['solicitudes-pago', 'list', p] as const,
+  pendientes: (temporadaId: number) => ['solicitudes-pago', 'pendientes', temporadaId] as const,
   detalle: (id: number) => ['solicitudes-pago', 'detalle', id] as const,
   despachado: (productorId: number, temporadaId: number, excluir?: number) => ['solicitudes-pago', 'despachado', productorId, temporadaId, excluir ?? null] as const,
 }

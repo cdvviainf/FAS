@@ -71,6 +71,8 @@ const entidadDocumentoSelect = {
   razonSocial: true,
     identificador: true,
     taxId: true,
+    // Nacional (Chile) → RUT; extranjero → TaxId (Instructivo v3, 2026-11-11).
+    pais: { select: { esPaisNacional: true } },
     // telefono de la entidad + datos del contacto (nombre/teléfono): usados
     // por la AGA en el Instructivo para Notify/Consignatario (2026-10-12).
     telefono: true,

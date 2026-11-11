@@ -46,6 +46,7 @@ export interface CuotaDespachada {
 }
 
 export interface GrupoDespachado {
+  productor: { id: number; codigo: string; razonSocial: string }
   ordenCompra: { id: number; numero: string; moneda: Ref; monedaId: number; condicionPago: Ref | null }
   embarque: { id: number; numeroInstructivo: string; fechaZarpe: string | null; fechaArribo: string | null }
   pallets: number

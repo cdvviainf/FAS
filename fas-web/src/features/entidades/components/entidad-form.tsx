@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -202,7 +203,8 @@ function DireccionDialog({ open, initial, defaultPaisId, onClose, onSave, isSavi
           </div>
           <div className='space-y-1.5'>
             <Label>Dirección <span className='text-destructive'>*</span></Label>
-            <Input
+            <Textarea
+              rows={3}
               value={form.direccion}
               onChange={(e) => setForm((f) => ({ ...f, direccion: e.target.value }))}
               placeholder='Ej: Av. Los Leones 1234, Providencia'

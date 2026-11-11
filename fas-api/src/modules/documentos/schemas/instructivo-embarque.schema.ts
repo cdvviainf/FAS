@@ -10,6 +10,9 @@ const actorCompletoSchema = z.object({
   telefono: z.string().nullable(),
   contacto: z.string().nullable(),
   contactoTelefono: z.string().nullable(),
+  // Nacional → se muestra RUT; extranjero → TaxId (2026-11-11). Opcional por
+  // payloads anteriores (sin el dato se muestran ambos).
+  esNacional: z.boolean().optional(),
 })
 
 // Payload del Instructivo de Embarque (InstructivoHijo, ventas.md R11) en
@@ -38,7 +41,11 @@ export const instructivoEmbarquePdfPayloadSchema = z.object({
     rut: z.string().nullable(),
     taxId: z.string().nullable(),
     direccion: z.string().nullable(),
+    esNacional: z.boolean().optional(),
   }),
+  // Cliente con datos completos: el bloque Consignatario lo usa cuando el
+  // consignatario es el propio cliente (2026-11-11).
+  clienteCompleto: actorCompletoSchema.nullable().optional(),
   // Exportador: en ventas NACIONALES el exportador es el cliente (exportadora),
   // no la empresa (2026-10-17). null en exportación (exporta la empresa emisora).
   exportador: z

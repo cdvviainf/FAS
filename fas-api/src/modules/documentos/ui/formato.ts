@@ -26,7 +26,9 @@ export const fmt = {
     // LOCAL evita el corrimiento de un día por huso horario.
     return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('es-CL')
   },
-  fechaHora: (iso: string) => new Date(iso).toLocaleString('es-CL'),
+  // Hora de Chile explícita (2026-11-11): el servidor corre en UTC y sin
+  // timeZone el PDF mostraba la hora desplazada (+3 h).
+  fechaHora: (iso: string) => new Date(iso).toLocaleString('es-CL', { timeZone: 'America/Santiago' }),
   rut: (rut: string | null | undefined) => rut ?? '—',
   // Por idioma del documento (2026-11-06, OC v3): EN usa separadores en-US
   // (1,080.00) y fecha "Oct 3, 2026"; ES usa es-CL (1.080,00) y "3 oct 2026".

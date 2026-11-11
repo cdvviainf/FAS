@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Icons } from '@/components/icons'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatFechaCorta, formatMonto } from '@/lib/format'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { solicitudesPagoKeys, solicitudesPagoService } from '../service'
 import { ESTADO_SOLICITUD_PAGO_LABELS, ITEM_SOLICITUD_PAGO } from '../types'
 import type { EstadoSolicitudPago } from '../types'
+import { PendientesPagoClient } from './pendientes-pago-client'
 
 export const ESTADO_VARIANT: Record<EstadoSolicitudPago, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   SOLICITADA: 'secondary',
@@ -21,7 +22,26 @@ export const ESTADO_VARIANT: Record<EstadoSolicitudPago, 'default' | 'secondary'
   ANULADA: 'destructive',
 }
 
+// Como el resto de las pantallas: por defecto lista lo pendiente de pago; las
+// solicitudes ya emitidas quedan en su propia pestaña.
 export function SolicitudPagoListingClient() {
+  return (
+    <Tabs defaultValue='pendientes' className='space-y-3'>
+      <TabsList>
+        <TabsTrigger value='pendientes'>Pendientes de pago</TabsTrigger>
+        <TabsTrigger value='solicitudes'>Solicitudes</TabsTrigger>
+      </TabsList>
+      <TabsContent value='pendientes'>
+        <PendientesPagoClient />
+      </TabsContent>
+      <TabsContent value='solicitudes'>
+        <SolicitudesListado />
+      </TabsContent>
+    </Tabs>
+  )
+}
+
+function SolicitudesListado() {
   const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM_SOLICITUD_PAGO)
   const [q, setQ] = useState('')
@@ -64,11 +84,6 @@ export function SolicitudPagoListingClient() {
             </Select>
           </div>
         </div>
-        {puedeEscribir && (
-          <Button onClick={() => router.push('/dashboard/productores/pagos/nueva')}>
-            <Icons.add className='mr-1 h-4 w-4' /> Nueva Solicitud
-          </Button>
-        )}
       </div>
 
       {isPending ? (
