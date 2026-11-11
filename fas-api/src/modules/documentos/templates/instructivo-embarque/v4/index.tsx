@@ -10,7 +10,7 @@ import type { InstructivoEmbarquePdfPayload } from '../../../schemas/instructivo
 // + Notify (+ Cliente solo en venta NACIONAL); Términos comerciales; Origen /
 // Planta (con CSP) | Destino; Transporte | Documentación; Hitos | Observaciones.
 // Hoja 2: Detalle de carga, Resumen (total pallets = folios distintos),
-// Instrucciones especiales y firmas. Sin imagen de producto.
+// Instrucciones especiales (sin firmas, 2026-11-11). Sin imagen de producto.
 // RUT si la entidad es nacional, TaxId si es extranjera.
 // v1–v3 quedan congeladas para reimpresiones (Etapa 4 §8).
 
@@ -39,7 +39,7 @@ const T = {
     calibre: 'Calibre', articulo: 'Embalaje / Artículo', productor: 'Productor', cajas: 'Cajas',
     pesoNeto: 'Peso neto (kg)', pesoBruto: 'Peso bruto (kg)', total: 'TOTAL',
     resumen: 'RESUMEN', totalPallets: 'Total pallets', totalCajas: 'Total cajas', totalNeto: 'Peso neto', totalBruto: 'Peso bruto',
-    instrucciones: 'INSTRUCCIONES ESPECIALES', firmaPlanta: 'Planta / Packing',
+    instrucciones: 'INSTRUCCIONES ESPECIALES',
     pie: 'Documento generado electrónicamente',
     legal: 'Este instructivo de embarque es emitido electrónicamente por {e} y está sujeto a los términos y condiciones del contrato de venta.',
   },
@@ -63,7 +63,7 @@ const T = {
     calibre: 'Size', articulo: 'Packaging / Article', productor: 'Producer', cajas: 'Boxes',
     pesoNeto: 'Net weight (kg)', pesoBruto: 'Gross weight (kg)', total: 'TOTAL',
     resumen: 'SUMMARY', totalPallets: 'Total pallets', totalCajas: 'Total boxes', totalNeto: 'Net weight', totalBruto: 'Gross weight',
-    instrucciones: 'SPECIAL INSTRUCTIONS', firmaPlanta: 'Plant / Packing facility',
+    instrucciones: 'SPECIAL INSTRUCTIONS',
     pie: 'Electronically generated document',
     legal: 'This Shipping Instruction is issued electronically by {e} and is subject to the terms and conditions of the sales contract.',
   },
@@ -351,18 +351,6 @@ export function InstructivoEmbarqueV4({ d, marcaAgua, marcaAguaFecha }: { d: Ins
             </Seccion>
           </div>
 
-          <div className='oc3-firmas'>
-            <div className='oc3-firma'>
-              <div className='oc3-firma-espacio' />
-              <div className='oc3-firma-linea' />
-              <div>{exportador.razonSocial}</div>
-            </div>
-            <div className='oc3-firma'>
-              <div className='oc3-firma-espacio' />
-              <div className='oc3-firma-linea' />
-              <div>{L.firmaPlanta}</div>
-            </div>
-          </div>
           <p className='ie4-legal'>{L.legal.replace('{e}', exportador.razonSocial)}</p>
         </div>
       </div>
