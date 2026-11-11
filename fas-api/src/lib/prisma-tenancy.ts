@@ -107,6 +107,8 @@ const MODELOS_TENANT = new Set([
   'DocumentoManual',
   // Solicitud de Pago a Productores (2026-11-10). Las líneas cuelgan de la raíz.
   'SolicitudPago',
+  // Visor de correos enviados (2026-11-11).
+  'CorreoEnviado',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

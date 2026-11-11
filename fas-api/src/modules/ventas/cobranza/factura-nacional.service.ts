@@ -533,6 +533,7 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
       `El cliente no tiene ${validacion.receptor.faltantes.map((f) => f.toLowerCase()).join(', ')} — complétalo en Entidades antes de enviar al SII`,
     )
   }
+  const cuotasDte = await construirCuotasNacional(factura, factura.fechaDocumento ?? new Date())
   const payload = mapFacturaNacionalADte({
     tipoDte: factura.tipoDte,
     fechaEmision: factura.fechaDocumento,
@@ -554,11 +555,15 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
     // Fecha de vencimiento y cuotas al SII (2026-11-09): mismas cuotas que se
     // generan al firmar (Condición de Pago, referencia FACTURA = fecha del
     // documento); las de zarpe/arribo/envío sin fecha conocida no se informan.
-    cuotas: (await construirCuotasNacional(factura, factura.fechaDocumento ?? new Date())).map((c) => ({
+    cuotas: cuotasDte.map((c) => ({
       glosa: `Cuota ${c.numeroCuota}`,
       fechaVencimiento: c.fechaVencimiento ? c.fechaVencimiento.toISOString().slice(0, 10) : null,
       monto: Math.round(c.montoCuota),
     })),
+    // Condición de pago (2026-11-11): Contado si vence el mismo día de la emisión.
+    fmaPago: condicionPagoSii(cuotasDte, factura.fechaDocumento ?? new Date()).fmaPago,
+    // Proforma a Productor: sin MntPagos, solo FchVenc (2026-11-11).
+    omitirMntPagos: factura.origenClase === 'PROFORMA_PRODUCTOR',
   })
 
   const versionAlLeer = factura.actualizadoEn?.getTime() ?? null
@@ -737,6 +742,23 @@ async function construirCuotasNacional(
   )
 }
 
+// Condición de pago de la Factura Nacional (2026-11-11, decisión del usuario):
+// CONTADO si la fecha de vencimiento (última cuota) es la misma que la de
+// emisión, o si no hay cuotas; CRÉDITO en cualquier otro caso (incluida una
+// cuota sin fecha conocida, p. ej. desde zarpe). → IdDoc.FmaPago 1/2.
+export function condicionPagoSii(
+  cuotas: Array<{ fechaVencimiento: Date | null }>,
+  fechaEmision: Date,
+): { fmaPago: 1 | 2; etiqueta: 'Contado' | 'Crédito'; fechaVencimiento: Date | null } {
+  if (cuotas.length === 0) return { fmaPago: 1, etiqueta: 'Contado', fechaVencimiento: fechaEmision }
+  if (cuotas.some((c) => c.fechaVencimiento == null)) return { fmaPago: 2, etiqueta: 'Crédito', fechaVencimiento: null }
+  const vence = cuotas.reduce((max, c) => (c.fechaVencimiento!.getTime() > max.getTime() ? c.fechaVencimiento! : max), cuotas[0].fechaVencimiento!)
+  const mismoDia = vence.toISOString().slice(0, 10) === fechaEmision.toISOString().slice(0, 10)
+  return mismoDia
+    ? { fmaPago: 1, etiqueta: 'Contado', fechaVencimiento: vence }
+    : { fmaPago: 2, etiqueta: 'Crédito', fechaVencimiento: vence }
+}
+
 // ─── Lecturas / anulación ─────────────────────────────────────────────────────
 // Resumen pre-vuelo (2026-11-07) de los datos de emisor y receptor que van en el
 // DTE 33/34 — mismo criterio que la Guía de despacho y el Generador DTE: el
@@ -788,10 +810,19 @@ export async function obtenerFactura(id: number) {
     dteService.obtenerDocumentoDte(ORIGEN_TIPO, factura.id),
     dteRepo.getEmpresaParaDte(factura.empresaId),
   ])
+  // Condición de pago (Contado/Crédito) — misma regla y misma fecha que el DTE:
+  // la fecha del documento (FAS-FN-FMAPAGO-001). La fecha de firma solo como
+  // respaldo para facturas antiguas sin fecha del documento.
+  const fechaCond = factura.fechaDocumento ?? factura.fechaEmision ?? new Date()
+  const condicion = condicionPagoSii(await construirCuotasNacional(factura, fechaCond), fechaCond)
   return {
     ...factura,
     dte: dte ? { estado: dte.estado, folio: dte.folio, tieneXml: !!dte.xml } : null,
     validacion: construirValidacionFacturaNacional(factura, emisor),
+    condicionPagoSii: {
+      etiqueta: condicion.etiqueta,
+      fechaVencimiento: condicion.fechaVencimiento ? condicion.fechaVencimiento.toISOString() : null,
+    },
   }
 }
 

@@ -53,6 +53,12 @@ export async function remove(req: FastifyRequest, reply: FastifyReply) {
   return reply.status(204).send()
 }
 
+export async function reabrir(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = recepcionParamsSchema.parse(req.params)
+  const recepcion = await service.reabrirRecepcion(id, req.fasUserId!)
+  return reply.send({ data: recepcion })
+}
+
 // ─── Adjuntos ──────────────────────────────────────────────────────────────
 
 export async function subirAdjunto(req: FastifyRequest, reply: FastifyReply) {

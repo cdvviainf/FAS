@@ -2,7 +2,9 @@ import type { Job } from 'bullmq'
 import { createQueue, createWorker } from '../../lib/queue.js'
 import { enviarCorreo } from '../../lib/mailer.js'
 import type { AdjuntoCorreo } from '../../lib/mailer.js'
+import { randomUUID } from 'node:crypto'
 import { empresaContext } from '../../lib/empresa-context.js'
+import * as repo from './correos.repository.js'
 
 export interface CorreoJobData {
   to: string[]
@@ -17,6 +19,10 @@ export interface CorreoJobData {
   // documentos.service.obtenerPdf al momento del envío (igual criterio que el
   // job 'recordatorio-solicitud', que reconstruye su correo al enviar).
   pdf?: { tipo: string; id: number }
+  // Visor de correos (2026-11-11): origen legible y, en el job, el registro
+  // (CorreoEnviado) de ESTE destinatario.
+  origen?: string | null
+  correoId?: number
 }
 
 export interface RecordatorioJobData {
@@ -33,9 +39,73 @@ const opcionesBase = {
   removeOnFail: 500,
 } as const
 
-/** Encola un correo con reintentos exponenciales; el envío nunca bloquea el request. */
+/**
+ * Encola un correo con reintentos exponenciales; el envío nunca bloquea el request.
+ * Visor de correos (2026-11-11): con empresa, se registra UNA fila por
+ * destinatario y se envía un correo individual a cada uno (estado y reintento
+ * por destinatario). Sin empresa (caso excepcional) se envía sin registrar.
+ */
 export async function encolarCorreo(data: CorreoJobData) {
-  await correosQueue.add('enviar', data, opcionesBase)
+  const destinatarios = [...new Set(data.to.map((d) => d.trim()).filter(Boolean))]
+  if (destinatarios.length === 0) return
+  if (data.empresaId == null) {
+    await correosQueue.add('enviar', { ...data, to: destinatarios }, opcionesBase)
+    return
+  }
+  const ids = await empresaContext.run({ empresaId: data.empresaId }, () =>
+    repo.crearRegistros({
+      lote: randomUUID(),
+      destinatarios,
+      asunto: data.subject,
+      html: data.html,
+      origen: data.origen ?? null,
+      pdfTipo: data.pdf?.tipo ?? null,
+      pdfId: data.pdf?.id ?? null,
+    }),
+  )
+  // CE-QA-001: si falla el encolado de un destinatario, su registro queda
+  // FALLIDO (reintentable) y se sigue con los demás; luego se informa el error.
+  let primerError: unknown = null
+  for (const [i, correoId] of ids.entries()) {
+    try {
+      await correosQueue.add('enviar', { ...data, to: [destinatarios[i]], correoId }, opcionesBase)
+    } catch (err) {
+      primerError ??= err
+      await empresaContext.run({ empresaId: data.empresaId }, () =>
+        repo.marcarNoEncolado(correoId, err instanceof Error ? err.message : String(err)),
+      )
+    }
+  }
+  if (primerError) throw primerError
+}
+
+/** Reintento de UN registro (casilla) del visor: mismo contenido y destinatario. */
+export async function reencolarRegistro(registro: {
+  id: number
+  empresaId: number
+  destinatario: string
+  asunto: string
+  html: string
+  origen: string | null
+  pdfTipo: string | null
+  pdfId: number | null
+}) {
+  const data: CorreoJobData = {
+    to: [registro.destinatario],
+    subject: registro.asunto,
+    html: registro.html,
+    empresaId: registro.empresaId,
+    origen: registro.origen,
+    correoId: registro.id,
+    ...(registro.pdfTipo && registro.pdfId != null ? { pdf: { tipo: registro.pdfTipo, id: registro.pdfId } } : {}),
+  }
+  try {
+    await correosQueue.add('enviar', data, opcionesBase)
+  } catch (err) {
+    // CE-QA-001: el registro no queda PENDIENTE sin job.
+    await repo.marcarNoEncolado(registro.id, err instanceof Error ? err.message : String(err))
+    throw err
+  }
 }
 
 /**
@@ -71,20 +141,34 @@ export function iniciarWorkerCorreos() {
         return
       }
       const data = job.data as CorreoJobData
-      // Adjunto PDF (obligatorio cuando viene el descriptor): se regenera acá, bajo
-      // el empresaContext ya activo, para no serializar el Buffer por Redis. El PDF
-      // se genera ANTES de enviar: si falla, se lanza el error para que BullMQ
-      // reintente (attempts/backoff) — NO se manda el correo sin el adjunto pedido.
-      let attachments: AdjuntoCorreo[] | undefined
-      if (data.pdf) {
-        if (data.empresaId == null) {
-          throw new Error('No se puede adjuntar el PDF al correo: falta la empresa en el job')
+      const intento = job.attemptsMade + 1
+      try {
+        await enviarJob(data)
+      } catch (err) {
+        if (data.correoId != null) {
+          const final = intento >= (job.opts.attempts ?? 1)
+          await repo.marcarError(data.correoId, err instanceof Error ? err.message : String(err), final)
         }
-        const { obtenerPdf } = await import('../documentos/documentos.service.js')
-        const { buffer, nombreArchivo } = await obtenerPdf(data.pdf.tipo, data.pdf.id, data.empresaId)
-        attachments = [{ filename: nombreArchivo, content: buffer, contentType: 'application/pdf' }]
+        throw err
       }
-      await enviarCorreo({ to: data.to, subject: data.subject, html: data.html, attachments })
+      if (data.correoId != null) await repo.marcarEnviado(data.correoId)
     })
   })
+}
+
+async function enviarJob(data: CorreoJobData) {
+  // Adjunto PDF (obligatorio cuando viene el descriptor): se regenera acá, bajo
+  // el empresaContext ya activo, para no serializar el Buffer por Redis. El PDF
+  // se genera ANTES de enviar: si falla, se lanza el error para que BullMQ
+  // reintente (attempts/backoff) — NO se manda el correo sin el adjunto pedido.
+  let attachments: AdjuntoCorreo[] | undefined
+  if (data.pdf) {
+    if (data.empresaId == null) {
+      throw new Error('No se puede adjuntar el PDF al correo: falta la empresa en el job')
+    }
+    const { obtenerPdf } = await import('../documentos/documentos.service.js')
+    const { buffer, nombreArchivo } = await obtenerPdf(data.pdf.tipo, data.pdf.id, data.empresaId)
+    attachments = [{ filename: nombreArchivo, content: buffer, contentType: 'application/pdf' }]
+  }
+  await enviarCorreo({ to: data.to, subject: data.subject, html: data.html, attachments })
 }

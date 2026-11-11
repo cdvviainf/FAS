@@ -136,6 +136,9 @@ export interface FacturaNacional {
   dte?: FacturaNacionalDteEstado | null
   // Resumen pre-vuelo de emisor/receptor (2026-11-07), solo en el detalle.
   validacion?: ValidacionFacturaNacional
+  // Condición de pago (2026-11-11): Contado si vence el mismo día de la emisión,
+  // si no Crédito. Solo en el detalle; se calcula con lo guardado.
+  condicionPagoSii?: { etiqueta: 'Contado' | 'Crédito'; fechaVencimiento: string | null }
 }
 
 export interface CampoContraparteDte {

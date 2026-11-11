@@ -37,6 +37,11 @@ export const recepcionesService = {
     await api.delete(`compras/recepciones/${id}`)
   },
 
+  // Reabrir una Recepción validada sin fruta comprometida (2026-11-11).
+  async reabrir(id: number): Promise<{ data: RecepcionDetalle }> {
+    return api.post(`compras/recepciones/${id}/reabrir`).json()
+  },
+
   async subirAdjunto(id: number, archivo: File): Promise<{ data: RecepcionAdjunto }> {
     const formData = new FormData()
     formData.append('file', archivo)

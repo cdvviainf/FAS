@@ -39,6 +39,10 @@ const ESTADO_VARIANT: Record<string, 'secondary' | 'default' | 'destructive'> = 
 
 function RecepcionCellAction({ recepcion }: { recepcion: RecepcionListItem }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [reabrirOpen, setReabrirOpen] = useState(false)
+  // Validada (2026-11-11): se puede eliminar o reabrir si su fruta no está
+  // comprometida (Embarque/Reclamo) — el backend lo verifica y explica si no.
+  const esValidada = recepcion.estado === 'VALIDADA'
   const queryClient = useQueryClient()
   const router = useRouter()
   const puedeEscribir = usePuedeEscribir(ITEM)
@@ -53,6 +57,17 @@ function RecepcionCellAction({ recepcion }: { recepcion: RecepcionListItem }) {
     onError: (e: Error) => toast.error(e.message || 'Error al eliminar la Recepción'),
   })
 
+  const reabrirMutation = useMutation({
+    mutationFn: () => recepcionesService.reabrir(recepcion.id),
+    onSuccess: () => {
+      toast.success('Recepción reabierta: puedes corregirla y cargar el Excel nuevamente')
+      setReabrirOpen(false)
+      queryClient.invalidateQueries({ queryKey: recepcionesKeys.all })
+      router.push(`/dashboard/compras/recepciones/${recepcion.id}`)
+    },
+    onError: (e: Error) => toast.error(e.message || 'Error al reabrir la Recepción'),
+  })
+
   return (
     <>
       <AlertModal
@@ -60,6 +75,21 @@ function RecepcionCellAction({ recepcion }: { recepcion: RecepcionListItem }) {
         onClose={() => setDeleteOpen(false)}
         onConfirm={() => deleteMutation.mutate()}
         loading={deleteMutation.isPending}
+        {...(esValidada
+          ? {
+              title: `Eliminar Recepción ${recepcion.numero}`,
+              description:
+                'Se eliminarán también los pallets que queden en Stock y la Orden de Compra volverá a Emitida. Solo es posible si ningún pallet está en un Embarque o Reclamo.',
+            }
+          : {})}
+      />
+      <AlertModal
+        isOpen={reabrirOpen}
+        onClose={() => setReabrirOpen(false)}
+        onConfirm={() => reabrirMutation.mutate()}
+        loading={reabrirMutation.isPending}
+        title={`Reabrir Recepción ${recepcion.numero}`}
+        description='Se eliminarán los pallets que queden en Stock, la Recepción vuelve a Cargada (editable, para subir un Excel corregido) y la Orden de Compra vuelve a Emitida. Solo es posible si ningún pallet está en un Embarque o Reclamo.'
       />
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
@@ -74,7 +104,13 @@ function RecepcionCellAction({ recepcion }: { recepcion: RecepcionListItem }) {
             <Icons.edit className='mr-2 h-4 w-4' />
             {puedeEscribir ? 'Editar' : 'Ver detalle'}
           </DropdownMenuItem>
-          {puedeEscribir && recepcion.editable && (
+          {puedeEscribir && esValidada && (
+            <DropdownMenuItem onClick={() => setReabrirOpen(true)}>
+              <Icons.reopen className='mr-2 h-4 w-4' />
+              Reabrir para recargar
+            </DropdownMenuItem>
+          )}
+          {puedeEscribir && (recepcion.editable || esValidada) && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem

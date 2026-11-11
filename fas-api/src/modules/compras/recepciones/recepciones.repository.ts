@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
@@ -33,7 +33,7 @@ const includeDetalle = {
   // generados para bloquear edición/carga/eliminación en consignación, donde
   // el estado por sí solo (CARGADA) no lo distingue — ver puedeModificarse()
   // en recepciones.service.ts.
-  _count: { select: { pallets: true } },
+  _count: { select: { pallets: { where: { eliminadoEn: null } } } },
 }
 
 // Namespace de advisory lock distinto al de OrdenCompra (490236) y NotaVenta
@@ -69,7 +69,7 @@ export async function listRecepciones(page: number, limit: number, plantaId?: nu
         planta: { select: entidadSelect },
         // QA-RCV-002: mismo motivo que includeDetalle — el listado también
         // debe poder bloquear el botón "Eliminar" por fila.
-        _count: { select: { pallets: true } },
+        _count: { select: { pallets: { where: { eliminadoEn: null } } } },
       },
       orderBy: { id: 'desc' },
       skip: (page - 1) * limit,
@@ -130,7 +130,7 @@ async function relockYReleerModificable(tx: Prisma.TransactionClient, id: number
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_RECEPCION_PROCESO}::int, ${id}::int)`
   const fresca = await tx.recepcion.findFirst({
     where: { id, eliminadoEn: null },
-    include: { _count: { select: { pallets: true } } },
+    include: { _count: { select: { pallets: { where: { eliminadoEn: null } } } } },
   })
   if (!fresca) throw new ValidationError('La Recepción ya no existe — pudo haber sido eliminada por otra operación')
   if (!['CARGADA', 'RECHAZADA'].includes(fresca.estado) || fresca._count.pallets > 0) {
@@ -550,7 +550,9 @@ export async function crearPalletsYValidar(
     // esto sí lo es. Si otra carga concurrente ganó la carrera y ya generó
     // pallets, se aborta sin duplicar (todo-o-nada también aplica acá).
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_RECEPCION_PROCESO}::int, ${recepcionId}::int)`
-    const yaTienePallets = await tx.pallet.count({ where: { recepcionId } })
+    // Solo pallets vigentes (2026-11-11): una Recepción reabierta conserva sus
+    // pallets eliminados como historial y debe poder recargarse.
+    const yaTienePallets = await tx.pallet.count({ where: { recepcionId, eliminadoEn: null } })
     if (yaTienePallets > 0) {
       throw new ValidationError('La Recepción ya fue procesada por otra carga concurrente')
     }
@@ -697,7 +699,7 @@ export async function crearPalletsYValidar(
 }
 
 export async function tienePallets(recepcionId: number) {
-  const count = await prisma.pallet.count({ where: { recepcionId } })
+  const count = await prisma.pallet.count({ where: { recepcionId, eliminadoEn: null } })
   return count > 0
 }
 
@@ -710,7 +712,7 @@ export async function tienePallets(recepcionId: number) {
 // solo cubría VALIDADA y dejaba marcar RECHAZADA una consignación exitosa).
 export async function marcarRechazada(recepcionId: number) {
   return prisma.recepcion.updateMany({
-    where: { id: recepcionId, estado: { not: 'VALIDADA' }, pallets: { none: {} } },
+    where: { id: recepcionId, estado: { not: 'VALIDADA' }, pallets: { none: { eliminadoEn: null } } },
     data: { estado: 'RECHAZADA' },
   })
 }
@@ -745,4 +747,86 @@ export async function deleteAdjunto(adjuntoId: number) {
 export async function getTemporadaDeOrdenCompra(ordenCompraId: number): Promise<number | null> {
   const oc = await prisma.ordenCompra.findFirst({ where: { id: ordenCompraId, eliminadoEn: null }, select: { temporadaId: true } })
   return oc?.temporadaId ?? null
+}
+
+// ─── Eliminar / reabrir una Recepción validada sin fruta comprometida ───────
+// (2026-11-11, decisión del usuario: "una recepción con fruta no comprometida
+// se debe poder eliminar o modificar"). Fruta comprometida = algún pallet de la
+// Recepción (vigente o eliminado) asociado a un Embarque o a un Reclamo.
+
+export interface PalletComprometido {
+  numeroPallet: string
+  motivo: string
+}
+
+async function palletsComprometidos(tx: Prisma.TransactionClient, recepcionId: number): Promise<PalletComprometido[]> {
+  // Lock de las filas de pallets: una reserva concurrente en un Embarque
+  // (UPDATE pallets SET embarqueId) queda serializada con esta operación.
+  await tx.$queryRaw(Prisma.sql`SELECT id FROM pallets WHERE "recepcionId" = ${recepcionId} FOR UPDATE`)
+  const pallets = await tx.pallet.findMany({
+    where: {
+      recepcionId,
+      OR: [{ embarqueId: { not: null } }, { lineas: { some: { reclamoLineas: { some: {} } } } }],
+    },
+    select: {
+      numeroPallet: true,
+      embarque: { select: { numeroInstructivo: true } },
+      lineas: { select: { reclamoLineas: { select: { id: true }, take: 1 } } },
+    },
+    take: 10,
+  })
+  return pallets.map((p) => ({
+    numeroPallet: p.numeroPallet,
+    motivo: p.embarque ? `asociado al Embarque ${p.embarque.numeroInstructivo}` : 'asociado a un Reclamo',
+  }))
+}
+
+export async function liberarRecepcion(id: number, modo: 'ELIMINAR' | 'REABRIR', userId: string) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_RECEPCION_PROCESO}::int, ${id}::int)`
+    const recepcion = await tx.recepcion.findFirst({
+      where: { id, eliminadoEn: null },
+      select: { id: true, estado: true, origen: true, ordenCompraId: true },
+    })
+    if (!recepcion) throw new ValidationError('La Recepción ya no existe — pudo haber sido eliminada por otra operación')
+    if (modo === 'REABRIR' && recepcion.estado !== 'VALIDADA') {
+      throw new ValidationError('Solo se puede reabrir una Recepción validada')
+    }
+
+    const comprometidos = await palletsComprometidos(tx, id)
+    if (comprometidos.length > 0) {
+      const detalle = comprometidos.map((c) => `pallet ${c.numeroPallet} ${c.motivo}`).join('; ')
+      throw new ValidationError(
+        `La Recepción tiene fruta comprometida y no puede ${modo === 'ELIMINAR' ? 'eliminarse' : 'reabrirse'}: ${detalle}`,
+      )
+    }
+
+    const ahora = new Date()
+    // Pallets aún vigentes en Stock → eliminados (borrado lógico).
+    await tx.pallet.updateMany({ where: { recepcionId: id, eliminadoEn: null }, data: { eliminadoEn: ahora, eliminadoPor: userId } })
+
+    // La OC vuelve a EMITIDA para poder recepcionarla de nuevo.
+    if (recepcion.ordenCompraId != null) {
+      await tx.ordenCompra.updateMany({
+        where: { id: recepcion.ordenCompraId, estado: 'RECEPCIONADA', eliminadoEn: null },
+        data: { estado: 'EMITIDA' },
+      })
+    }
+
+    if (modo === 'ELIMINAR') {
+      await tx.recepcion.update({ where: { id }, data: { eliminadoEn: ahora, eliminadoPor: userId } })
+      return null
+    }
+    return tx.recepcion.update({
+      where: { id },
+      data: {
+        estado: 'CARGADA',
+        advertenciasAceptadas: false,
+        advertenciasDetalle: Prisma.DbNull,
+        advertenciasAceptadasEn: null,
+        advertenciasAceptadasPor: null,
+      },
+      include: includeDetalle,
+    })
+  })
 }

@@ -194,7 +194,9 @@ export const navGroups: NavGroup[] = [
         icon: 'settings',
         isActive: false,
         items: [
-          { title: 'Carga Masiva de Maestros', url: '/dashboard/configuracion/carga-masiva', icon: 'upload' }
+          { title: 'Carga Masiva de Maestros', url: '/dashboard/configuracion/carga-masiva', icon: 'upload' },
+          { title: 'Correos Enviados',         url: '/dashboard/configuracion/correos-enviados', icon: 'page' },
+          { title: 'Auditoría',                url: '/dashboard/configuracion/auditoria',        icon: 'page' }
         ]
       },
 
@@ -352,8 +354,7 @@ export const navGroups: NavGroup[] = [
           { title: 'Parámetros',            url: '/dashboard/configuracion/parametros',        icon: 'adjustments'     },
           { title: 'Prefijos de Código',    url: '/dashboard/configuracion/prefijos-codigo',   icon: 'adjustments'     },
           { title: 'Templates de Carga',    url: '/dashboard/configuracion/templates-carga',   icon: 'forms'           },
-          { title: 'Integraciones',         url: '/dashboard/configuracion/integraciones',     icon: 'externalLink'    },
-          { title: 'Auditoría',             url: '/dashboard/configuracion/auditoria',         icon: 'page'            }
+          { title: 'Integraciones',         url: '/dashboard/configuracion/integraciones',     icon: 'externalLink'    }
         ]
       },
 

@@ -17,6 +17,8 @@ export async function recepcionesRoutes(app: FastifyInstance) {
   app.post('/recepciones', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)
   app.patch('/recepciones/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.update)
   app.delete('/recepciones/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.remove)
+  // Reabrir una Recepción validada sin fruta comprometida (2026-11-11).
+  app.post('/recepciones/:id/reabrir', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.reabrir)
 
   app.get(
     '/recepciones/:id/adjuntos/:adjuntoId/descarga',

@@ -13,6 +13,7 @@ import { solicitudesRoutes } from './modules/calidad/solicitudes/solicitudes.rou
 import { reclamosRoutes, reclamosExternoRoutes } from './modules/calidad/reclamos/reclamos.routes.js'
 import { materialesRoutes } from './modules/materiales/materiales.routes.js'
 import { productoresRoutes } from './modules/productores/productores.routes.js'
+import { correosEnviadosRoutes } from './modules/correos/correos.routes.js'
 import { ventasRoutes } from './modules/ventas/ventas.routes.js'
 import { comprasRoutes } from './modules/compras/compras.routes.js'
 import { operacionesRoutes } from './modules/operaciones/operaciones.routes.js'
@@ -198,6 +199,7 @@ export async function buildApp(options: { logger?: boolean } = {}) {
   await app.register(reclamosExternoRoutes, { prefix: '/api/externo' })
   await app.register(materialesRoutes, { prefix: '/api/materiales' })
   await app.register(productoresRoutes, { prefix: '/api/productores' })
+  await app.register(correosEnviadosRoutes, { prefix: '/api/correos-enviados' })
   await app.register(ventasRoutes, { prefix: '/api/ventas' })
   await app.register(comprasRoutes, { prefix: '/api/compras' })
   await app.register(operacionesRoutes, { prefix: '/api/operaciones' })

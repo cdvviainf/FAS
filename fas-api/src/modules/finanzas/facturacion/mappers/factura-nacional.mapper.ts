@@ -54,6 +54,9 @@ export interface FacturaNacionalMapeo {
   // IdDoc.MntPagos; FchVenc de cabecera = vencimiento de la última cuota con
   // fecha. Mismo criterio que la Factura de Exportación (DTE 110).
   cuotas?: CuotaFacturaNacional[]
+  // Proforma de Servicios a Productor (2026-11-11): no se informan las cuotas
+  // (MntPagos); se mantiene solo la fecha de vencimiento única (FchVenc).
+  omitirMntPagos?: boolean
 }
 
 export interface CuotaFacturaNacional {
@@ -76,7 +79,9 @@ export function mapFacturaNacionalADte(data: FacturaNacionalMapeo): LibredteDteP
   // Solo cuotas con vencimiento (FchPago es obligatorio dentro de MntPagos; SII
   // admite hasta 30 repeticiones).
   const cuotasConFecha = (data.cuotas ?? []).filter((c) => c.fechaVencimiento).slice(0, 30)
-  const fchVenc = cuotasConFecha.length > 0 ? cuotasConFecha[cuotasConFecha.length - 1].fechaVencimiento : null
+  // FchVenc = vencimiento MÁS TARDÍO de las cuotas con fecha (mismo criterio que
+  // la condición Contado/Crédito; las cuotas pueden venir en orden no cronológico).
+  const fchVenc = cuotasConFecha.reduce<string | null>((max, c) => (max == null || c.fechaVencimiento! > max ? c.fechaVencimiento : max), null)
   const glosa = data.observaciones?.trim().slice(0, MAX_OBSERVACIONES_SII).trim()
   return {
     Encabezado: {
@@ -85,7 +90,7 @@ export function mapFacturaNacionalADte(data: FacturaNacionalMapeo): LibredteDteP
         FchEmis: fmtFecha(data.fechaEmision),
         ...(data.fmaPago != null ? { FmaPago: data.fmaPago } : {}),
         ...(fchVenc ? { FchVenc: fchVenc } : {}),
-        ...(cuotasConFecha.length > 0
+        ...(cuotasConFecha.length > 0 && !data.omitirMntPagos
           ? {
               MntPagos: cuotasConFecha.map((c) => ({
                 FchPago: c.fechaVencimiento,

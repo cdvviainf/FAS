@@ -172,10 +172,23 @@ export async function actualizarRecepcion(id: number, body: RecepcionUpdateInput
 
 export async function eliminarRecepcion(id: number, eliminadoPor: string) {
   const existente = await obtenerRecepcion(id)
-  if (!(await puedeModificarse(existente))) {
-    throw new ValidationError('La Recepción ya fue procesada y no puede eliminarse')
+  if (await puedeModificarse(existente)) {
+    await repo.softDeleteRecepcion(id, eliminadoPor)
+    return
   }
-  await repo.softDeleteRecepcion(id, eliminadoPor)
+  // Ya procesada (2026-11-11): se puede eliminar si su fruta no está
+  // comprometida (Embarque/Reclamo); elimina los pallets que queden en Stock y
+  // devuelve la OC a Emitida. El repo revalida todo bajo lock.
+  await repo.liberarRecepcion(id, 'ELIMINAR', eliminadoPor)
+}
+
+// Reabrir una Recepción validada sin fruta comprometida (2026-11-11): elimina
+// los pallets que queden en Stock, vuelve a CARGADA (editable, se puede subir un
+// Excel corregido) y la OC vuelve a Emitida.
+export async function reabrirRecepcion(id: number, userId: string) {
+  await obtenerRecepcion(id)
+  const r = await repo.liberarRecepcion(id, 'REABRIR', userId)
+  return shapeRecepcion(r!)
 }
 
 // ─── Adjuntos ──────────────────────────────────────────────────────────────

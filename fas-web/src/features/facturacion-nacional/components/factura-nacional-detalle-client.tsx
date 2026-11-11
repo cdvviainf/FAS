@@ -448,6 +448,21 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
             <Label>Moneda</Label>
             <Input value={factura.moneda.codigo} disabled />
           </div>
+          {factura.condicionPagoSii && (
+            <div className='grid gap-1.5 sm:col-span-2'>
+              <Label>Condición de pago</Label>
+              <Input
+                disabled
+                value={`${factura.condicionPagoSii.etiqueta}${
+                  factura.condicionPagoSii.fechaVencimiento ? ` · vence ${formatFechaCorta(factura.condicionPagoSii.fechaVencimiento)}` : ''
+                }`}
+              />
+              <p className='text-muted-foreground text-xs'>
+                Contado si vence el mismo día de la emisión; si no, Crédito. Se informa al SII como forma de pago (se recalcula al guardar
+                la fecha del documento).
+              </p>
+            </div>
+          )}
           {esVenta && !esClp && (
             <div className='grid gap-1.5 sm:col-span-2'>
               <Label>Tipo de cambio (CLP por 1 {monedaOrigen})</Label>

@@ -447,8 +447,8 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
           </div>
           {bloqueadaPorPallets && (
             <p className='text-sm text-muted-foreground'>
-              Esta Recepción ya generó pallets en Stock y no puede editarse, cargar un nuevo Excel ni eliminarse,
-              aunque el estado siga en {ESTADO_RECEPCION_LABELS.CARGADA}.
+              Esta Recepción ya generó pallets en Stock y no puede editarse ni cargar un nuevo Excel. Si su fruta no
+              está en un Embarque ni en un Reclamo, puedes reabrirla o eliminarla desde el listado de Recepciones.
             </p>
           )}
           {recepcion?.data.advertenciasAceptadas && (

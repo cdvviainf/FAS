@@ -1,6 +1,5 @@
 import { NotFoundError, ValidationError, ConflictError, ForbiddenError } from '../../../shared/errors.js'
 import { encolarCorreo, encolarCorreoDiferido, cancelarCorreoDiferido } from '../../correos/correos.queue.js'
-import { enviarCorreo } from '../../../lib/mailer.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ParCalidad } from '../../../shared/calidades-permitidas.js'
 import * as repo from './solicitudes.repository.js'
@@ -26,6 +25,11 @@ async function destinatariosDe(solicitud: SolicitudDetalle): Promise<string[]> {
   const correos = solicitud.asignados.map((a) => a.usuario.email)
   if (solicitud.usuarioSolicitante?.email) correos.push(solicitud.usuarioSolicitante.email)
   return [...new Set(correos.filter(Boolean))]
+}
+
+// Origen legible del correo para el visor de correos enviados.
+function origenCorreo(solicitud: { codigo: string }, evento: string): string {
+  return `Solicitud de Inspección ${solicitud.codigo} — ${evento}`
 }
 
 function recordatorioJobId(solicitudId: number): string {
@@ -61,7 +65,9 @@ export async function procesarRecordatorio(solicitudId: number) {
   const solicitud = await repo.getSolicitudById(solicitudId)
   if (!solicitud || estaCerrada(solicitud.estado)) return
   const { subject, html } = emails.correoRecordatorio(solicitud)
-  await enviarCorreo({ to: await destinatariosDe(solicitud), subject, html })
+  // Visor de correos (2026-11-11): el recordatorio también se registra y se
+  // envía por destinatario a través de la cola (el worker ya corre con la empresa).
+  await encolarCorreo({ to: await destinatariosDe(solicitud), subject, html, empresaId: getEmpresaIdActual(), origen: origenCorreo(solicitud, 'Recordatorio') })
   await repo.marcarRecordatorioEnviado(solicitudId)
 }
 
@@ -339,7 +345,7 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
   if (actual.estado === 'NOTIFICADA') {
     const destinatarios = [...new Set([...destinatariosPrevios, ...(await destinatariosDe(actualizada))])]
     const { subject, html } = emails.correoModificacion(actualizada)
-    await encolarCorreo({ to: destinatarios, subject, html, empresaId: getEmpresaIdActual() })
+    await encolarCorreo({ to: destinatarios, subject, html, empresaId: getEmpresaIdActual(), origen: origenCorreo(actualizada, 'Modificación') })
     await programarRecordatorio(actualizada)
   }
 
@@ -358,7 +364,7 @@ export async function eliminarSolicitud(id: number, userId: string) {
   // Si estaba notificada: avisar la eliminación
   if (actual.estado === 'NOTIFICADA') {
     const { subject, html } = emails.correoEliminacion(actual)
-    await encolarCorreo({ to: await destinatariosDe(actual), subject, html, empresaId: getEmpresaIdActual() })
+    await encolarCorreo({ to: await destinatariosDe(actual), subject, html, empresaId: getEmpresaIdActual(), origen: origenCorreo(actual, 'Eliminación') })
   }
 }
 
@@ -389,6 +395,7 @@ export async function notificarSolicitud(id: number, userId: string) {
     html,
     empresaId: getEmpresaIdActual(),
     pdf: { tipo: 'solicitud-inspeccion', id: notificada.id },
+    origen: origenCorreo(notificada, 'Notificación'),
   })
   await programarRecordatorio(notificada)
   return notificada
@@ -594,7 +601,7 @@ export async function cerrarSolicitud(
   const adjuntosCierre = cerrada.adjuntos.filter((a) => a.etapa === 'CIERRE').length
   const comentarios = cerrada.comentariosCierre ?? ''
   const { subject, html } = emails.correoCierre(cerrada, comentarios, adjuntosCierre, resultado)
-  await encolarCorreo({ to: await destinatariosDe(cerrada), subject, html, empresaId: getEmpresaIdActual() })
+  await encolarCorreo({ to: await destinatariosDe(cerrada), subject, html, empresaId: getEmpresaIdActual(), origen: origenCorreo(cerrada, 'Cierre') })
 
   return cerrada
 }
@@ -614,7 +621,7 @@ export async function reabrirSolicitud(id: number, userId: string) {
   await programarRecordatorio(reabierta)
 
   const { subject, html } = emails.correoReapertura(reabierta)
-  await encolarCorreo({ to: await destinatariosDe(reabierta), subject, html, empresaId: getEmpresaIdActual() })
+  await encolarCorreo({ to: await destinatariosDe(reabierta), subject, html, empresaId: getEmpresaIdActual(), origen: origenCorreo(reabierta, 'Reapertura') })
 
   return reabierta
 }

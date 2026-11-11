@@ -89,6 +89,8 @@ const itemsMenu: Array<{ codigo: string; nombre: string; grupo: string; seccion:
 
   // ── Configuración › Herramientas ────────────────────────────────────────
   { codigo: 'CONFIG_CARGA_MASIVA', nombre: 'Carga Masiva de Maestros', grupo: 'Configuración', seccion: 'Herramientas', ruta: '/dashboard/configuracion/carga-masiva', tipo: 'PANTALLA', orden: 8050 },
+  { codigo: 'CONFIG_CORREOS_ENVIADOS', nombre: 'Correos Enviados', grupo: 'Configuración', seccion: 'Herramientas', ruta: '/dashboard/configuracion/correos-enviados', tipo: 'PANTALLA', orden: 8060 },
+  { codigo: 'CONFIG_AUDITORIA', nombre: 'Auditoría', grupo: 'Configuración', seccion: 'Herramientas', ruta: '/dashboard/configuracion/auditoria', tipo: 'REPORTE', orden: 8070 },
 
   // ── Configuración › Gestión Comercial ───────────────────────────────────
   { codigo: 'CONFIG_ENTIDADES', nombre: 'Entidades', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/entidades', tipo: 'PANTALLA', orden: 8110 },
@@ -153,7 +155,6 @@ const itemsMenu: Array<{ codigo: string; nombre: string; grupo: string; seccion:
   { codigo: 'CONFIG_PREFIJOS_CODIGO', nombre: 'Prefijos de Código', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/prefijos-codigo', tipo: 'PANTALLA', orden: 8900 },
   { codigo: 'CONFIG_TEMPLATES_CARGA', nombre: 'Templates de Carga', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/templates-carga', tipo: 'PANTALLA', orden: 8910 },
   { codigo: 'CONFIG_INTEGRACIONES', nombre: 'Integraciones', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/integraciones', tipo: 'PANTALLA', orden: 8920 },
-  { codigo: 'CONFIG_AUDITORIA', nombre: 'Auditoría', grupo: 'Configuración', seccion: 'Sistema', ruta: '/dashboard/configuracion/auditoria', tipo: 'REPORTE', orden: 8940 },
 ]
 
 const SISTEMA_USER = 'system'
