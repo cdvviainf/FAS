@@ -127,6 +127,30 @@ function BloqueActor({ a, L, mostrarTelefono = true }: { a: Actor; L: Labels; mo
   )
 }
 
+// Notify (2026-11-11): Razón social; Dirección = dirección por defecto + país;
+// contactos documentales con nombre, mail y teléfono. Sin RUT/TaxId.
+function BloqueNotify({ a, L }: { a: Actor; L: Labels }) {
+  const cs = a.contactosDocumentales ?? []
+  const dir = a.direccionConPais ?? a.direccion
+  return (
+    <>
+      <div className='oc3-razon'>{a.razonSocial}</div>
+      <Fila label={L.direccion} valor={dir ?? '—'} />
+      {cs.length === 0 ? (
+        <Fila label={L.contacto} valor='—' />
+      ) : (
+        cs.map((c, i) => (
+          <div key={i} className={i > 0 ? 'ie4-contacto' : undefined}>
+            <Fila label={L.contacto} valor={c.nombre} />
+            <Fila label={L.email} valor={c.email ?? '—'} />
+            <Fila label={L.telefono} valor={c.telefono ?? '—'} />
+          </div>
+        ))
+      )}
+    </>
+  )
+}
+
 function Termino({ icono, label, valor }: { icono: NombreIcono; label: string; valor: string }) {
   return (
     <div className='oc3-condicion'>
@@ -198,13 +222,13 @@ export function InstructivoEmbarqueV4({ d, marcaAgua, marcaAguaFecha }: { d: Ins
             {d.clienteEsNotify && (
               <div className='ie4-sub'>
                 <div className='ie4-sub-titulo'>{totalNotify > 1 ? `${L.notify} 1` : L.notify}</div>
-                <div>{d.cliente.razonSocial} {L.mismoCliente}</div>
+                {d.clienteCompleto ? <BloqueNotify a={d.clienteCompleto} L={L} /> : <div>{d.cliente.razonSocial} {L.mismoCliente}</div>}
               </div>
             )}
             {notifies.map((nt, i) => (
               <div className='ie4-sub' key={i}>
                 <div className='ie4-sub-titulo'>{totalNotify > 1 ? `${L.notify} ${i + 1 + (d.clienteEsNotify ? 1 : 0)}` : L.notify}</div>
-                <BloqueActor a={nt} L={L} />
+                <BloqueNotify a={nt} L={L} />
               </div>
             ))}
             {/* Cliente: solo en venta NACIONAL (en exportación no se muestra). */}

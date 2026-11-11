@@ -16,6 +16,8 @@ const actorCompletoSchema = z.object({
   // v4 (2026-11-11): dirección completa en líneas (calle · comuna, región ·
   // país) y contactos de tipo "Documental". Opcionales: v1–v3 no los usan.
   direccionLineas: z.array(z.string()).optional(),
+  // Notify (2026-11-11): dirección por defecto + país en una sola línea.
+  direccionConPais: z.string().nullable().optional(),
   contactosDocumentales: z.array(z.object({ nombre: z.string(), telefono: z.string().nullable(), email: z.string().nullable() })).optional(),
 })
 

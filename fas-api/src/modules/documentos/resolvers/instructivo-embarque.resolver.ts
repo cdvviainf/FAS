@@ -16,6 +16,14 @@ function esDocumental(tipo: string | null | undefined): boolean {
   return tipo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('document')
 }
 
+// Notify (2026-11-11): "Dirección + País" de la dirección por defecto, en una línea.
+function direccionConPais(d: NonNullable<EntidadDocumento>['direcciones'][number] | undefined, idioma: Idioma): string | null {
+  if (!d) return null
+  const pais = d.pais ? (idioma === 'EN' ? d.pais.descripcionExtranjera?.trim() || d.pais.descripcion : d.pais.descripcion) : ''
+  const txt = [d.direccion, pais].map((x) => x?.trim() ?? '').filter(Boolean).join(', ')
+  return txt || null
+}
+
 // Mapea una Entidad (Notify/Consignatario) a los datos completos que la AGA
 // necesita en el Instructivo: dirección, RUT, TaxId, teléfono y contacto.
 function actorCompleto(ent: EntidadDocumento, idioma: Idioma = 'ES') {
@@ -30,6 +38,7 @@ function actorCompleto(ent: EntidadDocumento, idioma: Idioma = 'ES') {
     contactoTelefono: ent.contactos[0]?.telefono ?? null,
     esNacional: ent.pais?.esPaisNacional ?? false,
     direccionLineas: lineasDireccion(ent.direcciones[0], idioma),
+    direccionConPais: direccionConPais(ent.direcciones[0], idioma),
     contactosDocumentales: ent.contactos
       .filter((c) => c.esDocumental || esDocumental(c.tipo))
       .map((c) => ({ nombre: c.nombre, telefono: c.telefono ?? null, email: c.email ?? null })),
