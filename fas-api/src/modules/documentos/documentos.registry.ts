@@ -33,6 +33,7 @@ import { instructivoEmbarquePdfPayloadSchema } from './schemas/instructivo-embar
 import { InstructivoEmbarqueV1 } from './templates/instructivo-embarque/v1/index.js'
 import { InstructivoEmbarqueV2 } from './templates/instructivo-embarque/v2/index.js'
 import { InstructivoEmbarqueV3 } from './templates/instructivo-embarque/v3/index.js'
+import { InstructivoEmbarqueV4 } from './templates/instructivo-embarque/v4/index.js'
 import { resolverProforma } from './resolvers/proforma.resolver.js'
 import { resolverFacturaExportacion } from './resolvers/factura-exportacion.resolver.js'
 import { proformaPdfPayloadSchema } from './schemas/proforma.schema.js'
@@ -245,10 +246,11 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Instructivo de Embarque',
     resolver: resolverInstructivoEmbarque,
     schema: instructivoEmbarquePdfPayloadSchema,
-    plantillaActual: 'v3',
+    plantillaActual: 'v4',
     // v2 = cabecera corporativa (2026-11-08, plantilla propia); v3 = todos los
-    // Notify del Cliente (2026-11-10). v1/v2 congeladas para reimpresiones.
-    plantillas: { v1: InstructivoEmbarqueV1, v2: InstructivoEmbarqueV2, v3: InstructivoEmbarqueV3 },
+    // Notify del Cliente (2026-11-10); v4 = formato corporativo "Shipping
+    // Instruction" ES/EN (2026-11-11). v1–v3 congeladas para reimpresiones.
+    plantillas: { v1: InstructivoEmbarqueV1, v2: InstructivoEmbarqueV2, v3: InstructivoEmbarqueV3, v4: InstructivoEmbarqueV4 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'VENTAS_EMBARQUES',
     // Un documento por InstructivoHijo (Planta), regenerable en cualquier

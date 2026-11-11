@@ -73,6 +73,8 @@ const entidadDocumentoSelect = {
     taxId: true,
     // Nacional (Chile) → RUT; extranjero → TaxId (Instructivo v3, 2026-11-11).
     pais: { select: { esPaisNacional: true } },
+    // CSP de la Planta (Instructivo v4, 2026-11-11).
+    csp: true,
     // telefono de la entidad + datos del contacto (nombre/teléfono): usados
     // por la AGA en el Instructivo para Notify/Consignatario (2026-10-12).
     telefono: true,
@@ -89,9 +91,10 @@ const entidadDocumentoSelect = {
     },
     contactos: {
       where: { eliminadoEn: null },
-      select: { nombre: true, telefono: true, email: true },
+      // tipo: el Instructivo v4 filtra los contactos "Documental" (2026-11-11).
+      // Sin `take`: contactos[0] sigue siendo el principal (mismo orden).
+      select: { nombre: true, telefono: true, email: true, tipo: true },
       orderBy: [{ esRepresentanteLegal: 'desc' }, { codigo: 'asc' }],
-      take: 1,
     },
 } satisfies Prisma.EntidadSelect
 

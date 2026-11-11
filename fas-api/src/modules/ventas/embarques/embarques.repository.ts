@@ -1350,6 +1350,8 @@ export async function getInstructivoHijoConDetalle(instructivoHijoId: number) {
               clienteId: true,
               consignatarioId: true,
               notifyId: true,
+              // Exportador (Entidad EXPORTADORA) — Instructivo v4 (2026-11-11).
+              exportadorId: true,
               // Venta NACIONAL: el exportador del Instructivo es el cliente
               // (exportadora), no la empresa (2026-10-17).
               tipoVenta: true,

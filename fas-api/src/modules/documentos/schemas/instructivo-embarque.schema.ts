@@ -13,6 +13,10 @@ const actorCompletoSchema = z.object({
   // Nacional → se muestra RUT; extranjero → TaxId (2026-11-11). Opcional por
   // payloads anteriores (sin el dato se muestran ambos).
   esNacional: z.boolean().optional(),
+  // v4 (2026-11-11): dirección completa en líneas (calle · comuna, región ·
+  // país) y contactos de tipo "Documental". Opcionales: v1–v3 no los usan.
+  direccionLineas: z.array(z.string()).optional(),
+  contactosDocumentales: z.array(z.object({ nombre: z.string(), telefono: z.string().nullable(), email: z.string().nullable() })).optional(),
 })
 
 // Payload del Instructivo de Embarque (InstructivoHijo, ventas.md R11) en
@@ -21,6 +25,11 @@ const actorCompletoSchema = z.object({
 // #controlCopia), mismo criterio que el Instructivo de Embalaje: no hay
 // distinción borrador/oficial.
 export const instructivoEmbarquePdfPayloadSchema = z.object({
+  // v4 (2026-11-11): bilingüe ES/EN; tipo de venta para mostrar u ocultar el
+  // Cliente (solo en venta NACIONAL); Exportador = Entidad exportadora.
+  idioma: z.enum(['ES', 'EN']).optional(),
+  esVentaNacional: z.boolean().optional(),
+  exportadorEntidad: actorCompletoSchema.nullable().optional(),
   // Imagen de la especie para la banda de la cabecera corporativa (2026-11-08).
   especieImagenDataUri: z.string().nullable().optional(),
   empresa: z.object({
@@ -35,6 +44,8 @@ export const instructivoEmbarquePdfPayloadSchema = z.object({
   planta: z.object({
     razonSocial: z.string(),
     direccion: z.string().nullable(),
+    direccionLineas: z.array(z.string()).optional(),
+    csp: z.string().nullable().optional(),
   }),
   cliente: z.object({
     razonSocial: z.string(),
@@ -103,6 +114,8 @@ export const instructivoEmbarquePdfPayloadSchema = z.object({
   })),
   totales: z.object({
     pallets: z.number().int(),
+    // v4: total de pallets = cantidad de folios distintos.
+    folios: z.number().int().optional(),
     cajas: z.number().int(),
     pesoNeto: z.number(),
     pesoBruto: z.number(),
