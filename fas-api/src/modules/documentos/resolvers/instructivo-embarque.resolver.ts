@@ -31,7 +31,7 @@ function actorCompleto(ent: EntidadDocumento, idioma: Idioma = 'ES') {
     esNacional: ent.pais?.esPaisNacional ?? false,
     direccionLineas: lineasDireccion(ent.direcciones[0], idioma),
     contactosDocumentales: ent.contactos
-      .filter((c) => esDocumental(c.tipo))
+      .filter((c) => c.esDocumental || esDocumental(c.tipo))
       .map((c) => ({ nombre: c.nombre, telefono: c.telefono ?? null, email: c.email ?? null })),
   }
 }

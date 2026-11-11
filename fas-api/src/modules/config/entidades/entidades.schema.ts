@@ -90,6 +90,7 @@ export const contactoCreateSchema = z.object({
   esRepresentanteLegal: z.boolean().default(false),
   // Comprador del Cliente (el Cierre preselecciona el primero).
   esComprador: z.boolean().default(false),
+  esDocumental: z.boolean().default(false),
 })
 
 export const contactoUpdateSchema = z.object({
@@ -102,6 +103,7 @@ export const contactoUpdateSchema = z.object({
   tipo: z.string().max(100).trim().nullable().optional(),
   esRepresentanteLegal: z.boolean().optional(),
   esComprador: z.boolean().optional(),
+  esDocumental: z.boolean().optional(),
 })
 
 // ─── Params y Query ───────────────────────────────────────────────────────────
@@ -144,6 +146,6 @@ export type DireccionCreateInput = z.infer<typeof direccionCreateSchema>
 export type DireccionUpdateInput = z.infer<typeof direccionUpdateSchema>
 // esComprador opcional en el tipo: los consumidores que llaman al service sin
 // pasar por Zod (loaders, tests) lo omiten → false.
-export type ContactoCreateInput = Omit<z.infer<typeof contactoCreateSchema>, 'esComprador'> & { esComprador?: boolean }
+export type ContactoCreateInput = Omit<z.infer<typeof contactoCreateSchema>, 'esComprador' | 'esDocumental'> & { esComprador?: boolean; esDocumental?: boolean }
 export type ContactoUpdateInput = z.infer<typeof contactoUpdateSchema>
 export type EntidadListQuery = z.infer<typeof entidadListQuerySchema>

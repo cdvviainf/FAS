@@ -165,6 +165,7 @@ export async function findEntidadById(id: number) {
           tipo: true,
           esRepresentanteLegal: true,
           esComprador: true,
+          esDocumental: true,
           creadoEn: true,
         },
         orderBy: [{ esRepresentanteLegal: 'desc' }, { codigo: 'asc' }],
@@ -489,6 +490,7 @@ export async function createContacto(
       tipo: data.tipo,
       esRepresentanteLegal: data.esRepresentanteLegal,
       esComprador: data.esComprador ?? false,
+      esDocumental: data.esDocumental ?? false,
       creadoPor,
     },
   })
@@ -511,6 +513,7 @@ export async function updateContacto(
       ...(data.tipo !== undefined ? { tipo: data.tipo } : {}),
       ...(data.esRepresentanteLegal !== undefined ? { esRepresentanteLegal: data.esRepresentanteLegal } : {}),
       ...(data.esComprador !== undefined ? { esComprador: data.esComprador } : {}),
+      ...(data.esDocumental !== undefined ? { esDocumental: data.esDocumental } : {}),
       actualizadoPor,
     },
   })

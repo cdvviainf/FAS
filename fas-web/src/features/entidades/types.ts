@@ -111,6 +111,7 @@ export interface ContactoItem {
   esRepresentanteLegal: boolean
   // Comprador del Cliente (el Cierre preselecciona el primero).
   esComprador?: boolean
+  esDocumental?: boolean
 }
 
 export interface EntidadListItem {
@@ -194,4 +195,5 @@ export interface ContactoCreateInput {
   tipo?: string
   esRepresentanteLegal: boolean
   esComprador?: boolean
+  esDocumental?: boolean
 }

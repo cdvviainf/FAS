@@ -323,6 +323,7 @@ function ContactoDialog({ open, initial, onClose, onSave, isSaving }: ContactoDi
     tipo: '',
     esRepresentanteLegal: false,
     esComprador: false,
+    esDocumental: false,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -338,6 +339,7 @@ function ContactoDialog({ open, initial, onClose, onSave, isSaving }: ContactoDi
         tipo: initial?.tipo ?? '',
         esRepresentanteLegal: initial?.esRepresentanteLegal ?? false,
         esComprador: initial?.esComprador ?? false,
+        esDocumental: initial?.esDocumental ?? false,
       })
       setErrors({})
     }
@@ -372,6 +374,7 @@ function ContactoDialog({ open, initial, onClose, onSave, isSaving }: ContactoDi
       tipo: form.tipo?.trim() || undefined,
       esRepresentanteLegal: form.esRepresentanteLegal,
       esComprador: form.esComprador ?? false,
+      esDocumental: form.esDocumental ?? false,
       id: initial?.id,
     })
   }
@@ -412,13 +415,24 @@ function ContactoDialog({ open, initial, onClose, onSave, isSaving }: ContactoDi
             {errors.nombre && <p className='text-xs text-destructive'>{errors.nombre}</p>}
           </div>
           {/* Comprador: el Cierre Comercial preselecciona el primer comprador del cliente. */}
-          <div className='flex items-center gap-2'>
-            <Checkbox
-              id='esComprador'
-              checked={form.esComprador ?? false}
-              onCheckedChange={(v) => setForm((f) => ({ ...f, esComprador: v === true }))}
-            />
-            <Label htmlFor='esComprador' className='font-normal'>Es comprador</Label>
+          <div className='flex flex-wrap items-center gap-6'>
+            <div className='flex items-center gap-2'>
+              <Checkbox
+                id='esComprador'
+                checked={form.esComprador ?? false}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, esComprador: v === true }))}
+              />
+              <Label htmlFor='esComprador' className='font-normal'>Es comprador</Label>
+            </div>
+            {/* Documental: el Instructivo de Embarque lo lista bajo la entidad. */}
+            <div className='flex items-center gap-2'>
+              <Checkbox
+                id='esDocumental'
+                checked={form.esDocumental ?? false}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, esDocumental: v === true }))}
+              />
+              <Label htmlFor='esDocumental' className='font-normal'>Es contacto documental</Label>
+            </div>
           </div>
           <div className='grid grid-cols-2 gap-3'>
             <div className='space-y-1.5'>
@@ -780,6 +794,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
             tipo: con.tipo || undefined,
             esRepresentanteLegal: con.esRepresentanteLegal,
             esComprador: con.esComprador ?? false,
+            esDocumental: con.esDocumental ?? false,
           })
         }
       } catch (err) {
@@ -995,6 +1010,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
         tipo: c.tipo ?? null,
         esRepresentanteLegal: c.esRepresentanteLegal,
         esComprador: c.esComprador ?? false,
+        esDocumental: c.esDocumental ?? false,
       }))
 
   // Próximo código de dirección: parte de la sugerencia del servidor y la
@@ -1378,6 +1394,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                       <th className='px-4 py-2 text-left font-medium'>Nombre</th>
                       <th className='px-4 py-2 text-left font-medium'>Tipo</th>
                       <th className='px-4 py-2 text-center font-medium'>Comprador</th>
+                      <th className='px-4 py-2 text-center font-medium'>Documental</th>
                       <th className='px-4 py-2 text-left font-medium'>Teléfono / Email</th>
                       <th className='px-4 py-2 text-center font-medium'>Rep. Legal</th>
                       <th className='px-4 py-2 w-20' />
@@ -1390,6 +1407,9 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                         <td className='px-4 py-2 text-muted-foreground'>{con.tipo ?? '—'}</td>
                         <td className='px-4 py-2 text-center'>
                           {con.esComprador && <Badge variant='secondary' className='text-xs'>Sí</Badge>}
+                        </td>
+                        <td className='px-4 py-2 text-center'>
+                          {con.esDocumental && <Badge variant='secondary' className='text-xs'>Sí</Badge>}
                         </td>
                         <td className='px-4 py-2 text-xs text-muted-foreground'>
                           {con.telefono && <div>{con.telefono}</div>}
@@ -1422,6 +1442,7 @@ export function EntidadForm({ entidadId }: EntidadFormProps) {
                                     tipo: con.tipo ?? '',
                                     esRepresentanteLegal: con.esRepresentanteLegal,
                                     esComprador: con.esComprador ?? false,
+                                    esDocumental: con.esDocumental ?? false,
                                   },
                                   localId: localCon?._localId,
                                 })

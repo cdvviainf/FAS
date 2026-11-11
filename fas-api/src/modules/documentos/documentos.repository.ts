@@ -93,7 +93,7 @@ const entidadDocumentoSelect = {
       where: { eliminadoEn: null },
       // tipo: el Instructivo v4 filtra los contactos "Documental" (2026-11-11).
       // Sin `take`: contactos[0] sigue siendo el principal (mismo orden).
-      select: { nombre: true, telefono: true, email: true, tipo: true },
+      select: { nombre: true, telefono: true, email: true, tipo: true, esDocumental: true },
       orderBy: [{ esRepresentanteLegal: 'desc' }, { codigo: 'asc' }],
     },
 } satisfies Prisma.EntidadSelect

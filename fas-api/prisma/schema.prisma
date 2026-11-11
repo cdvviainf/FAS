@@ -1901,6 +1901,9 @@ model EntidadContacto {
   // contacto comprador del Cliente. Notify/Consignatario ya no son contactos:
   // viven en EntidadRelacionCliente.
   esComprador          Boolean   @default(false)
+  // Contacto documental (2026-11-11): el Instructivo de Embarque v4 lo lista
+  // bajo Exportador/Consignatario/Notify.
+  esDocumental         Boolean   @default(false)
   creadoEn             DateTime  @default(now())
   creadoPor            String
   actualizadoEn        DateTime? @updatedAt
