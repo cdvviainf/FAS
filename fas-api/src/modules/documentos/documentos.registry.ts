@@ -42,6 +42,9 @@ import { resolverFichaProductor } from './resolvers/ficha-productor.resolver.js'
 import { fichaProductorPdfPayloadSchema } from './schemas/ficha-productor.schema.js'
 import { FichaProductorV1 } from './templates/ficha-productor/v1/index.js'
 import { FichaProductorV2 } from './templates/ficha-productor/v2/index.js'
+import { resolverSolicitudPago } from './resolvers/solicitud-pago.resolver.js'
+import { solicitudPagoPdfPayloadSchema } from './schemas/solicitud-pago.schema.js'
+import { SolicitudPagoV1 } from './templates/solicitud-pago/v1/index.js'
 import { resolverProformaProductor } from './resolvers/proforma-productor.resolver.js'
 import { proformaProductorPdfPayloadSchema } from './schemas/proforma-productor.schema.js'
 import { ProformaProductorV1 } from './templates/proforma-productor/v1/index.js'
@@ -76,6 +79,18 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     controlCopia: false,
     nombreArchivo: (p) => `Ficha_${p.productor.codigo}.pdf`,
     folio: (p) => p.productor.codigo,
+  },
+  'solicitud-pago': {
+    titulo: 'Solicitud de Pago a Productor',
+    resolver: resolverSolicitudPago,
+    schema: solicitudPagoPdfPayloadSchema,
+    plantillaActual: 'v1',
+    plantillas: { v1: SolicitudPagoV1 },
+    pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
+    itemMenu: 'PROD_SOLICITUD_PAGO',
+    controlCopia: false,
+    nombreArchivo: (p) => `${p.numero}.pdf`,
+    folio: (p) => p.numero,
   },
   'proforma-productor': {
     titulo: 'Proforma de Servicios a Productor',

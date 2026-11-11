@@ -58,6 +58,8 @@ const itemsMenu: Array<{ codigo: string; nombre: string; grupo: string; seccion:
   { codigo: 'PROD_CTA_CTE', nombre: 'Cuenta Corriente', grupo: 'Gestión Productores', seccion: 'Productores', ruta: null, tipo: 'PANTALLA', orden: 4130 },
   { codigo: 'PROD_CONCEPTOS_LIQ', nombre: 'Conceptos de Liquidación', grupo: 'Gestión Productores', seccion: 'Productores', ruta: '/dashboard/configuracion/conceptos-liquidacion', tipo: 'PANTALLA', orden: 4140 },
   { codigo: 'PRODUCTORES_PROFORMA', nombre: 'Proforma a Productores', grupo: 'Gestión Productores', seccion: 'Productores', ruta: '/dashboard/productores/proformas', tipo: 'PANTALLA', orden: 4150 },
+  { codigo: 'PROD_SOLICITUD_PAGO', nombre: 'Solicitud de Pago', grupo: 'Gestión Productores', seccion: 'Productores', ruta: '/dashboard/productores/pagos', tipo: 'PANTALLA', orden: 4160 },
+  { codigo: 'PROD_SOLICITUD_PAGO_CONFIRMAR', nombre: 'Confirmar Pago a Productor', grupo: 'Gestión Productores', seccion: 'Productores', ruta: null, tipo: 'ACCION', orden: 4165 },
 
   // ── Gestión Productores › Liquidaciones ─────────────────────────────────
   { codigo: 'LIQ_CLIENTES', nombre: 'Liquidación Clientes', grupo: 'Gestión Productores', seccion: 'Liquidaciones', ruta: '/dashboard/liquidaciones/clientes', tipo: 'PANTALLA', orden: 4210 },

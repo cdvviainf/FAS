@@ -307,6 +307,7 @@ model Empresa {
   saldosAFavor           SaldoAFavorCliente[]
   notasCredito           NotaCredito[]
   documentosManuales     DocumentoManual[]
+  SolicitudPago          SolicitudPago[]
 
   @@map("empresas")
 }
@@ -1617,6 +1618,7 @@ model Moneda {
   saldosAFavor          SaldoAFavorCliente[]
   notasCredito          NotaCredito[]
   documentosManuales    DocumentoManual[]
+  solicitudesPago       SolicitudPago[]
 
   @@map("monedas")
 }
@@ -1656,6 +1658,7 @@ model Temporada {
   notasVenta            NotaVenta[]                 @relation("NotaVentaTemporada")
   instructivosEmbalaje  InstructivoEmbalaje[]       @relation("InstructivoEmbalajeTemporada")
   ordenesCompra         OrdenCompra[]               @relation("OrdenCompraTemporada")
+  solicitudesPago       SolicitudPago[]             @relation("SolicitudPagoTemporada")
   recepciones           Recepcion[]                 @relation("RecepcionTemporada")
   reclamos              Reclamo[]                   @relation("ReclamoTemporada")
   movimientosCtaCte     MovimientoCuentaCorriente[] @relation("MovimientoCCTemporada")
@@ -1727,6 +1730,7 @@ model ConceptoCtaCte {
 
   movimientosCC      MovimientoCuentaCorriente[]
   proformasProductor ProformaProductor[]
+  solicitudesPago    SolicitudPago[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1810,6 +1814,7 @@ model Entidad {
   notasVentaNotify               NotaVenta[]                 @relation("NotaVentaNotify")
   notasVentaConsignatario        NotaVenta[]                 @relation("NotaVentaConsignatario")
   ordenesCompraProductor         OrdenCompra[]               @relation("OrdenCompraProductor")
+  solicitudesPago                SolicitudPago[]             @relation("SolicitudPagoProductor")
   ordenesCompraMaterialProveedor OrdenCompraMaterial[]       @relation("OrdenCompraMaterialProveedor")
   proformasMaterialCliente       ProformaMaterial[]          @relation("ProformaMaterialCliente")
   proformasProductor             ProformaProductor[]         @relation("ProformaProductorProductor")
@@ -3149,27 +3154,29 @@ model ProductorContratoAdjuntoContenido {
 }
 
 model MovimientoCuentaCorriente {
-  id          Int                    @id @default(autoincrement()) // operativo, inmutable (R5)
-  empresaId   Int
-  empresa     Empresa                @relation(fields: [empresaId], references: [id])
-  entidadId   Int // productor
+  id                          Int                    @id @default(autoincrement()) // operativo, inmutable (R5)
+  empresaId                   Int
+  empresa                     Empresa                @relation(fields: [empresaId], references: [id])
+  entidadId                   Int // productor
   // FK compuesta (empresaId, entidadId) -> Entidad(empresaId, id).
-  entidad     Entidad                @relation("CCProductor", fields: [empresaId, entidadId], references: [empresaId, id])
-  tipoId      Int
+  entidad                     Entidad                @relation("CCProductor", fields: [empresaId, entidadId], references: [empresaId, id])
+  tipoId                      Int
   // FK compuesta (empresaId, tipoId) -> ConceptoCtaCte(empresaId, id).
-  tipo        ConceptoCtaCte         @relation(fields: [empresaId, tipoId], references: [empresaId, id])
-  naturaleza  NaturalezaMovimientoCC // DEBE o HABER (consistente con tipo.naturaleza, R6)
-  fecha       DateTime
-  glosa       String?
-  monto       Decimal                @db.Decimal(14, 4)
-  monedaId    Int?
-  moneda      Moneda?                @relation(fields: [monedaId], references: [id])
-  referencia  String?
+  tipo                        ConceptoCtaCte         @relation(fields: [empresaId, tipoId], references: [empresaId, id])
+  naturaleza                  NaturalezaMovimientoCC // DEBE o HABER (consistente con tipo.naturaleza, R6)
+  fecha                       DateTime
+  glosa                       String?
+  monto                       Decimal                @db.Decimal(14, 4)
+  monedaId                    Int?
+  moneda                      Moneda?                @relation(fields: [monedaId], references: [id])
+  referencia                  String?
   // Temporada obligatoria (2026-11-09). FK compuesta (empresaId, temporadaId).
-  temporadaId Int
-  temporada   Temporada              @relation("MovimientoCCTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
-  usuarioId   String
-  creadoEn    DateTime               @default(now())
+  temporadaId                 Int
+  temporada                   Temporada              @relation("MovimientoCCTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+  usuarioId                   String
+  creadoEn                    DateTime               @default(now())
+  solicitudPagoLinea          SolicitudPagoLinea?    @relation("SolicitudPagoLineaMovimiento")
+  solicitudPagoLineaAnulacion SolicitudPagoLinea?    @relation("SolicitudPagoLineaMovimientoAnulacion")
 
   @@index([entidadId, fecha])
   @@index([tipoId])
@@ -3571,11 +3578,12 @@ model Embarque {
   // Un `confirmarDespacho` posterior sobreescribe `despachadoEn`/`despachadoPor`
   // con la nueva confirmación y limpia `despachoAnuladoEn`/`despachoAnuladoPor`
   // — no se conserva historial de ciclos completos, solo el vigente.
-  despachadoEn       DateTime?
-  despachadoPor      String?
-  despachoAnuladoEn  DateTime?
-  despachoAnuladoPor String?
-  pallets            Pallet[]
+  despachadoEn          DateTime?
+  despachadoPor         String?
+  despachoAnuladoEn     DateTime?
+  despachoAnuladoPor    String?
+  pallets               Pallet[]
+  solicitudesPagoLineas SolicitudPagoLinea[]
 
   // Solicitud de Reserva (2026-09-05, ventas.md §4.3; generalizado a
   // cualquier Gestor Logístico el 2026-09-07, reemplaza el hardcode a
@@ -5059,14 +5067,15 @@ model OrdenCompra {
   envasesProporcionadosPor ResponsableProductorExportadora?
   encargadoDescartePor     ResponsableProductorExportadora?
 
-  lineas      OrdenCompraLinea[]
-  cuotasPago  OrdenCompraCuotaPago[]
+  lineas                OrdenCompraLinea[]
+  cuotasPago            OrdenCompraCuotaPago[]
   // Array porque Prisma exige @unique en la FK para modelar 1:1, pero la
   // unicidad real es solo entre Recepciones activas (índice parcial WHERE
   // eliminadoEn IS NULL) — filas soft-deleted pueden repetir ordenCompraId.
   // En la práctica una OC tiene a lo más una Recepcion ACTIVA a la vez
   // (recepciones.repository.ts getRecepcionActivaPorOrdenCompra).
-  recepciones Recepcion[]
+  recepciones           Recepcion[]
+  solicitudesPagoLineas SolicitudPagoLinea[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -5200,19 +5209,20 @@ model OrdenCompraCuotaPago {
   ordenCompraId Int
   ordenCompra   OrdenCompra @relation(fields: [ordenCompraId], references: [id], onDelete: Cascade)
 
-  fechaReferencia FechaReferenciaPago @default(FACTURA)
-  plazoDias       Int
-  tipoValor       TipoValorCuota      @default(PORCENTAJE)
-  porcentaje      Decimal?            @db.Decimal(5, 2)
-  valorUnitario   Decimal?            @db.Decimal(14, 4)
-  monedaId        Int?
-  moneda          Moneda?             @relation(fields: [monedaId], references: [id])
-  unidadId        Int?
-  unidad          UnidadMedida?       @relation(fields: [unidadId], references: [id])
+  fechaReferencia       FechaReferenciaPago  @default(FACTURA)
+  plazoDias             Int
+  tipoValor             TipoValorCuota       @default(PORCENTAJE)
+  porcentaje            Decimal?             @db.Decimal(5, 2)
+  valorUnitario         Decimal?             @db.Decimal(14, 4)
+  monedaId              Int?
+  moneda                Moneda?              @relation(fields: [monedaId], references: [id])
+  unidadId              Int?
+  unidad                UnidadMedida?        @relation(fields: [unidadId], references: [id])
   // Monto ya resuelto (valorUnitario × cantidad real de la OC) al momento de
   // snapshotear — inmutable, no se recalcula si cambian las líneas después.
-  montoCalculado  Decimal?            @db.Decimal(14, 4)
-  descripcion     String?
+  montoCalculado        Decimal?             @db.Decimal(14, 4)
+  descripcion           String?
+  solicitudesPagoLineas SolicitudPagoLinea[]
 
   @@index([ordenCompraId])
   @@map("orden_compra_cuota_pago")
@@ -5924,4 +5934,95 @@ model TipoCambioHistorico {
   @@unique([monedaCodigo, fechaConsulta])
   @@index([monedaCodigo, fechaParidad])
   @@map("tipos_cambio_historico")
+}
+
+// ─── Solicitud de Pago a Productores (2026-11-10) ────────────────────────────
+// Se solicita el pago de las cuotas de la condición de pago de la OC sobre lo
+// REALMENTE DESPACHADO (pallets de la OC en Embarques con despacho confirmado y
+// no anulado), valorizado al precio de la línea de OC que calza. Solicitar NO
+// toca la cuenta corriente; "Confirmar pago" (permiso aparte) registra el N° de
+// factura del productor por cuota y genera un DEBE por cuota en su cta. cte.
+// Anular una pagada revierte con contramovimientos HABER.
+enum EstadoSolicitudPago {
+  SOLICITADA
+  PAGADA
+  ANULADA
+}
+
+model SolicitudPago {
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  numero      String // SP-{AAAA}-{NNNN}, correlativo por año y empresa
+  temporadaId Int
+  temporada   Temporada @relation("SolicitudPagoTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
+  entidadProductorId Int
+  entidadProductor   Entidad @relation("SolicitudPagoProductor", fields: [empresaId, entidadProductorId], references: [empresaId, id])
+  monedaId           Int // moneda de las OC (todas las líneas deben compartirla)
+  moneda             Moneda  @relation(fields: [monedaId], references: [id])
+
+  fecha         DateTime            @default(now())
+  observaciones String?
+  estado        EstadoSolicitudPago @default(SOLICITADA)
+  montoTotal    Decimal             @db.Decimal(14, 2)
+
+  // Confirmación del pago.
+  fechaPago           DateTime?
+  numeroTransferencia String?
+  conceptoCtaCteId    Int?
+  conceptoCtaCte      ConceptoCtaCte? @relation(fields: [empresaId, conceptoCtaCteId], references: [empresaId, id])
+  pagadoEn            DateTime?
+  pagadoPor           String?
+
+  anuladoEn  DateTime?
+  anuladoPor String?
+
+  lineas SolicitudPagoLinea[]
+
+  creadoEn       DateTime  @default(now())
+  creadoPor      String
+  actualizadoEn  DateTime? @updatedAt
+  actualizadoPor String?
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, numero])
+  @@index([entidadProductorId])
+  @@index([empresaId, estado])
+  @@map("solicitudes_pago")
+}
+
+// Una cuota de la condición de pago de una OC, sobre lo despachado de esa OC en
+// un Embarque. `ordenCompraCuotaPagoId` null = OC sin condición de pago (una
+// cuota implícita por el 100%). `montoCalculado` es el snapshot al solicitar;
+// `montoSolicitado` puede ser distinto pero ≤ saldo de la cuota.
+model SolicitudPagoLinea {
+  id              Int           @id @default(autoincrement())
+  solicitudPagoId Int
+  solicitudPago   SolicitudPago @relation(fields: [solicitudPagoId], references: [id], onDelete: Cascade)
+
+  ordenCompraId          Int
+  ordenCompra            OrdenCompra           @relation(fields: [ordenCompraId], references: [id])
+  embarqueId             Int
+  embarque               Embarque              @relation(fields: [embarqueId], references: [id])
+  ordenCompraCuotaPagoId Int?
+  ordenCompraCuotaPago   OrdenCompraCuotaPago? @relation(fields: [ordenCompraCuotaPagoId], references: [id])
+  numeroCuota            Int
+  fechaVencimiento       DateTime?
+
+  montoCalculado  Decimal @db.Decimal(14, 2)
+  montoSolicitado Decimal @db.Decimal(14, 2)
+
+  // N° de factura del productor (al confirmar el pago, mientras no exista la
+  // captura de documentos de compra).
+  numeroFactura String?
+
+  movimientoCcId          Int?                       @unique
+  movimientoCc            MovimientoCuentaCorriente? @relation("SolicitudPagoLineaMovimiento", fields: [movimientoCcId], references: [id])
+  movimientoAnulacionCcId Int?                       @unique
+  movimientoAnulacionCc   MovimientoCuentaCorriente? @relation("SolicitudPagoLineaMovimientoAnulacion", fields: [movimientoAnulacionCcId], references: [id])
+
+  @@index([solicitudPagoId])
+  @@index([ordenCompraId, embarqueId])
+  @@map("solicitud_pago_lineas")
 }

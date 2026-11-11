@@ -105,6 +105,8 @@ const MODELOS_TENANT = new Set([
   // cuelgan del documento (empresaId indirecto vía cascade); la raíz lleva
   // empresaId — mismo criterio que FacturaNacional.
   'DocumentoManual',
+  // Solicitud de Pago a Productores (2026-11-10). Las líneas cuelgan de la raíz.
+  'SolicitudPago',
 ])
 
 // Solo necesitan `where` (no tienen `data` propio que pudiera intentar

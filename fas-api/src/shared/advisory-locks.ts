@@ -165,3 +165,12 @@ export const LOCK_NAMESPACE_DOCUMENTO_MANUAL_PROCESO = 490259
 // (2026-09-21, FAS-IE-QA-005, QA ronda 4): esa operación ahora comparte
 // LOCK_NAMESPACE_EMBARQUE_DESPACHO con reservarPalletsEnEmbarque/
 // desvincularPallet/confirmarDespacho — ver su comentario arriba.
+
+// Solicitud de Pago a Productores (2026-11-10): correlativo SP-{AAAA}-{NNNN}.
+// Clave: año (el conteo ya filtra por empresa vía tenancy).
+export const LOCK_NAMESPACE_SOLICITUD_PAGO_NUMERO = 490260
+
+// Solicitud de Pago — saldos por productor: crear/editar/confirmar/anular
+// solicitudes de un mismo productor se serializan para que dos solicitudes
+// concurrentes no pidan más que el saldo de una cuota. Clave: entidadProductorId.
+export const LOCK_NAMESPACE_SOLICITUD_PAGO_PRODUCTOR = 490261

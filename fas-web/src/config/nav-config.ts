@@ -107,7 +107,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { title: 'Productores',           url: '/dashboard/productores',           icon: 'teams'        },
       { title: 'Proforma de Servicio',  url: '/dashboard/productores/proformas', icon: 'billing'      },
-      { title: 'Solicitud de Pago',     url: '/dashboard/productores/pagos',     icon: 'trendingDown', disabled: true },
+      { title: 'Solicitud de Pago',     url: '/dashboard/productores/pagos',     icon: 'trendingDown' },
       {
         title: 'Liquidaciones',
         url: '#',

@@ -58,7 +58,7 @@ const MANTENEDORES: MantenedorConfig[] = [
   // Lote 3
   { modelo: 'puerto', prefixRuta: 'puertos', label: 'Puerto', itemCodigo: 'CONFIG_PUERTOS', schemaKey: 'puerto' },
   { modelo: 'moneda', prefixRuta: 'monedas', label: 'Moneda', itemCodigo: 'CONFIG_MONEDAS', schemaKey: 'moneda', lecturaItemsAdicionales: ['GENERADOR_DTE'] },
-  { modelo: 'conceptoCtaCte', prefixRuta: 'conceptos-cta-cte', label: 'Concepto Cta. Cte.', itemCodigo: 'CONFIG_CONCEPTOS_CTA_CTE', schemaKey: 'conceptoCtaCte' },
+  { modelo: 'conceptoCtaCte', prefixRuta: 'conceptos-cta-cte', label: 'Concepto Cta. Cte.', itemCodigo: 'CONFIG_CONCEPTOS_CTA_CTE', schemaKey: 'conceptoCtaCte', lecturaItemsAdicionales: ['PROD_SOLICITUD_PAGO_CONFIRMAR'] },
   // Lote 4
   // Temporada: concepto de temporalidad de todas las transacciones → la lee
   // cualquier usuario autenticado (selector global, filtros por temporada).
