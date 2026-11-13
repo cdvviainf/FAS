@@ -72,6 +72,7 @@ const requireNivelDocumentoEmitido = async (req: FastifyRequest, reply: FastifyR
 export async function documentosRoutes(app: FastifyInstance) {
   app.get('/:tipo/:id/preview', { preHandler: [requireAuth, requireNivelDocumento('LECTURA')] }, ctrl.preview)
   app.get('/:tipo/:id.pdf', { preHandler: [requireAuth, requireNivelDocumento('LECTURA')] }, ctrl.descargarPdf)
+  app.get('/:tipo/:id.xlsx', { preHandler: [requireAuth, requireNivelDocumento('LECTURA')] }, ctrl.descargarExcel)
   app.post('/:tipo/:id/emitir', { preHandler: [requireAuth, requireControlCopia, requireNivelDocumento('TOTAL')] }, ctrl.emitir)
   app.get('/emitidos/:documentoEmitidoId.pdf', { preHandler: [requireAuth, requireNivelDocumentoEmitido] }, ctrl.descargarEmitido)
 }

@@ -310,6 +310,7 @@ model Empresa {
   SolicitudPago          SolicitudPago[]
 
   correosEnviados CorreoEnviado[]
+
   @@map("empresas")
 }
 
@@ -2059,6 +2060,7 @@ model SolicitudInspeccion {
   madurez   SolicitudInspeccionMadurez[]
 
   ordenesCompra OrdenCompraSolicitudInspeccion[]
+  recepciones   Recepcion[]
 
   @@unique([temporadaId, numero])
   @@unique([empresaId, id])
@@ -3055,6 +3057,8 @@ model Predio {
   eliminadoEn    DateTime?
   eliminadoPor   String?
 
+  palletLineas PalletLinea[]
+
   @@index([entidadId])
   @@index([empresaId])
   @@map("predios")
@@ -3639,6 +3643,9 @@ model Embarque {
   // exportación. EmisorSello se deriva de la naviera (no se tipea aparte).
   numeroSelloManual      String?
   fechaZarpeManual       DateTime?
+  // N° de DUS (Documento Único de Salida, Aduana) — se ingresa en los datos de
+  // la reserva y sale en la Proforma (2026-11-13).
+  numeroDus              String?
 
   // ─── Instructivo de Embarque (2026-09-21, ventas.md R11 + gap analysis
   // contra el "Instructivo de Embarque (AGA)" real del cliente) — campos
@@ -5370,6 +5377,11 @@ model Recepcion {
   // FK compuesta (empresaId, templateCargaId) -> TemplateCarga(empresaId, id).
   templateCarga   TemplateCarga? @relation(fields: [empresaId, templateCargaId], references: [empresaId, id])
 
+  // Solicitud de Inspección asociada (opcional, 2026-11-13). Con OC debe ser
+  // del mismo productor de la OC.
+  solicitudInspeccionId Int?
+  solicitudInspeccion   SolicitudInspeccion? @relation(fields: [empresaId, solicitudInspeccionId], references: [empresaId, id])
+
   estado        EstadoRecepcion @default(CARGADA)
   observaciones String?
 
@@ -5399,6 +5411,7 @@ model Recepcion {
   @@index([temporadaId])
   @@index([plantaId])
   @@index([templateCargaId])
+  @@index([solicitudInspeccionId])
   @@index([eliminadoEn])
   @@index([empresaId])
   @@map("recepciones")
@@ -5562,10 +5575,17 @@ model PalletLinea {
   etiqueta      Etiqueta? @relation(fields: [etiquetaId], references: [id])
   packingId     Int? // Entidad tipo PACKING
   packing       Entidad?  @relation("PalletLineaPacking", fields: [packingId], references: [id])
+  // Predio de origen (2026-11-13): la columna "Productor" del Excel de
+  // Recepción trae el código CSG del Predio — se guarda por línea para que el
+  // Packing List muestre el CSG/GGN/comuna reales. Null en cargas anteriores
+  // o líneas creadas a mano (el Packing List cae a los predios del productor).
+  predioId      Int?
+  predio        Predio?   @relation(fields: [predioId], references: [id])
 
   reclamoLineas ReclamoPalletLinea[]
 
   @@index([palletId])
+  @@index([predioId])
   @@map("pallet_lineas")
 }
 
@@ -6042,26 +6062,26 @@ enum EstadoCorreoEnviado {
 }
 
 model CorreoEnviado {
-  id           Int                 @id @default(autoincrement())
-  empresaId    Int
-  empresa      Empresa             @relation(fields: [empresaId], references: [id])
+  id             Int                 @id @default(autoincrement())
+  empresaId      Int
+  empresa        Empresa             @relation(fields: [empresaId], references: [id])
   // Agrupa los registros de un mismo correo enviado a varios destinatarios.
-  lote         String
-  destinatario String
-  asunto       String
-  html         String
+  lote           String
+  destinatario   String
+  asunto         String
+  html           String
   // Origen legible (p. ej. "Solicitud de Inspección SI-0001 — Cierre").
-  origen       String?
+  origen         String?
   // PDF adjunto (se regenera al enviar/reintentar).
-  pdfTipo      String?
-  pdfId        Int?
-  estado       EstadoCorreoEnviado @default(PENDIENTE)
-  intentos     Int                 @default(0)
-  ultimoError  String?
-  enviadoEn    DateTime?
+  pdfTipo        String?
+  pdfId          Int?
+  estado         EstadoCorreoEnviado @default(PENDIENTE)
+  intentos       Int                 @default(0)
+  ultimoError    String?
+  enviadoEn      DateTime?
   reintentadoEn  DateTime?
   reintentadoPor String?
-  creadoEn     DateTime            @default(now())
+  creadoEn       DateTime            @default(now())
 
   @@index([empresaId, creadoEn])
   @@index([empresaId, estado])

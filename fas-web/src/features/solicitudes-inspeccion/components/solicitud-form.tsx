@@ -792,6 +792,18 @@ function LineaEditor({ linea, especies, notasCalidad, notasCondicion, onChange, 
       setErrorLinea('Especie, embalaje y variedad son obligatorios')
       return
     }
+    // Obligatorios (2026-11-13): categorías, calibres, cantidad de pallets y
+    // al menos una calidad/condición.
+    const faltan: string[] = []
+    if (linea.categoriaIds.length === 0) faltan.push('categorías')
+    if (linea.calibreIds.length === 0) faltan.push('calibres')
+    const pallets = Number(linea.cantidadPallets)
+    if (!linea.cantidadPallets || !Number.isInteger(pallets) || pallets <= 0) faltan.push('cantidad de pallets (entero mayor a 0)')
+    if (linea.calidadesPermitidas.length === 0) faltan.push('calidad y condición')
+    if (faltan.length > 0) {
+      setErrorLinea(`Falta completar: ${faltan.join(', ')}`)
+      return
+    }
     const embalaje = (embalajesData?.data ?? []).find((a) => a.id === linea.articuloId)
     const variedad = (variedadesData?.data ?? []).find((v) => v.id === linea.variedadId)
     const categoriaNombre = (id: number) => (categoriasData?.data ?? []).find((c) => c.id === id)?.descripcion ?? String(id)
@@ -850,7 +862,7 @@ function LineaEditor({ linea, especies, notasCalidad, notasCondicion, onChange, 
       </div>
       <div className='grid gap-4 sm:grid-cols-2 lg:grid-cols-3'>
         <div className='space-y-1.5'>
-          <Label>Categorías</Label>
+          <Label>Categorías <span className='text-destructive'>*</span></Label>
           <SelectMultiple
             options={(categoriasData?.data ?? []).map((c) => ({ id: c.id, label: c.descripcion }))}
             selectedIds={linea.categoriaIds}
@@ -860,7 +872,7 @@ function LineaEditor({ linea, especies, notasCalidad, notasCondicion, onChange, 
           />
         </div>
         <div className='space-y-1.5'>
-          <Label>Calibres</Label>
+          <Label>Calibres <span className='text-destructive'>*</span></Label>
           <SelectMultiple
             options={(calibresData?.data ?? []).map((c) => ({ id: c.id, label: c.descripcion }))}
             selectedIds={linea.calibreIds}
@@ -870,13 +882,15 @@ function LineaEditor({ linea, especies, notasCalidad, notasCondicion, onChange, 
           />
         </div>
         <div className='space-y-1.5'>
-          <Label>Cantidad de pallets</Label>
-          <Input type='number' value={linea.cantidadPallets} onChange={(e) => onChange({ cantidadPallets: e.target.value })} />
+          <Label>Cantidad de pallets <span className='text-destructive'>*</span></Label>
+          <Input type='number' min={1} step={1} value={linea.cantidadPallets} onChange={(e) => onChange({ cantidadPallets: e.target.value })} />
         </div>
       </div>
       <CalidadesPermitidasInput
         value={linea.calidadesPermitidas}
         onChange={(v) => onChange({ calidadesPermitidas: v })}
+        label='Calidad y condición'
+        requerido
         calidades={notasCalidadValidas.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
         condiciones={notasCondicionValidas.map((n) => ({ id: n.id, descripcion: n.descripcion }))}
       />

@@ -13,6 +13,12 @@ export async function recepcionesRoutes(app: FastifyInstance) {
     { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
     ctrl.descargarFormatoBaseOc,
   )
+  // Opciones de Solicitud de Inspección (selector opcional, 2026-11-13).
+  app.get(
+    '/recepciones/opciones-solicitudes',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    ctrl.opcionesSolicitudes,
+  )
   app.get('/recepciones/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
   app.post('/recepciones', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)
   app.patch('/recepciones/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.update)

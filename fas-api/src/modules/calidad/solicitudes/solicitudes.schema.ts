@@ -14,11 +14,13 @@ export const solicitudLineaSchema = z.object({
   especieId: z.number().int().positive('La especie es requerida'),
   articuloId: z.number().int().positive('El embalaje es requerido'),
   variedadId: z.number().int().positive('La variedad es requerida'),
-  categoriaIds: z.array(z.number().int().positive()).optional(),
-  calibreIds: z.array(z.number().int().positive()).optional(),
+  // Obligatorios (2026-11-13): al menos una categoría, un calibre y un par
+  // calidad/condición, y la cantidad de pallets.
+  categoriaIds: z.array(z.number().int().positive(), { error: 'Debe indicar al menos una categoría' }).min(1, 'Debe indicar al menos una categoría'),
+  calibreIds: z.array(z.number().int().positive(), { error: 'Debe indicar al menos un calibre' }).min(1, 'Debe indicar al menos un calibre'),
   // Calidades permitidas = pares (NotaCalidad, NotaCondicion), por línea.
-  calidadesPermitidas: z.array(parCalidadSchema).optional(),
-  cantidadPallets: z.number().int().positive().nullable().optional(),
+  calidadesPermitidas: z.array(parCalidadSchema, { error: 'Debe indicar al menos una calidad y condición' }).min(1, 'Debe indicar al menos una calidad y condición'),
+  cantidadPallets: z.number({ error: 'La cantidad de pallets es requerida' }).int().positive('La cantidad de pallets debe ser mayor a 0'),
 })
 
 export const solicitudCreateSchema = z.object({

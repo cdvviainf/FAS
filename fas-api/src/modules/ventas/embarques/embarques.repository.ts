@@ -853,6 +853,8 @@ export async function getDatosEmisionPackingList(embarqueId: number) {
               calibre: { select: { descripcion: true } },
               articulo: { select: { codigo: true, descripcion: true, descripcionComercial: true, kgNetoEnvase: true } },
               etiqueta: { select: { descripcion: true } },
+              // Predio de origen de la línea (CSG del Excel de Recepción, 2026-11-13).
+              predio: { select: { codigoCsg: true, codigoGgn: true, comuna: comunaSel } },
             },
           },
         },

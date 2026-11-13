@@ -55,6 +55,7 @@ interface DatosInstructivoForm {
   voyageNumber: string
   deposito: string
   awbBl: string
+  numeroDus: string
   cutoffDate: string
   tipoBultos: string
   agenteAduanaId: string
@@ -70,6 +71,7 @@ function formInstructivoInicial(embarque: EmbarqueDetalle): DatosInstructivoForm
     voyageNumber: embarque.voyageNumber ?? '',
     deposito: embarque.deposito ?? '',
     awbBl: embarque.awbBl ?? '',
+    numeroDus: embarque.numeroDus ?? '',
     cutoffDate: isoAInputLocal(embarque.cutoffDate),
     tipoBultos: embarque.tipoBultos ?? '',
     agenteAduanaId: embarque.agenteAduanaId ? String(embarque.agenteAduanaId) : '',
@@ -221,6 +223,7 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
         voyageNumber: formInstructivo.voyageNumber || null,
         deposito: formInstructivo.deposito || null,
         awbBl: formInstructivo.awbBl || null,
+        numeroDus: formInstructivo.numeroDus || null,
         cutoffDate: inputLocalAIso(formInstructivo.cutoffDate),
         tipoBultos: formInstructivo.tipoBultos || null,
         agenteAduanaId: formInstructivo.agenteAduanaId ? Number(formInstructivo.agenteAduanaId) : null,
@@ -300,6 +303,11 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
           <Label>AWB / BL</Label>
           <Input value={formInstructivo.awbBl} onChange={(e) => setFormInstructivo((f) => ({ ...f, awbBl: e.target.value }))} disabled={!puedeEscribir} />
         </div>
+        <div className='space-y-1.5'>
+          <Label>DUS</Label>
+          <Input value={formInstructivo.numeroDus} onChange={(e) => setFormInstructivo((f) => ({ ...f, numeroDus: e.target.value }))} disabled={!puedeEscribir} />
+        </div>
+        <div />
 
         <div className='space-y-1.5'>
           <Label>Contenedor</Label>

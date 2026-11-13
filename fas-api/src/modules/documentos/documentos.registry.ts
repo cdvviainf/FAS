@@ -38,7 +38,9 @@ import { resolverProforma } from './resolvers/proforma.resolver.js'
 import { resolverFacturaExportacion } from './resolvers/factura-exportacion.resolver.js'
 import { proformaPdfPayloadSchema } from './schemas/proforma.schema.js'
 import { ProformaV1 } from './templates/proforma/v1/index.js'
+import { generarProformaExcel } from './excel/proforma.excel.js'
 import { ProformaV2 } from './templates/proforma/v2/index.js'
+import { ProformaV3 } from './templates/proforma/v3/index.js'
 import { resolverFichaProductor } from './resolvers/ficha-productor.resolver.js'
 import { fichaProductorPdfPayloadSchema } from './schemas/ficha-productor.schema.js'
 import { FichaProductorV1 } from './templates/ficha-productor/v1/index.js'
@@ -264,9 +266,10 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     titulo: 'Proforma de Exportación',
     resolver: resolverProforma,
     schema: proformaPdfPayloadSchema,
-    plantillaActual: 'v2',
+    plantillaActual: 'v3',
     // v2 = cabecera corporativa (2026-11-08, plantilla propia); v1 congelada para reimpresiones.
-    plantillas: { v1: ProformaV1, v2: ProformaV2 },
+    // v3 (2026-11-12): Exportador = EXPORTADORA de la NV + contactos documentales.
+    plantillas: { v1: ProformaV1, v2: ProformaV2, v3: ProformaV3 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' },
     itemMenu: 'FACT_EXPORTACION',
     // Control de copia (2026-11-07, supersede el criterio anterior "sin
@@ -277,6 +280,8 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     controlCopia: true,
     nombreArchivo: (p) => `Proforma_${p.codigo}.pdf`,
     folio: (p) => p.codigo,
+    // Misma Proforma en Excel (2026-11-12), desde el mismo payload.
+    excel: { generar: generarProformaExcel, nombreArchivo: (p) => `Proforma_${p.codigo}.xlsx` },
   },
   // Factura COMERCIAL (documento interno, formato propio) — NO es la
   // representación tributaria del DTE 110 (esa la entrega LibreDTE, pendiente de

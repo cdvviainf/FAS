@@ -50,6 +50,9 @@ interface FilaResuelta {
   etiquetaId: number
   etiquetaLabel?: string // para el mensaje de comparación contra la OC
   packingId: number
+  // Predio de origen (2026-11-13): el del código CSG de la columna Productor;
+  // null si el texto matcheó directo contra la Entidad productor.
+  predioId: number | null
 }
 
 interface RecepcionParaMotor {
@@ -159,7 +162,7 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
   const cacheCategoria = new Map<string, Awaited<ReturnType<typeof repo.findCategoriaByTexto>>>()
   const cacheCalibre = new Map<string, Awaited<ReturnType<typeof repo.findCalibreByTexto>>>()
   const cacheArticulo = new Map<string, Awaited<ReturnType<typeof repo.findArticuloByTexto>>>()
-  const cacheProductor = new Map<string, Awaited<ReturnType<typeof repo.findProductorByTexto>>>()
+  const cacheProductor = new Map<string, Awaited<ReturnType<typeof repo.findProductorYPredioByTexto>>>()
   const cacheNotaCalidad = new Map<string, Awaited<ReturnType<typeof repo.findNotaCalidadByTexto>>>()
   const cacheNotaCondicion = new Map<string, Awaited<ReturnType<typeof repo.findNotaCondicionByTexto>>>()
   const cacheEtiqueta = new Map<string, Awaited<ReturnType<typeof repo.findEtiquetaByTexto>>>()
@@ -206,8 +209,9 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
     if (!articulo) erroresFila.push(`Fila ${cruda.fila}: Artículo/Embalaje "${cruda.articulo}" no existe en el maestro`)
 
     const keyProductor = cruda.productor.toLowerCase()
-    if (!cacheProductor.has(keyProductor)) cacheProductor.set(keyProductor, await repo.findProductorByTexto(cruda.productor))
-    const productor = cacheProductor.get(keyProductor)
+    if (!cacheProductor.has(keyProductor)) cacheProductor.set(keyProductor, await repo.findProductorYPredioByTexto(cruda.productor))
+    const productorYPredio = cacheProductor.get(keyProductor)
+    const productor = productorYPredio?.productor
     if (!productor) erroresFila.push(`Fila ${cruda.fila}: Productor "${cruda.productor}" no existe en el maestro`)
 
     // Opcionales (compras.md §4.8): solo se resuelven/validan si la celda
@@ -308,6 +312,7 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
       etiquetaLabel: etiquetaResuelta?.descripcion ?? textoEtiqueta,
       packingId: pack.id,
       productorId: prod.id,
+      predioId: productorYPredio?.predio?.id ?? null,
       comboLabel: `${e.descripcion} / ${v.descripcion} / ${c.descripcion} / ${art.descripcion}`,
       comboKey: `${e.id}-${v.id}-${c.id}-${art.id}`,
       notaCalidadId,
@@ -346,6 +351,7 @@ function agruparEnPallets(filas: FilaResuelta[]) {
       fechaEmbalaje: Date
       etiquetaId: number
       packingId: number
+      predioId: number | null
     }>
   }> = []
 
@@ -393,6 +399,7 @@ function agruparEnPallets(filas: FilaResuelta[]) {
         fechaEmbalaje: l.fechaEmbalaje,
         etiquetaId: l.etiquetaId,
         packingId: l.packingId,
+        predioId: l.predioId,
       })),
     })
   }

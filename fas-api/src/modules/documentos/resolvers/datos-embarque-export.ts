@@ -1,4 +1,5 @@
-import { getEmbarqueParaDocumentoExport, getPesosEmbarque } from '../documentos.repository.js'
+import { contarPalletsEmbarque, getEmbarqueParaDocumentoExport, getPesosEmbarque } from '../documentos.repository.js'
+import { contactosDocumentales, type ContactoDocumental } from './contactos-documentales.js'
 
 // Notify / Consignatario resueltos para el PDF (razón social + id tributario +
 // dirección por defecto).
@@ -6,6 +7,7 @@ export interface EntidadEmbarqueExport {
   razonSocial: string
   rut: string | null
   direccion: string | null
+  contactosDocumentales: ContactoDocumental[]
 }
 
 // Datos de transporte/exportación de un Embarque listos para la Proforma y la
@@ -20,6 +22,7 @@ export interface DatosEmbarqueExport {
   booking: string | null
   contenedor: string | null
   sello: string | null
+  dus: string | null
   puertoEmbarque: string | null
   puertoDestino: string | null
   etd: string | null // ISO
@@ -27,10 +30,13 @@ export interface DatosEmbarqueExport {
   flete: string | null
   modalidadVenta: string | null
   incoterm: string | null
+  // Exportador de la NV (EXPORTADORA); null si la NV no tiene exportador.
+  exportador: (EntidadEmbarqueExport & { rutChile: string | null; telefono: string | null }) | null
   notify: EntidadEmbarqueExport | null
   consignatario: EntidadEmbarqueExport | null
   pesoNeto: number | null
   pesoBruto: number | null
+  totalPallets: number
 }
 
 function round2(n: number): number {
@@ -38,7 +44,13 @@ function round2(n: number): number {
 }
 
 function mapEntidad(
-  e: { razonSocial: string; identificador: string | null; taxId: string | null; direcciones: { direccion: string }[] } | null,
+  e: {
+    razonSocial: string
+    identificador: string | null
+    taxId: string | null
+    direcciones: { direccion: string }[]
+    contactos: Parameters<typeof contactosDocumentales>[0]
+  } | null,
 ): EntidadEmbarqueExport | null {
   if (!e) return null
   return {
@@ -47,15 +59,17 @@ function mapEntidad(
     // para entidades creadas antes del campo TAXID).
     rut: e.taxId ?? e.identificador ?? null,
     direccion: e.direcciones[0]?.direccion ?? null,
+    contactosDocumentales: contactosDocumentales(e.contactos),
   }
 }
 
 // Resuelve los datos de transporte/exportación de un Embarque para el PDF.
 // Devuelve null si el Embarque no existe (ej. documento sin Embarque asociado).
 export async function resolverDatosEmbarqueExport(embarqueId: number): Promise<DatosEmbarqueExport | null> {
-  const [embarque, lineasPeso] = await Promise.all([
+  const [embarque, lineasPeso, totalPallets] = await Promise.all([
     getEmbarqueParaDocumentoExport(embarqueId),
     getPesosEmbarque(embarqueId),
+    contarPalletsEmbarque(embarqueId),
   ])
   if (!embarque) return null
 
@@ -91,6 +105,7 @@ export async function resolverDatosEmbarqueExport(embarqueId: number): Promise<D
     booking,
     contenedor,
     sello,
+    dus: embarque.numeroDus ?? null,
     puertoEmbarque: embarque.puertoZarpe?.descripcion ?? null,
     puertoDestino: nv?.puertoDestino?.descripcion ?? null,
     etd: etdDate ? new Date(etdDate).toISOString() : null,
@@ -98,9 +113,13 @@ export async function resolverDatosEmbarqueExport(embarqueId: number): Promise<D
     flete: nv?.tipoFlete?.descripcion ?? null,
     modalidadVenta: nv?.modalidadVenta?.descripcion ?? null,
     incoterm: nv?.clausulaVenta?.descripcion ?? null,
+    exportador: nv?.exportador
+      ? { ...mapEntidad(nv.exportador)!, rutChile: nv.exportador.identificador ?? null, telefono: nv.exportador.telefono ?? null }
+      : null,
     notify: mapEntidad(nv?.notify ?? null),
     consignatario: mapEntidad(nv?.consignatario ?? null),
     pesoNeto: pesoNetoAcum > 0 ? round2(pesoNetoAcum) : null,
     pesoBruto: pesoBrutoAcum > 0 ? round2(pesoBrutoAcum) : null,
+    totalPallets,
   }
 }

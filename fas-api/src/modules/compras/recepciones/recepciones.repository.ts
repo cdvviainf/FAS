@@ -25,6 +25,7 @@ const includeDetalle = {
   planta: { select: entidadSelect },
   direccionPlanta: { select: direccionSelect },
   templateCarga: { select: mantenedorSelect },
+  solicitudInspeccion: { select: { id: true, codigo: true, estado: true } },
   adjuntos: {
     select: { id: true, nombre: true, mime: true, tamano: true, subidoEn: true, subidoPor: true },
     orderBy: { subidoEn: 'desc' as const },
@@ -175,7 +176,34 @@ export async function getDireccionDeEntidad(direccionId: number, entidadId: numb
 export async function getOrdenCompra(id: number) {
   return prisma.ordenCompra.findFirst({
     where: { id, eliminadoEn: null },
-    select: { id: true, estado: true, modalidad: true },
+    select: { id: true, estado: true, modalidad: true, entidadProductorId: true },
+  })
+}
+
+// Solicitud de Inspección asociable a la Recepción (2026-11-13).
+export async function getSolicitudInspeccion(id: number) {
+  return prisma.solicitudInspeccion.findFirst({
+    where: { id, eliminadoEn: null },
+    select: { id: true, entidadProductorId: true },
+  })
+}
+
+// Opciones del selector de Solicitud de Inspección en la Recepción.
+export async function listOpcionesSolicitudInspeccion(temporadaId?: number, entidadProductorId?: number) {
+  return prisma.solicitudInspeccion.findMany({
+    where: {
+      eliminadoEn: null,
+      ...(temporadaId ? { temporadaId } : {}),
+      ...(entidadProductorId ? { entidadProductorId } : {}),
+    },
+    select: {
+      id: true,
+      codigo: true,
+      estado: true,
+      entidadProductor: { select: { id: true, razonSocial: true } },
+    },
+    orderBy: [{ creadoEn: 'desc' }, { id: 'desc' }],
+    take: 500,
   })
 }
 
@@ -350,6 +378,13 @@ export async function findNotaCondicionByTexto(texto: string) {
 // Excel excepcionalmente trae el código de la Entidad), se cae al match
 // directo contra la Entidad como antes.
 export async function findProductorByTexto(texto: string) {
+  return (await findProductorYPredioByTexto(texto))?.productor ?? null
+}
+
+// Igual que findProductorByTexto, pero conserva el Predio cuando el match fue
+// por código CSG (2026-11-13) — la Recepción lo guarda por línea de pallet.
+// `predio` es null si el texto matcheó directo contra la Entidad.
+export async function findProductorYPredioByTexto(texto: string) {
   // "código CSG - Nombre CSG" (formato base) o solo el código CSG (Packing List
   // real) → se matchea por el código CSG (parte antes de " - ").
   const codigoCsg = codigoAntesDeGuion(texto)
@@ -361,9 +396,12 @@ export async function findProductorByTexto(texto: string) {
     },
     include: { entidad: true },
   })
-  if (predio) return predio.entidad
+  if (predio) {
+    const { entidad, ...resto } = predio
+    return { productor: entidad, predio: resto }
+  }
 
-  return prisma.entidad.findFirst({
+  const productor = await prisma.entidad.findFirst({
     where: {
       eliminadoEn: null,
       activo: true,
@@ -371,6 +409,7 @@ export async function findProductorByTexto(texto: string) {
       OR: condicionesPorCampos(['codigo', 'descripcion', 'razonSocial'], texto.trim()),
     },
   })
+  return productor ? { productor, predio: null } : null
 }
 
 // Etiqueta y Packing (compras.md §4.6, 2026-09-21) — obligatorios por línea.
@@ -537,6 +576,7 @@ export async function crearPalletsYValidar(
       fechaEmbalaje: Date
       etiquetaId: number
       packingId: number
+      predioId: number | null
     }>
   }>,
   opciones: { aceptarAdvertencias: boolean; userId: string },

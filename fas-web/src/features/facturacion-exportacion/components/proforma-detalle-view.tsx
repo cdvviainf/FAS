@@ -30,6 +30,17 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
   // PDF con control de copia (2026-11-07): vista previa BORRADOR + "Emitir
   // documento" (oficial) en el mismo diálogo que la OC y el Cierre.
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [descargandoExcel, setDescargandoExcel] = useState(false)
+  async function descargarExcel() {
+    setDescargandoExcel(true)
+    try {
+      await documentosService.descargarExcel('proforma', proforma.id, `Proforma_${proforma.codigo}.xlsx`)
+    } catch (e) {
+      toast.error((e as Error).message || 'No se pudo generar el Excel de la Proforma')
+    } finally {
+      setDescargandoExcel(false)
+    }
+  }
 
   // Desglose de la cláusula de venta. montoTotal es el valor cláusula/CIF; el
   // flete y el seguro restan para obtener el valor FOB de la mercadería. Cuando
@@ -125,9 +136,9 @@ export function ProformaDetalleView({ proforma }: { proforma: Proforma }) {
               <Icons.download className='mr-2 h-4 w-4' /> Ver PDF
             </Button>
           )}
-          {/* Deshabilitado en pausa hasta afinar el formato del PDF (2026-09-30) */}
+          {/* Misma Proforma en Excel (2026-11-12): mismo contenido que el PDF. */}
           {proforma.estado === 'EMITIDA' && (
-            <Button variant='outline' disabled title='Próximamente'>
+            <Button variant='outline' onClick={descargarExcel} isLoading={descargandoExcel}>
               <Icons.download className='mr-2 h-4 w-4' /> Exportar a Excel
             </Button>
           )}

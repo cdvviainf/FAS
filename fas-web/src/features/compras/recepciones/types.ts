@@ -81,6 +81,9 @@ export interface RecepcionDetalle extends RecepcionListItem {
   direccionPlanta: DireccionRef
   templateCargaId: number | null
   templateCarga: MantenedorRef | null
+  // Solicitud de Inspección asociada (opcional, 2026-11-13).
+  solicitudInspeccionId: number | null
+  solicitudInspeccion: { id: number; codigo: string; estado: string } | null
   observaciones: string | null
   adjuntos: RecepcionAdjunto[]
   creadoPor: string
@@ -110,6 +113,14 @@ export interface RecepcionCreateInput {
   observaciones?: string | null
   // Temporada (2026-11-06): por defecto la de la OC o la temporada activa.
   temporadaId?: number | null
+  solicitudInspeccionId?: number | null
+}
+
+export interface SolicitudInspeccionOpcion {
+  id: number
+  codigo: string
+  estado: string
+  entidadProductor: { id: number; razonSocial: string }
 }
 
 export type RecepcionUpdateInput = Partial<Omit<RecepcionCreateInput, 'ordenCompraId' | 'esProceso' | 'instructivoIds'>>

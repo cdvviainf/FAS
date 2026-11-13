@@ -4,6 +4,10 @@ import { z } from 'zod'
 // módulo de Facturación/Cobranza, 2026-09-24) — documento comercial (D12: "no
 // requiere folio SII ni CAF"), con control de copia (se envía al cliente,
 // admite reimpresión con marca de agua igual que la OC).
+// Contactos documentales de una entidad (2026-11-12) — opcional: los payloads
+// emitidos antes no lo traen.
+const contactosDocumentalesSchema = z.array(z.object({ nombre: z.string(), telefono: z.string().nullable(), email: z.string().nullable() })).optional()
+
 export const proformaPdfPayloadSchema = z.object({
   // Imagen de la especie para la banda de la cabecera corporativa (2026-11-08).
   especieImagenDataUri: z.string().nullable().optional(),
@@ -14,6 +18,23 @@ export const proformaPdfPayloadSchema = z.object({
     telefono: z.string().nullable().default(null),
     logoDataUri: z.string().nullable(),
   }),
+  // Exportador (2026-11-12): la EXPORTADORA de la Nota de Venta con sus
+  // contactos documentales; ausente → el bloque Exportador usa `empresa`.
+  // Mismo bloque que el Instructivo v4 (2026-11-13): RUT o TaxId según
+  // nacionalidad, dirección en líneas (calle / comuna, región / país).
+  exportador: z
+    .object({
+      razonSocial: z.string(),
+      rut: z.string().nullable(),
+      taxId: z.string().nullable().optional(),
+      esNacional: z.boolean().optional(),
+      direccion: z.string().nullable(),
+      direccionLineas: z.array(z.string()).optional(),
+      telefono: z.string().nullable(),
+      contactosDocumentales: contactosDocumentalesSchema,
+    })
+    .nullable()
+    .optional(),
   codigo: z.string(),
   numeroInstructivo: z.string(), // folio del Embarque
   fechaEmision: z.string(), // ISO
@@ -22,9 +43,16 @@ export const proformaPdfPayloadSchema = z.object({
     razonSocial: z.string(),
     rut: z.string().nullable(),
     direccion: z.string().nullable(),
+    pais: z.string().nullable().optional(), // 2026-11-13
   }),
   moneda: z.string(), // código, ej. "USD"
   condicionPago: z.string().nullable(), // descripción de la CondicionPago heredada
+  // Contado/Crédito (2026-11-13) — misma regla que la Factura Nacional:
+  // Contado si la última cuota vence el día del documento (o no hay cuotas).
+  formaPago: z.enum(['CONTADO', 'CREDITO']).nullable().optional(),
+  // Totales al pie (2026-11-13).
+  totalCajas: z.number().int().nullable().optional(),
+  totalPallets: z.number().int().nullable().optional(),
   observaciones: z.string().nullable().default(null), // observaciones libres del documento
   // La misma plantilla sirve para la Proforma y para la Factura de Exportación
   // (DTE 110): `variante` cambia el título y `folio`/`tipoDte` se muestran solo
@@ -79,6 +107,7 @@ export const proformaPdfPayloadSchema = z.object({
       booking: z.string().nullable(),
       contenedor: z.string().nullable(),
       sello: z.string().nullable(),
+      dus: z.string().nullable().optional(), // 2026-11-13
       puertoEmbarque: z.string().nullable(),
       puertoDestino: z.string().nullable(),
       etd: z.string().nullable(), // ISO
@@ -94,6 +123,7 @@ export const proformaPdfPayloadSchema = z.object({
       razonSocial: z.string(),
       rut: z.string().nullable(),
       direccion: z.string().nullable(),
+      contactosDocumentales: contactosDocumentalesSchema,
     })
     .nullable()
     .default(null),
@@ -102,6 +132,7 @@ export const proformaPdfPayloadSchema = z.object({
       razonSocial: z.string(),
       rut: z.string().nullable(),
       direccion: z.string().nullable(),
+      contactosDocumentales: contactosDocumentalesSchema,
     })
     .nullable()
     .default(null),

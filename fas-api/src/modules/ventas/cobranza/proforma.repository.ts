@@ -34,6 +34,7 @@ export async function getEmbarqueParaProforma(embarqueId: number) {
         select: {
           clienteId: true,
           tipoVenta: true,
+          exportadorId: true,
           cliente: { select: mantenedorSelect },
           monedaId: true,
           moneda: { select: mantenedorSelect },

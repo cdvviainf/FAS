@@ -18,7 +18,7 @@ type Vencimiento = ProformaPdfPayload['vencimientosEstimados'][number]
 // FAS-PROF-EXP-006 (QA ronda 1): TODO el texto visible al cliente vive acá
 // (incluidas las claves crudas de FechaReferenciaPago que manda el resolver)
 // — nada se traduce a mano en el resolver ni queda hardcodeado en español.
-const L = {
+export const ETIQUETAS_PROFORMA = {
   EN: {
     titulo: 'PROFORMA INVOICE',
     borrador: 'DRAFT',
@@ -34,6 +34,8 @@ const L = {
     rut: 'Tax ID',
     direccion: 'Address',
     telefono: 'Phone',
+    contacto: 'Contact',
+    email: 'Email',
     numeroInstructivo: 'Shipment No.',
     condicionPago: 'Payment Terms',
     transporte: 'Transport',
@@ -44,6 +46,14 @@ const L = {
     booking: 'Booking',
     contenedor: 'Container',
     sello: 'Seal',
+    // v3 (2026-11-13)
+    dus: 'DUS',
+    pais: 'Country',
+    taxId: 'Tax ID',
+    contado: 'Cash',
+    credito: 'Credit',
+    totalCajas: 'Total boxes',
+    totalPallets: 'Total pallets',
     puertoEmbarque: 'Loading Port',
     puertoDestino: 'Destination Port',
     etd: 'ETD',
@@ -94,6 +104,8 @@ const L = {
     rut: 'RUT',
     direccion: 'Dirección',
     telefono: 'Teléfono',
+    contacto: 'Contacto',
+    email: 'Email',
     numeroInstructivo: 'N° Instructivo',
     condicionPago: 'Condición de Pago',
     transporte: 'Transporte',
@@ -104,6 +116,14 @@ const L = {
     booking: 'Booking',
     contenedor: 'Contenedor',
     sello: 'Sello',
+    // v3 (2026-11-13)
+    dus: 'DUS',
+    pais: 'País',
+    taxId: 'Tax ID',
+    contado: 'Contado',
+    credito: 'Crédito',
+    totalCajas: 'Total cajas',
+    totalPallets: 'Total pallets',
     puertoEmbarque: 'Puerto de Embarque',
     puertoDestino: 'Puerto de Destino',
     etd: 'ETD',
@@ -140,6 +160,7 @@ const L = {
     },
   },
 } as const
+const L = ETIQUETAS_PROFORMA
 
 export function ProformaV2({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPayload; marcaAgua?: 'BORRADOR' | 'COPIA'; marcaAguaFecha?: string }) {
   const t = L[d.idioma]

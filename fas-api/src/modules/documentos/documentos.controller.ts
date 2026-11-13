@@ -34,6 +34,16 @@ export async function descargarPdf(req: FastifyRequest, reply: FastifyReply) {
     .send(buffer)
 }
 
+export async function descargarExcel(req: FastifyRequest, reply: FastifyReply) {
+  const { tipo, id } = documentoPdfParamsSchema.parse(req.params)
+  const { buffer, nombreArchivo } = await service.obtenerExcel(tipo, id, empresaActualOFallar(req), idiomaDeQuery(req), req.fasAccesos)
+  return reply
+    .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    .header('Content-Disposition', `attachment; filename="${encodeURIComponent(nombreArchivo)}"`)
+    .header('Content-Length', String(buffer.length))
+    .send(buffer)
+}
+
 export async function emitir(req: FastifyRequest, reply: FastifyReply) {
   const { tipo, id } = documentoParamsSchema.parse(req.params)
   const resultado = await service.emitirDocumento(tipo, id, empresaActualOFallar(req), req.fasUserId!, idiomaDeQuery(req))

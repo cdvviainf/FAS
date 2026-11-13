@@ -7,6 +7,7 @@ import {
   recepcionAdjuntoParamsSchema,
   recepcionListQuerySchema,
   formatoBaseOcQuerySchema,
+  opcionesSolicitudQuerySchema,
 } from './recepciones.schema.js'
 import * as service from './recepciones.service.js'
 
@@ -20,6 +21,13 @@ export async function descargarFormatoBaseOc(req: FastifyRequest, reply: Fastify
     .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     .header('Content-Disposition', `attachment; filename="${nombre}"`)
     .send(Buffer.from(buffer))
+}
+
+// GET /recepciones/opciones-solicitudes → Solicitudes de Inspección para el
+// selector opcional de la Recepción (filtradas por temporada/productor).
+export async function opcionesSolicitudes(req: FastifyRequest, reply: FastifyReply) {
+  const { temporadaId, entidadProductorId, ordenCompraId } = opcionesSolicitudQuerySchema.parse(req.query)
+  return reply.send({ data: await service.listarOpcionesSolicitudInspeccion(temporadaId, entidadProductorId, ordenCompraId) })
 }
 
 export async function list(req: FastifyRequest, reply: FastifyReply) {

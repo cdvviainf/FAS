@@ -9,6 +9,9 @@ import { factorFob, subtotalFob as calcSubtotalFob, totalClausula, unitarioFob }
 import { descripcionLinea } from '../../ventas/cobranza/descripcion-idioma.js'
 import { resolverDatosEmbarqueExport } from './datos-embarque-export.js'
 import { montoEnPalabras } from '../ui/monto-en-palabras.js'
+import { actorCompleto } from './instructivo-embarque.resolver.js'
+import { lineasDireccion } from './orden-compra.resolver.js'
+import { condicionPagoSii } from '../../ventas/cobranza/condicion-pago-sii.js'
 import type { ProformaPdfPayload } from '../schemas/proforma.schema.js'
 
 function round2(n: number): number {
@@ -24,11 +27,13 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
   const embarque = await getEmbarqueParaProforma(proforma.embarqueId)
   if (!embarque) throw new NotFoundError('Embarque', String(proforma.embarqueId))
 
-  const [empresa, cliente, cuotasPago, datosEmbarque] = await Promise.all([
+  const exportadorId = embarque.notaVenta.exportadorId
+  const [empresa, cliente, cuotasPago, datosEmbarque, exportadora] = await Promise.all([
     getEmpresaParaDocumento(empresaId),
     getEntidadParaDocumento(proforma.clienteId),
     getCuotasPagoNotaVenta(embarque.notaVentaId),
     resolverDatosEmbarqueExport(proforma.embarqueId),
+    exportadorId ? getEntidadParaDocumento(exportadorId) : Promise.resolve(null),
   ])
 
   // Fechas de referencia resolubles hoy (D6): ZARPE y ARRIBO. FACTURA/
@@ -80,6 +85,48 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
 
   const idioma = proforma.idioma === 'EN' ? 'EN' : 'ES'
 
+  // Exportador (2026-11-13): mismo bloque que el Instructivo v4 — la entidad
+  // EXPORTADORA de la NV; sin una, la empresa emisora (sin contactos).
+  const actorExp = actorCompleto(exportadora, idioma)
+  const exportador = actorExp
+    ? {
+        razonSocial: actorExp.razonSocial,
+        rut: actorExp.rut,
+        taxId: actorExp.taxId,
+        esNacional: actorExp.esNacional,
+        direccion: actorExp.direccion,
+        direccionLineas: actorExp.direccionLineas,
+        telefono: actorExp.telefono,
+        contactosDocumentales: actorExp.contactosDocumentales,
+      }
+    : {
+        razonSocial: empresa?.razonSocial ?? '—',
+        rut: empresa?.rut ?? null,
+        taxId: null,
+        esNacional: true,
+        direccion: empresa?.direcciones[0]?.direccion ?? null,
+        direccionLineas: lineasDireccion(empresa?.direcciones[0], idioma),
+        telefono: empresa?.telefono ?? null,
+        contactosDocumentales: [],
+      }
+
+  // Contado/Crédito (2026-11-13): misma regla que la Factura Nacional, con la
+  // fecha del documento como referencia FACTURA.
+  const fechaDoc = proforma.fechaDocumento ?? proforma.fechaEmision
+  const basePorReferencia: Record<string, Date | null | undefined> = { ...fechasPorReferencia, FACTURA: fechaDoc, ENVIO_DOCUMENTOS: null }
+  const formaPago = condicionPagoSii(
+    cuotasPago.map((c) => {
+      const base = basePorReferencia[c.fechaReferencia]
+      return { fechaVencimiento: base ? new Date(base.getTime() + c.plazoDias * 86_400_000) : null }
+    }),
+    fechaDoc,
+  ).fmaPago === 1 ? 'CONTADO' as const : 'CREDITO' as const
+
+  // Totales al pie: cajas de la fruta (las sublíneas de "Separar cantidades"
+  // repiten la cantidad y no se suman) y pallets del Embarque.
+  const totalCajas = proforma.lineas.reduce((a, l) => a + l.cantidadCajas, 0)
+  const paisCliente = cliente?.pais ? (idioma === 'EN' ? cliente.pais.descripcionExtranjera?.trim() || cliente.pais.descripcion : cliente.pais.descripcion) : null
+
   // Imagen de la especie (primera línea) para la cabecera corporativa (2026-11-08).
   const especieImagenDataUri = await getEspecieImagenDataUri(proforma.lineas[0]?.especieId ?? null)
 
@@ -92,6 +139,7 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
       telefono: empresa?.telefono ?? null,
       logoDataUri: logoDataUri(empresa?.logo),
     },
+    exportador,
     codigo: proforma.codigo,
     numeroInstructivo: embarque.numeroInstructivo,
     // Fecha del documento (editable) — cae a la fecha de emisión si no se fijó.
@@ -101,9 +149,13 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
       razonSocial: cliente?.razonSocial ?? '—',
       rut: cliente?.identificador ?? null,
       direccion: cliente?.direcciones[0]?.direccion ?? null,
+      pais: paisCliente,
     },
     moneda: proforma.moneda.codigo,
     condicionPago: proforma.condicionPago?.descripcion ?? null,
+    formaPago,
+    totalCajas,
+    totalPallets: datosEmbarque?.totalPallets ?? null,
     observaciones: proforma.observaciones ?? null,
     variante: 'PROFORMA',
     folio: null,
@@ -150,6 +202,7 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
           booking: datosEmbarque.booking,
           contenedor: datosEmbarque.contenedor,
           sello: datosEmbarque.sello,
+          dus: datosEmbarque.dus,
           puertoEmbarque: datosEmbarque.puertoEmbarque,
           puertoDestino: datosEmbarque.puertoDestino,
           etd: datosEmbarque.etd,

@@ -94,6 +94,8 @@ interface HeaderFields {
   observaciones: string
   // Temporada (2026-11-06): null en alta = la de la OC elegida o la activa.
   temporadaId: number | null
+  // Solicitud de Inspección asociada (opcional, 2026-11-13).
+  solicitudInspeccionId: number | null
 }
 
 const HEADER_EMPTY: HeaderFields = {
@@ -105,6 +107,7 @@ const HEADER_EMPTY: HeaderFields = {
   templateCargaId: null,
   observaciones: '',
   temporadaId: null,
+  solicitudInspeccionId: null,
 }
 
 interface RecepcionFormProps {
@@ -209,6 +212,22 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   const temporadaIdEfectiva = fields.temporadaId ?? (isEdit ? null : ocSeleccionada?.temporadaId ?? temporadaActiva?.id ?? null)
   const templatesCarga = templatesCargaData?.data ?? []
   const instructivos = instructivosData?.data ?? []
+  // Solicitudes de Inspección (opcional, 2026-11-13): de la temporada de la
+  // Recepción y, con OC, solo las del productor de la OC.
+  const ocParaSolicitud = fields.modo === 'OC' ? fields.ordenCompraId : null
+  const { data: solicitudesData } = useQuery({
+    queryKey: ['recepcion-opciones-solicitudes', temporadaIdEfectiva, ocParaSolicitud],
+    queryFn: () => recepcionesService.opcionesSolicitudes({ temporadaId: temporadaIdEfectiva ?? undefined, ordenCompraId: ocParaSolicitud ?? undefined }),
+    staleTime: 60_000,
+    enabled: fields.modo === 'PROCESO' || !!ocParaSolicitud,
+  })
+  const opcionesSolicitud = (() => {
+    const lista = (solicitudesData?.data ?? []).map((s) => ({ value: String(s.id), label: `${s.codigo} — ${s.entidadProductor.razonSocial}` }))
+    // La ya asociada siempre visible aunque no entre en el filtro actual.
+    const actual = recepcion?.data.solicitudInspeccion
+    if (actual && !lista.some((o) => o.value === String(actual.id))) lista.unshift({ value: String(actual.id), label: actual.codigo })
+    return [{ value: '__none__', label: 'Sin solicitud' }, ...lista]
+  })()
   const direccionesPlanta = plantaDetalle?.direcciones ?? []
 
   useEffect(() => {
@@ -224,6 +243,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
         templateCargaId: d.templateCargaId,
         observaciones: d.observaciones ?? '',
         temporadaId: d.temporadaId ?? null,
+        solicitudInspeccionId: d.solicitudInspeccionId ?? null,
       })
     }
   }, [recepcion])
@@ -262,6 +282,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
       templateCargaId: fields.templateCargaId,
       observaciones: fields.observaciones.trim() || undefined,
       temporadaId: temporadaIdEfectiva,
+      solicitudInspeccionId: fields.solicitudInspeccionId,
     }
   }
 
@@ -474,7 +495,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
               <RadioGroup
                 className='grid-flow-col justify-start gap-4'
                 value={fields.modo}
-                onValueChange={(v) => setFields((f) => ({ ...f, modo: v as ModoRecepcion, ordenCompraId: null, instructivoIds: [] }))}
+                onValueChange={(v) => setFields((f) => ({ ...f, modo: v as ModoRecepcion, ordenCompraId: null, instructivoIds: [], solicitudInspeccionId: null }))}
               >
                 <div className='flex items-center gap-1.5'>
                   <RadioGroupItem value='OC' id='modo-oc' />
@@ -516,7 +537,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
               <Label>Orden de Compra <span className='text-destructive'>*</span></Label>
               <Combobox
                 value={fields.ordenCompraId ? String(fields.ordenCompraId) : ''}
-                onChange={(v) => setFields((f) => ({ ...f, ordenCompraId: Number(v) }))}
+                onChange={(v) => setFields((f) => ({ ...f, ordenCompraId: Number(v), solicitudInspeccionId: null }))}
                 placeholder='Seleccionar Orden de Compra...'
                 searchPlaceholder='Buscar OC...'
                 options={ordenesCompra.map((oc) => ({ value: String(oc.id), label: `${oc.numero} — ${oc.entidadProductor.descripcion}` }))}
@@ -537,6 +558,20 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
                 onChange={(id) => setFields((f) => ({ ...f, temporadaId: id }))}
                 disabled={soloLectura}
               />
+            </div>
+            <div className='space-y-1.5 sm:col-span-2'>
+              <Label>Solicitud de Inspección <span className='text-muted-foreground text-xs'>(opcional)</span></Label>
+              <Combobox
+                value={fields.solicitudInspeccionId ? String(fields.solicitudInspeccionId) : '__none__'}
+                onChange={(v) => setFields((f) => ({ ...f, solicitudInspeccionId: v && v !== '__none__' ? Number(v) : null }))}
+                placeholder='Sin solicitud'
+                searchPlaceholder='Buscar solicitud...'
+                options={opcionesSolicitud}
+                disabled={soloLectura || (fields.modo === 'OC' && !fields.ordenCompraId)}
+              />
+              {fields.modo === 'OC' && !fields.ordenCompraId && (
+                <p className='text-xs text-muted-foreground'>Selecciona la Orden de Compra para ver sus solicitudes.</p>
+              )}
             </div>
           </div>
 

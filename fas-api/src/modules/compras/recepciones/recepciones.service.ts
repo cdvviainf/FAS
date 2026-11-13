@@ -89,6 +89,29 @@ function shapeRecepcion<T extends { estado: string; _count: { pallets: number } 
   return { ...resto, tienePallets, editable: ESTADOS_MODIFICABLES.has(resto.estado) && !tienePallets }
 }
 
+// Solicitud de Inspección (opcional, 2026-11-13): debe existir y, si la
+// Recepción tiene OC, ser del mismo productor que la OC.
+async function validarSolicitudInspeccion(solicitudId: number | null | undefined, ordenCompraId: number | null) {
+  if (solicitudId == null) return
+  const solicitud = await repo.getSolicitudInspeccion(solicitudId)
+  if (!solicitud) throw new ValidationError('La Solicitud de Inspección no existe o fue eliminada')
+  if (ordenCompraId != null) {
+    const oc = await repo.getOrdenCompra(ordenCompraId)
+    if (oc && oc.entidadProductorId !== solicitud.entidadProductorId) {
+      throw new ValidationError('La Solicitud de Inspección debe ser del mismo productor de la Orden de Compra')
+    }
+  }
+}
+
+export async function listarOpcionesSolicitudInspeccion(temporadaId?: number, entidadProductorId?: number, ordenCompraId?: number) {
+  if (ordenCompraId != null) {
+    const oc = await repo.getOrdenCompra(ordenCompraId)
+    if (!oc) return []
+    entidadProductorId = oc.entidadProductorId
+  }
+  return repo.listOpcionesSolicitudInspeccion(temporadaId, entidadProductorId)
+}
+
 export async function listarRecepciones(page: number, limit: number, plantaId?: number, origen?: string, estado?: string, temporadaId?: number) {
   const { data, total } = await repo.listRecepciones(page, limit, plantaId, origen, estado, temporadaId)
   return { data: data.map(shapeRecepcion), meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
@@ -128,6 +151,7 @@ export async function crearRecepcion(body: RecepcionCreateInput, creadoPor: stri
   await validarInstructivos(body.instructivoIds)
   await validarPlantaYDireccion(body.plantaId, body.direccionPlantaId)
   await validarTemplateCarga(body.templateCargaId)
+  await validarSolicitudInspeccion(body.solicitudInspeccionId, body.ordenCompraId ?? null)
   // Temporada: la enviada (validada); si no, la de la OC; si no, por fecha.
   if (body.temporadaId == null && body.ordenCompraId != null) {
     const temporadaOc = await repo.getTemporadaDeOrdenCompra(body.ordenCompraId)
@@ -166,6 +190,7 @@ export async function actualizarRecepcion(id: number, body: RecepcionUpdateInput
     body.direccionPlantaId ?? existente.direccionPlantaId,
   )
   await validarTemplateCarga(body.templateCargaId)
+  await validarSolicitudInspeccion(body.solicitudInspeccionId, existente.ordenCompraId)
   await validarTemporadaEnEdicion(body.temporadaId, existente.temporadaId)
   return shapeRecepcion(await repo.updateRecepcion(id, body, actualizadoPor))
 }

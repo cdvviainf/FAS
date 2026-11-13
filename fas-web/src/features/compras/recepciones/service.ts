@@ -7,6 +7,7 @@ import type {
   RecepcionAdjunto,
   OrigenRecepcion,
   EstadoRecepcion,
+  SolicitudInspeccionOpcion,
 } from './types'
 
 export const recepcionesService = {
@@ -19,6 +20,15 @@ export const recepcionesService = {
     if (params.estado) sp.estado = params.estado
     if (params.temporadaId) sp.temporadaId = String(params.temporadaId)
     return api.get('compras/recepciones', { searchParams: sp }).json()
+  },
+
+  // Solicitudes de Inspección para el selector opcional (2026-11-13): con OC,
+  // solo las del productor de la OC.
+  async opcionesSolicitudes(params: { temporadaId?: number; ordenCompraId?: number }): Promise<{ data: SolicitudInspeccionOpcion[] }> {
+    const sp = new URLSearchParams()
+    if (params.temporadaId) sp.set('temporadaId', String(params.temporadaId))
+    if (params.ordenCompraId) sp.set('ordenCompraId', String(params.ordenCompraId))
+    return api.get('compras/recepciones/opciones-solicitudes', { searchParams: sp }).json()
   },
 
   async getById(id: number): Promise<{ data: RecepcionDetalle }> {

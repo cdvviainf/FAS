@@ -72,7 +72,7 @@ const entidadDocumentoSelect = {
     identificador: true,
     taxId: true,
     // Nacional (Chile) → RUT; extranjero → TaxId (Instructivo v3, 2026-11-11).
-    pais: { select: { esPaisNacional: true } },
+    pais: { select: { esPaisNacional: true, descripcion: true, descripcionExtranjera: true } },
     // CSP de la Planta (Instructivo v4, 2026-11-11).
     csp: true,
     // telefono de la entidad + datos del contacto (nombre/teléfono): usados
@@ -147,6 +147,12 @@ export async function getEmbarqueParaDocumentoExport(embarqueId: number) {
       identificador: true,
       taxId: true,
       direcciones: direccionPorDefecto,
+      // Contactos documentales (Proforma, 2026-11-12) — se filtran en el resolver.
+      contactos: {
+        where: { eliminadoEn: null },
+        select: { nombre: true, telefono: true, email: true, tipo: true, esDocumental: true },
+        orderBy: [{ esRepresentanteLegal: 'desc' as const }, { codigo: 'asc' as const }],
+      },
     },
   }
   return prisma.embarque.findFirst({
@@ -162,6 +168,7 @@ export async function getEmbarqueParaDocumentoExport(embarqueId: number) {
       numeroContenedorManual: true,
       numeroSelloManual: true,
       awbBl: true,
+      numeroDus: true,
       naviera: { select: { razonSocial: true } },
       solicitudReserva: {
         select: { fechaZarpe: true, nave: true, numeroBooking: true, numeroContenedor: true, numeroSello: true },
@@ -177,6 +184,8 @@ export async function getEmbarqueParaDocumentoExport(embarqueId: number) {
           tipoBl: { select: { descripcion: true } },
           notify: entidadNotify,
           consignatario: entidadNotify,
+          // Exportador de la NV (EXPORTADORA) para el bloque Exportador de la Proforma.
+          exportador: { select: { ...entidadNotify.select, telefono: true } },
         },
       },
     },
@@ -186,6 +195,12 @@ export async function getEmbarqueParaDocumentoExport(embarqueId: number) {
 // Pesos del embarque desde los pallets físicos (cada PalletLinea trae su
 // embalaje con kgNeto/BrutoEnvase) — mismo origen que el DTE 110
 // (getLineasPalletParaPeso en cobranza). El helper de formateo suma.
+// Pallets del Embarque (folios distintos, vigentes) para el total de la Proforma.
+export async function contarPalletsEmbarque(embarqueId: number) {
+  const pallets = await prisma.pallet.findMany({ where: { embarqueId, eliminadoEn: null }, select: { numeroPallet: true } })
+  return new Set(pallets.map((p) => p.numeroPallet)).size
+}
+
 export async function getPesosEmbarque(embarqueId: number) {
   return prisma.palletLinea.findMany({
     where: { pallet: { embarqueId } },

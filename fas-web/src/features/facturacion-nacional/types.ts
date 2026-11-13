@@ -47,7 +47,7 @@ export interface OperacionesNacionalFilters {
 export const ORIGEN_FN_LABELS: Record<OrigenFacturaNacional, string> = {
   PROFORMA_MATERIAL: 'Proforma de Materiales',
   PROFORMA_PRODUCTOR: 'Proforma de Productor',
-  VENTA_NACIONAL: 'Venta Nacional',
+  VENTA_NACIONAL: 'Factura Fruta',
 }
 
 interface MantenedorRef {

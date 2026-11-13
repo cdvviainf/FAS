@@ -72,16 +72,36 @@ export async function obtenerPdf(tipo: string, id: number, empresaId: number, id
   return { buffer, nombreArchivo: def.nombreArchivo(payload) }
 }
 
-async function pdfOficialSiExiste(tipo: string, id: number, idioma: IdiomaDocumento): Promise<{ buffer: Buffer; nombreArchivo: string } | null> {
+async function emisionOficial(tipo: string, id: number, idioma: IdiomaDocumento) {
   const def = getDefinicionOFallar(tipo)
   if (!def.controlCopia) return null
   const emisiones = await repo.listarEmisionesDocumento(tipo, id)
   if (emisiones.length === 0) return null
   const idiomaDe = (p: unknown) => (p && typeof p === 'object' ? (p as { idioma?: string }).idioma ?? 'ES' : 'ES')
   const elegida = emisiones.find((e) => idiomaDe(e.payload) === idioma) ?? emisiones[0]!
-  const emitido = await repo.getDocumentoEmitidoById(elegida.id)
+  return repo.getDocumentoEmitidoById(elegida.id)
+}
+
+async function pdfOficialSiExiste(tipo: string, id: number, idioma: IdiomaDocumento): Promise<{ buffer: Buffer; nombreArchivo: string } | null> {
+  const def = getDefinicionOFallar(tipo)
+  const emitido = await emisionOficial(tipo, id, idioma)
   if (!emitido) return null
   return { buffer: Buffer.from(emitido.pdf), nombreArchivo: def.nombreArchivo(emitido.payload as never) }
+}
+
+// ─── Excel (2026-11-12, Proforma) ─────────────────────────────────────────
+// Mismo payload que el PDF: el congelado de la emisión oficial si existe (así
+// el Excel coincide con el PDF oficial), si no el resuelto en vivo.
+export async function obtenerExcel(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES', accesos?: AccesosUsuario): Promise<{ buffer: Buffer; nombreArchivo: string }> {
+  const def = getDefinicionOFallar(tipo)
+  if (!def.excel) throw new NotFoundError('Versión Excel del documento', tipo)
+  const emitido = await emisionOficial(tipo, id, idioma)
+  // El snapshot emitido se revalida (puede venir de una versión anterior del
+  // schema); si no calza, se usa el payload vivo.
+  const congelado = emitido ? def.schema.safeParse(emitido.payload) : null
+  const payload = congelado?.success ? congelado.data : (await resolverYValidar(tipo, id, empresaId, idioma, accesos)).payload
+  const buffer = await def.excel.generar(payload)
+  return { buffer, nombreArchivo: def.excel.nombreArchivo(payload) }
 }
 
 // Hash de idempotencia — DOC-QA-003 (ronda 1): tiene que ser del PAYLOAD

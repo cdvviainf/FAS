@@ -4,17 +4,11 @@ import { getEmpresaParaDocumento, getEntidadParaDocumento, getNotifiesCliente, l
 import type { InstructivoEmbarquePdfPayload } from '../schemas/instructivo-embarque.schema.js'
 import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 import { lineasDireccion } from './orden-compra.resolver.js'
+import { contactosDocumentales } from './contactos-documentales.js'
 import type { ResolverOpciones } from '../documentos.types.js'
 
 type EntidadDocumento = Awaited<ReturnType<typeof getEntidadParaDocumento>>
 type Idioma = 'ES' | 'EN'
-
-// Contacto "Documental" (v4, 2026-11-11): EntidadContacto.tipo es texto libre;
-// se acepta "Documental", "Documentación", "Documentos"… sin tildes ni mayúsculas.
-function esDocumental(tipo: string | null | undefined): boolean {
-  if (!tipo) return false
-  return tipo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('document')
-}
 
 // Notify (2026-11-11): "Dirección + País" de la dirección por defecto, en una línea.
 function direccionConPais(d: NonNullable<EntidadDocumento>['direcciones'][number] | undefined, idioma: Idioma): string | null {
@@ -26,7 +20,7 @@ function direccionConPais(d: NonNullable<EntidadDocumento>['direcciones'][number
 
 // Mapea una Entidad (Notify/Consignatario) a los datos completos que la AGA
 // necesita en el Instructivo: dirección, RUT, TaxId, teléfono y contacto.
-function actorCompleto(ent: EntidadDocumento, idioma: Idioma = 'ES') {
+export function actorCompleto(ent: EntidadDocumento, idioma: Idioma = 'ES') {
   if (!ent) return null
   return {
     razonSocial: ent.razonSocial,
@@ -39,9 +33,7 @@ function actorCompleto(ent: EntidadDocumento, idioma: Idioma = 'ES') {
     esNacional: ent.pais?.esPaisNacional ?? false,
     direccionLineas: lineasDireccion(ent.direcciones[0], idioma),
     direccionConPais: direccionConPais(ent.direcciones[0], idioma),
-    contactosDocumentales: ent.contactos
-      .filter((c) => c.esDocumental || esDocumental(c.tipo))
-      .map((c) => ({ nombre: c.nombre, telefono: c.telefono ?? null, email: c.email ?? null })),
+    contactosDocumentales: contactosDocumentales(ent.contactos),
   }
 }
 

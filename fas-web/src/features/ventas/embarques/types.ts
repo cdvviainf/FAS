@@ -136,6 +136,7 @@ export interface DatosInstructivo {
   voyageNumber: string | null
   deposito: string | null
   awbBl: string | null
+  numeroDus: string | null
   cutoffDate: string | null
   tipoBultos: string | null
   agenteAduanaId: number | null
@@ -153,6 +154,7 @@ export interface DatosInstructivoInput {
   voyageNumber?: string | null
   deposito?: string | null
   awbBl?: string | null
+  numeroDus?: string | null
   cutoffDate?: string | null
   tipoBultos?: string | null
   agenteAduanaId?: number | null

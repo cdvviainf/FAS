@@ -75,8 +75,17 @@ export async function generarPackingListExcel(
 
   for (const p of datos.pallets) {
     palletsDistintos.add(p.numeroPallet)
-    // CSG/GGN/comuna del productor: best-effort — solo si tiene un único Predio.
-    const predioUnico = p.productor.predios.length === 1 ? p.productor.predios[0] : null
+    // CSG/GGN/comuna: el Predio de origen de cada línea (cargado desde el CSG
+    // del Excel de Recepción, 2026-11-13). Líneas sin predio (cargas previas o
+    // creadas a mano) caen a los predios del productor: con uno solo se toma
+    // ese; con varios se listan sus CSG/GGN distintos, y la comuna solo si
+    // todos comparten la misma.
+    const predios = p.productor.predios
+    const distintos = (vs: (string | null | undefined)[]) => [...new Set(vs.map((v) => v?.trim()).filter((v): v is string => !!v))].join(' / ')
+    const comunasPredio = new Set(predios.map((pr) => pr.comuna?.descripcion ?? null))
+    const comunaPredio = comunasPredio.size === 1 ? predios[0]?.comuna ?? null : null
+    const csgProductor = distintos(predios.map((pr) => pr.codigoCsg))
+    const ggnProductor = distintos(predios.map((pr) => pr.codigoGgn))
     const comunaPack = p.recepcion.planta.direcciones[0]?.comuna ?? null
 
     for (const l of p.lineas) {
@@ -89,11 +98,11 @@ export async function generarPackingListExcel(
         container ?? '',
         p.temperatura != null ? Number(p.temperatura) : '',
         p.termografo ?? '',
-        predioUnico?.codigoCsg ?? '',
-        predioUnico?.codigoGgn ?? '',
+        l.predio ? l.predio.codigoCsg ?? '' : csgProductor,
+        l.predio ? l.predio.codigoGgn ?? '' : ggnProductor,
         p.productor.razonSocial,
-        predioUnico?.comuna?.descripcion ?? '',
-        predioUnico?.comuna?.provincia?.descripcion ?? '',
+        (l.predio ? l.predio.comuna : comunaPredio)?.descripcion ?? '',
+        (l.predio ? l.predio.comuna : comunaPredio)?.provincia?.descripcion ?? '',
         p.recepcion.planta.csp ?? '',
         p.recepcion.planta.razonSocial,
         comunaPack?.descripcion ?? '',

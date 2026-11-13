@@ -17,6 +17,18 @@ export const documentosService = {
     return api.get(`documentos/${tipo}/${id}.pdf`, { searchParams: { idioma } }).blob()
   },
 
+  // Versión Excel del documento (2026-11-12, Proforma): mismo contenido que el
+  // PDF. Se descarga como archivo (no se abre en pestaña).
+  async descargarExcel(tipo: string, id: number, nombreArchivo: string, idioma: IdiomaDocumento = 'ES'): Promise<void> {
+    const blob = await api.get(`documentos/${tipo}/${id}.xlsx`, { searchParams: { idioma } }).blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = nombreArchivo
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  },
+
   // Emisión oficial (Etapa 4 §4) — congela el payload y persiste
   // documentos_emitidos (backend, ver documentos.service.ts). Idempotente:
   // reemitir sin cambios en el documento origen reusa la emisión anterior

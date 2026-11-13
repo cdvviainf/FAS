@@ -18,6 +18,8 @@ export const recepcionCreateSchema = z
     // Temporada (2026-11-06): editable; si se omite, la de la OC (si tiene) o la
     // que corresponde por fecha. Pallets/Stock la heredan de la Recepción.
     temporadaId: z.number().int().positive().optional().nullable(),
+    // Solicitud de Inspección asociada (opcional, 2026-11-13).
+    solicitudInspeccionId: z.number().int().positive().optional().nullable(),
   })
   .refine((data) => !(data.ordenCompraId != null && data.esProceso), {
     message: 'Una Recepción con Orden de Compra no puede marcarse como Proceso',
@@ -44,6 +46,7 @@ export const recepcionUpdateSchema = z.object({
   templateCargaId: z.number().int().positive().optional().nullable(),
   observaciones: z.string().max(2000).trim().optional().nullable(),
   temporadaId: z.number().int().positive().optional().nullable(),
+  solicitudInspeccionId: z.number().int().positive().optional().nullable(),
 })
 
 export const recepcionParamsSchema = z.object({
@@ -72,6 +75,14 @@ export const formatoBaseOcQuerySchema = z.object({
   filas: z.coerce.number().int().min(1).max(10000).default(1),
   // Planta de la Recepción (2026-10-14): si también es PACKING, precarga su CSP.
   plantaId: z.coerce.number().int().positive().optional(),
+})
+
+// Opciones de Solicitud de Inspección para el selector de la Recepción.
+export const opcionesSolicitudQuerySchema = z.object({
+  temporadaId: z.coerce.number().int().positive().optional(),
+  entidadProductorId: z.coerce.number().int().positive().optional(),
+  // Con OC: se filtra por el productor de la OC.
+  ordenCompraId: z.coerce.number().int().positive().optional(),
 })
 
 export type RecepcionCreateBody = z.infer<typeof recepcionCreateSchema>

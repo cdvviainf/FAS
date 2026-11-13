@@ -52,6 +52,12 @@ export interface DocumentDefinition<Payload = unknown> {
   controlCopia: boolean
   nombreArchivo: (payload: Payload) => string
   folio: (payload: Payload) => string
+  // Versión Excel del mismo documento (2026-11-12, Proforma): mismo payload que
+  // el PDF. Si existe, GET /documentos/:tipo/:id.xlsx la entrega.
+  excel?: {
+    generar: (payload: Payload) => Promise<Buffer>
+    nombreArchivo: (payload: Payload) => string
+  }
 }
 
 // `any` a propósito (no `unknown`): el registro es heterogéneo — cada

@@ -9,6 +9,7 @@ export interface RecepcionCreateInput {
   templateCargaId?: number | null
   observaciones?: string | null
   temporadaId?: number | null
+  solicitudInspeccionId?: number | null
 }
 
 // origen/instructivoIds (derivado de/asociado a ordenCompraId/esProceso) se

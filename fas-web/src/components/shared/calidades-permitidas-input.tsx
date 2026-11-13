@@ -29,6 +29,7 @@ export function CalidadesPermitidasInput({
   condiciones,
   disabled = false,
   label = 'Calidades permitidas',
+  requerido = false,
 }: {
   value: CalidadPermitidaPar[]
   onChange: (pares: CalidadPermitidaPar[]) => void
@@ -36,6 +37,7 @@ export function CalidadesPermitidasInput({
   condiciones: NotaRef[]
   disabled?: boolean
   label?: string
+  requerido?: boolean
 }) {
   const [calidadId, setCalidadId] = useState<string>('')
   const [condicionId, setCondicionId] = useState<string>('')
@@ -59,7 +61,7 @@ export function CalidadesPermitidasInput({
 
   return (
     <div className='space-y-2'>
-      <Label>{label}</Label>
+      <Label>{label}{requerido && <span className='text-destructive'> *</span>}</Label>
       <div className='flex flex-wrap items-end gap-2'>
         <div className='min-w-[9rem] flex-1 space-y-1'>
           <span className='text-muted-foreground text-xs'>Calidad</span>
