@@ -56,6 +56,7 @@ interface DatosInstructivoForm {
   deposito: string
   awbBl: string
   numeroDus: string
+  fechaEnvioDocumentos: string
   cutoffDate: string
   tipoBultos: string
   agenteAduanaId: string
@@ -72,6 +73,7 @@ function formInstructivoInicial(embarque: EmbarqueDetalle): DatosInstructivoForm
     deposito: embarque.deposito ?? '',
     awbBl: embarque.awbBl ?? '',
     numeroDus: embarque.numeroDus ?? '',
+    fechaEnvioDocumentos: soloFecha(embarque.fechaEnvioDocumentos),
     cutoffDate: isoAInputLocal(embarque.cutoffDate),
     tipoBultos: embarque.tipoBultos ?? '',
     agenteAduanaId: embarque.agenteAduanaId ? String(embarque.agenteAduanaId) : '',
@@ -224,6 +226,7 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
         deposito: formInstructivo.deposito || null,
         awbBl: formInstructivo.awbBl || null,
         numeroDus: formInstructivo.numeroDus || null,
+        fechaEnvioDocumentos: formInstructivo.fechaEnvioDocumentos || null,
         cutoffDate: inputLocalAIso(formInstructivo.cutoffDate),
         tipoBultos: formInstructivo.tipoBultos || null,
         agenteAduanaId: formInstructivo.agenteAduanaId ? Number(formInstructivo.agenteAduanaId) : null,
@@ -307,7 +310,11 @@ export function SolicitudReservaTab({ embarque }: { embarque: EmbarqueDetalle })
           <Label>DUS</Label>
           <Input value={formInstructivo.numeroDus} onChange={(e) => setFormInstructivo((f) => ({ ...f, numeroDus: e.target.value }))} disabled={!puedeEscribir} />
         </div>
-        <div />
+        {/* Fecha base de las cuotas "Envío de documentos" (2026-11-13). */}
+        <div className='space-y-1.5'>
+          <Label>Fecha Envío Documentos</Label>
+          <Input type='date' value={formInstructivo.fechaEnvioDocumentos} onChange={(e) => setFormInstructivo((f) => ({ ...f, fechaEnvioDocumentos: e.target.value }))} disabled={!puedeEscribir} />
+        </div>
 
         <div className='space-y-1.5'>
           <Label>Contenedor</Label>

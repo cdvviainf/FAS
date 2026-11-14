@@ -247,7 +247,9 @@ describe('enviarBorradorSii → payload DTE 110 (valor FOB + Aduana)', () => {
     tipoCambio: 950,
     fechaDocumento: new Date('2026-09-22'),
     idioma: 'ES' as const,
-    condicionPago: null,
+    // Condición de Pago con cuotas: requisito de envío al SII (Forma de Pago,
+    // Docs/cobranza.md §0.k).
+    condicionPago: { cuotas: [{ plazoDias: 30 }] },
     observaciones: null,
     actualizadoEn: new Date('2026-09-22'),
     lineas: [
@@ -262,6 +264,9 @@ describe('enviarBorradorSii → payload DTE 110 (valor FOB + Aduana)', () => {
     numeroContenedorManual: 'CONT1',
     numeroSelloManual: 'SELLO1',
     awbBl: 'BL-123',
+    // DUS obligatorio para enviar la 110 (Docs/cobranza.md §0.k).
+    numeroDus: 'DUS-1',
+    fechaEnvioDocumentos: null,
     notaVenta: {
       ...embarqueDespachado.notaVenta,
       moneda: { codigo: 'USD', descripcion: 'DOLAR USA', descripcionExtranjera: null, esMonedaBase: false },
@@ -279,7 +284,11 @@ describe('enviarBorradorSii → payload DTE 110 (valor FOB + Aduana)', () => {
     vi.mocked(repo.getFacturaActivaById).mockResolvedValue(facturaCif as never)
     vi.mocked(repo.getEmbarqueParaFacturaDte).mockResolvedValue(embarqueCif as never)
     vi.mocked(dteRepo.getEmpresaParaDte).mockResolvedValue({ rut: '77.089.369-6', razonSocial: 'Agrosan SpA', giro: 'Exportación', direccion: 'Av X 1', comuna: 'Santiago' } as never)
-    vi.mocked(repo.getCuotasPagoNotaVenta).mockResolvedValue([] as never)
+    // Una cuota con vencimiento calculable (FACTURA + 30 días): requisito de
+    // envío al SII (Fecha de Vencimiento, Docs/cobranza.md §0.k).
+    vi.mocked(repo.getCuotasPagoNotaVenta).mockResolvedValue([
+      { descripcion: '100% a 30 días', fechaReferencia: 'FACTURA', plazoDias: 30, tipoValor: 'PORCENTAJE', porcentaje: 100, montoCalculado: null },
+    ] as never)
     vi.mocked(repo.getLineasPalletParaPeso).mockResolvedValue([] as never)
     vi.mocked(dteService.emitirDteTemporal).mockResolvedValue({ estado: 'TEMPORAL_CREADO' } as never)
 

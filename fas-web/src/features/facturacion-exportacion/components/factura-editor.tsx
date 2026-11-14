@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -104,15 +104,8 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   const [fechaTipoCambio, setFechaTipoCambio] = useState<string | null>(factura.fechaTipoCambio)
   const [observaciones, setObservaciones] = useState<string>(factura.observaciones ?? '')
 
-  // Faltantes de descripción extranjera para las dimensiones actuales — para
-  // advertir/bloquear el idioma inglés (misma fuente que el backend).
-  const { data: sugerencia } = useQuery({
-    queryKey: ['factura-sugerencia-faltantes', embarqueId, dimensiones],
-    queryFn: () => proformaService.sugerirLineas(embarqueId, dimensiones),
-    staleTime: 10_000,
-  })
-  const faltantesExtranjera = sugerencia?.faltantesExtranjera ?? []
-  const enBloqueadoPorFaltantes = idioma === 'EN' && faltantesExtranjera.length > 0
+  // El DTE del SII (110) se emite siempre en español (2026-11-13): el idioma de
+  // la Factura solo afecta la pantalla, así que no bloquea el envío al SII.
 
   // Estado del flujo SII (derivado del DocumentoDte): borrador enviado = temporal.
   const borradorEnviado = factura.dte?.estado === 'TEMPORAL_CREADO'
@@ -309,10 +302,6 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
       toast.error(`No se puede enviar al SII hasta completar: ${factura.validacion!.faltantes.join('; ')}`)
       return false
     }
-    if (enBloqueadoPorFaltantes) {
-      toast.error(`No se puede emitir en inglés: faltan descripciones extranjeras (${faltantesExtranjera.join(' · ')})`)
-      return false
-    }
     return true
   }
 
@@ -460,6 +449,7 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
               <dt className='font-medium'>Contenedor:</dt><dd>{factura.validacion.transporte.contenedor ?? '—'}</dd>
               <dt className='font-medium'>Sello:</dt><dd>{factura.validacion.transporte.sello ?? '—'}</dd>
               <dt className='font-medium'>B/L (AWB):</dt><dd>{factura.validacion.transporte.awbBl ?? '—'}</dd>
+              <dt className='font-medium'>DUS:</dt><dd>{factura.validacion.transporte.dus ?? '—'}</dd>
               <dt className='font-medium'>Bultos (cajas):</dt><dd>{factura.validacion.pesos.totBultos}</dd>
               <dt className='font-medium'>Peso neto:</dt><dd>{factura.validacion.pesos.pesoNeto != null ? `${factura.validacion.pesos.pesoNeto} kg` : '—'}</dd>
               <dt className='font-medium'>Peso bruto:</dt><dd>{factura.validacion.pesos.pesoBruto != null ? `${factura.validacion.pesos.pesoBruto} kg` : '—'}</dd>
@@ -508,12 +498,6 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
                   : 'El SII lo exige para facturar en moneda extranjera.'}
               </p>
             </div>
-          )}
-          {enBloqueadoPorFaltantes && (
-            <p className='w-full text-xs text-destructive'>
-              No se puede emitir en inglés: falta la descripción extranjera de — {faltantesExtranjera.join(' · ')}.
-              Complétala en el mantenedor o usa español.
-            </p>
           )}
           <div className='w-full space-y-1.5'>
             <div className='flex items-center justify-between gap-4'>

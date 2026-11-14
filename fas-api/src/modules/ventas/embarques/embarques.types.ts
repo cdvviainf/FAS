@@ -53,6 +53,7 @@ export interface DatosInstructivoInput {
   deposito?: string | null
   awbBl?: string | null
   numeroDus?: string | null
+  fechaEnvioDocumentos?: Date | null
   cutoffDate?: Date | null
   tipoBultos?: string | null
   agenteAduanaId?: number | null

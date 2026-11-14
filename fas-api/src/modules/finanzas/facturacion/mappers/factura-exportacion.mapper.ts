@@ -16,7 +16,9 @@ export interface ReceptorFacturaExportacion {
   taxId: string | null // NumId extranjero: Tax ID del cliente (campo TAXID de la Entidad)
   giro: string | null
   direccion: string | null
-  // Código de nacionalidad del cliente según tabla de Aduana del SII.
+  // Código de nacionalidad según tabla de Aduana del SII = país de DESTINO del
+  // Cierre (decisión de negocio 2026-11-13: Nacionalidad, CodPaisRecep y
+  // CodPaisDestin son el mismo país de destino).
   nacionalidadCodigo: string | null
 }
 
@@ -24,6 +26,26 @@ export interface LineaFacturaExportacion {
   descripcion: string
   cantidadCajas: number
   precioUnitario: number
+  // Unidad de medida del ítem (UnmdItem, SII máx. 4 caracteres). Null = se omite.
+  unidad?: string | null
+}
+
+// Largos máximos del SII (Formato DTE v2.5): NmbItem 80, DscItem 1000.
+const MAX_NMB_ITEM = 80
+const MAX_DSC_ITEM = 1000
+
+// Nombre del ítem para el SII (2026-11-13): si el nombre de venta cabe en 80
+// caracteres va completo en NmbItem; si no, NmbItem lleva los primeros 80
+// (cortando en un espacio para no partir palabras, y sin un separador " -"
+// colgando) y el nombre de venta COMPLETO va en DscItem, que LibreDTE imprime
+// bajo el nombre.
+export function nombreItemSii(texto: string): { nombre: string; detalle: string | null } {
+  const limpio = texto.trim()
+  if (limpio.length <= MAX_NMB_ITEM) return { nombre: limpio, detalle: null }
+  const corte = limpio.lastIndexOf(' ', MAX_NMB_ITEM)
+  const base = corte >= MAX_NMB_ITEM / 2 ? limpio.slice(0, corte) : limpio.slice(0, MAX_NMB_ITEM)
+  const nombre = base.replace(/[\s\-–,;:/]+$/, '').slice(0, MAX_NMB_ITEM)
+  return { nombre, detalle: limpio.slice(0, MAX_DSC_ITEM) }
 }
 
 // Datos de Aduana — todos opcionales acá, pero el service los valida como
@@ -176,7 +198,8 @@ function buildAduana(a: AduanaFacturaExportacion): Record<string, unknown> {
     ...(a.totBultos != null ? { TotBultos: a.totBultos } : {}),
     ...(a.montoFlete != null ? { MntFlete: a.montoFlete } : {}),
     ...(a.montoSeguro != null ? { MntSeguro: a.montoSeguro } : {}),
-    // País receptor y país destino: mismo país del cliente (decisión de negocio).
+    // País receptor y país destino: el mismo país de destino del Cierre
+    // (decisión de negocio, reconfirmada 2026-11-13).
     ...(a.paisDestinoCodigo ? { CodPaisRecep: a.paisDestinoCodigo } : {}),
     ...(a.paisDestinoCodigo ? { CodPaisDestin: a.paisDestinoCodigo } : {}),
   }
@@ -249,14 +272,21 @@ export function mapFacturaExportacionA110(data: FacturaExportacionMapeo): Libred
       // Moneda extranjera de la operación (tabla de Aduana del SII).
       Totales: { TpoMoneda: data.monedaAduana },
     },
-    Detalle: data.lineas.map((l, i) => ({
-      NroLinDet: i + 1,
-      NmbItem: l.descripcion,
-      QtyItem: l.cantidadCajas,
-      PrcItem: l.precioUnitario,
-      // Exportación: ítems no afectos a IVA.
-      IndExe: 1,
-    })),
+    // Claves en el orden del XSD del SII (NroLinDet, IndExe, NmbItem, DscItem,
+    // QtyItem, UnmdItem, PrcItem).
+    Detalle: data.lineas.map((l, i) => {
+      const { nombre, detalle } = nombreItemSii(l.descripcion)
+      return {
+        NroLinDet: i + 1,
+        // Exportación: ítems no afectos a IVA.
+        IndExe: 1,
+        NmbItem: nombre,
+        ...(detalle ? { DscItem: detalle } : {}),
+        QtyItem: l.cantidadCajas,
+        ...(l.unidad ? { UnmdItem: l.unidad } : {}),
+        PrcItem: l.precioUnitario,
+      }
+    }),
     // Referencias (B/L, DUS, OC…) — solo si hay. TpoDocRef = código SII.
     ...((data.referencias ?? []).length > 0
       ? {

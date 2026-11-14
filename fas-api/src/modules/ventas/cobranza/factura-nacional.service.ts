@@ -710,8 +710,8 @@ export async function firmar(id: number, userId: string) {
 
 // Arma las cuotas de la Factura Nacional desde su CondicionPago. Sin condición
 // configurada → sin cuotas (estadoCobranza SIN_CUOTAS). FACTURA usa la fecha del
-// documento; ZARPE/ARRIBO usan las del Embarque (solo VENTA_NACIONAL);
-// ENVIO_DOCUMENTOS queda sin fecha (sin fuente aún, igual que en exportación).
+// documento; ZARPE/ARRIBO/ENVIO_DOCUMENTOS usan las del Embarque (solo
+// VENTA_NACIONAL; envío de documentos desde 2026-11-13, igual que exportación).
 async function construirCuotasNacional(
   factura: { id: number; condicionPagoId: number | null; embarqueId: number | null; lineas: Array<{ cantidad: Prisma.Decimal | number }>; montoTotal: Prisma.Decimal | number },
   fechaDocumento: Date,
@@ -722,11 +722,13 @@ async function construirCuotasNacional(
 
   let fechaZarpe: Date | null = null
   let fechaArribo: Date | null = null
+  let fechaEnvioDocumentos: Date | null = null
   if (factura.embarqueId != null) {
     const emb = await repo.getFechasEmbarque(factura.embarqueId)
     if (emb) {
       fechaZarpe = emb.reservaManual ? emb.fechaZarpeManual : emb.solicitudReserva?.fechaZarpe ?? null
       fechaArribo = emb.fechaArribo
+      fechaEnvioDocumentos = emb.fechaEnvioDocumentos
     }
   }
   const cantidadTotal = factura.lineas.reduce((acc, l) => acc + Number(l.cantidad), 0)
@@ -740,7 +742,7 @@ async function construirCuotasNacional(
     })),
     Number(factura.montoTotal),
     cantidadTotal,
-    { FACTURA: fechaDocumento, ZARPE: fechaZarpe, ARRIBO: fechaArribo, ENVIO_DOCUMENTOS: null },
+    { FACTURA: fechaDocumento, ZARPE: fechaZarpe, ARRIBO: fechaArribo, ENVIO_DOCUMENTOS: fechaEnvioDocumentos },
   )
 }
 

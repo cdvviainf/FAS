@@ -29,6 +29,7 @@ export async function getEmbarqueParaProforma(embarqueId: number) {
       reservaManual: true,
       fechaZarpeManual: true,
       fechaArribo: true,
+      fechaEnvioDocumentos: true,
       solicitudReserva: { select: { fechaZarpe: true } },
       notaVenta: {
         select: {

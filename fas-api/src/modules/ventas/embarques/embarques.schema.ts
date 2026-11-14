@@ -102,6 +102,7 @@ export const datosInstructivoSchema = z
     deposito: z.string().trim().max(150).optional().nullable(),
     awbBl: z.string().trim().max(100).optional().nullable(),
     numeroDus: z.string().trim().max(50).optional().nullable(),
+    fechaEnvioDocumentos: z.coerce.date().optional().nullable(),
     cutoffDate: z.coerce.date().optional().nullable(),
     tipoBultos: z.string().trim().max(150).optional().nullable(),
     agenteAduanaId: z.number().int().positive().optional().nullable(),

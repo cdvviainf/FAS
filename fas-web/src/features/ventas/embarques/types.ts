@@ -137,6 +137,7 @@ export interface DatosInstructivo {
   deposito: string | null
   awbBl: string | null
   numeroDus: string | null
+  fechaEnvioDocumentos: string | null
   cutoffDate: string | null
   tipoBultos: string | null
   agenteAduanaId: number | null
@@ -155,6 +156,7 @@ export interface DatosInstructivoInput {
   deposito?: string | null
   awbBl?: string | null
   numeroDus?: string | null
+  fechaEnvioDocumentos?: string | null
   cutoffDate?: string | null
   tipoBultos?: string | null
   agenteAduanaId?: number | null

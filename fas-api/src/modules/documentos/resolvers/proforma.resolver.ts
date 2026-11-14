@@ -47,6 +47,8 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
   const fechasPorReferencia: Partial<Record<string, Date | null | undefined>> = {
     ZARPE: fechaZarpe,
     ARRIBO: embarque.fechaArribo,
+    // Fecha de envío de documentos del Embarque (2026-11-13).
+    ENVIO_DOCUMENTOS: embarque.fechaEnvioDocumentos,
   }
 
   // FAS-PROF-EXP-006 (QA ronda 1): se entrega la clave semántica cruda —
@@ -113,7 +115,7 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
   // Contado/Crédito (2026-11-13): misma regla que la Factura Nacional, con la
   // fecha del documento como referencia FACTURA.
   const fechaDoc = proforma.fechaDocumento ?? proforma.fechaEmision
-  const basePorReferencia: Record<string, Date | null | undefined> = { ...fechasPorReferencia, FACTURA: fechaDoc, ENVIO_DOCUMENTOS: null }
+  const basePorReferencia: Record<string, Date | null | undefined> = { ...fechasPorReferencia, FACTURA: fechaDoc }
   const formaPago = condicionPagoSii(
     cuotasPago.map((c) => {
       const base = basePorReferencia[c.fechaReferencia]

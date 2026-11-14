@@ -3646,6 +3646,10 @@ model Embarque {
   // N° de DUS (Documento Único de Salida, Aduana) — se ingresa en los datos de
   // la reserva y sale en la Proforma (2026-11-13).
   numeroDus              String?
+  // Fecha de envío de documentos al cliente (2026-11-13): fecha base de las
+  // cuotas con referencia ENVIO_DOCUMENTOS (antes sin fuente → sin vencimiento).
+  // Fecha calendario, se edita junto a los datos del Instructivo/reserva.
+  fechaEnvioDocumentos   DateTime?
 
   // ─── Instructivo de Embarque (2026-09-21, ventas.md R11 + gap analysis
   // contra el "Instructivo de Embarque (AGA)" real del cliente) — campos

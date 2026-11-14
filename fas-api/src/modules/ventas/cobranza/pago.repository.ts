@@ -549,6 +549,7 @@ const EMBARQUE_FECHAS_SELECT = {
   reservaManual: true,
   fechaZarpeManual: true,
   fechaArribo: true,
+  fechaEnvioDocumentos: true,
   solicitudReserva: { select: { fechaZarpe: true } },
 } as const
 
@@ -556,14 +557,16 @@ type EmbarqueFechas = {
   reservaManual: boolean
   fechaZarpeManual: Date | null
   fechaArribo: Date | null
+  fechaEnvioDocumentos: Date | null
   solicitudReserva: { fechaZarpe: Date | null } | null
 } | null
 
 // Fechas base para los vencimientos (CB6): FACTURA = fecha del documento;
-// ZARPE/ARRIBO del Embarque (si lo hay); ENVIO_DOCUMENTOS sin fuente aún.
+// ZARPE/ARRIBO/ENVIO_DOCUMENTOS del Embarque (si lo hay; envío de documentos
+// desde 2026-11-13).
 function fechasBase(fechaDocumento: Date | null, fechaEmision: Date | null, emb: EmbarqueFechas): FechasBase {
   const zarpe = emb ? (emb.reservaManual ? emb.fechaZarpeManual : emb.solicitudReserva?.fechaZarpe ?? null) : null
-  return { FACTURA: fechaDocumento ?? fechaEmision ?? null, ZARPE: zarpe, ARRIBO: emb?.fechaArribo ?? null, ENVIO_DOCUMENTOS: null }
+  return { FACTURA: fechaDocumento ?? fechaEmision ?? null, ZARPE: zarpe, ARRIBO: emb?.fechaArribo ?? null, ENVIO_DOCUMENTOS: emb?.fechaEnvioDocumentos ?? null }
 }
 
 // Refresca UNA factura bajo su advisory lock (serializa con los pagos, FAS-COB-

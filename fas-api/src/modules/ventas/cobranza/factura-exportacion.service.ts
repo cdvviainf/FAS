@@ -14,7 +14,7 @@ import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapte
 import { factorFob, resolverFleteSeguro, totalClausula, unitarioFob } from './clausula-flete-seguro.js'
 import { derivarEstadoCobranza, inicioDeHoy } from './cobranza-estado.js'
 import * as ncService from './nota-credito.service.js'
-import { descripcionLinea, faltantesDescripcionExtranjera, type Idioma, type LineaConMantenedores } from './descripcion-idioma.js'
+import { descripcionLinea, type Idioma } from './descripcion-idioma.js'
 import * as repo from './factura-exportacion.repository.js'
 import type {
   DimensionProforma,
@@ -78,38 +78,16 @@ function normalizarIdioma(idioma: string | null | undefined): Idioma {
   return idioma === 'EN' ? 'EN' : 'ES'
 }
 
-// Adapta las líneas (con relaciones de mantenedores) al shape del builder de
-// descripción por idioma.
-type LineaConRelaciones = {
-  especie: { descripcion: string; descripcionExtranjera: string | null }
-  variedad: { descripcion: string; descripcionExtranjera: string | null } | null
-  articulo: { descripcion: string; descripcionExtranjera: string | null; descripcionComercial?: string | null } | null
-  calibre: { descripcion: string; descripcionExtranjera: string | null } | null
-  categoria: { descripcion: string; descripcionExtranjera: string | null } | null
-  etiqueta: { descripcion: string; descripcionExtranjera: string | null } | null
-}
-function aLineasMantenedores(lineas: LineaConRelaciones[]): LineaConMantenedores[] {
-  return lineas.map((l) => ({
-    especie: l.especie,
-    variedad: l.variedad,
-    articulo: l.articulo,
-    calibre: l.calibre,
-    categoria: l.categoria,
-    etiqueta: l.etiqueta,
-  }))
-}
+// El DTE del SII (110/112) se emite SIEMPRE en español (2026-11-13, decisión de
+// negocio): el idioma de la Factura solo afecta la pantalla. Por eso ya no hay
+// barrera de "descripción extranjera" al enviar al SII.
+const IDIOMA_DTE: Idioma = 'ES'
 
-// Barrera de idioma: si es EN, exige que todos los mantenedores referenciados
-// tengan descripcionExtranjera; si falta alguno, bloquea y los lista.
-function requireIdiomaEmitible(idioma: Idioma, lineas: LineaConRelaciones[]) {
-  if (idioma !== 'EN') return
-  const faltan = faltantesDescripcionExtranjera(aLineasMantenedores(lineas))
-  if (faltan.length > 0) {
-    throw new ValidationError(
-      `No se puede emitir en inglés: falta la descripción extranjera de — ${faltan.join(' · ')}. Complétala en el mantenedor o cambia el idioma a español.`,
-    )
-  }
-}
+// Unidad de medida de cada ítem del DTE 110 (UnmdItem, SII máx. 4 caracteres).
+const UNIDAD_ITEM_DTE = 'CAJA'
+
+// Referencia del DUS (Documento Único de Salida) — código SII 807.
+const TPO_DOC_REF_DUS = '807'
 
 // ─── Crear borrador desde una Proforma emitida ───────────────────────────────
 export async function crearBorradorDesdeProforma(proformaId: number, userId: string) {
@@ -292,7 +270,8 @@ export async function actualizarBorrador(id: number, body: FacturaExportacionAct
 // Copia el snapshot NotaVentaCuotaPago del Cierre Comercial. PORCENTAJE se
 // recalcula contra el montoTotal real de la Factura; MONTO_UNITARIO usa el monto
 // ya congelado. Vencimiento = fecha de referencia + plazoDias; FACTURA usa la
-// fecha de emisión, ZARPE/ARRIBO las del Embarque, ENVIO_DOCUMENTOS queda null.
+// fecha de emisión, ZARPE/ARRIBO las del Embarque y ENVIO_DOCUMENTOS la fecha de
+// envío de documentos del Embarque (2026-11-13; null mientras no se cargue).
 // El descuadre de redondeo (si existe) se ajusta en la última cuota.
 async function construirCuotas(
   notaVentaId: number,
@@ -302,6 +281,7 @@ async function construirCuotas(
     reservaManual: boolean
     fechaZarpeManual: Date | null
     fechaArribo: Date | null
+    fechaEnvioDocumentos: Date | null
     solicitudReserva: { fechaZarpe: Date | null } | null
   },
 ): Promise<repo.CuotaPersistir[]> {
@@ -313,7 +293,7 @@ async function construirCuotas(
     FACTURA: fechaEmision,
     ZARPE: fechaZarpe,
     ARRIBO: embarque.fechaArribo,
-    ENVIO_DOCUMENTOS: null,
+    ENVIO_DOCUMENTOS: embarque.fechaEnvioDocumentos,
   }
 
   const cuotas = cuotasPago.map((c, i) => {
@@ -342,8 +322,8 @@ async function construirCuotas(
   return cuotas
 }
 
-// Arma el payload del DTE 110 desde la Factura + Embarque + emisor, en el idioma
-// de la Factura (descripción reconstruida por idioma; detalle a valor FOB).
+// Arma el payload del DTE 110 desde la Factura + Embarque + emisor, siempre en
+// español (IDIOMA_DTE; detalle a valor FOB).
 // Valida que cada mantenedor que alimenta el bloque Aduana del DTE 110 esté
 // presente en la Nota de Venta/Embarque y tenga su código de Aduana del SII
 // (codigoAduana) cargado. Junta todos los faltantes en un solo error accionable
@@ -387,7 +367,8 @@ function faltantesAduana(embarque: EmbarqueFacturaDte): string[] {
 // y la Factura Nacional. Fuente ÚNICA para el panel (`construirValidacionFactura`)
 // y el gate de envío (`validarReceptorFactura`). Razón social, TAXID (NumId: el
 // primer código, máx. 20) y dirección por defecto son obligatorios; el país
-// (nacionalidad) ya se valida en el bloque Aduana ("País de destino").
+// (Nacionalidad = país de destino del Cierre) ya se valida en el bloque Aduana
+// ("País de destino").
 function receptorFactura(embarque: EmbarqueFacturaDte) {
   const c = embarque.notaVenta.cliente
   const razonSocial = c.razonSocial?.trim() || null
@@ -424,12 +405,90 @@ function validarCodigosAduana(embarque: EmbarqueFacturaDte) {
   }
 }
 
+type EmisorDte = Awaited<ReturnType<typeof dteRepo.getEmpresaParaDte>>
+
+// Contenedor / sello / DUS del Embarque — misma derivación que el payload del DTE.
+function transporteEmbarque(embarque: EmbarqueFacturaDte) {
+  return {
+    contenedor: (embarque.reservaManual ? embarque.numeroContenedorManual : (embarque.solicitudReserva?.numeroContenedor ?? null))?.trim() || null,
+    sello: (embarque.numeroSelloManual ?? embarque.solicitudReserva?.numeroSello ?? null)?.trim() || null,
+    naviera: embarque.naviera?.razonSocial?.trim() || null,
+    dus: embarque.numeroDus?.trim() || null,
+  }
+}
+
+// Requisitos adicionales para ENVIAR la Factura de Exportación (DTE 110) al SII
+// (2026-11-13, validación contra la lista de campos exigidos en el PDF): datos
+// del emisor, Forma de Pago + Fecha de Vencimiento, contenedor completo y DUS.
+// Fuente ÚNICA para el panel pre-vuelo (`construirValidacionFactura`) y el gate
+// de `enviarBorradorSii`. No aplica a las Notas de Crédito (112).
+async function faltantesEnvio110(
+  factura: {
+    condicionPago: { cuotas: { plazoDias: number }[] } | null
+    fechaDocumento: Date | null
+    montoTotal: unknown
+  },
+  embarque: EmbarqueFacturaDte,
+  emisor: EmisorDte,
+): Promise<string[]> {
+  const faltantes: string[] = []
+
+  // Emisor: giro, dirección del establecimiento y comuna (impresos en el PDF).
+  if (emisor) {
+    const donde = 'complétalo en Configuración → Empresas'
+    if (!emisor.giro?.trim()) faltantes.push(`La Empresa emisora no tiene giro — ${donde}`)
+    if (!emisor.direccion?.trim()) faltantes.push(`La Empresa emisora no tiene dirección por defecto — ${donde}`)
+    if (!emisor.comuna?.trim()) faltantes.push(`La dirección por defecto de la Empresa emisora no tiene comuna — ${donde}`)
+  }
+
+  // Forma de Pago (FmaPago, derivada de la Condición de Pago de la Factura) y
+  // Fecha de Vencimiento (FchVenc, vencimiento de la última cuota con fecha).
+  if (derivarFmaPago(factura.condicionPago) == null) {
+    faltantes.push('La Factura no tiene Condición de Pago con cuotas — selecciónala para informar la Forma de Pago')
+  }
+  const cuotas = await construirCuotas(
+    embarque.notaVentaId,
+    Number(factura.montoTotal),
+    factura.fechaDocumento ?? new Date(),
+    embarque,
+  )
+  if (cuotas.length === 0) {
+    faltantes.push('El Cierre Comercial no tiene cuotas de pago — no se puede informar la Fecha de Vencimiento')
+  } else if (!cuotas.some((c) => c.fechaVencimiento)) {
+    faltantes.push(
+      'Ninguna cuota de pago tiene fecha de vencimiento calculable (revisa en el Embarque la fecha de zarpe, arribo o envío de documentos, según la Condición de Pago) — el SII exige la Fecha de Vencimiento',
+    )
+  }
+
+  // Contenedor: el SII exige IdContainer junto con Sello y EmisorSello (naviera);
+  // si falta alguno el contenedor no se puede informar → se bloquea en vez de
+  // timbrar la factura sin contenedor.
+  const t = transporteEmbarque(embarque)
+  if (t.contenedor && (!t.sello || !t.naviera)) {
+    const falta = [!t.sello ? 'el sello' : null, !t.naviera ? 'la naviera' : null].filter(Boolean).join(' y ')
+    faltantes.push(
+      `El Embarque tiene el contenedor ${t.contenedor} pero falta ${falta} — el SII los exige juntos para informar el contenedor`,
+    )
+  }
+
+  // DUS obligatorio (decisión 2026-11-13).
+  if (!t.dus) faltantes.push('Falta el N° de DUS en el Embarque (datos de la reserva)')
+
+  return faltantes
+}
+
 // Resumen pre-vuelo de TODO lo que irá en la Factura (bloque Aduana con su Código
 // SII + transporte + pesos/bultos), con los faltantes marcados. El panel lo pinta
 // en rojo y el envío al SII bloquea con la misma lista (`faltantes`).
 async function construirValidacionFactura(
-  factura: { lineas: Array<{ cantidadCajas: unknown }> },
+  factura: {
+    lineas: Array<{ cantidadCajas: unknown }>
+    condicionPago: { cuotas: { plazoDias: number }[] } | null
+    fechaDocumento: Date | null
+    montoTotal: unknown
+  },
   embarque: EmbarqueFacturaDte,
+  emisor: EmisorDte,
 ) {
   const bloqueAduana = requeridosAduana(embarque).map((r) => ({
     etiqueta: r.etiqueta,
@@ -448,6 +507,7 @@ async function construirValidacionFactura(
     contenedor: embarque.reservaManual ? embarque.numeroContenedorManual : (embarque.solicitudReserva?.numeroContenedor ?? null),
     sello: embarque.numeroSelloManual ?? embarque.solicitudReserva?.numeroSello ?? null,
     awbBl: embarque.awbBl ?? null,
+    dus: embarque.numeroDus ?? null,
   }
 
   // Pesos desde los pallets físicos; bultos = cajas facturadas (líneas).
@@ -471,7 +531,7 @@ async function construirValidacionFactura(
     receptor: receptor.campos,
     transporte,
     pesos,
-    faltantes: [...faltantesAduana(embarque), ...receptor.faltantes],
+    faltantes: [...faltantesAduana(embarque), ...receptor.faltantes, ...(await faltantesEnvio110(factura, embarque, emisor))],
   }
 }
 
@@ -545,7 +605,6 @@ export async function construirPayloadDte(
   factura: NonNullable<Awaited<ReturnType<typeof repo.getFacturaActivaById>>>,
   embarque: NonNullable<Awaited<ReturnType<typeof repo.getEmbarqueParaFacturaDte>>>,
   emisor: { rut: string; razonSocial: string; giro: string | null; direccion: string | null; comuna: string | null },
-  idioma: Idioma,
   opts?: ConstruirPayloadDteOpts,
 ) {
   const nv = embarque.notaVenta
@@ -637,6 +696,12 @@ export async function construirPayloadDte(
         razonRef: 'Instructivo de Embarque',
       })
     }
+    // DUS (2026-11-13): código SII 807. Obligatorio para enviar la 110 (gate en
+    // faltantesEnvio110); no se registra su fecha propia → FchRef = fecha del
+    // documento, mismo criterio que el B/L.
+    if (embarque.numeroDus?.trim()) {
+      referencias.push({ tpoDocRef: TPO_DOC_REF_DUS, folioRef: embarque.numeroDus.trim(), fecha: fechaRef, razonRef: 'DUS' })
+    }
   }
   if (opts?.referenciasExtra?.length) referencias.push(...opts.referenciasExtra)
 
@@ -646,10 +711,13 @@ export async function construirPayloadDte(
   const itemsDte = parcial
     ? [{ descripcion: parcial.glosa, cantidadCajas: 1, precioUnitario: Math.round(parcial.monto * 100) / 100 }]
     : factura.lineas.flatMap((l) => {
+        // Nombre de venta (dimensiones de agrupación de la Factura + descripción
+        // comercial), siempre en español en el DTE.
         const fruta = {
-          descripcion: descripcionLinea(l, idioma),
+          descripcion: descripcionLinea(l, IDIOMA_DTE),
           cantidadCajas: l.cantidadCajas,
           precioUnitario: unitarioFob(Number(l.precioUnitario), factor),
+          unidad: UNIDAD_ITEM_DTE,
         }
         if (l.separacionDescripcion == null || l.separacionPrecioUnitario == null) return [fruta]
         return [
@@ -658,6 +726,7 @@ export async function construirPayloadDte(
             descripcion: l.separacionDescripcion,
             cantidadCajas: l.cantidadCajas,
             precioUnitario: unitarioFob(Number(l.separacionPrecioUnitario), factor),
+            unidad: UNIDAD_ITEM_DTE,
           },
         ]
       })
@@ -679,7 +748,9 @@ export async function construirPayloadDte(
       giro: nv.cliente.giro,
       // DirRecep del DTE 110 (2026-10-13): dirección por defecto del cliente.
       direccion: nv.cliente.direcciones[0]?.direccion ?? null,
-      // SII espera el código de país de SU tabla de Aduana (no "COL").
+      // SII espera el código de país de SU tabla de Aduana (no "COL"). Es el
+      // país de DESTINO del Cierre (Nacionalidad = CodPaisRecep = CodPaisDestin,
+      // decisión de negocio reconfirmada 2026-11-13).
       nacionalidadCodigo: nv.paisDestino?.codigoAduana ?? null,
     },
     lineas: itemsDte,
@@ -742,12 +813,10 @@ async function armarPreviewPayloadDte(id: number) {
   const emisor = await dteRepo.getEmpresaParaDte(factura.empresaId)
   if (!emisor?.rut) throw new ValidationError('La Empresa no tiene RUT configurado')
 
-  const idioma = normalizarIdioma(factura.idioma)
   const payload = await construirPayloadDte(
     factura,
     embarque,
     { rut: emisor.rut, razonSocial: emisor.razonSocial, giro: emisor.giro, direccion: emisor.direccion, comuna: emisor.comuna },
-    idioma,
   )
   const nv = embarque.notaVenta
   // Resumen rápido: qué dato va con qué código de Aduana (null = falta).
@@ -817,8 +886,12 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
     throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas antes de facturar')
   }
 
-  const idioma = normalizarIdioma(factura.idioma)
-  requireIdiomaEmitible(idioma, factura.lineas)
+  // Requisitos del PDF/DTE 110 (emisor, Forma de Pago/Vencimiento, contenedor,
+  // DUS) — misma lista que el panel pre-vuelo.
+  const faltantes110 = await faltantesEnvio110(factura, embarque, emisor)
+  if (faltantes110.length > 0) {
+    throw new ValidationError(`No se puede enviar al SII hasta completar: ${faltantes110.join('; ')}.`)
+  }
 
   // Versión de la factura con la que se arma el payload — se re-verifica bajo el
   // advisory lock antes de crear el temporal (FAS-COB-F1-001).
@@ -828,7 +901,6 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
     factura,
     embarque,
     { rut: emisor.rut, razonSocial: emisor.razonSocial, giro: emisor.giro, direccion: emisor.direccion, comuna: emisor.comuna },
-    idioma,
   )
 
   const temporal = await dteService.emitirDteTemporal({
@@ -1014,7 +1086,8 @@ export async function obtenerFactura(id: number) {
   // marcados (el editor lo muestra en rojo antes de enviar al SII). Reusa el mismo
   // gate `requeridosAduana` que bloquea el envío.
   const embarqueDte = await repo.getEmbarqueParaFacturaDte(factura.embarqueId)
-  const validacion = embarqueDte ? await construirValidacionFactura(factura, embarqueDte) : null
+  const emisorDte = embarqueDte ? await dteRepo.getEmpresaParaDte(factura.empresaId) : null
+  const validacion = embarqueDte ? await construirValidacionFactura(factura, embarqueDte, emisorDte) : null
   // Reclamos aprobados del embarque + estado de su NC: alimenta el indicador
   // "reclamo aprobado — NC pendiente" / "NC de reclamo emitida".
   const reclamosRaw = await repo.getReclamosAprobadosEmbarque(factura.embarqueId)
@@ -1165,9 +1238,6 @@ export async function anularConNotaCredito(id: number, userId: string) {
   if (!emisor?.rut) {
     throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas')
   }
-  const idioma = normalizarIdioma(factura.idioma)
-  requireIdiomaEmitible(idioma, factura.lineas)
-
   const codigo = await siguienteCodigo('notaCredito')
   if (!codigo) {
     throw new ValidationError('No hay un prefijo de código configurado para Notas de Crédito (Configuración › Prefijos de Código)')
@@ -1178,7 +1248,6 @@ export async function anularConNotaCredito(id: number, userId: string) {
     factura,
     embarque,
     { rut: emisor.rut, razonSocial: emisor.razonSocial, giro: emisor.giro, direccion: emisor.direccion, comuna: emisor.comuna },
-    idioma,
     {
       tipoDte: TIPO_DTE_NC_EXPORTACION,
       incluirCuotas: false,
@@ -1250,20 +1319,18 @@ export async function emitirNotaCreditoReclamo(facturaId: number, reclamoId: num
   if (!emisor?.rut) {
     throw new ValidationError('La Empresa no tiene RUT configurado — complétalo en Configuración → Empresas')
   }
-  const idioma = normalizarIdioma(factura.idioma)
-
   const codigo = await siguienteCodigo('notaCredito')
   if (!codigo) {
     throw new ValidationError('No hay un prefijo de código configurado para Notas de Crédito (Configuración › Prefijos de Código)')
   }
 
   const fechaFactura = factura.fechaEmision ?? factura.fechaDocumento ?? new Date()
-  const glosa = idioma === 'EN' ? `Credit note for claim ${reclamo.codigo}` : `Nota de crédito por reclamo ${reclamo.codigo}`
+  // El DTE va siempre en español (IDIOMA_DTE).
+  const glosa = `Nota de crédito por reclamo ${reclamo.codigo}`
   const payload = await construirPayloadDte(
     factura,
     embarque,
     { rut: emisor.rut, razonSocial: emisor.razonSocial, giro: emisor.giro, direccion: emisor.direccion, comuna: emisor.comuna },
-    idioma,
     {
       tipoDte: TIPO_DTE_NC_EXPORTACION,
       incluirCuotas: false,

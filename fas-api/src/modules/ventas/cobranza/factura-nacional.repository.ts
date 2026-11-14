@@ -445,6 +445,7 @@ export async function getFechasEmbarque(embarqueId: number) {
       reservaManual: true,
       fechaZarpeManual: true,
       fechaArribo: true,
+      fechaEnvioDocumentos: true,
       solicitudReserva: { select: { fechaZarpe: true } },
     },
   })

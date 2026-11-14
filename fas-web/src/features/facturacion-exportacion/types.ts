@@ -233,6 +233,7 @@ export interface FacturaValidacion {
     contenedor: string | null
     sello: string | null
     awbBl: string | null
+    dus: string | null
   }
   pesos: { pesoNeto: number | null; pesoBruto: number | null; totBultos: number }
   // Bloqueadores (igual que el gate del envío al SII). Vacío = se puede enviar.

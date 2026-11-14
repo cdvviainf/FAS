@@ -151,6 +151,10 @@ export async function getEmbarqueParaFacturaDte(embarqueId: number) {
       numeroContenedorManual: true,
       numeroSelloManual: true,
       awbBl: true,
+      // N° de DUS (2026-11-13): obligatorio para enviar la 110; va como Referencia 807.
+      numeroDus: true,
+      // Fecha base de las cuotas ENVIO_DOCUMENTOS (2026-11-13).
+      fechaEnvioDocumentos: true,
       naviera: { select: { razonSocial: true } },
       solicitudReserva: { select: { fechaZarpe: true, nave: true, numeroBooking: true, numeroContenedor: true, numeroSello: true } },
       puertoZarpe: { select: { codigo: true, descripcion: true, codigoAduana: true } },
