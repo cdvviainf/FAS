@@ -20,7 +20,7 @@ import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { facturasKeys } from '../queries'
 import { facturaExportacionService, hoyFecha, proformaService } from '../service'
 import { DIMENSION_LABELS } from '../types'
-import type { DimensionProforma, FacturaExportacion, ProformaLineaSugerida } from '../types'
+import type { DimensionProforma, FacturaExportacion, ProformaLineaSugerida, TipoMovimientoFleteDte } from '../types'
 import { FilaSeparacion, IncluirLoteCheckbox, SeparacionCantidadesControl } from './separacion-lote-controles'
 import {
   aplicarSeparacionGeneral,
@@ -96,6 +96,9 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   const [montoSeguro, setMontoSeguro] = useState<string>(factura.montoSeguro ?? '')
   // Modo del flete: false = resta al precio de venta (default); true = suma.
   const [fleteSumaAlPrecio, setFleteSumaAlPrecio] = useState<boolean>(factura.fleteSumaAlPrecio)
+  // Cómo va el flete/seguro en el documento del SII (2026-11-17): obligatorio
+  // elegirlo para enviar al SII cuando la cláusula exige flete o seguro.
+  const [fleteMovimientoDte, setFleteMovimientoDte] = useState<TipoMovimientoFleteDte | null>(factura.fleteMovimientoDte)
 
   // Tipo de cambio: solo aplica si la moneda no es la base (CLP). Lo exige el SII
   // para emitir el DTE 110 en moneda extranjera.
@@ -119,6 +122,9 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   const seguroNum = requiereSeguro ? Number(montoSeguro) || 0 : 0
   const subtotalFob = fleteSumaAlPrecio ? Math.round(montoTotal * 100) / 100 : Math.round((montoTotal - fleteNum - seguroNum) * 100) / 100
   const totalCif = Math.round((subtotalFob + fleteNum + seguroNum) * 100) / 100
+  // Total que quedará en el documento del SII: con recargo = valor cláusula
+  // (FOB + flete + seguro); con descuento = valor FOB (cláusula − flete − seguro).
+  const totalDocumentoSii = fleteMovimientoDte === 'DESCUENTO' ? subtotalFob : totalCif
 
   async function toggleDimension(dim: DimensionProforma, marcado: boolean) {
     const nuevas = marcado ? [...dimensiones, dim] : dimensiones.filter((d) => d !== dim)
@@ -206,6 +212,7 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
         montoFlete: requiereFlete ? Number(montoFlete) || 0 : null,
         montoSeguro: requiereSeguro ? Number(montoSeguro) || 0 : null,
         fleteSumaAlPrecio,
+        fleteMovimientoDte: requiereFlete || requiereSeguro ? fleteMovimientoDte : null,
         tipoCambio: esMonedaExtranjera ? Number(tipoCambio) || null : null,
         // Fecha de la paridad observada (la real del Banco Central cuando viene
         // de "Obtener"); null en ingreso manual → el backend sella con la fecha
@@ -666,6 +673,22 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
                   />
                 </div>
               )}
+              <div className='space-y-1.5'>
+                <label className='text-sm font-medium'>En el documento del SII *</label>
+                <Select
+                  value={fleteMovimientoDte ?? ''}
+                  onValueChange={(v) => { setFleteMovimientoDte(v as TipoMovimientoFleteDte); setDirty(true) }}
+                  disabled={!puedeEscribir}
+                >
+                  <SelectTrigger className={`h-8 w-64 ${fleteMovimientoDte ? '' : 'border-destructive'}`}>
+                    <SelectValue placeholder='Elegir recargo o descuento...' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value='RECARGO'>Recargo (suma al valor FOB)</SelectItem>
+                    <SelectItem value='DESCUENTO'>Descuento (resta al valor cláusula)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className='space-y-1 border-t pt-2 text-sm tabular-nums'>
               <div className='flex justify-between'>
@@ -688,6 +711,14 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
                 <span>Total (valor cláusula)</span>
                 <span>{factura.moneda.codigo} {formatMonto(totalCif)}</span>
               </div>
+              {fleteMovimientoDte && (
+                <p className='text-muted-foreground pt-1 text-xs'>
+                  {fleteMovimientoDte === 'RECARGO'
+                    ? 'En el SII: detalle a valor FOB + recargo de flete/seguro.'
+                    : 'En el SII: detalle a valor cláusula − descuento de flete/seguro.'}{' '}
+                  Total del documento: <span className='font-medium'>{factura.moneda.codigo} {formatMonto(totalDocumentoSii)}</span>
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

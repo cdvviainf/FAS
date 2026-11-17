@@ -244,6 +244,7 @@ describe('enviarBorradorSii → payload DTE 110 (valor FOB + Aduana)', () => {
     montoTotal: 1000,
     montoFlete: 100,
     montoSeguro: 100,
+    fleteMovimientoDte: 'RECARGO' as 'RECARGO' | 'DESCUENTO' | null,
     tipoCambio: 950,
     fechaDocumento: new Date('2026-09-22'),
     idioma: 'ES' as const,
@@ -302,5 +303,44 @@ describe('enviarBorradorSii → payload DTE 110 (valor FOB + Aduana)', () => {
     expect(aduana.TotClauVenta).toBe(1000)
     expect(aduana.MntFlete).toBe(100)
     expect(aduana.MntSeguro).toBe(100)
+    // RECARGO: flete y seguro suman al FOB → total documento = cláusula (1000).
+    expect(payload.DscRcgGlobal).toEqual([
+      { NroLinDR: 1, TpoMov: 'R', GlosaDR: 'Flete', TpoValor: '$', ValorDR: 100, IndExeDR: 1 },
+      { NroLinDR: 2, TpoMov: 'R', GlosaDR: 'Seguro', TpoValor: '$', ValorDR: 100, IndExeDR: 1 },
+    ])
+    // Forma de pago y tipo de cambio en la glosa impresa (TermPagoGlosa).
+    const idDoc = (payload.Encabezado as Record<string, Record<string, unknown>>).IdDoc
+    expect(idDoc.FmaPago).toBe(2)
+    expect(idDoc.TermPagoGlosa).toBe('Forma de pago: Crédito · Tipo de cambio: $950,00')
+  })
+
+  function mocksEnvio(factura: unknown) {
+    vi.mocked(repo.getFacturaActivaById).mockResolvedValue(factura as never)
+    vi.mocked(repo.getEmbarqueParaFacturaDte).mockResolvedValue(embarqueCif as never)
+    vi.mocked(dteRepo.getEmpresaParaDte).mockResolvedValue({ rut: '77.089.369-6', razonSocial: 'Agrosan SpA', giro: 'Exportación', direccion: 'Av X 1', comuna: 'Santiago' } as never)
+    vi.mocked(repo.getCuotasPagoNotaVenta).mockResolvedValue([
+      { descripcion: '100% a 30 días', fechaReferencia: 'FACTURA', plazoDias: 30, tipoValor: 'PORCENTAJE', porcentaje: 100, montoCalculado: null },
+    ] as never)
+    vi.mocked(repo.getLineasPalletParaPeso).mockResolvedValue([] as never)
+    vi.mocked(dteService.emitirDteTemporal).mockResolvedValue({ estado: 'TEMPORAL_CREADO' } as never)
+  }
+
+  it('DESCUENTO: timbra el detalle a valor cláusula y descuenta Flete/Seguro (total = FOB)', async () => {
+    mocksEnvio({ ...facturaCif, fleteMovimientoDte: 'DESCUENTO' })
+    vi.mocked(dteService.emitirDteTemporal).mockClear()
+    await enviarBorradorSii(20, 'u1')
+    const { payload } = vi.mocked(dteService.emitirDteTemporal).mock.calls[0][0] as { payload: Record<string, unknown> }
+    expect((payload.Detalle as Array<Record<string, unknown>>)[0].PrcItem).toBe(10)
+    expect((payload.DscRcgGlobal as Array<Record<string, unknown>>).map((r) => [r.TpoMov, r.ValorDR])).toEqual([['D', 100], ['D', 100]])
+  })
+
+  it('bloquea el envío si hay Flete/Seguro y no se eligió recargo o descuento', async () => {
+    mocksEnvio({ ...facturaCif, fleteMovimientoDte: null })
+    await expect(enviarBorradorSii(20, 'u1')).rejects.toThrow(/Recargo o Descuento/)
+  })
+
+  it('bloquea el envío si la glosa (forma de pago + TC + observaciones) supera 100 caracteres', async () => {
+    mocksEnvio({ ...facturaCif, observaciones: 'x'.repeat(80) })
+    await expect(enviarBorradorSii(20, 'u1')).rejects.toThrow(/acórtalas a 49 caracteres/)
   })
 })

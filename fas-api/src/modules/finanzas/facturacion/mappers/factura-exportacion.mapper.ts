@@ -135,6 +135,15 @@ export interface FacturaExportacionMapeo {
   // campo que LibreDTE imprime como glosa/observaciones en el PDF (máx. 100
   // caracteres según el SII; el schema de entrada ya lo acota).
   observaciones?: string | null
+  // Recargos/descuentos globales (DscRcgGlobal) — Flete/Seguro de la cláusula
+  // (2026-11-17). Montos en la moneda del documento, exentos (IndExeDR=1).
+  recargosGlobales?: RecargoGlobalFacturaExportacion[]
+}
+
+export interface RecargoGlobalFacturaExportacion {
+  tipo: 'R' | 'D' // TpoMov: R = recargo, D = descuento
+  glosa: string // GlosaDR (máx. 45)
+  valor: number // ValorDR en monto ($)
 }
 
 // RUT genérico de receptor extranjero para DTE de exportación (norma SII).
@@ -287,6 +296,20 @@ export function mapFacturaExportacionA110(data: FacturaExportacionMapeo): Libred
         PrcItem: l.precioUnitario,
       }
     }),
+    // Flete/Seguro como recargo o descuento global (2026-11-17). Exportación:
+    // todo es exento → IndExeDR=1 (el recargo/descuento afecta al monto exento).
+    ...((data.recargosGlobales ?? []).length > 0
+      ? {
+          DscRcgGlobal: (data.recargosGlobales ?? []).map((r, i) => ({
+            NroLinDR: i + 1,
+            TpoMov: r.tipo,
+            GlosaDR: r.glosa.slice(0, 45),
+            TpoValor: '$',
+            ValorDR: r.valor,
+            IndExeDR: 1,
+          })),
+        }
+      : {}),
     // Referencias (B/L, DUS, OC…) — solo si hay. TpoDocRef = código SII.
     ...((data.referencias ?? []).length > 0
       ? {

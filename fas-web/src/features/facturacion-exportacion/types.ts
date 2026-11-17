@@ -181,6 +181,8 @@ export interface FacturaExportacion {
   montoSeguro: string | null
   // Si true, el flete/seguro se SUMAN al precio de venta en vez de restar.
   fleteSumaAlPrecio: boolean
+  // Flete/Seguro en el documento del SII: recargo o descuento global (2026-11-17).
+  fleteMovimientoDte: TipoMovimientoFleteDte | null
   // Tipo de cambio (pesos por unidad de la moneda extranjera) y fecha de la
   // paridad observada. Null cuando la moneda es la base (CLP) o no se capturó.
   tipoCambio: string | null
@@ -282,6 +284,7 @@ export interface FacturaExportacionActualizarInput {
   montoFlete?: number | null
   montoSeguro?: number | null
   fleteSumaAlPrecio?: boolean
+  fleteMovimientoDte?: TipoMovimientoFleteDte | null
   tipoCambio?: number | null
   // Fecha de la paridad observada (ISO YYYY-MM-DD) cuando viene de "Obtener";
   // null en ingreso manual. BRT-R1-003.
@@ -316,3 +319,5 @@ export const FECHA_REFERENCIA_LABELS: Record<FacturaExportacionCuota['fechaRefer
   ENVIO_DOCUMENTOS: 'Envío de documentos',
   ARRIBO: 'Arribo',
 }
+
+export type TipoMovimientoFleteDte = 'RECARGO' | 'DESCUENTO'
