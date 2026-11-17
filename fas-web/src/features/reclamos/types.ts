@@ -182,7 +182,6 @@ export interface ReclamoCreateInput {
   fechaReclamo: string
   tipoReclamoId: number
   resumenCliente?: string | null
-  temporadaId?: number | null
   tieneTermografos?: boolean
   tieneReporte?: boolean
   lineas: { palletLineaId: number; cantidadCajas: number }[]
@@ -194,7 +193,6 @@ export interface ReclamoUpdateInput {
   fechaReclamo?: string
   tipoReclamoId?: number
   resumenCliente?: string | null
-  temporadaId?: number | null
   tieneTermografos?: boolean
   tieneReporte?: boolean
   lineas?: { palletLineaId: number; cantidadCajas: number }[]

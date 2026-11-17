@@ -49,13 +49,24 @@ function armarHtml(
   return `<!DOCTYPE html>${markup}`
 }
 
+// Marca de lo generado EN VIVO: BORRADOR para documentos con control de copia,
+// salvo los `oficialEnVivo` ya emitidos (Proforma, 2026-11-16), cuyo definitivo
+// ES la versión en vivo (sin marca).
+async function esOficialEnVivo(def: ReturnType<typeof getDefinicionOFallar>, tipo: string, id: number): Promise<boolean> {
+  if (!def.controlCopia || !def.oficialEnVivo) return false
+  return (await repo.listarEmisionesDocumento(tipo, id)).length > 0
+}
+
 // ─── Preview (Etapa 4 §1 — "el preview es el PDF") ────────────────────────
 // Mismo HTML que se fotografía para el PDF; se sirve crudo para mostrarlo en
-// un iframe en el ERP antes de emitir. Siempre con marca BORRADOR — nada
-// generado por esta vía queda registrado como oficial.
-export async function obtenerPreviewHtml(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES', accesos?: AccesosUsuario): Promise<string> {
+// un iframe en el ERP antes de emitir. Con marca BORRADOR — nada generado por
+// esta vía queda registrado como oficial — salvo un `oficialEnVivo` ya emitido,
+// que se muestra tal cual su definitivo (`oficial: true`).
+export async function obtenerPreviewHtml(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES', accesos?: AccesosUsuario): Promise<{ html: string; oficial: boolean }> {
   const { def, payload } = await resolverYValidar(tipo, id, empresaId, idioma, accesos)
-  return armarHtml(def, payload, def.plantillaActual, def.controlCopia ? 'BORRADOR' : undefined)
+  const oficial = await esOficialEnVivo(def, tipo, id)
+  const marca = def.controlCopia && !oficial ? 'BORRADOR' : undefined
+  return { html: armarHtml(def, payload, def.plantillaActual, marca), oficial }
 }
 
 // ─── PDF bajo demanda (sin emitir) ─────────────────────────────────────────
@@ -63,11 +74,16 @@ export async function obtenerPreviewHtml(tipo: string, id: number, empresaId: nu
 // se entrega ese PDF (el congelado, sin marca) en vez de uno BORRADOR — la
 // marca BORRADOR solo aplica mientras no se haya emitido el oficial. Se
 // prefiere la emisión más reciente en el idioma pedido; si no hay, la última.
+// `oficialEnVivo` (Proforma, 2026-11-16): nunca el congelado — el definitivo se
+// genera en vivo, sin marca una vez emitido.
 export async function obtenerPdf(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES', accesos?: AccesosUsuario): Promise<{ buffer: Buffer; nombreArchivo: string }> {
-  const oficial = await pdfOficialSiExiste(tipo, id, idioma)
-  if (oficial) return oficial
+  if (!getDefinicionOFallar(tipo).oficialEnVivo) {
+    const congelado = await pdfOficialSiExiste(tipo, id, idioma)
+    if (congelado) return congelado
+  }
   const { def, payload } = await resolverYValidar(tipo, id, empresaId, idioma, accesos)
-  const html = armarHtml(def, payload, def.plantillaActual, def.controlCopia ? 'BORRADOR' : undefined)
+  const oficial = await esOficialEnVivo(def, tipo, id)
+  const html = armarHtml(def, payload, def.plantillaActual, def.controlCopia && !oficial ? 'BORRADOR' : undefined)
   const buffer = await renderPdf(html, def.pagina)
   return { buffer, nombreArchivo: def.nombreArchivo(payload) }
 }
@@ -95,7 +111,8 @@ async function pdfOficialSiExiste(tipo: string, id: number, idioma: IdiomaDocume
 export async function obtenerExcel(tipo: string, id: number, empresaId: number, idioma: IdiomaDocumento = 'ES', accesos?: AccesosUsuario): Promise<{ buffer: Buffer; nombreArchivo: string }> {
   const def = getDefinicionOFallar(tipo)
   if (!def.excel) throw new NotFoundError('Versión Excel del documento', tipo)
-  const emitido = await emisionOficial(tipo, id, idioma)
+  // `oficialEnVivo` (Proforma, 2026-11-16): siempre el payload vivo, igual que su PDF.
+  const emitido = def.oficialEnVivo ? null : await emisionOficial(tipo, id, idioma)
   // El snapshot emitido se revalida (puede venir de una versión anterior del
   // schema); si no calza, se usa el payload vivo.
   const congelado = emitido ? def.schema.safeParse(emitido.payload) : null

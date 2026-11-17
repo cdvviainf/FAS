@@ -89,12 +89,12 @@ async function crearFixtures() {
     },
   })
   const embarque = await prisma.embarque.create({
-    data: { empresaId: empresa.id, notaVentaId: notaVenta.id, numeroInstructivo: '001A', creadoPor: 'test', estadoReserva: 'SOLICITADA' },
+    data: { empresaId: empresa.id, temporadaId: temporada.id, notaVentaId: notaVenta.id, numeroInstructivo: '001A', creadoPor: 'test', estadoReserva: 'SOLICITADA' },
   })
   const referenciaFas = `AGL-${empresa.id}-${notaVenta.id}`
   const solicitud = await prisma.solicitudReserva.create({
     data: {
-      empresaId: empresa.id, embarqueId: embarque.id, referenciaFas,
+      empresaId: empresa.id, temporadaId: temporada.id, embarqueId: embarque.id, referenciaFas,
       payloadEnviado: {}, enviadoPor: 'test',
     },
   })

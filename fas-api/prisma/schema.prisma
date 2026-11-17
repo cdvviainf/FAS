@@ -1664,6 +1664,24 @@ model Temporada {
   recepciones           Recepcion[]                 @relation("RecepcionTemporada")
   reclamos              Reclamo[]                   @relation("ReclamoTemporada")
   movimientosCtaCte     MovimientoCuentaCorriente[] @relation("MovimientoCCTemporada")
+  // Cabeceras transaccionales con temporada obligatoria (2026-11-16).
+  embarques             Embarque[]                  @relation("EmbarqueTemporada")
+  solicitudesReserva    SolicitudReserva[]          @relation("SolicitudReservaTemporada")
+  embarquePackingLists  EmbarquePackingList[]       @relation("EmbarquePackingListTemporada")
+  instructivosHijos     InstructivoHijo[]           @relation("InstructivoHijoTemporada")
+  pallets               Pallet[]                    @relation("PalletTemporada")
+  proformas             Proforma[]                  @relation("ProformaTemporada")
+  facturasExportacion   FacturaExportacion[]        @relation("FacturaExportacionTemporada")
+  facturasNacional      FacturaNacional[]           @relation("FacturaNacionalTemporada")
+  notasCredito          NotaCredito[]               @relation("NotaCreditoTemporada")
+  provisiones           Provision[]                 @relation("ProvisionTemporada")
+  pagos                 Pago[]                      @relation("PagoTemporada")
+  saldosAFavorCliente   SaldoAFavorCliente[]        @relation("SaldoAFavorClienteTemporada")
+  movimientosMateriales Movimiento[]                @relation("MovimientoTemporada")
+  ordenesCompraMaterial OrdenCompraMaterial[]       @relation("OrdenCompraMaterialTemporada")
+  proformasMaterial     ProformaMaterial[]          @relation("ProformaMaterialTemporada")
+  proformasProductor    ProformaProductor[]         @relation("ProformaProductorTemporada")
+  documentosManuales    DocumentoManual[]           @relation("DocumentoManualTemporada")
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -2060,7 +2078,6 @@ model SolicitudInspeccion {
   madurez   SolicitudInspeccionMadurez[]
 
   ordenesCompra OrdenCompraSolicitudInspeccion[]
-  recepciones   Recepcion[]
 
   @@unique([temporadaId, numero])
   @@unique([empresaId, id])
@@ -2636,9 +2653,14 @@ model SaldoArticulo {
 }
 
 model Movimiento {
-  id               Int            @id @default(autoincrement())
-  empresaId        Int
-  empresa          Empresa        @relation(fields: [empresaId], references: [id])
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("MovimientoTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
   tipoMovimientoId Int
   // FK compuesta (empresaId, tipoMovimientoId) -> TipoMovimiento(empresaId, id).
   tipoMovimiento   TipoMovimiento @relation(fields: [empresaId, tipoMovimientoId], references: [empresaId, id])
@@ -2693,6 +2715,7 @@ model Movimiento {
   eliminadoPor String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([tipoMovimientoId])
   @@index([fechaMovimiento])
   @@index([empresaId])
@@ -2726,10 +2749,15 @@ enum EstadoOrdenCompraMaterial {
 }
 
 model OrdenCompraMaterial {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
-  numero    String // OCM-{AAAA}-{NNNN}, correlativo por año
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("OrdenCompraMaterialTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
+  numero String // OCM-{AAAA}-{NNNN}, correlativo por año
 
   entidadProveedorId Int // Entidad tipo PROVEEDOR (R19)
   // FK compuesta (empresaId, entidadProveedorId) -> Entidad(empresaId, id).
@@ -2763,6 +2791,7 @@ model OrdenCompraMaterial {
   eliminadoPor   String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([entidadProveedorId])
   @@index([condicionPagoId])
   @@index([empresaId])
@@ -2820,10 +2849,15 @@ enum EstadoProformaMaterial {
 }
 
 model ProformaMaterial {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
-  numero    String // PVM-{AAAA}-{NNNN}, correlativo por año (R25)
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("ProformaMaterialTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
+  numero String // PVM-{AAAA}-{NNNN}, correlativo por año (R25)
 
   // Igual que OrdenCompraMaterial↔Movimiento (materiales.md R22): Prisma
   // exige un campo único para expresar la relación como 1:1, pero la
@@ -2868,6 +2902,7 @@ model ProformaMaterial {
   actualizadoPor String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([movimientoId])
   @@index([entidadId])
   @@index([condicionPagoId])
@@ -2925,10 +2960,15 @@ enum EstadoProformaProductor {
 }
 
 model ProformaProductor {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
-  numero    String // PVP-{AAAA}-{NNNN}, correlativo por año
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("ProformaProductorTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
+  numero String // PVP-{AAAA}-{NNNN}, correlativo por año
 
   // El Productor al que se le prestan los servicios (Entidad tipo PRODUCTOR).
   entidadId Int
@@ -2966,6 +3006,7 @@ model ProformaProductor {
   actualizadoPor String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([entidadId])
   @@index([condicionPagoId])
   @@index([conceptoCtaCteId])
@@ -3560,6 +3601,11 @@ model Embarque {
   id          Int       @id @default(autoincrement())
   empresaId   Int
   empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("EmbarqueTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
   notaVentaId Int
   // FK compuesta (empresaId, notaVentaId) -> NotaVenta(empresaId, id).
   notaVenta   NotaVenta @relation(fields: [empresaId, notaVentaId], references: [empresaId, id])
@@ -3735,6 +3781,7 @@ model Embarque {
   eliminadoPor   String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([notaVentaId])
   @@index([empresaId])
   @@index([gestorLogisticoId])
@@ -3753,9 +3800,14 @@ model Embarque {
 // detalle del Embarque, decisión de negocio Christian 2026-09-21) — no se
 // recalcula automáticamente al reservar/desvincular pallets.
 model InstructivoHijo {
-  id         Int      @id @default(autoincrement())
-  empresaId  Int
-  empresa    Empresa  @relation(fields: [empresaId], references: [id])
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("InstructivoHijoTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
   embarqueId Int
   embarque   Embarque @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
 
@@ -3793,6 +3845,7 @@ model InstructivoHijo {
   eliminadoPor   String?
 
   @@unique([empresaId, codigo])
+  @@index([temporadaId])
   @@index([embarqueId])
   @@index([plantaId])
   @@index([eliminadoEn])
@@ -3832,9 +3885,14 @@ enum EstadoReservaEmbarque {
 // llamada saliente a AGL360 tuvo éxito. `referenciaFas` es lo que AGL360 nos
 // devuelve en el webhook de confirmación para matchear el registro.
 model SolicitudReserva {
-  id         Int      @id @default(autoincrement())
-  empresaId  Int
-  empresa    Empresa  @relation(fields: [empresaId], references: [id])
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("SolicitudReservaTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
   embarqueId Int
   embarque   Embarque @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
 
@@ -3869,6 +3927,7 @@ model SolicitudReserva {
 
   @@unique([empresaId, embarqueId])
   @@unique([empresaId, referenciaFas])
+  @@index([temporadaId])
   @@index([empresaId])
   @@map("solicitudes_reserva")
 }
@@ -3890,9 +3949,14 @@ model SolicitudReserva {
 // eso `Embarque.packingLists` de abajo es `[]`, no `?` (filas soft-deleted
 // pueden repetir embarqueId).
 model EmbarquePackingList {
-  id         Int      @id @default(autoincrement())
-  empresaId  Int
-  empresa    Empresa  @relation(fields: [empresaId], references: [id])
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("EmbarquePackingListTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
   embarqueId Int
   embarque   Embarque @relation(fields: [empresaId, embarqueId], references: [empresaId, id])
 
@@ -3924,6 +3988,7 @@ model EmbarquePackingList {
   eliminadoEn  DateTime?
   eliminadoPor String?
 
+  @@index([temporadaId])
   @@index([empresaId])
   @@index([embarqueId])
   @@index([templateCargaId])
@@ -4126,9 +4191,14 @@ model ReclamoDocumentoContenido {
 // la creó" de PR3 — es un efecto de sistema, no una acción manual) o a mano
 // en cualquier momento vía permiso RECLAMO_PROVISION.
 model Provision {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("ProvisionTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
   reclamoId Int // obligatorio (PR1)
   reclamo   Reclamo @relation(fields: [reclamoId], references: [id])
 
@@ -4148,6 +4218,7 @@ model Provision {
   // solo las que ELLA reversó, no una reversa manual previa coincidente.
   reversadaPorValorizacion Boolean   @default(false)
 
+  @@index([temporadaId])
   @@index([empresaId])
   @@index([reclamoId])
   @@map("provisiones")
@@ -4175,9 +4246,13 @@ enum DimensionProforma {
 }
 
 model Proforma {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("ProformaTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
 
   embarqueId Int
   // FK compuesta (empresaId, embarqueId) -> Embarque(empresaId, id). Sin
@@ -4236,6 +4311,7 @@ model Proforma {
   eliminadoEn   DateTime?
   eliminadoPor  String?
 
+  @@index([temporadaId])
   @@index([empresaId, embarqueId])
   @@index([clienteId])
   @@map("proformas")
@@ -4319,9 +4395,13 @@ enum EstadoCuotaFacturaExportacion {
 }
 
 model FacturaExportacion {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("FacturaExportacionTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
 
   embarqueId Int
   // FK compuesta (empresaId, embarqueId) -> Embarque(empresaId, id). Unicidad
@@ -4410,6 +4490,7 @@ model FacturaExportacion {
   eliminadoPor  String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([empresaId, embarqueId])
   @@index([clienteId])
   @@index([proformaId])
@@ -4501,9 +4582,13 @@ enum OrigenFacturaNacional {
 }
 
 model FacturaNacional {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("FacturaNacionalTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
 
   // Origen del documento: PROFORMA_MATERIAL o VENTA_NACIONAL (Embarque con
   // Cierre tipoVenta=NACIONAL). Alimenta la columna "origen" del listado.
@@ -4577,6 +4662,7 @@ model FacturaNacional {
   eliminadoPor  String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([empresaId])
   @@index([clienteId])
   @@index([proformaMaterialId])
@@ -4685,10 +4771,15 @@ model FacturaNacionalCuota {
 }
 
 model Pago {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
-  codigo    String // autogenerado vía PrefijoCodigo (modelo='pago', prefijo PAG)
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("PagoTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
+  codigo String // autogenerado vía PrefijoCodigo (modelo='pago', prefijo PAG)
 
   clienteId Int
   cliente   Entidad @relation("PagoCliente", fields: [empresaId, clienteId], references: [empresaId, id])
@@ -4711,6 +4802,7 @@ model Pago {
   eliminadoPor  String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([empresaId])
   @@index([clienteId])
   @@map("pagos")
@@ -4767,9 +4859,13 @@ model PagoAplicacionCuota {
 // Saldo a favor del cliente (CB12/D11): remanente de un pago no aplicado.
 // Reaplicable a futuras facturas del mismo cliente + misma moneda.
 model SaldoAFavorCliente {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("SaldoAFavorClienteTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
 
   clienteId Int
   cliente   Entidad @relation("SaldoAFavorCliente", fields: [empresaId, clienteId], references: [empresaId, id])
@@ -4791,6 +4887,7 @@ model SaldoAFavorCliente {
 
   @@unique([empresaId, id])
   @@unique([empresaId, pagoOrigenId])
+  @@index([temporadaId])
   @@index([empresaId])
   @@index([clienteId])
   @@map("saldos_a_favor_cliente")
@@ -4823,10 +4920,15 @@ model SaldoAFavorAplicacion {
 // referenciada al emitir (no se persiste detalle propio: siempre es anulación
 // total). Mismo motor DocumentoDte que las facturas (origenTipo distinto).
 model NotaCredito {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
-  codigo    String // autogenerado vía PrefijoCodigo (modelo='notaCredito', prefijo NC)
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("NotaCreditoTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
+  codigo String // autogenerado vía PrefijoCodigo (modelo='notaCredito', prefijo NC)
 
   facturaExportacionId Int?
   facturaExportacion   FacturaExportacion? @relation("NotaCreditoFacturaExport", fields: [empresaId, facturaExportacionId], references: [empresaId, id])
@@ -4868,6 +4970,7 @@ model NotaCredito {
   eliminadoPor  String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([empresaId])
   @@index([facturaExportacionId])
   @@index([facturaNacionalId])
@@ -5381,10 +5484,8 @@ model Recepcion {
   // FK compuesta (empresaId, templateCargaId) -> TemplateCarga(empresaId, id).
   templateCarga   TemplateCarga? @relation(fields: [empresaId, templateCargaId], references: [empresaId, id])
 
-  // Solicitud de Inspección asociada (opcional, 2026-11-13). Con OC debe ser
-  // del mismo productor de la OC.
-  solicitudInspeccionId Int?
-  solicitudInspeccion   SolicitudInspeccion? @relation(fields: [empresaId, solicitudInspeccionId], references: [empresaId, id])
+  // La Solicitud de Inspección opcional (2026-11-13) se movió a la Orden de
+  // Compra (2026-11-16, oc_solicitudes_inspeccion): la Recepción no la guarda.
 
   estado        EstadoRecepcion @default(CARGADA)
   observaciones String?
@@ -5415,7 +5516,6 @@ model Recepcion {
   @@index([temporadaId])
   @@index([plantaId])
   @@index([templateCargaId])
-  @@index([solicitudInspeccionId])
   @@index([eliminadoEn])
   @@index([empresaId])
   @@map("recepciones")
@@ -5476,6 +5576,11 @@ model Pallet {
   id          Int       @id @default(autoincrement())
   empresaId   Int
   empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("PalletTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
+
   recepcionId Int
   // FK compuesta (empresaId, recepcionId) -> Recepcion(empresaId, id).
   recepcion   Recepcion @relation(fields: [empresaId, recepcionId], references: [empresaId, id])
@@ -5535,6 +5640,7 @@ model Pallet {
   eliminadoEn  DateTime?
   eliminadoPor String?
 
+  @@index([temporadaId])
   @@index([recepcionId])
   @@index([productorId])
   @@index([embarqueId])
@@ -5817,9 +5923,13 @@ enum EstadoDocumentoManual {
 }
 
 model DocumentoManual {
-  id        Int     @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa @relation(fields: [empresaId], references: [id])
+  id          Int       @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa   @relation(fields: [empresaId], references: [id])
+  // Temporada obligatoria (2026-11-16): la del selector superior al registrar;
+  // los documentos hijos la copian de su padre. No se cambia después.
+  temporadaId Int
+  temporada   Temporada @relation("DocumentoManualTemporada", fields: [empresaId, temporadaId], references: [empresaId, id])
 
   codigo String // autogenerado vía correlativo GDT-{AAAA}-{NNNN} (advisory lock)
 
@@ -5888,6 +5998,7 @@ model DocumentoManual {
   eliminadoPor  String?
 
   @@unique([empresaId, id])
+  @@index([temporadaId])
   @@index([empresaId])
   @@index([entidadId])
   @@index([claseDocumento])

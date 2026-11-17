@@ -598,6 +598,8 @@ Basadas en el sistema legado (screenshots):
 
 > Supersede la ausencia de temporada en `NotaVenta`. Plan: `QA/plan-temporada-listados-nov2026.md`.
 
+> **Supersesión (2026-11-16) — Temporada en cabeceras.** Ver `00-entorno-general.md` §6 (E3, supersesión 2026-11-16), que manda sobre lo de esta sección: la temporada del selector superior viaja en la cabecera `X-Temporada-Id`, **no es un campo de formulario ni del body**, se fija al crear (hijos ← padre) y **no se cambia**; todos los listados filtran por la temporada activa. `Embarque` (y su Reserva, Packing List, Instructivo hijo) tiene `temporadaId` propio NOT NULL copiado del Cierre; `GET /api/ventas/embarques?temporadaId=` filtra por esa columna. Duplicar un Cierre toma la temporada del selector superior.
+
 - `NotaVenta.temporadaId Int?` con FK compuesta `(empresaId, temporadaId) → Temporada(empresaId, id)`.
 - **Alta:** la UI envía la temporada activa (editable en el form); si se omite, el service la resuelve por `fecha` (temporada de la empresa cuyo rango la contiene; si ninguna, la predeterminada). **Edición:** se valida solo si cambia (temporada de la empresa, no eliminada ni bloqueada); `null` explícito se rechaza.
 - **Duplicar** copia la temporada del original.

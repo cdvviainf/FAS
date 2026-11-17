@@ -9,8 +9,11 @@ import { api } from '@/lib/api'
 export type IdiomaDocumento = 'ES' | 'EN'
 
 export const documentosService = {
-  async previewHtml(tipo: string, id: number, idioma: IdiomaDocumento = 'ES'): Promise<string> {
-    return api.get(`documentos/${tipo}/${id}/preview`, { searchParams: { idioma } }).text()
+  // `oficial` (2026-11-16): el preview ES el documento definitivo (Proforma ya
+  // emitida, que se genera siempre actualizada) — viene en X-Documento-Oficial.
+  async previewHtml(tipo: string, id: number, idioma: IdiomaDocumento = 'ES'): Promise<{ html: string; oficial: boolean }> {
+    const res = await api.get(`documentos/${tipo}/${id}/preview`, { searchParams: { idioma } })
+    return { html: await res.text(), oficial: res.headers.get('X-Documento-Oficial') === '1' }
   },
 
   async descargarPdfBlob(tipo: string, id: number, idioma: IdiomaDocumento = 'ES'): Promise<Blob> {

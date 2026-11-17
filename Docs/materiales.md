@@ -16,6 +16,9 @@
 
 ---
 
+
+> **Supersesión (2026-11-16) — Temporada en cabeceras.** Ver `00-entorno-general.md` §6 (E3, supersesión 2026-11-16), que manda sobre lo de esta sección: la temporada del selector superior viaja en la cabecera `X-Temporada-Id`, **no es un campo de formulario ni del body**, se fija al crear (hijos ← padre) y **no se cambia**; todos los listados filtran por la temporada activa. Movimiento (← cabecera; el inverso ← original), OC de Materiales (← cabecera) y Proforma de Materiales (← Movimiento) tienen `temporadaId` NOT NULL. Filtran los listados de Movimientos, OC y Proformas; Kardex/PMP y saldos de bodega NO (son continuos entre temporadas).
+
 ## 0. Contexto para Claude Code
 
 El módulo de Materiales administra el **maestro de artículos** de embalaje (embalajes, envases, materiales de embalaje y servicios), sus **recetas** de producción, el **registro de movimientos** (entradas/salidas/traslados) sobre un **mantenedor dinámico de tipos de movimiento**, y un **analizador de stock por receta**. El consumo valorizado alimenta la matriz de costos y la liquidación al productor.

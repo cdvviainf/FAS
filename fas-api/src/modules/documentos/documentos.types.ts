@@ -50,6 +50,12 @@ export interface DocumentDefinition<Payload = unknown> {
   // y las rutas /emitir y de reimpresión quedan bloqueadas para su `tipo`
   // (documentos.routes.ts/documentos.service.ts).
   controlCopia: boolean
+  // Oficial "siempre actualizado" (2026-11-16, Proforma de Exportación): una vez
+  // emitido, la descarga/preview/Excel se generan EN VIVO con la plantilla y los
+  // datos vigentes, sin marca BORRADOR (no se entrega el PDF congelado). Así el
+  // definitivo tiene el mismo formato que el borrador y refleja el folio SII que
+  // llega después. Las emisiones siguen registradas como historial (COPIA).
+  oficialEnVivo?: boolean
   nombreArchivo: (payload: Payload) => string
   folio: (payload: Payload) => string
   // Versión Excel del mismo documento (2026-11-12, Proforma): mismo payload que

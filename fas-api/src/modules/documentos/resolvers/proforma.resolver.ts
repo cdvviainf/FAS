@@ -3,6 +3,7 @@ import {
   getEmbarqueParaProforma,
   getCuotasPagoNotaVenta,
   getProformaById,
+  getFolioSiiDeProforma,
 } from '../../ventas/cobranza/proforma.repository.js'
 import { getEmpresaParaDocumento, getEntidadParaDocumento, logoDataUri, getEspecieImagenDataUri } from '../documentos.repository.js'
 import { factorFob, subtotalFob as calcSubtotalFob, totalClausula, unitarioFob } from '../../ventas/cobranza/clausula-flete-seguro.js'
@@ -131,6 +132,7 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
 
   // Imagen de la especie (primera línea) para la cabecera corporativa (2026-11-08).
   const especieImagenDataUri = await getEspecieImagenDataUri(proforma.lineas[0]?.especieId ?? null)
+  const folioSii = await getFolioSiiDeProforma(proforma.id)
 
   return {
     especieImagenDataUri,
@@ -160,8 +162,10 @@ export async function resolverProforma(id: number, empresaId: number): Promise<P
     totalPallets: datosEmbarque?.totalPallets ?? null,
     observaciones: proforma.observaciones ?? null,
     variante: 'PROFORMA',
-    folio: null,
-    tipoDte: null,
+    // N° del SII (2026-11-16): con Factura de Exportación timbrada, el PDF
+    // muestra su folio como número y el código PRF… como código interno.
+    folio: folioSii,
+    tipoDte: folioSii != null ? 110 : null,
     // Detalle a valor FOB: si la cláusula exige Flete/Seguro, el precio unitario
     // cláusula/CIF se lleva a FOB con el factor. Sin flete/seguro el factor es 1
     // y las líneas quedan idénticas al valor cláusula.

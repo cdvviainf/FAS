@@ -4,6 +4,7 @@ import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { LOCK_NAMESPACE_COBRANZA_PAGO } from '../../../shared/advisory-locks.js'
+import { filtroTemporadaActiva, temporadaDelRegistro } from '../../../shared/temporada-documento.js'
 import { esFacturaTimbrada } from './sii-estado.js'
 import {
   derivarEstadoCobranza,
@@ -129,6 +130,8 @@ export async function getDocumentosPendientesCliente(clienteId: number, monedaId
     estado: { in: ESTADOS_FACTURA_TIMBRADA },
     estadoCobranza: { in: ESTADOS_CARTERA_ACTIVOS },
     ...(monedaId ? { monedaId } : {}),
+    // Cobranza filtra por la temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
   }
   const [exp, nac] = await Promise.all([
     prisma.facturaExportacion.findMany({
@@ -197,6 +200,8 @@ export async function getCarteraFacturasRaw(): Promise<CarteraFacturaRaw[]> {
   const where = {
     eliminadoEn: null,
     estado: { in: ESTADOS_FACTURA_TIMBRADA },
+    // Cobranza filtra por la temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
   }
   const carteraSelect = {
     clienteId: true,
@@ -364,9 +369,12 @@ export async function crearPagoTransaccional(input: CrearPagoInput, codigo: stri
 
     // Crea el Pago (la extensión tenant reinyecta empresaId; se pasa explícito
     // por el tipado y como el resto del módulo).
+    // Temporada (2026-11-16): la del selector superior (raíz sin padre).
+    const temporadaId = await temporadaDelRegistro(new Date(input.fecha))
     const pago = await tx.pago.create({
       data: {
         empresaId,
+        temporadaId,
         codigo,
         clienteId: input.clienteId,
         fecha: new Date(input.fecha),
@@ -415,6 +423,8 @@ export async function crearPagoTransaccional(input: CrearPagoInput, codigo: stri
       await tx.saldoAFavorCliente.create({
         data: {
           empresaId,
+          // El saldo a favor copia la temporada del pago que lo origina.
+          temporadaId,
           clienteId: input.clienteId,
           monedaId: input.monedaId,
           montoOriginal: remanente,
@@ -521,6 +531,8 @@ export async function listPagos(filters: PagosListFilters) {
   const { page, limit } = filters
   const where: Prisma.PagoWhereInput = {
     eliminadoEn: null,
+    // Temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
     ...(filters.clienteId ? { clienteId: filters.clienteId } : {}),
     ...(filters.desde || filters.hasta
       ? {
@@ -648,7 +660,8 @@ export async function refrescarCarteraEmpresaActual(hoy: Date) {
 
 export async function getSaldosAFavorCliente(clienteId: number) {
   return prisma.saldoAFavorCliente.findMany({
-    where: { clienteId, eliminadoEn: null, montoDisponible: { gt: 0 } },
+    // Temporada del selector superior (2026-11-16).
+    where: { clienteId, eliminadoEn: null, montoDisponible: { gt: 0 }, ...filtroTemporadaActiva() },
     select: {
       id: true,
       montoOriginal: true,

@@ -27,9 +27,8 @@ export const instructivoEmbalajeCreateSchema = z.object({
   // Exportador (2026-10-05) — Entidad tipo EXPORTADORA, opcional.
   exportadorId: z.number().int().positive().optional().nullable(),
   fechaInicioPrograma: z.coerce.date({ message: 'La fecha de inicio de programa es requerida' }),
-  // Temporada (2026-11-06): la UI envía la temporada activa (editable). Si se
-  // omite, se resuelve por fechaInicioPrograma (o la predeterminada).
-  temporadaId: z.number().int().positive().optional().nullable(),
+  // Temporada (2026-11-16): NO viaja en el body — la fija el selector superior
+  // (cabecera X-Temporada-Id) al crear y no se cambia después.
   observaciones: z.string().max(5000).trim().optional().nullable(),
   // Calidades permitidas = pares (NotaCalidad, NotaCondicion).
   calidadesPermitidas: z.array(parCalidadSchema).optional(),
@@ -44,7 +43,6 @@ export const instructivoEmbalajeUpdateSchema = z
     entidadProductorId: z.number().int().positive('El productor es requerido').optional(),
     exportadorId: z.number().int().positive().optional().nullable(),
     fechaInicioPrograma: z.coerce.date().optional(),
-    temporadaId: z.number().int().positive().optional().nullable(),
     observaciones: z.string().max(5000).trim().optional().nullable(),
     calidadesPermitidas: z.array(parCalidadSchema).optional(),
     detalle: z.array(instructivoEmbalajeDetalleSchema).min(1, 'El instructivo debe tener al menos una línea').optional(),
@@ -54,7 +52,6 @@ export const instructivoEmbalajeUpdateSchema = z
       data.entidadProductorId !== undefined ||
       data.exportadorId !== undefined ||
       data.fechaInicioPrograma !== undefined ||
-      data.temporadaId !== undefined ||
       data.observaciones !== undefined ||
       data.calidadesPermitidas !== undefined ||
       data.detalle !== undefined,

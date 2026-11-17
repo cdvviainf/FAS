@@ -15,6 +15,9 @@
 
 ---
 
+
+> **Supersesión (2026-11-16) — Temporada en cabeceras.** Ver `00-entorno-general.md` §6 (E3, supersesión 2026-11-16), que manda sobre lo de esta sección: la temporada del selector superior viaja en la cabecera `X-Temporada-Id`, **no es un campo de formulario ni del body**, se fija al crear (hijos ← padre) y **no se cambia**; todos los listados filtran por la temporada activa. La Solicitud de Inspección toma la temporada de la cabecera; `temporadaId` ya no viaja en el body.
+
 ## 0. Contexto para Claude Code
 
 Registra los **controles de calidad de fruta en origen**. **Cada especie tiene su propia norma**, por lo que defectos y características de madurez se **asocian por especie** y toda la captura se segmenta por la especie de la solicitud. La **configuración** vive solo en WEB; la **app móvil (PWA)** solo sirve para que el inspector **registre la inspección** (offline-first).

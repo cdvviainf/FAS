@@ -24,7 +24,7 @@ export const solicitudLineaSchema = z.object({
 })
 
 export const solicitudCreateSchema = z.object({
-  temporadaId: z.number().int().positive('La temporada es requerida'),
+  // Temporada (2026-11-16): la del selector superior (cabecera), no viaja en el body.
   // Opcional: si se omite, el service lo defaultea al usuario autenticado
   // (ver crearSolicitud) — igual que hace la UI, pero también para
   // cualquier otro consumidor de la API (QA-R2-SI-001).
@@ -60,7 +60,7 @@ export const solicitudCreateSchema = z.object({
 })
 
 // La temporada no se cambia después de creada (el correlativo depende de ella)
-export const solicitudUpdateSchema = solicitudCreateSchema.omit({ temporadaId: true }).partial()
+export const solicitudUpdateSchema = solicitudCreateSchema.partial()
 
 export const solicitudParamsSchema = z.object({
   id: z.coerce.number().int().positive(),

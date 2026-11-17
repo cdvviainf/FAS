@@ -25,7 +25,7 @@ export const solicitudesPagoService = {
   async getById(id: number): Promise<{ data: SolicitudPago }> {
     return api.get(`${BASE}/${id}`).json()
   },
-  async create(data: { entidadProductorId: number; temporadaId: number | null; observaciones: string | null; lineas: SolicitudPagoLineaInput[] }): Promise<{ data: SolicitudPago }> {
+  async create(data: { entidadProductorId: number; observaciones: string | null; lineas: SolicitudPagoLineaInput[] }): Promise<{ data: SolicitudPago }> {
     return api.post(BASE, { json: data }).json()
   },
   async update(id: number, data: { observaciones: string | null; lineas: SolicitudPagoLineaInput[] }): Promise<{ data: SolicitudPago }> {

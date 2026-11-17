@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
+import { temporadaDeNotaVenta } from '../../../shared/temporada-padre.repository.js'
 import { BusinessError, ValidationError } from '../../../shared/errors.js'
 import {
   LOCK_NAMESPACE_EMBARQUE_DESPACHO,
@@ -159,8 +161,9 @@ export async function listEmbarques(
   const where: Prisma.EmbarqueWhereInput = {
     eliminadoEn: null,
     ...(notaVentaId ? { notaVentaId } : {}),
-    // Temporada heredada del Cierre Comercial (2026-11-06).
-    ...(temporadaId ? { notaVenta: { temporadaId } } : {}),
+    // Temporada propia del Embarque (copiada del Cierre al crearlo); la cabecera
+    // X-Temporada-Id manda sobre ?temporadaId= (2026-11-16, TEC-R1-001).
+    ...filtroTemporadaActiva(temporadaId),
     ...whereEstadoListado(estado),
   }
   const [data, total] = await Promise.all([
@@ -651,7 +654,7 @@ export async function guardarPackingList(
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_EMBARQUE_DESPACHO}::int, ${embarqueId}::int)`
 
-    const embarque = await tx.embarque.findFirst({ where: { id: embarqueId, eliminadoEn: null }, select: { id: true } })
+    const embarque = await tx.embarque.findFirst({ where: { id: embarqueId, eliminadoEn: null }, select: { id: true, temporadaId: true } })
     if (!embarque) throw new ValidationError('El Embarque ya no existe')
 
     // Packing parcializado (2026-09-28): los archivos se ACUMULAN (ya no se
@@ -674,6 +677,8 @@ export async function guardarPackingList(
     const creado = await tx.embarquePackingList.create({
       data: {
         empresaId,
+        // Temporada del Embarque (2026-11-16): el hijo copia la del padre.
+        temporadaId: embarque.temporadaId,
         embarqueId,
         templateCargaId: datos.templateCargaId,
         nombreArchivo: datos.nombreArchivo,
@@ -922,11 +927,13 @@ export async function getNotaVentaParaReserva(id: number) {
 }
 
 export async function createEmbarque(notaVentaId: number, numeroInstructivo: string, creadoPor: string) {
+  // Temporada del Cierre (2026-11-16): el Embarque y todos sus hijos la copian.
+  const temporadaId = await temporadaDeNotaVenta(notaVentaId)
   return prisma.embarque.create({
     // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe este
     // valor con la empresa activa del contexto — se declara aquí solo para
     // satisfacer el tipo requerido por Prisma.
-    data: { empresaId: getEmpresaIdActual()!, notaVentaId, numeroInstructivo, creadoPor },
+    data: { empresaId: getEmpresaIdActual()!, temporadaId, notaVentaId, numeroInstructivo, creadoPor },
     include: { notaVenta: { select: notaVentaRefSelect } },
   })
 }
@@ -997,6 +1004,7 @@ export async function generarEmbarqueTransaccional(
       if (!Number.isNaN(num) && num > maximo) maximo = num
     }
     const numeroInstructivo = `${prefijo}${String(maximo + 1).padStart(digitos, '0')}`
+    const temporadaId = await temporadaDeNotaVenta(notaVentaId, tx)
 
     // Tipo de embarque sin Solicitud de Reserva (Terrestre, 2026-10-08): se crea
     // el Embarque plano, sin llamar a AGL360 ni registrar SolicitudReserva y sin
@@ -1005,14 +1013,14 @@ export async function generarEmbarqueTransaccional(
     // despacho no depende de estadoReserva, así que no se bloquea.
     if (!requiereReserva) {
       return tx.embarque.create({
-        data: { empresaId, notaVentaId, numeroInstructivo, gestorLogisticoId, creadoPor, ...datosBase },
+        data: { empresaId, temporadaId, notaVentaId, numeroInstructivo, gestorLogisticoId, creadoPor, ...datosBase },
         include: { notaVenta: { select: notaVentaRefSelect } },
       })
     }
 
     if (!modoAutomatico) {
       return tx.embarque.create({
-        data: { empresaId, notaVentaId, numeroInstructivo, gestorLogisticoId, creadoPor, reservaManual: true, ...datosBase },
+        data: { empresaId, temporadaId, notaVentaId, numeroInstructivo, gestorLogisticoId, creadoPor, reservaManual: true, ...datosBase },
         include: { notaVenta: { select: notaVentaRefSelect } },
       })
     }
@@ -1025,6 +1033,7 @@ export async function generarEmbarqueTransaccional(
     const embarque = await tx.embarque.create({
       data: {
         empresaId,
+        temporadaId,
         notaVentaId,
         numeroInstructivo,
         gestorLogisticoId,
@@ -1037,6 +1046,7 @@ export async function generarEmbarqueTransaccional(
       await tx.solicitudReserva.create({
         data: {
           empresaId,
+          temporadaId,
           embarqueId: embarque.id,
           referenciaFas: resultado.referenciaFas!,
           payloadEnviado: resultado.payloadEnviado as Prisma.InputJsonValue,
@@ -1068,7 +1078,7 @@ export async function solicitarReservaTransaccional(
 
     const embarque = await tx.embarque.findFirst({
       where: { id: embarqueId, eliminadoEn: null },
-      select: { estadoReserva: true, reservaManual: true },
+      select: { estadoReserva: true, reservaManual: true, temporadaId: true },
     })
     if (!embarque) throw new ValidationError('El Embarque ya no existe')
     if (embarque.estadoReserva !== 'PENDIENTE') {
@@ -1087,6 +1097,7 @@ export async function solicitarReservaTransaccional(
     await tx.solicitudReserva.create({
       data: {
         empresaId,
+        temporadaId: embarque.temporadaId,
         embarqueId,
         referenciaFas: resultado.referenciaFas!,
         payloadEnviado: resultado.payloadEnviado as Prisma.InputJsonValue,
@@ -1113,7 +1124,7 @@ export async function marcarReservaManualTransaccional(embarqueId: number, actua
 
     const embarque = await tx.embarque.findFirst({
       where: { id: embarqueId, eliminadoEn: null },
-      select: { estadoReserva: true, reservaManual: true },
+      select: { estadoReserva: true, reservaManual: true, temporadaId: true },
     })
     if (!embarque) throw new ValidationError('El Embarque ya no existe')
     if (embarque.estadoReserva !== 'PENDIENTE') {
@@ -1272,7 +1283,7 @@ export async function generarInstructivosHijos(embarqueId: number, actualizadoPo
 
     const embarque = await tx.embarque.findFirst({
       where: { id: embarqueId, eliminadoEn: null },
-      select: { id: true, numeroInstructivo: true },
+      select: { id: true, numeroInstructivo: true, temporadaId: true },
     })
     if (!embarque) throw new ValidationError('El Embarque ya no existe')
 
@@ -1313,6 +1324,7 @@ export async function generarInstructivosHijos(embarqueId: number, actualizadoPo
       await tx.instructivoHijo.create({
         data: {
           empresaId,
+          temporadaId: embarque.temporadaId,
           embarqueId,
           plantaId,
           secuencia: siguienteSecuencia,

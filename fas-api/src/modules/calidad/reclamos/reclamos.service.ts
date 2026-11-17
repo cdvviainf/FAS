@@ -1,6 +1,6 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './reclamos.repository.js'
-import { temporadaParaCrear, validarTemporadaEnEdicion } from '../../../shared/temporada-documento.js'
+import { rechazarCambioTemporada } from '../../../shared/temporada-documento.js'
 import { findPrefijoCodigoByModelo } from '../../config/prefijos-codigo/prefijos-codigo.repository.js'
 import type {
   AnalisisCalidadInput,
@@ -40,13 +40,9 @@ export async function crearReclamo(embarqueId: number, body: ReclamoCreateInput,
   // Correlativo propio (2026-10-06) vía PrefijoCodigo (modelo='reclamo'). Si la
   // empresa no configuró su prefijo, se usa el default REC + 4 dígitos (mismo
   // criterio que el backfill de la migración).
-  // Temporada obligatoria (2026-11-09): la enviada (vigente); si no viene, la
-  // del Cierre del Embarque (heredada, sin exigir que siga vigente); si el
-  // Cierre no tiene, la que corresponde por fecha del reclamo.
-  const temporadaId =
-    body.temporadaId == null && embarque.notaVenta.temporadaId != null
-      ? embarque.notaVenta.temporadaId
-      : await temporadaParaCrear(body.temporadaId, body.fechaReclamo)
+  // Temporada (2026-11-16): el Reclamo es hijo del Embarque y copia su
+  // temporada (no se elige ni se cambia).
+  const temporadaId = embarque.temporadaId
 
   const prefijoConfig = await findPrefijoCodigoByModelo('reclamo')
   const prefijo = prefijoConfig?.prefijo ?? 'REC'
@@ -84,7 +80,7 @@ async function validarTipoReclamo(tipoReclamoId: number) {
 // en el repository (misma transacción que la escritura).
 export async function actualizarReclamo(id: number, embarqueId: number, body: ReclamoUpdateInput, userId: string) {
   if (body.tipoReclamoId != null) await validarTipoReclamo(body.tipoReclamoId)
-  if (body.temporadaId !== undefined) await validarTemporadaEnEdicion(body.temporadaId, await repo.getTemporadaReclamo(id))
+  if (body.temporadaId !== undefined) rechazarCambioTemporada(body.temporadaId, await repo.getTemporadaReclamo(id))
   return repo.actualizarReclamoTransaccional(id, embarqueId, body, userId)
 }
 

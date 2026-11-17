@@ -19,6 +19,7 @@ import {
   agregarLinea as agregarLineaSvc,
   actualizarLinea as actualizarLineaSvc,
   obtenerDisponibilidadCierre as obtenerDisponibilidadCierreSvc,
+  listarOpcionesSolicitudInspeccion as listarOpcionesSolicitudInspeccionSvc,
 } from '../../src/modules/compras/ordenes-compra/ordenes-compra.service.js'
 import {
   crearSolicitud as crearSolicitudSvc,
@@ -299,6 +300,10 @@ async function crearFixtures() {
 }
 
 async function crearOtraSolicitudAprobada(f: Awaited<ReturnType<typeof crearFixtures>>) {
+  return crearOtraSolicitudCerrada(f, 'APROBADA')
+}
+
+async function crearOtraSolicitudCerrada(f: Awaited<ReturnType<typeof crearFixtures>>, resultado: 'APROBADA' | 'RECHAZADA') {
   const solicitud = await crearSolicitudInspeccion(f.empresa.id, {
     temporadaId: f.temporada.id,
     usuarioSolicitanteId: f.usuarioInspector.id,
@@ -310,7 +315,7 @@ async function crearOtraSolicitudAprobada(f: Awaited<ReturnType<typeof crearFixt
     asignados: [{ usuarioId: f.usuarioNotificado.id, funcion: 'NOTIFICAR' }],
   }, 'test')
   await notificarSolicitudInspeccion(f.empresa.id, solicitud.id, 'test')
-  return cerrarSolicitudInspeccion(f.empresa.id, solicitud, 'APROBADA', 'test', f.usuarioInspector.id)
+  return cerrarSolicitudInspeccion(f.empresa.id, solicitud, resultado, 'test', f.usuarioInspector.id)
 }
 
 function nvBase(f: Awaited<ReturnType<typeof crearFixtures>>) {
@@ -513,6 +518,35 @@ describe('Orden de Compra contra PostgreSQL', () => {
     await expect(
       crearOrdenCompra(f.empresa.id, { entidadProductorId: f.cliente.id, solicitudInspeccionIds: [f.solicitudInspeccionCompraAprobada.id], monedaId: f.moneda.id }, 'test'),
     ).rejects.toMatchObject({ statusCode: 422 })
+  })
+
+  it('vincula Inspecciones de Compra opcionales en cualquier estado y el selector solo ofrece las del productor libres o de la misma OC', async () => {
+    const f = await crearFixtures()
+    const opciones = (productorId: number, ordenCompraId?: number) =>
+      empresaContext.run({ empresaId: f.empresa.id }, () => listarOpcionesSolicitudInspeccionSvc(productorId, ordenCompraId))
+
+    // 2026-11-16: una Rechazada se puede vincular (ya no se exige alguna Aprobada).
+    const rechazada = await crearOtraSolicitudCerrada(f, 'RECHAZADA')
+    expect(rechazada.estado).toBe('RECHAZADA')
+    const oc = await crearOrdenCompra(f.empresa.id, { entidadProductorId: f.productor.id, solicitudInspeccionIds: [rechazada.id], monedaId: f.moneda.id }, 'test')
+    expect((await obtenerOrdenCompra(f.empresa.id, oc.id)).solicitudes.map((s) => s.solicitudInspeccion.id)).toEqual([rechazada.id])
+
+    // Sin OC: las del productor que no están en otra OC (la Rechazada ya no).
+    const libres = (await opciones(f.productor.id)).map((s) => s.id)
+    expect(libres).toContain(f.solicitudInspeccionCompraAprobada.id)
+    expect(libres).not.toContain(rechazada.id)
+    // En edición de esa OC: también las suyas, con su estado.
+    const deLaOc = await opciones(f.productor.id, oc.id)
+    expect(deLaOc.find((s) => s.id === rechazada.id)?.estado).toBe('RECHAZADA')
+    // Otra entidad: no ve las inspecciones del productor.
+    const deOtra = (await opciones(f.cliente.id)).map((s) => s.id)
+    expect(deOtra).not.toContain(f.solicitudInspeccionCompraAprobada.id)
+    expect(deOtra).not.toContain(rechazada.id)
+
+    // Es opcional: en edición se puede vaciar el conjunto.
+    await actualizarOrdenCompra(f.empresa.id, oc.id, { solicitudInspeccionIds: [] }, 'test')
+    expect((await obtenerOrdenCompra(f.empresa.id, oc.id)).solicitudes).toHaveLength(0)
+    expect((await opciones(f.productor.id)).map((s) => s.id)).toContain(rechazada.id)
   })
 
   it('deriva las cuotas de pago desde la Condición de Pago seleccionada (no se cargan manualmente) y valida la lista de calibres por especie al agregar una línea', async () => {

@@ -14,6 +14,9 @@
 
 ---
 
+
+> **Supersesión (2026-11-16) — Temporada en cabeceras.** Ver `00-entorno-general.md` §6 (E3, supersesión 2026-11-16), que manda sobre lo de esta sección: la temporada del selector superior viaja en la cabecera `X-Temporada-Id`, **no es un campo de formulario ni del body**, se fija al crear (hijos ← padre) y **no se cambia**; todos los listados filtran por la temporada activa. Contrato, Movimiento de Cuenta Corriente manual, Solicitud de Pago y Proforma a Productor toman la temporada de la cabecera (el movimiento automático de una factura, la de la factura). La temporada del Contrato no se cambia al editar (supersede la edición de `temporadaId` del PATCH).
+
 ## 0. Contexto para Claude Code
 
 El módulo administra a los **productores** (que son `Entidad` con `tipos` incluyendo `PRODUCTOR`) y todo lo asociado: sus **predios**, su **contrato** (PDF + condiciones controladas), su **cuenta corriente** (debes/haberes) y la configuración de **conceptos de liquidación** (cobros/abonos por especie). La compra al productor nace por **Orden de Compra** (módulo Compras, *pendiente*) o por **Contrato**.

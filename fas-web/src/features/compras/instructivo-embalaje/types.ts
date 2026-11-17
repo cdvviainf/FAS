@@ -85,7 +85,6 @@ export interface InstructivoEmbalajeCreateInput {
   entidadProductorId: number
   exportadorId?: number | null
   fechaInicioPrograma: string
-  temporadaId?: number | null
   observaciones?: string | null
   calidadesPermitidas?: { notaCalidadId: number; notaCondicionId: number }[]
   detalle: InstructivoEmbalajeDetalleInput[]
@@ -102,7 +101,6 @@ export interface InstructivoEmbalajeUpdateInput {
   entidadProductorId?: number
   exportadorId?: number | null
   fechaInicioPrograma?: string
-  temporadaId?: number | null
   observaciones?: string | null
   calidadesPermitidas?: { notaCalidadId: number; notaCondicionId: number }[]
   detalle?: InstructivoEmbalajeDetalleInput[]

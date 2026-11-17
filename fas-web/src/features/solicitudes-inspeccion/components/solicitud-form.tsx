@@ -295,7 +295,6 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
 
   function buildPayload(): SolicitudCreateInput {
     return {
-      temporadaId: temporada?.id ?? 0,
       usuarioSolicitanteId: usuarioSolicitanteId!,
       entidadProductorId: productorId!,
       plantaId,

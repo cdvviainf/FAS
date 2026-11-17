@@ -13,6 +13,9 @@
 
 ---
 
+
+> **Supersesión (2026-11-16) — Temporada en cabeceras.** Ver `00-entorno-general.md` §6 (E3, supersesión 2026-11-16), que manda sobre lo de esta sección: la temporada del selector superior viaja en la cabecera `X-Temporada-Id`, **no es un campo de formulario ni del body**, se fija al crear (hijos ← padre) y **no se cambia**; todos los listados filtran por la temporada activa. El Reclamo copia la temporada de su Embarque (no se elige ni se cambia) y la Provisión la del Reclamo.
+
 ## 0. Supersesión (2026-09-08) — reconciliación contra el Embarque real
 
 > El spec original (Etapa B) se escribió **antes de que existiera el módulo Embarque** — por eso `Reclamo.instructivo` era texto libre y la asociación no bajaba a nivel de pallet. `ventas.md` ya dejaba anotado el pendiente exacto ("el campo `instructivo` pasa a FK a `Embarque`"). Esta versión resuelve eso y agrega lo que se decidió en la reconciliación:

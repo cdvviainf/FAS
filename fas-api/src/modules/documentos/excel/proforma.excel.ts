@@ -76,7 +76,8 @@ export async function generarProformaExcel(d: ProformaPdfPayload): Promise<Buffe
   rTitulo.getCell(1).font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } }
   rTitulo.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_TITULO } }
   rTitulo.height = 24
-  const facturaConFolio = d.variante === 'FACTURA' && d.folio != null
+  // Igual que el PDF v3 (2026-11-16): con folio SII, el N° es el folio.
+  const facturaConFolio = d.folio != null
   pares(
     [[t.numero, facturaConFolio ? String(d.folio) : d.codigo], ...(facturaConFolio ? [[t.codigoInterno, d.codigo] as [string, string]] : [])],
     [[t.emision, fecha(d.fechaEmision)]],

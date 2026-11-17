@@ -7,7 +7,8 @@ import { LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION, LOCK_NAMESPACE_EMBARQUE_DESPACHO,
 import type { CuotaCalculada } from './cobranza-estado.js'
 import type { FacturasNacionalListFilters } from './factura-nacional.types.js'
 import { esFacturaTimbrada } from './sii-estado.js'
-import { temporadaParaMovimientoAutomatico } from '../../../shared/temporada-documento.js'
+import { filtroTemporadaActiva, temporadaDelRegistro } from '../../../shared/temporada-documento.js'
+import { temporadaDeEmbarque, temporadaDeProformaMaterial, temporadaDeProformaProductor } from '../../../shared/temporada-padre.repository.js'
 
 // Forma de una cuota a persistir al firmar (= CuotaCalculada del helper).
 export type CuotaCobranzaPersistir = CuotaCalculada
@@ -235,6 +236,8 @@ export async function listEmbarquesFacturables(filters: { page?: number; limit?:
     despachoAnuladoEn: null,
     notaVenta: { is: { tipoVenta: 'NACIONAL' } },
     facturasNacional: { none: { eliminadoEn: null } },
+    // Temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
     ...(q
       ? {
           OR: [
@@ -304,6 +307,7 @@ export async function listOperacionesFacturables(filters: {
           despachadoEn: { not: null },
           despachoAnuladoEn: null,
           notaVenta: { is: { tipoVenta: 'NACIONAL' } },
+          ...filtroTemporadaActiva(),
         },
         select: {
           id: true,
@@ -325,6 +329,7 @@ export async function listOperacionesFacturables(filters: {
             { estado: { in: ['ENVIADA_VALIDACION', 'FACTURADA'] } },
             { facturasNacional: { some: { eliminadoEn: null } } },
           ],
+          ...filtroTemporadaActiva(),
         },
         select: {
           id: true,
@@ -344,6 +349,7 @@ export async function listOperacionesFacturables(filters: {
             { estado: { in: ['ENVIADA_VALIDACION', 'FACTURADA'] } },
             { facturasNacional: { some: { eliminadoEn: null } } },
           ],
+          ...filtroTemporadaActiva(),
         },
         select: {
           id: true,
@@ -491,9 +497,17 @@ export interface CrearBorradorData {
 
 export async function crearBorrador(data: CrearBorradorData, creadoPorId: string) {
   const empresaId = getEmpresaIdActual()!
+  // Temporada (2026-11-16): la del documento de origen (Proforma Materiales,
+  // Proforma Productor o Embarque); sin origen, la del selector superior.
+  const temporadaId =
+    data.proformaMaterialId != null ? await temporadaDeProformaMaterial(data.proformaMaterialId)
+    : data.proformaProductorId != null ? await temporadaDeProformaProductor(data.proformaProductorId)
+    : data.embarqueId != null ? await temporadaDeEmbarque(data.embarqueId)
+    : await temporadaDelRegistro(data.fechaDocumento ?? new Date())
   const createArgs = {
     data: {
       empresaId,
+      temporadaId,
       origenClase: data.origenClase,
       proformaMaterialId: data.proformaMaterialId ?? null,
       proformaProductorId: data.proformaProductorId ?? null,
@@ -765,8 +779,8 @@ export async function marcarFirmada(
             monto: factura.montoTotal,
             monedaId: factura.monedaId,
             referencia: factura.codigo,
-            // Temporada obligatoria (2026-11-09): por fecha de emisión.
-            temporadaId: await temporadaParaMovimientoAutomatico(datos.fechaEmision),
+            // Temporada de la factura que lo origina (2026-11-16).
+            temporadaId: factura.temporadaId,
             usuarioId: userId,
           },
         })
@@ -823,6 +837,8 @@ export async function listFacturas(filters: FacturasNacionalListFilters) {
   const { page = 1, limit = 20, estado, q } = filters
   const where: Prisma.FacturaNacionalWhereInput = {
     eliminadoEn: null,
+    // Temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
     ...(estado ? { estado } : {}),
     ...(q ? { OR: [{ codigo: { contains: q, mode: 'insensitive' } }, { cliente: { razonSocial: { contains: q, mode: 'insensitive' } } }] } : {}),
   }
@@ -847,6 +863,8 @@ export async function listProformasFacturables(filters: { page?: number; limit?:
     estado: 'ENVIADA_VALIDACION',
     facturasNacional: { none: { eliminadoEn: null } },
     ...(q ? { OR: [{ numero: { contains: q, mode: 'insensitive' } }, { entidad: { razonSocial: { contains: q, mode: 'insensitive' } } }] } : {}),
+    // Temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
   }
   const [data, total] = await Promise.all([
     prisma.proformaMaterial.findMany({

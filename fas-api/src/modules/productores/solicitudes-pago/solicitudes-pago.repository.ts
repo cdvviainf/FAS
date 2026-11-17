@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { LOCK_NAMESPACE_SOLICITUD_PAGO_NUMERO, LOCK_NAMESPACE_SOLICITUD_PAGO_PRODUCTOR } from '../../../shared/advisory-locks.js'
 import type { EstadoSolicitudPago } from './solicitudes-pago.types.js'
@@ -182,7 +183,8 @@ export async function listSolicitudes(f: ListFiltros) {
   const where: Prisma.SolicitudPagoWhereInput = {
     ...(f.entidadProductorId ? { entidadProductorId: f.entidadProductorId } : {}),
     ...(f.estado ? { estado: f.estado } : {}),
-    ...(f.temporadaId ? { temporadaId: f.temporadaId } : {}),
+    // La cabecera X-Temporada-Id manda (2026-11-16, TEC-R1-001).
+    ...filtroTemporadaActiva(f.temporadaId),
     ...(f.q
       ? {
           OR: [

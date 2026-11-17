@@ -12,7 +12,7 @@ export const contratoLineaSchema = z.object({
 })
 
 export const contratoCreateSchema = z.object({
-  temporadaId: z.number().int().positive(),
+  // Temporada (2026-11-16): la del selector superior (cabecera), no viaja en el body.
   especieId: z.number().int().positive(),
   fechaInicio: z.string().date(),
   fechaTermino: z.string().date(),
@@ -25,7 +25,6 @@ export const contratoCreateSchema = z.object({
 })
 
 export const contratoUpdateSchema = z.object({
-  temporadaId: z.number().int().positive().optional(),
   especieId: z.number().int().positive().optional(),
   fechaInicio: z.string().date().optional(),
   fechaTermino: z.string().date().optional(),

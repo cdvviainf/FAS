@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 import { Prisma } from '@prisma/client'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ConflictError } from '../../../shared/errors.js'
@@ -136,7 +137,8 @@ function buildWhere(filters: SolicitudListFilters): Prisma.SolicitudInspeccionWh
   return {
     eliminadoEn: null,
     ...(filters.estado ? { estado: filters.estado } : {}),
-    ...(filters.temporadaId ? { temporadaId: filters.temporadaId } : {}),
+    // La cabecera X-Temporada-Id manda (2026-11-16, TEC-R1-001).
+    ...filtroTemporadaActiva(filters.temporadaId),
     ...(filters.entidadProductorId ? { entidadProductorId: filters.entidadProductorId } : {}),
     ...(filters.usuarioAsignadoId
       ? { asignados: { some: { usuarioId: filters.usuarioAsignadoId } } }

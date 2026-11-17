@@ -30,5 +30,4 @@ export interface MovimientoCCCreateInput {
   monto: number
   monedaId?: number | null
   referencia?: string | null
-  temporadaId?: number | null
 }

@@ -5,6 +5,8 @@ import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { LOCK_NAMESPACE_DOCUMENTO_DTE_EMISION } from '../../../shared/advisory-locks.js'
 import { ValidationError } from '../../../shared/errors.js'
 import type { DimensionProforma, FacturasExportacionListFilters } from './factura-exportacion.types.js'
+import { temporadaDeEmbarque } from '../../../shared/temporada-padre.repository.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 
 // origenTipo del DocumentoDte de una Factura de Exportación (debe calzar con el
 // del service que emite/timbra) — para invalidar su temporal al editar.
@@ -329,9 +331,12 @@ interface DatosCrearFactura {
 
 export async function crearBorrador(datos: DatosCrearFactura, creadoPorId: string) {
   const empresaId = getEmpresaIdActual()!
+  // Temporada del Embarque (2026-11-16).
+  const temporadaId = await temporadaDeEmbarque(datos.embarqueId)
   return prisma.facturaExportacion.create({
     data: {
       empresaId,
+      temporadaId,
       embarqueId: datos.embarqueId,
       proformaId: datos.proformaId,
       codigo: datos.codigo,
@@ -551,6 +556,8 @@ export async function listEmbarquesDespachados(filters: EmbarquesExportacionFilt
     // la facturación nacional, no a la de exportación (FAS-COB-VN).
     notaVenta: { is: { tipoVenta: 'EXPORTACION', ...(clienteId ? { clienteId } : {}) } },
     ...(folio ? { numeroInstructivo: { contains: folio, mode: 'insensitive' as const } } : {}),
+    // Temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
   }
   const [data, total] = await Promise.all([
     prisma.embarque.findMany({
@@ -587,6 +594,8 @@ export async function listFacturas(filters: FacturasExportacionListFilters) {
     ...(embarqueId ? { embarqueId } : {}),
     ...(clienteId ? { clienteId } : {}),
     ...(folio ? { embarque: { numeroInstructivo: { contains: folio, mode: 'insensitive' as const } } } : {}),
+    // Temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
   }
   const [data, total] = await Promise.all([
     prisma.facturaExportacion.findMany({

@@ -93,13 +93,16 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
   // el HTML de un documento anterior como flash en blanco al reabrir el
   // diálogo para otro id, sin el patrón "sincronizar prop a state" que
   // react-hooks/set-state-in-effect bloquea en este proyecto.
-  const { data: html, isPending, isError } = useQuery({
+  const { data: preview, isPending, isError } = useQuery({
     queryKey: ['documento-preview', tipo, id, idioma],
     queryFn: () => documentosService.previewHtml(tipo, id, idioma),
     enabled: open,
     staleTime: 0,
     placeholderData: keepPreviousData,
   })
+  const html = preview?.html
+  // Proforma ya emitida (2026-11-16): lo que se ve ES el definitivo, sin BORRADOR.
+  const oficial = preview?.oficial ?? false
 
   const [descargando, setDescargando] = useState(false)
   async function descargar() {
@@ -136,7 +139,7 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
         <DialogHeader>
           <DialogTitle className='flex items-center gap-2'>
             {titulo}
-            {controlCopia && <Badge variant='secondary'>Vista previa — borrador</Badge>}
+            {controlCopia && <Badge variant='secondary'>{oficial ? 'Documento oficial' : 'Vista previa — borrador'}</Badge>}
           </DialogTitle>
           {/* FAS-DOC-R1-001 (ronda QA 2, arbitrado BUG_REAL): antes decía "es
               exactamente este HTML" — falso para un documento largo, donde el
@@ -183,7 +186,7 @@ export function DocumentoPreviewDialog({ tipo, id, titulo, open, onOpenChange, p
           )}
           <Button variant='outline' onClick={() => onOpenChange(false)}>Cerrar</Button>
           <Button variant='outline' onClick={descargar} isLoading={descargando}>
-            <Icons.download className='mr-1 h-4 w-4' /> {controlCopia ? 'Descargar borrador' : 'Descargar PDF'}
+            <Icons.download className='mr-1 h-4 w-4' /> {controlCopia && !oficial ? 'Descargar borrador' : 'Descargar PDF'}
           </Button>
           {controlCopia && puedeEmitir && (
             <Button onClick={emitir} isLoading={emitiendo}>

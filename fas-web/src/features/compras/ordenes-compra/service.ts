@@ -8,6 +8,7 @@ import type {
   OrdenCompraLineaItem,
   EstadoOrdenCompra,
   NotaVentaDetalleDisponibilidad,
+  SolicitudInspeccionOpcionOc,
 } from './types'
 
 export const ordenesCompraService = {
@@ -51,5 +52,13 @@ export const ordenesCompraService = {
 
   async getDisponibilidadCierre(notaVentaId: number): Promise<{ data: NotaVentaDetalleDisponibilidad[] }> {
     return api.get(`compras/ordenes-compra/notas-venta/${notaVentaId}/disponibilidad`).json()
+  },
+
+  // Inspecciones de Compra del productor de la OC (selector opcional,
+  // 2026-11-16). En edición se manda la OC para incluir las ya vinculadas.
+  async opcionesSolicitudes(params: { entidadProductorId: number; ordenCompraId?: number }): Promise<{ data: SolicitudInspeccionOpcionOc[] }> {
+    const sp = new URLSearchParams({ entidadProductorId: String(params.entidadProductorId) })
+    if (params.ordenCompraId) sp.set('ordenCompraId', String(params.ordenCompraId))
+    return api.get('compras/ordenes-compra/opciones-solicitudes', { searchParams: sp }).json()
   },
 }

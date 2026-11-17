@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO } from '../../../shared/advisory-locks.js'
@@ -25,7 +26,6 @@ const includeDetalle = {
   planta: { select: entidadSelect },
   direccionPlanta: { select: direccionSelect },
   templateCarga: { select: mantenedorSelect },
-  solicitudInspeccion: { select: { id: true, codigo: true, estado: true } },
   adjuntos: {
     select: { id: true, nombre: true, mime: true, tamano: true, subidoEn: true, subidoPor: true },
     orderBy: { subidoEn: 'desc' as const },
@@ -56,7 +56,8 @@ const LOCK_NAMESPACE_RECEPCION_PROCESO = 490238
 export async function listRecepciones(page: number, limit: number, plantaId?: number, origen?: string, estado?: string, temporadaId?: number) {
   const where = {
     eliminadoEn: null,
-    ...(temporadaId ? { temporadaId } : {}),
+    // La cabecera X-Temporada-Id manda (2026-11-16, TEC-R1-001).
+    ...filtroTemporadaActiva(temporadaId),
     ...(plantaId ? { plantaId } : {}),
     ...(origen ? { origen: origen as 'COMPRA' | 'PROCESO' } : {}),
     ...(estado ? { estado: estado as 'CARGADA' | 'VALIDADA' | 'RECHAZADA' } : {}),
@@ -176,34 +177,7 @@ export async function getDireccionDeEntidad(direccionId: number, entidadId: numb
 export async function getOrdenCompra(id: number) {
   return prisma.ordenCompra.findFirst({
     where: { id, eliminadoEn: null },
-    select: { id: true, estado: true, modalidad: true, entidadProductorId: true },
-  })
-}
-
-// Solicitud de Inspección asociable a la Recepción (2026-11-13).
-export async function getSolicitudInspeccion(id: number) {
-  return prisma.solicitudInspeccion.findFirst({
-    where: { id, eliminadoEn: null },
-    select: { id: true, entidadProductorId: true },
-  })
-}
-
-// Opciones del selector de Solicitud de Inspección en la Recepción.
-export async function listOpcionesSolicitudInspeccion(temporadaId?: number, entidadProductorId?: number) {
-  return prisma.solicitudInspeccion.findMany({
-    where: {
-      eliminadoEn: null,
-      ...(temporadaId ? { temporadaId } : {}),
-      ...(entidadProductorId ? { entidadProductorId } : {}),
-    },
-    select: {
-      id: true,
-      codigo: true,
-      estado: true,
-      entidadProductor: { select: { id: true, razonSocial: true } },
-    },
-    orderBy: [{ creadoEn: 'desc' }, { id: 'desc' }],
-    take: 500,
+    select: { id: true, estado: true, modalidad: true },
   })
 }
 
@@ -687,6 +661,8 @@ export async function crearPalletsYValidar(
           // solo para satisfacer el tipo requerido por Prisma (mismo patrón
           // que createRecepcion() más arriba en este archivo).
           empresaId: getEmpresaIdActual()!,
+          // Temporada de la Recepción (2026-11-16): el pallet la copia.
+          temporadaId: recepcionFresca.temporadaId,
           recepcionId,
           numeroPallet: p.numeroPallet,
           origen,
@@ -781,12 +757,6 @@ export async function getAdjuntoContenido(adjuntoId: number) {
 
 export async function deleteAdjunto(adjuntoId: number) {
   return prisma.recepcionAdjunto.delete({ where: { id: adjuntoId } })
-}
-
-// Temporada de la OC (2026-11-06): la Recepción con OC la hereda por defecto.
-export async function getTemporadaDeOrdenCompra(ordenCompraId: number): Promise<number | null> {
-  const oc = await prisma.ordenCompra.findFirst({ where: { id: ordenCompraId, eliminadoEn: null }, select: { temporadaId: true } })
-  return oc?.temporadaId ?? null
 }
 
 // ─── Eliminar / reabrir una Recepción validada sin fruta comprometida ───────

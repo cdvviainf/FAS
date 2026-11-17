@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva, temporadaDelRegistro } from '../../../shared/temporada-documento.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { LOCK_NAMESPACE_ORDEN_COMPRA_MATERIAL_PROCESO } from '../../../shared/advisory-locks.js'
@@ -32,6 +33,8 @@ const includeDetalle = {
 export async function listOrdenesCompraMaterial(page: number, limit: number, entidadProveedorId?: number, estado?: string) {
   const where: Prisma.OrdenCompraMaterialWhereInput = {
     eliminadoEn: null,
+    // Temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
     ...(entidadProveedorId ? { entidadProveedorId } : {}),
     ...(estado ? { estado: estado as 'BORRADOR' | 'EMITIDA' | 'RECEPCIONADA' } : {}),
   }
@@ -140,6 +143,8 @@ const LOCK_NAMESPACE_ORDEN_COMPRA_MATERIAL_NUMERO = 490245
 export async function createOrdenCompraMaterial(data: OrdenCompraMaterialCreateInput, creadoPor: string) {
   const anio = (data.fecha ?? new Date()).getFullYear()
   const prefijo = `OCM-${anio}-`
+  // Temporada (2026-11-16): la del selector superior (raíz sin padre).
+  const temporadaId = await temporadaDelRegistro(data.fecha ?? new Date())
 
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_ORDEN_COMPRA_MATERIAL_NUMERO}::int, ${anio}::int)`
@@ -154,6 +159,7 @@ export async function createOrdenCompraMaterial(data: OrdenCompraMaterialCreateI
         // este valor con la empresa activa del contexto.
         empresaId: getEmpresaIdActual()!,
         ...data,
+        temporadaId,
         numero,
         creadoPor,
         cuotasPago: { create: cuotasPago },

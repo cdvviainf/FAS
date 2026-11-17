@@ -163,7 +163,6 @@ export interface NotaVentaListResponse {
 
 export interface NotaVentaCreateInput {
   fecha: string
-  temporadaId?: number | null
   tipoVenta?: 'EXPORTACION' | 'NACIONAL'
   clienteId: number
   exportadorId?: number | null

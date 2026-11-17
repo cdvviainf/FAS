@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 import { ValidationError } from '../../../shared/errors.js'
 import type { LoteEditarInput, PalletUpdateInput } from './stock.types.js'
 
@@ -17,7 +18,7 @@ const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 // Temporada (2026-11-06): opcional, heredada de la Recepción del pallet.
 export async function listPalletsConLineas(temporadaId?: number) {
   return prisma.pallet.findMany({
-    where: { embarqueId: null, eliminadoEn: null, ...(temporadaId ? { recepcion: { temporadaId } } : {}) },
+    where: { embarqueId: null, eliminadoEn: null, ...filtroTemporadaActiva(temporadaId) /* temporada propia del pallet; manda la cabecera (2026-11-16) */ },
     include: {
       productor: { select: entidadSelect },
       recepcion: { select: { estado: true, plantaId: true, planta: { select: entidadSelect } } },

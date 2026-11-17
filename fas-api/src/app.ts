@@ -56,7 +56,7 @@ export async function buildApp(options: { logger?: boolean } = {}) {
   app.addHook('onRequest', (_req, _reply, done) => {
     // Ambos contextos ALS activos para todo el request; `requireAuth` los
     // completa. El de auditoría va anidado dentro del de empresa.
-    empresaContext.run({ empresaId: null }, () => {
+    empresaContext.run({ empresaId: null, temporadaId: null, esHttp: true }, () => {
       auditoriaContext.run(storeAuditoriaVacio(), done)
     })
   })

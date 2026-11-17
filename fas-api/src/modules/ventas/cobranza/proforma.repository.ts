@@ -2,6 +2,8 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { DimensionProforma, ProformasListFilters } from './proforma.types.js'
+import { temporadaDeEmbarque } from '../../../shared/temporada-padre.repository.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 // Descripciones ES/EN de un mantenedor referenciado por una línea — para
@@ -187,6 +189,8 @@ export async function listProformas(filters: ProformasListFilters) {
     // FAS-PROF-EXP-004 (QA ronda 1): filtro server-side, no post-paginación
     // en el cliente — mismo criterio que reclamos.repository.ts:listReclamos.
     ...(folio ? { embarque: { numeroInstructivo: { contains: folio, mode: 'insensitive' as const } } } : {}),
+    // Temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
   }
   const [data, total] = await Promise.all([
     prisma.proforma.findMany({
@@ -252,6 +256,18 @@ export async function getDescripcionesMantenedores(lineas: LineaIds[]) {
 
 // Factura de Exportación ACTIVA del Embarque (para bloquear la anulación de la
 // Proforma mientras exista una Factura) — null si no hay.
+// Folio SII de la Factura de Exportación timbrada de esta Proforma (2026-11-16):
+// si existe, el PDF de la Proforma muestra ese N° en vez del código transitorio
+// (PRF…). Solo timbradas vigentes (ENVIADA_SII/APROBADA); la más reciente.
+export async function getFolioSiiDeProforma(proformaId: number): Promise<number | null> {
+  const factura = await prisma.facturaExportacion.findFirst({
+    where: { proformaId, eliminadoEn: null, estado: { in: ['ENVIADA_SII', 'APROBADA'] }, folio: { not: null } },
+    orderBy: { id: 'desc' },
+    select: { folio: true },
+  })
+  return factura?.folio ?? null
+}
+
 export async function getFacturaActivaEmbarque(embarqueId: number) {
   return prisma.facturaExportacion.findFirst({
     where: { embarqueId, eliminadoEn: null },
@@ -285,9 +301,12 @@ interface MetaCrearProforma {
 
 export async function crearProforma(datos: DatosCrearProforma, meta: MetaCrearProforma, creadoPorId: string) {
   const empresaId = getEmpresaIdActual()!
+  // Temporada del Embarque (2026-11-16).
+  const temporadaId = await temporadaDeEmbarque(datos.embarqueId)
   return prisma.proforma.create({
     data: {
       empresaId,
+      temporadaId,
       embarqueId: datos.embarqueId,
       codigo: datos.codigo,
       clienteId: datos.clienteId,

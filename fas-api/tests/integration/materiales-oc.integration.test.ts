@@ -102,8 +102,20 @@ async function obtenerEmpresaTest() {
   return prisma.empresa.create({ data: { codigo: 'EMP-TEST', razonSocial: 'Empresa de prueba', creadoPor: 'test' } })
 }
 
+// Temporada obligatoria en cabeceras (2026-11-16): la empresa de prueba
+// necesita una temporada; su rango amplio cubre las fechas de los fixtures
+// (fuera de HTTP la temporada se resuelve por fecha).
+async function asegurarTemporadaTest(empresaId: number) {
+  const existente = await prisma.temporada.findFirst({ where: { empresaId, codigo: 'T-TEST', eliminadoEn: null } })
+  if (existente) return existente
+  return prisma.temporada.create({
+    data: { empresaId, codigo: 'T-TEST', descripcion: 'Temporada de prueba', fechaInicio: new Date('2000-01-01'), fechaTermino: new Date('2100-12-31'), creadoPor: 'test' },
+  })
+}
+
 async function crearFixtures() {
   const empresa = await obtenerEmpresaTest()
+  await asegurarTemporadaTest(empresa.id)
   const pais = await prisma.pais.create({ data: { codigo: 'CHL', descripcion: 'Chile', creadoPor: 'test' } })
   const proveedor = await prisma.entidad.create({
     data: { empresaId: empresa.id, codigo: 'PROV-01', descripcion: 'Proveedor Uno', razonSocial: 'Proveedor Uno SpA', paisId: pais.id, tipos: ['PROVEEDOR'], creadoPor: 'test' },

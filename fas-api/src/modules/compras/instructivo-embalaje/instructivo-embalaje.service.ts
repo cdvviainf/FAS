@@ -1,6 +1,6 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { validarCalidadesPermitidas } from '../../../shared/calidades-permitidas.js'
-import { temporadaParaCrear, validarTemporadaEnEdicion } from '../../../shared/temporada-documento.js'
+import { rechazarCambioTemporada, temporadaDelRegistro } from '../../../shared/temporada-documento.js'
 import * as repo from './instructivo-embalaje.repository.js'
 import type { InstructivoEmbalajeCreateInput, InstructivoEmbalajeDetalleInput, InstructivoEmbalajeUpdateInput } from './instructivo-embalaje.types.js'
 import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
@@ -106,8 +106,8 @@ export async function obtenerInstructivo(id: number) {
 }
 
 export async function crearInstructivo(body: InstructivoEmbalajeCreateInput, creadoPor: string) {
-  // Temporada: la enviada (validada) o la que corresponde por fecha de programa.
-  const temporadaId = await temporadaParaCrear(body.temporadaId, body.fechaInicioPrograma)
+  // Temporada (2026-11-16): la del selector superior (cabecera X-Temporada-Id).
+  const temporadaId = await temporadaDelRegistro(body.fechaInicioPrograma, body.temporadaId)
   body = { ...body, temporadaId }
   await validarReferenciasHeader(body)
   await validarCalidadesPermitidas(body.calidadesPermitidas ?? [])
@@ -123,7 +123,7 @@ export async function crearInstructivo(body: InstructivoEmbalajeCreateInput, cre
 // Instructivo, ver compras.md §4.1) — editable/eliminable libremente.
 export async function actualizarInstructivo(id: number, body: InstructivoEmbalajeUpdateInput) {
   const existente = await obtenerInstructivo(id)
-  await validarTemporadaEnEdicion(body.temporadaId, existente.temporadaId)
+  rechazarCambioTemporada(body.temporadaId, existente.temporadaId)
 
   await validarReferenciasHeader(body)
   if (body.calidadesPermitidas !== undefined) {

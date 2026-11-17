@@ -114,9 +114,26 @@ export const requireAuth: preHandlerHookHandler = async (request, reply) => {
       : null
   }
 
+  // Temporada activa del selector superior (2026-11-16): rige todo lo que se
+  // registra. Aquí solo se parsea; la pertenencia a la empresa y su vigencia
+  // se validan al usarla (shared/temporada-documento.ts).
+  const temporadaRaw = request.headers['x-temporada-id']
+  let temporadaId: number | null = null
+  if (temporadaRaw != null && temporadaRaw !== '') {
+    const parsed = Number(Array.isArray(temporadaRaw) ? temporadaRaw[0] : temporadaRaw)
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      reply.status(400).send({ error: { code: 'TEMPORADA_INVALIDA', message: 'X-Temporada-Id inválido.' } })
+      return
+    }
+    temporadaId = parsed
+  }
+
   request.fasEmpresaId = empresaId
   const store = empresaContext.getStore()
-  if (store) store.empresaId = empresaId
+  if (store) {
+    store.empresaId = empresaId
+    store.temporadaId = temporadaId
+  }
 }
 
 /**

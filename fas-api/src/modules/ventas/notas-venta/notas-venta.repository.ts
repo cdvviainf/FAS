@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { LOCK_NAMESPACE_NOTA_VENTA_DETALLE } from '../../../shared/advisory-locks.js'
@@ -130,7 +131,8 @@ export async function listNotasVenta(page: number, limit: number, clienteId?: nu
   const where = {
     eliminadoEn: null,
     ...(clienteId ? { clienteId } : {}),
-    ...(temporadaId ? { temporadaId } : {}),
+    // La cabecera X-Temporada-Id manda (2026-11-16, TEC-R1-001).
+    ...filtroTemporadaActiva(temporadaId),
   }
 
   const [data, total] = await Promise.all([
@@ -345,7 +347,7 @@ export async function updateNotaVenta(id: number, data: NotaVentaUpdateInput, ac
 // re-snapshotean desde la Condición de Pago VIGENTE (no se copia el snapshot
 // del origen) y se resuelven contra las líneas copiadas. Todo en una sola
 // transacción con el mismo lock de folio que createNotaVenta.
-export async function duplicarNotaVenta(origenId: number, creadoPor: string, responsableVentaId: string | null) {
+export async function duplicarNotaVenta(origenId: number, creadoPor: string, responsableVentaId: string | null, temporadaId: number) {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE_NOTA_VENTA}::int, 0)`
 
@@ -365,8 +367,8 @@ export async function duplicarNotaVenta(origenId: number, creadoPor: string, res
         empresaId: getEmpresaIdActual()!,
         folio,
         fecha: new Date(),
-        // Duplicar copia la temporada del original (editable después).
-        temporadaId: origen.temporadaId,
+        // Temporada del selector superior (2026-11-16), resuelta por el service.
+        temporadaId,
         tipoVenta: origen.tipoVenta,
         clienteId: origen.clienteId,
         exportadorId: origen.exportadorId,

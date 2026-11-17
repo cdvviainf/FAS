@@ -61,7 +61,6 @@ export interface ContratoLineaInput {
 }
 
 export interface ContratoCreateInput {
-  temporadaId: number
   especieId: number
   fechaInicio: string
   fechaTermino: string

@@ -20,8 +20,13 @@ function idiomaDeQuery(req: FastifyRequest): IdiomaDocumento {
 
 export async function preview(req: FastifyRequest, reply: FastifyReply) {
   const { tipo, id } = documentoParamsSchema.parse(req.params)
-  const html = await service.obtenerPreviewHtml(tipo, id, empresaActualOFallar(req), idiomaDeQuery(req), req.fasAccesos)
-  return reply.header('Content-Type', 'text/html; charset=utf-8').send(html)
+  const { html, oficial } = await service.obtenerPreviewHtml(tipo, id, empresaActualOFallar(req), idiomaDeQuery(req), req.fasAccesos)
+  // X-Documento-Oficial (2026-11-16): el preview ES el definitivo (sin BORRADOR)
+  // — la web ajusta sus etiquetas ("Documento oficial" / "Descargar PDF").
+  return reply
+    .header('Content-Type', 'text/html; charset=utf-8')
+    .header('X-Documento-Oficial', oficial ? '1' : '0')
+    .send(html)
 }
 
 export async function descargarPdf(req: FastifyRequest, reply: FastifyReply) {

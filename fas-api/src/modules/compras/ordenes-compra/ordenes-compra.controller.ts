@@ -8,6 +8,7 @@ import {
   ordenCompraLineaUpdateSchema,
   ordenCompraLineaParamsSchema,
   disponibilidadCierreParamsSchema,
+  opcionesSolicitudOcQuerySchema,
 } from './ordenes-compra.schema.js'
 import * as service from './ordenes-compra.service.js'
 
@@ -60,6 +61,13 @@ export async function removeLinea(req: FastifyRequest, reply: FastifyReply) {
   const { id, lineaId } = ordenCompraLineaParamsSchema.parse(req.params)
   await service.eliminarLinea(id, lineaId)
   return reply.status(204).send()
+}
+
+// GET /ordenes-compra/opciones-solicitudes → Inspecciones de Compra del
+// productor de la OC para el selector opcional (2026-11-16).
+export async function opcionesSolicitudes(req: FastifyRequest, reply: FastifyReply) {
+  const { entidadProductorId, ordenCompraId } = opcionesSolicitudOcQuerySchema.parse(req.query)
+  return reply.send({ data: await service.listarOpcionesSolicitudInspeccion(entidadProductorId, ordenCompraId) })
 }
 
 export async function disponibilidadCierre(req: FastifyRequest, reply: FastifyReply) {

@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import ExcelJS from 'exceljs'
 import { prisma } from '../../src/lib/prisma.js'
 import { empresaContext } from '../../src/lib/empresa-context.js'
-import { crearRecepcion as crearRecepcionSvc, actualizarRecepcion as actualizarRecepcionSvc, subirAdjunto as subirAdjuntoSvc, obtenerRecepcion as obtenerRecepcionSvc, confirmarAdvertencias as confirmarAdvertenciasSvc } from '../../src/modules/compras/recepciones/recepciones.service.js'
+import { crearRecepcion as crearRecepcionSvc, subirAdjunto as subirAdjuntoSvc, obtenerRecepcion as obtenerRecepcionSvc, confirmarAdvertencias as confirmarAdvertenciasSvc } from '../../src/modules/compras/recepciones/recepciones.service.js'
 import {
   crearOrdenCompra as crearOrdenCompraSvc,
   actualizarOrdenCompra as actualizarOrdenCompraSvc,
@@ -361,29 +361,6 @@ describe('Motor de validación de Recepción contra PostgreSQL (compras.md §7)'
     expect(pallets[0].productorId).toBe(f.productor.id)
     // La línea guarda el Predio del CSG (2026-11-13) — el Packing List lo usa.
     expect(pallets[0].lineas[0].predioId).toBe(f.predioProductor.id)
-  })
-
-  it('asocia una Solicitud de Inspección opcional del productor de la OC y rechaza la de otro productor', async () => {
-    const f = await crearFixtures()
-    const oc = await crearOcEmitida(f, 100, 1)
-    const base = { ordenCompraId: oc.id, plantaId: f.planta.id, direccionPlantaId: f.direccionPlanta.id }
-
-    const recepcion = await crearRecepcion(f.empresa.id, { ...base, solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id }, 'test')
-    const leida = await prisma.recepcion.findUniqueOrThrow({ where: { id: recepcion.id } })
-    expect(leida.solicitudInspeccionId).toBe(f.solicitudInspeccionCompraAprobada.id)
-
-    // Quitarla (PATCH a null) también se permite: es opcional.
-    await empresaContext.run({ empresaId: f.empresa.id }, () => actualizarRecepcionSvc(recepcion.id, { solicitudInspeccionId: null }, 'test'))
-    expect((await prisma.recepcion.findUniqueOrThrow({ where: { id: recepcion.id } })).solicitudInspeccionId).toBeNull()
-
-    // Solicitud de otro productor → rechazo.
-    const otro = await prisma.entidad.create({
-      data: { empresaId: f.empresa.id, codigo: 'PROD-02', descripcion: 'Productor Dos', razonSocial: 'Productor Dos SpA', paisId: f.pais.id, tipos: ['PRODUCTOR'], creadoPor: 'test' },
-    })
-    await prisma.solicitudInspeccion.update({ where: { id: f.solicitudInspeccionCompraAprobada.id }, data: { entidadProductorId: otro.id } })
-    await expect(
-      empresaContext.run({ empresaId: f.empresa.id }, () => actualizarRecepcionSvc(recepcion.id, { solicitudInspeccionId: f.solicitudInspeccionCompraAprobada.id }, 'test')),
-    ).rejects.toThrow('mismo productor')
   })
 
   it('backfill: completa el Predio de líneas antiguas releyendo el Excel adjunto', async () => {

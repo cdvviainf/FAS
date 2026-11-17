@@ -90,6 +90,11 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
       // localStorage en el momento del request — si el efecto de arriba
       // todavía no corrió, esos refetches saldrían con la empresa anterior.
       localStorage.setItem(STORAGE_KEY, String(empresa.id))
+      // La temporada es por empresa (2026-11-16, TEC-R3-003): se descarta la de
+      // la empresa anterior en el mismo momento, para que ninguna petición salga
+      // con X-Empresa-Id nuevo y X-Temporada-Id viejo (lib/api.ts lee ambas de
+      // localStorage). TemporadaProvider fija luego la de la nueva empresa.
+      localStorage.removeItem('fas_temporada')
       setEmpresaActivaState(empresa)
       // Decisión #8: cambiar de empresa descarta el cache de TanStack Query.
       // Las query keys no incluyen la empresa, así que un simple invalidate
@@ -102,7 +107,12 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
       // desmontaría la página mientras recarga.
       const esSesion = (q: { queryKey: readonly unknown[] }) => q.queryKey[0] === 'config' && q.queryKey[1] === 'me'
       queryClient.invalidateQueries({ predicate: esSesion })
-      queryClient.resetQueries({ predicate: (q) => !esSesion(q) })
+      // removeQueries (no resetQueries, TEC-R3-003): vacía los datos SIN volver
+      // a pedirlos en este instante — aún no hay temporada de la nueva empresa.
+      // Las pantallas (desmontadas por EsperarTemporada mientras tanto) los piden
+      // al volver a montarse, ya con empresa y temporada nuevas.
+      void queryClient.cancelQueries({ predicate: (q) => !esSesion(q) })
+      queryClient.removeQueries({ predicate: (q) => !esSesion(q) })
     },
     [queryClient],
   )

@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 import type { Prisma } from '@prisma/client'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { MovimientoCCCreateInput, CuentaCorrienteFilters } from './cuenta-corriente.types.js'
@@ -11,7 +12,8 @@ const includeRefs = {
 function buildWhere(entidadId: number, filters: CuentaCorrienteFilters): Prisma.MovimientoCuentaCorrienteWhereInput {
   return {
     entidadId,
-    ...(filters.temporadaId ? { temporadaId: filters.temporadaId } : {}),
+    // La cabecera X-Temporada-Id manda (2026-11-16, TEC-R1-001).
+    ...filtroTemporadaActiva(filters.temporadaId),
     ...((filters.fechaDesde || filters.fechaHasta)
       ? {
           fecha: {

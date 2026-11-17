@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { InstructivoEmbalajeCreateInput, InstructivoEmbalajeDetalleInput, InstructivoEmbalajeUpdateInput } from './instructivo-embalaje.types.js'
 
@@ -41,7 +42,8 @@ const includeDetalle = {
 export async function listInstructivos(page: number, limit: number, entidadProductorId?: number, temporadaId?: number) {
   const where = {
     eliminadoEn: null,
-    ...(temporadaId ? { temporadaId } : {}),
+    // La cabecera X-Temporada-Id manda (2026-11-16, TEC-R1-001).
+    ...filtroTemporadaActiva(temporadaId),
     ...(entidadProductorId ? { entidadProductorId } : {}),
   }
 

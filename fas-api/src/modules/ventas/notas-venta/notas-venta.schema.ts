@@ -2,9 +2,8 @@ import { z } from 'zod'
 
 export const notaVentaCreateSchema = z.object({
   fecha: z.coerce.date(),
-  // Temporada (2026-11-06): la UI envía la temporada activa (editable). Si se
-  // omite al crear, se resuelve por fecha (o la predeterminada).
-  temporadaId: z.number().int().positive().optional().nullable(),
+  // Temporada (2026-11-16): NO viaja en el body — la fija el selector superior
+  // (cabecera X-Temporada-Id) al crear y no se cambia después.
   // Exportación / Nacional (2026-10-06). Opcional en el body: si se omite, el
   // default del modelo (EXPORTACION) aplica.
   tipoVenta: z.enum(['EXPORTACION', 'NACIONAL']).optional(),

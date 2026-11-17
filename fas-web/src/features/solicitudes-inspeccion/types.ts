@@ -182,7 +182,6 @@ export interface SolicitudDefectoInput {
 }
 
 export interface SolicitudCreateInput {
-  temporadaId: number
   usuarioSolicitanteId: string
   entidadProductorId: number
   plantaId?: number | null
@@ -201,7 +200,7 @@ export interface SolicitudCreateInput {
   asignados: AsignadoInput[]
 }
 
-export type SolicitudUpdateInput = Partial<Omit<SolicitudCreateInput, 'temporadaId'>>
+export type SolicitudUpdateInput = Partial<SolicitudCreateInput>
 
 // Cierre POR LÍNEA (2026-11-03): cada línea lleva su veredicto + defectos + madurez.
 export interface SolicitudCierreLineaInput {

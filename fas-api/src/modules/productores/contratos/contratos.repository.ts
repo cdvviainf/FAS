@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ContratoCreateInput, ContratoUpdateInput } from './contratos.types.js'
 
@@ -27,7 +28,8 @@ const includeDetalle = {
 
 export async function listContratosPorEntidad(entidadId: number) {
   return prisma.productorContrato.findMany({
-    where: { entidadId, eliminadoEn: null },
+    // Solo los contratos de la temporada del selector superior (2026-11-16, TEC-R1-001).
+    where: { entidadId, eliminadoEn: null, ...filtroTemporadaActiva() },
     include: includeDetalle,
     orderBy: { creadoEn: 'desc' },
   })
@@ -58,7 +60,7 @@ export async function contarContratosPorEspecieTemporada(
   })
 }
 
-export async function createContrato(entidadId: number, data: ContratoCreateInput, creadoPor: string) {
+export async function createContrato(entidadId: number, data: ContratoCreateInput & { temporadaId: number }, creadoPor: string) {
   const { lineas, ...cabecera } = data
   return prisma.productorContrato.create({
     data: {
@@ -78,7 +80,8 @@ export async function createContrato(entidadId: number, data: ContratoCreateInpu
 }
 
 export async function updateContrato(contratoId: number, data: ContratoUpdateInput, actualizadoPor: string) {
-  const { lineas, ...cabecera } = data
+  // La temporada no se cambia (2026-11-16): nunca se persiste en una edición.
+  const { lineas, temporadaId: _temporada, ...cabecera } = data
   return prisma.$transaction(async (tx) => {
     if (lineas !== undefined) {
       await tx.productorContratoLinea.deleteMany({ where: { contratoId } })

@@ -50,9 +50,8 @@ export const ordenCompraCreateSchema = z.object({
   // Modalidad de compra (2026-10-23): CAJAS (fruta embalada) o GRANEL (por kilos).
   modalidad: z.enum(['CAJAS', 'GRANEL']).optional().default('CAJAS'),
   fecha: z.coerce.date().optional(),
-  // Temporada (2026-11-06): la UI envía la temporada activa (editable). Si se
-  // omite al crear, se resuelve por fecha (o la predeterminada).
-  temporadaId: z.number().int().positive().optional().nullable(),
+  // Temporada (2026-11-16): NO viaja en el body — la fija el selector superior
+  // (cabecera X-Temporada-Id) al crear y no se cambia después.
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
   monedaId: z.number().int().positive('La moneda es requerida'),
@@ -78,9 +77,8 @@ export const ordenCompraUpdateSchema = z.object({
   // valida en el service): cambiarla cambia qué campos exige cada línea.
   modalidad: z.enum(['CAJAS', 'GRANEL']).optional(),
   fecha: z.coerce.date().optional(),
-  // Temporada (2026-11-06): la UI envía la temporada activa (editable). Si se
-  // omite al crear, se resuelve por fecha (o la predeterminada).
-  temporadaId: z.number().int().positive().optional().nullable(),
+  // Temporada (2026-11-16): NO viaja en el body — la fija el selector superior
+  // (cabecera X-Temporada-Id) al crear y no se cambia después.
   formaPagoId: z.number().int().positive().optional().nullable(),
   condicionPagoId: z.number().int().positive().optional().nullable(),
   monedaId: z.number().int().positive().optional(),
@@ -117,6 +115,14 @@ export const ordenCompraLineaParamsSchema = z.object({
 
 export const disponibilidadCierreParamsSchema = z.object({
   notaVentaId: z.coerce.number().int().positive(),
+})
+
+// Opciones del selector "Inspección de Compra" (2026-11-16): el productor de
+// la OC es obligatorio — solo se listan sus Solicitudes. En edición se manda
+// la OC para incluir las que ya tiene vinculadas.
+export const opcionesSolicitudOcQuerySchema = z.object({
+  entidadProductorId: z.coerce.number().int().positive(),
+  ordenCompraId: z.coerce.number().int().positive().optional(),
 })
 
 export const ordenCompraListQuerySchema = z.object({

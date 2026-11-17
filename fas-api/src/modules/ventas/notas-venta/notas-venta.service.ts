@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client'
 import { ForbiddenError, NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as repo from './notas-venta.repository.js'
 import type { NotaVentaCreateInput, NotaVentaDetalleCreateInput, NotaVentaDetalleUpdateInput, NotaVentaUpdateInput } from './notas-venta.types.js'
-import { temporadaParaCrear, validarTemporadaEnEdicion } from '../../../shared/temporada-documento.js'
+import { rechazarCambioTemporada, temporadaDelRegistro } from '../../../shared/temporada-documento.js'
 
 const TIPOS_CLIENTE = new Set(['CLIENTE_NACIONAL', 'CLIENTE_EXTRANJERO'])
 
@@ -368,8 +368,8 @@ export async function crearNotaVenta(body: NotaVentaCreateInput, creadoPor: stri
   }
   // Responsable de venta: por defecto el usuario digitador (si se omite).
   if (body.responsableVentaId === undefined) body = { ...body, responsableVentaId: creadoPor }
-  // Temporada: la enviada (validada) o la que corresponde por fecha.
-  const temporadaId = await temporadaParaCrear(body.temporadaId, body.fecha)
+  // Temporada (2026-11-16): la del selector superior (cabecera X-Temporada-Id).
+  const temporadaId = await temporadaDelRegistro(body.fecha, body.temporadaId)
   body = { ...body, temporadaId }
   await validarReferenciasHeader(body)
   await validarResponsableVenta(body.responsableVentaId, creadoPor)
@@ -380,7 +380,7 @@ export async function actualizarNotaVenta(id: number, body: NotaVentaUpdateInput
   const existente = await obtenerNotaVenta(id)
   requireAbierta(existente)
   await requireEditorCierre(existente, actualizadoPor)
-  await validarTemporadaEnEdicion(body.temporadaId, existente.temporadaId)
+  rechazarCambioTemporada(body.temporadaId, existente.temporadaId)
 
   // Instructivo de Embalaje (compras.md) no bloquea edición/borrado de la
   // Nota de Venta: es un documento independiente, sin relación de herencia
@@ -443,7 +443,9 @@ export async function duplicarNotaVenta(id: number, userId: string) {
   for (const d of origen.detalles) {
     await validarCalidadHasta(d.notaCalidadHasta?.id ?? null, d.notaCondicionHasta?.id ?? null)
   }
-  return ejecutarConFkTraducida(() => repo.duplicarNotaVenta(id, userId, userId))
+  // El duplicado es un Cierre nuevo: toma la temporada del selector superior.
+  const temporadaId = await temporadaDelRegistro(new Date(), origen.temporadaId)
+  return ejecutarConFkTraducida(() => repo.duplicarNotaVenta(id, userId, userId, temporadaId))
 }
 
 export async function eliminarNotaVenta(id: number, eliminadoPor: string) {

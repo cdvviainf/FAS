@@ -138,7 +138,7 @@ export function SolicitudPagoForm({ solicitudId, prefill }: { solicitudId?: numb
       const obs = observaciones.trim() || null
       return isEdit
         ? solicitudesPagoService.update(solicitudId!, { observaciones: obs, lineas })
-        : solicitudesPagoService.create({ entidadProductorId: productorId!, temporadaId: temporada?.id ?? null, observaciones: obs, lineas })
+        : solicitudesPagoService.create({ entidadProductorId: productorId!, observaciones: obs, lineas })
     },
     onSuccess: (r) => {
       invalidar()

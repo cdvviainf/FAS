@@ -49,7 +49,10 @@ export function ProformaV3({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
   // Título según variante: la misma plantilla sirve para la Proforma y para la
   // Factura de Exportación (DTE 110).
   const titulo = d.variante === 'FACTURA' ? t.tituloFactura : t.titulo
-  const facturaConFolio = d.variante === 'FACTURA' && d.folio != null
+  // Con folio SII (Factura Comercial timbrada, o Proforma cuya Factura de
+  // Exportación ya se timbró — 2026-11-16) el N° es el folio y el código
+  // interno va de subtítulo.
+  const facturaConFolio = d.folio != null
   // Solo cuando la cláusula de venta exige Flete y/o Seguro se muestra el
   // desglose FOB; en FOB puro el documento queda idéntico a antes.
   const tieneDesgloseClausula = d.montoFlete != null || d.montoSeguro != null
@@ -116,7 +119,8 @@ export function ProformaV3({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
         etiquetaFecha={t.emision}
         // Título = solo el tipo de documento (CAB-CORP-002). En la Factura
         // Comercial timbrada el N° es el folio SII y el código interno va de
-        // subtítulo; sin folio (o en la Proforma) el N° es el código interno.
+        // subtítulo (también en la Proforma cuya factura ya tiene folio SII,
+        // 2026-11-16); sin folio, el N° es el código interno.
         tituloDocumento={titulo}
         numero={facturaConFolio ? String(d.folio) : d.codigo}
         subtitulo={facturaConFolio ? `${t.codigoInterno} ${d.codigo}` : undefined}

@@ -228,8 +228,8 @@ export function ContratoFormSheet({ entidadId, item, open, onOpenChange }: Contr
 
   const mutation = useMutation({
     mutationFn: async () => {
+      // La temporada no viaja (2026-11-16): la fija el selector superior.
       const payload = {
-        temporadaId: temporadaId!,
         especieId: especieId!,
         fechaInicio,
         fechaTermino,

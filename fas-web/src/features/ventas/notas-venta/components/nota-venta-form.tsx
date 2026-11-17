@@ -65,10 +65,6 @@ const clausulasVentaService = createMantenedorService('clausulas-venta')
 
 interface HeaderFields {
   fecha: string
-  // Temporada (2026-11-06): null en alta = usar la temporada activa del
-  // selector general. Desde 2026-11-09 no se muestra en el form: al editar se
-  // reenvía la ya guardada.
-  temporadaId: number | null
   tipoVenta: 'EXPORTACION' | 'NACIONAL'
   clienteId: number
   exportadorId: number | null
@@ -96,7 +92,6 @@ interface HeaderFields {
 
 const HEADER_EMPTY: HeaderFields = {
   fecha: new Date().toISOString().slice(0, 10),
-  temporadaId: null,
   tipoVenta: 'EXPORTACION',
   clienteId: 0,
   exportadorId: null,
@@ -172,11 +167,10 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   const queryClient = useQueryClient()
 
   const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
-  // En alta, mientras el usuario no elija otra, la temporada es la activa.
+  // La temporada es la del selector superior (2026-11-16): viaja en la cabecera
+  // de cada request, no en el formulario. Sin temporada activa no se crea.
   const { temporada: temporadaActiva, isLoading: temporadaCargando } = useTemporada()
-  const temporadaIdEfectiva = fields.temporadaId ?? (isEdit ? null : temporadaActiva?.id ?? null)
-  // Temporada obligatoria (2026-11-09): sin temporada no se crea el Cierre.
-  const sinTemporada = !isEdit && temporadaIdEfectiva == null
+  const sinTemporada = !isEdit && temporadaActiva == null
   const [errors, setErrors] = useState<Record<string, string>>({})
   const { data: session } = authClient.useSession()
   const usuarioActualId = session?.user?.id ?? null
@@ -375,7 +369,6 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación del form al cargar la NV a editar
       setFields({
         fecha: d.fecha.slice(0, 10),
-        temporadaId: d.temporadaId ?? null,
         tipoVenta: d.tipoVenta ?? 'EXPORTACION',
         clienteId: d.clienteId,
         exportadorId: d.exportadorId ?? null,
@@ -460,7 +453,6 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
   function buildPayload(): NotaVentaCreateInput {
     return {
       fecha: fields.fecha,
-      temporadaId: temporadaIdEfectiva,
       tipoVenta: fields.tipoVenta,
       clienteId: fields.clienteId,
       exportadorId: fields.exportadorId,

@@ -8,7 +8,7 @@ export const movimientoCCCreateSchema = z.object({
   monto: z.number().positive('El monto debe ser mayor a 0'),
   monedaId: z.number().int().positive().optional().nullable(),
   referencia: z.string().max(100).trim().optional().nullable(),
-  temporadaId: z.number().int().positive().optional().nullable(),
+  // Temporada (2026-11-16): la del selector superior, no viaja en el body.
 })
 
 export const productorParamsSchema = z.object({

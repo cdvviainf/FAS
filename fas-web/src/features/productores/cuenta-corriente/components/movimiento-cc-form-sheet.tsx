@@ -94,7 +94,6 @@ export function MovimientoCCFormSheet({ entidadId, open, onOpenChange }: Movimie
       monto: Number(monto),
       monedaId,
       referencia: referencia.trim() || null,
-      temporadaId: temporadaActiva?.id ?? null,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cuenta-corriente', entidadId] })

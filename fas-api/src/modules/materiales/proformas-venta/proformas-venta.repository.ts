@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import type {
@@ -34,6 +35,8 @@ const includeDetalle = {
 
 export async function listProformasMaterial(page: number, limit: number, entidadId?: number, estado?: string) {
   const where: Prisma.ProformaMaterialWhereInput = {
+    // Temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
     ...(entidadId ? { entidadId } : {}),
     ...(estado ? { estado: estado as 'BORRADOR' | 'ENVIADA_VALIDACION' | 'FACTURADA' | 'ANULADA' } : {}),
   }
@@ -67,6 +70,8 @@ export async function listMovimientosRequierenProforma(page: number, limit: numb
     eliminadoEn: null,
     estado: 'CONFIRMADO',
     tipoMovimiento: { clase: 'SALIDA', generaProforma: true },
+    // Temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
   }
   const [data, total] = await Promise.all([
     prisma.movimiento.findMany({
@@ -190,6 +195,8 @@ export async function createProformaMaterial(data: ProformaMaterialCreateInput, 
         // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
         // este valor con la empresa activa del contexto.
         empresaId: getEmpresaIdActual()!,
+        // La Proforma copia la temporada de su Movimiento (2026-11-16).
+        temporadaId: movimiento.temporadaId,
         numero,
         movimientoId: data.movimientoId,
         entidadId: movimiento.entidad!.id,

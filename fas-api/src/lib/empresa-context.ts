@@ -8,6 +8,14 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 // sin depender de `request`).
 export interface EmpresaStore {
   empresaId: number | null
+  // Temporada activa del selector superior (cabecera X-Temporada-Id,
+  // 2026-11-16): rige todo lo que el usuario registra. Se valida al usarla
+  // (temporada-documento.ts), no en el guard.
+  temporadaId?: number | null
+  // true solo en el store que abre el hook onRequest de un request HTTP. Los
+  // contextos abiertos a mano (jobs, scripts, tests) no lo tienen y pueden
+  // resolver la temporada por fecha.
+  esHttp?: boolean
 }
 
 export const empresaContext = new AsyncLocalStorage<EmpresaStore>()

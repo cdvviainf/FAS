@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../../shared/errors.js'
-import { temporadaParaCrear } from '../../../shared/temporada-documento.js'
+import { temporadaDelListado, temporadaDelRegistro } from '../../../shared/temporada-documento.js'
 import { descripcionComercialArticulo } from '../../../shared/articulo-descripcion.js'
 import * as repo from './solicitudes-pago.repository.js'
 import { calcularGrupo, claveCuota, type CuotaOc, type FechaReferencia, type LineaPalletDespachada } from './solicitudes-pago.calculo.js'
@@ -112,7 +112,8 @@ export async function calcularDespachado(f: repo.FiltrosDespachado & { excluirSo
 // Pendientes de pago: grupos con al menos una cuota con saldo (los bloqueados
 // por precio pendiente también se listan, para que se vea por qué no se pagan).
 export async function listarPendientes(f: PendientesQuery) {
-  const grupos = await calcularDespachado({ entidadProductorId: f.entidadProductorId, temporadaId: f.temporadaId })
+  // La cabecera X-Temporada-Id manda sobre ?temporadaId= (2026-11-16, TEC-R1-001).
+  const grupos = await calcularDespachado({ entidadProductorId: f.entidadProductorId, temporadaId: temporadaDelListado(f.temporadaId) })
   return grupos
     .filter((g) => g.cuotas.some((c) => c.saldo > 0.005))
     .sort((a, b) => a.productor.razonSocial.localeCompare(b.productor.razonSocial) || a.ordenCompra.numero.localeCompare(b.ordenCompra.numero))
@@ -155,6 +156,13 @@ function validarLineas(grupos: GrupoDespachado[], lineas: SolicitudCreateBody['l
   return { persistir, monedaId: [...monedas][0], montoTotal }
 }
 
+// Endpoint GET /despachado: la cabecera X-Temporada-Id manda sobre
+// ?temporadaId= (2026-11-16, TEC-R1-001). `calcularDespachado` sigue recibiendo
+// la temporada explícita en los usos internos (alta/edición de la solicitud).
+export async function listarDespachado(q: repo.FiltrosDespachado & { excluirSolicitudId?: number }) {
+  return calcularDespachado({ ...q, temporadaId: temporadaDelListado(q.temporadaId) })
+}
+
 export async function listarSolicitudes(q: SolicitudesListQuery) {
   const { data, total } = await repo.listSolicitudes(q)
   return { data, meta: { total, page: q.page, limit: q.limit, totalPages: Math.ceil(total / q.limit) } }
@@ -166,10 +174,12 @@ export async function obtenerSolicitud(id: number) {
   return s
 }
 
-export async function crearSolicitud(body: SolicitudCreateBody, userId: string) {
+// `temporadaId` solo para llamadores internos: desde HTTP, la del selector
+// superior (cabecera X-Temporada-Id, 2026-11-16).
+export async function crearSolicitud(body: SolicitudCreateBody & { temporadaId?: number | null }, userId: string) {
   const productor = await repo.getProductor(body.entidadProductorId)
   if (!productor) throw new ValidationError('El productor no existe o no es de tipo Productor')
-  const temporadaId = await temporadaParaCrear(body.temporadaId, new Date())
+  const temporadaId = await temporadaDelRegistro(new Date(), body.temporadaId)
 
   return prisma.$transaction(async (tx) => {
     await repo.lockProductor(tx, body.entidadProductorId)

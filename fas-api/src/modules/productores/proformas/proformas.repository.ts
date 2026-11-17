@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import type { NaturalezaCuentaCorriente } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva, temporadaDelRegistro } from '../../../shared/temporada-documento.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { LOCK_NAMESPACE_PROFORMA_PRODUCTOR_NUMERO, LOCK_NAMESPACE_PROFORMA_PRODUCTOR_PROCESO } from '../../../shared/advisory-locks.js'
@@ -32,6 +33,8 @@ type Tx = any
 
 export async function listProformasProductor(page: number, limit: number, entidadId?: number, estado?: string, q?: string) {
   const where: Prisma.ProformaProductorWhereInput = {
+    // Temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
     ...(entidadId ? { entidadId } : {}),
     ...(estado ? { estado: estado as 'BORRADOR' | 'ENVIADA_VALIDACION' | 'RECHAZADA' | 'FACTURADA' | 'ANULADA' } : {}),
     ...(q
@@ -116,6 +119,8 @@ async function lockYVerificarEditable(tx: Tx, proformaProductorId: number): Prom
 }
 
 export async function createProformaProductor(data: ProformaProductorCreateInput, creadoPor: string) {
+  // Temporada (2026-11-16): la del selector superior (raíz sin padre).
+  const temporadaId = await temporadaDelRegistro(new Date())
   return prisma.$transaction(async (tx) => {
     const cuotasPago = await cuotasDesdeCondicionPago(tx, data.condicionPagoId)
 
@@ -130,6 +135,7 @@ export async function createProformaProductor(data: ProformaProductorCreateInput
         // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
         // este valor con la empresa activa del contexto.
         empresaId: getEmpresaIdActual()!,
+        temporadaId,
         numero,
         entidadId: data.entidadId,
         formaPagoId: data.formaPagoId,

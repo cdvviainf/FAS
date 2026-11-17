@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { LOCK_NAMESPACE_ORDEN_COMPRA_PROCESO, LOCK_NAMESPACE_NOTA_VENTA_DETALLE } from '../../../shared/advisory-locks.js'
@@ -56,7 +57,8 @@ const includeDetalle = {
 export async function listOrdenesCompra(page: number, limit: number, entidadProductorId?: number, estado?: string, temporadaId?: number) {
   const where = {
     eliminadoEn: null,
-    ...(temporadaId ? { temporadaId } : {}),
+    // La cabecera X-Temporada-Id manda (2026-11-16, TEC-R1-001).
+    ...filtroTemporadaActiva(temporadaId),
     ...(entidadProductorId ? { entidadProductorId } : {}),
     ...(estado ? { estado: estado as 'BORRADOR' | 'EMITIDA' | 'RECEPCIONADA' } : {}),
   }
@@ -660,13 +662,40 @@ export async function getNotaVentaDetalleConDisponibilidad(notaVentaId: number) 
   })
 }
 
-// La OC exige al menos una Inspección de Compra Aprobada del mismo productor
-// entre TODAS las vinculadas (compras.md §4.2, N:M 2026-08-22) — se valida
+// Inspecciones de Compra vinculadas a la OC (opcional, N:M): deben ser del
+// mismo productor de la OC, en cualquier estado (2026-11-16) — se valida
 // completo desde el service; este helper solo trae los datos necesarios.
 export async function getSolicitudesInspeccion(ids: number[]) {
   return prisma.solicitudInspeccion.findMany({
     where: { id: { in: ids }, eliminadoEn: null },
     select: { id: true, estado: true, entidadProductorId: true },
+  })
+}
+
+// Opciones del selector de Inspección de Compra de la OC (2026-11-16): del
+// productor de la OC, no eliminadas y libres (sin OC) o ya vinculadas a esta
+// misma OC. Una OC eliminada libera sus vínculos (softDelete borra el puente),
+// así que "sin fila en el puente" = libre.
+export async function listOpcionesSolicitudInspeccion(entidadProductorId: number, ordenCompraId?: number) {
+  return prisma.solicitudInspeccion.findMany({
+    where: {
+      eliminadoEn: null,
+      entidadProductorId,
+      OR: [
+        { ordenesCompra: { none: {} } },
+        ...(ordenCompraId != null ? [{ ordenesCompra: { some: { ordenCompraId } } }] : []),
+      ],
+    },
+    select: {
+      id: true,
+      codigo: true,
+      estado: true,
+      entidadProductorId: true,
+      fechaHora: true,
+      creadoEn: true,
+    },
+    orderBy: [{ creadoEn: 'desc' }, { id: 'desc' }],
+    take: 500,
   })
 }
 

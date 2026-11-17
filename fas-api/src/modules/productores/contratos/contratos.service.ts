@@ -1,4 +1,5 @@
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
+import { rechazarCambioTemporada, temporadaDelRegistro } from '../../../shared/temporada-documento.js'
 import * as repo from './contratos.repository.js'
 import { findEntidadById } from '../../config/entidades/entidades.repository.js'
 import type { ContratoCreateInput, ContratoLineaInput, ContratoUpdateInput } from './contratos.types.js'
@@ -102,20 +103,24 @@ export async function crearContrato(entidadId: number, body: ContratoCreateInput
       'El productor debe tener un representante legal (con RUT) registrado antes de crear un contrato (R3)',
     )
   }
-  await validarReferenciasHeader(body)
-  await validarUnicoPorEspecieTemporada(entidadId, body.especieId, body.temporadaId)
+  // Temporada (2026-11-16): la del selector superior (cabecera X-Temporada-Id).
+  const temporadaId = await temporadaDelRegistro(new Date(), body.temporadaId)
+  await validarReferenciasHeader({ ...body, temporadaId: null })
+  await validarUnicoPorEspecieTemporada(entidadId, body.especieId, temporadaId)
   for (const [index, linea] of body.lineas.entries()) {
     await validarLinea(body.especieId, linea, index)
   }
-  return repo.createContrato(entidadId, body, userId)
+  return repo.createContrato(entidadId, { ...body, temporadaId }, userId)
 }
 
 export async function actualizarContrato(entidadId: number, contratoId: number, body: ContratoUpdateInput, userId: string) {
   const existente = await obtenerContrato(entidadId, contratoId)
+  // La temporada no se cambia (2026-11-16).
+  rechazarCambioTemporada(body.temporadaId, existente.temporadaId)
   await validarReferenciasHeader(body)
   const especieId = body.especieId ?? existente.especieId
-  const temporadaId = body.temporadaId ?? existente.temporadaId
-  if (body.especieId != null || body.temporadaId != null) {
+  const temporadaId = existente.temporadaId
+  if (body.especieId != null) {
     await validarUnicoPorEspecieTemporada(entidadId, especieId, temporadaId, contratoId)
   }
   if (body.lineas) {

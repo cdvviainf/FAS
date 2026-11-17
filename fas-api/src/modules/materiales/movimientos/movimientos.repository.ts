@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva, temporadaDelRegistro } from '../../../shared/temporada-documento.js'
 import { Prisma } from '@prisma/client'
 import type { PrismaClient } from '@prisma/client'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
@@ -53,7 +54,9 @@ function buildWhere(filters: MovimientoListFilters): Prisma.MovimientoWhereInput
 
 export async function listMovimientos(filters: MovimientoListFilters) {
   const { page = 1, limit = 20 } = filters
-  const where = buildWhere(filters)
+  // Solo el LISTADO filtra por la temporada del selector superior (2026-11-16);
+  // Kardex/PMP/saldos son continuos entre temporadas.
+  const where = { ...buildWhere(filters), ...filtroTemporadaActiva() }
   const [data, total] = await Promise.all([
     prisma.movimiento.findMany({
       where,
@@ -123,11 +126,14 @@ export async function getOrdenCompraMaterialActiva(id: number) {
 // ─── Cabecera: crear / editar / eliminar (borrador) ──────────────────────────
 
 export async function createMovimientoBorrador(data: MovimientoCreateInput, userId: string) {
+  // Temporada (2026-11-16): la del selector superior (raíz sin padre).
+  const temporadaId = await temporadaDelRegistro(new Date(data.fechaMovimiento))
   return prisma.movimiento.create({
     data: {
       // empresaId: la extensión de tenancy (prisma-tenancy.ts) sobrescribe
       // este valor con la empresa activa del contexto.
       empresaId: getEmpresaIdActual()!,
+      temporadaId,
       tipoMovimientoId: data.tipoMovimientoId,
       fechaMovimiento: new Date(data.fechaMovimiento),
       usuarioId: userId,
@@ -635,6 +641,8 @@ export async function anularRecepcionTransaccional(movimientoOriginalId: number,
     const inverso = await tx.movimiento.create({
       data: {
         empresaId: original.empresaId,
+        // El inverso copia la temporada del movimiento que anula (2026-11-16).
+        temporadaId: original.temporadaId,
         tipoMovimientoId: tipoReverso.id,
         entidadId: original.entidadId,
         fechaMovimiento: new Date(),

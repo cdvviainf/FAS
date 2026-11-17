@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTemporada } from '@/contexts/temporada-context'
 import { AvisoSinTemporada } from '@/components/shared/aviso-sin-temporada'
-import { TemporadaSelect } from '@/components/shared/temporada-select'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -25,6 +24,7 @@ import {
 import { Icons } from '@/components/icons'
 import { Badge } from '@/components/ui/badge'
 import { Combobox } from '@/components/ui/combobox'
+import { SelectMultiple } from '@/components/shared/select-multiple'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { MantenedorQuickCreate } from '@/components/shared/mantenedor-simple/mantenedor-quick-create'
@@ -77,8 +77,6 @@ interface HeaderFields {
   notaVentaId: number | null
   solicitudInspeccionIds: number[]
   fecha: string
-  // Temporada (2026-11-06): null en alta = usar la temporada activa.
-  temporadaId: number | null
   responsableId: string | null
   destinoMercadoId: number | null
   condicionPagoId: number | null
@@ -110,7 +108,6 @@ const HEADER_EMPTY: HeaderFields = {
   // Fecha del día en hora LOCAL (2026-11-09): toISOString() es UTC y después de
   // las 21:00 en Chile proponía el día siguiente.
   fecha: hoyLocal(),
-  temporadaId: null,
   responsableId: null,
   destinoMercadoId: null,
   condicionPagoId: null,
@@ -149,6 +146,19 @@ interface OrdenCompraFormProps {
 
 const ITEM = 'COMPRAS_OC'
 
+// Estado de la Inspección de Compra en el selector de la OC (2026-11-16): se
+// puede vincular en cualquier estado, pero se muestra el veredicto. MIXTO
+// (líneas con veredictos distintos) se lee como "Parcialmente rechazada".
+const ESTADO_INSPECCION_OC: Record<string, string> = {
+  PENDIENTE: 'Pendiente',
+  NOTIFICADA: 'Notificada',
+  APROBADA: 'Aprobada',
+  RECHAZADA: 'Rechazada',
+  MIXTO: 'Parcialmente rechazada',
+  OBJETADA: 'Objetada',
+  CERRADA: 'Cerrada',
+}
+
 export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const isEdit = !!ordenCompraId
   const router = useRouter()
@@ -166,11 +176,10 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   }
 
   const [fields, setFields] = useState<HeaderFields>(HEADER_EMPTY)
-  // En alta, mientras el usuario no elija otra, la temporada es la activa.
+  // La temporada es la del selector superior (2026-11-16): viaja en la cabecera
+  // de cada request, no en el formulario. Sin temporada activa no se crea.
   const { temporada: temporadaActiva, isLoading: temporadaCargando } = useTemporada()
-  const temporadaIdEfectiva = fields.temporadaId ?? (isEdit ? null : temporadaActiva?.id ?? null)
-  // Temporada obligatoria (2026-11-09): sin temporada no se crea la OC.
-  const sinTemporada = !isEdit && temporadaIdEfectiva == null
+  const sinTemporada = !isEdit && temporadaActiva == null
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [linea, setLinea] = useState<OrdenCompraLineaCreateInput>(LINEA_EMPTY)
   const [lineaErrors, setLineaErrors] = useState<Record<string, string>>({})
@@ -243,6 +252,16 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const { data: calibresData } = useQuery({ queryKey: ['calibres-options', linea.especieId], queryFn: () => calibresService.list({ limit: 200, especieId: linea.especieId }), staleTime: 60_000, enabled: !!linea.especieId })
   const { data: tiposPalletData } = useQuery({ queryKey: ['tipos-pallet-options'], queryFn: () => tiposPalletService.list({ limit: 200 }), staleTime: 5 * 60_000 })
 
+  // Inspección de Compra (opcional, 2026-11-16 — se movió desde la Recepción):
+  // solo las Solicitudes del productor al que se emite la OC; el backend las
+  // filtra (y revalida al guardar). En edición incluye las ya vinculadas.
+  const { data: solicitudesOpcionesData } = useQuery({
+    queryKey: ['oc-opciones-solicitudes', fields.entidadProductorId, ordenCompraId ?? null],
+    queryFn: () => ordenesCompraService.opcionesSolicitudes({ entidadProductorId: fields.entidadProductorId, ordenCompraId }),
+    staleTime: 30_000,
+    enabled: !!fields.entidadProductorId,
+  })
+
   const { data: incotermsData } = useQuery({ queryKey: ['clausulas-venta-options'], queryFn: () => clausulasVentaService.list({ limit: 200, soloActivos: true }), staleTime: 5 * 60_000 })
 
   const esGranel = fields.modalidad === 'GRANEL'
@@ -256,6 +275,18 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
   const modalidadBloqueada = (ordenCompra?.data.lineas.length ?? 0) > 0 || fields.estado !== 'BORRADOR'
 
   const productores = productoresData?.data ?? []
+  const opcionesSolicitud = (() => {
+    const lista = (solicitudesOpcionesData?.data ?? []).map((s) => ({
+      id: s.id,
+      label: `${s.codigo} — ${ESTADO_INSPECCION_OC[s.estado] ?? s.estado}`,
+    }))
+    // Las ya vinculadas siempre visibles aunque la lista aún no cargue.
+    for (const v of ordenCompra?.data.solicitudes ?? []) {
+      const s = v.solicitudInspeccion
+      if (!lista.some((o) => o.id === s.id)) lista.push({ id: s.id, label: `${s.codigo} — ${ESTADO_INSPECCION_OC[s.estado] ?? s.estado}` })
+    }
+    return lista
+  })()
   const responsables = responsablesData?.data ?? []
   const especies = especiesData?.data ?? []
   const articulos = articulosData?.data ?? []
@@ -289,7 +320,6 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
         notaVentaId: d.notaVentaId,
         solicitudInspeccionIds: d.solicitudes.map((s) => s.solicitudInspeccion.id),
         fecha: d.fecha.slice(0, 10),
-        temporadaId: d.temporadaId ?? null,
         responsableId: d.responsableId,
         destinoMercadoId: d.destinoMercadoId,
         condicionPagoId: d.condicionPagoId,
@@ -377,9 +407,10 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
       entidadProductorId: fields.entidadProductorId,
       modalidad: fields.modalidad,
       notaVentaId: fields.origen === 'CIERRE' ? fields.notaVentaId : null,
-      solicitudInspeccionIds: fields.solicitudInspeccionIds.length > 0 ? fields.solicitudInspeccionIds : undefined,
+      // Registro opcional (2026-11-16): se envía siempre el conjunto completo
+      // (vacío incluido) para que en edición también se pueda quitar.
+      solicitudInspeccionIds: fields.solicitudInspeccionIds,
       fecha: fields.fecha,
-      temporadaId: temporadaIdEfectiva,
       responsableId: fields.responsableId,
       destinoMercadoId: fields.destinoMercadoId,
       condicionPagoId: fields.condicionPagoId,
@@ -761,10 +792,6 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
               <Label>Fecha</Label>
               <Input type='date' value={fields.fecha} onChange={(e) => setFields((f) => ({ ...f, fecha: e.target.value }))} />
             </div>
-            <div className='space-y-1.5'>
-              <Label>Temporada</Label>
-              <TemporadaSelect value={temporadaIdEfectiva} onChange={(id) => setFields((f) => ({ ...f, temporadaId: id }))} />
-            </div>
           </div>
 
           <Separator />
@@ -807,6 +834,27 @@ export function OrdenCompraForm({ ordenCompraId }: OrdenCompraFormProps) {
                 </SelectContent>
               </Select>
               {fields.origen === 'CIERRE' && <p className='text-muted-foreground text-xs'>Se toma del Cierre Comercial.</p>}
+            </div>
+          </div>
+
+          {/* Fila 2b: Inspección de Compra (opcional, N:M — 2026-11-16, se movió
+              desde la Recepción). Solo las del productor de la OC, en cualquier
+              estado; el estado se muestra junto al código. */}
+          <div className='grid gap-4 sm:grid-cols-3'>
+            <div className='space-y-1.5 sm:col-span-2'>
+              <Label>Inspección de Compra <span className='text-muted-foreground text-xs'>(opcional)</span></Label>
+              <SelectMultiple
+                options={opcionesSolicitud}
+                selectedIds={fields.solicitudInspeccionIds}
+                onChange={(ids) => setFields((f) => ({ ...f, solicitudInspeccionIds: ids }))}
+                placeholder={fields.entidadProductorId ? 'Agregar inspección...' : 'Elige un productor primero'}
+                disabled={!fields.entidadProductorId}
+              />
+              <p className='text-xs text-muted-foreground'>
+                {fields.entidadProductorId && opcionesSolicitud.length === 0
+                  ? 'El productor no tiene inspecciones de compra disponibles.'
+                  : 'Solo se listan las inspecciones del productor de esta Orden de Compra que no están en otra OC.'}
+              </p>
             </div>
           </div>
 

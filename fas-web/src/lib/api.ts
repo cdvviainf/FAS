@@ -45,6 +45,22 @@ const beforeRequestHook: BeforeRequestHook = ({ request }) => {
   if (new URL(request.url).pathname.endsWith('/config/me/empresas')) return
   const empresaId = localStorage.getItem('fas_empresa_id')
   if (empresaId) request.headers.set('X-Empresa-Id', empresaId)
+  // Temporada activa del selector superior (2026-11-16): rige todo lo que se
+  // registra y filtra los listados, igual que la empresa. Misma clave que
+  // TemporadaProvider (src/contexts/temporada-context.tsx).
+  const temporadaId = temporadaIdGuardada()
+  if (temporadaId != null) request.headers.set('X-Temporada-Id', String(temporadaId))
+}
+
+function temporadaIdGuardada(): number | null {
+  try {
+    const raw = localStorage.getItem('fas_temporada')
+    if (!raw) return null
+    const id = (JSON.parse(raw) as { id?: unknown }).id
+    return typeof id === 'number' && Number.isInteger(id) && id > 0 ? id : null
+  } catch {
+    return null
+  }
 }
 
 // Prefijo relativo ('/api', mismo origen del frontend) en vez de

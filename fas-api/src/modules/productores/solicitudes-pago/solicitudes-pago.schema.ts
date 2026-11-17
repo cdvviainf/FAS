@@ -47,8 +47,7 @@ const lineasSchema = z
 
 export const solicitudCreateSchema = z.object({
   entidadProductorId: z.number().int().positive(),
-  // Temporada activa del selector general (obligatoria, 2026-11-09).
-  temporadaId: z.number().int().positive().nullable().optional(),
+  // Temporada (2026-11-16): la del selector superior (cabecera), no viaja en el body.
   observaciones: z.string().trim().max(1000).nullable().optional(),
   lineas: lineasSchema,
 })

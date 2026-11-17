@@ -60,7 +60,7 @@ export const reclamoCreateSchema = z.object({
   // llega a Calidad (tipoReclamo.generaAnalisisCalidad).
   tipoReclamoId: z.number().int().positive('Selecciona el tipo de reclamo'),
   resumenCliente: z.string().trim().max(2000).optional().nullable(),
-  temporadaId: z.number().int().positive().optional().nullable(),
+  // Temporada (2026-11-16): no viaja en el body — la del Embarque, fija.
   // Contexto del reclamo (2026-10-25): Sí/No, default No.
   tieneTermografos: z.boolean().optional().default(false),
   tieneReporte: z.boolean().optional().default(false),
@@ -76,7 +76,6 @@ export const reclamoUpdateSchema = z.object({
   fechaReclamo: fechaReclamoSchema.optional(),
   tipoReclamoId: z.number().int().positive().optional(),
   resumenCliente: z.string().trim().max(2000).optional().nullable(),
-  temporadaId: z.number().int().positive().optional().nullable(),
   tieneTermografos: z.boolean().optional(),
   tieneReporte: z.boolean().optional(),
   lineas: lineasSchema('Selecciona al menos una línea de pallet').optional(),

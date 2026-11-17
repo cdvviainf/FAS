@@ -6,6 +6,13 @@ const ITEM = 'COMPRAS_OC'
 
 export async function ordenesCompraRoutes(app: FastifyInstance) {
   app.get('/ordenes-compra', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.list)
+  // Opciones del selector "Inspección de Compra" (2026-11-16, se movió desde la
+  // Recepción). Ruta estática: Fastify la prioriza sobre /:id.
+  app.get(
+    '/ordenes-compra/opciones-solicitudes',
+    { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] },
+    ctrl.opcionesSolicitudes,
+  )
   app.get('/ordenes-compra/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'LECTURA')] }, ctrl.getById)
   app.post('/ordenes-compra', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.create)
   app.patch('/ordenes-compra/:id', { preHandler: [requireAuth, requireLevel(ITEM, 'TOTAL')] }, ctrl.update)

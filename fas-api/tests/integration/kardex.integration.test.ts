@@ -77,6 +77,17 @@ async function crearTipoMovimiento(empresaId: number, codigo: string, clase: 'EN
   })
 }
 
+// Temporada obligatoria en cabeceras (2026-11-16): la empresa de prueba
+// necesita una temporada; su rango amplio cubre las fechas de los fixtures
+// (fuera de HTTP la temporada se resuelve por fecha).
+async function asegurarTemporadaTest(empresaId: number) {
+  const existente = await prisma.temporada.findFirst({ where: { empresaId, codigo: 'T-TEST', eliminadoEn: null } })
+  if (existente) return existente
+  return prisma.temporada.create({
+    data: { empresaId, codigo: 'T-TEST', descripcion: 'Temporada de prueba', fechaInicio: new Date('2000-01-01'), fechaTermino: new Date('2100-12-31'), creadoPor: 'test' },
+  })
+}
+
 async function crearMovimiento(params: {
   empresaId: number
   tipoMovimientoId: number
@@ -87,9 +98,11 @@ async function crearMovimiento(params: {
   cantidad: number
   precioUnitario?: number
 }) {
+  const temporada = await asegurarTemporadaTest(params.empresaId)
   return prisma.movimiento.create({
     data: {
       empresaId: params.empresaId,
+      temporadaId: temporada.id,
       tipoMovimientoId: params.tipoMovimientoId,
       fechaMovimiento: new Date(params.fechaMovimiento),
       bodegaOrigenId: params.bodegaOrigenId ?? null,

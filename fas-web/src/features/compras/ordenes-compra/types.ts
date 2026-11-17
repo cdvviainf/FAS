@@ -128,6 +128,17 @@ export interface OrdenCompraListItem {
   notaVenta: { id: number; folio: number } | null
 }
 
+// Opción del selector "Inspección de Compra" de la OC (2026-11-16): solo
+// Solicitudes del productor de la OC, libres o ya vinculadas a esta OC.
+export interface SolicitudInspeccionOpcionOc {
+  id: number
+  codigo: string
+  estado: string
+  entidadProductorId: number
+  fechaHora: string | null
+  creadoEn: string
+}
+
 export interface OrdenCompraSolicitudVinculo {
   id: number
   solicitudInspeccion: { id: number; codigo: string; estado: string }
@@ -204,7 +215,6 @@ export interface OrdenCompraCreateInput {
   // vínculos existentes.
   solicitudInspeccionIds?: number[]
   fecha?: string
-  temporadaId?: number | null
   formaPagoId?: number | null
   condicionPagoId?: number | null
   monedaId: number

@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
-import { temporadaParaCrear, validarTemporadaEnEdicion } from '../../../shared/temporada-documento.js'
+import { rechazarCambioTemporada, temporadaDelRegistro } from '../../../shared/temporada-documento.js'
 import * as repo from './ordenes-compra.repository.js'
 import type {
   OrdenCompraCreateInput,
@@ -233,11 +233,9 @@ async function validarReferenciasHeader(data: {
     if (productorIdEfectivo != null && solicitudes.some((s) => s.entidadProductorId !== productorIdEfectivo)) {
       throw new ValidationError('Una o más inspecciones de compra seleccionadas no corresponden al productor de esta Orden de Compra')
     }
-    // N:M (2026-08-22, Etapa 2): ya no exige que TODAS estén Aprobadas —
-    // basta con que al menos una lo esté para habilitar la OC.
-    if (!solicitudes.some((s) => s.estado === 'APROBADA')) {
-      throw new ValidationError('Al menos una de las inspecciones de compra seleccionadas debe estar Aprobada')
-    }
+    // Registro opcional (2026-11-16, se movió desde la Recepción): se puede
+    // vincular en cualquier estado — ya no se exige que alguna esté Aprobada.
+    // El selector muestra el estado (Aprobada/Rechazada/Parcialmente rechazada…).
     // "Ya vinculada a otra OC" solo se revalida cuando el propio caller
     // reenvía el arreglo — si llegó solo por el fallback `vigente`, ya está
     // vinculada a ESTA misma OC y no corresponde chocar contra sí misma.
@@ -275,6 +273,13 @@ export async function listarOrdenesCompra(page: number, limit: number, entidadPr
   return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
+// Opciones del selector "Inspección de Compra" de la OC (2026-11-16): solo
+// las Solicitudes del productor al que se emite la OC, no eliminadas y no
+// vinculadas a OTRA OC (en edición se incluyen las de esta misma OC).
+export async function listarOpcionesSolicitudInspeccion(entidadProductorId: number, ordenCompraId?: number) {
+  return repo.listOpcionesSolicitudInspeccion(entidadProductorId, ordenCompraId)
+}
+
 export async function obtenerOrdenCompra(id: number) {
   const orden = await repo.getOrdenCompraById(id)
   if (!orden) throw new NotFoundError('Orden de Compra', String(id))
@@ -298,8 +303,8 @@ function normalizarCondicionesGranel<T extends OrdenCompraUpdateInput>(body: T, 
 export async function crearOrdenCompra(body: OrdenCompraCreateInput, creadoPor: string) {
   // La Inspección de Compra ya NO es requerida (2026-09-15): la OC puede
   // crearse sin solicitudes. Si se envían, validarReferenciasHeader las valida.
-  // Temporada: la enviada (validada) o la que corresponde por fecha.
-  const temporadaId = await temporadaParaCrear(body.temporadaId, body.fecha ?? new Date())
+  // Temporada (2026-11-16): la del selector superior (cabecera X-Temporada-Id).
+  const temporadaId = await temporadaDelRegistro(body.fecha ?? new Date(), body.temporadaId)
   body = { ...body, temporadaId }
   body = await mercadoDesdeCierre(body, null)
   await validarReferenciasHeader(body)
@@ -325,7 +330,7 @@ function traducirColisionSolicitud(e: unknown): unknown {
 
 export async function actualizarOrdenCompra(id: number, body: OrdenCompraUpdateInput, actualizadoPor: string) {
   const existente = await obtenerOrdenCompra(id)
-  await validarTemporadaEnEdicion(body.temporadaId, existente.temporadaId)
+  rechazarCambioTemporada(body.temporadaId, existente.temporadaId)
   // Editable hasta Recepción (compras.md §6.2/§8): una vez recepcionada
   // (asignado por el futuro flujo de Recepción, no por este endpoint) la OC
   // queda bloqueada.

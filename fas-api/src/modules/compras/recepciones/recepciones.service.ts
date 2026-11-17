@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
-import { temporadaParaCrear, validarTemporadaEnEdicion } from '../../../shared/temporada-documento.js'
+import { rechazarCambioTemporada, temporadaDelRegistro } from '../../../shared/temporada-documento.js'
+import { temporadaDeOrdenCompra } from '../../../shared/temporada-padre.repository.js'
 import * as repo from './recepciones.repository.js'
 import { procesarCargaExcel } from './recepciones.motor.js'
 import type { RecepcionCreateInput, RecepcionUpdateInput } from './recepciones.types.js'
@@ -89,28 +90,8 @@ function shapeRecepcion<T extends { estado: string; _count: { pallets: number } 
   return { ...resto, tienePallets, editable: ESTADOS_MODIFICABLES.has(resto.estado) && !tienePallets }
 }
 
-// Solicitud de Inspección (opcional, 2026-11-13): debe existir y, si la
-// Recepción tiene OC, ser del mismo productor que la OC.
-async function validarSolicitudInspeccion(solicitudId: number | null | undefined, ordenCompraId: number | null) {
-  if (solicitudId == null) return
-  const solicitud = await repo.getSolicitudInspeccion(solicitudId)
-  if (!solicitud) throw new ValidationError('La Solicitud de Inspección no existe o fue eliminada')
-  if (ordenCompraId != null) {
-    const oc = await repo.getOrdenCompra(ordenCompraId)
-    if (oc && oc.entidadProductorId !== solicitud.entidadProductorId) {
-      throw new ValidationError('La Solicitud de Inspección debe ser del mismo productor de la Orden de Compra')
-    }
-  }
-}
-
-export async function listarOpcionesSolicitudInspeccion(temporadaId?: number, entidadProductorId?: number, ordenCompraId?: number) {
-  if (ordenCompraId != null) {
-    const oc = await repo.getOrdenCompra(ordenCompraId)
-    if (!oc) return []
-    entidadProductorId = oc.entidadProductorId
-  }
-  return repo.listOpcionesSolicitudInspeccion(temporadaId, entidadProductorId)
-}
+// La Solicitud de Inspección opcional (2026-11-13) se movió a la Orden de
+// Compra (2026-11-16): la Recepción ya no la registra.
 
 export async function listarRecepciones(page: number, limit: number, plantaId?: number, origen?: string, estado?: string, temporadaId?: number) {
   const { data, total } = await repo.listRecepciones(page, limit, plantaId, origen, estado, temporadaId)
@@ -151,13 +132,11 @@ export async function crearRecepcion(body: RecepcionCreateInput, creadoPor: stri
   await validarInstructivos(body.instructivoIds)
   await validarPlantaYDireccion(body.plantaId, body.direccionPlantaId)
   await validarTemplateCarga(body.templateCargaId)
-  await validarSolicitudInspeccion(body.solicitudInspeccionId, body.ordenCompraId ?? null)
-  // Temporada: la enviada (validada); si no, la de la OC; si no, por fecha.
-  if (body.temporadaId == null && body.ordenCompraId != null) {
-    const temporadaOc = await repo.getTemporadaDeOrdenCompra(body.ordenCompraId)
-    if (temporadaOc != null) body = { ...body, temporadaId: temporadaOc }
-  }
-  const temporadaId = await temporadaParaCrear(body.temporadaId, new Date())
+  // Temporada (2026-11-16): con OC, la de la OC (documento padre); de Proceso,
+  // la del selector superior (cabecera X-Temporada-Id).
+  const temporadaId = body.ordenCompraId != null
+    ? await temporadaDeOrdenCompra(body.ordenCompraId)
+    : await temporadaDelRegistro(new Date(), body.temporadaId)
   body = { ...body, temporadaId }
   try {
     return shapeRecepcion(await repo.createRecepcion({ ...body, temporadaId }, creadoPor))
@@ -190,8 +169,7 @@ export async function actualizarRecepcion(id: number, body: RecepcionUpdateInput
     body.direccionPlantaId ?? existente.direccionPlantaId,
   )
   await validarTemplateCarga(body.templateCargaId)
-  await validarSolicitudInspeccion(body.solicitudInspeccionId, existente.ordenCompraId)
-  await validarTemporadaEnEdicion(body.temporadaId, existente.temporadaId)
+  rechazarCambioTemporada(body.temporadaId, existente.temporadaId)
   return shapeRecepcion(await repo.updateRecepcion(id, body, actualizadoPor))
 }
 

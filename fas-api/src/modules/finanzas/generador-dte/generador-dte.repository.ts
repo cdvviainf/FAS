@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { filtroTemporadaActiva, temporadaDelRegistro } from '../../../shared/temporada-documento.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import {
@@ -131,6 +132,8 @@ function transporteCampos(clase: ClaseDocumentoManual, t: DocumentoManualTranspo
 export async function listDocumentosManuales(f: DocumentoManualListFilters) {
   const where: Prisma.DocumentoManualWhereInput = {
     eliminadoEn: null,
+    // Temporada del selector superior (2026-11-16).
+    ...filtroTemporadaActiva(),
     ...(f.claseDocumento ? { claseDocumento: f.claseDocumento } : {}),
     ...(f.estado ? { estado: f.estado } : {}),
     ...(f.entidadId ? { entidadId: f.entidadId } : {}),
@@ -175,6 +178,8 @@ async function generarCodigo(tx: Tx, empresaId: number): Promise<string> {
 
 // ─── Crear ──────────────────────────────────────────────────────────────────────
 export async function createDocumentoManual(data: DocumentoManualCreateInput, creadoPorId: string) {
+  // Temporada (2026-11-16): la del selector superior (raíz sin padre).
+  const temporadaId = await temporadaDelRegistro(new Date(data.fechaDocumento))
   return prisma.$transaction(async (tx) => {
     const empresaId = getEmpresaIdActual()!
     const codigo = await generarCodigo(tx, empresaId)
@@ -183,6 +188,7 @@ export async function createDocumentoManual(data: DocumentoManualCreateInput, cr
     return tx.documentoManual.create({
       data: {
         empresaId,
+        temporadaId,
         codigo,
         claseDocumento: data.claseDocumento,
         tipoDte: montos.tipoDte,

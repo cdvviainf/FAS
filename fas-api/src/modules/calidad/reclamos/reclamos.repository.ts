@@ -1,5 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../../../lib/prisma.js'
+import { temporadaDeReclamo } from '../../../shared/temporada-padre.repository.js'
+import { filtroTemporadaActiva } from '../../../shared/temporada-documento.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ForbiddenError, NotFoundError, ValidationError } from '../../../shared/errors.js'
 import { LOCK_NAMESPACE_RECLAMO_PALLET_LINEA, LOCK_NAMESPACE_RECLAMO_CORRELATIVO } from '../../../shared/advisory-locks.js'
@@ -76,6 +78,7 @@ export async function getEmbarqueParaReclamo(embarqueId: number) {
     select: {
       id: true,
       numeroInstructivo: true,
+      temporadaId: true,
       notaVenta: {
         select: {
           clienteId: true,
@@ -303,6 +306,8 @@ export async function crearReclamoTransaccional(
       await tx.provision.create({
         data: {
           empresaId,
+          // La Provisión copia la temporada de su Reclamo (2026-11-16).
+          temporadaId: reclamo.temporadaId,
           reclamoId: reclamo.id,
           tipoCalculo: provisionInput.tipoCalculo,
           valorUnitario: provisionInput.valorUnitario ?? undefined,
@@ -444,6 +449,8 @@ export async function listReclamos(filters: ReclamoListFilters) {
   const { page = 1, limit = 20, estado, embarqueId, clienteId, folio, soloConAnalisis } = filters
   const where: Prisma.ReclamoWhereInput = {
     eliminadoEn: null,
+    // Temporada del selector superior (2026-11-16, TEC-R1-001).
+    ...filtroTemporadaActiva(),
     ...(estado ? { estado } : {}),
     ...(embarqueId ? { embarqueId } : {}),
     ...(clienteId ? { clienteId } : {}),
@@ -727,6 +734,8 @@ export async function crearProvision(reclamoId: number, input: ProvisionInput, c
     return tx.provision.create({
       data: {
         empresaId,
+        // La Provisión copia la temporada de su Reclamo (2026-11-16).
+        temporadaId: await temporadaDeReclamo(reclamoId, tx),
         reclamoId,
         tipoCalculo: input.tipoCalculo,
         valorUnitario: input.valorUnitario ?? undefined,

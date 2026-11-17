@@ -13,7 +13,7 @@ import { ITEM_SOLICITUD_PAGO_CONFIRMAR } from './solicitudes-pago.types.js'
 
 export async function despachado(req: FastifyRequest, reply: FastifyReply) {
   const q = despachadoQuerySchema.parse(req.query)
-  return reply.send({ data: await service.calcularDespachado(q) })
+  return reply.send({ data: await service.listarDespachado(q) })
 }
 
 export async function pendientes(req: FastifyRequest, reply: FastifyReply) {

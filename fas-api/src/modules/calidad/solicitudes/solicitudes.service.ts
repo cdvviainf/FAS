@@ -1,4 +1,5 @@
 import { NotFoundError, ValidationError, ConflictError, ForbiddenError } from '../../../shared/errors.js'
+import { temporadaDelRegistro } from '../../../shared/temporada-documento.js'
 import { encolarCorreo, encolarCorreoDiferido, cancelarCorreoDiferido } from '../../correos/correos.queue.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import type { ParCalidad } from '../../../shared/calidades-permitidas.js'
@@ -225,9 +226,12 @@ function requireSoloNotificados(asignados: { funcion: string }[] | undefined) {
   }
 }
 
-export async function crearSolicitud(body: SolicitudCreateBody, userId: string) {
+// `temporadaId` solo lo usan llamadores internos (jobs/tests): desde HTTP la
+// temporada es la del selector superior (cabecera X-Temporada-Id, 2026-11-16).
+export async function crearSolicitud(body: SolicitudCreateBody & { temporadaId?: number | null }, userId: string) {
   requireSoloNotificados(body.asignados)
-  const temporada = await repo.getTemporadaActiva(body.temporadaId)
+  const temporadaId = await temporadaDelRegistro(new Date(), body.temporadaId)
+  const temporada = await repo.getTemporadaActiva(temporadaId)
   if (!temporada) throw new ValidationError('La temporada seleccionada no existe o fue eliminada')
 
   // Si se omite, el solicitante por defecto es el usuario autenticado —
@@ -250,7 +254,7 @@ export async function crearSolicitud(body: SolicitudCreateBody, userId: string) 
   if (body.lineas.length === 0) throw new ValidationError('Debe agregar al menos una línea de producto')
   await validarLineas(body.lineas)
 
-  const { temporadaId, asignados, fechaHora, paisIds = [], lineas, ...core } = body
+  const { temporadaId: _temporadaInterna, asignados, fechaHora, paisIds = [], lineas, ...core } = body
   return repo.createSolicitud(
     temporadaId,
     temporada.codigo,

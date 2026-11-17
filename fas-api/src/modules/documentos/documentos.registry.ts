@@ -278,6 +278,10 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     // documentos_emitidos y las reimpresiones salen como COPIA. El estado de
     // negocio de la Proforma (EMITIDA/ANULADA) no cambia al emitir el PDF.
     controlCopia: true,
+    // Definitivo "siempre actualizado" (2026-11-16): ver oficialEnVivo en
+    // documentos.types.ts — mismo formato que el borrador y N° SII cuando la
+    // Factura de Exportación de la Proforma ya está timbrada.
+    oficialEnVivo: true,
     nombreArchivo: (p) => `Proforma_${p.codigo}.pdf`,
     folio: (p) => p.codigo,
     // Misma Proforma en Excel (2026-11-12), desde el mismo payload.

@@ -10,7 +10,9 @@ export interface ContratoLineaInput {
 }
 
 export interface ContratoCreateInput {
-  temporadaId: number
+  // Desde HTTP no viaja: la del selector superior (2026-11-16). Solo llamadores
+  // internos (tests/jobs) la pasan.
+  temporadaId?: number | null
   especieId: number
   fechaInicio: string
   fechaTermino: string

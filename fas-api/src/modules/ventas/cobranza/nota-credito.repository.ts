@@ -3,6 +3,7 @@ import { prisma } from '../../../lib/prisma.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
 import { ValidationError } from '../../../shared/errors.js'
 import { LOCK_NAMESPACE_COBRANZA_NOTA_CREDITO } from '../../../shared/advisory-locks.js'
+import { temporadaDeFacturaExportacion, temporadaDeFacturaNacional, temporadaDeReclamo } from '../../../shared/temporada-padre.repository.js'
 import { derivarEstadoCuota, derivarEstadoCobranza, inicioDeHoy } from './cobranza-estado.js'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -69,9 +70,14 @@ export async function crearOReusarNc(data: CrearNcInput) {
       }
       return existente // BORRADOR/RECHAZADA → se reutiliza para reintentar
     }
+    // Temporada de la factura que anula (2026-11-16).
+    const temporadaId = data.tipoFactura === 'EXPORTACION'
+      ? await temporadaDeFacturaExportacion(data.facturaId, tx)
+      : await temporadaDeFacturaNacional(data.facturaId, tx)
     return tx.notaCredito.create({
       data: {
         empresaId,
+        temporadaId,
         codigo: data.codigo,
         facturaExportacionId: data.tipoFactura === 'EXPORTACION' ? data.facturaId : null,
         facturaNacionalId: data.tipoFactura === 'NACIONAL' ? data.facturaId : null,
@@ -152,6 +158,8 @@ export async function crearOReusarNcReclamo(data: CrearNcReclamoInput) {
     return tx.notaCredito.create({
       data: {
         empresaId,
+        // Temporada del reclamo que la origina (2026-11-16).
+        temporadaId: await temporadaDeReclamo(data.reclamoId, tx),
         codigo: data.codigo,
         reclamoId: data.reclamoId,
         tipoDte: data.tipoDte,
