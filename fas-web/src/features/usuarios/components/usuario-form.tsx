@@ -141,6 +141,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       }
       toast.success('Usuario creado correctamente')
       queryClient.invalidateQueries({ queryKey: usuariosKeys.all })
+      queryClient.invalidateQueries({ queryKey: ['inspectores-calidad'] })
       router.push('/dashboard/configuracion/usuarios')
     },
     onError: (e: Error) => toast.error(e.message || 'Error al crear el usuario'),
@@ -162,6 +163,7 @@ export function UsuarioForm({ usuarioId }: UsuarioFormProps) {
       toast.success('Usuario actualizado correctamente')
       queryClient.invalidateQueries({ queryKey: usuariosKeys.all })
       queryClient.invalidateQueries({ queryKey: usuariosKeys.detail(usuarioId!) })
+      queryClient.invalidateQueries({ queryKey: ['inspectores-calidad'] })
       router.push('/dashboard/configuracion/usuarios')
     },
     onError: (e: Error) => toast.error(e.message || 'Error al actualizar el usuario'),

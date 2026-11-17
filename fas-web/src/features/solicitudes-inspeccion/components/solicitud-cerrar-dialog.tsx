@@ -299,7 +299,6 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
 
   // Notificados: lista fija (no editable aquí; el backend la conserva).
   const notificados = solicitud.asignados.filter((a) => a.funcion === 'NOTIFICAR')
-  const notificadosIds = new Set(notificados.map((a) => a.usuarioId))
 
   // Prefill al abrir con lo ya guardado en la solicitud.
   useEffect(() => {
@@ -336,7 +335,7 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
     })
   }, [open, solicitud])
 
-  const { data: inspectores } = useQuery({ queryKey: ['inspectores-calidad'], queryFn: () => solicitudesService.inspectores(), staleTime: 5 * 60_000, enabled: open })
+  const { data: inspectores } = useQuery({ queryKey: ['inspectores-calidad'], queryFn: () => solicitudesService.inspectores(), staleTime: 0, enabled: open })
   const { data: gruposData } = useQuery({ queryKey: ['grupos-defecto-options'], queryFn: () => gruposDefectoService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000, enabled: open })
   const { data: defectosData } = useQuery({ queryKey: ['defectos-options'], queryFn: () => defectosService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000, enabled: open })
   const { data: caracteristicasData } = useQuery({ queryKey: ['caracteristicas-madurez-options'], queryFn: () => caracteristicasMadurezService.list({ soloActivos: true, limit: 500 }), staleTime: 5 * 60_000, enabled: open })
@@ -347,14 +346,12 @@ export function SolicitudCerrarDialog({ solicitud, open, onOpenChange }: Solicit
 
   // Opciones de "Quién asiste": usuarios Inspector Calidad + los asistentes ya
   // asignados (se conservan aunque no tengan el permiso) + Servicio Tercero.
-  // Nunca los notificados (las listas no se mezclan).
+  // Un notificado que sea Inspector Calidad también puede marcarse (2026-11-13).
   const opcionesAsiste = (() => {
     const mapa = new Map<string, string>()
     for (const a of solicitud.asignados) if (a.funcion === 'ACUDIR') mapa.set(a.usuarioId, a.usuario.nombre)
     for (const u of inspectores?.data ?? []) if (!mapa.has(u.id)) mapa.set(u.id, u.nombre)
-    const usuarios = [...mapa.entries()]
-      .filter(([id]) => !notificadosIds.has(id))
-      .map(([value, label]) => ({ value, label }))
+    const usuarios = [...mapa.entries()].map(([value, label]) => ({ value, label }))
     return [...usuarios, { value: SERVICIO_TERCERO, label: 'Servicio Tercero' }]
   })()
   const conServicioTercero = acudeIds.includes(SERVICIO_TERCERO)

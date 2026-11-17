@@ -286,14 +286,16 @@ export async function actualizarSolicitud(id: number, body: SolicitudUpdateBody,
   }
   requireSoloNotificados(body.asignados)
   // Se conservan los asistentes (ACUDIR) ya registrados por Calidad: Compras
-  // solo reemplaza la lista de notificados. Las listas no se mezclan.
+  // solo reemplaza la lista de notificados. Un asistente también recibe los
+  // correos (2026-11-13: un notificado puede ser quien asiste), así que si
+  // Compras lo vuelve a listar como notificado se mantiene como ACUDIR.
   if (body.asignados !== undefined) {
     const acude = actual.asignados.filter((a) => a.funcion === 'ACUDIR')
     const acudeIds = new Set(acude.map((a) => a.usuarioId))
-    if (body.asignados.some((a) => acudeIds.has(a.usuarioId))) {
-      throw new ValidationError('Un usuario que asiste a la inspección no puede agregarse también como notificado')
-    }
-    body.asignados = [...body.asignados, ...acude.map((a) => ({ usuarioId: a.usuarioId, funcion: 'ACUDIR' as const }))]
+    body.asignados = [
+      ...body.asignados.filter((a) => !acudeIds.has(a.usuarioId)),
+      ...acude.map((a) => ({ usuarioId: a.usuarioId, funcion: 'ACUDIR' as const })),
+    ]
   }
 
   await validarReferencias(
@@ -483,7 +485,8 @@ function requireNotificada(solicitud: SolicitudDetalle) {
 
 // "Editar inspección" (2026-11-10): guarda los datos de la visita sin cerrar.
 // Sin correo; la solicitud sigue NOTIFICADA. Los NOTIFICAR son una lista fija:
-// se conservan tal cual. Quién asiste (ACUDIR): los ya asignados se conservan;
+// se conservan tal cual (salvo los que se marcan como asistentes). Quién asiste
+// (ACUDIR): los ya asignados se conservan;
 // los NUEVOS deben tener el permiso de usuario "Inspector Calidad".
 export async function guardarCierreBorrador(
   id: number,
@@ -495,12 +498,11 @@ export async function guardarCierreBorrador(
   requireNotificada(solicitud)
   requireInspectorOTotal(solicitud, userId, tieneNivelTotal, 'registrar', await esUsuarioInspectorCalidad(userId))
 
-  const notificar = solicitud.asignados.filter((a) => a.funcion === 'NOTIFICAR')
-  const notificarIds = new Set(notificar.map((a) => a.usuarioId))
+  // Un notificado puede ser también quien asiste (2026-11-13): pasa a ACUDIR
+  // (una fila por usuario) y sigue recibiendo los correos como asignado.
+  const acudeSet = new Set(body.acudeIds)
+  const notificar = solicitud.asignados.filter((a) => a.funcion === 'NOTIFICAR' && !acudeSet.has(a.usuarioId))
   const acudeActuales = new Set(solicitud.asignados.filter((a) => a.funcion === 'ACUDIR').map((a) => a.usuarioId))
-  if (body.acudeIds.some((u) => notificarIds.has(u))) {
-    throw new ValidationError('Un usuario notificado no puede registrarse como asistente: las listas no se mezclan')
-  }
   const nuevos = body.acudeIds.filter((u) => !acudeActuales.has(u))
   const inspectores = await repo.getInspectoresCalidad(nuevos)
   if (inspectores.length !== nuevos.length) {
