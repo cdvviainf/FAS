@@ -23,6 +23,8 @@ export interface SaldoBodega {
 
 export interface Articulo {
   id: number
+  // Solo en el listado: true si el embalaje tiene al menos una receta activa.
+  tieneReceta?: boolean
   tipo: TipoArticulo
   codigo: string
   descripcion: string

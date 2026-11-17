@@ -51,6 +51,11 @@ export function ConsultaStockClient() {
     queryFn: () => articulosService.list({ tipo: 'EMBALAJE', activo: true, limit: 500 }),
     staleTime: 60_000,
   })
+  // Solo se pueden elegir embalajes con receta activa; se listan primero
+  // (orden estable: dentro de cada grupo se mantiene el orden por código).
+  const embalajesOrdenados = [...(embalajesDisponibles?.data ?? [])].sort(
+    (a, b) => Number(!!b.tieneReceta) - Number(!!a.tieneReceta),
+  )
   const { data: bodegas } = useQuery({
     queryKey: ['bodegas-options-consulta'],
     queryFn: () => bodegasService.list({ soloActivos: true, limit: 500 }),
@@ -151,8 +156,16 @@ export function ConsultaStockClient() {
         <Select value='' onValueChange={agregarEmbalaje}>
           <SelectTrigger className='max-w-sm'><SelectValue placeholder='Agregar embalaje...' /></SelectTrigger>
           <SelectContent>
-            {(embalajesDisponibles?.data ?? []).map((e) => (
-              <SelectItem key={e.id} value={String(e.id)}>{e.codigo} — {e.descripcion}</SelectItem>
+            {embalajesOrdenados.map((e) => (
+              <SelectItem
+                key={e.id}
+                value={String(e.id)}
+                disabled={!e.tieneReceta}
+                className={!e.tieneReceta ? 'text-muted-foreground' : undefined}
+              >
+                {e.codigo} — {e.descripcion}
+                {!e.tieneReceta && <span className='ml-2 text-xs'>(sin receta)</span>}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>

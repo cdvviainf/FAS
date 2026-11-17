@@ -70,6 +70,10 @@ export async function listArticulos(filters: ArticuloListFilters) {
         // Conjunto permitido del embalaje (2026-10-12): lo usa el editor de
         // Stock para limitar/bloquear la etiqueta por línea.
         etiquetasAdicionales: { select: { etiquetaId: true, etiqueta: { select: etiquetaSelect } }, orderBy: { id: 'asc' } },
+        // Recetas activas del embalaje (2026-11-17): la Consulta de Stock por
+        // Receta solo permite elegir embalajes con receta activa (misma
+        // condición que usa el cálculo en movimientos.repository).
+        _count: { select: { recetas: { where: { activo: true } } } },
       },
       orderBy: resolveOrderByArticulo(filters.sort),
       skip: (page - 1) * limit,

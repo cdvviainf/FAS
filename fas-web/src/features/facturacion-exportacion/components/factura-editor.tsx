@@ -393,6 +393,16 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
                 Embarque. El envío al SII queda bloqueado hasta completarlo.
               </p>
             )}
+            {/* Lista explícita de faltantes (2026-11-17): incluye requisitos que no
+                tienen fila propia en el panel (DUS, emisor, cuotas/vencimiento,
+                sello/naviera del contenedor), que antes solo sumaban al contador. */}
+            {factura.validacion.faltantes.length > 0 && (
+              <ul className='text-destructive list-disc space-y-0.5 pl-5 text-xs font-medium'>
+                {factura.validacion.faltantes.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+            )}
             {/* Receptor (cliente extranjero) — 2026-11-07. Bloquea igual que Aduana. */}
             {factura.validacion.receptor?.length > 0 && (
               <div className='rounded-md border p-3'>
@@ -441,7 +451,7 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
                 </tbody>
               </table>
             </div>
-            {/* Transporte y pesos (informativo — no bloquean el envío). */}
+            {/* Transporte y pesos (informativo; el DUS sí es obligatorio — decisión 2026-11-13). */}
             <dl className='text-muted-foreground grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-[auto_1fr_auto_1fr]'>
               <dt className='font-medium'>Naviera:</dt><dd>{factura.validacion.transporte.naviera ?? '—'}</dd>
               <dt className='font-medium'>Nave:</dt><dd>{factura.validacion.transporte.nave ?? '—'}</dd>
@@ -449,7 +459,8 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
               <dt className='font-medium'>Contenedor:</dt><dd>{factura.validacion.transporte.contenedor ?? '—'}</dd>
               <dt className='font-medium'>Sello:</dt><dd>{factura.validacion.transporte.sello ?? '—'}</dd>
               <dt className='font-medium'>B/L (AWB):</dt><dd>{factura.validacion.transporte.awbBl ?? '—'}</dd>
-              <dt className='font-medium'>DUS:</dt><dd>{factura.validacion.transporte.dus ?? '—'}</dd>
+              <dt className={factura.validacion.transporte.dus ? 'font-medium' : 'text-destructive font-medium'}>DUS: <span className='text-destructive'>*</span></dt>
+              <dd className={factura.validacion.transporte.dus ? undefined : 'text-destructive font-medium'}>{factura.validacion.transporte.dus ?? '⚠ Sin DUS'}</dd>
               <dt className='font-medium'>Bultos (cajas):</dt><dd>{factura.validacion.pesos.totBultos}</dd>
               <dt className='font-medium'>Peso neto:</dt><dd>{factura.validacion.pesos.pesoNeto != null ? `${factura.validacion.pesos.pesoNeto} kg` : '—'}</dd>
               <dt className='font-medium'>Peso bruto:</dt><dd>{factura.validacion.pesos.pesoBruto != null ? `${factura.validacion.pesos.pesoBruto} kg` : '—'}</dd>

@@ -66,8 +66,9 @@ function normalizarFacturable(
 }
 
 export async function listarArticulos(filters: ArticuloListFilters) {
-  const { data, total } = await repo.listArticulos(filters)
+  const { data: rows, total } = await repo.listArticulos(filters)
   const { page = 1, limit = 20 } = filters
+  const data = rows.map(({ _count, ...a }) => ({ ...a, tieneReceta: _count.recetas > 0 }))
   return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } }
 }
 
