@@ -16,7 +16,6 @@ export interface FacturaExportacionActualizarInput {
   // Si true, el flete/seguro se SUMAN al precio de venta en vez de restar.
   fleteSumaAlPrecio?: boolean
   // Flete/Seguro en el DTE 110 como recargo o descuento global (2026-11-17).
-  fleteMovimientoDte?: 'RECARGO' | 'DESCUENTO' | null
   // Tipo de cambio (pesos por unidad de la moneda extranjera) — editable en BORRADOR.
   tipoCambio?: number | null
   // Fecha de la paridad observada (ISO YYYY-MM-DD) cuando el valor viene de

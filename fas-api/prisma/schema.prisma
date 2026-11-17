@@ -4440,11 +4440,6 @@ model FacturaExportacion {
   // usan ese total mayor). Default false = restan (comportamiento histórico).
   // Se hereda de la Proforma al crear el borrador.
   fleteSumaAlPrecio  Boolean                 @default(false)
-  // Cómo se timbra el Flete/Seguro en el DTE 110 (2026-11-17): como RECARGO
-  // global (detalle a FOB + flete → total documento = valor cláusula) o como
-  // DESCUENTO global (detalle a valor cláusula − flete → total = FOB). Lo elige
-  // el usuario en BORRADOR; obligatorio para enviar al SII si hay flete/seguro.
-  fleteMovimientoDte TipoMovimientoFleteDte?
 
   // Idioma del documento (ES/EN) — heredado de la Proforma, editable en
   // BORRADOR. Afecta las descripciones (descripcion vs descripcionExtranjera)
@@ -6209,9 +6204,3 @@ model CorreoEnviado {
   @@map("correos_enviados")
 }
 
-// Flete/Seguro de la Factura de Exportación como recargo o descuento global
-// (DscRcgGlobal) del DTE 110 (2026-11-17).
-enum TipoMovimientoFleteDte {
-  RECARGO
-  DESCUENTO
-}

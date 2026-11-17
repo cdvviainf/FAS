@@ -390,7 +390,6 @@ export async function actualizarBorrador(
     montoFlete: number | null
     montoSeguro: number | null
     fleteSumaAlPrecio: boolean
-    fleteMovimientoDte: 'RECARGO' | 'DESCUENTO' | null
     tipoCambio: number | null
     fechaTipoCambio: Date | null
     observaciones: string | null
@@ -431,7 +430,6 @@ export async function actualizarBorrador(
         montoFlete: datos.montoFlete,
         montoSeguro: datos.montoSeguro,
         fleteSumaAlPrecio: datos.fleteSumaAlPrecio,
-        fleteMovimientoDte: datos.fleteMovimientoDte,
         tipoCambio: datos.tipoCambio,
         fechaTipoCambio: datos.fechaTipoCambio,
         observaciones: datos.observaciones,

@@ -173,7 +173,12 @@ describe('firmar', () => {
     embarqueId: 5,
     empresaId: 1,
     montoTotal: 1000,
+    montoFlete: null,
+    montoSeguro: null,
+    fleteSumaAlPrecio: false,
     fechaDocumento: new Date('2026-09-22'),
+    // Las cuotas van sobre el total del documento (suma de las líneas = 1000).
+    lineas: [{ cantidadCajas: 100, precioUnitario: '10' }],
   }
   const emisor = { rut: '77.089.369-6', razonSocial: 'Agrosan SpA', giro: 'Exportación', direccion: 'Av X 1', comuna: 'Santiago' }
 
@@ -189,7 +194,7 @@ describe('firmar', () => {
     expect(repo.marcarFirmada).not.toHaveBeenCalled()
   })
 
-  it('timbra (folio) y genera las cuotas 60/40 sobre el montoTotal', async () => {
+  it('timbra (folio) y genera las cuotas 60/40 sobre el total del documento', async () => {
     vi.mocked(repo.getFacturaActivaById).mockResolvedValue(facturaBorrador as never)
     vi.mocked(dteService.obtenerDocumentoDte).mockResolvedValue({ estado: 'TEMPORAL_CREADO', folio: null } as never)
     vi.mocked(repo.getEmbarqueParaFacturaDte).mockResolvedValue(embarqueDespachado as never)
@@ -244,8 +249,7 @@ describe('enviarBorradorSii → payload DTE 110 (valor FOB + Aduana)', () => {
     montoTotal: 1000,
     montoFlete: 100,
     montoSeguro: 100,
-    fleteMovimientoDte: 'RECARGO' as 'RECARGO' | 'DESCUENTO' | null,
-    moneda: { codigo: 'USD' },
+    fleteSumaAlPrecio: false,
     tipoCambio: 950,
     fechaDocumento: new Date('2026-09-22'),
     idioma: 'ES' as const,
@@ -304,14 +308,17 @@ describe('enviarBorradorSii → payload DTE 110 (valor FOB + Aduana)', () => {
     expect(aduana.TotClauVenta).toBe(1000)
     expect(aduana.MntFlete).toBe(100)
     expect(aduana.MntSeguro).toBe(100)
-    // Sin DscRcgGlobal (no validado en LibreDTE): el recargo/descuento elegido,
-    // la forma de pago y el tipo de cambio van como texto en TermPagoGlosa.
+    // Resta: precio de cierre − flete − seguro = total del documento; sin
+    // DscRcgGlobal. La cuenta, la forma de pago y el TC van en TermPagoGlosa.
+    expect(detalle).toHaveLength(1)
     expect(payload.DscRcgGlobal).toBeUndefined()
     const idDoc = (payload.Encabezado as Record<string, Record<string, unknown>>).IdDoc
     expect(idDoc.FmaPago).toBe(2)
     expect(idDoc.TermPagoGlosa).toBe(
-      'Forma pago: Crédito · T/C: $950,00 · Recargo flete USD 100,00 y seguro USD 100,00',
+      'Pago: Crédito · T/C: $950,00 · Cierre 1.000,00 - flete 100,00 - seguro 100,00 = 800,00',
     )
+    // Cuotas siempre sobre el total del documento (cierre − flete − seguro).
+    expect((idDoc.MntPagos as Array<Record<string, unknown>>).map((c) => c.MntPago)).toEqual([800])
   })
 
   function mocksEnvio(factura: unknown) {
@@ -325,24 +332,28 @@ describe('enviarBorradorSii → payload DTE 110 (valor FOB + Aduana)', () => {
     vi.mocked(dteService.emitirDteTemporal).mockResolvedValue({ estado: 'TEMPORAL_CREADO' } as never)
   }
 
-  it('DESCUENTO: el detalle sigue a valor FOB y la glosa informa el descuento', async () => {
-    mocksEnvio({ ...facturaCif, fleteMovimientoDte: 'DESCUENTO' })
+  it('suma: el detalle va al precio de cierre y el Flete/Seguro como ítems → total = cierre + flete + seguro', async () => {
+    mocksEnvio({ ...facturaCif, fleteSumaAlPrecio: true })
     vi.mocked(dteService.emitirDteTemporal).mockClear()
     await enviarBorradorSii(20, 'u1')
     const { payload } = vi.mocked(dteService.emitirDteTemporal).mock.calls[0][0] as { payload: Record<string, unknown> }
-    expect((payload.Detalle as Array<Record<string, unknown>>)[0].PrcItem).toBe(8)
+    const detalle = payload.Detalle as Array<Record<string, unknown>>
+    expect(detalle.map((d) => [d.NmbItem, d.QtyItem, d.PrcItem])).toEqual([
+      [expect.any(String), 100, 10],
+      ['FLETE', 1, 100],
+      ['SEGURO', 1, 100],
+    ])
     expect(payload.DscRcgGlobal).toBeUndefined()
-    const idDoc = (payload.Encabezado as Record<string, Record<string, unknown>>).IdDoc
-    expect(idDoc.TermPagoGlosa).toBe('Forma pago: Crédito · T/C: $950,00 · Descuento flete USD 100,00 y seguro USD 100,00')
-  })
-
-  it('bloquea el envío si hay Flete/Seguro y no se eligió recargo o descuento', async () => {
-    mocksEnvio({ ...facturaCif, fleteMovimientoDte: null })
-    await expect(enviarBorradorSii(20, 'u1')).rejects.toThrow(/Recargo o Descuento/)
+    const encabezado = payload.Encabezado as Record<string, Record<string, unknown>>
+    expect((encabezado.Transporte.Aduana as Record<string, unknown>).TotClauVenta).toBe(1200)
+    expect(encabezado.IdDoc.TermPagoGlosa).toBe(
+      'Pago: Crédito · T/C: $950,00 · Cierre 1.000,00 + flete 100,00 + seguro 100,00 = 1.200,00',
+    )
+    expect((encabezado.IdDoc.MntPagos as Array<Record<string, unknown>>).map((c) => c.MntPago)).toEqual([1200])
   })
 
   it('bloquea el envío si la glosa (forma de pago + TC + observaciones) supera 100 caracteres', async () => {
     mocksEnvio({ ...facturaCif, observaciones: 'x'.repeat(30) })
-    await expect(enviarBorradorSii(20, 'u1')).rejects.toThrow(/acórtalas a 16 caracteres/)
+    await expect(enviarBorradorSii(20, 'u1')).rejects.toThrow(/acórtalas a 11 caracteres/)
   })
 })

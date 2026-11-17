@@ -40,7 +40,6 @@ export const facturaExportacionActualizarSchema = z.object({
   // Si true, el flete/seguro se SUMAN al precio de venta en vez de restar.
   fleteSumaAlPrecio: z.boolean().optional(),
   // Flete/Seguro en el DTE 110 como recargo o descuento global (2026-11-17).
-  fleteMovimientoDte: z.enum(['RECARGO', 'DESCUENTO']).nullable().optional(),
   // Tipo de cambio (pesos por unidad de la moneda extranjera) — editable en
   // BORRADOR; se sugiere desde el Banco Central al crear la factura. Lo exige el
   // SII para emitir en moneda extranjera (validación server-side al enviar al SII).
