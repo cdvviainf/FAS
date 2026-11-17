@@ -137,6 +137,8 @@ export interface FacturaExportacionMapeo {
   observaciones?: string | null
   // Recargos/descuentos globales (DscRcgGlobal) — Flete/Seguro de la cláusula
   // (2026-11-17). Montos en la moneda del documento, exentos (IndExeDR=1).
+  // HOY NO SE USA: pendiente validar en certificación LibreDTE; mientras tanto
+  // el recargo/descuento va como texto en TermPagoGlosa (factura-exportacion.service).
   recargosGlobales?: RecargoGlobalFacturaExportacion[]
 }
 

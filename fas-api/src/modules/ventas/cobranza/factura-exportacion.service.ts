@@ -9,7 +9,7 @@ import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
 import * as libredte from '../../finanzas/facturacion/libredte.adapter.js'
 import { esFacturaTimbrada, esFacturaConDocumentoDescargable, interpretarEstadoSii } from './sii-estado.js'
-import { mapFacturaExportacionA110, type RecargoGlobalFacturaExportacion, type ReferenciaFacturaExportacion } from '../../finanzas/facturacion/mappers/factura-exportacion.mapper.js'
+import { mapFacturaExportacionA110, type ReferenciaFacturaExportacion } from '../../finanzas/facturacion/mappers/factura-exportacion.mapper.js'
 import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
 import { factorFob, resolverFleteSeguro, totalClausula, unitarioFob } from './clausula-flete-seguro.js'
 import { derivarEstadoCobranza, inicioDeHoy } from './cobranza-estado.js'
@@ -436,7 +436,6 @@ async function faltantesEnvio110(
     montoTotal: unknown
     montoFlete: unknown
     montoSeguro: unknown
-    fleteMovimientoDte: 'RECARGO' | 'DESCUENTO' | null
   },
   embarque: EmbarqueFacturaDte,
   emisor: EmisorDte,
@@ -487,7 +486,7 @@ async function faltantesEnvio110(
   // Flete/Seguro: el usuario debe elegir si van como recargo o descuento global
   // del DTE (2026-11-17).
   if ((factura.montoFlete != null || factura.montoSeguro != null) && factura.fleteMovimientoDte == null) {
-    faltantes.push('Elige en la Factura si el Flete/Seguro va como Recargo o Descuento en el documento del SII')
+    faltantes.push('Elige en la Factura si el Flete/Seguro va como Recargo o Descuento (se informa en las observaciones del documento SII)')
   }
 
   // Glosa del PDF (forma de pago + tipo de cambio + observaciones) ≤ 100 (SII).
@@ -495,7 +494,7 @@ async function faltantesEnvio110(
   if (glosa.length > MAX_GLOSA_DTE) {
     const disponible = Math.max(0, MAX_GLOSA_DTE - glosaDte({ ...factura, observaciones: null }, 110).length - SEPARADOR_GLOSA.length)
     faltantes.push(
-      `Las observaciones son muy largas: junto con la forma de pago y el tipo de cambio superan ${MAX_GLOSA_DTE} caracteres — acórtalas a ${disponible} caracteres`,
+      `Las observaciones son muy largas: junto con la forma de pago, el tipo de cambio y el flete/seguro superan ${MAX_GLOSA_DTE} caracteres — acórtalas a ${disponible} caracteres`,
     )
   }
 
@@ -591,8 +590,10 @@ function derivarFmaPago(condicionPago: { cuotas: { plazoDias: number }[] } | nul
 }
 
 // Glosa del DTE (IdDoc.TermPagoGlosa, la que LibreDTE imprime en el PDF):
-// el PDF tributario no muestra FmaPago ni TpoCambio, así que se anteponen
-// "Forma de pago" y "Tipo de cambio" a las observaciones (2026-11-17). Máx. 100.
+// el PDF tributario no muestra FmaPago ni TpoCambio, así que se anteponen a las
+// observaciones (2026-11-17). El Flete/Seguro elegido como recargo o descuento
+// también va aquí como texto: por ahora NO se envía como DscRcgGlobal (no se
+// pudo validar en certificación LibreDTE) y el detalle sigue a valor FOB. Máx. 100.
 const MAX_GLOSA_DTE = 100
 const SEPARADOR_GLOSA = ' · '
 const GLOSA_FMA_PAGO: Record<number, string> = { 1: 'Contado', 2: 'Crédito', 3: 'Sin costo' }
@@ -600,14 +601,32 @@ interface FacturaGlosaDte {
   condicionPago: { cuotas: { plazoDias: number }[] } | null
   tipoCambio: unknown
   observaciones: string | null
+  montoFlete: unknown
+  montoSeguro: unknown
+  fleteMovimientoDte: 'RECARGO' | 'DESCUENTO' | null
+  moneda: { codigo: string }
+}
+function fmtGlosa(n: number, decimales: { min: number; max: number }): string {
+  return n.toLocaleString('es-CL', { minimumFractionDigits: decimales.min, maximumFractionDigits: decimales.max })
 }
 function glosaDte(factura: FacturaGlosaDte, tipoDte: number): string {
   const partes: string[] = []
-  const fma = tipoDte === 110 ? derivarFmaPago(factura.condicionPago) : null
-  if (fma != null) partes.push(`Forma de pago: ${GLOSA_FMA_PAGO[fma]}`)
+  const es110 = tipoDte === 110
+  const fma = es110 ? derivarFmaPago(factura.condicionPago) : null
+  if (fma != null) partes.push(`Forma pago: ${GLOSA_FMA_PAGO[fma]}`)
   const tc = factura.tipoCambio == null ? null : Number(factura.tipoCambio)
-  if (tc != null && tc > 0) {
-    partes.push(`Tipo de cambio: $${tc.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`)
+  if (tc != null && tc > 0) partes.push(`T/C: $${fmtGlosa(tc, { min: 2, max: 4 })}`)
+  if (es110 && factura.fleteMovimientoDte) {
+    const mov = factura.fleteMovimientoDte === 'RECARGO' ? 'Recargo' : 'Descuento'
+    const moneda = factura.moneda.codigo
+    const flete = factura.montoFlete == null ? 0 : Number(factura.montoFlete)
+    const seguro = factura.montoSeguro == null ? 0 : Number(factura.montoSeguro)
+    // Compacto (tope 100 del SII): "Recargo flete USD 6.683,07 y seguro USD 120,00".
+    const componentes = [
+      flete > 0 ? `flete ${moneda} ${fmtGlosa(flete, { min: 2, max: 2 })}` : null,
+      seguro > 0 ? `seguro ${moneda} ${fmtGlosa(seguro, { min: 2, max: 2 })}` : null,
+    ].filter(Boolean)
+    if (componentes.length > 0) partes.push(`${mov} ${componentes.join(' y ')}`)
   }
   const obs = factura.observaciones?.trim()
   if (obs) partes.push(obs)
@@ -674,23 +693,9 @@ export async function construirPayloadDte(
         montoSeguro: factura.montoSeguro == null ? null : Number(factura.montoSeguro),
       }, fleteSumado)
   const totalCif = parcial ? Math.round(parcial.monto * 100) / 100 : totalClausula(montoTotalNum, montoFlete, montoSeguro, fleteSumado)
-  // Flete/Seguro en el documento (2026-11-17), según lo elegido en la Factura:
-  // - RECARGO: detalle a valor FOB + recargo global → total documento = cláusula.
-  // - DESCUENTO: detalle a valor cláusula (CIF) − descuento global → total = FOB.
-  // - Sin elegir (solo borradores antiguos/preview; el envío lo bloquea
-  //   faltantesEnvio110): detalle a FOB sin recargo (comportamiento previo).
-  const movimiento = parcial ? null : factura.fleteMovimientoDte
-  const factor = parcial
-    ? 1
-    : movimiento === 'DESCUENTO'
-      ? (montoTotalNum > 0 ? totalCif / montoTotalNum : 1)
-      : factorFob(montoTotalNum, montoFlete, montoSeguro, fleteSumado)
-  const recargosGlobales: RecargoGlobalFacturaExportacion[] = []
-  if (movimiento) {
-    const tipo = movimiento === 'RECARGO' ? 'R' : 'D'
-    if (montoFlete != null && montoFlete > 0) recargosGlobales.push({ tipo, glosa: 'Flete', valor: montoFlete })
-    if (montoSeguro != null && montoSeguro > 0) recargosGlobales.push({ tipo, glosa: 'Seguro', valor: montoSeguro })
-  }
+  // El detalle se timbra a valor FOB; el Flete/Seguro va en Aduana y, si se
+  // eligió recargo/descuento, como texto en la glosa (ver glosaDte).
+  const factor = parcial ? 1 : factorFob(montoTotalNum, montoFlete, montoSeguro, fleteSumado)
   const fechaDocumento = factura.fechaDocumento ?? new Date()
   const fechaRef = fechaDocumento.toISOString().slice(0, 10)
 
@@ -858,7 +863,6 @@ export async function construirPayloadDte(
     // Glosa del documento → IdDoc.TermPagoGlosa (forma de pago + tipo de
     // cambio + observaciones; el PDF del SII no imprime FmaPago ni TpoCambio).
     observaciones: glosaDte(factura, opts?.tipoDte ?? 110).slice(0, MAX_GLOSA_DTE) || null,
-    recargosGlobales,
   })
 }
 

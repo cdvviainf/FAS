@@ -122,9 +122,6 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   const seguroNum = requiereSeguro ? Number(montoSeguro) || 0 : 0
   const subtotalFob = fleteSumaAlPrecio ? Math.round(montoTotal * 100) / 100 : Math.round((montoTotal - fleteNum - seguroNum) * 100) / 100
   const totalCif = Math.round((subtotalFob + fleteNum + seguroNum) * 100) / 100
-  // Total que quedará en el documento del SII: con recargo = valor cláusula
-  // (FOB + flete + seguro); con descuento = valor FOB (cláusula − flete − seguro).
-  const totalDocumentoSii = fleteMovimientoDte === 'DESCUENTO' ? subtotalFob : totalCif
 
   async function toggleDimension(dim: DimensionProforma, marcado: boolean) {
     const nuevas = marcado ? [...dimensiones, dim] : dimensiones.filter((d) => d !== dim)
@@ -713,10 +710,9 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
               </div>
               {fleteMovimientoDte && (
                 <p className='text-muted-foreground pt-1 text-xs'>
-                  {fleteMovimientoDte === 'RECARGO'
-                    ? 'En el SII: detalle a valor FOB + recargo de flete/seguro.'
-                    : 'En el SII: detalle a valor cláusula − descuento de flete/seguro.'}{' '}
-                  Total del documento: <span className='font-medium'>{factura.moneda.codigo} {formatMonto(totalDocumentoSii)}</span>
+                  En el documento del SII el detalle va a valor FOB y el{' '}
+                  {fleteMovimientoDte === 'RECARGO' ? 'recargo' : 'descuento'} de flete/seguro se informa en las
+                  observaciones (junto con la forma de pago y el tipo de cambio).
                 </p>
               )}
             </div>
