@@ -46,7 +46,8 @@ const facturaInclude = {
       id: true,
       descripcion: true,
       articuloId: true,
-      articulo: { select: { id: true, codigo: true, descripcion: true } },
+      // Unidad de medida del maestro del Artículo → UnmdItem del DTE (2026-11-18).
+      articulo: { select: { id: true, codigo: true, descripcion: true, unidad: { select: { codigo: true } } } },
       cantidad: true,
       precioUnitario: true,
       precioUnitarioOrigen: true,

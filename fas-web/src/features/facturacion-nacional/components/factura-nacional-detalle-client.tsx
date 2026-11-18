@@ -492,20 +492,20 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
           )}
           <div className='grid gap-1.5 sm:col-span-2'>
             <Label>Observaciones</Label>
-            {/* Máx. 100 caracteres = límite del SII (TermPagoGlosa, 2026-11-09):
-                lo que se ve aquí es exactamente lo que llega al SII. */}
+            {/* Máx. 78 = 100 del SII (TermPagoGlosa) − "Forma pago: Crédito · ",
+                que se antepone en el DTE porque el PDF no imprime FmaPago (2026-11-18). */}
             <Textarea
               value={observaciones}
               disabled={soloLectura}
               rows={2}
-              maxLength={100}
+              maxLength={78}
               onChange={(e) => {
                 setObservaciones(e.target.value)
                 setDirty(true)
               }}
             />
-            <p className={`text-right text-xs ${observaciones.length > 100 ? 'text-destructive' : 'text-muted-foreground'}`}>
-              {observaciones.length}/100 — límite del SII
+            <p className={`text-right text-xs ${observaciones.length > 78 ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {observaciones.length}/78 — en el SII van precedidas de la forma de pago (Crédito/Contado)
             </p>
           </div>
         </CardContent>

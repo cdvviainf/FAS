@@ -51,3 +51,24 @@ describe('Nota de Crédito nacional (DTE 61)', () => {
     expect(refs[0]).toMatchObject({ TpoDocRef: '33', FolioRef: '7', CodRef: 1 })
   })
 })
+
+describe('Factura nacional (DTE 33/34) — unidad de medida', () => {
+  const base = {
+    tipoDte: 33,
+    fechaEmision: new Date('2026-11-18T12:00:00Z'),
+    emisor: { rut: '77089369-0', razonSocial: 'Agrosan', giro: 'Export', direccion: 'Calle 1', comuna: 'Rancagua' },
+    receptor: { rut: '76000000-0', razonSocial: 'Cliente', giro: 'Comercio', direccion: 'Calle 2', comuna: 'Santiago' },
+  }
+  it('emite UnmdItem con la unidad del maestro (máx. 4) y la omite si no hay', () => {
+    const dte = mapFacturaNacionalADte({
+      ...base,
+      lineas: [
+        { descripcion: 'Caja cartón', cantidad: 10, precioUnitario: 500, exento: false, unidad: 'CAJA' },
+        { descripcion: 'Servicio', cantidad: 1, precioUnitario: 1000, exento: false, unidad: null },
+      ],
+    })
+    const detalle = (dte as Record<string, unknown>).Detalle as Array<Record<string, unknown>>
+    expect(detalle[0].UnmdItem).toBe('CAJA')
+    expect(detalle[1]).not.toHaveProperty('UnmdItem')
+  })
+})

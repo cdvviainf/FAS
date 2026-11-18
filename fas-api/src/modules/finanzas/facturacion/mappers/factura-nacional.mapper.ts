@@ -24,6 +24,8 @@ export interface LineaFacturaNacional {
   precioUnitario: number
   // Línea exenta de IVA → IndExe=1; afecta → sin IndExe (LibreDTE le aplica IVA).
   exento: boolean
+  // Unidad de medida (UnmdItem, SII máx. 4 caracteres). Null = se omite.
+  unidad?: string | null
 }
 
 // Referencia a otro DTE (IdDoc.Referencia). La Nota de Crédito nacional (61) la
@@ -121,6 +123,7 @@ export function mapFacturaNacionalADte(data: FacturaNacionalMapeo): LibredteDteP
       NroLinDet: i + 1,
       NmbItem: l.descripcion,
       QtyItem: l.cantidad,
+      ...(l.unidad?.trim() ? { UnmdItem: l.unidad.trim().slice(0, 4) } : {}),
       PrcItem: l.precioUnitario,
       // Línea exenta: IndExe=1 (sin IVA). Afecta: se omite y LibreDTE le aplica IVA.
       ...(l.exento ? { IndExe: 1 } : {}),

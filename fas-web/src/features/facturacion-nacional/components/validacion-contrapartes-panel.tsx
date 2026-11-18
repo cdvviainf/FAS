@@ -28,6 +28,7 @@ function TablaContraparte({ titulo, datos, ayuda }: { titulo: string; datos: Con
 }
 
 export function ValidacionContrapartesPanel({ validacion }: { validacion: ValidacionFacturaNacional }) {
+  const otros = validacion.faltantes.filter((f) => !f.startsWith('Emisor:') && !f.startsWith('Receptor:'))
   return (
     <Card>
       <CardHeader className='flex flex-row items-center justify-between gap-2 space-y-0'>
@@ -49,6 +50,13 @@ export function ValidacionContrapartesPanel({ validacion }: { validacion: Valida
           datos={validacion.receptor}
           ayuda='Completa los datos en la ficha de la entidad (Entidades). La dirección y comuna salen de su dirección por defecto.'
         />
+        {/* Faltantes que no son de emisor/receptor (p. ej. observaciones muy
+            largas junto con la forma de pago) — se listan para que se vea qué falta. */}
+        {otros.length > 0 && (
+          <ul className='text-destructive list-disc pl-5 text-sm md:col-span-2'>
+            {otros.map((f) => <li key={f}>{f}</li>)}
+          </ul>
+        )}
       </CardContent>
     </Card>
   )

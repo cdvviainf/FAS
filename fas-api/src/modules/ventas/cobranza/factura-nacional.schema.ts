@@ -45,7 +45,8 @@ export const actualizarBorradorSchema = z.object({
   fechaDocumento: z.string().date().optional().nullable(),
   // Máx. 100 = límite SII de TermPagoGlosa (2026-11-09): lo que se ve en el
   // sistema es exactamente lo que llega al SII.
-  observaciones: z.string().trim().max(100, 'Las observaciones admiten máximo 100 caracteres (límite del SII)').optional().nullable(),
+  // 78 = 100 del SII − "Forma pago: Crédito · " que se antepone en el DTE (2026-11-18).
+  observaciones: z.string().trim().max(78, 'Las observaciones admiten máximo 78 caracteres (100 del SII menos la forma de pago)').optional().nullable(),
   // Venta nacional: tipo de cambio (moneda de origen → CLP) editable antes de
   // emitir; recotiza las líneas. No aplica a facturas desde Proforma de Materiales.
   tipoCambio: z.number().positive().max(9_999_999_999).optional().nullable(),

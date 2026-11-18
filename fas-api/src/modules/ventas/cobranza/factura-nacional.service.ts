@@ -36,6 +36,24 @@ const round4 = (n: number) => Math.round(n * 10000) / 10000
 // en esa moneda (Σ líneas, sin IVA ni detalle por línea) y el tipo de cambio.
 // Ej.: "USD 2.500 a 998,56". Máx. 100 caracteres (límite SII de TermPagoGlosa):
 // si no cabe, se recorta el texto de la Proforma para conservar el del TC.
+// Glosa del DTE 33/34 (2026-11-18, igual que la 110): el PDF de LibreDTE no
+// imprime FmaPago, así que va antepuesto a las observaciones:
+// "Forma pago: Crédito · {observaciones}". Tope SII 100 → las observaciones
+// del usuario admiten 100 − 22 = 78 caracteres.
+const SEPARADOR_GLOSA = ' · '
+const glosaFormaPago = (etiqueta: string) => `Forma pago: ${etiqueta}`
+export const MAX_OBSERVACIONES_NACIONAL =
+  MAX_OBSERVACIONES_SII - glosaFormaPago('Contado').length - SEPARADOR_GLOSA.length
+function glosaDteNacional(etiquetaFmaPago: string, observaciones: string | null): string {
+  return [glosaFormaPago(etiquetaFmaPago), observaciones?.trim()].filter(Boolean).join(SEPARADOR_GLOSA)
+}
+function faltanteGlosaNacional(observaciones: string | null): string | null {
+  const largo = observaciones?.trim().length ?? 0
+  return largo > MAX_OBSERVACIONES_NACIONAL
+    ? `Las observaciones son muy largas: junto con la forma de pago superan ${MAX_OBSERVACIONES_SII} caracteres — acórtalas a ${MAX_OBSERVACIONES_NACIONAL} caracteres`
+    : null
+}
+
 const fmtMontoCl = new Intl.NumberFormat('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 const fmtTcCl = new Intl.NumberFormat('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
 function observacionesDesdeProforma(
@@ -46,13 +64,13 @@ function observacionesDesdeProforma(
   lineasOrigen: Array<{ cantidad: number; precioUnitario: number }>,
 ): string | null {
   const obs = observacionesProforma?.replace(/\s+/g, ' ').trim() ?? ''
-  if (esClp) return obs ? obs.slice(0, MAX_OBSERVACIONES_SII).trim() : null
+  if (esClp) return obs ? obs.slice(0, MAX_OBSERVACIONES_NACIONAL).trim() : null
   const neto = round2(lineasOrigen.reduce((a, l) => a + round2(l.cantidad * l.precioUnitario), 0))
   const tc = `${monedaCodigo} ${fmtMontoCl.format(neto)} a ${fmtTcCl.format(tipoCambio)}`
   if (!obs) return tc
   const sep = ' / '
-  const disponible = MAX_OBSERVACIONES_SII - tc.length - sep.length
-  if (disponible <= 0) return tc.slice(0, MAX_OBSERVACIONES_SII)
+  const disponible = MAX_OBSERVACIONES_NACIONAL - tc.length - sep.length
+  if (disponible <= 0) return tc.slice(0, MAX_OBSERVACIONES_NACIONAL)
   return `${obs.slice(0, disponible).trim()}${sep}${tc}`
 }
 
@@ -535,7 +553,10 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
       `El cliente no tiene ${validacion.receptor.faltantes.map((f) => f.toLowerCase()).join(', ')} — complétalo en Entidades antes de enviar al SII`,
     )
   }
+  const faltanteGlosa = faltanteGlosaNacional(factura.observaciones)
+  if (faltanteGlosa) throw new ValidationError(faltanteGlosa)
   const cuotasDte = await construirCuotasNacional(factura, factura.fechaDocumento ?? new Date())
+  const condicionSii = condicionPagoSii(cuotasDte, factura.fechaDocumento ?? new Date())
   const payload = mapFacturaNacionalADte({
     tipoDte: factura.tipoDte,
     fechaEmision: factura.fechaDocumento,
@@ -552,8 +573,10 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
       cantidad: Number(l.cantidad),
       precioUnitario: Number(l.precioUnitario),
       exento: l.exento,
+      unidad: unidadItemDte(factura.origenClase, l),
     })),
-    observaciones: factura.observaciones,
+    // Forma de pago + observaciones (el PDF de LibreDTE no imprime FmaPago).
+    observaciones: glosaDteNacional(condicionSii.etiqueta, factura.observaciones),
     // Fecha de vencimiento y cuotas al SII (2026-11-09): mismas cuotas que se
     // generan al firmar (Condición de Pago, referencia FACTURA = fecha del
     // documento); las de zarpe/arribo/envío sin fecha conocida no se informan.
@@ -563,7 +586,7 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
       monto: Math.round(c.montoCuota),
     })),
     // Condición de pago (2026-11-11): Contado si vence el mismo día de la emisión.
-    fmaPago: condicionPagoSii(cuotasDte, factura.fechaDocumento ?? new Date()).fmaPago,
+    fmaPago: condicionSii.fmaPago,
     // Proforma a Productor: sin MntPagos, solo FchVenc (2026-11-11).
     omitirMntPagos: factura.origenClase === 'PROFORMA_PRODUCTOR',
   })
@@ -594,6 +617,19 @@ async function enviarBorradorSiiInterno(id: number, userId: string) {
     throw new ValidationError(temporal.errorMensaje ?? 'No se pudo crear el DTE temporal en LibreDTE')
   }
   return repo.getFacturaActivaById(id)
+}
+
+// Unidad de medida del ítem (UnmdItem, 2026-11-18): la del maestro del Artículo
+// (Proforma de Materiales); la venta nacional desde Embarque factura cajas
+// (mismo criterio que el DTE 110). Proforma a Productor (glosa libre, sin
+// artículo): pendiente — se omite.
+const UNIDAD_CAJA_DTE = 'CAJA'
+function unidadItemDte(
+  origenClase: string,
+  linea: { articulo: { unidad: { codigo: string } | null } | null },
+): string | null {
+  if (origenClase === 'VENTA_NACIONAL') return UNIDAD_CAJA_DTE
+  return linea.articulo?.unidad?.codigo ?? null
 }
 
 // ─── Paso 2: Firmar (timbrado real) ──────────────────────────────────────────
@@ -790,6 +826,11 @@ export function construirValidacionFacturaNacional(
   }
 }
 
+function conFaltanteGlosa<T extends { faltantes: string[] }>(v: T, observaciones: string | null): T {
+  const f = faltanteGlosaNacional(observaciones)
+  return f ? { ...v, faltantes: [...v.faltantes, f] } : v
+}
+
 export async function obtenerFactura(id: number) {
   const factura = await repo.getFacturaByIdConHistorial(id)
   if (!factura) throw new NotFoundError('Factura Nacional', String(id))
@@ -805,7 +846,7 @@ export async function obtenerFactura(id: number) {
   return {
     ...factura,
     dte: dte ? { estado: dte.estado, folio: dte.folio, tieneXml: !!dte.xml } : null,
-    validacion: construirValidacionFacturaNacional(factura, emisor),
+    validacion: conFaltanteGlosa(construirValidacionFacturaNacional(factura, emisor), factura.observaciones),
     condicionPagoSii: {
       etiqueta: condicion.etiqueta,
       fechaVencimiento: condicion.fechaVencimiento ? condicion.fechaVencimiento.toISOString() : null,
@@ -1035,6 +1076,7 @@ export async function anularConNotaCredito(id: number, userId: string) {
       cantidad: Number(l.cantidad),
       precioUnitario: Number(l.precioUnitario),
       exento: l.exento,
+      unidad: unidadItemDte(factura.origenClase, l),
     })),
     observaciones: `Anula factura ${factura.codigo}`,
     referencias: [
