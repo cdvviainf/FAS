@@ -21,7 +21,7 @@ import { facturasKeys } from '../queries'
 import { facturaExportacionService, hoyFecha, proformaService } from '../service'
 import { DIMENSION_LABELS } from '../types'
 import type { DimensionProforma, FacturaExportacion, ProformaLineaSugerida } from '../types'
-import { FilaSeparacion, IncluirLoteCheckbox, SeparacionCantidadesControl } from './separacion-lote-controles'
+import { FilaSeparacion, formatUnitarioSii, IncluirLoteCheckbox, SeparacionCantidadesControl } from './separacion-lote-controles'
 import {
   aplicarSeparacionGeneral,
   aplicarSeparacionLinea,
@@ -119,6 +119,25 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
   const seguroNum = requiereSeguro ? Number(montoSeguro) || 0 : 0
   const subtotalFob = fleteSumaAlPrecio ? Math.round(montoTotal * 100) / 100 : Math.round((montoTotal - fleteNum - seguroNum) * 100) / 100
   const totalCif = Math.round((subtotalFob + fleteNum + seguroNum) * 100) / 100
+  // Detalle tal como irá al documento del SII (espejo de construirPayloadDte,
+  // 2026-11-17): con Flete/Seguro, resta → la fruta a FOB (unitario × factor,
+  // 6 decimales); suma → al precio de cierre. Flete/Seguro siempre como ítems.
+  const conFleteSeguro = requiereFlete || requiereSeguro
+  const factorSii =
+    fleteSumaAlPrecio || montoTotal <= 0 || fleteNum + seguroNum <= 0 ? 1 : (montoTotal - fleteNum - seguroNum) / montoTotal
+  const unitarioSii = (precioCierre: number) => Math.round(precioCierre * factorSii * 1_000_000) / 1_000_000
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  const totalDocumentoSii = r2(
+    lineas.reduce(
+      (acc, l) =>
+        acc +
+        r2(l.cantidadCajas * unitarioSii(l.precioUnitario)) +
+        (l.separacion ? r2(l.cantidadCajas * unitarioSii(l.separacion.precioUnitario)) : 0),
+      0,
+    ) +
+      fleteNum +
+      seguroNum,
+  )
 
   async function toggleDimension(dim: DimensionProforma, marcado: boolean) {
     const nuevas = marcado ? [...dimensiones, dim] : dimensiones.filter((d) => d !== dim)
@@ -571,7 +590,8 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
                 <TableRow>
                   <TableHead>Descripción</TableHead>
                   <TableHead className='text-right'>Cajas</TableHead>
-                  <TableHead className='w-36 text-right'>Precio Unitario</TableHead>
+                  <TableHead className='w-36 text-right'>{conFleteSeguro ? 'Precio Cierre' : 'Precio Unitario'}</TableHead>
+                  {conFleteSeguro && <TableHead className='w-36 text-right'>Precio Unitario</TableHead>}
                   <TableHead className='w-36 text-right'>Total Línea</TableHead>
                 </TableRow>
               </TableHeader>
@@ -594,20 +614,52 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
                         disabled={!puedeEscribir}
                       />
                     </TableCell>
+                    {conFleteSeguro && (
+                      <TableCell className='text-right tabular-nums'>{formatUnitarioSii(unitarioSii(l.precioUnitario))}</TableCell>
+                    )}
                     <TableCell className='text-right tabular-nums'>
-                      {formatMonto(l.separacion ? Math.round(l.precioUnitario * l.cantidadCajas * 100) / 100 : l.montoLinea)}
+                      {conFleteSeguro
+                        ? formatMonto(r2(l.cantidadCajas * unitarioSii(l.precioUnitario)))
+                        : formatMonto(l.separacion ? Math.round(l.precioUnitario * l.cantidadCajas * 100) / 100 : l.montoLinea)}
                     </TableCell>
                   </TableRow>
-                  <FilaSeparacion linea={l} disabled={!puedeEscribir} onValorChange={(v) => cambiarValorSeparacion(i, v)} />
+                  <FilaSeparacion
+                    linea={l}
+                    disabled={!puedeEscribir}
+                    onValorChange={(v) => cambiarValorSeparacion(i, v)}
+                    unitarioSii={conFleteSeguro ? unitarioSii : undefined}
+                  />
                   </Fragment>
                 ))}
+                {/* Flete/Seguro como ítems propios del documento del SII. */}
+                {requiereFlete && (
+                  <TableRow>
+                    <TableCell className='text-sm'>FLETE</TableCell>
+                    <TableCell className='text-right tabular-nums'>1</TableCell>
+                    <TableCell />
+                    <TableCell className='text-right tabular-nums'>{formatUnitarioSii(fleteNum)}</TableCell>
+                    <TableCell className='text-right tabular-nums'>{formatMonto(fleteNum)}</TableCell>
+                  </TableRow>
+                )}
+                {requiereSeguro && (
+                  <TableRow>
+                    <TableCell className='text-sm'>SEGURO</TableCell>
+                    <TableCell className='text-right tabular-nums'>1</TableCell>
+                    <TableCell />
+                    <TableCell className='text-right tabular-nums'>{formatUnitarioSii(seguroNum)}</TableCell>
+                    <TableCell className='text-right tabular-nums'>{formatMonto(seguroNum)}</TableCell>
+                  </TableRow>
+                )}
               </TableBody>
               <TableFooter>
                 <TableRow>
                   <TableCell>Total</TableCell>
                   <TableCell className='text-right tabular-nums'>{formatMonto(lineas.reduce((a, l) => a + l.cantidadCajas, 0), 0)}</TableCell>
                   <TableCell />
-                  <TableCell className='text-right tabular-nums'>{factura.moneda.codigo} {formatMonto(montoTotal)}</TableCell>
+                  {conFleteSeguro && <TableCell />}
+                  <TableCell className='text-right tabular-nums'>
+                    {factura.moneda.codigo} {formatMonto(conFleteSeguro ? totalDocumentoSii : montoTotal)}
+                  </TableCell>
                 </TableRow>
               </TableFooter>
             </Table>
@@ -691,7 +743,7 @@ export function FacturaEditor({ factura }: { factura: FacturaExportacion }) {
               <p className='text-muted-foreground pt-1 text-xs'>
                 {fleteSumaAlPrecio
                   ? 'En el documento del SII el flete/seguro va como ítem aparte: precio de cierre + flete = total.'
-                  : 'En el documento del SII el detalle va a precio de cierre − flete = precio de venta (FOB).'}
+                  : 'En el documento del SII la fruta va a valor FOB (precio de cierre − flete) y el flete/seguro como ítem aparte: total = precio de cierre.'}
               </p>
             </div>
           </CardContent>

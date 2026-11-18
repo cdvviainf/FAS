@@ -65,17 +65,27 @@ export function SeparacionCantidadesControl({
 }
 
 // Fila de la cantidad separada bajo su línea de fruta (valor editable por línea).
+// Unitario del DTE: hasta 6 decimales (PrcItem del SII), sin ceros de relleno.
+export function formatUnitarioSii(n: number): string {
+  return n.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 6 })
+}
+
 export function FilaSeparacion({
   linea,
   disabled,
   onValorChange,
+  unitarioSii,
 }: {
   linea: ProformaLineaSugerida
   disabled?: boolean
   onValorChange: (valor: number) => void
+  // Factura con Flete/Seguro: unitario recalculado como irá al SII (columna
+  // extra "Precio Unitario"; el total de la fila usa ese unitario).
+  unitarioSii?: (precioCierre: number) => number
 }) {
   if (!linea.separacion) return null
-  const monto = Math.round(linea.separacion.precioUnitario * linea.cantidadCajas * 100) / 100
+  const unitario = unitarioSii ? unitarioSii(linea.separacion.precioUnitario) : linea.separacion.precioUnitario
+  const monto = Math.round(unitario * linea.cantidadCajas * 100) / 100
   return (
     <TableRow className='bg-muted/30'>
       <TableCell className='pl-6 text-sm'>↳ {linea.separacion.descripcion}</TableCell>
@@ -91,6 +101,7 @@ export function FilaSeparacion({
           className='h-8 text-right'
         />
       </TableCell>
+      {unitarioSii && <TableCell className='text-right tabular-nums'>{formatUnitarioSii(unitario)}</TableCell>}
       <TableCell className='text-right tabular-nums'>{formatMonto(monto)}</TableCell>
     </TableRow>
   )

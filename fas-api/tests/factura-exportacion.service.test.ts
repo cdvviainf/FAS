@@ -308,17 +308,20 @@ describe('enviarBorradorSii → payload DTE 110 (valor FOB + Aduana)', () => {
     expect(aduana.TotClauVenta).toBe(1000)
     expect(aduana.MntFlete).toBe(100)
     expect(aduana.MntSeguro).toBe(100)
-    // Resta: precio de cierre − flete − seguro = total del documento; sin
-    // DscRcgGlobal. La cuenta, la forma de pago y el TC van en TermPagoGlosa.
-    expect(detalle).toHaveLength(1)
+    // Resta: fruta a FOB + ítems FLETE/SEGURO = precio de cierre; sin DscRcgGlobal.
+    expect(detalle.map((d) => [d.NmbItem, d.QtyItem, d.PrcItem])).toEqual([
+      [expect.any(String), 100, 8],
+      ['FLETE', 1, 100],
+      ['SEGURO', 1, 100],
+    ])
     expect(payload.DscRcgGlobal).toBeUndefined()
     const idDoc = (payload.Encabezado as Record<string, Record<string, unknown>>).IdDoc
     expect(idDoc.FmaPago).toBe(2)
     expect(idDoc.TermPagoGlosa).toBe(
-      'Pago: Crédito · T/C: $950,00 · Cierre 1.000,00 - flete 100,00 - seguro 100,00 = 800,00',
+      'Forma pago: Crédito · T/C: $950,00',
     )
-    // Cuotas siempre sobre el total del documento (cierre − flete − seguro).
-    expect((idDoc.MntPagos as Array<Record<string, unknown>>).map((c) => c.MntPago)).toEqual([800])
+    // Cuotas siempre sobre el total del documento (= precio de cierre).
+    expect((idDoc.MntPagos as Array<Record<string, unknown>>).map((c) => c.MntPago)).toEqual([1000])
   })
 
   function mocksEnvio(factura: unknown) {
@@ -347,13 +350,13 @@ describe('enviarBorradorSii → payload DTE 110 (valor FOB + Aduana)', () => {
     const encabezado = payload.Encabezado as Record<string, Record<string, unknown>>
     expect((encabezado.Transporte.Aduana as Record<string, unknown>).TotClauVenta).toBe(1200)
     expect(encabezado.IdDoc.TermPagoGlosa).toBe(
-      'Pago: Crédito · T/C: $950,00 · Cierre 1.000,00 + flete 100,00 + seguro 100,00 = 1.200,00',
+      'Forma pago: Crédito · T/C: $950,00',
     )
     expect((encabezado.IdDoc.MntPagos as Array<Record<string, unknown>>).map((c) => c.MntPago)).toEqual([1200])
   })
 
   it('bloquea el envío si la glosa (forma de pago + TC + observaciones) supera 100 caracteres', async () => {
-    mocksEnvio({ ...facturaCif, observaciones: 'x'.repeat(30) })
-    await expect(enviarBorradorSii(20, 'u1')).rejects.toThrow(/acórtalas a 11 caracteres/)
+    mocksEnvio({ ...facturaCif, observaciones: 'x'.repeat(80) })
+    await expect(enviarBorradorSii(20, 'u1')).rejects.toThrow(/acórtalas a 63 caracteres/)
   })
 })

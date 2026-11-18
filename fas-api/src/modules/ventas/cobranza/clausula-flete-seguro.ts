@@ -81,7 +81,9 @@ export function totalClausula(montoTotal: number, montoFlete: number | null, mon
 }
 
 // Unitario a valor FOB, redondeado a 4 decimales (misma precisión que la
-// columna precioUnitario @db.Decimal(14,4)).
-export function unitarioFob(precioUnitarioClausula: number, factor: number): number {
-  return Math.round(precioUnitarioClausula * factor * 10_000) / 10_000
+// columna precioUnitario @db.Decimal(14,4)). El DTE usa 6 (PrcItem del SII
+// admite 6 decimales) para que FOB + flete cuadre al centavo con el cierre.
+export function unitarioFob(precioUnitarioClausula: number, factor: number, decimales = 4): number {
+  const escala = 10 ** decimales
+  return Math.round(precioUnitarioClausula * factor * escala) / escala
 }
