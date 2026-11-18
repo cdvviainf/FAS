@@ -8,7 +8,7 @@ import { validarYCompletarLineas } from './proforma.service.js'
 import * as dteService from '../../finanzas/facturacion/dte-emitidos.service.js'
 import * as dteRepo from '../../finanzas/facturacion/dte-emitidos.repository.js'
 import * as libredte from '../../finanzas/facturacion/libredte.adapter.js'
-import { esFacturaTimbrada, esFacturaConDocumentoDescargable, interpretarEstadoSii } from './sii-estado.js'
+import { esFacturaTimbrada, esFacturaConDocumentoDescargable, esFacturaConsultableSii, interpretarEstadoSii } from './sii-estado.js'
 import { mapFacturaExportacionA110, type LineaFacturaExportacion, type ReferenciaFacturaExportacion } from '../../finanzas/facturacion/mappers/factura-exportacion.mapper.js'
 import { obtenerTipoCambio } from '../../finanzas/facturacion/tipo-cambio.adapter.js'
 import { factorFob, resolverFleteSeguro, totalClausula, unitarioFob } from './clausula-flete-seguro.js'
@@ -1105,7 +1105,9 @@ export async function firmar(id: number, userId: string) {
 export async function consultarEstadoSii(id: number) {
   const factura = await repo.getFacturaActivaById(id)
   if (!factura) throw new NotFoundError('Factura de Exportación', String(id))
-  if (!esFacturaTimbrada(factura.estado) || factura.folio == null) {
+  // RECHAZADA con folio también se puede re-consultar (2026-11-18): corrige una
+  // Factura marcada RECHAZADA por un veredicto mal interpretado (RLV).
+  if (factura.folio == null || !esFacturaConsultableSii(factura.estado, factura.folio)) {
     throw new ValidationError('Solo se puede consultar el estado SII de una Factura ya timbrada (con folio)')
   }
   if (env.DTE_PROVIDER !== 'libredte') {

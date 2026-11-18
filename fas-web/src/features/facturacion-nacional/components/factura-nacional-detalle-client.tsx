@@ -355,7 +355,8 @@ function Detalle({ factura }: { factura: FacturaNacional }) {
               Reabrir
             </Button>
           )}
-          {esTimbrada(factura.estado) && puedeEscribir && (
+          {/* RECHAZADA con folio: re-verificar el veredicto (ej. aceptada con reparos). */}
+          {(esTimbrada(factura.estado) || (factura.estado === 'RECHAZADA' && factura.folio != null)) && puedeEscribir && (
             <Button variant='outline' disabled={consultarSii.isPending} onClick={() => consultarSii.mutate()}>
               <Icons.search className='mr-1 h-4 w-4' />
               Consultar estado SII

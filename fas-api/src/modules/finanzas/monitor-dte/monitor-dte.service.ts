@@ -3,7 +3,7 @@ import { logger } from '../../../lib/logger.js'
 import { NotFoundError, ValidationError } from '../../../shared/errors.js'
 import * as dteService from '../facturacion/dte-emitidos.service.js'
 import * as libredte from '../facturacion/libredte.adapter.js'
-import { interpretarEstadoSii, esFacturaTimbrada } from '../../ventas/cobranza/sii-estado.js'
+import { interpretarEstadoSii, esFacturaTimbrada, esFacturaConsultableSii } from '../../ventas/cobranza/sii-estado.js'
 import * as facturaNacionalService from '../../ventas/cobranza/factura-nacional.service.js'
 import * as facturaExportacionService from '../../ventas/cobranza/factura-exportacion.service.js'
 import * as facturaNacionalRepo from '../../ventas/cobranza/factura-nacional.repository.js'
@@ -148,11 +148,11 @@ async function firmadoOError(id: number) {
 async function facturaTimbrada(origenTipo: string, origenId: number): Promise<boolean> {
   if (origenTipo === 'factura-nacional') {
     const f = await facturaNacionalRepo.getFacturaActivaById(origenId)
-    return !!f && esFacturaTimbrada(f.estado) && f.folio != null
+    return !!f && esFacturaConsultableSii(f.estado, f.folio)
   }
   if (origenTipo === 'factura-exportacion') {
     const f = await facturaExportacionRepo.getFacturaActivaById(origenId)
-    return !!f && esFacturaTimbrada(f.estado) && f.folio != null
+    return !!f && esFacturaConsultableSii(f.estado, f.folio)
   }
   return false
 }

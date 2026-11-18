@@ -28,12 +28,30 @@ export function esFacturaConDocumentoDescargable(estado: string): boolean {
   return esFacturaTimbrada(estado) || estado === 'ANULADA'
 }
 
-// Códigos/glosas de RECHAZO del SII (revisión de envío + estado de documento).
-// RCH/RFR/RCT/RLV = rechazos de envío; FAU/FNA = firma/autorización; más glosas.
-const RECHAZO_SII = /rechaz|"?rch"?|"?rfr"?|"?rct"?|"?rlv"?|"?fau"?|"?fna"?|no v[aá]lid|anulad/i
-// Códigos/glosas de ACEPTACIÓN. DOK = documento OK; DNK = recibido con reparos
-// (aceptado con observaciones); EPR = envío procesado. Más glosas habituales.
-const ACEPTADO_SII = /"?dok"?|"?dnk"?|"?epr"?|aceptad|recibido( conforme)?|documento (recibido|correcto)|procesado( correctamente)?/i
+// Códigos del SII (revisión del envío y estado del documento). Se leen como
+// palabra completa (\b) para no confundir un trozo de otra palabra o del JSON.
+//
+// ACEPTACIÓN:
+//   EPR = envío procesado · RLV = DTE aceptado con reparos leves · RPR =
+//   aceptado con reparos · DOK = documento recibido OK · DNK = recibido, datos
+//   no coinciden (aceptado con observaciones).
+// RLV/RPR (2026-11-18): antes RLV estaba en la lista de rechazo y una Factura
+// "Aceptada con Reparos Leves" (LibreDTE: aceptada, código 804) quedaba
+// RECHAZADA en FAS. Con reparos el DTE es VÁLIDO.
+//
+// RECHAZO:
+//   RCH = DTE rechazado · RCT = error en carátula · RFR = error en firma ·
+//   RCS/RSC = error en schema · RPT = repetido rechazado · FAU/FNA = documento
+//   no autorizado / no recibido · FAN = anulado.
+const CODIGOS_ACEPTADO = ['EPR', 'RLV', 'RPR', 'DOK', 'DNK']
+const CODIGOS_RECHAZO = ['RCH', 'RCT', 'RFR', 'RCS', 'RSC', 'RPT', 'FAU', 'FNA', 'FAN']
+const RE_CODIGO = (codigos: string[]) => new RegExp(`\\b(${codigos.join('|')})\\b`)
+const CODIGO_ACEPTADO_RE = RE_CODIGO(CODIGOS_ACEPTADO)
+const CODIGO_RECHAZO_RE = RE_CODIGO(CODIGOS_RECHAZO)
+// Glosas: "aceptado con reparos" se evalúa ANTES que cualquier rechazo.
+const GLOSA_ACEPTADO_CON_REPAROS = /aceptad[oa]s? con reparos/i
+const GLOSA_RECHAZO = /rechaz|no v[aá]lid|anulad/i
+const GLOSA_ACEPTADO = /aceptad|recibido( conforme)?|documento (recibido|correcto)|procesado( correctamente)?/i
 
 export type VeredictoSii = { veredicto: 'ACEPTADO' | 'RECHAZADO' | 'PENDIENTE'; glosa: string }
 
@@ -53,8 +71,39 @@ function extraerGlosa(data: unknown): string {
 export function interpretarEstadoSii(data: unknown): VeredictoSii {
   const texto = JSON.stringify(data) ?? ''
   const glosa = extraerGlosa(data)
-  // Rechazo primero: una señal de rechazo manda sobre cualquier otra.
-  if (RECHAZO_SII.test(texto)) return { veredicto: 'RECHAZADO', glosa }
-  if (ACEPTADO_SII.test(texto)) return { veredicto: 'ACEPTADO', glosa }
+  // 1) El código del campo de estado (revision_estado/estado, ej. "RLV - DTE
+  //    Aceptado con Reparos Leves") manda: es la señal estructurada del SII.
+  const codigo = codigoEstado(data)
+  if (codigo) {
+    if (CODIGOS_ACEPTADO.includes(codigo)) return { veredicto: 'ACEPTADO', glosa }
+    if (CODIGOS_RECHAZO.includes(codigo)) return { veredicto: 'RECHAZADO', glosa }
+  }
+  // 2) Sin código reconocible: "aceptado con reparos" es aceptación aunque el
+  //    resto del texto traiga palabras de rechazo; luego rechazo; luego aceptación.
+  if (GLOSA_ACEPTADO_CON_REPAROS.test(texto)) return { veredicto: 'ACEPTADO', glosa }
+  if (CODIGO_RECHAZO_RE.test(texto) || GLOSA_RECHAZO.test(texto)) return { veredicto: 'RECHAZADO', glosa }
+  if (CODIGO_ACEPTADO_RE.test(texto) || GLOSA_ACEPTADO.test(texto)) return { veredicto: 'ACEPTADO', glosa }
   return { veredicto: 'PENDIENTE', glosa }
+}
+
+// Código SII de 3 letras al inicio de un campo de estado conocido ("RLV - …",
+// "EPR", "DOK"…). Null si no hay campo o no empieza con un código.
+function codigoEstado(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null
+  const o = data as Record<string, unknown>
+  for (const k of ['revision_estado', 'estado', 'ESTADO']) {
+    const v = o[k]
+    if (typeof v !== 'string') continue
+    const m = /^\s*([A-Z]{3})\b/.exec(v.trim().toUpperCase())
+    if (m && (CODIGOS_ACEPTADO.includes(m[1]) || CODIGOS_RECHAZO.includes(m[1]))) return m[1]
+  }
+  return null
+}
+
+// Factura en la que tiene sentido consultar el veredicto SII: timbrada, o
+// RECHAZADA que ya tiene folio (fue timbrada y el veredicto la rechazó). Esto
+// último permite re-verificar una Factura marcada RECHAZADA por error de
+// interpretación (ej. RLV antes del 2026-11-18) sin reabrirla ni timbrar otra.
+export function esFacturaConsultableSii(estado: string, folio: number | null | undefined): boolean {
+  return folio != null && (esFacturaTimbrada(estado) || estado === 'RECHAZADA')
 }

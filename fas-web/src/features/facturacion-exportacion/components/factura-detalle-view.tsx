@@ -208,7 +208,8 @@ export function FacturaDetalleView({ factura }: { factura: FacturaExportacion })
               <Icons.billing className='mr-2 h-4 w-4' /> Ver Proforma {factura.proforma.codigo}
             </Button>
           )}
-          {esTimbrada(factura.estado) && puedeEscribir && (
+          {/* RECHAZADA con folio: re-verificar el veredicto (ej. aceptada con reparos). */}
+          {(esTimbrada(factura.estado) || (factura.estado === 'RECHAZADA' && factura.folio != null)) && puedeEscribir && (
             <Button variant='outline' onClick={() => consultarSii.mutate()} isLoading={consultarSii.isPending}>
               <Icons.search className='mr-2 h-4 w-4' /> Consultar estado SII
             </Button>
