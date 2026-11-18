@@ -128,6 +128,8 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
   const monedaSeleccionada = (monedasData?.data ?? []).find((m) => m.id === fields.monedaId)
   // Si la moneda no es CLP, la Factura Nacional (CLP) exige tipo de cambio.
   const esMonedaNoClp = !!monedaSeleccionada && monedaSeleccionada.codigo !== 'CLP'
+  // Moneda en los totales (2026-11-18): "Neto: USD 20,00" — evita confundir montos en pesos con USD.
+  const prefijoMoneda = monedaSeleccionada ? `${monedaSeleccionada.codigo} ` : ''
   // Moneda vigente (ref) para descartar respuestas tardías del botón "Obtener"
   // si el usuario cambió de moneda mientras se consultaba. Se sincroniza en un
   // effect (el proyecto prohíbe escribir refs durante el render).
@@ -573,14 +575,14 @@ export function ProformaProductorForm({ proformaProductorId }: ProformaProductor
             )}
             <div className='flex flex-col items-end gap-0.5 text-sm'>
               {fields.tipoDte === 34 ? (
-                <div className='text-muted-foreground'>Exento: <span className='tabular-nums'>{formatMonto(totales.exento)}</span></div>
+                <div className='text-muted-foreground'>Exento: <span className='tabular-nums'>{prefijoMoneda}{formatMonto(totales.exento)}</span></div>
               ) : (
                 <>
-                  <div className='text-muted-foreground'>Neto: <span className='tabular-nums'>{formatMonto(totales.neto)}</span></div>
-                  <div className='text-muted-foreground'>IVA 19%: <span className='tabular-nums'>{formatMonto(totales.iva)}</span></div>
+                  <div className='text-muted-foreground'>Neto: <span className='tabular-nums'>{prefijoMoneda}{formatMonto(totales.neto)}</span></div>
+                  <div className='text-muted-foreground'>IVA 19%: <span className='tabular-nums'>{prefijoMoneda}{formatMonto(totales.iva)}</span></div>
                 </>
               )}
-              <div className='font-medium'>Total: <span className='tabular-nums'>{formatMonto(totales.total)}</span></div>
+              <div className='font-medium'>Total: <span className='tabular-nums'>{prefijoMoneda}{formatMonto(totales.total)}</span></div>
             </div>
           </CardContent>
         </Card>

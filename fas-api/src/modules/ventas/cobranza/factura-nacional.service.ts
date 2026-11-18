@@ -111,9 +111,27 @@ function calcularMontosYTipoDte(lineas: LineaCalculo[]) {
   return { montoNeto, montoExento, montoIva, montoTotal, tipoDte }
 }
 
+// Tope de las columnas de precio Decimal(14,4): menos de 10^10 (2026-11-18).
+// Sin esta validación un precio fuera de rango llegaba a Postgres como "numeric
+// field overflow" (500). Caso real: Proforma a Productor en USD con el monto
+// digitado en pesos → precio × tipo de cambio ≈ 20.600 millones de CLP.
+const PRECIO_MAX = 9_999_999_999.9999
+const fmtPrecioCl = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 2 })
+
 function lineasPersistir(
   lineas: Array<{ descripcion: string; articuloId?: number | null; cantidad: number; precioUnitario: number; precioUnitarioOrigen?: number | null; exento: boolean }>,
 ) {
+  for (const l of lineas) {
+    if (Math.abs(l.precioUnitario) > PRECIO_MAX || Math.abs(l.precioUnitarioOrigen ?? 0) > PRECIO_MAX) {
+      const conversion =
+        l.precioUnitarioOrigen != null
+          ? ` (${fmtPrecioCl.format(l.precioUnitarioOrigen)} en la moneda de origen convertido a CLP con el tipo de cambio). Revisa la moneda y el tipo de cambio del documento de origen: si el monto ya está en pesos, el documento debe estar en CLP`
+          : ''
+      throw new ValidationError(
+        `El precio unitario de la línea "${l.descripcion.trim()}" queda en ${fmtPrecioCl.format(l.precioUnitario)} CLP, sobre el máximo permitido${conversion}.`,
+      )
+    }
+  }
   return lineas.map((l) => ({
     descripcion: l.descripcion.trim(),
     articuloId: l.articuloId ?? null,

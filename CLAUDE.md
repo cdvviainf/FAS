@@ -1,7 +1,7 @@
 # CLAUDE.md — Sistema de Gestión Integral Frutera Agrosan (FAS)
 
 > Documento vivo. Actualizar con cada decisión técnica relevante.  
-> Última actualización: Junio 2026 · Versión 0.3
+> Última actualización: 18 de noviembre de 2026 · Versión 0.4
 
 ---
 
@@ -231,35 +231,15 @@ fas-web/
 
 ## 7. Reglas de negocio críticas
 
-> Reglas **provisionales**: se refinan en los specs de Compras/Ventas/Operaciones/Finanzas cuando se escriban. Toda referencia a "rol" se reemplaza por perfil + ítem de menú + nivel.
+> Las reglas provisionales de la v0.3 (`OC-{YYYY}-{NNNN}`, `LOTE-…`, `NV-…`, OC `APROBADA`, `StockMovimiento`/`DESPACHO_EXPORTACION`, NV `EMBARCADA`) **quedaron superseded** por los specs y no existen en el código (verificado 2026-11-18). Las reglas vigentes viven en cada spec:
 
-### Órdenes de Compra
-- Una OC en estado `APROBADA` no puede modificarse — solo anularse y crear nueva.
-- El número de OC se genera automáticamente: `OC-{YYYY}-{NNNN}` (secuencial por año).
-- Crear/editar OC requiere nivel `TOTAL` en el ítem de menú de Compras (perfil).
-- La aprobación requiere el permiso específico de aprobación de OC (ítem de menú dedicado).
-
-### Stock / Lotes
-- Un lote solo puede despacharse si tiene `estadoCalidad = APROBADO` o `APROBADO_CONDICIONADO`.
-- El stock disponible = `cantidadCajas - SUM(movimientos DESPACHO_EXPORTACION)`.
-- No se puede despachar más stock del disponible — validar en el servicio, no solo en el frontend.
-- El código de lote se genera automáticamente: `LOTE-{YYYY}-{NNNN}`.
-
-### Notas de Venta
-- Una NV solo puede incluir lotes con stock disponible > 0.
-- Al confirmar una NV, se crea automáticamente un `StockMovimiento` tipo `DESPACHO_EXPORTACION`.
-- El número de NV se genera automáticamente: `NV-{YYYY}-{NNNN}`.
-- Una NV `EMBARCADA` o posterior no puede editarse.
-
-### DTE — Adaptador genérico
-- El sistema prepara el payload interno y lo envía al proveedor DTE configurado vía variable de entorno.
-- La integración con el proveedor real se implementa en `src/modules/finanzas/facturacion/dte.adapter.ts`.
-- En desarrollo/staging, usar un mock adapter que retorna documentos dummy.
-- El proveedor DTE se configura con: `DTE_PROVIDER=mock|chilesystems|simplefactura`.
-
-### Cobranza
-- Al registrar pago completo, `estado` cambia a `PAGADA` automáticamente.
-- Si `fechaVencimiento < today` y estado es `PENDIENTE`, marcar como `VENCIDA` (job diario en BullMQ).
+- **Órdenes de Compra** (estados `BORRADOR → EMITIDA → RECEPCIONADA`, modalidad CAJAS/GRANEL, Instructivo de Embalaje, Recepción): ver `Docs/compras.md`.
+- **Stock fruta / Pallets / Despacho** (Recepción → Pallet, calificación, Packing List que bloquea el despacho): ver `Docs/compras.md` y `Docs/ventas.md`.
+- **Cierre Comercial (Nota de Venta) / Embarque / Instructivo** (folio correlativo por empresa, N° de Instructivo correlativo por prefijo de Tipo de Embarque, reapertura del Cierre): ver `Docs/ventas.md`.
+- **Códigos y correlativos:** se generan desde Configuración → Prefijos de Código (`PrefijoCodigo`); ver `Docs/mantenedores-generales.md`.
+- **Temporada:** todo documento transaccional lleva `temporadaId` desde la cabecera `X-Temporada-Id`; ver `Docs/00-entorno-general.md` §6 (E3).
+- **DTE:** adaptador genérico con proveedor configurable por `DTE_PROVIDER`; el proveedor integrado es **LibreDTE** (`fas-api/src/modules/finanzas/facturacion/libredte.adapter.ts`), activo en producción con `DTE_PROVIDER=libredte` en Coolify; el default es `mock`. Emisión en 2 pasos (borrador temporal → firma). Reglas de cada documento (110, 33/34, 52, 61, 112): ver `Docs/cobranza.md`.
+- **Cobranza** (cuotas, pagos y saldo a favor, paso a `PAGADA`, job diario BullMQ `VENCIDA`, NC): ver `Docs/cobranza.md`.
 
 ---
 
@@ -273,10 +253,10 @@ PORT=3001
 API_BASE_URL=http://localhost:3001
 
 # Database
-DATABASE_URL=postgresql://fas_user:fas_pass@localhost:5432/fas_db
+DATABASE_URL=postgresql://fas_user:fas_pass@localhost:5433/fas_db
 
 # Redis
-REDIS_URL=redis://localhost:6379
+REDIS_URL=redis://:fas_redis_pass@localhost:6379
 
 # Auth (Better Auth)
 BETTER_AUTH_SECRET=change_me_in_production
@@ -287,12 +267,9 @@ RESEND_API_KEY=re_xxxx
 EMAIL_FROM=noreply@agrosan.cl
 
 # DTE
-DTE_PROVIDER=mock
-# DTE_PROVIDER=chilesystems
-# DTE_API_URL=https://api.chilesystems.cl
-# DTE_API_KEY=xxxx
-# DTE_RUT_EMISOR=76.XXX.XXX-X
+DTE_PROVIDER=mock            # mock (default) | libredte (producción, configurado en Coolify)
 # DTE_AMBIENTE=certificacion  # o produccion
+# (credenciales de LibreDTE: ver fas-api/.env.example y Configuración → Integraciones)
 
 # CORS
 CORS_ORIGIN=http://localhost:3000
@@ -312,107 +289,72 @@ NEXT_PUBLIC_API_URL=http://localhost:3001/api
 
 ## 9. Docker Compose
 
-```yaml
-# docker-compose.yml (desarrollo)
-services:
-  postgres:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_USER: fas_user
-      POSTGRES_PASSWORD: fas_pass
-      POSTGRES_DB: fas_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+La configuración vigente vive en los propios archivos (no se duplica aquí para que no se desactualice):
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-  api:
-    build: ./fas-api
-    ports:
-      - "3001:3001"
-    env_file: ./fas-api/.env
-    depends_on:
-      - postgres
-      - redis
-    volumes:
-      - ./fas-api:/app
-      - /app/node_modules
-
-  web:
-    build: ./fas-web
-    ports:
-      - "3000:3000"
-    env_file: ./fas-web/.env.local
-    depends_on:
-      - api
-
-volumes:
-  postgres_data:
-```
+- `docker-compose.yml` — desarrollo: `postgres` (puerto **5433**), `redis` (con contraseña), `pgadmin`, `redis-commander`, `api`, `web`.
+- `docker-compose.demo.yml` — despliegue en Coolify: `postgres`, `redis`, `api`, `web`, `pgadmin`; variables desde Coolify.
+- Los workers BullMQ corren dentro de `api` (no hay contenedor worker aparte). Topología: `Docs/00-entorno-general.md` §4.
 
 ---
 
 ## 10. Fases de implementación — Etapa 1
 
-### Fase 0 — Scaffold (arrancar aquí)
-- [ ] Inicializar `fas-api`: Fastify + TypeScript + Prisma + Zod + Better Auth
-- [ ] Inicializar `fas-web`: Next.js 15 + Tailwind v4 + shadcn/ui + TanStack Query
-- [ ] Docker Compose con PostgreSQL + Redis funcionando
-- [ ] CI/CD básico (GitHub Actions: lint + test + build)
-- [ ] Schema Prisma completo con migración inicial
-- [ ] Plugin de error handling global en Fastify
-- [ ] Plugin Swagger/OpenAPI en Fastify
-- [ ] Layout base del dashboard en fas-web (sidebar, topbar, rutas protegidas)
+> Verificado contra el código el 2026-11-18. Donde el alcance cambió respecto del plan original, el texto refleja lo construido.
+
+### Fase 0 — Scaffold
+- [x] Inicializar `fas-api`: Fastify + TypeScript + Prisma + Zod + Better Auth
+- [x] Inicializar `fas-web`: Next.js 15 + Tailwind v4 + shadcn/ui + TanStack Query
+- [x] Docker Compose con PostgreSQL + Redis funcionando (`docker-compose.yml`, `docker-compose.demo.yml` para Coolify)
+- [ ] CI/CD básico (GitHub Actions: lint + test + build) — no existe `.github/workflows`
+- [x] Schema Prisma completo con migraciones (`fas-api/prisma/migrations`)
+- [x] Plugin de error handling global en Fastify (`plugins/error-handler.ts`)
+- [x] Plugin Swagger/OpenAPI en Fastify (`plugins/swagger.plugin.ts`)
+- [x] Layout base del dashboard en fas-web (sidebar por ItemMenu + perfiles, topbar con empresa y temporada)
 
 ### Fase 1 — Auth + Usuarios
-- [ ] Login / logout / refresh token
-- [ ] Gestión de usuarios y perfiles (CRUD admin) — ver `Docs/usuarios-perfiles.md`
-- [ ] Middleware de autenticación + guard de autorización por perfil/ítem de menú/nivel
-- [ ] Pantalla de login en fas-web
-- [ ] Guard de rutas protegidas en fas-web
+- [x] Login / logout / sesión (Better Auth)
+- [x] Gestión de usuarios y perfiles (CRUD admin, restablecer contraseña) — `Docs/usuarios-perfiles.md`
+- [x] Middleware de autenticación + guard de autorización por perfil/ítem de menú/nivel (`plugins/auth-guard.ts`)
+- [x] Pantalla de login en fas-web
+- [x] Guard de rutas protegidas en fas-web (`src/proxy.ts` + `route-access-guard.tsx`)
 
 ### Fase 2 — Maestros
-- [ ] CRUD Productores
-- [ ] CRUD Clientes
-- [ ] CRUD Especies / Variedades
-- [ ] CRUD Materiales y tarifas
+- [x] Productores (Entidad tipo PRODUCTOR + ficha, predios, contrato) — `Docs/productores.md`
+- [x] Clientes (Entidad tipo CLIENTE / CLIENTE_NACIONAL) — `Docs/entidades.md`
+- [x] Especies / Variedades y resto de mantenedores — `Docs/mantenedores-generales.md`
+- [x] Materiales: Artículos y Recetas — `Docs/materiales.md`
 
 ### Fase 3 — Compras
-- [ ] CRUD Órdenes de Compra con items
-- [ ] Flujo de aprobación (BORRADOR → ENVIADA → APROBADA)
-- [ ] Generación de PDF de OC (Puppeteer)
-- [ ] Gestión de pagos a productores
-- [ ] Vista de saldo pendiente por productor
+- [x] Órdenes de Compra con líneas (CAJAS y GRANEL) — `Docs/compras.md`
+- [x] Flujo de estados `BORRADOR → EMITIDA → RECEPCIONADA` (reemplaza BORRADOR → ENVIADA → APROBADA)
+- [x] PDF de OC con el Motor de Documentos (Playwright, decisión #12; reemplaza Puppeteer)
+- [x] Pagos a productores (Solicitud de Pago) — `Docs/productores.md`
+- [x] Saldo por productor (Cuenta Corriente) — `Docs/productores.md`
 
 ### Fase 4 — Operaciones
-- [ ] Ingreso manual de lotes (recepción de fruta)
-- [ ] Control de calidad por lote
-- [ ] Vista de stock disponible con filtros
-- [ ] Movimientos de stock (despacho, merma, ajuste)
-- [ ] Gestión de materiales e insumos
+- [x] Recepción de fruta (pallets), con OC, de proceso — `Docs/compras.md`
+- [x] Control de calidad (Solicitud de Inspección, calificación de pallets) — `Docs/calidad.md`
+- [x] Vista de stock disponible con filtros (Stock Fruta, Gestión de Pallets)
+- [x] Movimientos de stock fruta: despacho por Embarque, edición de stock (`OPER_STOCK_EDICION`), eliminación de pallet
+- [x] Materiales e insumos: movimientos, saldos, Kardex, OC y Proformas de Materiales — `Docs/materiales.md`
 
 ### Fase 5 — Ventas
-- [ ] CRUD Notas de Venta con items (selección desde stock)
-- [ ] Flujo de estados (BORRADOR → CONFIRMADA → EMBARCADA → ...)
-- [ ] Generación PDF de NV
-- [ ] Módulo de cobranza / CRM
-- [ ] Registro de pagos de clientes
+- [x] Cierre Comercial (Nota de Venta) con líneas — `Docs/ventas.md`
+- [x] Embarque / Instructivo / Packing List / Solicitud de Reserva AGL360 (la NV no tiene estados; reapertura del Cierre por permiso `VENTAS_REABRIR_CIERRE`)
+- [x] PDF de Cierre Comercial (Sales Order ES/EN)
+- [ ] Cobranza / CRM — Cobranza construida (`Docs/cobranza.md`); Gestión de Cobranza (CRM, `Docs/cobranza-gestion.md`) y Score de riesgo sin implementar
+- [x] Registro de pagos de clientes y saldo a favor — `Docs/cobranza.md`
 
 ### Fase 6 — Finanzas
-- [ ] Registro de costos operacionales
-- [ ] Adaptador DTE genérico (mock funcionando, proveedor real enchufable)
-- [ ] Emisión de facturas asociadas a NV
-- [ ] Seguimiento de documentos DTE
+- [ ] Registro de costos operacionales — sin spec
+- [x] Adaptador DTE (mock + LibreDTE)
+- [x] Emisión de facturas: Exportación (110) desde Proforma, Nacional (33/34), Guía de Despacho (52), NC (61/112)
+- [x] Seguimiento de documentos DTE (Monitor DTE + seguimiento automático del estado SII)
 
 ### Fase 7 — QA y Puesta en Marcha
-- [ ] Tests de integración módulos críticos
-- [ ] Migración de datos desde sistema legacy
-- [ ] Despliegue en VPS con Coolify
+- [ ] Tests de integración de módulos críticos — hay suite (`fas-api/tests/integration`), cobertura parcial
+- [ ] Migración de datos desde la Plataforma Web Actual — parcial: cargadores masivos (maestros, recetas, direcciones/contactos, stock inicial)
+- [x] Despliegue en VPS con Coolify
 - [ ] Capacitación key users
 
 ---
@@ -426,7 +368,7 @@ volumes:
 | 3 | IA como servicios externos — no desarrollados en Etapa 1 | ✅ Confirmado |
 | 4 | Despliegue VPS + Coolify operado por VIAIN | ✅ Confirmado |
 | 5 | Repos separados: fas-api y fas-web | ✅ Confirmado |
-| 6 | Proveedor DTE específico | ⏳ Pendiente |
+| 6 | Proveedor DTE: **LibreDTE** (`libredte.adapter.ts`). Activo vía `DTE_PROVIDER=libredte` en Coolify/producción (confirmado 2026-11-18); el default del código y de los compose es `mock` | ✅ Confirmado |
 | 7 | IDs `Int autoincrement` + `codigo` texto en todas las tablas | ✅ Confirmado |
 | 8 | Autorización por perfil + ítem de menú + nivel (sin roles) | ✅ Confirmado |
 | 9 | Prefijo API `/api/<módulo>` (sin versión) | ✅ Confirmado |

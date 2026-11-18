@@ -39,35 +39,34 @@ Entrega en **3 etapas** con gates de alcance: (1) Operación core, (2) Automatiz
 
 ### Topología de servicios
 
+> Verificado contra `docker-compose.yml`, `docker-compose.demo.yml` y `fas-api/src/server.ts` el 2026-11-18.
+
 | Contenedor | Base | Rol | Entorno |
 |---|---|---|---|
-| `fas-web` | node:22 | Frontend Next.js 15 (SSR) | dev + prod |
-| `fas-api` | node:22 | API REST Fastify 5 | dev + prod |
-| `fas-worker` | node:22 | Jobs/colas BullMQ (misma imagen que `fas-api`, distinto comando) | dev + prod |
-| `postgres` | postgres:17 | Base de datos | dev + prod |
-| `redis` | redis:7 | Colas BullMQ + caché/sesión | dev + prod |
-| `pgadmin` | dpage/pgadmin4 | Administración BD | solo dev |
+| `web` (fas-web) | node:22 | Frontend Next.js 15 | dev + Coolify |
+| `api` (fas-api) | node:22 | API REST Fastify 5 **y** workers BullMQ (arrancan en el mismo proceso desde `server.ts`) | dev + Coolify |
+| `postgres` | postgres:17 | Base de datos (en dev publicada en el puerto 5433) | dev + Coolify |
+| `redis` | redis:7 | Colas BullMQ (con contraseña) | dev + Coolify |
+| `pgadmin` | dpage/pgadmin4 | Administración BD | dev + demo |
 | `redis-commander` | rediscommander | Administración Redis | solo dev |
-| `proxy` | Caddy/Nginx/Traefik | TLS + routing | prod |
 
 ```
-            ┌──────────┐
-  internet→ │  proxy   │ (prod)
-            └────┬─────┘
-        ┌────────┴────────┐
-   ┌────▼────┐       ┌────▼────┐
-   │ fas-web │──API──│ fas-api │───┐
-   └─────────┘       └────┬────┘   │
-                          │        │
-                ┌─────────▼──┐  ┌──▼────────┐
-                │ postgres   │  │  redis    │◄── fas-worker (BullMQ)
-                └────────────┘  └───────────┘
+  internet → proxy/TLS de Coolify
+                  │
+        ┌─────────┴─────────┐
+   ┌────▼────┐         ┌────▼─────────────────┐
+   │   web   │───API──▶│ api (+ workers BullMQ)│
+   └─────────┘         └────┬────────────┬────┘
+                            │            │
+                     ┌──────▼─────┐ ┌────▼────┐
+                     │  postgres  │ │  redis  │
+                     └────────────┘ └─────────┘
 ```
 
-- El **worker** comparte código con `fas-api` (mismo build), arranca con otro entrypoint y consume colas BullMQ desde Redis.
-- Redis cumple doble rol: backend de colas y caché/sesión.
-- Empaquetado: Dockerfile multi-stage por servicio; orquestación con `docker-compose` (dev) y CI/CD vía **GitHub Actions**.
-- Pendiente: el `docker-compose` actual solo tiene infra (postgres, redis, pgadmin, redis-commander); falta formalizar `fas-web`, `fas-api`, `fas-worker` y el `proxy` de prod.
+- No hay un contenedor `fas-worker` aparte: las colas BullMQ (vencimientos de cobranza, seguimiento SII, correos, auditoría) se consumen dentro del proceso de `fas-api`.
+- El proxy y el TLS de producción los provee **Coolify**; el repo no define un contenedor `proxy`.
+- Empaquetado: un `Dockerfile` por repo (`fas-api/Dockerfile`, `fas-web/Dockerfile`).
+- **CI/CD: no implementado** (no existe `.github/workflows`); el despliegue lo hace Coolify desde el repositorio.
 
 ---
 
@@ -135,23 +134,38 @@ Entrega en **3 etapas** con gates de alcance: (1) Operación core, (2) Automatiz
 
 ### Estado de specs
 
-| Módulo | Sección | Etapa | Spec | Estado |
-|---|---|---|---|---|
-| Entorno General | — | — | `00-entorno-general.md` | ✅ Este documento |
-| Mantenedores Generales | Configuración | 1 | `mantenedores-generales.md` | ✅ Listo |
-| Materiales | Operaciones | 1 | `materiales.md` | ✅ Listo |
-| Administración de Productores | Productores | 1/3 | `productores.md` | ✅ Listo |
-| Entidades (Proveedor/Productor/Cliente/Transporte) | Configuración | 1 | `entidades.md` | ✅ Listo |
-| Usuarios y Perfiles (Seguridad) | Configuración | 1 | `usuarios-perfiles.md` | ✅ Listo |
-| Compras (OC) | Compras | 1 | — | ⏳ Pendiente |
-| Ventas (Notas de venta, Cobranza) | Ventas | 1 | — | ⏳ Pendiente |
-| Operaciones — Stock fruta | Operaciones | 1 | — | ⏳ Pendiente |
-| Finanzas (Costos, Pagos, Facturación) | Finanzas | 1 | — | ⏳ Pendiente |
-| Calidad (Validación lotes, Reclamos) | Calidad | 1/3 | — | ⏳ Pendiente |
-| Calidad — Control en origen (web + PWA) | Calidad | 1 | `calidad.md` | ✅ Listo |
-| Calidad — Reclamos | Calidad | 1/3 | `reclamos.md` | ✅ Listo |
-| Liquidaciones | Liquidaciones | 3 | — | ⏳ Pendiente |
-| Automatización IA (PL, facturas, agentes) | — | 2/3 | — | ⏳ Pendiente |
+> Verificado contra el código el **2026-11-18** (`main` 6db046c).
+> Estado del spec: `📝 Borrador` · `✅ Spec cerrado` · `⏳ Sin spec`. Estado de implementación: `✅ Implementado` · `🟡 Implementado parcial` · `⏳ Sin implementar` · `⏳ Sin spec` (no hay spec que implementar). Las aclaraciones van en "Pendientes conocidos". (`⏳ Sin implementar` se agregó al vocabulario del plan de higiene por decisión del 2026-11-18, para módulos con spec pero sin código.)
+
+| Módulo | Sección | Spec | Estado del spec | Estado de implementación | Pendientes conocidos |
+|---|---|---|---|---|---|
+| Entorno General | — | `00-entorno-general.md` | ✅ Spec cerrado | ✅ Implementado | Documento transversal (este archivo) |
+| Mantenedores Generales | Configuración | `mantenedores-generales.md` | ✅ Spec cerrado | ✅ Implementado | Ninguno |
+| Usuarios y Perfiles | Configuración | `usuarios-perfiles.md` | ✅ Spec cerrado | ✅ Implementado | Ninguno |
+| Entidades | Configuración | `entidades.md` | ✅ Spec cerrado | ✅ Implementado | Ninguno |
+| Empresas (multi-empresa) | Configuración | `empresas.md` | ✅ Spec cerrado | ✅ Implementado | Ninguno |
+| Temporada | Configuración | `temporada.md` | 📝 Borrador | ✅ Implementado | El spec es anterior a la temporada en cabeceras (commit `88851f1`); se reescribe en la Etapa 2 del plan de higiene |
+| Integraciones (AGL360, TC, LibreDTE) | Configuración | `integraciones.md` | ✅ Spec cerrado | ✅ Implementado | Ninguno |
+| Auditoría | Transversal | `auditoria.md` | ✅ Spec cerrado | ✅ Implementado | Ninguno (modelo `AuditLog`, módulo `auditoria`) |
+| Motor de Documentos (PDF) | Transversal | `agrosan_etapa4_motor_documentos.md` | ✅ Spec cerrado | ✅ Implementado | La cabecera del doc aún dice "Propuesta v0.1"; documentos restantes migran al formato banner ES/EN por fases |
+| Materiales | Operaciones | `materiales.md` | ✅ Spec cerrado | ✅ Implementado | Ninguno |
+| Administración de Productores | Productores | `productores.md` | ✅ Spec cerrado | 🟡 Implementado parcial | Proceso de liquidación (Etapa 3) |
+| Compras (OC, Instructivo de Embalaje, Recepción) | Compras | `compras.md` | 📝 Borrador | ✅ Implementado | Cabecera "v0.1" desactualizada (Etapa 2); recepción de OC GRANEL bloqueada; especie por línea en Solicitud de Inspección diferida |
+| Ventas (Cierre Comercial, Embarque, Instructivo, Packing List, Reserva) | Ventas | `ventas.md` | 📝 Borrador | ✅ Implementado | Cabecera "BORRADOR DE CONTEXTO" desactualizada (Etapa 2) |
+| API Solicitudes AGL360 | Ventas | `api-solicitudes.md` | ✅ Spec cerrado | ✅ Implementado | Ninguno |
+| Webhook AGL360 → FAS | Ventas | `webhook-fas.md` | ✅ Spec cerrado | ✅ Implementado | Ninguno (`embarques.routes.ts`) |
+| Cobranza / Facturación (Proforma, DTE 110, 33/34, 52, Cuotas, Pagos, NC) | Facturación y Cobranza | `cobranza.md` | ✅ Spec cerrado | 🟡 Implementado parcial | ND (DTE 56) y NC parciales genéricas; NC 112 parcial por validar en certificación; Factura Nacional: referencias a Nota de Venta/Instructivo y unidad en Proforma a Productor; Generador DTE fase 2 (emisión SII) |
+| Gestión de Cobranza (CRM) | Ventas | `cobranza-gestion.md` | ✅ Spec cerrado | ⏳ Sin implementar | Todo el módulo |
+| Score de riesgo de clientes | Ventas | `cobranza-score-riesgo.md` | 📝 Borrador | ⏳ Sin implementar | Punto abierto §3: frecuencia/mecanismo de recálculo |
+| Anexo Entidades cliente – cobranza | Configuración | `anexo-entidades-cliente-cobranza.md` | ✅ Spec cerrado | ⏳ Sin implementar | `estadoActivo` no existe en el schema; depende del Score de riesgo |
+| Calidad — Control en origen | Calidad | `calidad.md` | ✅ Spec cerrado | 🟡 Implementado parcial | PWA offline-first de inspecciones (no existe) |
+| Reclamos | Calidad / Ventas | `reclamos.md` | ✅ Spec cerrado | ✅ Implementado | Ninguno |
+| Anexo Reclamos – provisión | Calidad / Ventas | `anexo-reclamos-provision.md` | ✅ Spec cerrado | ✅ Implementado | Ninguno (`EstadoProvision`, ítem `RECLAMO_PROVISION`) |
+| Operaciones — Stock fruta | Operaciones | `compras.md` / `ventas.md` | 📝 Borrador | ✅ Implementado | Sin spec propio: Pallets y Stock Fruta se especifican en Compras y Ventas |
+| Finanzas — Costos | Finanzas | — | ⏳ Sin spec | ⏳ Sin spec | `CostoOperacional` y `StockLote` del schema son restos del scaffold sin uso |
+| Liquidaciones | Liquidaciones | — | ⏳ Sin spec | ⏳ Sin spec | Spec por escribir |
+| Dashboard de inicio | Dashboard | — | ⏳ Sin spec | ⏳ Sin spec | `/dashboard/overview` es la página de ejemplo del template (E1) |
+| Automatización IA | — | — | ⏳ Sin spec | ⏳ Sin spec | Etapas 2/3 |
 
 ---
 
@@ -160,17 +174,18 @@ Entrega en **3 etapas** con gates de alcance: (1) Operación core, (2) Automatiz
 - **Plataforma Web Actual:** el sistema legado que se reemplaza (nunca "ASP legacy" ni "plataforma legacy").
 - **EDGE:** herramienta de gestión operacional a eliminar.
 - **Temporada:** ciclo (fecha inicio/término) que delimita la operación; variable de sesión (E3).
-- **Adaptador DTE:** capa genérica hacia un proveedor de facturación electrónica de mercado (ChileSystems / SimpleFactura — decisión pendiente).
+- **Adaptador DTE:** capa genérica hacia un proveedor de facturación electrónica de mercado. Proveedor integrado: **LibreDTE** (`fas-api/src/modules/finanzas/facturacion/libredte.adapter.ts`). El proveedor activo lo define `DTE_PROVIDER` (`mock` por defecto en el código, `.env.example` y los compose); en producción (`appfas.agrosanexp.com`) está configurado `DTE_PROVIDER=libredte` en Coolify (confirmado por Christian Droguett, 2026-11-18).
 - **Maestro vs operativo:** maestro = catálogo de Configuración (con `codigo` texto, softdelete); operativo = transacción del negocio (con `numero` correlativo, inmutable donde aplique). Ambos con `id Int autoincrement`.
 
 ---
 
 ## 10. Pendientes del entorno (checklist)
 
-- [ ] Definir el **dashboard** de inicio (E1).
-- [x] Spec de **Usuarios y Perfiles** (E2). → `usuarios-perfiles.md`
-- [ ] Confirmar qué módulos son **season-scoped** (E3).
-- [ ] Formalizar `fas-web`, `fas-api`, `fas-worker` y `proxy` en Docker (§4).
-- [ ] Elegir el **template/admin shell** y selección del proveedor DTE.
+- [ ] Definir el **dashboard** de inicio (E1). Hoy `/dashboard/overview` es la página de ejemplo del template.
+- [x] Spec de **Usuarios y Perfiles** (E2). → `usuarios-perfiles.md` (commit `a39e606`)
+- [x] Confirmar qué módulos son **season-scoped** (E3). → §6 E3, supersesión 2026-11-16 (commit `88851f1`)
+- [x] Formalizar los servicios en Docker (§4) → `docker-compose.yml` (dev) y `docker-compose.demo.yml` (Coolify) con `api` y `web`; decisión vigente: los workers BullMQ corren dentro de `api` (sin contenedor `fas-worker`) y Coolify provee proxy/TLS (sin contenedor `proxy`).
+- [x] Elegir el **template/admin shell** → next-shadcn-dashboard-starter (Kiranism), ver `CLAUDE.md` "Decisiones canónicas".
+- [x] Elegir el **proveedor DTE** → LibreDTE (commits `4e52a10`, `bcea6d3`; activo en producción vía `DTE_PROVIDER=libredte` en Coolify; ver §9).
 - [ ] Actualizar el stack en `agrosan_proyecto.html` (§3).
-- [ ] Specs de las áreas operativas restantes (§8).
+- [ ] Specs de las áreas operativas restantes (§8): Finanzas — Costos, Liquidaciones, Dashboard.
