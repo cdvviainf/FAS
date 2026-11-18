@@ -36,6 +36,20 @@ function camposContactos(cs: Contacto[] | undefined, t: (typeof L)['ES'] | (type
   ])
 }
 
+// Compactación (2026-11-18, pedido de Christian): espacios verticales entre
+// bloques −25 % y los datos de cabecera (Exportador, Cliente, Consignatario,
+// Notify, Transporte) al mismo tamaño de letra que el detalle (7.5pt de
+// .doc-tabla). Scope `.prf3` para no tocar las demás plantillas que comparten
+// print-css (v1/v2 de la Proforma, Factura Comercial, OC, etc.).
+const COMPACTO_CSS = `
+  .prf3 .doc-grupo { margin-bottom: 3mm; }
+  .prf3 .doc-grupo-titulo { margin-bottom: 1.1mm; }
+  .prf3 .doc-campo { font-size: 7.5pt; padding: 0.45mm 0; grid-template-columns: 26mm 1fr; }
+  .prf3 .doc-totales { margin-top: 3mm; }
+  .prf3 .doc-totales .doc-totales-linea { padding: 0.75mm 0; }
+  .prf3 .doc-pie-firma { margin-top: 9mm; }
+`
+
 export function ProformaV3({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPayload; marcaAgua?: 'BORRADOR' | 'COPIA'; marcaAguaFecha?: string }) {
   const t = L[d.idioma]
   // Exportador: la EXPORTADORA de la NV si existe; si no, la empresa emisora.
@@ -112,6 +126,8 @@ export function ProformaV3({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
       paginaOpts={{ formato: 'A4', orientacion: 'portrait', margen: '14mm 12mm 16mm' }}
       piePagina={t.pie}
     >
+      <style dangerouslySetInnerHTML={{ __html: COMPACTO_CSS }} />
+      <div className='prf3'>
       <EncabezadoCorporativo
         logoDataUri={d.empresa.logoDataUri ?? undefined}
         especieImagenDataUri={d.especieImagenDataUri ?? null}
@@ -211,14 +227,14 @@ export function ProformaV3({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
       />
 
       {d.montoEnPalabras && (
-        <div style={{ marginTop: 6, fontSize: 9 }}>
+        <div style={{ marginTop: 4.5, fontSize: 9 }}>
           <span style={{ fontWeight: 700 }}>{t.montoEnPalabras}: </span>
           <span>{d.montoEnPalabras}</span>
         </div>
       )}
 
       {(d.totalCajas != null || d.totalPallets != null) && (
-        <div style={{ marginTop: 8, fontSize: 9, display: 'flex', gap: 24, justifyContent: 'flex-end' }}>
+        <div style={{ marginTop: 6, fontSize: 9, display: 'flex', gap: 24, justifyContent: 'flex-end' }}>
           {d.totalCajas != null && (
             <span><span style={{ fontWeight: 700 }}>{t.totalCajas}: </span>{fmt.entero(d.totalCajas)}</span>
           )}
@@ -233,13 +249,14 @@ export function ProformaV3({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPay
       )}
 
       {d.observaciones && (
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 9 }}>
           <div style={{ fontSize: 9, fontWeight: 700, marginBottom: 3 }}>{t.observaciones}</div>
           <div style={{ fontSize: 9, whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{d.observaciones}</div>
         </div>
       )}
 
       <PieFirma firmantes={['Frutera Agrosan', t.cliente]} />
+      </div>
     </Documento>
   )
 }
