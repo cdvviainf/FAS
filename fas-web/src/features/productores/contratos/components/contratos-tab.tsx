@@ -1,6 +1,7 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
+import Link from 'next/link'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,6 @@ import { AlertModal } from '@/components/modal/alert-modal'
 import { usePuedeEscribir } from '@/hooks/use-item-acceso'
 import { contratosService } from '../service'
 import type { Contrato } from '../types'
-import { ContratoFormSheet } from './contrato-form-sheet'
 
 // PROD-01: Contratos tiene su propio ítem de menú (PROD_CONTRATO), independiente
 // de la Ficha (PROD_FICHA) — no se debe reutilizar el permiso de la ficha aquí.
@@ -30,36 +30,9 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
 }) {
   const puedeEscribir = usePuedeEscribir(ITEM)
   const queryClient = useQueryClient()
-  const [editItem, setEditItem] = useState<Contrato | undefined>()
-  const [formOpen, setFormOpen] = useState(false)
-  const [subiendoId, setSubiendoId] = useState<number | null>(null)
   const [deleteItem, setDeleteItem] = useState<Contrato | undefined>()
-  const [deleteAdjunto, setDeleteAdjunto] = useState<{ contratoId: number; adjuntoId: number; nombre: string } | undefined>()
-  const inputRef = useRef<HTMLInputElement>(null)
 
   const invalidarFicha = () => queryClient.invalidateQueries({ queryKey: ['productores', 'ficha', entidadId] })
-
-  const agregarAdjuntoMutation = useMutation({
-    mutationFn: ({ contratoId, archivo }: { contratoId: number; archivo: File }) =>
-      contratosService.agregarAdjunto(entidadId, contratoId, archivo),
-    onSuccess: () => {
-      invalidarFicha()
-      toast.success('Documento adjuntado')
-    },
-    onError: (e: Error) => toast.error(e.message || 'Error al adjuntar el documento'),
-    onSettled: () => setSubiendoId(null),
-  })
-
-  const eliminarAdjuntoMutation = useMutation({
-    mutationFn: ({ contratoId, adjuntoId }: { contratoId: number; adjuntoId: number }) =>
-      contratosService.eliminarAdjunto(entidadId, contratoId, adjuntoId),
-    onSuccess: () => {
-      invalidarFicha()
-      toast.success('Documento eliminado')
-      setDeleteAdjunto(undefined)
-    },
-    onError: (e: Error) => toast.error(e.message || 'Error al eliminar el documento'),
-  })
 
   const deleteMutation = useMutation({
     mutationFn: (contratoId: number) => contratosService.remove(entidadId, contratoId),
@@ -71,24 +44,8 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
     onError: (e: Error) => toast.error(e.message || 'Error al eliminar el contrato'),
   })
 
-  function iniciarSubida(contratoId: number) {
-    setSubiendoId(contratoId)
-    inputRef.current?.click()
-  }
-
   return (
     <div className='space-y-3'>
-      <input
-        ref={inputRef}
-        type='file'
-        className='hidden'
-        onChange={(e) => {
-          const archivo = e.target.files?.[0]
-          if (archivo && subiendoId) agregarAdjuntoMutation.mutate({ contratoId: subiendoId, archivo })
-          e.target.value = ''
-        }}
-      />
-
       {puedeEscribir && (
         <>
           {!tieneRepresentanteLegal && (
@@ -96,9 +53,18 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
               Este productor no tiene representante legal registrado. Agrega uno en Contactos antes de crear un contrato (R3).
             </p>
           )}
-          <Button onClick={() => { setEditItem(undefined); setFormOpen(true) }} disabled={!tieneRepresentanteLegal}>
-            <Icons.add className='mr-2 h-4 w-4' /> Nuevo Contrato
-          </Button>
+          {/* Pantalla completa (2026-11-18), ya no panel lateral. */}
+          {tieneRepresentanteLegal ? (
+            <Button asChild>
+              <Link href={`/dashboard/productores/${entidadId}/contratos/nuevo`}>
+                <Icons.add className='mr-2 h-4 w-4' /> Nuevo Contrato
+              </Link>
+            </Button>
+          ) : (
+            <Button disabled>
+              <Icons.add className='mr-2 h-4 w-4' /> Nuevo Contrato
+            </Button>
+          )}
         </>
       )}
 
@@ -117,19 +83,18 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
                     {fmt.format(new Date(c.fechaInicio))} a {fmt.format(new Date(c.fechaTermino))}
                   </p>
                 </div>
-                {puedeEscribir && (
-                  <div className='flex gap-1'>
-                    <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => { setEditItem(c); setFormOpen(true) }}>
-                      <Icons.edit className='h-4 w-4' />
-                    </Button>
-                    <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => iniciarSubida(c.id)} disabled={agregarAdjuntoMutation.isPending}>
-                      <Icons.upload className='h-4 w-4' />
-                    </Button>
-                    <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => setDeleteItem(c)}>
+                <div className='flex gap-1'>
+                  <Button variant='ghost' size='icon' className='h-8 w-8' asChild title={puedeEscribir ? 'Editar' : 'Ver'}>
+                    <Link href={`/dashboard/productores/${entidadId}/contratos/${c.id}`}>
+                      {puedeEscribir ? <Icons.edit className='h-4 w-4' /> : <Icons.page className='h-4 w-4' />}
+                    </Link>
+                  </Button>
+                  {puedeEscribir && (
+                    <Button variant='ghost' size='icon' className='h-8 w-8' title='Eliminar' onClick={() => setDeleteItem(c)}>
                       <Icons.trash className='h-4 w-4' />
                     </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
               {c.lineas.length > 0 && (
@@ -141,6 +106,7 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
                         <th className='p-1.5 text-left'>Variedad</th>
                         <th className='p-1.5 text-left'>Categoría</th>
                         <th className='p-1.5 text-left'>Calibre</th>
+                        <th className='p-1.5 text-left'>Condición de pago</th>
                         <th className='p-1.5 text-right'>Comprometido</th>
                         <th className='p-1.5 text-right'>Mín. garantizado</th>
                       </tr>
@@ -152,6 +118,7 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
                           <td className='p-1.5'>{l.variedad.descripcion}</td>
                           <td className='p-1.5'>{l.categoria.descripcion}</td>
                           <td className='p-1.5'>{l.calibreDesde.descripcion}–{l.calibreHasta.descripcion}</td>
+                          <td className='p-1.5'>{l.condicionPago?.descripcion ?? <span className='text-destructive'>Falta</span>}</td>
                           <td className='p-1.5 text-right'>{l.cantidadComprometida} {l.unidadMedida.codigo}</td>
                           <td className='p-1.5 text-right'>{l.minimoGarantizado}</td>
                         </tr>
@@ -178,16 +145,6 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
                           <Icons.paperclip className='h-4 w-4' /> {a.nombre}
                         </a>
                         <span className='text-xs text-muted-foreground'>{formatBytes(a.tamano)}</span>
-                        {puedeEscribir && (
-                          <Button
-                            variant='ghost'
-                            size='icon'
-                            className='h-6 w-6'
-                            onClick={() => setDeleteAdjunto({ contratoId: c.id, adjuntoId: a.id, nombre: a.nombre })}
-                          >
-                            <Icons.trash className='h-3.5 w-3.5' />
-                          </Button>
-                        )}
                       </li>
                     ))}
                   </ul>
@@ -198,12 +155,6 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
         </div>
       )}
 
-      <ContratoFormSheet
-        entidadId={entidadId}
-        item={editItem}
-        open={formOpen}
-        onOpenChange={(v) => { setFormOpen(v); if (!v) setEditItem(undefined) }}
-      />
       <AlertModal
         isOpen={!!deleteItem}
         onClose={() => setDeleteItem(undefined)}
@@ -211,14 +162,6 @@ export function ContratosTab({ entidadId, contratos, tieneRepresentanteLegal }: 
         loading={deleteMutation.isPending}
         title='Eliminar contrato'
         description='¿Eliminar este contrato? Esta acción no se puede deshacer.'
-      />
-      <AlertModal
-        isOpen={!!deleteAdjunto}
-        onClose={() => setDeleteAdjunto(undefined)}
-        onConfirm={() => deleteAdjunto && eliminarAdjuntoMutation.mutate({ contratoId: deleteAdjunto.contratoId, adjuntoId: deleteAdjunto.adjuntoId })}
-        loading={eliminarAdjuntoMutation.isPending}
-        title='Eliminar documento'
-        description={`¿Eliminar el documento "${deleteAdjunto?.nombre}"?`}
       />
     </div>
   )

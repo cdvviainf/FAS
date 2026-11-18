@@ -9,6 +9,8 @@ export const contratoLineaSchema = z.object({
   unidadMedidaId: z.number().int().positive(),
   cantidadComprometida: z.number().min(0),
   minimoGarantizado: z.number().min(0),
+  // Condición de Pago por línea (2026-11-18, antes en la cabecera): obligatoria.
+  condicionPagoId: z.number({ error: 'La condición de pago es obligatoria' }).int().positive('La condición de pago es obligatoria'),
 })
 
 export const contratoCreateSchema = z.object({
@@ -16,7 +18,6 @@ export const contratoCreateSchema = z.object({
   especieId: z.number().int().positive(),
   fechaInicio: z.string().date(),
   fechaTermino: z.string().date(),
-  condicionPagoId: z.number().int().positive().optional().nullable(),
   responsableId: z.string().min(1).optional().nullable(),
   lineas: z.array(contratoLineaSchema).min(1, 'Debe agregar al menos una línea de características'),
 }).refine((d) => d.fechaInicio <= d.fechaTermino, {
@@ -28,7 +29,6 @@ export const contratoUpdateSchema = z.object({
   especieId: z.number().int().positive().optional(),
   fechaInicio: z.string().date().optional(),
   fechaTermino: z.string().date().optional(),
-  condicionPagoId: z.number().int().positive().optional().nullable(),
   responsableId: z.string().min(1).optional().nullable(),
   lineas: z.array(contratoLineaSchema).min(1, 'Debe agregar al menos una línea de características').optional(),
 }).superRefine((d, ctx) => {

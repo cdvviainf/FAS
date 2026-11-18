@@ -43,6 +43,9 @@ async function validarLinea(especieId: number, linea: ContratoLineaInput, index:
     throw new ValidationError(`${prefijo} la categoría no pertenece a la especie del contrato`)
   }
 
+  const condicionPago = await repo.getCondicionPago(linea.condicionPagoId)
+  if (!condicionPago) throw new ValidationError(`${prefijo} la condición de pago seleccionada no existe o está bloqueada`)
+
   const unidadMedida = await repo.getUnidadMedida(linea.unidadMedidaId)
   if (!unidadMedida) throw new ValidationError(`${prefijo} la unidad de medida seleccionada no existe o está bloqueada`)
 
@@ -70,10 +73,6 @@ async function validarReferenciasHeader(body: ContratoCreateInput | ContratoUpda
   if (body.especieId != null) {
     const especie = await repo.getEspecie(body.especieId)
     if (!especie) throw new ValidationError('La especie seleccionada no existe o está bloqueada')
-  }
-  if (body.condicionPagoId != null) {
-    const condicionPago = await repo.getCondicionPago(body.condicionPagoId)
-    if (!condicionPago) throw new ValidationError('La condición de pago seleccionada no existe o está bloqueada')
   }
   if (body.responsableId != null) {
     const responsable = await repo.getUsuarioResponsable(body.responsableId)

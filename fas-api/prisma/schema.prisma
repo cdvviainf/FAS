@@ -3106,31 +3106,26 @@ model Predio {
 }
 
 model ProductorContrato {
-  id              Int            @id @default(autoincrement())
-  empresaId       Int
-  empresa         Empresa        @relation(fields: [empresaId], references: [id])
-  entidadId       Int
+  id            Int       @id @default(autoincrement())
+  empresaId     Int
+  empresa       Empresa   @relation(fields: [empresaId], references: [id])
+  entidadId     Int
   // FK compuesta (empresaId, entidadId) -> Entidad(empresaId, id).
-  entidad         Entidad        @relation("ContratosProductor", fields: [empresaId, entidadId], references: [empresaId, id])
-  temporadaId     Int
+  entidad       Entidad   @relation("ContratosProductor", fields: [empresaId, entidadId], references: [empresaId, id])
+  temporadaId   Int
   // FK compuesta (empresaId, temporadaId) -> Temporada(empresaId, id).
-  temporada       Temporada      @relation(fields: [empresaId, temporadaId], references: [empresaId, id])
-  especieId       Int
+  temporada     Temporada @relation(fields: [empresaId, temporadaId], references: [empresaId, id])
+  especieId     Int
   // FK compuesta (empresaId, especieId) -> Especie(empresaId, id).
-  especie         Especie        @relation(fields: [empresaId, especieId], references: [empresaId, id])
-  fechaInicio     DateTime       @db.Date
-  fechaTermino    DateTime       @db.Date
-  // Mantenedor real CondicionPago (tipo COMPRA) — decisión de negocio,
-  // Christian, 2026-07-30. Reemplaza el hack anterior de Parametro suelto
-  // (que nunca llegó a tener catálogo real). CondicionPago pasa a ser tenant
-  // en Fase 3 lote Compras — FK compuesta (empresaId, condicionPagoId) ->
-  // CondicionPago(empresaId, id).
-  condicionPagoId Int?
-  condicionPago   CondicionPago? @relation(fields: [empresaId, condicionPagoId], references: [empresaId, id])
+  especie       Especie   @relation(fields: [empresaId, especieId], references: [empresaId, id])
+  fechaInicio   DateTime  @db.Date
+  fechaTermino  DateTime  @db.Date
+  // Condición de Pago: pasó a nivel de LÍNEA (2026-11-18, Christian) — ver
+  // ProductorContratoLinea.condicionPagoId. Columna de cabecera eliminada.
   // Usuario responsable (mismo patrón que OrdenCompra.responsableId,
   // filtrado por esResponsableVenta).
-  responsableId   String?
-  responsable     Usuario?       @relation(fields: [responsableId], references: [id])
+  responsableId String?
+  responsable   Usuario?  @relation(fields: [responsableId], references: [id])
 
   lineas   ProductorContratoLinea[]
   adjuntos ProductorContratoAdjunto[]
@@ -3172,7 +3167,14 @@ model ProductorContratoLinea {
   cantidadComprometida Decimal @db.Decimal(14, 3)
   minimoGarantizado    Decimal @db.Decimal(14, 4)
 
+  // Condición de Pago por línea (2026-11-18, antes en la cabecera). Mantenedor
+  // CondicionPago tipo COMPRA. Obligatoria en la API; nullable en BD solo para
+  // líneas antiguas cuyo contrato no tenía condición (se exige al editar).
+  condicionPagoId Int?
+  condicionPago   CondicionPago? @relation(fields: [condicionPagoId], references: [id])
+
   @@index([contratoId])
+  @@index([condicionPagoId])
   @@map("productor_contrato_linea")
 }
 
@@ -4433,13 +4435,13 @@ model FacturaExportacion {
   // obtener el valor FOB de la mercadería. Se hereda de la Proforma al crear el
   // borrador y es editable mientras la Factura esté en BORRADOR. En el DTE 110
   // van como MntFlete/MntSeguro; TotClauVenta = montoTotal (CIF).
-  montoFlete         Decimal?                @db.Decimal(14, 2)
-  montoSeguro        Decimal?                @db.Decimal(14, 2)
+  montoFlete        Decimal? @db.Decimal(14, 2)
+  montoSeguro       Decimal? @db.Decimal(14, 2)
   // Si true, el flete/seguro se SUMAN al precio de venta (el precio es el FOB y
   // el total cláusula = precio + flete + seguro; las cuotas/cobranza y el DTE
   // usan ese total mayor). Default false = restan (comportamiento histórico).
   // Se hereda de la Proforma al crear el borrador.
-  fleteSumaAlPrecio  Boolean                 @default(false)
+  fleteSumaAlPrecio Boolean  @default(false)
 
   // Idioma del documento (ES/EN) — heredado de la Proforma, editable en
   // BORRADOR. Afecta las descripciones (descripcion vs descripcionExtranjera)
@@ -5261,17 +5263,17 @@ model CondicionPago {
   tipo        TipoCondicionPago
   bloqueado   Boolean           @default(false)
 
-  cuotas                CondicionPagoCuota[]
-  ordenesCompra         OrdenCompra[]
-  notasVenta            NotaVenta[]
-  contratosProductor    ProductorContrato[]
-  ordenesCompraMaterial OrdenCompraMaterial[]
-  proformasMaterial     ProformaMaterial[]
-  proformasProductor    ProformaProductor[]
-  proformas             Proforma[]
-  facturasExportacion   FacturaExportacion[]
-  facturasNacional      FacturaNacional[]
-  documentosManuales    DocumentoManual[]
+  cuotas                  CondicionPagoCuota[]
+  ordenesCompra           OrdenCompra[]
+  notasVenta              NotaVenta[]
+  lineasContratoProductor ProductorContratoLinea[]
+  ordenesCompraMaterial   OrdenCompraMaterial[]
+  proformasMaterial       ProformaMaterial[]
+  proformasProductor      ProformaProductor[]
+  proformas               Proforma[]
+  facturasExportacion     FacturaExportacion[]
+  facturasNacional        FacturaNacional[]
+  documentosManuales      DocumentoManual[]
 
   creadoEn       DateTime  @default(now())
   creadoPor      String
@@ -6203,4 +6205,3 @@ model CorreoEnviado {
   @@index([lote])
   @@map("correos_enviados")
 }
-

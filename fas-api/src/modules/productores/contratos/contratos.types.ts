@@ -7,6 +7,7 @@ export interface ContratoLineaInput {
   unidadMedidaId: number
   cantidadComprometida: number
   minimoGarantizado: number
+  condicionPagoId: number
 }
 
 export interface ContratoCreateInput {
@@ -16,7 +17,6 @@ export interface ContratoCreateInput {
   especieId: number
   fechaInicio: string
   fechaTermino: string
-  condicionPagoId?: number | null
   responsableId?: string | null
   lineas: ContratoLineaInput[]
 }

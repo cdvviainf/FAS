@@ -8,7 +8,6 @@ const mantenedorSelect = { id: true, codigo: true, descripcion: true }
 const includeDetalle = {
   temporada: { select: mantenedorSelect },
   especie: { select: mantenedorSelect },
-  condicionPago: { select: mantenedorSelect },
   responsable: { select: { id: true, nombre: true, email: true } },
   lineas: {
     include: {
@@ -18,6 +17,7 @@ const includeDetalle = {
       calibreHasta: { select: mantenedorSelect },
       categoria: { select: mantenedorSelect },
       unidadMedida: { select: mantenedorSelect },
+      condicionPago: { select: mantenedorSelect },
     },
   },
   adjuntos: {

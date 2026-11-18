@@ -66,6 +66,7 @@ export async function getFicha(entidadId: number) {
               calibreHasta: { select: { id: true, codigo: true, descripcion: true } },
               categoria: { select: { id: true, codigo: true, descripcion: true } },
               unidadMedida: { select: { id: true, codigo: true, descripcion: true } },
+              condicionPago: { select: { id: true, codigo: true, descripcion: true } },
             },
           },
           adjuntos: {

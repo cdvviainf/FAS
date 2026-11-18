@@ -20,6 +20,10 @@ export interface ContratoLinea {
   unidadMedida: RefSimple
   cantidadComprometida: string
   minimoGarantizado: string
+  // Condición de Pago por línea (2026-11-18). Null solo en líneas antiguas
+  // cuyo contrato no tenía condición: se exige al editar.
+  condicionPagoId: number | null
+  condicionPago: RefSimple | null
 }
 
 export interface ContratoAdjunto {
@@ -40,8 +44,6 @@ export interface Contrato {
   especie: RefSimple
   fechaInicio: string
   fechaTermino: string
-  condicionPagoId: number | null
-  condicionPago: RefSimple | null
   responsableId: string | null
   responsable: { id: string; nombre: string; email: string } | null
   lineas: ContratoLinea[]
@@ -58,13 +60,13 @@ export interface ContratoLineaInput {
   unidadMedidaId: number
   cantidadComprometida: number
   minimoGarantizado: number
+  condicionPagoId: number
 }
 
 export interface ContratoCreateInput {
   especieId: number
   fechaInicio: string
   fechaTermino: string
-  condicionPagoId?: number | null
   responsableId?: string | null
   lineas: ContratoLineaInput[]
 }

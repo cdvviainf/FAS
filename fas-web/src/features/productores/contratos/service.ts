@@ -5,6 +5,9 @@ export const contratosService = {
   async list(entidadId: number): Promise<{ data: Contrato[] }> {
     return api.get(`productores/${entidadId}/contratos`).json()
   },
+  async get(entidadId: number, contratoId: number): Promise<{ data: Contrato }> {
+    return api.get(`productores/${entidadId}/contratos/${contratoId}`).json()
+  },
   async create(entidadId: number, data: ContratoCreateInput): Promise<{ data: Contrato }> {
     return api.post(`productores/${entidadId}/contratos`, { json: data }).json()
   },
