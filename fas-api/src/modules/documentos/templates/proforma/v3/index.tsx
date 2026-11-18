@@ -28,7 +28,7 @@ const L = ETIQUETAS_PROFORMA
 type Contacto = { nombre: string; telefono: string | null; email: string | null }
 
 // Contactos documentales como pares label/valor bajo la entidad.
-function camposContactos(cs: Contacto[] | undefined, t: (typeof L)['ES'] | (typeof L)['EN']) {
+function camposContactos(cs: Contacto[] | undefined, t: { contacto: string; email: string; telefono: string }) {
   return (cs ?? []).flatMap((c) => [
     { label: t.contacto, valor: c.nombre },
     ...(c.email ? [{ label: t.email, valor: c.email }] : []),
@@ -36,22 +36,35 @@ function camposContactos(cs: Contacto[] | undefined, t: (typeof L)['ES'] | (type
   ])
 }
 
-// Compactación (2026-11-18, pedido de Christian): espacios verticales entre
-// bloques −25 % y los datos de cabecera (Exportador, Cliente, Consignatario,
-// Notify, Transporte) al mismo tamaño de letra que el detalle (7.5pt de
-// .doc-tabla). Scope `.prf3` para no tocar las demás plantillas que comparten
-// print-css (v1/v2 de la Proforma, Factura Comercial, OC, etc.).
+// Compactación (2026-11-18, pedidos de Christian):
+// - espacios verticales entre bloques −25 %;
+// - títulos de bloque (EXPORTADOR, CLIENTE, CONSIGNATARIO…) más chicos (8.5 → 7pt);
+// - datos de cabecera 1pt bajo el detalle (7.5 → 6.5pt) e interlineado −25 %
+//   otra vez (padding 0.45 → 0.34mm, line-height 1.35 → 1.2);
+// - rótulo pegado al valor: cada bloque es una grilla `max-content 1fr` (el
+//   ancho del rótulo = el más largo del bloque, no 26mm fijos) y rótulos
+//   abreviados (Pto., Mod.).
+// Scope `.prf3` para no tocar las demás plantillas que comparten print-css
+// (v1/v2 de la Proforma, Factura Comercial, OC, etc.).
 const COMPACTO_CSS = `
   .prf3 .doc-grupo { margin-bottom: 3mm; }
-  .prf3 .doc-grupo-titulo { margin-bottom: 1.1mm; }
-  .prf3 .doc-campo { font-size: 7.5pt; padding: 0.45mm 0; grid-template-columns: 26mm 1fr; }
+  .prf3 .doc-grupo-titulo { font-size: 7pt; margin-bottom: 1.1mm; }
+  .prf3 .doc-campos { display: grid; grid-template-columns: max-content 1fr; column-gap: 2.5mm; align-content: start; }
+  .prf3 .doc-campo { display: contents; }
+  .prf3 .doc-campo > span { font-size: 6.5pt; line-height: 1.2; padding: 0.34mm 0; }
   .prf3 .doc-totales { margin-top: 3mm; }
   .prf3 .doc-totales .doc-totales-linea { padding: 0.75mm 0; }
   .prf3 .doc-pie-firma { margin-top: 9mm; }
 `
 
+// Rótulos abreviados solo en v3 (v2 queda congelada con los textos completos).
+const ABREVIADOS = {
+  ES: { puertoEmbarque: 'Pto. de Embarque', puertoDestino: 'Pto. de Destino', modalidadVenta: 'Mod. de Venta' },
+  EN: {},
+} as const
+
 export function ProformaV3({ d, marcaAgua, marcaAguaFecha }: { d: ProformaPdfPayload; marcaAgua?: 'BORRADOR' | 'COPIA'; marcaAguaFecha?: string }) {
-  const t = L[d.idioma]
+  const t = { ...L[d.idioma], ...ABREVIADOS[d.idioma] }
   // Exportador: la EXPORTADORA de la NV si existe; si no, la empresa emisora.
   const exp = d.exportador ?? { ...d.empresa, contactosDocumentales: [] as Contacto[] }
   const expLineas = 'direccionLineas' in exp && exp.direccionLineas && exp.direccionLineas.length > 0 ? exp.direccionLineas : exp.direccion ? [exp.direccion] : []
