@@ -3838,15 +3838,13 @@ model InstructivoHijo {
   // Despacho" descarta los InstructivoHijo derivados del despacho anulado
   // sin borrarlos de verdad (auditoría/historial) — "Generar Instructivos"
   // también soft-elimina acá los de una Planta que dejó de aportar pallets
-  // (antes hard delete). `codigo` sigue siendo único para siempre (nunca se
-  // reutiliza un número de secuencia, aunque la fila quede soft-deleted) —
-  // solo `(empresaId, embarqueId, plantaId)` necesita ser único apenas entre
-  // filas ACTIVAS (índice parcial a nivel de BD, WHERE "eliminadoEn" IS
-  // NULL, ver migration.sql — mismo patrón que Recepcion.ordenCompraId).
+  // (antes hard delete). `codigo` y `(empresaId, embarqueId, plantaId)` son
+  // únicos solo entre filas ACTIVAS (índices parciales WHERE "eliminadoEn" IS
+  // NULL, ver migration.sql): desde 2026-11-19 la secuencia se reutiliza al
+  // anular y volver a generar (vuelve a salir "-1", no "-2").
   eliminadoEn    DateTime?
   eliminadoPor   String?
 
-  @@unique([empresaId, codigo])
   @@index([temporadaId])
   @@index([embarqueId])
   @@index([plantaId])

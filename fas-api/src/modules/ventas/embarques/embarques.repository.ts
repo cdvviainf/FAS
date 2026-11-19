@@ -1313,14 +1313,21 @@ export async function generarInstructivosHijos(embarqueId: number, actualizadoPo
       })
     }
 
-    // La siguiente secuencia se calcula sobre TODAS las filas (incluidas las
-    // soft-deleted): `codigo` es único para siempre, nunca se reutiliza un
-    // número aunque la fila que lo tenía haya sido soft-eliminada.
-    const secuenciaMaxima = await tx.instructivoHijo.aggregate({ where: { embarqueId }, _max: { secuencia: true } })
+    // La secuencia se asigna sobre las filas ACTIVAS (2026-11-19, decisión de
+    // negocio Christian — supersede "nunca se reutiliza"): al anular una
+    // carga/despacho y volver a generar, el instructivo debe salir de nuevo
+    // como "-1" y no "-2". Se toma el menor número libre entre los activos
+    // (los que sobreviven conservan el suyo). `codigo` es único solo entre
+    // activos (índice parcial, migración 20261119120000).
+    const secuenciasActivas = new Set(
+      existentesActivos.filter((i) => plantaIds.has(i.plantaId)).map((i) => i.secuencia),
+    )
     const empresaId = getEmpresaIdActual()!
-    let siguienteSecuencia = (secuenciaMaxima._max.secuencia ?? 0) + 1
+    let siguienteSecuencia = 0
     for (const plantaId of plantaIds) {
       if (plantasConInstructivo.has(plantaId)) continue
+      do siguienteSecuencia += 1
+      while (secuenciasActivas.has(siguienteSecuencia))
       await tx.instructivoHijo.create({
         data: {
           empresaId,
@@ -1332,7 +1339,6 @@ export async function generarInstructivosHijos(embarqueId: number, actualizadoPo
           creadoPor: actualizadoPor,
         },
       })
-      siguienteSecuencia += 1
     }
 
     return tx.instructivoHijo.findMany({
