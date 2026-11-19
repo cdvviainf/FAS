@@ -24,9 +24,13 @@ const loteLineaSchema = z.object({
   fechaEmbalaje: z.coerce.date().nullable().optional(),
   etiquetaId: z.number().int().positive().nullable().optional(),
   packingId: z.number().int().positive().nullable().optional(),
+  // CSG = Predio del productor (2026-11-19): elegible en la edición.
+  predioId: z.number().int().positive().nullable().optional(),
 })
 
 export const loteEditarSchema = z.object({
+  // Folio del pallet (N° de Pallet, 2026-11-19): editable desde Edición de Stock.
+  numeroPallet: z.string().trim().min(1, 'El folio es obligatorio').max(50, 'El folio admite hasta 50 caracteres').optional(),
   productorId: z.number().int().positive().optional(),
   notaCalidadId: z.number().int().positive().nullable().optional(),
   notaCondicionId: z.number().int().positive().nullable().optional(),
@@ -41,4 +45,8 @@ export type LoteEditarBody = z.infer<typeof loteEditarSchema>
 // heredada de la Recepción del pallet.
 export const stockListQuerySchema = z.object({
   temporadaId: z.coerce.number().int().positive().optional(),
+})
+
+export const productorParamsSchema = z.object({
+  productorId: z.coerce.number().int().positive(),
 })

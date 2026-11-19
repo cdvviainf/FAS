@@ -25,6 +25,8 @@ export async function stockRoutes(app: FastifyInstance) {
   // guardado (cambiar datos, agregar/eliminar líneas).
   app.get('/stock/pallets/:id/lote', { preHandler: [requireAuth, requireLevel(ITEM_EDICION, 'LECTURA')] }, ctrl.obtenerLote)
   app.patch('/stock/pallets/:id/lote', { preHandler: [requireAuth, requireLevel(ITEM_EDICION, 'TOTAL')] }, ctrl.editarLote)
+  // CSG (predios) del productor para el selector de la edición (2026-11-19).
+  app.get('/stock/productores/:productorId/predios', { preHandler: [requireAuth, requireLevel(ITEM_EDICION, 'LECTURA')] }, ctrl.prediosDeProductor)
   // Eliminar pallet (soft delete) — mismo permiso que editar, nivel TOTAL.
   app.delete('/stock/pallets/:id', { preHandler: [requireAuth, requireLevel(ITEM_EDICION, 'TOTAL')] }, ctrl.eliminarPallet)
 }

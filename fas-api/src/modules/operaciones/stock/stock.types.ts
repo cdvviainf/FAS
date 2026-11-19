@@ -13,6 +13,14 @@ interface CalibreConOrden extends Mantenedor {
   orden: number
 }
 
+export interface PredioCsg {
+  id: number
+  codigo: string
+  descripcion: string
+  codigoCsg: string | null
+  nombreCsg: string | null
+}
+
 // Una fila por PalletLinea — el reporte en pantalla (fas-web) resuelve
 // filtros, agrupación por especie/variedad/calibre/categoría y antigüedad
 // (hoy - fechaRecepcion) en el cliente, sobre el dataset completo devuelto
@@ -52,6 +60,10 @@ export interface StockDetalleRow {
   // PalletLinea históricas.
   packingId: number | null
   packing: Mantenedor | null
+  // Predio de origen de la línea (2026-11-19): su código CSG se muestra en el
+  // Stock. Null en líneas sin predio (cargas anteriores al 2026-11-13).
+  predioId: number | null
+  predio: PredioCsg | null
   cajas: number
   // cajas × Articulo.kgNetoEnvase de la línea (peso neto de fruta, sin el
   // embalaje) — 0 si el artículo no tiene kgNetoEnvase configurado.
@@ -84,9 +96,11 @@ export interface LoteLineaInput {
   fechaEmbalaje?: Date | null
   etiquetaId?: number | null
   packingId?: number | null
+  predioId?: number | null
 }
 
 export interface LoteEditarInput {
+  numeroPallet?: string
   productorId?: number
   notaCalidadId?: number | null
   notaCondicionId?: number | null

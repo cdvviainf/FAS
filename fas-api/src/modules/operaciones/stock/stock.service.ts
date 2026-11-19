@@ -34,6 +34,8 @@ export async function obtenerStock(temporadaId?: number): Promise<StockDetalleRo
         fechaEmbalaje: linea.fechaEmbalaje,
         packingId: linea.packingId,
         packing: linea.packing,
+        predioId: linea.predioId,
+        predio: linea.predio,
         cajas: linea.cajas,
         // Sin redondear acá (QAS-STK-004, QA ronda 2): redondear por línea
         // pierde precisión y acumula diferencia en los totales agregados —
@@ -77,7 +79,7 @@ export async function obtenerLote(id: number) {
 }
 
 // Valida existencia + coherencia de especie de todas las líneas del lote.
-async function validarLineasLote(data: LoteEditarInput) {
+async function validarLineasLote(data: LoteEditarInput, productorId: number) {
   const especieIds = [...new Set(data.lineas.map((l) => l.especieId))]
   const variedadIds = [...new Set(data.lineas.map((l) => l.variedadId))]
   const categoriaIds = [...new Set(data.lineas.map((l) => l.categoriaId))]
@@ -85,14 +87,18 @@ async function validarLineasLote(data: LoteEditarInput) {
   const articuloIds = [...new Set(data.lineas.map((l) => l.articuloId))]
   const packingIds = [...new Set(data.lineas.map((l) => l.packingId).filter((v): v is number => v != null))]
 
-  const [especies, variedades, categorias, calibres, articulos, packings] = await Promise.all([
+  const predioIds = [...new Set(data.lineas.map((l) => l.predioId).filter((v): v is number => v != null))]
+
+  const [especies, variedades, categorias, calibres, articulos, packings, predios] = await Promise.all([
     repo.getEspeciesByIds(especieIds),
     repo.getVariedadesByIds(variedadIds),
     repo.getCategoriasByIds(categoriaIds),
     repo.getCalibresByIds(calibreIds),
     repo.getArticulosByIds(articuloIds),
     packingIds.length ? repo.getEntidadesByIds(packingIds) : Promise.resolve([]),
+    predioIds.length ? repo.getPrediosByIds(predioIds) : Promise.resolve([]),
   ])
+  const predioProductor = new Map(predios.map((p) => [p.id, p.entidadId]))
 
   const especieSet = new Set(especies.map((e) => e.id))
   const variedadEspecie = new Map(variedades.map((v) => [v.id, v.especieId]))
@@ -144,6 +150,12 @@ async function validarLineasLote(data: LoteEditarInput) {
       throw new ValidationError(`Línea ${n}: la etiqueta no está permitida para el artículo`)
     }
     if (l.packingId != null && !packingSet.has(l.packingId)) throw new ValidationError(`Línea ${n}: el packing no existe, está inactivo o no es tipo Packing`)
+    // CSG (2026-11-19): el predio debe ser del productor del pallet.
+    if (l.predioId != null) {
+      const dueno = predioProductor.get(l.predioId)
+      if (dueno == null) throw new ValidationError(`Línea ${n}: el CSG (predio) no existe o fue eliminado`)
+      if (dueno !== productorId) throw new ValidationError(`Línea ${n}: el CSG no pertenece al productor del pallet`)
+    }
   })
 }
 
@@ -164,7 +176,13 @@ export async function editarLote(id: number, data: LoteEditarInput) {
     }
   }
   await validarReferencias({ notaCalidadId: data.notaCalidadId, notaCondicionId: data.notaCondicionId })
-  await validarLineasLote(data)
+  await validarLineasLote(data, data.productorId ?? lote.productorId)
+
+  if (data.numeroPallet !== undefined && data.numeroPallet !== lote.numeroPallet) {
+    if (await repo.existeOtroPalletConFolio(id, data.numeroPallet, lote.temporadaId)) {
+      throw new ValidationError(`Ya existe otro pallet con el folio "${data.numeroPallet}" en esta temporada`)
+    }
+  }
 
   // `completo` siempre presente para el reclamo atómico del repo (si el body lo
   // omite, se conserva el valor actual — no es un cambio).
@@ -184,4 +202,9 @@ export async function eliminarPallet(id: number, userId: string) {
   if (count === 0) {
     throw new ValidationError('El lote fue reservado a un Embarque o eliminado mientras se procesaba — recarga e intenta de nuevo')
   }
+}
+
+// Predios (CSG) de un productor para el selector de la edición de Stock.
+export async function prediosDeProductor(productorId: number) {
+  return repo.listPrediosDeProductor(productorId)
 }

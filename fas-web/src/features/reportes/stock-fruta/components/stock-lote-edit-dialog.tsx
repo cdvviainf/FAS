@@ -41,7 +41,7 @@ interface Props {
 }
 
 function lineaVacia(): LoteLineaInput {
-  return { especieId: 0, variedadId: 0, categoriaId: 0, articuloId: 0, calibreId: 0, cajas: 1, fechaEmbalaje: null, etiquetaId: null, packingId: null }
+  return { especieId: 0, variedadId: 0, categoriaId: 0, articuloId: 0, calibreId: 0, cajas: 1, fechaEmbalaje: null, etiquetaId: null, packingId: null, predioId: null }
 }
 
 // Los mantenedores dependientes (variedad/categoría/calibre) traen `especieId`
@@ -60,6 +60,7 @@ function porEspecie(arr: ItemMantenedor[] | undefined, especieId: number): ItemM
 
 export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
   const queryClient = useQueryClient()
+  const [numeroPallet, setNumeroPallet] = useState('')
   const [productorId, setProductorId] = useState<string>(NINGUNO)
   const [notaCalidadId, setNotaCalidadId] = useState<string>(NINGUNO)
   const [notaCondicionId, setNotaCondicionId] = useState<string>(NINGUNO)
@@ -76,6 +77,7 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
     if (!open || !loteData?.data) return
     const l = loteData.data
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación al abrir
+    setNumeroPallet(l.numeroPallet)
     setProductorId(String(l.productorId))
     setNotaCalidadId(l.notaCalidadId != null ? String(l.notaCalidadId) : NINGUNO)
     setNotaCondicionId(l.notaCondicionId != null ? String(l.notaCondicionId) : NINGUNO)
@@ -92,6 +94,7 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
         fechaEmbalaje: x.fechaEmbalaje ? x.fechaEmbalaje.slice(0, 10) : null,
         etiquetaId: x.etiquetaId,
         packingId: x.packingId,
+        predioId: x.predioId,
       })),
     )
   }, [open, loteData])
@@ -104,6 +107,25 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
   const { data: articulos } = useQuery({ queryKey: ['articulos-embalaje-options'], queryFn: () => articulosService.list({ tipo: 'EMBALAJE', activo: true, limit: 500 }), enabled: open, staleTime: 5 * 60_000 })
   const { data: productores } = useQuery({ queryKey: ['entidades-productor-options'], queryFn: () => entidadesService.list({ tipo: 'PRODUCTOR', activo: true, limit: 500 }), enabled: open, staleTime: 5 * 60_000 })
   const { data: packings } = useQuery({ queryKey: ['entidades-packing-options'], queryFn: () => entidadesService.list({ tipo: 'PACKING', activo: true, limit: 500 }), enabled: open, staleTime: 5 * 60_000 })
+  // CSG (predios) del productor elegido en el lote (2026-11-19).
+  const productorNum = productorId !== NINGUNO ? Number(productorId) : null
+  const { data: predios } = useQuery({
+    queryKey: ['stock-predios-productor', productorNum],
+    queryFn: () => stockFrutaService.prediosDeProductor(productorNum!),
+    enabled: open && productorNum != null,
+    staleTime: 60_000,
+  })
+  const opcionesCsg = (predios?.data ?? []).map((p) => ({
+    id: p.id,
+    descripcion: p.codigoCsg ? (p.nombreCsg ? `${p.codigoCsg} - ${p.nombreCsg}` : p.codigoCsg) : `${p.descripcion} (sin CSG)`,
+  }))
+
+  // Al cambiar el productor, el CSG de las líneas ya no corresponde: se limpia.
+  function cambiarProductor(v: string) {
+    if (v !== productorId) setLineas((prev) => prev.map((l) => ({ ...l, predioId: null })))
+    setProductorId(v)
+  }
+
   const { data: notasCalidad } = useQuery({ queryKey: ['notas-calidad'], queryFn: () => notasCalidadService.list(), enabled: open, staleTime: 60_000 })
   const { data: notasCondicion } = useQuery({ queryKey: ['notas-condicion'], queryFn: () => notasCondicionService.list(), enabled: open, staleTime: 60_000 })
 
@@ -144,6 +166,7 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
   const guardar = useMutation({
     mutationFn: () =>
       stockFrutaService.editarLote(palletId!, {
+        numeroPallet: numeroPallet.trim(),
         productorId: productorId !== NINGUNO ? Number(productorId) : undefined,
         notaCalidadId: notaCalidadId !== NINGUNO ? Number(notaCalidadId) : null,
         notaCondicionId: notaCondicionId !== NINGUNO ? Number(notaCondicionId) : null,
@@ -160,6 +183,10 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
   })
 
   function handleGuardar() {
+    if (!numeroPallet.trim()) {
+      toast.error('El folio del pallet es obligatorio')
+      return
+    }
     if (lineas.length === 0) {
       toast.error('El lote debe tener al menos una línea')
       return
@@ -195,13 +222,17 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
           <p className='text-destructive text-sm'>Este lote está reservado a un Embarque o despachado — no se puede editar.</p>
         ) : (
           <div className='space-y-4'>
-            <div className='grid grid-cols-2 gap-3 sm:grid-cols-4'>
+            <div className='grid grid-cols-2 gap-3 sm:grid-cols-5'>
+              <div className='min-w-0 space-y-1.5'>
+                <Label>Folio</Label>
+                <Input value={numeroPallet} onChange={(e) => setNumeroPallet(e.target.value)} maxLength={50} />
+              </div>
               <div className='min-w-0 space-y-1.5'>
                 <Label>Productor</Label>
                 <Combobox
                   options={toOptions(productores?.data)}
                   value={productorId !== NINGUNO ? productorId : null}
-                  onChange={setProductorId}
+                  onChange={cambiarProductor}
                   placeholder='Seleccionar productor...'
                   searchPlaceholder='Buscar productor...'
                 />
@@ -302,7 +333,7 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
                     )
                   })()}
 
-                  {/* Fila 2: Artículo (2 col) · Packing (2 col) · Cajas · eliminar */}
+                  {/* Fila 2: Artículo (2 col) · Packing · CSG · Cajas · eliminar */}
                   <div className='min-w-0 space-y-1 sm:col-span-2'>
                     <Label className='text-[10px] uppercase'>Artículo</Label>
                     <Combobox
@@ -314,7 +345,8 @@ export function StockLoteEditDialog({ palletId, open, onOpenChange }: Props) {
                       className='h-8'
                     />
                   </div>
-                  <SelectField label='Packing' value={l.packingId ?? 0} onChange={(v) => setLinea(i, { packingId: v || null })} items={packings?.data} nullable className='sm:col-span-2' />
+                  <SelectField label='Packing' value={l.packingId ?? 0} onChange={(v) => setLinea(i, { packingId: v || null })} items={packings?.data} nullable />
+                  <SelectField label='CSG' value={l.predioId ?? 0} onChange={(v) => setLinea(i, { predioId: v || null })} items={opcionesCsg} nullable disabled={productorNum == null} />
                   <div className='min-w-0 space-y-1'>
                     <Label className='text-[10px] uppercase'>Cajas</Label>
                     <Input type='number' min={1} value={l.cajas} onChange={(e) => setLinea(i, { cajas: Math.max(1, Math.trunc(Number(e.target.value) || 0)) })} className='h-8 w-full' />

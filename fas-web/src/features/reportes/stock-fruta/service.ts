@@ -1,5 +1,5 @@
 import { api } from '@/lib/api'
-import type { StockDetalleRow, Lote, LoteEditarInput } from './types'
+import type { StockDetalleRow, Lote, LoteEditarInput, PredioCsg } from './types'
 
 export const stockFrutaService = {
   async list(temporadaId?: number): Promise<{ data: StockDetalleRow[] }> {
@@ -12,6 +12,10 @@ export const stockFrutaService = {
   },
   async editarLote(palletId: number, data: LoteEditarInput): Promise<{ data: Lote }> {
     return api.patch(`operaciones/stock/pallets/${palletId}/lote`, { json: data }).json()
+  },
+  // CSG (predios) del productor para la edición del lote (2026-11-19).
+  async prediosDeProductor(productorId: number): Promise<{ data: PredioCsg[] }> {
+    return api.get(`operaciones/stock/productores/${productorId}/predios`).json()
   },
   // Eliminar pallet (soft delete, 2026-10-12) — solo stock libre.
   async eliminarPallet(palletId: number): Promise<void> {

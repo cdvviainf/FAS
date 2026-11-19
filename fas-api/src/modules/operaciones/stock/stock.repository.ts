@@ -5,6 +5,7 @@ import type { LoteEditarInput, PalletUpdateInput } from './stock.types.js'
 
 const entidadSelect = { id: true, codigo: true, descripcion: true }
 const mantenedorSelect = { id: true, codigo: true, descripcion: true }
+const predioSelect = { id: true, codigo: true, descripcion: true, codigoCsg: true, nombreCsg: true }
 
 // Pallets vigentes de la empresa que siguen siendo stock DISPONIBLE (modelo
 // tenant — el Prisma Client Extension inyecta empresaId) con sus líneas y los
@@ -36,6 +37,7 @@ export async function listPalletsConLineas(temporadaId?: number) {
           // (Embalaje) en el reporte de Stock, entre Especie y Variedad.
           articulo: { select: { ...mantenedorSelect, descripcionComercial: true, kgNetoEnvase: true } },
           packing: { select: entidadSelect },
+          predio: { select: predioSelect },
         },
       },
     },
@@ -82,6 +84,7 @@ export async function getLoteParaEditar(id: number) {
     select: {
       id: true,
       numeroPallet: true,
+      temporadaId: true,
       embarqueId: true,
       productorId: true,
       notaCalidadId: true,
@@ -99,6 +102,7 @@ export async function getLoteParaEditar(id: number) {
           fechaEmbalaje: true,
           etiquetaId: true,
           packingId: true,
+          predioId: true,
         },
         orderBy: { id: 'asc' },
       },
@@ -130,6 +134,28 @@ export async function getArticulosByIds(ids: number[]) {
 }
 export async function getEntidadesByIds(ids: number[]) {
   return prisma.entidad.findMany({ where: { id: { in: ids }, eliminadoEn: null }, select: { id: true, tipos: true, activo: true } })
+}
+
+// Predios (CSG) del productor para la edición de Stock (2026-11-19).
+export async function listPrediosDeProductor(productorId: number) {
+  return prisma.predio.findMany({
+    where: { entidadId: productorId, eliminadoEn: null },
+    select: predioSelect,
+    orderBy: [{ codigoCsg: 'asc' }, { codigo: 'asc' }],
+  })
+}
+
+export async function getPrediosByIds(ids: number[]) {
+  return prisma.predio.findMany({ where: { id: { in: ids }, eliminadoEn: null }, select: { id: true, entidadId: true } })
+}
+
+// Folio repetido (2026-11-19): otro pallet vigente de la misma temporada con
+// el mismo N° de Pallet — el Packing List reconcilia por ese número.
+export async function existeOtroPalletConFolio(id: number, numeroPallet: string, temporadaId: number) {
+  const n = await prisma.pallet.count({
+    where: { id: { not: id }, numeroPallet: { equals: numeroPallet, mode: 'insensitive' }, temporadaId, eliminadoEn: null },
+  })
+  return n > 0
 }
 
 // Soft delete del pallet (2026-10-12, OPER_STOCK_EDICION). Reclamo atómico:
@@ -169,6 +195,7 @@ export async function editarLote(id: number, data: LoteEditarInput) {
     const claim = await tx.pallet.updateMany({
       where: { id, embarqueId: null },
       data: {
+        ...(data.numeroPallet !== undefined ? { numeroPallet: data.numeroPallet } : {}),
         ...(data.productorId !== undefined ? { productorId: data.productorId } : {}),
         ...(data.notaCalidadId !== undefined ? { notaCalidadId: data.notaCalidadId } : {}),
         ...(data.notaCondicionId !== undefined ? { notaCondicionId: data.notaCondicionId } : {}),
@@ -207,6 +234,7 @@ export async function editarLote(id: number, data: LoteEditarInput) {
         fechaEmbalaje: l.fechaEmbalaje ?? null,
         etiquetaId: l.etiquetaId ?? null,
         packingId: l.packingId ?? null,
+        predioId: l.predioId ?? null,
       }
       if (l.id != null) {
         const upd = await tx.palletLinea.updateMany({ where: { id: l.id, palletId: id }, data: datos })

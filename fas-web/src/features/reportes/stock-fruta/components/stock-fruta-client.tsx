@@ -505,7 +505,7 @@ export function StockFrutaClient() {
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Folio</TableCell>
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Productor</TableCell>
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Antigüedad</TableCell>
-                          <TableCell></TableCell>
+                          <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>CSG</TableCell>
                           <TableCell className='text-foreground text-right text-[10px] font-semibold tracking-wide uppercase'>Cajas</TableCell>
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Nota Calidad</TableCell>
                           <TableCell className='text-foreground text-[10px] font-semibold tracking-wide uppercase'>Nota Condición</TableCell>
@@ -552,7 +552,7 @@ export function StockFrutaClient() {
                                 <TableCell>
                                   <Badge variant='outline' className={AGING_BADGE_VARIANT[bucket]}>{dias} d</Badge>
                                 </TableCell>
-                                <TableCell></TableCell>
+                                <TableCell title={row.predio?.nombreCsg ?? row.predio?.descripcion ?? undefined}>{row.predio?.codigoCsg ?? '—'}</TableCell>
                                 <TableCell className='text-right tabular-nums'>{row.cajas.toLocaleString('es-CL')}</TableCell>
                                 <TableCell>{row.notaCalidad?.descripcion ?? '—'}</TableCell>
                                 <TableCell>{row.notaCondicion?.descripcion ?? '—'}</TableCell>

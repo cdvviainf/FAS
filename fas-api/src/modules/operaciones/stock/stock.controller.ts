@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
-import { palletUpdateSchema, palletParamsSchema, loteEditarSchema, stockListQuerySchema } from './stock.schema.js'
+import { palletUpdateSchema, palletParamsSchema, loteEditarSchema, stockListQuerySchema, productorParamsSchema } from './stock.schema.js'
 import * as service from './stock.service.js'
 
 export async function listar(req: FastifyRequest, reply: FastifyReply) {
@@ -32,4 +32,10 @@ export async function eliminarPallet(req: FastifyRequest, reply: FastifyReply) {
   const { id } = palletParamsSchema.parse(req.params)
   await service.eliminarPallet(id, req.fasUserId!)
   return reply.status(204).send()
+}
+
+export async function prediosDeProductor(req: FastifyRequest, reply: FastifyReply) {
+  const { productorId } = productorParamsSchema.parse(req.params)
+  const data = await service.prediosDeProductor(productorId)
+  return reply.send({ data })
 }

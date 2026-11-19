@@ -18,6 +18,14 @@ export const ESTADO_STOCK_LABELS: Record<EstadoStock, string> = {
   VALIDADA: 'Validada',
 }
 
+export interface PredioCsg {
+  id: number
+  codigo: string
+  descripcion: string
+  codigoCsg: string | null
+  nombreCsg: string | null
+}
+
 // Una fila por PalletLinea — el filtrado, la agrupación y la antigüedad se
 // resuelven acá en el cliente sobre el dataset completo (ver
 // stock-fruta-client.tsx). El backend no aplica filtros (compras.md §11).
@@ -49,6 +57,9 @@ export interface StockDetalleRow {
   fechaEmbalaje: string | null
   packingId: number | null
   packing: MantenedorRef | null
+  // Predio de origen (CSG) de la línea — null en cargas sin predio.
+  predioId: number | null
+  predio: PredioCsg | null
   cajas: number
   kg: number
   // Nota de Calidad/Condición y Completo/Incompleto (2026-09-02) — a nivel de
@@ -73,6 +84,7 @@ export interface LoteLinea {
   fechaEmbalaje: string | null
   etiquetaId: number | null
   packingId: number | null
+  predioId: number | null
 }
 
 export interface Lote {
@@ -97,9 +109,11 @@ export interface LoteLineaInput {
   fechaEmbalaje?: string | null
   etiquetaId?: number | null
   packingId?: number | null
+  predioId?: number | null
 }
 
 export interface LoteEditarInput {
+  numeroPallet?: string
   productorId?: number
   notaCalidadId?: number | null
   notaCondicionId?: number | null
