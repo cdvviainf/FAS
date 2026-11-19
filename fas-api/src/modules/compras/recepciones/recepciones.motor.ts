@@ -156,7 +156,10 @@ export function parseFechaEmbalajeTexto(texto: string): Date | typeof FECHA_INVA
   return FECHA_INVALIDA
 }
 
-async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ filas: FilaResuelta[]; errores: string[] }> {
+async function resolverContraMaestros(
+  filasCrudas: FilaExcelCruda[],
+  productoresEsperados: number[] = [],
+): Promise<{ filas: FilaResuelta[]; errores: string[] }> {
   const cacheEspecie = new Map<string, Awaited<ReturnType<typeof repo.findEspecieByTexto>>>()
   const cacheVariedad = new Map<string, Awaited<ReturnType<typeof repo.findVariedadByTexto>>>()
   const cacheCategoria = new Map<string, Awaited<ReturnType<typeof repo.findCategoriaByTexto>>>()
@@ -209,10 +212,12 @@ async function resolverContraMaestros(filasCrudas: FilaExcelCruda[]): Promise<{ 
     if (!articulo) erroresFila.push(`Fila ${cruda.fila}: Artículo/Embalaje "${cruda.articulo}" no existe en el maestro`)
 
     const keyProductor = cruda.productor.toLowerCase()
-    if (!cacheProductor.has(keyProductor)) cacheProductor.set(keyProductor, await repo.findProductorYPredioByTexto(cruda.productor))
+    if (!cacheProductor.has(keyProductor)) cacheProductor.set(keyProductor, await repo.findProductorYPredioByTexto(cruda.productor, productoresEsperados))
     const productorYPredio = cacheProductor.get(keyProductor)
     const productor = productorYPredio?.productor
-    if (!productor) erroresFila.push(`Fila ${cruda.fila}: Productor "${cruda.productor}" no existe en el maestro`)
+    if (productorYPredio?.ambiguos.length) {
+      erroresFila.push(`Fila ${cruda.fila}: el CSG "${cruda.productor}" está en Predios de varios productores (${productorYPredio.ambiguos.join(', ')}) — no se puede determinar a cuál corresponde`)
+    } else if (!productor) erroresFila.push(`Fila ${cruda.fila}: Productor "${cruda.productor}" no existe en el maestro`)
 
     // Opcionales (compras.md §4.8): solo se resuelven/validan si la celda
     // trae texto — vacío es válido y queda en `null`.
@@ -471,7 +476,10 @@ export async function procesarCargaExcel(
   // Etapa 3 — Maestros: cada valor resuelve a un registro real, la
   // agrupación en pallets es consistente y (si hay OC) todo cuadra contra
   // sus líneas.
-  const { filas, errores: erroresMaestros } = await resolverContraMaestros(filasCrudas)
+  // CSG compartido entre productores (2026-11-19): desempata el productor de
+  // la OC (COMPRA) o de los Instructivos (PROCESO).
+  const productoresEsperados = await repo.productoresEsperadosRecepcion(recepcion.ordenCompraId, recepcion.instructivoIds)
+  const { filas, errores: erroresMaestros } = await resolverContraMaestros(filasCrudas, productoresEsperados)
   if (erroresMaestros.length > 0) {
     throw new ValidationError('Etapa 3 — Hay datos que no existen en los maestros', { diferencias: erroresMaestros })
   }

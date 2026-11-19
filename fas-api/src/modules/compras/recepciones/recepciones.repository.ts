@@ -154,6 +154,16 @@ export async function updateRecepcion(id: number, data: RecepcionUpdateInput, ac
   })
 }
 
+// Planta/Dirección de una Recepción ya procesada (2026-11-19): dato de
+// cabecera, corregible en cualquier estado mientras no esté eliminada.
+export async function updatePlantaRecepcion(id: number, data: { plantaId: number; direccionPlantaId: number }, actualizadoPor: string) {
+  return prisma.recepcion.update({
+    where: { id, eliminadoEn: null },
+    data: { ...data, actualizadoPor },
+    include: includeDetalle,
+  })
+}
+
 export async function softDeleteRecepcion(id: number, eliminadoPor: string) {
   return prisma.$transaction(async (tx) => {
     await relockYReleerModificable(tx, id)
@@ -351,28 +361,43 @@ export async function findNotaCondicionByTexto(texto: string) {
 // busca primero por ahí. Si no hay match (predio sin CSG cargado, o el
 // Excel excepcionalmente trae el código de la Entidad), se cae al match
 // directo contra la Entidad como antes.
-export async function findProductorByTexto(texto: string) {
-  return (await findProductorYPredioByTexto(texto))?.productor ?? null
+export async function findProductorByTexto(texto: string, productoresPreferidos: number[] = []) {
+  return (await findProductorYPredioByTexto(texto, productoresPreferidos))?.productor ?? null
 }
 
 // Igual que findProductorByTexto, pero conserva el Predio cuando el match fue
 // por código CSG (2026-11-13) — la Recepción lo guarda por línea de pallet.
 // `predio` es null si el texto matcheó directo contra la Entidad.
-export async function findProductorYPredioByTexto(texto: string) {
+//
+// CSG compartido entre productores (2026-11-19, RC-2026-0033): un mismo
+// código CSG puede estar en Predios de distintos productores. Ya NO se toma
+// el primero que aparezca: si alguno pertenece a `productoresPreferidos` (el
+// productor de la OC / de los Instructivos / del pallet), gana ese; si aun así
+// quedan varios productores posibles, el resultado es AMBIGUO (`productor`
+// null + `ambiguos` con sus nombres) y el llamador lo reporta como error —
+// nunca una asignación silenciosa al productor equivocado.
+export async function findProductorYPredioByTexto(texto: string, productoresPreferidos: number[] = []) {
   // "código CSG - Nombre CSG" (formato base) o solo el código CSG (Packing List
   // real) → se matchea por el código CSG (parte antes de " - ").
   const codigoCsg = codigoAntesDeGuion(texto)
-  const predio = await prisma.predio.findFirst({
+  const predios = await prisma.predio.findMany({
     where: {
       eliminadoEn: null,
       codigoCsg: { equals: codigoCsg, ...insensible },
       entidad: { eliminadoEn: null, activo: true, tipos: { has: 'PRODUCTOR' } },
     },
     include: { entidad: true },
+    orderBy: { id: 'asc' },
   })
-  if (predio) {
-    const { entidad, ...resto } = predio
-    return { productor: entidad, predio: resto }
+  if (predios.length > 0) {
+    const deLosPreferidos = predios.filter((p) => productoresPreferidos.includes(p.entidadId))
+    const candidatos = deLosPreferidos.length > 0 ? deLosPreferidos : predios
+    const productores = new Map(candidatos.map((p) => [p.entidadId, p.entidad.descripcion]))
+    if (productores.size > 1) {
+      return { productor: null, predio: null, ambiguos: [...productores.values()] }
+    }
+    const { entidad, ...resto } = candidatos[0]!
+    return { productor: entidad, predio: resto, ambiguos: [] as string[] }
   }
 
   const productor = await prisma.entidad.findFirst({
@@ -383,7 +408,20 @@ export async function findProductorYPredioByTexto(texto: string) {
       OR: condicionesPorCampos(['codigo', 'descripcion', 'razonSocial'], texto.trim()),
     },
   })
-  return productor ? { productor, predio: null } : null
+  return productor ? { productor, predio: null, ambiguos: [] as string[] } : null
+}
+
+// Productores "esperados" de una Recepción (2026-11-19): el de su OC (modo
+// COMPRA) o los de sus Instructivos (modo PROCESO). Desempatan un CSG
+// compartido entre productores en findProductorYPredioByTexto.
+export async function productoresEsperadosRecepcion(ordenCompraId: number | null, instructivoIds: number[]): Promise<number[]> {
+  if (ordenCompraId != null) {
+    const oc = await prisma.ordenCompra.findFirst({ where: { id: ordenCompraId }, select: { entidadProductorId: true } })
+    return oc ? [oc.entidadProductorId] : []
+  }
+  if (instructivoIds.length === 0) return []
+  const ins = await prisma.instructivoEmbalaje.findMany({ where: { id: { in: instructivoIds } }, select: { entidadProductorId: true } })
+  return [...new Set(ins.map((i) => i.entidadProductorId))]
 }
 
 // Etiqueta y Packing (compras.md §4.6, 2026-09-21) — obligatorios por línea.

@@ -372,6 +372,10 @@ A diferencia de Nota de Calidad/Condición/Completo (§4.8, a nivel de **Pallet 
 
 > **Supersesión (2026-09-28, decisión de negocio Christian) — Edición de Stock.** Estos 3 campos (Fecha de Embalaje, Etiqueta, Packing) **sí** son editables después, junto con el resto del lote (especie/variedad/categoría/artículo/calibre/cajas, agregar y eliminar líneas, y datos del pallet), desde la consulta de Stock (Reportes → Stock de Fruta) con el permiso especial `OPER_STOCK_EDICION`. Solo aplica a pallets **libres** (no reservados a un Embarque ni despachados). Backend valida referencias/coherencia y reclama el pallet atómicamente contra reservas concurrentes.
 
+> **Ampliación (2026-11-19) — CSG y Folio.** El Stock de Fruta muestra por línea el **CSG** (`PalletLinea.predio.codigoCsg`). En la Edición de Stock se puede: (1) elegir el **CSG** de cada línea entre los Predios del productor del pallet (`predioId`; el backend rechaza un predio de otro productor y, al cambiar el productor en la UI, se limpia el CSG de las líneas); (2) editar el **Folio** (`numeroPallet`, obligatorio, ≤ 50 caracteres), rechazado si otro pallet vigente de la misma temporada ya tiene ese folio (el Packing List reconcilia por él). Selector vía `GET /api/operaciones/stock/productores/:productorId/predios` (permiso `OPER_STOCK_EDICION` LECTURA).
+>
+> **Supersesión (2026-11-19) — Planta de la Recepción editable.** La **Planta** y su **Dirección** de una Recepción se pueden corregir en cualquier estado (también Validada/con pallets), con nivel TOTAL. En una Recepción ya procesada son los **únicos** campos editables; cambiar template u observaciones se rechaza (422). El Stock lee la planta en vivo desde la Recepción.
+
 **Consecuencia operativa**: cualquier `TemplateCarga` de tipo `RECEPCION` creado antes de esta fecha debe editarse en Configuración → Templates de Carga para mapear las 3 columnas nuevas antes de procesar el próximo Excel de Recepción — sin eso, la carga se rechaza con "falta Fecha de Embalaje/Etiqueta/Packing" en cada fila.
 
 ---

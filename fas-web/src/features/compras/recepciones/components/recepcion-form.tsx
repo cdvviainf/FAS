@@ -35,7 +35,7 @@ import { instructivoEmbalajeService } from '@/features/compras/instructivo-embal
 import { semanaISO } from '@/lib/format'
 import { recepcionDetailOptions, recepcionesKeys } from '../queries'
 import { recepcionesService } from '../service'
-import type { RecepcionCreateInput } from '../types'
+import type { RecepcionCreateInput, RecepcionUpdateInput } from '../types'
 import { ORIGEN_RECEPCION_LABELS, ESTADO_RECEPCION_LABELS } from '../types'
 
 const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024
@@ -269,7 +269,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   })
 
   const updateMutation = useMutation({
-    mutationFn: (data: RecepcionCreateInput) => recepcionesService.update(recepcionId!, data),
+    mutationFn: (data: RecepcionUpdateInput) => recepcionesService.update(recepcionId!, data),
     onSuccess: () => {
       toast.success('Recepción actualizada')
       queryClient.invalidateQueries({ queryKey: recepcionesKeys.all })
@@ -408,7 +408,8 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
       return
     }
     const payload = buildPayload()
-    if (isEdit) updateMutation.mutate(payload)
+    if (isEdit && soloPlanta) updateMutation.mutate({ plantaId: fields.plantaId, direccionPlantaId: fields.direccionPlantaId })
+    else if (isEdit) updateMutation.mutate(payload)
     else createMutation.mutate(payload)
   }
 
@@ -423,6 +424,10 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
   // generado pallets/Stock, así que el estado por sí solo no basta.
   const soloLectura = !puedeEscribir || (isEdit && !!recepcion && !recepcion.data.editable)
   const bloqueadaPorPallets = isEdit && !!recepcion && !recepcion.data.editable && recepcion.data.tienePallets
+  // Planta/Dirección (2026-11-19): corregibles aunque la Recepción ya esté
+  // procesada — en ese caso solo se envían esos dos campos.
+  const soloPlanta = puedeEscribir && soloLectura
+  const plantaBloqueada = !puedeEscribir
 
   return (
     <div className='space-y-6'>
@@ -533,7 +538,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
                 placeholder='Seleccionar planta...'
                 searchPlaceholder='Buscar planta...'
                 options={plantas.map((p) => ({ value: String(p.id), label: p.descripcion }))}
-                disabled={soloLectura}
+                disabled={plantaBloqueada}
               />
               {errors.plantaId && <p className='text-xs text-destructive'>{errors.plantaId}</p>}
             </div>
@@ -542,7 +547,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
               <Select
                 value={fields.direccionPlantaId ? String(fields.direccionPlantaId) : ''}
                 onValueChange={(v) => setFields((f) => ({ ...f, direccionPlantaId: Number(v) }))}
-                disabled={soloLectura || !fields.plantaId}
+                disabled={plantaBloqueada || !fields.plantaId}
               >
                 <SelectTrigger className='w-full'><SelectValue placeholder='Seleccionar dirección...' /></SelectTrigger>
                 <SelectContent>
@@ -661,7 +666,7 @@ export function RecepcionForm({ recepcionId }: RecepcionFormProps) {
       </Card>
 
       {!soloLectura && <AvisoSinTemporada mostrar={sinTemporadaActiva} />}
-      {!soloLectura && (
+      {(!soloLectura || soloPlanta) && (
         <div className='flex justify-end'>
           <Button onClick={handleSubmit} isLoading={isPending} disabled={!isEdit && (temporadaCargando || temporadaFiltro == null)}>
             <Icons.check className='mr-1 h-4 w-4' /> {isEdit ? 'Guardar cambios' : 'Crear Recepción'}

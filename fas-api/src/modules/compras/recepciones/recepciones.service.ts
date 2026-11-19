@@ -159,7 +159,19 @@ export async function actualizarRecepcion(id: number, body: RecepcionUpdateInput
   // cabecera/template antes de reintentar. Ver puedeModificarse() sobre por
   // qué el estado solo no basta.
   if (!(await puedeModificarse(existente))) {
-    throw new ValidationError('La Recepción ya fue procesada y no puede editarse')
+    // Ya procesada (2026-11-19): solo se puede corregir la Planta y su
+    // Dirección (dato de cabecera; Stock la lee en vivo desde la Recepción).
+    const otrosCambios =
+      (body.templateCargaId !== undefined && body.templateCargaId !== existente.templateCargaId) ||
+      (body.observaciones !== undefined && (body.observaciones ?? null) !== (existente.observaciones ?? null))
+    if (otrosCambios) {
+      throw new ValidationError('La Recepción ya fue procesada: solo se puede cambiar la Planta y su Dirección')
+    }
+    rechazarCambioTemporada(body.temporadaId, existente.temporadaId)
+    const plantaId = body.plantaId ?? existente.plantaId
+    const direccionPlantaId = body.direccionPlantaId ?? existente.direccionPlantaId
+    await validarPlantaYDireccion(plantaId, direccionPlantaId)
+    return shapeRecepcion(await repo.updatePlantaRecepcion(id, { plantaId, direccionPlantaId }, actualizadoPor))
   }
   // Un PATCH parcial no puede validarse aislado: si solo viene uno de los dos
   // campos, hay que evaluar la pareja efectiva contra lo persistido, no dejar

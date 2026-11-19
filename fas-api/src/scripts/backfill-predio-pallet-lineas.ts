@@ -93,7 +93,7 @@ async function procesarRecepcion(recepcionId: number, r: Resumen, APLICAR: boole
     for (let i = 0; i < p.lineas.length; i++) {
       const linea = p.lineas[i]!
       if (linea.predioId != null) continue
-      const res = await findProductorYPredioByTexto(filas[i]!.productor)
+      const res = await findProductorYPredioByTexto(filas[i]!.productor, [p.productorId])
       if (!res?.predio || res.predio.entidadId !== p.productorId) {
         r.filasSinPredio.push(`${rec.numero} pallet ${p.numeroPallet} fila ${filas[i]!.fila}: "${filas[i]!.productor}" no corresponde a un Predio del productor`)
         continue

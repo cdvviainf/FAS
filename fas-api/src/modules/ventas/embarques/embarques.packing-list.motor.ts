@@ -119,13 +119,18 @@ function validarFilasCompletas(filas: FilaPackingListCruda[], esAgrosan: EsAgros
 
 // ─── Etapa 3: resolución texto -> ID contra los maestros ──────────────────
 
-async function resolverContraMaestros(filas: FilaPackingListCruda[]): Promise<{ filas: FilaPackingListParaComparar[]; errores: string[] }> {
+async function resolverContraMaestros(
+  filas: FilaPackingListCruda[],
+  // N° de Pallet → productor del pallet en Stock (2026-11-19): desempata un
+  // CSG compartido entre productores.
+  productorPorPallet: Map<string, number> = new Map(),
+): Promise<{ filas: FilaPackingListParaComparar[]; errores: string[] }> {
   const cacheEspecie = new Map<string, Awaited<ReturnType<typeof recepcionesRepo.findEspecieByTexto>>>()
   const cacheVariedad = new Map<string, Awaited<ReturnType<typeof recepcionesRepo.findVariedadByTexto>>>()
   const cacheCategoria = new Map<string, Awaited<ReturnType<typeof recepcionesRepo.findCategoriaByTexto>>>()
   const cacheCalibre = new Map<string, Awaited<ReturnType<typeof recepcionesRepo.findCalibreByTexto>>>()
   const cacheArticulo = new Map<string, Awaited<ReturnType<typeof recepcionesRepo.findArticuloByTexto>>>()
-  const cacheProductor = new Map<string, Awaited<ReturnType<typeof recepcionesRepo.findProductorByTexto>>>()
+  const cacheProductor = new Map<string, Awaited<ReturnType<typeof recepcionesRepo.findProductorYPredioByTexto>>>()
   const cacheEtiqueta = new Map<string, Awaited<ReturnType<typeof recepcionesRepo.findEtiquetaByTexto>>>()
 
   const errores: string[] = []
@@ -164,10 +169,16 @@ async function resolverContraMaestros(filas: FilaPackingListCruda[]): Promise<{ 
     const articulo = cacheArticulo.get(keyArticulo)
     if (!articulo) erroresFila.push(`Fila ${cruda.fila}: Artículo/Embalaje "${cruda.articulo}" no existe en el maestro`)
 
-    const keyProductor = cruda.productor.toLowerCase()
-    if (!cacheProductor.has(keyProductor)) cacheProductor.set(keyProductor, await recepcionesRepo.findProductorByTexto(cruda.productor))
-    const productor = cacheProductor.get(keyProductor)
-    if (!productor) erroresFila.push(`Fila ${cruda.fila}: Productor "${cruda.productor}" no existe en el maestro`)
+    const productorDelPallet = productorPorPallet.get(cruda.numeroPallet)
+    const keyProductor = `${productorDelPallet ?? ''}:${cruda.productor.toLowerCase()}`
+    if (!cacheProductor.has(keyProductor)) {
+      cacheProductor.set(keyProductor, await recepcionesRepo.findProductorYPredioByTexto(cruda.productor, productorDelPallet != null ? [productorDelPallet] : []))
+    }
+    const resProductor = cacheProductor.get(keyProductor)
+    const productor = resProductor?.productor
+    if (resProductor?.ambiguos.length) {
+      erroresFila.push(`Fila ${cruda.fila}: el CSG "${cruda.productor}" está en Predios de varios productores (${resProductor.ambiguos.join(', ')}) — no se puede determinar a cuál corresponde`)
+    } else if (!productor) erroresFila.push(`Fila ${cruda.fila}: Productor "${cruda.productor}" no existe en el maestro`)
 
     const keyEtiqueta = cruda.etiqueta.toLowerCase()
     if (!cacheEtiqueta.has(keyEtiqueta)) cacheEtiqueta.set(keyEtiqueta, await recepcionesRepo.findEtiquetaByTexto(cruda.etiqueta))
@@ -343,7 +354,8 @@ export async function reconciliarPackingList(
   const termografos = [...new Set(filasCrudas.map((f) => f.termografo.trim()).filter(Boolean))]
 
   // Etapa 3 — Maestros: cada valor resuelve a un registro real.
-  const { filas, errores: erroresMaestros } = await resolverContraMaestros(filasCrudas)
+  const productorPorPallet = new Map(palletsStock.map((p) => [p.numeroPallet, p.productorId]))
+  const { filas, errores: erroresMaestros } = await resolverContraMaestros(filasCrudas, productorPorPallet)
   if (erroresMaestros.length > 0) {
     throw new ValidationError('Etapa 3 — Hay datos que no existen en los maestros', { diferencias: erroresMaestros })
   }
