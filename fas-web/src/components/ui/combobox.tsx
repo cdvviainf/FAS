@@ -75,11 +75,17 @@ export function Combobox({
             className
           )}
         >
-          <span className='truncate'>{selected ? selected.label : placeholder}</span>
+          <span className='truncate' title={selected?.label}>{selected ? selected.label : placeholder}</span>
           <Icons.chevronsUpDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className='w-(--radix-popover-trigger-width) p-0'>
+      {/* Ancho según contenido (2026-11-20): mínimo el del trigger, máximo
+          36rem o el viewport, alineado a la izquierda — los labels largos
+          (ej. "código — descripción" de embalajes) se leen completos. */}
+      <PopoverContent
+        align='start'
+        className='w-auto min-w-(--radix-popover-trigger-width) max-w-[min(36rem,calc(100vw_-_2rem))] p-0'
+      >
         <Command filter={(value, search) => (value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
@@ -94,8 +100,8 @@ export function Combobox({
                     setOpen(false);
                   }}
                 >
-                  <Icons.check className={cn('mr-2 h-4 w-4', !selected ? 'opacity-100' : 'opacity-0')} />
                   <span className='text-muted-foreground truncate italic'>{noneLabel}</span>
+                  <Icons.check className={cn('ml-auto h-4 w-4 shrink-0', !selected ? 'opacity-100' : 'opacity-0')} />
                 </CommandItem>
               )}
               {options.map((option) => (
@@ -107,13 +113,13 @@ export function Combobox({
                     setOpen(false);
                   }}
                 >
+                  <span className='truncate' title={option.label}>{option.label}</span>
                   <Icons.check
                     className={cn(
-                      'mr-2 h-4 w-4',
+                      'ml-auto h-4 w-4 shrink-0',
                       value === option.value ? 'opacity-100' : 'opacity-0'
                     )}
                   />
-                  <span className='truncate'>{option.label}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
