@@ -461,7 +461,7 @@ export function ContratoForm({ entidadId, contratoId }: { entidadId: number; con
                   <div className='space-y-1.5 lg:col-span-2'>
                     <Label className='text-xs'>Embalaje <span className='text-destructive'>*</span></Label>
                     <Combobox
-                      options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${articuloDescripcionComercial(a)}` }))}
+                      options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} · ${articuloDescripcionComercial(a)}` }))}
                       value={linea.articuloId ? String(linea.articuloId) : null}
                       onChange={(v) => setLinea((p) => ({ ...p, articuloId: v ? Number(v) : null }))}
                       placeholder='Seleccionar...'

@@ -219,7 +219,7 @@ export function SolicitudForm({ solicitudId }: SolicitudFormProps) {
         calidadesPermitidas: l.calidades.map((c) => ({ notaCalidadId: c.notaCalidad.id, notaCondicionId: c.notaCondicion.id })),
         cantidadPallets: l.cantidadPallets != null ? String(l.cantidadPallets) : '',
         especieLabel: l.especie.descripcion,
-        articuloLabel: `${l.articulo.codigo} — ${articuloDescripcionComercial(l.articulo)}`,
+        articuloLabel: `${l.articulo.codigo} · ${articuloDescripcionComercial(l.articulo)}`,
         variedadLabel: l.variedad.descripcion,
         categoriaLabels: l.categorias.map((c) => c.categoria.descripcion),
         calibreLabels: l.calibres.map((c) => c.calibre.descripcion),
@@ -812,7 +812,7 @@ function LineaEditor({ linea, especies, notasCalidad, notasCondicion, onChange, 
     onGuardar({
       ...linea,
       especieLabel: especies.find((e) => e.id === linea.especieId)?.descripcion,
-      articuloLabel: embalaje ? `${embalaje.codigo} — ${articuloDescripcionComercial(embalaje)}` : undefined,
+      articuloLabel: embalaje ? `${embalaje.codigo} · ${articuloDescripcionComercial(embalaje)}` : undefined,
       variedadLabel: variedad?.descripcion,
       categoriaLabels: linea.categoriaIds.map(categoriaNombre),
       calibreLabels: linea.calibreIds.map(calibreNombre),
@@ -846,7 +846,7 @@ function LineaEditor({ linea, especies, notasCalidad, notasCondicion, onChange, 
             placeholder={especieId ? 'Seleccionar embalaje...' : 'Elige especie primero'}
             searchPlaceholder='Buscar embalaje...'
             disabled={!especieId}
-            options={(embalajesData?.data ?? []).map((a) => ({ value: String(a.id), label: `${a.codigo} — ${articuloDescripcionComercial(a)}` }))}
+            options={(embalajesData?.data ?? []).map((a) => ({ value: String(a.id), label: `${a.codigo} · ${articuloDescripcionComercial(a)}` }))}
           />
         </div>
         <div className='space-y-1.5'>

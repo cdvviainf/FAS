@@ -729,7 +729,7 @@ export function GeneradorDteForm({ documentoId }: GeneradorDteFormProps) {
                             onChange={(v) => onSelectArticulo(idx, v ? Number(v) : null)}
                             placeholder='Línea libre'
                             searchPlaceholder='Buscar artículo...'
-                            options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${articuloDescripcionComercial(a)}` }))}
+                            options={articulos.map((a) => ({ value: String(a.id), label: `${a.codigo} · ${articuloDescripcionComercial(a)}` }))}
                             disabled={soloLectura}
                           />
                         </TableCell>

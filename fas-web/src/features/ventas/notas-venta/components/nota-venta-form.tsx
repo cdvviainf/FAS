@@ -1188,7 +1188,7 @@ export function NotaVentaForm({ notaVentaId }: NotaVentaFormProps) {
                 <div className='space-y-1.5 sm:col-span-2'>
                   <Label>Artículo (Embalaje) <span className='text-destructive'>*</span></Label>
                   <Combobox
-                    options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} — ${articuloDescripcionComercial(a)}` }))}
+                    options={articulosLinea.map((a) => ({ value: String(a.id), label: `${a.codigo} · ${articuloDescripcionComercial(a)}` }))}
                     value={linea.articuloId ? String(linea.articuloId) : null}
                     onChange={(v) => {
                       const id = Number(v)

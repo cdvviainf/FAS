@@ -90,11 +90,12 @@ export function Combobox({
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
+            <CommandGroup className='px-0.5'>
               {noneLabel && (
                 <CommandItem
                   key={NONE_VALUE}
                   value={noneLabel}
+                  className='px-1.5'
                   onSelect={() => {
                     onNone?.();
                     setOpen(false);
@@ -108,6 +109,7 @@ export function Combobox({
                 <CommandItem
                   key={option.value}
                   value={option.label}
+                  className='px-1.5'
                   onSelect={() => {
                     onChange(option.value);
                     setOpen(false);
