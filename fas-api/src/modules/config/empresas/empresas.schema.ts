@@ -6,7 +6,7 @@ export const direccionCreateSchema = z.object({
   codigo: z.string().min(1, 'El código es requerido').max(50).trim(),
   descripcion: z.string().min(1, 'La descripción es requerida').max(200).trim(),
   paisId: z.number().int().positive('El país es requerido'),
-  comunaId: z.number().int().positive().optional(),
+  comunaId: z.number().int().positive().nullable().optional(), // null = sin comuna (país distinto de Chile)
   direccion: z.string().min(1, 'La dirección es requerida').max(300).trim(),
   esPorDefecto: z.boolean().default(false),
   latitud: z.number().min(-90).max(90).nullable().optional(),
