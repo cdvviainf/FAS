@@ -118,8 +118,8 @@ export async function generarPackingListExcel(
         l.cajas,
         netKg.toNumber(),
         p.numeroGuiaDespacho ?? '',
-        // Emisor = "Agrosan" cuando la guía la emite la empresa (sin emisor-entidad).
-        p.guiaEmitidaPorAgrosan ? 'Agrosan' : p.emisorGuia?.razonSocial ?? '',
+        // Emisor = la empresa activa cuando la guía la emite ella (sin emisor-entidad).
+        p.guiaEmitidaPorAgrosan ? empresa.razonSocial : p.emisorGuia?.razonSocial ?? '',
       ])
     }
   }

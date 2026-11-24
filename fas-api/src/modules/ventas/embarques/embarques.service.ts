@@ -563,17 +563,18 @@ const EMISOR_AGROSAN = 'Agrosan'
 // activa (su código/razón social/nombre de fantasía, o la etiqueta "Agrosan").
 // Depende de Empresa.emiteGuiaDespachoSistema (2026-11-24):
 //  - true (Agrosan): la empresa emite la guía desde el sistema → el pallet queda
-//    con guiaEmitidaPorAgrosan (sin N° ni emisor-entidad); el dropdown del formato
-//    ofrece la etiqueta "Agrosan".
+//    con guiaEmitidaPorAgrosan (sin N° ni emisor-entidad).
 //  - false (AGDry): la empresa es un TERCERO que emite la guía fuera del sistema
 //    → N° de Guía obligatorio y el emisor es la Entidad con el RUT de la empresa
 //    (se suma a los emisores válidos, con los nombres de la empresa como alias).
 //    Si esa Entidad no existe, la carga lo informa para que la creen.
+// En ambos casos el dropdown del formato ofrece el NOMBRE de la empresa activa
+// (nombre de fantasía o razón social), nunca "Agrosan" fijo (2026-11-24).
 async function construirEmisorEmpresa(entidadesEmbarque: EntidadEmisorEmbarque[]): Promise<{
   esAgrosan: EsAgrosanEmisor
   entidadesEmisor: EntidadEmisorEmbarque[]
   mensajeNoEncontrado: MensajeEmisorNoEncontrado
-  etiquetaEmpresa: string | null
+  etiquetaEmpresa: string
 }> {
   const emp = await repo.getEmpresaActivaNombres()
   const norm = (s: string) => s.trim().toLowerCase()
@@ -581,14 +582,16 @@ async function construirEmisorEmpresa(entidadesEmbarque: EntidadEmisorEmbarque[]
   const nombresEmpresa = [emp?.codigo, emp?.razonSocial, emp?.nombreFantasia].filter((n): n is string => !!n?.trim())
   const nombres = new Set(nombresEmpresa.map(norm))
   const esEmpresa = (texto: string) => nombres.has(norm(texto)) || nombres.has(codigoAntes(texto))
+  const etiquetaEmpresa = emp?.nombreFantasia?.trim() || emp?.razonSocial?.trim() || EMISOR_AGROSAN
 
   if (!emp || emp.emiteGuiaDespachoSistema) {
+    // "Agrosan" se sigue aceptando como alias (formatos descargados antes).
     nombres.add(norm(EMISOR_AGROSAN))
     return {
       esAgrosan: esEmpresa,
       entidadesEmisor: entidadesEmbarque,
       mensajeNoEncontrado: () => null,
-      etiquetaEmpresa: EMISOR_AGROSAN,
+      etiquetaEmpresa,
     }
   }
 
@@ -606,7 +609,7 @@ async function construirEmisorEmpresa(entidadesEmbarque: EntidadEmisorEmbarque[]
       ? `el Emisor de la Guía "${texto}" es la empresa, que no emite guías desde el sistema: crea una Entidad con su RUT (${emp.rut}) para registrarla como emisor`
       : `el Emisor de la Guía "${texto}" es la empresa, que no emite guías desde el sistema: configura el RUT de la empresa y crea una Entidad con ese RUT para registrarla como emisor`
   }
-  return { esAgrosan: () => false, entidadesEmisor, mensajeNoEncontrado, etiquetaEmpresa: null }
+  return { esAgrosan: () => false, entidadesEmisor, mensajeNoEncontrado, etiquetaEmpresa }
 }
 
 export async function subirPackingList(
@@ -676,16 +679,12 @@ export async function subirPackingList(
 export async function descargarFormatoPackingList(embarqueId: number, templateCargaId: number) {
   await obtenerEmbarque(embarqueId)
   const template = await validarTemplateCargaPackingList(templateCargaId)
-  const { entidadesEmisor, etiquetaEmpresa } = await construirEmisorEmpresa(
-    await repo.getEntidadesEmisorEmbarque(embarqueId),
-  )
-  // Opciones del dropdown: "código - razón social" (lo que reconoce matchEmisor) +
-  // "Agrosan" solo si la empresa emite la guía desde el sistema (si es tercero,
-  // su Entidad ya viene en entidadesEmisor).
-  const opciones = [
-    ...entidadesEmisor.map((e) => `${e.codigo} - ${e.razonSocial}`),
-    ...(etiquetaEmpresa ? [etiquetaEmpresa] : []),
-  ]
+  const entidadesEmbarque = await repo.getEntidadesEmisorEmbarque(embarqueId)
+  const { etiquetaEmpresa } = await construirEmisorEmpresa(entidadesEmbarque)
+  // Opciones del dropdown: productores/plantas del embarque como "código - razón
+  // social" (lo que reconoce matchEmisor) + el nombre de la empresa activa. Si la
+  // empresa es tercero, ese nombre resuelve a su Entidad por alias en la carga.
+  const opciones = [...entidadesEmbarque.map((e) => `${e.codigo} - ${e.razonSocial}`), etiquetaEmpresa]
   // Filas a pre-generar con el dropdown: una por línea de pallet reservada (lo que
   // el usuario debe llenar), con un mínimo para que el formato nunca baje "pelado".
   const lineas = await repo.contarLineasPalletReservadas(embarqueId)
