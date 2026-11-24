@@ -62,6 +62,8 @@ export interface EmpresaDetalle {
   giro: string | null
   email: string | null
   telefono: string | null
+  // Emite la Guía de Despacho desde el sistema (false = tercero en el Packing List).
+  emiteGuiaDespachoSistema: boolean
   activo: boolean
   direcciones: DireccionItem[]
   contactos: ContactoItem[]
@@ -123,6 +125,7 @@ export interface EmpresaCreateInput {
   giro?: string
   email?: string
   telefono?: string
+  emiteGuiaDespachoSistema?: boolean
   activo: boolean
   // Sub-recursos opcionales: solo usados al crear (POST), para que el backend
   // los persista junto con la empresa en una única transacción atómica.

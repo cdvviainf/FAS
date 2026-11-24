@@ -17,6 +17,7 @@ export interface EmpresaDetalle {
   giro: string | null
   email: string | null
   telefono: string | null
+  emiteGuiaDespachoSistema: boolean
   activo: boolean
   creadoEn: Date
   creadoPor: string

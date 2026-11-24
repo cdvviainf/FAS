@@ -620,7 +620,29 @@ export async function getEmpresaActivaNombres() {
   const empresaId = getEmpresaIdActual()!
   return prisma.empresa.findFirst({
     where: { id: empresaId },
-    select: { codigo: true, razonSocial: true, nombreFantasia: true },
+    select: { codigo: true, razonSocial: true, nombreFantasia: true, rut: true, emiteGuiaDespachoSistema: true },
+  })
+}
+
+// Entidad (de la empresa activa) cuyo RUT/identificador es el de la empresa —
+// la empresa "como tercero" emisor de la Guía en el Packing List (2026-11-24,
+// empresas con emiteGuiaDespachoSistema=false). Compara el RUT normalizado (sin
+// puntos, guión ni espacios, mayúsculas) porque el identificador se digita a mano.
+export async function getEntidadPorRutEmpresa(rut: string) {
+  const empresaId = getEmpresaIdActual()!
+  const rutNorm = rut.replace(/[.\s-]/g, '').toUpperCase()
+  if (!rutNorm) return null
+  const filas = await prisma.$queryRaw<Array<{ id: number }>>`
+    SELECT id FROM entidades
+    WHERE "empresaId" = ${empresaId}
+      AND "eliminadoEn" IS NULL
+      AND upper(regexp_replace(coalesce(identificador, ''), '[.[:space:]-]', '', 'g')) = ${rutNorm}
+    ORDER BY id
+    LIMIT 1`
+  if (filas.length === 0) return null
+  return prisma.entidad.findFirst({
+    where: { id: filas[0].id, eliminadoEn: null },
+    select: { id: true, codigo: true, descripcion: true, razonSocial: true },
   })
 }
 

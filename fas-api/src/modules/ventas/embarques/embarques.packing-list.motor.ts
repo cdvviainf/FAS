@@ -43,7 +43,15 @@ export interface EntidadEmisorEmbarque {
   codigo: string
   descripcion: string
   razonSocial: string
+  // Textos adicionales que también identifican a esta entidad como emisor
+  // (2026-11-24): código/razón social/nombre de fantasía de la empresa activa
+  // cuando la empresa actúa como tercero (emiteGuiaDespachoSistema=false).
+  alias?: string[]
 }
+
+// Mensaje específico cuando el Emisor no calza con ninguna entidad (ej. es la
+// empresa como tercero pero no existe la Entidad con su RUT). null = genérico.
+export type MensajeEmisorNoEncontrado = (texto: string) => string | null
 
 export interface ResultadoReconciliacion {
   estado: 'OK' | 'DISCREPANCIA'
@@ -227,6 +235,7 @@ function resolverDatosPorPallet(
   filas: FilaPackingListCruda[],
   entidadesEmisor: EntidadEmisorEmbarque[],
   esAgrosan: EsAgrosanEmisor,
+  mensajeNoEncontrado: MensajeEmisorNoEncontrado,
 ): { datosPorPallet: DatoPalletReconciliado[]; errores: string[] } {
   const errores: string[] = []
 
@@ -238,7 +247,9 @@ function resolverDatosPorPallet(
     const tc = codigoAntes(texto)
     return (
       entidadesEmisor.find(
-        (e) => norm(e.codigo) === tc || norm(e.codigo) === t || norm(e.descripcion) === t || norm(e.razonSocial) === t,
+        (e) =>
+          norm(e.codigo) === tc || norm(e.codigo) === t || norm(e.descripcion) === t || norm(e.razonSocial) === t ||
+          (e.alias ?? []).some((a) => norm(a) === t || norm(a) === tc),
       ) ?? null
     )
   }
@@ -292,7 +303,11 @@ function resolverDatosPorPallet(
       } else {
         const emisor = matchEmisor(texto)
         if (!emisor) {
-          errores.push(`Pallet "${numeroPallet}": el Emisor de la Guía "${texto}" no corresponde a un productor, planta del Embarque ni a Agrosan`)
+          errores.push(
+            `Pallet "${numeroPallet}": ` +
+              (mensajeNoEncontrado(texto) ??
+                `el Emisor de la Guía "${texto}" no corresponde a un productor, planta del Embarque ni a la empresa`),
+          )
           continue
         }
         emisorGuiaId = emisor.id
@@ -332,6 +347,7 @@ export async function reconciliarPackingList(
   palletsStock: PalletStockParaComparar[],
   entidadesEmisor: EntidadEmisorEmbarque[] = [],
   esAgrosan: EsAgrosanEmisor = () => false,
+  mensajeNoEncontrado: MensajeEmisorNoEncontrado = () => null,
 ): Promise<ResultadoReconciliacion> {
   const hoja = await cargarPrimeraHoja(buffer)
 
@@ -387,7 +403,7 @@ export async function reconciliarPackingList(
   // plantas del embarque) + termógrafo + temperatura. Sus inconsistencias se
   // suman como discrepancias; solo los pallets consistentes se devuelven para
   // persistir.
-  const { datosPorPallet, errores: erroresDatos } = resolverDatosPorPallet(filasCrudas, entidadesEmisor, esAgrosan)
+  const { datosPorPallet, errores: erroresDatos } = resolverDatosPorPallet(filasCrudas, entidadesEmisor, esAgrosan, mensajeNoEncontrado)
   discrepancias.push(...erroresDatos)
 
   return discrepancias.length > 0

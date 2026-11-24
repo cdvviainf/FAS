@@ -415,6 +415,7 @@ interface BaseFields {
   giro: string
   email: string
   telefono: string
+  emiteGuiaDespachoSistema: boolean
   activo: boolean
 }
 
@@ -439,6 +440,7 @@ export function EmpresaForm({ empresaId }: EmpresaFormProps) {
     giro: '',
     email: '',
     telefono: '',
+    emiteGuiaDespachoSistema: true,
     activo: true,
   })
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -483,6 +485,7 @@ export function EmpresaForm({ empresaId }: EmpresaFormProps) {
         giro: empresa.giro ?? '',
         email: empresa.email ?? '',
         telefono: empresa.telefono ?? '',
+        emiteGuiaDespachoSistema: empresa.emiteGuiaDespachoSistema,
         activo: empresa.activo,
       })
     }
@@ -546,6 +549,7 @@ export function EmpresaForm({ empresaId }: EmpresaFormProps) {
       giro: fields.giro.trim() || undefined,
       email: fields.email.trim() || undefined,
       telefono: fields.telefono.trim() || undefined,
+      emiteGuiaDespachoSistema: fields.emiteGuiaDespachoSistema,
       activo: fields.activo,
     }
 
@@ -836,6 +840,20 @@ export function EmpresaForm({ empresaId }: EmpresaFormProps) {
                     onCheckedChange={(v) => setFields((f) => ({ ...f, activo: v }))}
                   />
                   <Label htmlFor='activo-switch'>Activa</Label>
+                </div>
+                <div className='space-y-1 pt-4 sm:col-span-2'>
+                  <div className='flex items-center gap-2'>
+                    <Switch
+                      id='emite-guia-switch'
+                      checked={fields.emiteGuiaDespachoSistema}
+                      onCheckedChange={(v) => setFields((f) => ({ ...f, emiteGuiaDespachoSistema: v }))}
+                    />
+                    <Label htmlFor='emite-guia-switch'>Emite la Guía de Despacho desde el sistema</Label>
+                  </div>
+                  <p className='text-xs text-muted-foreground'>
+                    Si está desactivado, en el Packing List la empresa se trata como un emisor externo: el N° de Guía
+                    es obligatorio y se registra como emisor la Entidad que tiene el RUT de la empresa.
+                  </p>
                 </div>
               </div>
             </CardContent>

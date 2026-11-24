@@ -58,6 +58,9 @@ export const empresaCreateSchema = z.object({
   giro: z.string().max(200).trim().optional(),
   email: z.string().email('Email inválido').max(200).trim().optional(),
   telefono: z.string().max(50).trim().optional(),
+  // Emite la Guía de Despacho desde el sistema (false = la empresa es un tercero
+  // emisor en el Packing List, ver embarques.service construirEmisorEmpresa).
+  emiteGuiaDespachoSistema: z.boolean().default(true),
   activo: z.boolean().default(true),
   // Sub-recursos opcionales: permiten crear la empresa junto con sus
   // direcciones/contactos iniciales en una única transacción de backend
@@ -74,6 +77,7 @@ export const empresaUpdateSchema = z.object({
   giro: z.string().max(200).trim().nullable().optional(),
   email: z.string().email('Email inválido').max(200).trim().nullable().optional(),
   telefono: z.string().max(50).trim().nullable().optional(),
+  emiteGuiaDespachoSistema: z.boolean().optional(),
   activo: z.boolean().optional(),
 })
 

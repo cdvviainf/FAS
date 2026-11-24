@@ -207,32 +207,37 @@ model UsuarioFirma {
 // se crea el modelo de Empresa + membresía de usuarios. El scoping por
 // `empresaId` en el resto de las tablas se agrega en la fase de tenancy.
 model Empresa {
-  id                  Int       @id @default(autoincrement())
-  codigo              String    @unique
-  razonSocial         String
-  nombreFantasia      String?
-  rut                 String?
-  giro                String?
-  email               String?
-  telefono            String?
+  id                       Int       @id @default(autoincrement())
+  codigo                   String    @unique
+  razonSocial              String
+  nombreFantasia           String?
+  rut                      String?
+  giro                     String?
+  email                    String?
+  telefono                 String?
+  // ¿La empresa emite la Guía de Despacho (DTE 52) desde el sistema? (2026-11-24)
+  // true (Agrosan): en el Packing List, la empresa como Emisor deja la guía
+  // pendiente de emitir. false (AGDry): la empresa actúa como un TERCERO — exige
+  // N° de Guía y se registra como emisor la Entidad con el RUT de la empresa.
+  emiteGuiaDespachoSistema Boolean   @default(true)
   // Nota final de la hoja de Términos y Condiciones del PDF de Orden de Compra
   // (2026-11-06, plantilla v3), por idioma. Ver EmpresaClausulaOc.
-  notaTerminosOcEs    String?
-  notaTerminosOcEn    String?
+  notaTerminosOcEs         String?
+  notaTerminosOcEn         String?
   // Recuadro "Reclamos / Claims" del PDF de Cierre Comercial v2 (2026-11-06):
   // texto y línea de referencia (ej. protocolo adjunto), por idioma. Sin texto,
   // no se muestra el recuadro.
-  reclamosCierreEs    String?
-  reclamosCierreEn    String?
-  reclamosCierreRefEs String?
-  reclamosCierreRefEn String?
-  activo              Boolean   @default(true)
-  creadoEn            DateTime  @default(now())
-  creadoPor           String
-  actualizadoEn       DateTime? @updatedAt
-  actualizadoPor      String?
-  eliminadoEn         DateTime?
-  eliminadoPor        String?
+  reclamosCierreEs         String?
+  reclamosCierreEn         String?
+  reclamosCierreRefEs      String?
+  reclamosCierreRefEn      String?
+  activo                   Boolean   @default(true)
+  creadoEn                 DateTime  @default(now())
+  creadoPor                String
+  actualizadoEn            DateTime? @updatedAt
+  actualizadoPor           String?
+  eliminadoEn              DateTime?
+  eliminadoPor             String?
 
   direcciones            EmpresaDireccion[]
   contactos              EmpresaContacto[]

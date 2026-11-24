@@ -139,6 +139,7 @@ export async function updateEmpresa(
       ...(data.giro !== undefined ? { giro: data.giro } : {}),
       ...(data.email !== undefined ? { email: data.email } : {}),
       ...(data.telefono !== undefined ? { telefono: data.telefono } : {}),
+      ...(data.emiteGuiaDespachoSistema !== undefined ? { emiteGuiaDespachoSistema: data.emiteGuiaDespachoSistema } : {}),
       ...(data.activo !== undefined ? { activo: data.activo } : {}),
       actualizadoPor,
     },
@@ -159,6 +160,7 @@ export async function createEmpresaCompleta(data: EmpresaCreateInput, creadoPor:
       giro: data.giro,
       email: data.email,
       telefono: data.telefono,
+      emiteGuiaDespachoSistema: data.emiteGuiaDespachoSistema,
       activo: data.activo,
       creadoPor,
       direcciones: {

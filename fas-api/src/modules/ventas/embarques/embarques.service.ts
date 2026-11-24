@@ -7,7 +7,12 @@ import * as aglAdapter from './agl360.adapter.js'
 import * as integracionesRepo from '../../config/integraciones/integraciones.repository.js'
 import * as templatesCargaRepo from '../../config/templates-carga/templates-carga.repository.js'
 import { generarFormatoBase } from '../../config/templates-carga/templates-carga.excel.js'
-import { reconciliarPackingList, type EsAgrosanEmisor } from './embarques.packing-list.motor.js'
+import {
+  reconciliarPackingList,
+  type EsAgrosanEmisor,
+  type EntidadEmisorEmbarque,
+  type MensajeEmisorNoEncontrado,
+} from './embarques.packing-list.motor.js'
 import { generarPackingListExcel } from './embarques.packing-list-emision.js'
 import { getEmpresaParaDocumento } from '../../documentos/documentos.repository.js'
 import { getEmpresaIdActual } from '../../../lib/empresa-context.js'
@@ -554,21 +559,54 @@ async function validarTemplateCargaPackingList(templateCargaId: number) {
 // formato descargado y reconocida en la carga.
 const EMISOR_AGROSAN = 'Agrosan'
 
-// Arma el predicado "¿el Emisor de la Guía es Agrosan (la empresa)?" + la etiqueta
-// para el dropdown del formato. Reconoce la etiqueta fija y, como alias, el
-// código/razón social/nombre de fantasía de la empresa activa.
-async function construirEsAgrosanEmisor(): Promise<{ esAgrosan: EsAgrosanEmisor; etiqueta: string }> {
+// Arma la regla del Emisor de la Guía cuando el texto es la propia empresa
+// activa (su código/razón social/nombre de fantasía, o la etiqueta "Agrosan").
+// Depende de Empresa.emiteGuiaDespachoSistema (2026-11-24):
+//  - true (Agrosan): la empresa emite la guía desde el sistema → el pallet queda
+//    con guiaEmitidaPorAgrosan (sin N° ni emisor-entidad); el dropdown del formato
+//    ofrece la etiqueta "Agrosan".
+//  - false (AGDry): la empresa es un TERCERO que emite la guía fuera del sistema
+//    → N° de Guía obligatorio y el emisor es la Entidad con el RUT de la empresa
+//    (se suma a los emisores válidos, con los nombres de la empresa como alias).
+//    Si esa Entidad no existe, la carga lo informa para que la creen.
+async function construirEmisorEmpresa(entidadesEmbarque: EntidadEmisorEmbarque[]): Promise<{
+  esAgrosan: EsAgrosanEmisor
+  entidadesEmisor: EntidadEmisorEmbarque[]
+  mensajeNoEncontrado: MensajeEmisorNoEncontrado
+  etiquetaEmpresa: string | null
+}> {
   const emp = await repo.getEmpresaActivaNombres()
   const norm = (s: string) => s.trim().toLowerCase()
   const codigoAntes = (s: string) => (s.includes(' - ') ? s.split(' - ')[0] : s).trim().toLowerCase()
-  const nombres = new Set<string>([norm(EMISOR_AGROSAN)])
-  if (emp) {
-    nombres.add(norm(emp.codigo))
-    nombres.add(norm(emp.razonSocial))
-    if (emp.nombreFantasia) nombres.add(norm(emp.nombreFantasia))
+  const nombresEmpresa = [emp?.codigo, emp?.razonSocial, emp?.nombreFantasia].filter((n): n is string => !!n?.trim())
+  const nombres = new Set(nombresEmpresa.map(norm))
+  const esEmpresa = (texto: string) => nombres.has(norm(texto)) || nombres.has(codigoAntes(texto))
+
+  if (!emp || emp.emiteGuiaDespachoSistema) {
+    nombres.add(norm(EMISOR_AGROSAN))
+    return {
+      esAgrosan: esEmpresa,
+      entidadesEmisor: entidadesEmbarque,
+      mensajeNoEncontrado: () => null,
+      etiquetaEmpresa: EMISOR_AGROSAN,
+    }
   }
-  const esAgrosan: EsAgrosanEmisor = (texto) => nombres.has(norm(texto)) || nombres.has(codigoAntes(texto))
-  return { esAgrosan, etiqueta: EMISOR_AGROSAN }
+
+  const entidad = emp.rut ? await repo.getEntidadPorRutEmpresa(emp.rut) : null
+  let entidadesEmisor = entidadesEmbarque
+  if (entidad) {
+    const yaEsta = entidadesEmbarque.some((e) => e.id === entidad.id)
+    entidadesEmisor = yaEsta
+      ? entidadesEmbarque.map((e) => (e.id === entidad.id ? { ...e, alias: nombresEmpresa } : e))
+      : [...entidadesEmbarque, { ...entidad, alias: nombresEmpresa }]
+  }
+  const mensajeNoEncontrado: MensajeEmisorNoEncontrado = (texto) => {
+    if (!esEmpresa(texto)) return null
+    return emp.rut
+      ? `el Emisor de la Guía "${texto}" es la empresa, que no emite guías desde el sistema: crea una Entidad con su RUT (${emp.rut}) para registrarla como emisor`
+      : `el Emisor de la Guía "${texto}" es la empresa, que no emite guías desde el sistema: configura el RUT de la empresa y crea una Entidad con ese RUT para registrarla como emisor`
+  }
+  return { esAgrosan: () => false, entidadesEmisor, mensajeNoEncontrado, etiquetaEmpresa: null }
 }
 
 export async function subirPackingList(
@@ -603,11 +641,19 @@ export async function subirPackingList(
   }
 
   // Emisores válidos de la Guía (2026-10-23): productores/plantas del embarque.
-  const entidadesEmisor = await repo.getEntidadesEmisorEmbarque(embarqueId)
-  // "Agrosan" como emisor = la empresa exportadora emite la guía (pendiente).
-  const { esAgrosan } = await construirEsAgrosanEmisor()
+  // + la empresa: emite desde el sistema (pendiente) o es un tercero (Entidad con su RUT).
+  const { esAgrosan, entidadesEmisor, mensajeNoEncontrado } = await construirEmisorEmpresa(
+    await repo.getEntidadesEmisorEmbarque(embarqueId),
+  )
 
-  const resultado = await reconciliarPackingList(template, archivo.datos, palletsStock, entidadesEmisor, esAgrosan)
+  const resultado = await reconciliarPackingList(
+    template,
+    archivo.datos,
+    palletsStock,
+    entidadesEmisor,
+    esAgrosan,
+    mensajeNoEncontrado,
+  )
 
   return repo.guardarPackingList(embarqueId, {
     templateCargaId,
@@ -630,11 +676,16 @@ export async function subirPackingList(
 export async function descargarFormatoPackingList(embarqueId: number, templateCargaId: number) {
   await obtenerEmbarque(embarqueId)
   const template = await validarTemplateCargaPackingList(templateCargaId)
-  const entidadesEmisor = await repo.getEntidadesEmisorEmbarque(embarqueId)
-  const { etiqueta } = await construirEsAgrosanEmisor()
+  const { entidadesEmisor, etiquetaEmpresa } = await construirEmisorEmpresa(
+    await repo.getEntidadesEmisorEmbarque(embarqueId),
+  )
   // Opciones del dropdown: "código - razón social" (lo que reconoce matchEmisor) +
-  // "Agrosan".
-  const opciones = [...entidadesEmisor.map((e) => `${e.codigo} - ${e.razonSocial}`), etiqueta]
+  // "Agrosan" solo si la empresa emite la guía desde el sistema (si es tercero,
+  // su Entidad ya viene en entidadesEmisor).
+  const opciones = [
+    ...entidadesEmisor.map((e) => `${e.codigo} - ${e.razonSocial}`),
+    ...(etiquetaEmpresa ? [etiquetaEmpresa] : []),
+  ]
   // Filas a pre-generar con el dropdown: una por línea de pallet reservada (lo que
   // el usuario debe llenar), con un mínimo para que el formato nunca baje "pelado".
   const lineas = await repo.contarLineasPalletReservadas(embarqueId)
