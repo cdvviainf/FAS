@@ -13,14 +13,14 @@ export interface EmbarqueCreateInput {
   contenedores?: DatosContenedorInput[]
 }
 
-// Temperatura/CBM/Tipo de BL de UN contenedor, capturados al solicitar la
+// Temperatura/CBM/Tipo de Contenedor de UN contenedor, capturados al solicitar la
 // reserva (en vez de solo después, vía guardarDatosReservaBase) — para poder
-// incluirlos en el envío a AGL360 (temperatura/cbm) y persistirlos en el
+// incluirlos en el envío a AGL360 (temperatura/cbm/idTipoContenedor) y persistirlos en el
 // Embarque desde su creación.
 export interface DatosContenedorInput {
   temperatura?: number | null
   cbm?: number | null
-  tipoBlId?: number | null
+  tipoContenedorId?: number | null
 }
 
 export interface DatosReservaManualInput {
@@ -39,7 +39,7 @@ export interface DatosReservaBaseInput {
   fechaCompromiso?: Date | null
   temperatura?: number | null
   cbm?: number | null
-  tipoBlId?: number | null
+  tipoContenedorId?: number | null
 }
 
 // Datos del Instructivo de Embarque compartidos por todo el Embarque

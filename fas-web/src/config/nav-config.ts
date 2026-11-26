@@ -211,6 +211,7 @@ export const navGroups: NavGroup[] = [
           { title: 'Grupos de Mercado', url: '/dashboard/configuracion/grupos-mercado', icon: 'page'    },
           { title: 'Mercados',          url: '/dashboard/configuracion/mercados',        icon: 'page'    },
           { title: 'Tipos de Embarque', url: '/dashboard/configuracion/tipos-embarque', icon: 'page'    },
+          { title: 'Tipos de Contenedor', url: '/dashboard/configuracion/tipos-contenedor', icon: 'page'  },
           { title: 'Puertos',           url: '/dashboard/configuracion/puertos',         icon: 'page'    },
           { title: 'Formas de Pago',    url: '/dashboard/configuracion/formas-pago',    icon: 'billing' },
           { title: 'Condiciones de Pago', url: '/dashboard/configuracion/condiciones-pago', icon: 'billing' },

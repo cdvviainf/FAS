@@ -236,7 +236,7 @@ export async function getEmbarqueById(id: number) {
       agenteAduana: { select: entidadSelect },
       embarcador: { select: entidadSelect },
       naviera: { select: entidadSelect },
-      tipoBl: { select: mantenedorSelect },
+      tipoContenedor: { select: mantenedorSelect },
       instructivosHijos: {
         where: { eliminadoEn: null },
         include: { planta: { select: entidadSelect } },
@@ -1003,7 +1003,7 @@ export async function generarEmbarqueTransaccional(
   const datosBase = {
     temperatura: datosContenedor?.temperatura ?? undefined,
     cbm: datosContenedor?.cbm ?? undefined,
-    tipoBlId: datosContenedor?.tipoBlId ?? undefined,
+    tipoContenedorId: datosContenedor?.tipoContenedorId ?? undefined,
   }
   return prisma.$transaction(async (tx) => {
     const empresaId = getEmpresaIdActual()!
@@ -1208,10 +1208,11 @@ export async function actualizarSelloContenedor(embarqueId: number, numeroSello:
   })
 }
 
-// Valida que el tipoBlId sea un Parametro de tipo TIPO_BL vigente (2026-09-28).
-export async function getParametroTipoBl(id: number) {
-  return prisma.parametro.findFirst({
-    where: { id, eliminadoEn: null, bloqueado: false, tipoParametro: { codigo: 'TIPO_BL' } },
+// Valida que el Tipo de Contenedor exista y esté vigente (2026-11-26 —
+// reemplaza la validación del Tipo de BL, que ahora vive solo en el Cierre).
+export async function getTipoContenedorVigente(id: number) {
+  return prisma.tipoContenedor.findFirst({
+    where: { id, eliminadoEn: null, bloqueado: false },
     select: { id: true },
   })
 }
@@ -1225,7 +1226,7 @@ export async function guardarDatosReservaBase(embarqueId: number, datos: DatosRe
       fechaCompromiso: datos.fechaCompromiso,
       temperatura: datos.temperatura,
       cbm: datos.cbm,
-      tipoBlId: datos.tipoBlId,
+      tipoContenedorId: datos.tipoContenedorId,
       actualizadoPor,
     },
   })

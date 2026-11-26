@@ -26,6 +26,8 @@ const MANTENEDORES: MantenedorConfig[] = [
   { modelo: 'zona', prefixRuta: 'zonas', label: 'Zona', itemCodigo: 'CONFIG_ZONAS' },
   { modelo: 'grupoMercado', prefixRuta: 'grupos-mercado', label: 'Grupo de Mercado', itemCodigo: 'CONFIG_GRUPOS_MERCADO' },
   { modelo: 'tipoEmbarque', prefixRuta: 'tipos-embarque', label: 'Tipo de Embarque', itemCodigo: 'CONFIG_TIPOS_EMBARQUE', schemaKey: 'tipoEmbarque' },
+  // Tipo de Contenedor (2026-11-26): catálogo global; lectura para Embarques (combo de la reserva).
+  { modelo: 'tipoContenedor', prefixRuta: 'tipos-contenedor', label: 'Tipo de Contenedor', itemCodigo: 'CONFIG_TIPOS_CONTENEDOR', lecturaItemsAdicionales: ['VENTAS_EMBARQUES'] },
   // Lectura para Cierre (Forma de pago, 2026-11-06) y OC, que la usan como combo.
   { modelo: 'formaPago', prefixRuta: 'formas-pago', label: 'Forma de Pago', itemCodigo: 'CONFIG_FORMAS_PAGO', lecturaItemsAdicionales: ['VENTAS_NV', 'COMPRAS_OC'] },
   { modelo: 'unidadMedida', prefixRuta: 'unidades-medida', label: 'Unidad de Medida', itemCodigo: 'CONFIG_UNIDADES_MEDIDA' },

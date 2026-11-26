@@ -10,6 +10,7 @@ const modelMap: Record<MantenedorModelo, string> = {
   zona: 'zona',
   grupoMercado: 'grupoMercado',
   tipoEmbarque: 'tipoEmbarque',
+  tipoContenedor: 'tipoContenedor',
   formaPago: 'formaPago',
   unidadMedida: 'unidadMedida',
   tipoPallet: 'tipoPallet',

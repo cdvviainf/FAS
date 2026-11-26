@@ -25,6 +25,9 @@ export interface SolicitudAglPayload {
   idConsignee?: number
   idPod?: number
   idProducto?: number
+  // Catálogo `tipo_contenedor` de AGL360 (2026-11-26), traducido desde el
+  // Tipo de Contenedor del Embarque vía Integraciones.
+  idTipoContenedor?: number
   direccionRetiro?: string
   observaciones?: string
   // Temperatura (°C) y CBM del contenedor (2026-09-30, decisión de negocio:

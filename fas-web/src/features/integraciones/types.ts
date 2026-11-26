@@ -1,11 +1,12 @@
 export type TipoParametroIntegracion = 'TEXTO' | 'MAESTRO'
-export type MaestroIntegracion = 'ENTIDAD' | 'ESPECIE' | 'TIPO_EMBARQUE' | 'PUERTO'
+export type MaestroIntegracion = 'ENTIDAD' | 'ESPECIE' | 'TIPO_EMBARQUE' | 'PUERTO' | 'TIPO_CONTENEDOR'
 
 export const MAESTRO_INTEGRACION_LABELS: Record<MaestroIntegracion, string> = {
   ENTIDAD: 'Entidad',
   ESPECIE: 'Especie',
   TIPO_EMBARQUE: 'Tipo de Embarque',
   PUERTO: 'Puerto',
+  TIPO_CONTENEDOR: 'Tipo de Contenedor',
 }
 
 export interface IntegracionParametro {

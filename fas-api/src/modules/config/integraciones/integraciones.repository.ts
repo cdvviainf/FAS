@@ -200,5 +200,7 @@ export async function listOpcionesMaestro(maestro: MaestroIntegracion) {
       return prisma.tipoEmbarque.findMany({ where: { eliminadoEn: null, bloqueado: false }, select: mantenedorSelect, orderBy: { descripcion: 'asc' } })
     case 'PUERTO':
       return prisma.puerto.findMany({ where: { eliminadoEn: null, bloqueado: false }, select: mantenedorSelect, orderBy: { descripcion: 'asc' } })
+    case 'TIPO_CONTENEDOR':
+      return prisma.tipoContenedor.findMany({ where: { eliminadoEn: null, bloqueado: false }, select: mantenedorSelect, orderBy: { descripcion: 'asc' } })
   }
 }

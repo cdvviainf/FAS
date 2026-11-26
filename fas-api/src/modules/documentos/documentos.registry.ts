@@ -18,6 +18,7 @@ import { CierreComercialV1 } from './templates/cierre-comercial/v1/index.js'
 import { CierreComercialV2 } from './templates/cierre-comercial/v2/index.js'
 import { CierreComercialV3 } from './templates/cierre-comercial/v3/index.js'
 import { CierreComercialV4 } from './templates/cierre-comercial/v4/index.js'
+import { CierreComercialV5 } from './templates/cierre-comercial/v5/index.js'
 import { resolverMovimiento, resolverMovimientoGuiaDespacho } from './resolvers/movimiento.resolver.js'
 import { movimientoPdfPayloadSchema } from './schemas/movimiento.schema.js'
 import { MovimientoV1 } from './templates/movimiento/v1/index.js'
@@ -193,10 +194,11 @@ export const DOCUMENT_REGISTRY: DocumentRegistry = {
     schema: cierreComercialPdfPayloadSchema,
     // v2 (2026-11-06): formato corporativo "Sales Order", bilingüe. v1 se
     // conserva para reimpresiones (regla de versionado, Etapa 4 §4).
-    plantillaActual: 'v4',
+    plantillaActual: 'v5',
     // v3 = cabecera corporativa única (2026-11-08); v4 = Calidad / Condición por
-    // línea (2026-11-09). v1–v3 se conservan para reimpresiones.
-    plantillas: { v1: CierreComercialV1, v2: CierreComercialV2, v3: CierreComercialV3, v4: CierreComercialV4 },
+    // línea (2026-11-09); v5 = "Tipo de embarque" en vez de "Embalaje" en el
+    // bloque de Embarque (2026-11-26). v1–v4 se conservan para reimpresiones.
+    plantillas: { v1: CierreComercialV1, v2: CierreComercialV2, v3: CierreComercialV3, v4: CierreComercialV4, v5: CierreComercialV5 },
     pagina: { formato: 'A4', orientacion: 'portrait', margen: '10mm 10mm 14mm' },
     itemMenu: 'VENTAS_NV',
     controlCopia: true,

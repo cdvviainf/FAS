@@ -262,6 +262,15 @@ model TipoProduccion {
   // + base
 }
 
+model TipoContenedor {
+  // + base — catálogo GLOBAL (sin empresaId, como TipoEmbarque/Puerto), 2026-11-26.
+  // 20' Reefer, 40' HC Reefer, etc. Se elige por Embarque en la información base
+  // de la reserva (ventas.md) y reemplaza al Tipo de BL del Embarque. Para AGL360
+  // se traduce vía Integraciones (maestro TIPO_CONTENEDOR → IdTipoContenedor).
+  // Permiso CONFIG_TIPOS_CONTENEDOR; lectura también con VENTAS_EMBARQUES.
+  // back-relation embarques Embarque[] vive en ventas.md
+}
+
 model UnidadMedida {
   // + base — usada por Materiales (Articulo.unidadId)
   // back-relation articulos Articulo[] vive en materiales.md
@@ -277,7 +286,7 @@ model TipoCuentaCorriente {
 ### 4.4 Agrupación de menú (Configuración)
 
 - **Geografía:** Zona · Región · Provincia · Comuna · País · Puerto
-- **Comercial:** Grupo mercado · Mercado · Moneda · Temporada · Tipo de embarque · Tipo cuenta corriente
+- **Comercial:** Grupo mercado · Mercado · Moneda · Temporada · Tipo de embarque · Tipo de contenedor · Tipo cuenta corriente
 - **Operación:** Bodega · Unidad de medida · Tipo de pallet · Etiqueta · Altura · Tipo Producción
 - **Fruta:** Especie · Grupo Variedad · Variedad · Categoría · Calibre
 - **Parámetros:** Tipo Parámetro · Parámetro

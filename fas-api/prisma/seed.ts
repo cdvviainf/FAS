@@ -97,6 +97,7 @@ const itemsMenu: Array<{ codigo: string; nombre: string; grupo: string; seccion:
   { codigo: 'CONFIG_GRUPOS_MERCADO', nombre: 'Grupos de Mercado', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/grupos-mercado', tipo: 'PANTALLA', orden: 8120 },
   { codigo: 'CONFIG_MERCADOS', nombre: 'Mercados', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/mercados', tipo: 'PANTALLA', orden: 8130 },
   { codigo: 'CONFIG_TIPOS_EMBARQUE', nombre: 'Tipos de Embarque', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/tipos-embarque', tipo: 'PANTALLA', orden: 8140 },
+  { codigo: 'CONFIG_TIPOS_CONTENEDOR', nombre: 'Tipos de Contenedor', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/tipos-contenedor', tipo: 'PANTALLA', orden: 8145 },
   { codigo: 'CONFIG_PUERTOS', nombre: 'Puertos', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/puertos', tipo: 'PANTALLA', orden: 8150 },
   { codigo: 'CONFIG_FORMAS_PAGO', nombre: 'Formas de Pago', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/formas-pago', tipo: 'PANTALLA', orden: 8160 },
   { codigo: 'CONFIG_CONDICIONES_PAGO', nombre: 'Condiciones de Pago', grupo: 'Configuración', seccion: 'Gestión Comercial', ruta: '/dashboard/configuracion/condiciones-pago', tipo: 'PANTALLA', orden: 8170 },

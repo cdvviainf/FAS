@@ -21,7 +21,7 @@ export const embarqueCreateSchema = z.object({
 const datosContenedorSchema = z.object({
   temperatura: z.number().int().min(-99).max(99).optional().nullable(),
   cbm: z.number().int().min(0).max(1_000_000).optional().nullable(),
-  tipoBlId: z.number().int().positive().optional().nullable(),
+  tipoContenedorId: z.number().int().positive().optional().nullable(),
 })
 
 // Generación múltiple (2026-09-28): una reserva/Embarque por contenedor.
@@ -76,7 +76,7 @@ export const datosReservaBaseSchema = z
     fechaCompromiso: z.coerce.date().optional().nullable(),
     temperatura: z.number().int().min(-99).max(99).optional().nullable(),
     cbm: z.number().int().min(0).max(1_000_000).optional().nullable(),
-    tipoBlId: z.number().int().positive().optional().nullable(),
+    tipoContenedorId: z.number().int().positive().optional().nullable(),
   })
   .refine((d) => Object.values(d).some((v) => v !== undefined), {
     message: 'Debes ingresar al menos un dato de la reserva',

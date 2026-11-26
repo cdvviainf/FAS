@@ -3,6 +3,7 @@ export type MantenedorModelo =
   | 'zona'
   | 'grupoMercado'
   | 'tipoEmbarque'
+  | 'tipoContenedor'
   | 'formaPago'
   | 'unidadMedida'
   | 'tipoPallet'

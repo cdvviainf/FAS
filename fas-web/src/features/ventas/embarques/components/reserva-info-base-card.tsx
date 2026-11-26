@@ -18,8 +18,7 @@ import type { EmbarqueDetalle } from '../types'
 
 const ITEM = 'VENTAS_EMBARQUES'
 const NINGUNO = '__NINGUNO__'
-const tiposParametroService = createMantenedorService('tipos-parametro')
-const parametrosService = createMantenedorService('parametros')
+const tiposContenedorService = createMantenedorService('tipos-contenedor')
 
 function especiesDistintas(embarque: EmbarqueDetalle): string {
   const set = new Set(embarque.notaVenta.detalles.map((d) => d.especie.descripcion))
@@ -33,19 +32,16 @@ export function ReservaInfoBaseCard({ embarque }: { embarque: EmbarqueDetalle })
   const [fechaCompromiso, setFechaCompromiso] = useState(embarque.fechaCompromiso ? embarque.fechaCompromiso.slice(0, 10) : '')
   const [temperatura, setTemperatura] = useState(embarque.temperatura != null ? String(embarque.temperatura) : '')
   const [cbm, setCbm] = useState(embarque.cbm != null ? String(embarque.cbm) : '')
-  const [tipoBlId, setTipoBlId] = useState<string>(embarque.tipoBlId != null ? String(embarque.tipoBlId) : NINGUNO)
+  const [tipoContenedorId, setTipoContenedorId] = useState<string>(
+    embarque.tipoContenedorId != null ? String(embarque.tipoContenedorId) : NINGUNO,
+  )
 
-  const { data: tiposParam } = useQuery({
-    queryKey: ['tipos-parametro-options'],
-    queryFn: () => tiposParametroService.list({ limit: 200 }),
+  // Tipo de Contenedor (2026-11-26): reemplaza al Tipo de BL, que se define en
+  // el Cierre Comercial. Para AGL360 se traduce vía Integraciones.
+  const { data: tiposContenedor } = useQuery({
+    queryKey: ['tipos-contenedor-options'],
+    queryFn: () => tiposContenedorService.list({ limit: 200 }),
     staleTime: 5 * 60_000,
-  })
-  const tipoBlTipoId = tiposParam?.data.find((t) => t.codigo === 'TIPO_BL')?.id
-  const { data: tiposBl } = useQuery({
-    queryKey: ['parametros-options', tipoBlTipoId],
-    queryFn: () => parametrosService.list({ limit: 200, tipoParametroId: tipoBlTipoId }),
-    staleTime: 5 * 60_000,
-    enabled: !!tipoBlTipoId,
   })
 
   const guardar = useMutation({
@@ -54,7 +50,7 @@ export function ReservaInfoBaseCard({ embarque }: { embarque: EmbarqueDetalle })
         fechaCompromiso: fechaCompromiso || null,
         temperatura: temperatura !== '' ? Math.trunc(Number(temperatura)) : null,
         cbm: cbm !== '' ? Math.trunc(Number(cbm)) : null,
-        tipoBlId: tipoBlId !== NINGUNO ? Number(tipoBlId) : null,
+        tipoContenedorId: tipoContenedorId !== NINGUNO ? Number(tipoContenedorId) : null,
       }),
     onSuccess: () => {
       toast.success('Información de reserva guardada')
@@ -105,12 +101,12 @@ export function ReservaInfoBaseCard({ embarque }: { embarque: EmbarqueDetalle })
             <Input type='number' step='1' min={0} value={cbm} onChange={(e) => setCbm(e.target.value)} disabled={!puedeEscribir} />
           </div>
           <div className='space-y-1.5'>
-            <Label>Tipo de BL</Label>
-            <Select value={tipoBlId} onValueChange={setTipoBlId} disabled={!puedeEscribir}>
+            <Label>Tipo de Contenedor</Label>
+            <Select value={tipoContenedorId} onValueChange={setTipoContenedorId} disabled={!puedeEscribir}>
               <SelectTrigger><SelectValue placeholder='Seleccionar...' /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={NINGUNO}>—</SelectItem>
-                {(tiposBl?.data ?? []).map((t) => (
+                {(tiposContenedor?.data ?? []).map((t) => (
                   <SelectItem key={t.id} value={String(t.id)}>{t.descripcion}</SelectItem>
                 ))}
               </SelectContent>

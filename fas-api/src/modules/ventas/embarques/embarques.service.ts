@@ -117,6 +117,16 @@ async function intentarReservaAgl(
   // idProducto: solo si todas las líneas del Cierre comparten la misma
   // especie — AGL360 acepta un único producto por solicitud y una NV puede
   // mezclar especies en su detalle (decisión de negocio, 2026-09-07).
+  // idTipoContenedor (2026-11-26): el Tipo de Contenedor del Embarque traducido
+  // vía Integraciones (maestro TIPO_CONTENEDOR). Opcional en AGL360 — si no
+  // está mapeado no se envía (no bloquea la reserva).
+  const idTipoContenedor = datosContenedor?.tipoContenedorId
+    ? await integracionesRepo.getValorParametro(CODIGO_INTEGRACION_AGL, 'IdTipoContenedor', {
+        maestro: 'TIPO_CONTENEDOR',
+        maestroId: datosContenedor.tipoContenedorId,
+      })
+    : null
+
   const especiesUnicas = [...new Set(nv.detalles.map((d) => d.especieId))]
   const idProducto = especiesUnicas.length === 1
     ? await integracionesRepo.getValorParametro(CODIGO_INTEGRACION_AGL, 'IdProducto', { maestro: 'ESPECIE', maestroId: especiesUnicas[0] })
@@ -132,6 +142,7 @@ async function intentarReservaAgl(
     ...(idConsignee ? { idConsignee: Number(idConsignee) } : {}),
     ...(idPod ? { idPod: Number(idPod) } : {}),
     ...(idProducto ? { idProducto: Number(idProducto) } : {}),
+    ...(idTipoContenedor ? { idTipoContenedor: Number(idTipoContenedor) } : {}),
     ...(datosContenedor?.temperatura != null ? { temperatura: datosContenedor.temperatura } : {}),
     ...(datosContenedor?.cbm != null ? { cbm: datosContenedor.cbm } : {}),
     observaciones: `Cierre Comercial folio ${nv.folio} — generado desde FAS`,
@@ -212,11 +223,11 @@ export async function generarEmbarquesMultiples(
   if (body.contenedores && body.contenedores.length !== cantidad) {
     throw new ValidationError(`Los datos por contenedor (${body.contenedores.length}) no calzan con la cantidad de contenedores (${cantidad})`)
   }
-  const tipoBlIds = [...new Set((body.contenedores ?? []).map((c) => c.tipoBlId).filter((v): v is number => v != null))]
-  if (tipoBlIds.length > 0) {
-    const validos = await Promise.all(tipoBlIds.map((id) => repo.getParametroTipoBl(id)))
-    const invalido = tipoBlIds.find((_, i) => !validos[i])
-    if (invalido != null) throw new ValidationError('El Tipo de BL seleccionado no existe o está bloqueado')
+  const tipoContenedorIds = [...new Set((body.contenedores ?? []).map((c) => c.tipoContenedorId).filter((v): v is number => v != null))]
+  if (tipoContenedorIds.length > 0) {
+    const validos = await Promise.all(tipoContenedorIds.map((id) => repo.getTipoContenedorVigente(id)))
+    const invalido = tipoContenedorIds.find((_, i) => !validos[i])
+    if (invalido != null) throw new ValidationError('El Tipo de Contenedor seleccionado no existe o está bloqueado')
   }
 
   const modoAutomatico = await resolverModoAutomatico(body.gestorLogisticoId)
@@ -308,7 +319,13 @@ export async function solicitarReservaParaEmbarque(embarqueId: number, creadoPor
   return repo.solicitarReservaTransaccional(
     embarqueId,
     creadoPor,
-    () => intentarReservaAgl(embarque.notaVentaId, referenciaFasDe(embarque.numeroInstructivo)),
+    // El reintento manda la información base ya guardada en el Embarque
+    // (temperatura/CBM/Tipo de Contenedor), igual que la generación inicial.
+    () => intentarReservaAgl(embarque.notaVentaId, referenciaFasDe(embarque.numeroInstructivo), {
+      temperatura: embarque.temperatura,
+      cbm: embarque.cbm,
+      tipoContenedorId: embarque.tipoContenedorId,
+    }),
   )
 }
 
@@ -334,9 +351,9 @@ export async function actualizarSelloContenedor(embarqueId: number, numeroSello:
 // Información base de la reserva (2026-09-28) — datos propios del Embarque.
 export async function guardarDatosReservaBase(embarqueId: number, datos: DatosReservaBaseInput, actualizadoPor: string) {
   await obtenerEmbarque(embarqueId)
-  if (datos.tipoBlId != null) {
-    const tipoBl = await repo.getParametroTipoBl(datos.tipoBlId)
-    if (!tipoBl) throw new ValidationError('El Tipo de BL seleccionado no existe o está bloqueado')
+  if (datos.tipoContenedorId != null) {
+    const tipoContenedor = await repo.getTipoContenedorVigente(datos.tipoContenedorId)
+    if (!tipoContenedor) throw new ValidationError('El Tipo de Contenedor seleccionado no existe o está bloqueado')
   }
   return repo.guardarDatosReservaBase(embarqueId, datos, actualizadoPor)
 }

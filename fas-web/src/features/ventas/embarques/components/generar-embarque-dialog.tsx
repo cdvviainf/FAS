@@ -23,13 +23,12 @@ import { AlertModal } from '@/components/modal/alert-modal'
 import { createMantenedorService } from '@/features/mantenedor-simple/service'
 import { embarquesService } from '../service'
 import { embarquesKeys } from '../queries'
-import { notasVentaKeys, notaVentaDetailOptions } from '@/features/ventas/notas-venta/queries'
+import { notasVentaKeys } from '@/features/ventas/notas-venta/queries'
 import { entidadesService } from '@/features/entidades/service'
 import type { DatosContenedorInput } from '../types'
 
 const NINGUNO = '__NINGUNO__'
-const tiposParametroService = createMantenedorService('tipos-parametro')
-const parametrosService = createMantenedorService('parametros')
+const tiposContenedorService = createMantenedorService('tipos-contenedor')
 
 interface GenerarEmbarqueDialogProps {
   notaVentaId: number
@@ -37,23 +36,24 @@ interface GenerarEmbarqueDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-// Temperatura/CBM/Tipo de BL en edición (strings — igual criterio que
-// reserva-info-base-card.tsx).
+// Temperatura/CBM/Tipo de Contenedor en edición (strings — igual criterio que
+// reserva-info-base-card.tsx). El Tipo de BL ya no se pide acá: vive solo en el
+// Cierre Comercial (2026-11-26).
 interface ContenedorForm {
   temperatura: string
   cbm: string
-  tipoBlId: string
+  tipoContenedorId: string
 }
 
-function contenedorVacio(tipoBlIdDefault: string): ContenedorForm {
-  return { temperatura: '', cbm: '', tipoBlId: tipoBlIdDefault }
+function contenedorVacio(): ContenedorForm {
+  return { temperatura: '', cbm: '', tipoContenedorId: NINGUNO }
 }
 
 function aInput(c: ContenedorForm): DatosContenedorInput {
   return {
     temperatura: c.temperatura !== '' ? Math.trunc(Number(c.temperatura)) : null,
     cbm: c.cbm !== '' ? Math.trunc(Number(c.cbm)) : null,
-    tipoBlId: c.tipoBlId !== NINGUNO ? Number(c.tipoBlId) : null,
+    tipoContenedorId: c.tipoContenedorId !== NINGUNO ? Number(c.tipoContenedorId) : null,
   }
 }
 
@@ -68,18 +68,8 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
   // "mismo valor para todos"; si se destilda, un bloque editable por
   // contenedor (1..cantidad).
   const [mismoParaTodos, setMismoParaTodos] = useState(true)
-  const [contenedorComun, setContenedorComun] = useState<ContenedorForm>(contenedorVacio(NINGUNO))
+  const [contenedorComun, setContenedorComun] = useState<ContenedorForm>(contenedorVacio())
   const [contenedoresIndividuales, setContenedoresIndividuales] = useState<ContenedorForm[]>([])
-
-  // Tipo de BL por defecto: el del Cierre Comercial (propuesto, editable acá).
-  const { data: notaVentaData } = useQuery({ ...notaVentaDetailOptions(notaVentaId), enabled: open })
-  const tipoBlDefault = notaVentaData?.data.tipoBlId != null ? String(notaVentaData.data.tipoBlId) : NINGUNO
-
-  useEffect(() => {
-    if (!open) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- propone el default una sola vez al abrir
-    setContenedorComun((c) => (c.tipoBlId === NINGUNO ? { ...c, tipoBlId: tipoBlDefault } : c))
-  }, [open, tipoBlDefault])
 
   // Mantiene el arreglo "individual" del mismo largo que `cantidad`, sin
   // perder lo ya tipeado en las posiciones que siguen existiendo.
@@ -88,24 +78,17 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
     setContenedoresIndividuales((prev) => {
       if (prev.length === cantidad) return prev
       const next = [...prev]
-      while (next.length < cantidad) next.push(contenedorVacio(tipoBlDefault))
+      while (next.length < cantidad) next.push(contenedorVacio())
       next.length = cantidad
       return next
     })
-  }, [cantidad, tipoBlDefault])
+  }, [cantidad])
 
-  const { data: tiposParam } = useQuery({
-    queryKey: ['tipos-parametro-options'],
-    queryFn: () => tiposParametroService.list({ limit: 200 }),
+  const { data: tiposContenedor } = useQuery({
+    queryKey: ['tipos-contenedor-options'],
+    queryFn: () => tiposContenedorService.list({ limit: 200 }),
     staleTime: 5 * 60_000,
     enabled: open,
-  })
-  const tipoBlTipoId = tiposParam?.data.find((t) => t.codigo === 'TIPO_BL')?.id
-  const { data: tiposBl } = useQuery({
-    queryKey: ['parametros-options', tipoBlTipoId],
-    queryFn: () => parametrosService.list({ limit: 200, tipoParametroId: tipoBlTipoId }),
-    staleTime: 5 * 60_000,
-    enabled: !!tipoBlTipoId && open,
   })
 
   // Sugerencia de contenedores = techo(pallets del Cierre / 20). Editable.
@@ -213,12 +196,12 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
           <Input type='number' step='1' min={0} value={valor.cbm} onChange={(e) => onChange({ cbm: e.target.value })} className='h-8' />
         </div>
         <div className='space-y-1'>
-          <Label className='text-[10px] uppercase'>Tipo de BL</Label>
-          <Select value={valor.tipoBlId} onValueChange={(v) => onChange({ tipoBlId: v })}>
+          <Label className='text-[10px] uppercase'>Tipo de Contenedor</Label>
+          <Select value={valor.tipoContenedorId} onValueChange={(v) => onChange({ tipoContenedorId: v })}>
             <SelectTrigger className='h-8'><SelectValue placeholder='—' /></SelectTrigger>
             <SelectContent>
               <SelectItem value={NINGUNO}>—</SelectItem>
-              {(tiposBl?.data ?? []).map((t) => (
+              {(tiposContenedor?.data ?? []).map((t) => (
                 <SelectItem key={t.id} value={String(t.id)}>{t.descripcion}</SelectItem>
               ))}
             </SelectContent>
@@ -237,7 +220,7 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
             setGestorLogisticoId(null)
             setCantidad(1)
             setMismoParaTodos(true)
-            setContenedorComun(contenedorVacio(NINGUNO))
+            setContenedorComun(contenedorVacio())
             setContenedoresIndividuales([])
             setFaltantes(0)
             setFaltantesOffset(0)
@@ -287,7 +270,7 @@ export function GenerarEmbarqueDialog({ notaVentaId, open, onOpenChange }: Gener
           <div className='space-y-2 rounded-md border p-3'>
             <label className='flex items-center gap-2 text-sm'>
               <Checkbox checked={mismoParaTodos} onCheckedChange={(c) => setMismoParaTodos(!!c)} disabled={cantidad <= 1} />
-              Usar el mismo valor de Temperatura/CBM/Tipo de BL para todos los contenedores
+              Usar el mismo valor de Temperatura/CBM/Tipo de Contenedor para todos los contenedores
             </label>
 
             {mismoParaTodos || cantidad <= 1 ? (

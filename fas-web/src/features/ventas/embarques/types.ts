@@ -211,8 +211,9 @@ export interface Embarque extends DatosReservaManual, DatosInstructivo {
   fechaCompromiso: string | null
   temperatura: number | null
   cbm: number | null
-  tipoBlId: number | null
-  tipoBl: MantenedorRef | null
+  // Tipo de Contenedor (2026-11-26) — reemplaza al Tipo de BL (que vive solo en el Cierre).
+  tipoContenedorId: number | null
+  tipoContenedor: MantenedorRef | null
   creadoEn: string
   // `reclamos` = cantidad de reclamos activos del Embarque (solo en list()) —
   // alimenta la columna "Reclamo" Sí/No.
@@ -297,7 +298,7 @@ export interface EmbarqueCreateInput {
 export interface DatosContenedorInput {
   temperatura?: number | null
   cbm?: number | null
-  tipoBlId?: number | null
+  tipoContenedorId?: number | null
 }
 
 export interface EmbarqueListResponse {

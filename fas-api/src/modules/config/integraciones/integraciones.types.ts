@@ -1,5 +1,5 @@
 export type TipoParametroIntegracion = 'TEXTO' | 'MAESTRO'
-export type MaestroIntegracion = 'ENTIDAD' | 'ESPECIE' | 'TIPO_EMBARQUE' | 'PUERTO'
+export type MaestroIntegracion = 'ENTIDAD' | 'ESPECIE' | 'TIPO_EMBARQUE' | 'PUERTO' | 'TIPO_CONTENEDOR'
 
 export interface IntegracionCreateInput {
   codigo: string

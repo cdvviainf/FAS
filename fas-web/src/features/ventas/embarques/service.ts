@@ -149,10 +149,10 @@ export const embarquesService = {
   },
 
   // Información base de la reserva (2026-09-28): fecha compromiso, temperatura,
-  // CBM, tipo de BL.
+  // CBM, tipo de contenedor.
   async guardarDatosReservaBase(
     id: number,
-    data: { fechaCompromiso?: string | null; temperatura?: number | null; cbm?: number | null; tipoBlId?: number | null },
+    data: { fechaCompromiso?: string | null; temperatura?: number | null; cbm?: number | null; tipoContenedorId?: number | null },
   ): Promise<{ data: EmbarqueDetalle }> {
     return api.patch(`ventas/embarques/${id}/datos-reserva-base`, { json: data }).json()
   },

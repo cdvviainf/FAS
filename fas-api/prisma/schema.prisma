@@ -739,6 +739,31 @@ model TipoEmbarque {
   @@map("tipos_embarque")
 }
 
+// Tipo de Contenedor (2026-11-26): 20' Reefer, 40' HC Reefer, etc. Se elige
+// por Embarque (1 Embarque = 1 contenedor) en la información base de la
+// reserva — reemplaza al Tipo de BL, que ya vive en el Cierre Comercial.
+// Catálogo GLOBAL (como TipoEmbarque/Puerto): los tipos de contenedor son
+// universales. Para AGL360 se traduce a su `idTipoContenedor` vía el
+// mantenedor de Integraciones (maestro TIPO_CONTENEDOR, parámetro
+// 'IdTipoContenedor') y viaja en el POST /api/solicitudes.
+model TipoContenedor {
+  id                    Int       @id @default(autoincrement())
+  codigo                String
+  descripcion           String
+  descripcionExtranjera String?
+  bloqueado             Boolean   @default(false)
+  creadoEn              DateTime  @default(now())
+  creadoPor             String
+  actualizadoEn         DateTime? @updatedAt
+  actualizadoPor        String?
+  eliminadoEn           DateTime?
+  eliminadoPor          String?
+
+  embarques Embarque[]
+
+  @@map("tipos_contenedor")
+}
+
 model FormaPago {
   id                    Int       @id @default(autoincrement())
   empresaId             Int
@@ -1453,7 +1478,6 @@ model Parametro {
   notasVentaModalidad NotaVenta[] @relation("NotaVentaModalidadVenta")
   notasVentaTipoFlete NotaVenta[] @relation("NotaVentaTipoFlete")
   notasVentaTipoBl    NotaVenta[] @relation("NotaVentaTipoBl")
-  embarquesTipoBl     Embarque[]  @relation("EmbarqueTipoBl")
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -2324,6 +2348,7 @@ enum MaestroIntegracion {
   ESPECIE
   TIPO_EMBARQUE
   PUERTO
+  TIPO_CONTENEDOR
 }
 
 model Integracion {
@@ -2372,7 +2397,7 @@ model IntegracionParametro {
   integracionId Int
   integracion   Integracion @relation(fields: [integracionId], references: [id], onDelete: Cascade)
 
-  idExterno    String // 'TOKEN', 'IdCliente', 'IdProducto', 'IdTipoEmbarque', 'IdPod', 'IdConsignee', 'IdCiaNaviera' — libre, sin enum
+  idExterno    String // 'TOKEN', 'IdCliente', 'IdProducto', 'IdTipoEmbarque', 'IdPod', 'IdConsignee', 'IdCiaNaviera', 'IdTipoContenedor' — libre, sin enum
   tipo         TipoParametroIntegracion @default(TEXTO)
   maestro      MaestroIntegracion? // solo si tipo = MAESTRO
   maestroId    Int? // id real del registro elegido del maestro — solo si tipo = MAESTRO
@@ -3733,11 +3758,14 @@ model Embarque {
   // Información base de la reserva (2026-09-28, decisión de negocio Christian):
   // datos propios de cada Embarque/reserva. La Semana (ISO) de la Fecha de
   // Compromiso se calcula en la presentación, no se persiste.
-  fechaCompromiso DateTime?
-  temperatura     Int? // °C, entero
-  cbm             Int? // metros cúbicos, entero
-  tipoBlId        Int? // Parametro tipo TIPO_BL
-  tipoBl          Parametro? @relation("EmbarqueTipoBl", fields: [empresaId, tipoBlId], references: [empresaId, id])
+  fechaCompromiso  DateTime?
+  temperatura      Int? // °C, entero
+  cbm              Int? // metros cúbicos, entero
+  // Tipo de Contenedor (2026-11-26) — reemplaza al Tipo de BL del Embarque
+  // (el Tipo de BL se define solo en el Cierre Comercial). Catálogo global:
+  // FK simple por id.
+  tipoContenedorId Int?
+  tipoContenedor   TipoContenedor? @relation(fields: [tipoContenedorId], references: [id])
 
   instructivosHijos InstructivoHijo[]
 
@@ -3797,6 +3825,7 @@ model Embarque {
   @@index([embarcadorId])
   @@index([navieraId])
   @@index([guiaTransporteId])
+  @@index([tipoContenedorId])
   @@map("embarques")
 }
 

@@ -4,7 +4,7 @@
 // aquí a medida que se conecta cada formulario (ver plan de la sesión).
 export const MODELOS_CON_CODIGO = [
   // Mantenedores genéricos (config.routes.ts MANTENEDORES)
-  'pais', 'zona', 'grupoMercado', 'tipoEmbarque', 'formaPago', 'unidadMedida',
+  'pais', 'zona', 'grupoMercado', 'tipoEmbarque', 'tipoContenedor', 'formaPago', 'unidadMedida',
   'tipoPallet', 'etiqueta', 'altura', 'tipoProduccion', 'tipoParametro',
   'region', 'provincia', 'comuna', 'especie', 'grupoVariedad', 'variedad',
   'categoria', 'calibre', 'parametro', 'mercado', 'puerto', 'moneda',

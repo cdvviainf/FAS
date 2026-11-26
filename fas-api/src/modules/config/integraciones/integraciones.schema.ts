@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const MAESTRO_VALUES = ['ENTIDAD', 'ESPECIE', 'TIPO_EMBARQUE', 'PUERTO'] as const
+const MAESTRO_VALUES = ['ENTIDAD', 'ESPECIE', 'TIPO_EMBARQUE', 'PUERTO', 'TIPO_CONTENEDOR'] as const
 
 export const integracionCreateSchema = z.object({
   codigo: z.string().min(1, 'El código es requerido').max(50).trim(),
